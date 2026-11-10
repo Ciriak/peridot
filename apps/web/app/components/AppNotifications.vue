@@ -2,8 +2,9 @@
 import { useRoute } from "#imports";
 import { onBeforeUnmount, onMounted, watch } from "vue";
 import { useLibraryScan } from "../composables/use-library-scan";
+import { useLibraryTracks } from "../composables/use-library-tracks";
 import { useServer } from "../composables/use-server";
-import { isLibraryScanActive } from "../lib/library-scan-toast";
+import { isLibraryScanWorkActive } from "../lib/library-scan-toast";
 import { isPeridotServerReachable } from "../lib/server-connection";
 import {
   clearServerConnectionLost,
@@ -22,6 +23,7 @@ const CONNECTION_TIMEOUT = 4000;
 const route = useRoute();
 const { address } = useServer();
 const { scan, refresh } = useLibraryScan();
+const { reload: reloadLibrary } = useLibraryTracks();
 
 let scanTimer: ReturnType<typeof setTimeout> | undefined;
 let scanFailures = 0;
@@ -44,7 +46,7 @@ async function refreshScan(scanId: string) {
   try {
     const next = await refresh();
     scanFailures = 0;
-    if (next?.id === scanId && isLibraryScanActive(next.status)) {
+    if (next?.id === scanId && isLibraryScanWorkActive(next)) {
       // The scan state watcher schedules the next poll after each update.
       return;
     }
@@ -68,11 +70,12 @@ watch(
   (current) => {
     if (!current) return;
     notifyLibraryScan(current);
-    if (isLibraryScanActive(current.status)) {
+    if (isLibraryScanWorkActive(current)) {
       scanFailures = 0;
       scheduleScanRefresh(current.id, SCAN_POLL_DELAY);
     } else {
       clearScanTimer();
+      if (current.status === "completed") void reloadLibrary();
     }
   },
   { immediate: true },

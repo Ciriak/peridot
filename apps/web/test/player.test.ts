@@ -1,0 +1,73 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+
+test("the persistent player controls a native audio element", async () => {
+  const [player, layout, app] = await Promise.all([
+    readFile(
+      new URL("../app/composables/use-library-player.ts", import.meta.url),
+      "utf8",
+    ),
+    readFile(new URL("../app/layouts/default.vue", import.meta.url), "utf8"),
+    readFile(new URL("../app/app.vue", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(player, /new Audio\(\)/);
+  assert.match(player, /createPlaybackToken\(/);
+  assert.match(player, /trackAudioUrl\(/);
+  assert.match(player, /downloadTrack\(trackId = currentTrackId\.value\)/);
+  assert.match(player, /anchor\.download = trackDownloadFileName\(track\)/);
+  assert.match(player, /notifyTrackDownloadFailed\(/);
+  assert.match(player, /addEventListener\("timeupdate"/);
+  assert.match(player, /addEventListener\("loadedmetadata"/);
+  assert.match(player, /addEventListener\("ended"/);
+  assert.match(player, /audio\.currentTime = elapsed\.value/);
+  assert.match(player, /audio\.volume = value \/ 100/);
+  assert.match(
+    player,
+    /watch\(elapsed, \(position\)/,
+    "Changing the shared position seeks the native media",
+  );
+  assert.match(player, /audio\.currentTime = position/);
+  assert.match(
+    player,
+    /previous !== undefined && trackId !== previousTrackId/,
+    "Remounting the player preserves the current elapsed position",
+  );
+  assert.match(
+    app,
+    /useLibraryPlayer\(\{ audio: true \}\)/,
+    "Audio playback is mounted at the persistent application root",
+  );
+  assert.doesNotMatch(
+    layout,
+    /useLibraryPlayer\(\{ audio: true \}\)/,
+    "Changing layouts must not tear down audio playback",
+  );
+  assert.match(layout, /currentCoverUrl = computed\(/);
+  assert.match(layout, /<img[\s\S]*object-cover/);
+  assert.match(layout, /<Icon v-else :icon="icons\.music"/);
+  assert.match(
+    layout,
+    /<TrackArtistLinks v-if="active" :artists="active\.artists" \/>/,
+    "The active track's credited artists link from the persistent player",
+  );
+  assert.match(layout, /@click="togglePlayback"/);
+  assert.match(layout, /@click="seek\(0\)"/);
+  assert.match(layout, /@update:model-value="seek\(\$event\?\.\[0\] \?\? 0\)"/);
+  assert.match(
+    layout,
+    /class="min-h-11 flex-1"[\s\S]*thumb-label="Playback position"/,
+    "The playback progress uses a taller invisible hit target than its track",
+  );
+  assert.match(
+    layout,
+    /@update:model-value="setVolume\(\$event\?\.\[0\] \?\? 0\)"/,
+  );
+  assert.match(
+    layout,
+    /:icon="icons\.volume"[\s\S]*thumb-label="Playback volume"/,
+  );
+  assert.match(layout, /<Spinner\s+v-if="loading"/);
+  assert.match(layout, /role="alert"/);
+});

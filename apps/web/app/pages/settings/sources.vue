@@ -1,0 +1,436 @@
+<script setup lang="ts">
+import { computed, definePageMeta, onMounted, ref } from "#imports";
+import { Icon } from "@iconify/vue/offline";
+import type {
+  CreateSourceRequest,
+  SourceKind,
+  SourceResponse,
+} from "@peridot/contracts";
+import { Badge } from "@peridot/ui/components/ui/badge";
+import { Button } from "@peridot/ui/components/ui/button";
+import { Input } from "@peridot/ui/components/ui/input";
+import { useSortable } from "@vueuse/integrations/useSortable";
+import {
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogOverlay,
+  AlertDialogPortal,
+  AlertDialogRoot,
+  AlertDialogTitle,
+  DialogContent,
+  DialogDescription,
+  DialogOverlay,
+  DialogPortal,
+  DialogRoot,
+  DialogTitle,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuPortal,
+  DropdownMenuRoot,
+  DropdownMenuTrigger,
+} from "reka-ui";
+import { useLibraryScan } from "../../composables/use-library-scan";
+import { useServer } from "../../composables/use-server";
+import { useSession } from "../../composables/use-session";
+import { useUser } from "../../composables/use-user";
+import { icons } from "../../lib/icons";
+import {
+  createSource,
+  deleteSource,
+  listSources,
+  reorderSources,
+} from "../../lib/peridot-client";
+import { sourceFolderName } from "../../lib/source-label";
+import { notifySourceMutation } from "../../lib/toasts";
+
+definePageMeta({ layout: "settings" });
+
+const { address } = useServer();
+const { token } = useSession();
+const { user } = useUser();
+const { scanning, startSource } = useLibraryScan();
+const allowed = computed(() => user.value?.role === "admin");
+
+const sources = ref<SourceResponse[]>([]);
+const sourceList = ref<HTMLElement | null>(null);
+const loading = ref(true);
+const pageError = ref("");
+const addOpen = ref(false);
+const newKind = ref<SourceKind | null>(null);
+const newPath = ref("");
+const newUrl = ref("");
+const adding = ref(false);
+const addError = ref("");
+const removeOpen = ref(false);
+const pendingDelete = ref<SourceResponse | null>(null);
+
+useSortable(sourceList, sources, {
+  animation: 150,
+  handle: ".drag-handle",
+  watchElement: true,
+  onEnd: () => void persistOrder(),
+});
+
+function sourceLabel(source: SourceResponse | null): string {
+  if (!source) return "";
+  if (source.kind === "path") return source.path ?? "";
+  if (source.kind === "url") return source.url ?? "";
+  return source.integration ?? "";
+}
+
+async function loadSources() {
+  if (!allowed.value) {
+    loading.value = false;
+    return;
+  }
+  loading.value = true;
+  pageError.value = "";
+  try {
+    const result = await listSources(address.value ?? "", token.value ?? "");
+    sources.value = result.items;
+  } catch (reason) {
+    pageError.value =
+      reason instanceof Error
+        ? reason.message
+        : "Could not load library sources.";
+  } finally {
+    loading.value = false;
+  }
+}
+
+function openAddDialog() {
+  addError.value = "";
+  newKind.value = null;
+  newPath.value = "";
+  newUrl.value = "";
+  addOpen.value = true;
+}
+
+function chooseKind(kind: SourceKind) {
+  addError.value = "";
+  newKind.value = kind;
+}
+
+function closeAddDialog() {
+  addOpen.value = false;
+  newKind.value = null;
+  newPath.value = "";
+  newUrl.value = "";
+}
+
+function handleDialogBack() {
+  if (newKind.value) {
+    newKind.value = null;
+    addError.value = "";
+  } else {
+    closeAddDialog();
+  }
+}
+
+function canAdd(): boolean {
+  if (newKind.value === "path") return Boolean(newPath.value.trim());
+  if (newKind.value === "url") return Boolean(newUrl.value.trim());
+  return false;
+}
+
+async function addSource() {
+  if (!newKind.value) return;
+  adding.value = true;
+  addError.value = "";
+  const body: CreateSourceRequest = { kind: newKind.value };
+  if (newKind.value === "path") body.path = newPath.value;
+  if (newKind.value === "url") body.url = newUrl.value;
+  try {
+    const source = await createSource(
+      address.value ?? "",
+      token.value ?? "",
+      body,
+    );
+    closeAddDialog();
+    notifySourceMutation("added", sourceLabel(source));
+    await loadSources();
+  } catch (reason) {
+    addError.value =
+      reason instanceof Error ? reason.message : "Could not add the source.";
+  } finally {
+    adding.value = false;
+  }
+}
+
+async function rescan(source: SourceResponse) {
+  if (source.kind !== "path" || scanning.value) return;
+  pageError.value = "";
+  try {
+    await startSource(source.id);
+  } catch (reason) {
+    pageError.value =
+      reason instanceof Error
+        ? reason.message
+        : "Could not start the source scan.";
+  }
+}
+
+function askRemove(source: SourceResponse) {
+  pendingDelete.value = source;
+  removeOpen.value = true;
+}
+
+async function confirmRemove() {
+  if (!pendingDelete.value) return;
+  const removedSource = pendingDelete.value;
+  pageError.value = "";
+  try {
+    await deleteSource(
+      address.value ?? "",
+      token.value ?? "",
+      removedSource.id,
+    );
+    notifySourceMutation("removed", sourceLabel(removedSource));
+    pendingDelete.value = null;
+    await loadSources();
+  } catch (reason) {
+    pageError.value =
+      reason instanceof Error ? reason.message : "Could not remove the source.";
+  }
+}
+
+async function persistOrder() {
+  try {
+    await reorderSources(
+      address.value ?? "",
+      token.value ?? "",
+      sources.value.map((source) => source.id),
+    );
+    notifySourceMutation("updated");
+  } catch (reason) {
+    pageError.value =
+      reason instanceof Error
+        ? reason.message
+        : "Could not save the source order.";
+  }
+}
+
+onMounted(() => void loadSources());
+</script>
+
+<template>
+  <div class="space-y-2">
+    <h2 class="text-2xl font-semibold tracking-tight">Sources</h2>
+    <p class="text-sm text-muted-foreground">
+      Configure where this Peridot server gets raw audio files.
+    </p>
+  </div>
+
+  <section
+    v-if="!allowed"
+    role="alert"
+    class="rounded-lg border bg-card p-6 text-sm text-card-foreground"
+  >
+    Administrator access is required to manage library sources.
+  </section>
+
+  <section v-else aria-labelledby="sources-heading" class="space-y-4">
+    <div class="flex items-center justify-between gap-4">
+      <h3 id="sources-heading" class="text-lg font-semibold">
+        Library sources
+      </h3>
+      <Button type="button" size="sm" @click="openAddDialog">
+        Add source
+      </Button>
+    </div>
+    <p v-if="pageError" role="alert" class="text-sm text-destructive">
+      {{ pageError }}
+    </p>
+    <div class="rounded-lg border bg-card p-6 text-card-foreground">
+      <p v-if="loading" class="text-sm text-muted-foreground">Loading…</p>
+      <ul v-else-if="sources.length" ref="sourceList" class="space-y-2">
+        <li
+          v-for="source in sources"
+          :key="source.id"
+          class="flex items-center gap-2 rounded-md border p-2"
+          :title="source.kind === 'path' ? (source.path ?? '') : undefined"
+        >
+          <button
+            type="button"
+            class="drag-handle cursor-grab rounded-md p-1 text-muted-foreground"
+            aria-label="Drag to reorder source"
+          >
+            <Icon :icon="icons.drag" aria-hidden="true" class="size-4" />
+          </button>
+          <Badge variant="secondary" class="shrink-0">{{ source.kind }}</Badge>
+          <span
+            v-if="source.kind === 'path'"
+            class="min-w-0 flex-1 break-all text-sm"
+          >
+            <span class="font-medium">{{
+              sourceFolderName(source.path ?? "")
+            }}</span>
+            <span class="text-muted-foreground"> {{ source.path }}</span>
+          </span>
+          <span v-else class="min-w-0 flex-1 truncate text-sm">
+            {{ sourceLabel(source) }}
+          </span>
+          <DropdownMenuRoot>
+            <DropdownMenuTrigger as-child>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                :aria-label="`Actions for ${sourceFolderName(sourceLabel(source))}`"
+              >
+                <span
+                  aria-hidden="true"
+                  class="flex flex-col items-center gap-0.5"
+                >
+                  <span class="size-1 rounded-full bg-current" />
+                  <span class="size-1 rounded-full bg-current" />
+                  <span class="size-1 rounded-full bg-current" />
+                </span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuPortal>
+              <DropdownMenuContent
+                class="z-50 w-44 rounded-lg border bg-popover p-1 text-popover-foreground shadow-lg"
+              >
+                <DropdownMenuItem
+                  :disabled="source.kind !== 'path' || scanning"
+                  class="flex items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none disabled:opacity-50"
+                  @select="rescan(source)"
+                >
+                  <Icon
+                    :icon="icons.restart"
+                    aria-hidden="true"
+                    class="size-4"
+                  />
+                  Rescan
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  :disabled="scanning"
+                  class="flex items-center gap-2 rounded-sm px-2 py-2 text-sm text-destructive outline-none disabled:opacity-50"
+                  @select="askRemove(source)"
+                >
+                  <Icon :icon="icons.close" aria-hidden="true" class="size-4" />
+                  Remove
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenuPortal>
+          </DropdownMenuRoot>
+        </li>
+      </ul>
+      <p v-else class="text-sm text-muted-foreground">No sources configured.</p>
+    </div>
+  </section>
+
+  <DialogRoot v-model:open="addOpen">
+    <DialogPortal>
+      <DialogOverlay class="fixed inset-0 z-50 bg-background/80" />
+      <DialogContent
+        class="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-card p-6 text-card-foreground shadow-lg"
+      >
+        <DialogTitle class="text-lg font-semibold">Add source</DialogTitle>
+        <DialogDescription class="text-sm text-muted-foreground">
+          Choose where Peridot reads raw audio files from.
+        </DialogDescription>
+
+        <div v-if="!newKind" class="mt-4 grid gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            class="justify-start"
+            @click="chooseKind('path')"
+          >
+            Local files
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            class="justify-start"
+            @click="chooseKind('url')"
+          >
+            Remote URL
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            class="justify-start"
+            @click="chooseKind('integration')"
+          >
+            Integration
+          </Button>
+        </div>
+
+        <div v-else class="mt-4 space-y-4">
+          <div v-if="newKind === 'path'" class="space-y-2">
+            <label for="source-path" class="text-sm font-medium">
+              Folder on this server
+            </label>
+            <FolderTree v-model="newPath" />
+            <p class="text-sm text-muted-foreground">
+              {{ newPath || "No folder selected" }}
+            </p>
+          </div>
+
+          <div v-else-if="newKind === 'url'" class="space-y-2">
+            <label for="source-url" class="text-sm font-medium">
+              External URL
+            </label>
+            <Input
+              id="source-url"
+              v-model="newUrl"
+              type="url"
+              placeholder="https://example.com/music"
+            />
+          </div>
+
+          <p v-else class="text-sm text-muted-foreground">
+            Spotify and YouTube Music integrations are not available yet.
+          </p>
+
+          <p v-if="addError" role="alert" class="text-sm text-destructive">
+            {{ addError }}
+          </p>
+        </div>
+
+        <div class="mt-6 flex justify-end gap-3">
+          <Button type="button" variant="outline" @click="handleDialogBack">
+            {{ newKind ? "Back" : "Cancel" }}
+          </Button>
+          <Button
+            v-if="newKind"
+            type="button"
+            :disabled="adding || !canAdd()"
+            @click="addSource"
+          >
+            {{ adding ? "Adding…" : "Add source" }}
+          </Button>
+        </div>
+      </DialogContent>
+    </DialogPortal>
+  </DialogRoot>
+
+  <AlertDialogRoot v-model:open="removeOpen">
+    <AlertDialogPortal>
+      <AlertDialogOverlay class="fixed inset-0 z-50 bg-background/80" />
+      <AlertDialogContent
+        class="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-card p-6 text-card-foreground shadow-lg"
+      >
+        <AlertDialogTitle class="text-lg font-semibold">
+          Remove source?
+        </AlertDialogTitle>
+        <AlertDialogDescription class="text-sm text-muted-foreground">
+          {{ sourceLabel(pendingDelete) }}
+        </AlertDialogDescription>
+        <div class="mt-6 flex justify-end gap-3">
+          <AlertDialogCancel as-child>
+            <Button type="button" variant="outline">Cancel</Button>
+          </AlertDialogCancel>
+          <AlertDialogAction as-child @click="confirmRemove">
+            <Button type="button" variant="destructive">Remove</Button>
+          </AlertDialogAction>
+        </div>
+      </AlertDialogContent>
+    </AlertDialogPortal>
+  </AlertDialogRoot>
+</template>

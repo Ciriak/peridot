@@ -19,12 +19,44 @@ to use different development locations.
 On first launch, the web app asks for the address of the user's Peridot server.
 It then creates the required first user with administrator privileges, or signs
 in when the server already has users. The server address and expiring session
-are kept in same-site browser cookies and the server can be changed from the
-sidebar. Server selection continuously probes the typed address and scans the
-web host's private IPv4 networks for Peridot servers on port 17430; selecting a
-discovered server advances onboarding. The routed web preview still uses fictional music, search, favorites,
-and simulated player controls; it does not yet fetch library data or play audio.
-Demo library/player state resets on reload. The server requires a migrated local
+are kept in same-site browser cookies. The server can be changed from Settings
+→ Administration by disconnecting first. Server selection continuously probes
+the typed address and scans the web host's private IPv4 networks for Peridot
+servers on port 17430; selecting a
+discovered server advances onboarding. The routed library view reads scanned
+tracks from the authenticated catalog API and refreshes after a completed scan.
+The Albums view derives groups from available track tags, keeps same-named
+albums by different artists separate, and opens a detail page with disc/track
+ordering and album playback actions. Album artwork is read from embedded
+front-cover tags or same-folder `cover`, `folder`, `front`, or `albumart` images.
+Tracks without album tags remain in the Library view and are omitted from
+Albums. The Artists view groups every tagged performer in the catalog, including
+artists whose tracks have no album metadata, and opens an artist page with album
+cards, an all-tracks list, and artist playback actions. Artist names in the
+shared track list and album detail link to their derived artist pages. The fixed
+player streams available tracks from the authenticated server through a
+short-lived, track-scoped playback URL, with play/pause, seeking, volume,
+previous/next, randomized upcoming playback, automatic advancement, and
+retryable loading and error states. Audio playback is owned by the application
+root, so entering fullscreen settings keeps the current track playing while its
+controls are hidden. Original files are served with HTTP range support and are
+not transcoded. One durable queue is
+stored per signed-in user, restores paused after reloads, and opens in a
+player-clearing, width-constrained custom right-side panel where upcoming tracks
+can be reordered or removed and their artist links opened. The queue button
+directly toggles the panel. The panel and overlay stop above the fixed player,
+leaving the player unobstructed. Queue rows remain draggable without closing
+the panel, which is non-modal so the player controls remain interactive.
+Right-clicking a track row opens a Reka UI context menu for
+playback, adding the track next in the queue, favorites, authenticated download,
+album navigation, and per-artist navigation when a track has multiple credits.
+Add to queue stays available for tracks already in the queue and moves them back
+to the next position instead of creating duplicates. Right-clicking or
+long-pressing an album or artist card opens a collection menu for playing it,
+changing its favorite state, or opening its details.
+Tracks, albums, and artists can be liked independently from their rows, cards,
+and detail headers. Likes are private to the signed-in user and persist across
+reloads, sessions, and server restarts. The server requires a migrated local
 SQLite database and a music folder, but no API key or hosted service.
 
 ```sh
@@ -62,7 +94,7 @@ under Program Files. Turbo and nested scripts need pnpm itself on PATH.
 - `apps/desktop`: documented future desktop shell.
 - `packages/contracts`: shared API types.
 - `packages/ui`: shared brand tokens and reusable Button, Input, Badge, Slider, Gradient, and Spinner components.
-- `packages/player`: playback state contract, no audio engine yet.
+- `packages/player`: shared playback state contract; the web app owns the browser audio adapter.
 - `packages/plugin-sdk`: initial manifest contract, no execution runtime.
 - `packages/config`: shared TypeScript configuration.
 - `plugins`: planned official connectors and metadata providers.
@@ -81,10 +113,11 @@ Poppins is the main UI font, bundled locally via `@fontsource/poppins`.
 Upstream component licensing is preserved in `packages/ui/THIRD_PARTY_NOTICES.md`.
 The shared Spinner uses the animated Peridot brand SVG and substitutes the static
 brand mark when the user prefers reduced motion.
-The web shell mounts one app-level Reka UI toast region in the bottom-right,
-above the fixed player. It keeps library-scan progress visible across route
-changes and keeps a single connection-loss error visible until the configured
-server health endpoint responds again.
+The web shell mounts one app-level Reka UI toast region in the bottom-right. It
+sits above the fixed player in the main shell and against the bottom edge in
+playerless fullscreen layouts. It keeps library-scan progress visible across
+route changes and keeps a single connection-loss error visible until the
+configured server health endpoint responds again.
 
 ## Configuration
 
@@ -92,17 +125,33 @@ Server defaults to loopback port 17430. Set HOST and PORT in your shell to overr
 See apps/server/.env.example for variables required by built server startup.
 Environment files are not loaded automatically. The development command supplies
 the local defaults described in Quick start. `DATABASE_URL` selects the local SQLite file,
-`MUSIC_LIBRARY_PATH` selects the single authoritative music folder, and
+`MUSIC_LIBRARY_PATH` seeds the first local music source, and
 `PERIDOT_WEB_ORIGINS` lists browser origins allowed to call the API. Its defaults
 support the local web development server; add the exact web origin when accessing
 Peridot from another device.
-Administrators can also manage where the server gets raw audio files from
-Settings → Administration. Each source is a local folder, an external URL, or a
-future integration such as Spotify or YouTube Music. Local folder sources seed
-from `MUSIC_LIBRARY_PATH` on first launch and are used by later library scans;
-URL and integration sources are stored but not indexed yet.
+Administrators can manage where the server gets raw audio files from
+Settings → Sources. Each source is a local folder, an external URL, or a future
+integration such as Spotify or YouTube Music. Local folder sources seed from
+`MUSIC_LIBRARY_PATH` on first launch and are used by library scans; URL and
+integration sources are stored but not indexed yet. Each local source row has a
+three-dot action menu for a source-scoped rescan or confirmed removal.
 The local-folder picker supports case-insensitive deep folder search without
 requiring folders to be expanded first.
+
+Administrators can configure ordered metadata providers from
+Settings → Metadata. MusicBrainz is supported first and requires a contact email
+or URL for its User-Agent; it does not require an API key. After a library scan
+discovers new or changed tracks, Peridot matches them against configured
+providers in the background at no more than one MusicBrainz request per second.
+Each containing folder is treated as an album: the folder name supplies the
+release title when tracks have no album tag, or when their tags disagree.
+The Metadata page also has a Refresh metadata action that re-runs automatic
+matching without rescanning audio files and a confirmed Reset metadata action
+that removes all automatic and manual track matches so tracks use their original
+file tags. A configured provider kind cannot be added twice.
+Provider metadata is stored separately from local file tags, and track context
+menus let signed-in users choose another match or return to the original file
+metadata. Peridot never rewrites the audio files.
 
 Apply committed migrations before starting a new database:
 
@@ -120,14 +169,39 @@ Except for health and these setup/sign-in routes, server routes require the
 returned session as `Authorization: Bearer <token>`.
 Start a scan with `POST /api/library/scans`, poll
 `GET /api/library/scans/:id`, list tracks with `GET /api/tracks`, and stream a
-track with `GET /api/tracks/:id/audio`. Scans are explicit and never run at
-startup. MP3, M4A/AAC, OGG/Opus, WAV, and FLAC files are cataloged; originals
-are streamed without transcoding. The web shell polls an active scan globally
-for its progress toast and checks the public health endpoint every ten seconds
-while connected.
+track with `GET /api/tracks/:id/audio`. Authenticated clients list the current
+user's favorites with `GET /api/likes`; `POST /api/likes` and
+`DELETE /api/likes` accept an independent track, album, or artist target. Track
+likes use catalog IDs, while album and artist likes match trimmed,
+case-insensitive metadata identities. `GET /api/queue` returns the current
+user's ordered track IDs and `PUT /api/queue` atomically replaces that snapshot;
+duplicate or unknown IDs are rejected. Scans are explicit and never run at
+startup. MP3, M4A/AAC, OGG/Opus, WAV, and FLAC files are cataloged; originals are
+streamed without transcoding. Catalog responses include nullable disc and track
+numbers used for album ordering. A metadata-version marker makes the next scan
+backfill those fields once for catalog rows created before the columns existed,
+including files whose contents have not changed. The web shell polls an active
+scan globally for its progress toast and checks the public health endpoint every
+ten seconds while connected.
+Album covers are deduplicated by content hash in the local SQLite database and
+served through short-lived, track-scoped cover URLs so browser image requests do
+not expose the user session. Tracks without readable embedded or folder artwork
+keep the semantic music-note placeholder in album cards, album details, and the
+player.
 Administrators can search local directories recursively with
 `GET /api/admin/filesystem/search?query=<term>`; results are bounded and do not
 follow symbolic links.
+Administrators can rescan one local source with
+`POST /api/admin/sources/:id/scans`; a scoped scan only changes availability for
+tracks from that source. Administrators manage metadata providers through
+`GET/POST /api/admin/metadata-providers`,
+`PUT /api/admin/metadata-providers/order`, and
+`DELETE /api/admin/metadata-providers/:id`. `POST /api/admin/metadata/refresh`
+re-runs automatic metadata matching without a file scan, while
+`POST /api/admin/metadata/reset` clears every track override. Signed-in clients
+can list MusicBrainz candidates for a track and apply or clear an override
+through `GET /api/tracks/:id/metadata/candidates` and
+`PUT/DELETE /api/tracks/:id/metadata`.
 
 ## Linting and formatting
 
@@ -174,8 +248,9 @@ player. Mobile navigation is collapsible. Use standard Tailwind utilities,
 existing shadcn-vue variants, and the shared semantic theme tokens only; custom
 CSS, inline styles, arbitrary utility values, and local theme overrides are
 not permitted. Album placeholders use the theme's muted/secondary surfaces.
+When no readable album image is available, the music-note placeholder remains.
 
-UI icons use Iconify's offline Vue component with individually bundled
-`@iconify-icons/basil` data for all icons. The play icon is
-`basil:play-solid`.
+UI icons use Iconify's offline Vue component with individually bundled icon
+data. UI icons are Basil, with `basil:play-solid` for play and the owner-requested
+`akar-icons:drag-vertical` for queue drag handles.
 Icons render on the server and need no runtime icon API or network access.

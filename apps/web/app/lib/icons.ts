@@ -14,16 +14,23 @@ import pause from "@iconify-icons/basil/pause-solid";
 import previous from "@iconify-icons/basil/skip-prev-solid";
 import next from "@iconify-icons/basil/skip-next-solid";
 import restart from "@iconify-icons/basil/refresh-outline";
+import caretUp from "@iconify-icons/basil/caret-up-outline";
 import caretDown from "@iconify-icons/basil/caret-down-outline";
 import caretRight from "@iconify-icons/basil/caret-right-outline";
+import sort from "@iconify-icons/basil/sort-outline";
 import folder from "@iconify-icons/basil/folder-outline";
-import drag from "@iconify-icons/basil/move-outline";
+import drag from "@iconify-icons/akar-icons/drag-vertical";
 import filterIcon from "@iconify-icons/basil/filter-outline";
 import settings from "@iconify-icons/basil/settings-outline";
 import server from "@iconify-icons/basil/server-outline";
 import user from "@iconify-icons/basil/user-outline";
 import check from "@iconify-icons/basil/check-outline";
 import cloudOff from "@iconify-icons/basil/cloud-off-outline";
+import logout from "@iconify-icons/basil/logout-outline";
+import trash from "@iconify-icons/basil/trash-outline";
+import download from "@iconify-icons/basil/download-outline";
+import volume from "@iconify-icons/basil/volume-up-outline";
+import shuffle from "@iconify-icons/basil/shuffle-outline";
 
 // Import data directly: icons render during SSR and never require an icon API.
 export const icons = {
@@ -34,6 +41,8 @@ export const icons = {
   heart,
   heartFilled,
   playlist,
+  queue: playlist,
+  addToQueue: playlist,
   plugins,
   close,
   menu,
@@ -43,8 +52,10 @@ export const icons = {
   previous,
   next,
   restart,
+  caretUp,
   caretDown,
   caretRight,
+  sort,
   folder,
   drag,
   filterIcon,
@@ -53,4 +64,9 @@ export const icons = {
   user,
   check,
   cloudOff,
+  logout,
+  trash,
+  download,
+  volume,
+  shuffle,
 };

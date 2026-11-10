@@ -1,0 +1,118 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+
+test("track rows expose a Reka context menu with playback, favorites, downloads, and navigation", async () => {
+  const [menu, trackTable, library, album, artist] = await Promise.all([
+    readFile(
+      new URL("../app/components/TrackContextMenu.vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/components/TrackTable.vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/components/LibraryScreen.vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/pages/albums/[album].vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/pages/artists/[artist].vue", import.meta.url),
+      "utf8",
+    ),
+  ]);
+
+  assert.match(
+    menu,
+    /@peridot\/ui\/components\/ui\/context-menu/,
+    "Context menu primitives come from the shared shadcn-vue layer",
+  );
+  assert.match(menu, /<ContextMenuTrigger as-child>/);
+  assert.match(menu, /@select="emit\('play'\)"/);
+  assert.match(menu, /useLikes\(\)/);
+  assert.match(menu, /toggleLike\(\{ kind: 'track', trackId: track\.id \}\)/);
+  assert.match(menu, /downloadTrack\(props\.track\.id\)/);
+  assert.match(menu, /Go to album/);
+  assert.match(menu, /Go to artist/);
+  assert.match(menu, /Go to artists/);
+  assert.match(menu, /v-for="artist in artists"/);
+  assert.match(menu, /v-else-if="artists\.length > 1"/);
+  assert.match(menu, /Matched with \{\{ track\.metadata\.providerName \}\}/);
+  assert.match(menu, /Correct metadata match/);
+  assert.match(menu, /Use file metadata/);
+  assert.match(menu, /listMetadataCandidates/);
+  assert.match(menu, /applyTrackMetadata/);
+  assert.match(menu, /revertTrackMetadata/);
+  assert.match(menu, /Search MusicBrainz/);
+
+  assert.match(trackTable, /<TrackContextMenu/);
+  assert.match(trackTable, /@play="play\(track\.id, true\)"/);
+
+  for (const [name, source, variant] of [
+    ["library", library, "library"],
+    ["album", album, "album"],
+    ["artist", artist, "artist"],
+  ] as const) {
+    assert.match(
+      source,
+      new RegExp(`<TrackTable[^>]*variant="${variant}"`),
+      `${name} uses the shared track table`,
+    );
+  }
+});
+
+test("album and artist cards expose collection-aware context menus", async () => {
+  const [albumMenu, artistMenu, albumCard, artistCard] = await Promise.all([
+    readFile(
+      new URL("../app/components/AlbumContextMenu.vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/components/ArtistContextMenu.vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/components/AlbumCard.vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/components/ArtistCard.vue", import.meta.url),
+      "utf8",
+    ),
+  ]);
+
+  for (const menu of [albumMenu, artistMenu]) {
+    assert.match(menu, /@peridot\/ui\/components\/ui\/context-menu/);
+    assert.match(menu, /<ContextMenuTrigger as-child>/);
+    assert.match(menu, /useLikes\(\)/);
+    assert.match(menu, /useLibraryPlayer\(\)/);
+    assert.match(menu, /playCollection\(/);
+  }
+
+  assert.match(albumMenu, /playCollection\(album\.trackIds\)/);
+  assert.match(albumMenu, /Like album/);
+  assert.match(albumMenu, /Unlike album/);
+  assert.match(albumMenu, /albumRoute\(album\)/);
+  assert.match(albumMenu, /Open album/);
+
+  assert.match(artistMenu, /playCollection\(artist\.trackIds\)/);
+  assert.match(artistMenu, /Like artist/);
+  assert.match(artistMenu, /Unlike artist/);
+  assert.match(artistMenu, /artistRoute\(artist\)/);
+  assert.match(artistMenu, /Open artist/);
+
+  assert.match(
+    albumCard,
+    /<AlbumContextMenu[\s\S]*<article[\s\S]*<NuxtLink/,
+    "The entire album card is the context-menu trigger",
+  );
+  assert.match(
+    artistCard,
+    /<ArtistContextMenu[\s\S]*<article[\s\S]*<NuxtLink/,
+    "The entire artist card is the context-menu trigger",
+  );
+});

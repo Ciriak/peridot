@@ -2,6 +2,604 @@
 
 Last updated: 2026-11-10.
 
+## Bulk track metadata reset
+
+The Metadata settings page now has a confirmed Reset metadata action. It clears
+automatic and manual metadata matches for every catalog track, restores the
+display to original file tags, reloads the browser catalog, and leaves
+configured providers and audio files unchanged. The reset also clears attempted
+match signatures, provider provenance, MusicBrainz recording/release IDs,
+numbering, and match timestamps. The action is unavailable while a library
+operation is active, and the server returns `409` if one is already running.
+
+Added `POST /api/admin/metadata/reset` and a shared reset response contract. The
+server endpoint is administrator-only. Behavioral coverage verifies successful
+clearing of automatic and manual modes, file-tag fallback, provider retention,
+and member/anonymous rejection. Web coverage verifies the authenticated client
+call, confirmation dialog, catalog reload, and success-toast wiring.
+
+Verified all 58 server tests, all 78 web tests, workspace type checking,
+`pnpm check`, the full production `pnpm build`, and Prettier formatting. Database
+schema validation was skipped because no schema or migration changed. Browser
+visual and interaction QA was not run. Changes remain uncommitted on `dev` and
+existing concurrent work was preserved; no commit, push, tag, publication, or
+deployment was performed. Next: visually verify the destructive confirmation
+and reset the real Tron: Legacy catalog to confirm it returns to one album.
+
+## Playback across fullscreen layouts
+
+Audio playback is now owned by the persistent Nuxt application root instead of
+the main layout. Opening fullscreen Settings no longer tears down the native
+audio element, so the current track keeps playing and its shared position,
+volume, and queue remain intact while the player controls are hidden. Returning
+to the main shell reconnects the controls to the same audio manager.
+
+Updated the player lifecycle regression test to require root ownership and
+prevent `default.vue` from creating a second audio manager. Checks and browser
+verification results will be recorded after validation. Changes remain
+uncommitted on `dev`; no commit, push, publication, or deployment was performed.
+
+## Like success toasts
+
+Liking a track, album, or artist now shows a five-second success toast after
+the server confirms the like. Track likes use a generic confirmation because
+the like target carries only the catalog ID; album and artist confirmations
+include their trimmed display name. Heart buttons, context menus, cards, and
+detail headers all inherit the behavior from the shared optimistic likes
+composable. Unlikes remain silent on success and retain the existing rollback
+error toast on failure.
+
+Added pure target-specific toast content and a wiring regression test. All 78
+web tests, web typecheck, workspace `pnpm check`, the full production
+`pnpm build`, and `git diff --check` passed. Browser visual QA was not run.
+Server behavioral tests, database schema validation, and server-specific type
+checks were skipped because no server or storage code changed. Changes remain
+uncommitted on `dev` alongside the existing library, metadata, playback, likes,
+queue, and artwork work; no commit, push, tag, publication, or deployment was
+performed.
+
+## Album and artist card context menus
+
+Album and artist cards now expose Reka UI context menus on right-click and touch
+long-press across the complete card, including their artwork and title links.
+The menus provide collection-aware Play, Like/Unlike, and Open actions. Play
+replaces the persistent queue with the collection order through the shared
+player, likes use the existing optimistic synchronized store, and Open uses the
+existing encoded album and artist routes.
+
+Added `AlbumContextMenu` and `ArtistContextMenu` wrappers and composed them into
+the shared cards so home, Albums, and artist detail surfaces inherit the same
+behavior. Added context-menu interaction coverage and included both components
+in the styling-authority scan.
+
+`pnpm --filter @peridot/web typecheck`, targeted ESLint and Prettier, all 77 web
+tests, the production web build, and `git diff --check` passed. Browser pointer,
+touch long-press, and keyboard visual QA was not run. Database/schema checks were
+skipped because no server or storage code changed. Changes remain uncommitted on
+`dev` with the existing work preserved; no commit, push, tag, publication, or
+deployment was performed. Next: visually exercise right-click and touch
+long-press on both card types and confirm menu actions against a real library.
+
+## Folder-based album metadata matching
+
+Automatic metadata enrichment now treats every containing folder as an album.
+Tracks are grouped by source and directory, remain grouped when album tags are
+missing or inconsistent, and use the folder name as the release title fallback.
+This ensures tracks in an untagged album folder go through shared release search
+and lookup instead of being treated as unrelated recording searches. Tracks in
+a source root fall back to the source directory's name.
+
+Added a behavioral test with two untagged MP3s in a `Night Sessions` folder,
+asserting one release search for that folder title and two successful matches.
+The targeted server test run passed all 57 server tests, and the server
+typecheck, server build, workspace `pnpm check`, targeted ESLint, targeted
+Prettier, and `git diff --check` checks passed.
+
+Changes remain uncommitted on `dev` alongside the existing library, metadata,
+playback, likes, queue, and artwork work. No commit, push, tag, publication, or
+deployment was performed. Next: exercise the folder-based group against a real
+untagged album and confirm releases with inconsistent per-track artist credits
+are matched as expected.
+
+## Local album artwork and signed cover URLs
+
+The scanner now extracts preferred embedded front-cover artwork and falls back to
+same-folder JPEG, PNG, or WebP files named `cover`, `folder`, `front`, or
+`albumart`. Covers are capped at 5 MiB, hashed by content, deduplicated in the
+new `TrackCover` table, and associated with tracks through `coverId`. Metadata
+version 3 makes the next scan backfill covers for existing rows.
+
+Track responses now include a relative cover URL with a four-hour HMAC token
+scoped to that track's cover image. The scanner, player, and catalog do not
+expose the user session to image requests. Album cards, album detail headers,
+and the fixed player render the actual image and keep the semantic music-note
+placeholder whenever no usable cover exists or the image request fails.
+
+Added migration `20261110280000_track_covers`, cover-token authorization and log
+redaction, embedded/folder artwork extraction, deduplication, authenticated
+image serving, album grouping cover selection, and UI regression coverage for
+the image/fallback branches.
+
+## Metadata providers and dedicated source management
+
+Settings now has dedicated administrator-only Sources and Metadata pages.
+Sources retains add, drag-to-sort, and confirmed deletion, and each local source
+row has a three-dot action menu for a source-scoped rescan or removal. Remote URL
+and integration sources show Rescan disabled until those source kinds become
+indexable. Administration now contains only the connected-server control and
+server log; the former Library status and global Rescan library panel is gone.
+
+Added the `POST /api/admin/sources/:id/scans` endpoint and nullable source
+context on scans. Scoped scans read only the selected local path and only mark
+missing tracks from that source unavailable. Global scan behavior remains for
+compatibility and tests.
+
+Added administrator-managed MusicBrainz providers with list, create, reorder,
+delete, contact validation, duplicate protection, credential secrecy, and a
+reserved encrypted credential column for future providers. MusicBrainz uses no
+API key, so the UI collects a contact email or URL for the required User-Agent.
+The Add provider dialog uses a Sources-style two-step flow: selectable cards for
+MusicBrainz and a disabled Spotify coming-soon placeholder, followed by a
+contact-only MusicBrainz form without a display-name option.
+Configured kinds are disabled in the picker and the server uniqueness constraint
+prevents duplicate MusicBrainz providers. The Metadata page also exposes a
+Refresh metadata action backed by `POST /api/admin/metadata/refresh`, which
+re-runs automatic matching for current tracks without scanning files or touching
+manual/file-mode overrides.
+The fixed-origin client serializes requests to one per second, applies timeouts,
+response-size limits, retry backoff, and rate-limit handling.
+
+Library scans now continue into background metadata matching after local file
+scanning completes. New or changed tracks are grouped for release matching or
+queried as recordings, and matching metadata is stored as an overlay with a
+provider snapshot, recording/release MBIDs, match mode, time, and MusicBrainz
+link. Local tags remain the fallback. Successful unchanged matches and prior
+no-match signatures are not polled again; transient failures remain retryable.
+Track context menus expose provenance, MusicBrainz candidate search, manual
+correction, and return-to-file-metadata actions for signed-in members. Reverting
+selects file mode so the next scan does not immediately restore the same
+automatic match.
+
+Added migration `20261110270000_metadata_providers` for provider configuration,
+track overlay fields, and scan metadata/source context. Behavioral coverage now
+includes provider CRUD and authorization, contact and CORS validation,
+MusicBrainz request headers/origin/rate limiting, automatic matching, no-match
+and unchanged skipping, manual correction/reversion, source-scoped scan
+isolation, dedicated Settings pages, context-menu correction, metadata toast
+progress, and styling authority.
+
+Verified `pnpm check`, full workspace typecheck, all 138 tests (76 web, 57
+server, 5 shared UI), `pnpm db:validate`, `pnpm build`, deployment of all twelve
+migrations against a disposable SQLite database, and `git diff --check`; all
+passed. A browser visual/interaction pass was not run.
+
+Known limits: MusicBrainz is the only provider; URL and integration source types
+remain stored but not indexable; matching is deterministic best-match rather than
+a confidence-review queue; any signed-in member can change shared catalog
+metadata; several tracks in one album share a release search/lookup but manual
+searches remain per track; and creating a provider that requires an API key is
+not exposed until such a provider is implemented. Album artwork only uses
+embedded pictures and four well-known same-folder filenames; it does not search
+parent directories or fetch remote Cover Art Archive images.
+
+Changes remain uncommitted on `dev` alongside the existing album, artist,
+playback, likes, queue, and library work. No commit, push, tag, publication, or
+deployment was performed. Next: visually review the two new Settings pages,
+three-dot menus, provider dialog, metadata correction dialog, and toast phases at
+desktop and mobile widths; then exercise a real MusicBrainz match against a
+small tagged album.
+
+## Sortable Reka track tables
+
+Library, album, and artist track lists now use one shared real-DOM table that
+follows the Reka UI data-table example for client-side sorting and row
+interaction composition. The visible Track number, Title, Artist, Album, and
+Duration fields expose accessible sort buttons with `aria-sort`, bundled Basil
+sort-direction icons, and a three-state cycle through ascending, descending,
+and default. Library tables return to Title ascending in their default state;
+album and artist tables return to track number ascending so their existing
+album/disc semantics remain the default.
+Missing text, duration, and track-number values sort last in both directions.
+
+The refactor centralizes row rendering for playback, liking, double-click, album
+and artist links, and the existing Reka context menu. Added behavioral coverage
+for case-insensitive text sorting, the three-state toggle cycle, null placement,
+numeric duration sorting, album/disc/track ordering, and non-mutating input.
+Updated component regression coverage to verify all three screens use the
+shared table.
+
+The tri-state sorting regression test, web typecheck, `pnpm check` (workspace
+lint and formatting), production web build, and `git diff --check` passed. The
+full web run passed 74 of 75 tests; the remaining unrelated album-cover fixture
+expects a cover URL that its catalog fixture does not define. Database/schema
+checks were skipped because no server or storage code changed. Browser visual,
+pointer, and keyboard interaction QA was not run. Changes remain uncommitted on
+`dev` alongside the existing work; no commit, push, tag, publication, or
+deployment was performed. Next: visually verify the sortable headers at desktop
+and mobile widths, then exercise default, ascending, descending, reset, and
+keyboard activation in a browser.
+
+## Durable player queue and right-side queue drawer
+
+The player now uses one ordered, per-user queue with the first available track
+as the active item. Individual track playback moves that track to the front;
+album and artist Play actions replace the queue with the ordered collection.
+Next and natural completion consume the active item and stop at the end.
+Previous restores an in-memory history entry and puts the displaced current
+track back at the front of upcoming. Add to queue inserts directly after the
+active track without duplicating an existing entry. The action remains enabled
+for queued tracks and re-adding one normalizes and repositions it rather than
+creating a duplicate.
+
+Queue order is stored relationally in the new `QueueItem` model and migration
+`20261110260000_user_queue`. Authenticated `GET /api/queue` and
+`PUT /api/queue` expose an ordered track-ID snapshot; PUT rejects duplicates
+and unknown tracks and atomically replaces the user's queue. Browser mutations
+are serialized, auth-scope guarded, and last-write-wins. Queue loading restores
+the first available track paused at the start without auto-play.
+
+The fixed player includes randomize-upcoming and queue controls. Randomize
+shuffles only upcoming entries and preserves the active track and playback
+state. The queue opens in a player-clearing, width-constrained custom right-side
+panel with a pinned now-playing row, drag-sorted upcoming rows, playback
+context, artist links, delete actions, and retryable loading errors. Upcoming
+queue rows are not playback controls. The panel and overlay stop at the top of
+the fixed player, so neither overlaps or blocks player interaction. The queue
+button directly toggles the panel. Entire queue rows are sortable with
+SortableJS. The new order is calculated from its old and new indexes before
+persistence. Close-button, Escape, and backdrop dismissal are handled by the
+custom panel. The panel is non-modal so the fixed player remains interactive
+while it is open. The now-playing row cannot be reordered or removed.
+Queue drag handles use the bundled `akar-icons:drag-vertical` glyph, imported
+offline through `@iconify-icons/akar-icons`.
+
+Added server coverage for ordering, validation, per-user privacy,
+authentication, restart persistence, and cascade deletion. Added pure queue
+logic, authenticated client, context-menu, control-placement, custom drawer, and
+styling coverage. Full workspace lint, formatting, typecheck, tests, schema
+validation, production build, and deployment of all ten migrations passed
+before the final drawer layout adjustments. Web typecheck and all 69 web tests
+passed after changing the drawer to a right-side panel and then constraining
+its width. Browser visual/interaction QA remains unavailable because Computer
+Use could not verify the active Brave URL.
+
+Changes remain uncommitted on `dev` alongside concurrent work, including the
+shared track-table refactor and player seek hit-area change. No commit, push,
+tag, publication, deployment, or credentials were created. Next: visually
+verify the full-screen drawer controls and a real drag sort at desktop and
+mobile widths when browser automation is available.
+
+## Sidebar brand logo
+
+The main sidebar now displays the bundled shared Peridot logo immediately before
+the lowercase “peridot” title. The image is decorative because the adjacent text
+already names the home link, and it uses the existing Button gap with a standard
+Tailwind `size-6` scale. A regression assertion covers the logo placement.
+
+Verified the web typecheck, all 65 web tests, targeted Prettier, the production
+web build, and `git diff --check`; all passed. Targeted ESLint still reports the
+preexisting unused `queueTracks` binding in `default.vue`; that unrelated
+uncommitted code was preserved. No browser visual pass was run. Changes remain
+uncommitted on `dev`; no commit, push, publication, or deployment was performed.
+
+## Durable track, album, and artist likes
+
+Track, album, and artist favorites now persist per signed-in user in SQLite.
+The migration adds separate track, album, and artist like models. Track likes
+reference catalog IDs and cascade with user or track deletion; derived album and
+artist likes store trimmed display labels plus normalized identities so they
+match the existing case-insensitive projections. The authenticated likes API is
+an aggregate `GET /api/likes` plus idempotent `POST` and `DELETE` mutations with
+a discriminated target.
+
+The web app now loads likes once into shared Nuxt state and uses it from the
+fixed player, every track heart and context menu, the Liked songs view and count,
+album cards, artist cards, and both detail headers. Mutations are optimistic,
+per-target pending operations ignore duplicate clicks, failures roll back and
+surface an app toast, and state resets when the connected server or user changes.
+Album and artist cards separate their navigation links from like buttons so
+interactive controls are not nested. Likes never cascade from albums or artists
+to tracks. No new liked-album or liked-artist browsing page was added.
+
+Added migration `20261110250000_user_likes` and behavioral coverage for
+normalization and idempotency, identity independence, per-user privacy,
+authentication, validation, missing tracks, persistence across restart, and
+cascade deletion. Added client coverage for authenticated API calls, JSON
+bodies, identity helpers, the shared state wiring, Liked songs filtering, and all
+album/artist card and detail controls.
+
+Verified `pnpm check`, full workspace typecheck, all 101 tests (59 web, 37
+server, 5 shared UI), `pnpm db:validate`, `pnpm build`, deployment of all nine
+migrations against a disposable database, and `git diff --check`; all passed. No
+browser visual or interaction pass was run.
+
+Known limits: existing in-memory likes cannot be migrated because they were
+never persisted; unavailable track likes remain stored but are hidden from the
+available catalog; retagging an album or artist to a new normalized identity
+leaves the prior like stored but unmatched. Changes remain uncommitted on `dev`
+alongside the existing work; no commit, push, tag, publication, or deployment
+was performed.
+
+## Track context menus, downloads, and multiple artist credits
+
+Track rows in the library, album detail, and artist detail now share a Reka UI
+context menu built on new shadcn-style wrappers in `@peridot/ui`. Right-clicking
+or long-pressing a row offers Play, Like/Unlike, Download, Go to album, and Go
+to artist. Tracks with multiple credits use a Go to artists submenu. Menu
+playback preserves each screen's existing queue, and downloads use a
+short-lived playback token plus a temporary blob URL with a safe filename based
+on the track title and MIME type.
+
+The catalog contract now includes an artist-credit array while retaining the
+combined display artist string. The scanner retains every metadata artist and
+recognizes common single-field separators. A new optional `artistCredits`
+column stores the array as JSON, and metadata version 2 triggers one backfill
+scan for existing rows. Artist browsing now places a collaboration track under
+each credited artist and renders individual artist links.
+
+Verified `pnpm check`, full workspace typecheck, all 101 tests (59 web, 37
+server, 5 shared UI), `pnpm db:validate`, `pnpm build`, and `git diff --check`;
+all passed. The server tests apply all migration files to disposable databases,
+including the new artist-credit migration. No browser visual/interaction pass
+was run.
+
+Changes remain uncommitted on `dev` alongside the existing album, artist,
+playback, library, source, likes, and settings work. No commit, push, tag,
+publication, or deployment was performed. Known limits: existing tracks receive
+separate artist credits after their next scan, and downloads buffer the complete
+audio file in browser memory before saving. Next: right-click and long-press
+rows at desktop and mobile widths, test the multi-artist submenu with real
+tagged files, and confirm a download in a browser.
+
+## Functional native audio playback
+
+The fixed player now streams real tracks through an `HTMLAudioElement` instead
+of advancing a simulated timer. Play/pause, previous/next, restart, seek,
+volume, native media time, track duration, loading, and retryable error states
+are connected to the shared player state. Album and artist queues advance
+automatically when audio ends, while a single library-track choice returns to
+the full catalog queue. Switching tracks aborts stale setup work and preserves
+the intended play/pause state.
+
+The browser cannot attach the session bearer header to a native media request,
+so available tracks now issue a four-hour HMAC-signed token scoped to that track
+and audio route. The token is supplied only in the audio URL, never replaces the
+user session, and is redacted from request logs. Audio continues through the
+existing authenticated HTTP range endpoint, so original formats stream and seek
+without full-file downloads or transcoding.
+
+Added server coverage for scoped tokens, expiry, tampering, route/method
+restrictions, log redaction, token issuance, and unauthenticated ranged audio
+streaming. Added web coverage for token issuance and the native audio/player
+wiring. Updated README and DECISIONS.md.
+
+Verified `pnpm check`, full workspace typecheck, all 87 tests (50 web, 32 server,
+5 shared UI), `pnpm db:validate`, `pnpm build`, and `git diff --check`; all
+passed. A browser runtime playback pass was not completed because Computer Use
+stopped when it could not verify the current browser URL. Changes remain
+uncommitted on `dev` alongside the existing artist, album, library, source, and
+settings work; no commit, push, tag, publication, or deployment was performed.
+
+Known limits: selected-track and favorite state still reset on reload; playback
+tokens are process-local and expire after four hours; fullscreen Settings
+unmounts the audio element, so playback resumes at the saved position after
+returning to the main layout. Next: manually play, pause, seek, change volume,
+and exercise next/end-of-track behavior against a tagged local library in Brave.
+
+## Artist browsing, detail, and artist queues
+
+Added an Artists navigation destination and responsive artist grid derived from
+every non-empty track artist in the loaded catalog, including albumless tracks
+and Unknown Artist. Each card opens an artist detail route with album cards, a
+complete artist track list, search, individual favorites/playback, and a Play
+artist action. Artist tracks are ordered by album, disc, and track number, with
+albumless tracks last. Both Play artist and individual artist-track actions use
+an artist-scoped queue; album playback retains its existing album-scoped queue.
+
+Artist names in the shared library track list and album detail now link to the
+artist page, and the Artists navigation item remains active on detail routes.
+The grouping helpers are case-insensitive and remain a client-side projection
+with no server endpoint, schema change, or migration.
+
+Verified `pnpm check`, full workspace typecheck, all 87 workspace tests (50 web,
+32 server, 5 shared UI), the web production build, and `git diff --check`; all
+passed. Database validation was unnecessary because no schema or server code
+changed. No browser visual/interaction pass was run.
+
+Changes remain uncommitted on `dev` alongside the existing album, playback,
+library, source, and settings work. No commit, push, tag, publication, or
+deployment was performed. Next: visually review the artist grid/detail and
+artist links at desktop and mobile widths.
+
+## Track-row double-click playback
+
+Double-clicking a row in the shared library track list or an album detail track
+list now starts that track. Row playback keeps the existing queue semantics:
+library rows play from the full catalog and album rows remain inside the album.
+Double-clicks on the title button, favorite control, and album link stop at those
+controls so they do not trigger a second row action.
+
+Added component regression assertions for both row handlers and the child-event
+guard. Verified all 43 web tests, the web typecheck, targeted ESLint and Prettier
+checks, the production web build, and `git diff --check`; all passed. Database
+validation was skipped because no schema or server code changed, and no browser
+interaction pass was run. Changes remain uncommitted on `dev` alongside the
+existing album-browsing work; no commit, push, tag, publication, or deployment
+was performed.
+
+Next: exercise row double-click playback in the library and an album at desktop
+widths, including double-clicks over title, favorite, and album controls.
+
+## Track-list album links
+
+Album names in the shared track list now link to the album detail route using
+the same trimmed album title and artist identity as the Albums index. Tracks
+without album or artist metadata continue to show the existing dash instead of
+linking to an unavailable album.
+
+Added route-identity coverage for trimmed track album metadata and a component
+regression assertion for the track-list link. Verified all 43 web tests, the web
+typecheck, targeted ESLint and Prettier checks, the production web build, and
+`git diff --check`; all passed. Database validation was skipped because no
+schema or server code changed, and no browser visual pass was run. Changes
+remain uncommitted on `dev` alongside the existing album-browsing work; no
+commit, push, tag, publication, or deployment was performed.
+
+Next: visually confirm the album link's hover and keyboard-focus states at
+desktop widths, where the track-list Album column is visible.
+
+## Album browsing, detail, and album queues
+
+Added an Albums navigation destination and responsive album grid derived from
+the loaded track catalog. Albums group by case-insensitive artist and title;
+albumless tracks remain in the normal library and are excluded from album
+browsing. Each card opens a detail route with placeholder artwork, track and
+total-duration summaries, search, per-track playback/favorites, and a Play album
+action. The navigation highlights the Albums section on detail routes.
+
+The player now supports an ordered album queue. Album actions keep previous,
+next, and automatic advancement inside the album, while choosing a library track
+resets the active queue to the full catalog. The persistent layout is now the
+sole owner of the simulated playback timer, avoiding duplicate clocks when
+screens also consume player state.
+
+Extended the Track catalog with nullable disc and track numbers plus a private
+metadata version. The scanner reads positive `disk.no` and `track.no` metadata;
+the next scan reparses legacy rows once to backfill them, then marks tagless
+files current so unchanged scans remain cheap. `TrackResponse` exposes the two
+public ordering fields. Added migration
+`20261110230000_track_album_order`.
+
+Verified `pnpm check`, full workspace typecheck, all 77 tests (43 web, 29 server,
+5 shared UI), `pnpm db:validate`, `pnpm build`, deployment of all seven
+migrations against a disposable database, and `git diff --check`; all passed.
+No browser visual/interaction pass was run.
+
+Known limits: album artwork remains a semantic placeholder because cover
+extraction/serving is deferred; albums are still a client-side projection with
+no album entity or `/api/albums` endpoint; existing catalogs receive disc/track
+metadata only after their next scan; and playback remains simulated. Changes
+remain uncommitted on `dev` alongside the existing library, source, settings,
+and documentation work. No commit, push, tag, publication, or deployment was
+performed.
+
+Next: run a scan against a tagged multi-disc library, then visually review the
+album grid/detail at desktop and mobile widths. A later artwork slice should
+extract embedded covers or folder images and expose a bounded image endpoint.
+
+## Real scanned tracks in the library
+
+The Home, Library, and Liked songs views now read the authenticated
+`GET /api/tracks` catalog instead of the former five fictional records. A shared
+Nuxt state loads the catalog once, exposes loading and retry states, supports
+title/artist/album search and in-memory favorite filtering, and reloads
+automatically when the global scan watcher reports a completed scan. The fixed
+player now displays selected real track metadata; its timer and transport remain
+simulated until the audio engine is connected.
+
+Removed `demo-library.ts`, `use-demo-player.ts`, and their tests. Added pure
+library filtering/duration tests and client coverage that verifies the bearer
+token and `/api/tracks` endpoint. A read-only check of the active local database
+confirmed real catalog rows such as Daft Punk's TRON soundtrack tracks.
+
+Verified `pnpm check`, all 37 web tests, web typecheck, production web build, the
+full 70-test monorepo suite (37 web, 28 server, 5 UI), and `git diff --check`;
+all passed. Database schema validation was skipped because no schema or server
+route changed. A browser visual pass could not run because Computer Use stopped
+when it could not confidently determine Brave's current URL.
+
+Changes remain uncommitted on `dev` alongside the existing source, disconnect,
+logging, and documentation work; unrelated changes were preserved. No commit,
+push, tag, publication, or deployment was performed. Known limits: likes are
+in-memory, the track list uses the server's default available-only ordering,
+and playback remains simulated. Next: visually verify the table at desktop and
+mobile sizes, then connect the authenticated `/api/tracks/:id/audio` endpoint.
+
+## Fullscreen toast anchoring
+
+Fixed app-level toast placement in the playerless fullscreen Settings layout.
+The shared toast viewport now follows the active Nuxt layout: it keeps the
+existing player clearance in the main shell and anchors to the bottom edge in
+fullscreen routes. A focused placement test covers default, Settings, false,
+and custom layouts.
+
+Verified all 37 web tests, web typecheck, targeted lint and formatting, the web
+production build, and `git diff --check`; all passed. Database validation was
+skipped because the schema is unchanged. No browser visual pass was run. Next:
+trigger a toast in Settings at desktop and mobile widths to confirm the final
+spacing against the viewport edge.
+
+Changes remain uncommitted on `dev` alongside the existing library-player and
+server work; unrelated files were preserved. No commit, push, tag, publication,
+or deployment was performed.
+
+## Server disconnect control
+
+Added a Disconnect button to the right of the connected-server card in
+Administration. It uses the bundled Basil logout icon, stacks below the address
+on narrow screens, opens a Reka UI confirmation dialog naming the connected
+server, and becomes disabled with a disconnecting label while the action runs.
+Canceling the dialog preserves the current browser identity. Confirming clears
+the server, session, and profile cookies, attempts to revoke the server-side
+session, and returns to onboarding.
+
+Added client coverage for `DELETE /api/auth/session`, icon pre-bundling coverage,
+and settings regression assertions for card placement, confirmation-dialog
+wiring, and local credential cleanup. Verified `pnpm check`, web typecheck, all
+35 web tests, and `git diff --check`; all passed. A production build was
+attempted but Nuxt reported that the checkout's active dev server already owns
+the build lock, so it was skipped to avoid disrupting that process. Database
+validation was skipped because the schema is unchanged. No browser
+visual/interaction pass was run.
+
+Changes remain uncommitted on `dev` alongside concurrent unrelated changes in
+`apps/server/src/app.ts` and `apps/server/test/sources.test.ts`; those files were
+preserved. No commit, push, tag, publication, or deployment was performed.
+Known limit: if the server cannot be reached during disconnect, local identity
+is still cleared but that remote session cannot be revoked and remains valid
+until expiry. Next: visually verify the desktop and mobile card layouts and
+exercise the server-unreachable path in a browser.
+
+## Source deletion request and warning logs
+
+Fixed the follow-up source-deletion failure after CORS was corrected. The shared
+web API client was adding `Content-Type: application/json` to `DELETE` requests
+that had no body, so Fastify rejected them with `FST_ERR_CTP_EMPTY_JSON_BODY`.
+The client now adds the JSON content type only when a body is present; source
+removal and session revocation remain authenticated requests without a content
+type.
+
+The server previously logged every completed response at `info`. Successful
+HTTP requests are now logged at `debug`, while failed HTTP responses are
+logged at `warn`; request method, URL, status, and response time remain
+available in the Administration log. The log view now starts with `debug`,
+`warn`, `error`, and `fatal` selected, hiding `trace` and `info` by default.
+Added client assertions for headers with and without bodies, server coverage
+for both request-log levels, and a settings assertion for the default filter.
+
+Verified all 28 server tests, all 35 web tests, `pnpm check`, `pnpm typecheck`,
+`pnpm db:validate`, `pnpm build`, and `git diff --check`; all passed. Changes
+remain uncommitted on `dev` alongside concurrent disconnect work; no commit,
+push, tag, publication, or deployment was performed.
+
+## Source mutation CORS fix
+
+Fixed source removal and drag-to-reorder from Settings when the web app and API
+are on different development origins. The server previously relied on
+`@fastify/cors` defaults, which advertise only `GET`, `HEAD`, and `POST`; browsers
+therefore rejected the `DELETE` source-removal request and `PUT` order request
+before either reached Fastify. The CORS policy now explicitly advertises `GET`,
+`HEAD`, `POST`, `PUT`, `DELETE`, and `OPTIONS` while retaining the configured
+origin and authorization/content/range header allowlists.
+
+Added behavioral preflight coverage for both source mutations. Verified
+`pnpm --filter @peridot/server test` (27 tests), `pnpm check`, `pnpm typecheck`,
+`pnpm db:validate`, and `pnpm build`; all passed. `git diff --check` is recorded
+after the final documentation edit. No browser interaction pass was repeated,
+and the schema is unchanged. Changes remain uncommitted on `dev`; unrelated web
+changes that appeared during verification were preserved. No commit, push, tag,
+publication, or deployment was performed.
+
 ## Source change toasts
 
 Added success toasts for source lifecycle changes in Administration. Adding or
@@ -708,3 +1306,17 @@ unrelated working-tree changes were preserved. All 18 web tests, web typecheck,
 targeted formatting, and `git diff --check` passed. Schema validation, production
 build, and browser visual QA were skipped because this is an isolated empty-state
 presentation change. No commit, push, publication, or deployment was performed.
+
+## 2026-11-10: Larger player progress hit target
+
+Added a 44px minimum-height invisible hit area to the bottom player's progress
+slider while preserving the existing 6px track and 16px thumb. The shared
+Slider component and volume control are unchanged. A player regression assertion
+now covers the player-only target class.
+
+All 59 web tests, web typecheck, targeted ESLint/Prettier checks, the production
+web build, and `git diff --check` passed. Schema/server checks were skipped
+because no server or storage code changed. Browser visual QA was not run.
+Changes remain uncommitted on `dev` with unrelated work preserved. No commit,
+push, publication, or deployment was performed. Next: visually confirm pointer
+seeking near the top and bottom edges of the progress row.

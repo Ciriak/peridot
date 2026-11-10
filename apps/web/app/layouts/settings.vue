@@ -2,22 +2,33 @@
 import { useRoute } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import { Button } from "@peridot/ui/components/ui/button";
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
+import { useUser } from "../composables/use-user";
 import { icons } from "../lib/icons";
 
 const route = useRoute();
+const { user } = useUser();
 const mobileNavigation = ref(false);
-const categories = [
+const commonCategories = [
   { name: "Account", to: "/settings/account", icon: icons.user },
   { name: "Library", to: "/settings/library", icon: icons.library },
   { name: "Playback", to: "/settings/playback", icon: icons.music },
   { name: "Plugins", to: "/settings/plugins", icon: icons.plugins },
+];
+const adminCategories = [
+  { name: "Sources", to: "/settings/sources", icon: icons.folder },
+  { name: "Metadata", to: "/settings/metadata", icon: icons.plugins },
   {
     name: "Administration",
     to: "/settings/administration",
     icon: icons.server,
   },
 ];
+const categories = computed(() =>
+  user.value?.role === "admin"
+    ? [...commonCategories, ...adminCategories]
+    : commonCategories,
+);
 
 watch(
   () => route.path,

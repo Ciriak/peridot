@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useRoute } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import { Button } from "@peridot/ui/components/ui/button";
 import { Spinner } from "@peridot/ui/components/ui/spinner";
@@ -10,9 +11,13 @@ import {
   ToastViewport,
   useToastManager,
 } from "reka-ui";
+import { computed } from "vue";
 import { icons } from "../lib/icons";
+import { toastViewportClass } from "../lib/toast-position";
 import type { AppToastData, AppToastKind } from "../lib/toasts";
 
+const route = useRoute();
+const viewportClass = computed(() => toastViewportClass(route.meta.layout));
 const { toasts } = useToastManager<AppToastData>();
 
 function iconFor(kind: AppToastKind | undefined) {
@@ -21,9 +26,7 @@ function iconFor(kind: AppToastKind | undefined) {
 </script>
 
 <template>
-  <ToastViewport
-    class="fixed inset-x-4 bottom-44 z-50 flex w-auto flex-col gap-2 p-0 md:inset-x-auto md:bottom-32 md:right-6 md:w-96"
-  >
+  <ToastViewport :class="viewportClass">
     <ToastRoot
       v-for="toast in toasts"
       :key="toast.id"

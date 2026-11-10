@@ -10,7 +10,7 @@ import type {
   AuthStatusResponse,
   UserResponse,
 } from "@peridot/contracts";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { Database } from "./database.js";
 import { sendError } from "./http.js";
 
@@ -200,6 +200,7 @@ export async function registerProtectedRoutes(
   app: FastifyInstance,
   database: Database,
   routes: (protectedApp: FastifyInstance) => Promise<void>,
+  authorizeRequest?: (request: FastifyRequest) => boolean,
 ) {
   app.decorateRequest("authenticatedSessionId", null);
   app.decorateRequest("authenticatedUser", null);
@@ -217,6 +218,7 @@ export async function registerProtectedRoutes(
           })
         : null;
       if (!session || session.expiresAt <= new Date()) {
+        if (authorizeRequest?.(request)) return;
         if ((await database.user.count()) === 0) {
           return sendError(
             reply,

@@ -1,12 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   createMemberSession,
   createTestContext,
   createWav,
   startScan,
+  waitForScan,
 } from "./helpers.js";
 
 test("administrators can read server counts and the default source", async () => {
@@ -34,6 +35,35 @@ test("administrators can read server counts and the default source", async () =>
     assert.equal(items.length, 1);
     assert.equal(items[0]?.kind, "path");
     assert.equal(items[0]?.path, context.libraryRoot);
+  } finally {
+    await context.close();
+  }
+});
+
+test("source mutations are allowed by the configured web origin", async () => {
+  const context = await createTestContext();
+  try {
+    for (const method of ["PUT", "DELETE"]) {
+      const response = await context.app.inject({
+        method: "OPTIONS",
+        url: "/api/admin/sources/order",
+        headers: {
+          origin: "http://127.0.0.1:3000",
+          "access-control-request-method": method,
+          "access-control-request-headers": "authorization,content-type",
+        },
+      });
+
+      assert.equal(response.statusCode, 204);
+      assert.equal(
+        response.headers["access-control-allow-origin"],
+        "http://127.0.0.1:3000",
+      );
+      assert.match(
+        String(response.headers["access-control-allow-methods"]),
+        new RegExp(`(^|,\\s*)${method}($|,\\s*)`),
+      );
+    }
   } finally {
     await context.close();
   }
@@ -302,6 +332,91 @@ test("a rescan reads all configured path sources", async () => {
   }
 });
 
+test("source rescans isolate availability changes to the selected source", async () => {
+  const context = await createTestContext();
+  const secondRoot = path.join(context.root, "second");
+  const firstTrack = path.join(context.libraryRoot, "first.wav");
+  try {
+    await mkdir(secondRoot);
+    await writeFile(firstTrack, createWav());
+    await writeFile(path.join(secondRoot, "second.wav"), createWav());
+    const secondSource = await context.app.inject({
+      method: "POST",
+      url: "/api/admin/sources",
+      headers: context.authorization,
+      payload: { kind: "path", path: secondRoot },
+    });
+    await startScan(context);
+    await rm(firstTrack);
+
+    const scoped = await context.app.inject({
+      method: "POST",
+      url: `/api/admin/sources/${secondSource.json().id}/scans`,
+      headers: context.authorization,
+    });
+    assert.equal(scoped.statusCode, 202);
+    assert.equal(scoped.json().sourceId, secondSource.json().id);
+    assert.equal(scoped.json().sourceName, "second");
+    const scopedScan = await waitForScan(context, scoped.json().id);
+    assert.equal(scopedScan.status, "completed");
+    assert.equal(scopedScan.unavailableCount, 0);
+
+    const availableAfterSecond = await context.app.inject({
+      method: "GET",
+      url: "/api/tracks",
+      headers: context.authorization,
+    });
+    assert.equal(availableAfterSecond.json().items.length, 2);
+
+    const firstSource = await context.app.inject({
+      method: "GET",
+      url: "/api/admin/sources",
+      headers: context.authorization,
+    });
+    const firstSourceId = firstSource
+      .json<{
+        items: Array<{ id: string; path: string }>;
+      }>()
+      .items.find((source) => source.path === context.libraryRoot)?.id;
+    const firstScoped = await context.app.inject({
+      method: "POST",
+      url: `/api/admin/sources/${firstSourceId}/scans`,
+      headers: context.authorization,
+    });
+    assert.equal(firstScoped.statusCode, 202);
+    await waitForScan(context, firstScoped.json().id);
+    const availableAfterFirst = await context.app.inject({
+      method: "GET",
+      url: "/api/tracks",
+      headers: context.authorization,
+    });
+    assert.equal(availableAfterFirst.json().items.length, 1);
+  } finally {
+    await context.close();
+  }
+});
+
+test("only local sources can be rescanned", async () => {
+  const context = await createTestContext();
+  try {
+    const remote = await context.app.inject({
+      method: "POST",
+      url: "/api/admin/sources",
+      headers: context.authorization,
+      payload: { kind: "url", url: "https://example.com/music" },
+    });
+    const response = await context.app.inject({
+      method: "POST",
+      url: `/api/admin/sources/${remote.json().id}/scans`,
+      headers: context.authorization,
+    });
+    assert.equal(response.statusCode, 400);
+    assert.equal(response.json().error.code, "source_not_rescanable");
+  } finally {
+    await context.close();
+  }
+});
+
 test("sources require an administrator", async () => {
   const context = await createTestContext();
   const member = await createMemberSession(context);
@@ -309,6 +424,7 @@ test("sources require an administrator", async () => {
     for (const [method, url] of [
       ["GET", "/api/admin/sources"],
       ["POST", "/api/admin/sources"],
+      ["POST", "/api/admin/sources/missing/scans"],
       ["GET", "/api/admin/filesystem/search?query=music"],
     ] as const) {
       const memberResponse = await context.app.inject({

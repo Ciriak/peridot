@@ -204,6 +204,7 @@ export async function reorderSources(
 
 export interface PathSource {
   id: string;
+  name: string | null;
   path: string;
 }
 
@@ -215,7 +216,11 @@ export async function getPathSources(
     .filter((source): source is Source & { path: string } =>
       Boolean(source.path),
     )
-    .map((source) => ({ id: source.id, path: source.path! }));
+    .map((source) => ({
+      id: source.id,
+      name: source.name,
+      path: source.path!,
+    }));
 }
 
 export async function listDirectoryEntries(

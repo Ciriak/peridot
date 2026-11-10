@@ -8,15 +8,19 @@ datasource db {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
-  username     String    @unique
+  id           String       @id @default(cuid())
+  email        String       @unique
+  username     String       @unique
   passwordHash String
   role         String
-  bootstrapKey String?   @unique
+  bootstrapKey String?      @unique
   sessions     Session[]
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  trackLikes   TrackLike[]
+  albumLikes   AlbumLike[]
+  artistLikes  ArtistLike[]
+  queueItems   QueueItem[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
   @@index([role])
 }
@@ -34,41 +38,131 @@ model Session {
 }
 
 model Track {
-  id             String   @id @default(cuid())
-  title          String
-  artist         String
-  album          String?
-  relativePath   String
-  mimeType       String
-  durationMs     Int?
-  fileSizeBytes  BigInt
-  fileModifiedAt DateTime
-  available      Boolean  @default(true)
-  lastSeenScanId String?
-  sourceId       String?
-  source         Source?  @relation(fields: [sourceId], references: [id], onDelete: SetNull)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                         String      @id @default(cuid())
+  title                      String
+  artist                     String
+  artistCredits              String?
+  album                      String?
+  discNumber                 Int?
+  trackNumber                Int?
+  relativePath               String
+  mimeType                   String
+  durationMs                 Int?
+  fileSizeBytes              BigInt
+  fileModifiedAt             DateTime
+  metadataVersion            Int         @default(0)
+  metadataMode               String      @default("automatic")
+  metadataTitle              String?
+  metadataArtist             String?
+  metadataArtistCredits      String?
+  metadataAlbum              String?
+  metadataDiscNumber         Int?
+  metadataTrackNumber        Int?
+  metadataProviderId         String?
+  metadataProviderKind       String?
+  metadataProviderName       String?
+  metadataRecordingId        String?
+  metadataReleaseId          String?
+  metadataMatchedAt          DateTime?
+  metadataAttemptedSignature String?
+  coverId                    String?
+  available                  Boolean     @default(true)
+  lastSeenScanId             String?
+  sourceId                   String?
+  source                     Source?     @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  likes                      TrackLike[]
+  queueItems                 QueueItem[]
+  createdAt                  DateTime    @default(now())
+  updatedAt                  DateTime    @updatedAt
 
+  @@unique([sourceId, relativePath])
   @@index([available])
   @@index([artist, album, title])
   @@index([sourceId])
-  @@unique([sourceId, relativePath])
+  @@index([coverId])
+}
+
+model TrackCover {
+  id        String   @id @default(cuid())
+  hash      String   @unique
+  mimeType  String
+  data      Bytes
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TrackLike {
+  userId    String
+  trackId   String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  track     Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userId, trackId])
+  @@index([trackId])
+}
+
+model QueueItem {
+  userId    String
+  trackId   String
+  position  Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  track     Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userId, trackId])
+  @@index([userId, position])
+  @@index([trackId])
+}
+
+model AlbumLike {
+  id               String   @id @default(cuid())
+  userId           String
+  title            String
+  artist           String
+  normalizedTitle  String
+  normalizedArtist String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt        DateTime @default(now())
+
+  @@unique([userId, normalizedArtist, normalizedTitle])
+  @@index([userId, createdAt])
+}
+
+model ArtistLike {
+  id             String   @id @default(cuid())
+  userId         String
+  name           String
+  normalizedName String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
+
+  @@unique([userId, normalizedName])
+  @@index([userId, createdAt])
 }
 
 model LibraryScan {
-  id               String   @id @default(cuid())
-  status           String
-  discoveredCount  Int      @default(0)
-  createdCount     Int      @default(0)
-  updatedCount     Int      @default(0)
-  unchangedCount   Int      @default(0)
-  errorCount       Int      @default(0)
-  unavailableCount Int      @default(0)
-  failureSummary   String?
-  createdAt        DateTime @default(now())
-  startedAt        DateTime?
-  completedAt      DateTime?
+  id                     String    @id @default(cuid())
+  status                 String
+  sourceId               String?
+  sourceName             String?
+  discoveredCount        Int       @default(0)
+  createdCount           Int       @default(0)
+  updatedCount           Int       @default(0)
+  unchangedCount         Int       @default(0)
+  errorCount             Int       @default(0)
+  unavailableCount       Int       @default(0)
+  metadataStatus         String    @default("skipped")
+  metadataTotalCount     Int       @default(0)
+  metadataProcessedCount Int       @default(0)
+  metadataMatchedCount   Int       @default(0)
+  metadataUnmatchedCount Int       @default(0)
+  metadataErrorCount     Int       @default(0)
+  metadataFailureSummary String?
+  failureSummary         String?
+  createdAt              DateTime  @default(now())
+  startedAt              DateTime?
+  completedAt            DateTime?
 
   @@index([status])
   @@index([createdAt])
@@ -93,5 +187,18 @@ model Source {
   tracks      Track[]
 
   @@index([kind])
+  @@index([position])
+}
+
+model MetadataProvider {
+  id                   String   @id @default(cuid())
+  kind                 String   @unique
+  name                 String
+  contact              String
+  credentialCiphertext String?
+  position             Int      @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
   @@index([position])
 }

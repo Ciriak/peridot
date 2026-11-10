@@ -1,15 +1,28 @@
 import type {
   ApiErrorResponse,
+  ApplyTrackMetadataRequest,
   AuthSessionResponse,
   AuthStatusResponse,
+  CreateMetadataProviderRequest,
   CreateSourceRequest,
   DirectoryListResponse,
   DirectorySearchResponse,
+  LikeListResponse,
+  LikeResponse,
+  LikeTarget,
   LibraryScanResponse,
   LogListResponse,
+  MetadataCandidateListResponse,
+  MetadataProviderListResponse,
+  MetadataProviderResponse,
+  PlaybackTokenResponse,
+  QueueResponse,
+  ReplaceQueueRequest,
+  ResetTrackMetadataResponse,
   ServerSettingsResponse,
   SourceListResponse,
   SourceResponse,
+  TrackListResponse,
 } from "@peridot/contracts";
 
 export interface AdministratorCredentials {
@@ -40,9 +53,13 @@ async function requestJson<T>(
 ): Promise<T> {
   let response: Response;
   try {
+    const headers = new Headers(init?.headers);
+    if (init?.body != null) {
+      headers.set("Content-Type", "application/json");
+    }
     response = await fetch(`${serverAddress}${path}`, {
       ...init,
-      headers: { "Content-Type": "application/json", ...init?.headers },
+      headers,
     });
   } catch {
     throw new Error("Could not reach this Peridot server.");
@@ -111,11 +128,85 @@ export function createUserSession(
   });
 }
 
+export function revokeSession(serverAddress: string, token: string) {
+  return authenticatedRequestJson<void>(
+    serverAddress,
+    "/api/auth/session",
+    token,
+    { method: "DELETE" },
+  );
+}
+
 export function fetchServerSettings(serverAddress: string, token: string) {
   return authenticatedRequestJson<ServerSettingsResponse>(
     serverAddress,
     "/api/admin/server",
     token,
+  );
+}
+
+export function listMetadataProviders(serverAddress: string, token: string) {
+  return authenticatedRequestJson<MetadataProviderListResponse>(
+    serverAddress,
+    "/api/admin/metadata-providers",
+    token,
+  );
+}
+
+export function createMetadataProvider(
+  serverAddress: string,
+  token: string,
+  provider: CreateMetadataProviderRequest,
+) {
+  return authenticatedRequestJson<MetadataProviderResponse>(
+    serverAddress,
+    "/api/admin/metadata-providers",
+    token,
+    { method: "POST", body: JSON.stringify(provider) },
+  );
+}
+
+export function deleteMetadataProvider(
+  serverAddress: string,
+  token: string,
+  providerId: string,
+) {
+  return authenticatedRequestJson<void>(
+    serverAddress,
+    `/api/admin/metadata-providers/${providerId}`,
+    token,
+    { method: "DELETE" },
+  );
+}
+
+export function reorderMetadataProviders(
+  serverAddress: string,
+  token: string,
+  ids: string[],
+) {
+  return authenticatedRequestJson<MetadataProviderListResponse>(
+    serverAddress,
+    "/api/admin/metadata-providers/order",
+    token,
+    { method: "PUT", body: JSON.stringify({ ids }) },
+  );
+}
+
+export function refreshMetadata(serverAddress: string, token: string) {
+  return authenticatedRequestJson<LibraryScanResponse>(
+    serverAddress,
+    "/api/admin/metadata/refresh",
+    token,
+    { method: "POST" },
+  );
+}
+
+export function resetMetadata(serverAddress: string, token: string) {
+  return authenticatedRequestJson<ResetTrackMetadataResponse>(
+    serverAddress,
+    "/api/admin/metadata/reset",
+    token,
+    { method: "POST" },
   );
 }
 
@@ -174,6 +265,19 @@ export function reorderSources(
   );
 }
 
+export function rescanSource(
+  serverAddress: string,
+  token: string,
+  sourceId: string,
+) {
+  return authenticatedRequestJson<LibraryScanResponse>(
+    serverAddress,
+    `/api/admin/sources/${sourceId}/scans`,
+    token,
+    { method: "POST" },
+  );
+}
+
 export function listDirectories(
   serverAddress: string,
   token: string,
@@ -224,4 +328,130 @@ export function getLibraryScan(
     `/api/library/scans/${scanId}`,
     token,
   );
+}
+
+export function listTracks(serverAddress: string, token: string) {
+  return authenticatedRequestJson<TrackListResponse>(
+    serverAddress,
+    "/api/tracks",
+    token,
+  );
+}
+
+export function listMetadataCandidates(
+  serverAddress: string,
+  token: string,
+  trackId: string,
+  query?: string,
+) {
+  const params = new URLSearchParams();
+  if (query?.trim()) params.set("query", query.trim());
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return authenticatedRequestJson<MetadataCandidateListResponse>(
+    serverAddress,
+    `/api/tracks/${encodeURIComponent(trackId)}/metadata/candidates${suffix}`,
+    token,
+  );
+}
+
+export function applyTrackMetadata(
+  serverAddress: string,
+  token: string,
+  trackId: string,
+  metadata: ApplyTrackMetadataRequest,
+) {
+  return authenticatedRequestJson<void>(
+    serverAddress,
+    `/api/tracks/${encodeURIComponent(trackId)}/metadata`,
+    token,
+    { method: "PUT", body: JSON.stringify(metadata) },
+  );
+}
+
+export function revertTrackMetadata(
+  serverAddress: string,
+  token: string,
+  trackId: string,
+) {
+  return authenticatedRequestJson<void>(
+    serverAddress,
+    `/api/tracks/${encodeURIComponent(trackId)}/metadata`,
+    token,
+    { method: "DELETE" },
+  );
+}
+
+export function fetchQueue(serverAddress: string, token: string) {
+  return authenticatedRequestJson<QueueResponse>(
+    serverAddress,
+    "/api/queue",
+    token,
+  );
+}
+
+export function replaceQueue(
+  serverAddress: string,
+  token: string,
+  trackIds: string[],
+) {
+  const body: ReplaceQueueRequest = { trackIds };
+  return authenticatedRequestJson<QueueResponse>(
+    serverAddress,
+    "/api/queue",
+    token,
+    { method: "PUT", body: JSON.stringify(body) },
+  );
+}
+
+export function listLikes(serverAddress: string, token: string) {
+  return authenticatedRequestJson<LikeListResponse>(
+    serverAddress,
+    "/api/likes",
+    token,
+  );
+}
+
+export function createLike(
+  serverAddress: string,
+  token: string,
+  target: LikeTarget,
+) {
+  return authenticatedRequestJson<LikeResponse>(
+    serverAddress,
+    "/api/likes",
+    token,
+    { method: "POST", body: JSON.stringify(target) },
+  );
+}
+
+export function deleteLike(
+  serverAddress: string,
+  token: string,
+  target: LikeTarget,
+) {
+  return authenticatedRequestJson<void>(serverAddress, "/api/likes", token, {
+    method: "DELETE",
+    body: JSON.stringify(target),
+  });
+}
+
+export function createPlaybackToken(
+  serverAddress: string,
+  token: string,
+  trackId: string,
+) {
+  return authenticatedRequestJson<PlaybackTokenResponse>(
+    serverAddress,
+    `/api/tracks/${encodeURIComponent(trackId)}/playback-token`,
+    token,
+    { method: "POST" },
+  );
+}
+
+export function trackAudioUrl(
+  serverAddress: string,
+  trackId: string,
+  playbackToken: string,
+) {
+  return `${serverAddress}/api/tracks/${encodeURIComponent(trackId)}/audio?playbackToken=${encodeURIComponent(playbackToken)}`;
 }

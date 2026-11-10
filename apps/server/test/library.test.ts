@@ -4,7 +4,12 @@ import { mkdir, rename, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
-import { createTestContext, createWav, startScan } from "./helpers.js";
+import {
+  createTaggedMp3,
+  createTestContext,
+  createWav,
+  startScan,
+} from "./helpers.js";
 
 test("protected library routes require a valid user session", async () => {
   const context = await createTestContext();
@@ -71,10 +76,15 @@ test("scans catalog supported regular files, reconcile availability, and persist
       id: list.items[0]?.id,
       title: "Song",
       artist: "Unknown Artist",
+      artists: ["Unknown Artist"],
       album: null,
+      discNumber: null,
+      trackNumber: null,
       durationMs: 100,
       mimeType: "audio/wav",
       available: true,
+      coverUrl: null,
+      metadata: null,
     });
     assert.doesNotMatch(
       listResponse.body,
@@ -113,7 +123,72 @@ test("scans catalog supported regular files, reconcile availability, and persist
   }
 });
 
-test("audio endpoint streams complete and ranged responses and marks missing files unavailable", async () => {
+test("scans track, disc, and album tags and backfills legacy metadata once", async () => {
+  const context = await createTestContext();
+  const trackPath = path.join(context.root, "music", "ordered.mp3");
+  try {
+    await writeFile(
+      trackPath,
+      createTaggedMp3({
+        title: "Opening",
+        artist: "Elliot Lake; Óra",
+        album: "Night Sessions",
+        discNumber: 2,
+        trackNumber: 5,
+      }),
+    );
+
+    const firstScan = await startScan(context);
+    assert.equal(firstScan.status, "completed");
+    const firstTrack = await context.database.track.findFirstOrThrow();
+    assert.equal(firstTrack.artist, "Elliot Lake, Óra");
+    assert.equal(
+      firstTrack.artistCredits,
+      JSON.stringify(["Elliot Lake", "Óra"]),
+    );
+    assert.equal(firstTrack.album, "Night Sessions");
+    assert.equal(firstTrack.mimeType, "audio/mpeg");
+    assert.equal(firstTrack.discNumber, 2);
+    assert.equal(firstTrack.trackNumber, 5);
+    assert.equal(firstTrack.metadataVersion, 3);
+
+    await context.database.track.update({
+      where: { id: firstTrack.id },
+      data: { metadataVersion: 0, discNumber: null, trackNumber: null },
+    });
+    const backfillScan = await startScan(context);
+    assert.equal(backfillScan.updatedCount, 1);
+    const backfilledTrack = await context.database.track.findUniqueOrThrow({
+      where: { id: firstTrack.id },
+    });
+    assert.equal(backfilledTrack.discNumber, 2);
+    assert.equal(backfilledTrack.trackNumber, 5);
+    assert.equal(backfilledTrack.metadataVersion, 3);
+
+    const unchangedScan = await startScan(context);
+    assert.equal(unchangedScan.unchangedCount, 1);
+    assert.equal(unchangedScan.updatedCount, 0);
+
+    const response = await context.app.inject({
+      method: "GET",
+      url: `/api/tracks/${firstTrack.id}`,
+      headers: context.authorization,
+    });
+    assert.equal(response.statusCode, 200);
+    assert.equal(
+      response.json<{ trackNumber: number | null }>().trackNumber,
+      5,
+    );
+    assert.deepEqual(response.json<{ artists: string[] }>().artists, [
+      "Elliot Lake",
+      "Óra",
+    ]);
+  } finally {
+    await context.close();
+  }
+});
+
+test("audio endpoint streams complete and ranged responses with a playback token and marks missing files unavailable", async () => {
   const context = await createTestContext();
   const trackPath = path.join(context.root, "music", "range.wav");
   const wav = createWav(20);
@@ -125,10 +200,37 @@ test("audio endpoint streams complete and ranged responses and marks missing fil
     });
     const url = `/api/tracks/${track.id}/audio`;
 
+    const tokenResponse = await context.app.inject({
+      method: "POST",
+      url: `/api/tracks/${track.id}/playback-token`,
+      headers: context.authorization,
+    });
+    assert.equal(tokenResponse.statusCode, 200);
+    const playbackToken = tokenResponse.json<{ token: string }>().token;
+    const playbackUrl = `${url}?playbackToken=${encodeURIComponent(playbackToken)}`;
+
+    assert.equal(
+      (
+        await context.app.inject({
+          method: "GET",
+          url,
+        })
+      ).statusCode,
+      401,
+    );
+    assert.equal(
+      (
+        await context.app.inject({
+          method: "GET",
+          url: playbackUrl.replace(track.id, "another-track"),
+        })
+      ).statusCode,
+      401,
+    );
+
     const complete = await context.app.inject({
       method: "GET",
-      url,
-      headers: context.authorization,
+      url: playbackUrl,
     });
     assert.equal(complete.statusCode, 200);
     assert.equal(complete.headers["accept-ranges"], "bytes");
@@ -142,8 +244,8 @@ test("audio endpoint streams complete and ranged responses and marks missing fil
     ] as const) {
       const response = await context.app.inject({
         method: "GET",
-        url,
-        headers: { ...context.authorization, range },
+        url: playbackUrl,
+        headers: { range },
       });
       assert.equal(response.statusCode, 206);
       assert.equal(
@@ -158,8 +260,7 @@ test("audio endpoint streams complete and ranged responses and marks missing fil
 
     const head = await context.app.inject({
       method: "HEAD",
-      url,
-      headers: context.authorization,
+      url: playbackUrl,
     });
     assert.equal(head.statusCode, 200);
     assert.equal(head.headers["content-length"], String(wav.length));
@@ -167,8 +268,8 @@ test("audio endpoint streams complete and ranged responses and marks missing fil
 
     const invalid = await context.app.inject({
       method: "GET",
-      url,
-      headers: { ...context.authorization, range: `bytes=${wav.length}-` },
+      url: playbackUrl,
+      headers: { range: `bytes=${wav.length}-` },
     });
     assert.equal(invalid.statusCode, 416);
     assert.equal(invalid.headers["content-range"], `bytes */${wav.length}`);

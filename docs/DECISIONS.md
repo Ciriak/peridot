@@ -1,5 +1,337 @@
 # Decisions
 
+## 2026-11-10: Bulk metadata reset returns tracks to file metadata
+
+Administrators can clear every stored track metadata match from Settings →
+Metadata after confirming the destructive action. Reset sets all tracks to file
+mode and clears provider provenance, MusicBrainz recording and release IDs,
+album/title/artist/numbering overlays, match timestamps, and attempted-match
+signatures. It does not delete metadata providers, track rows, queue or like
+data, artwork, source configuration, or audio files.
+
+Bulk reset shares the per-track “Use file metadata” destination: tracks use
+their original file tags and are not immediately re-enriched. This gives the
+owner a reliable recovery path when individual manual matches split one folder
+album into several derived Albums entries. The reset endpoint is administrator
+only, rejects requests while a scan or metadata refresh is active, and returns
+the number of catalog tracks reset.
+
+## 2026-11-10: Playback survives fullscreen layout changes
+
+The web application root owns the single native audio element. Layouts render
+playback controls and queue UI but do not mount or destroy audio themselves.
+Switching from the main shell to the playerless fullscreen Settings layout
+therefore leaves the current media playing and its shared position, volume, and
+queue state intact. Returning to the main shell reconnects those controls to the
+same audio manager.
+
+This supersedes the earlier decision that the persistent main layout was the
+sole audio owner. Layout changes still hide the visual player, but they no longer
+pause, clear, or recreate playback.
+
+## 2026-11-10: Album and artist cards share collection context menus
+
+Album and artist cards use dedicated wrapper components around the shared Reka
+UI context-menu primitives. The complete card, including its artwork and title
+link, is the trigger, so right-click and touch long-press work consistently
+without adding page-specific pointer handlers. Each menu exposes only actions
+that make sense for a collection: Play, Like/Unlike, and Open.
+
+Play uses the same `playCollection` queue replacement as the detail headers.
+Like state and pending mutations use the shared optimistic likes store, so a
+card menu and its heart button stay synchronized. Open reuses the existing
+encoded album and artist routes instead of duplicating route construction.
+
+## 2026-11-10: Folders are album boundaries for metadata matching
+
+Automatic metadata enrichment groups tracks by source and containing directory
+rather than by file-tag album and artist identity. Every folder is therefore an
+album even when its files have no album tags, so those tracks use release search
+and release lookup instead of falling back to individual recording searches.
+
+When every track in the folder agrees on the same non-empty album tag, that tag
+is used as the release title. If tags are absent or disagree within the folder,
+the folder name is used instead. Tracks directly below a source root use that
+source directory's name. Exact title and credited-artist matching still decides
+whether any provider result is applied, and provider metadata remains an overlay
+over the original file metadata.
+
+## 2026-11-10: Local album artwork with placeholder fallback
+
+The scanner reads the preferred embedded front-cover picture from each changed
+audio file, falling back to same-folder `cover`, `folder`, `front`, or `albumart`
+JPEG/PNG/WebP files. Images are limited to 5 MiB, hashed by content, and stored
+once as SQLite BLOBs so tracks from the same album do not duplicate artwork.
+Metadata version 3 re-reads existing catalog rows so covers are backfilled by the
+next scan.
+
+Track responses expose a relative cover URL containing a short-lived HMAC token
+scoped to that track's GET/HEAD cover route. Browser image requests therefore do
+not need to expose the long-lived session bearer token, and cover URLs are
+redacted from request logs. A missing, unreadable, oversized, expired, or
+unsupported cover leaves the music-note placeholder in album cards, album
+details, and the persistent player. Peridot does not fetch external artwork or
+rewrite audio files.
+
+## 2026-11-10: MusicBrainz metadata overlays with per-source scans
+
+Metadata providers are ordered server-wide configuration managed by
+administrators. MusicBrainz is the first provider. The public read API currently
+requires no API key, but it requires a meaningful contact-bearing User-Agent and
+at most one request per second. Peridot collects a contact email or URL,
+serializes requests through one rate-limited client, uses only the official
+MusicBrainz origin, and applies bounded responses, timeouts, and retry backoff.
+Provider credentials are reserved for future keyed providers, are never returned
+to the browser, and are not collected for MusicBrainz.
+
+The Add provider dialog follows the Sources picker's two-step flow. Its service
+choices are large selectable cards rather than a button list. MusicBrainz is the
+only enabled card; Spotify appears disabled with a coming-soon label. The
+MusicBrainz step collects only the required contact, with no display-name field,
+because the provider name is derived from its fixed provider kind.
+
+Enrichment runs as a background continuation after a file scan marks the local
+catalog complete. It processes only new or changed tracks with automatic
+matching enabled, stores no-match signatures to avoid polling unchanged misses,
+and leaves transient failures retryable. Album tracks are grouped through
+release search and lookup; albumless tracks use recording search. Automatic
+matches require normalized title and credited-artist agreement, with album,
+numbering, and duration used to disambiguate. Provider values are stored as
+overlays instead of rewriting local file tags. Manual matches use manual mode;
+reverting selects file mode so later scans do not immediately reapply the same
+automatic result. Provider deletion stops future enrichment but preserves
+existing overlay snapshots and provenance.
+
+Sources and metadata providers each have dedicated administrator-only Settings
+pages. A local source's three-dot action menu starts a source-scoped scan or
+confirms removal. Source-scoped scans only reconcile availability for tracks
+belonging to that source, so a missing file in one source cannot hide tracks from
+another source. The former Administration Library status panel and global rescan
+control were removed; scan progress remains visible through the global toast,
+including the background metadata phase.
+
+## 2026-11-10: Sortable shared Reka-style track tables
+
+The library, album detail, and artist detail screens share one track-table
+component rather than maintaining three copies of row markup. It follows the
+Reka UI data-table example's composition pattern: a semantic table wraps Reka
+context-menu interactions, client-side sort state drives a copied row array, and
+header buttons toggle the active direction. Reka does not provide a table or
+sorting primitive, so sorting remains a small typed helper over the catalog
+model while interaction primitives and shared shadcn-style controls continue to
+come from Reka UI.
+
+Title, artist, album, duration, and visible track-number fields are sortable.
+Each header cycles through ascending, descending, and default. The default state
+clears the active header sort; library tables return to title ascending, while
+album and artist tables return to track-number ordering so album/disc order
+remains intact. Missing text, duration, and track-number values remain last in
+both directions, and equal values retain source order. Sorting is per-table
+client state and does not mutate or persist the catalog order.
+
+## 2026-11-10: Durable per-user player queue
+
+The player has one ordered queue whose first available catalog track is the
+active track. Playing a track moves it to the front while preserving the rest
+of the queue; playing an album or artist replaces the queue with that ordered
+collection. Next and natural completion consume the active item and stop when
+the queue is empty. Previous uses a non-persistent in-memory history and places
+the displaced current track back at the front of upcoming. Track IDs are unique
+within the queue, including explicit Add to queue operations. Adding any track
+that is already queued moves it back to the next position; re-adding the active
+track leaves the normalized order intact and still reports success. The Add to
+queue action is never disabled solely because the track is already present.
+
+Queue order is private to each authenticated user and stored in a relational
+`QueueItem` table keyed by user and track with cascading deletion. The
+authenticated API is an ordered `GET /api/queue` snapshot plus an idempotent
+`PUT /api/queue` replacement. Requests reject duplicate and unknown track IDs.
+Browser writes are serialized and last-write-wins; stale writes are skipped when
+the authenticated server or user changes. Playback continues locally if a save
+fails, and the next queue mutation sends the complete current snapshot.
+
+The web shell restores a saved queue paused at the first available track. A
+player-clearing, width-constrained custom right-side panel pins the now-playing
+item and uses the existing SortableJS integration for upcoming drag reordering.
+Upcoming rows display title context and artist links without acting as playback
+controls. The panel and overlay stop at the top edge of the fixed player, so
+there is no overlapping interactive surface. Entire queue rows are draggable.
+Reordering calculates the new order from SortableJS's old and new indexes
+before updating and persisting the authoritative array. The queue button
+directly toggles the panel. Close-button, Escape, and backdrop dismissal are
+implemented explicitly. The panel is non-modal so the fixed player keeps
+pointer and keyboard interaction while the panel is open. No local CSS or theme
+overrides are used. Randomize shuffles only upcoming tracks so the active track
+and playback state remain unchanged.
+
+Queue drag handles use the bundled Akar Icons `drag-vertical` glyph instead of
+the previous four-direction Basil move icon. It is imported as local icon data,
+so drag handles still render offline and inherit semantic colors and Tailwind
+sizing.
+
+## 2026-11-10: Player seek target uses a larger invisible hit area
+
+The bottom player's progress slider uses a standard `min-h-11` minimum height
+on its Reka UI root. Pointer interactions are handled by the root, so this makes
+the seek target 44px tall without changing the shared 6px track or 16px thumb.
+The larger hit area is scoped to playback progress; the volume slider and the
+shared Slider defaults remain visually and dimensionally unchanged.
+
+## 2026-11-10: Durable per-user track, album, and artist likes
+
+Tracks, albums, and artists have independent likes stored per authenticated
+user. Track likes use the stable catalog ID and cascade when the track or user is
+deleted. Albums and artists remain client-side projections rather than server
+entities, so their likes store trimmed display metadata plus normalized identity
+fields and are unique per user and normalized identity. The same case-insensitive
+trimming used by the album and artist projections determines whether a like
+matches.
+
+One authenticated `GET /api/likes` response feeds a shared browser composable.
+`POST /api/likes` and `DELETE /api/likes` accept a discriminated target and are
+idempotent. The client updates the UI optimistically, locks the affected target
+while its request is pending, restores the previous state and reports a toast on
+failure, and clears favorite state when the server or signed-in user changes.
+After the server confirms a new like, the client also shows a five-second
+success toast. Album and artist confirmations include their trimmed display
+name; track confirmations are generic because the like target carries only the
+catalog ID. Successful unlikes do not show a toast, so the confirmation is
+reserved for adding an item to the user's likes.
+Liking an album or artist never likes its tracks. Album and artist metadata
+retags create a new normalized identity, so an old like remains stored but stops
+matching the retagged entity.
+
+## 2026-11-10: Track context menus and multiple artist credits
+
+Track rows in the library, album detail, and artist detail use one shared Reka
+UI context menu exposed through `@peridot/ui`. The native context trigger opens
+on right-click or touch long-press and offers Play, Like/Unlike, Download, Go to
+album, and Go to artist. A track with multiple credited artists shows a submenu
+listing each artist destination. Menu playback preserves the queue of the
+screen that owns the row. The browser obtains a short-lived playback token and
+downloads the original file through a temporary blob URL, so neither the
+long-lived session nor a server credential is embedded in media URLs or menu
+markup.
+
+The catalog now carries `artists: string[]` alongside the combined display
+`artist` value. Scanning retains every value from the tag's artist list and
+also recognizes semicolon, comma, and featuring separators in single artist
+fields. The JSON-encoded `artistCredits` column is optional because SQLite and
+Prisma do not provide a portable array column for this provisional schema;
+legacy rows fall back to their display artist until rescanned. Bumping the
+metadata version to 2 makes the next scan backfill existing rows. Artist
+browsing groups a collaboration track under every credited artist, and artist
+links render each credit separately.
+
+## 2026-11-10: Browser playback through track-scoped stream URLs
+
+Use the browser's native audio element against the existing authenticated audio
+route instead of downloading each track into memory or introducing a second
+streaming protocol. Because a media element cannot attach the session bearer
+header, the authenticated client first requests a short-lived playback token,
+then supplies it in the audio request URL. Tokens are HMAC-signed, scoped to one
+track and the exact GET/HEAD audio route, expire after four hours, and are
+redacted from request logs. They never replace or expose the 30-day user session.
+
+The persistent main layout remains the sole owner of the audio element. Shared
+Nuxt state exposes playback status and actions so library, album, artist, and
+player controls stay synchronized. The player uses the native media clock for
+position and duration, preserves HTTP range seeking, handles browser autoplay or
+decode failures visibly, and advances within the active album or artist queue.
+Fullscreen settings do not render a player; returning to the main layout resumes
+the current track at its saved position.
+
+## 2026-11-10: Derived artist browsing and artist queues
+
+Artist browsing is a client-side projection of the canonical track catalog,
+matching the album boundary rather than introducing an artist entity or server
+endpoint. Artists are grouped from trimmed, case-insensitive track artist values
+and include albumless tracks as well as the scanner's Unknown Artist fallback.
+The index filters by artist name. An artist page derives its album cards from
+the same tracks and orders the complete track table by album title, disc, and
+track number, with albumless tracks last.
+
+The shared simulated player accepts general ordered queues. Album pages retain
+album-scoped queues, while artist pages use an artist-wide queue for both the
+Play artist action and individual track selection. Artist names in the shared
+track list and album details link to the derived artist page. Artist and album
+artwork remain semantic placeholders until artwork extraction is designed.
+
+## 2026-11-10: Derived album browsing and album playback queues
+
+Album browsing is a client-side projection of the canonical track catalog rather
+than a separate album entity. Available tracks with non-empty album metadata are
+grouped by case-insensitive, trimmed artist and album values, so same-named
+albums by different artists remain separate. Albumless tracks stay in the normal
+library. Album cards use semantic placeholder artwork until embedded or folder
+cover extraction is designed.
+
+Album ordering uses nullable disc and track numbers scanned from file metadata.
+Positive track numbers sort across discs, with a missing disc treated as disc
+one; unnumbered tracks sort alphabetically after numbered tracks. A private
+metadata-version field causes the first scan after this change to re-read
+unchanged legacy files once, then records the current version so tagless files
+are not repeatedly parsed.
+
+The shared simulated player supports an optional ordered queue. Playing an album
+or one of its tracks keeps previous, next, and automatic advancement within that
+album; choosing a track from the main library returns the player to the full
+catalog queue. The playback clock is owned by the persistent layout so multiple
+screens can consume player state without creating duplicate timers.
+
+## 2026-11-10: Library UI reads the server catalog
+
+The web library uses the authenticated `GET /api/tracks` response as its only
+track source. A shared Nuxt composable owns loading, errors, retry, and completed-
+scan refresh so Home, Library, Liked songs, and the fixed player do not maintain
+separate catalog copies. Search and favorites filter the loaded catalog locally;
+favorites remain in-memory until persistence is designed. The player now uses
+real track metadata, but its transport stays explicitly simulated until audio
+playback is connected.
+
+The previous hardcoded demo records and demo player module are removed. This
+avoids presenting fictional content as a user's scanned library and gives later
+playback work a single real-track state contract to build on.
+
+## 2026-11-10: Disconnect from the connected server
+
+Administration presents server disconnection beside the connected-server
+address. The Disconnect button opens a Reka UI alert dialog so canceling or
+dismissing the confirmation leaves the browser identity untouched. Confirming
+clears the browser's server, session, and profile cookies, then calls the
+server's session-revocation endpoint when both the server address and token are
+available. Local disconnecting succeeds even when the server is unreachable or
+revocation fails, so stale browser credentials cannot trap the user; in that
+failure case the server-side session may remain valid until it expires or is
+revoked separately.
+
+## 2026-11-10: JSON content type only for request bodies
+
+The web API client adds `Content-Type: application/json` only when the request
+has a body. A `DELETE` with no body must not claim to contain JSON because
+Fastify correctly rejects that contradictory request before routing it. This
+applies to both source removal and session revocation.
+
+## 2026-11-10: Request completion log severity
+
+Fastify's default request-completion line uses `info` for every response status.
+Peridot replaces that completion logging so successful HTTP requests are
+logged at `debug` and failed HTTP responses are logged at `warn`. The line
+retains the request method, URL, response status, and elapsed time so the
+Administration log can identify rejected requests after the fact. The
+Administration log initially selects `debug`, `warn`, `error`, and `fatal`,
+hiding `trace` and `info` until the user explicitly enables them or selects All.
+
+## 2026-11-10: Explicit browser API CORS methods
+
+Configure the browser API CORS policy with the methods Peridot actually exposes
+instead of relying on the CORS plugin default. `@fastify/cors` defaults to
+allowing only `GET`, `HEAD`, and `POST`, which omitted the `PUT` source-order and
+`DELETE` source-removal requests behind a browser preflight. The explicit
+allowlist is `GET`, `HEAD`, `POST`, `PUT`, `DELETE`, and `OPTIONS`; configured web
+origins and the smaller authorization/content/range header allowlist remain
+authoritative.
+
 ## 2026-11-10: Local-source folder search
 
 The local-files source picker searches directories recursively on the server so
@@ -20,7 +352,9 @@ and connection errors. Library scan state and polling live in a shared composabl
 rather than the Administration page, so a progress toast remains current after
 navigation. The active scan maps to a single persistent `loading` toast that
 updates through queued/running and then becomes a brief completion or failure
-toast. The toast viewport is fixed to the bottom-right and sits above the player.
+toast. The toast viewport is fixed to the bottom-right. It clears the fixed
+player in the main shell and anchors to the bottom edge in playerless fullscreen
+layouts such as Settings.
 
 While the app is connected, probe the configured server's public
 `GET /api/health` endpoint every ten seconds with a bounded timeout and require

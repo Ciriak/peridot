@@ -38,10 +38,10 @@ test("disabled actions remain native disabled buttons with their accessible labe
 test("search input preserves its initial model and accessible name during SSR", async () => {
   const html = await render("Input", {
     modelValue: "Ambient",
-    "aria-label": "Search demo library",
+    "aria-label": "Search library",
   });
   assert.match(html, /value="Ambient"/);
-  assert.match(html, /aria-label="Search demo library"/);
+  assert.match(html, /aria-label="Search library"/);
 });
 test("player slider renders initial progress and exposes bounds and a named thumb during SSR", async () => {
   const html = await render("Slider", {
