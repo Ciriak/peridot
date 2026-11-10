@@ -56,3 +56,49 @@ test("player slider renders initial progress and exposes bounds and a named thum
   assert.match(html, /aria-valuemax="246"/);
   assert.match(html, /aria-label="Playback position"/);
 });
+test("spinner uses the animated brand asset with an accessible reduced-motion fallback", async () => {
+  const html = await render("Spinner", {
+    label: "Scanning for servers",
+    class: "size-4",
+  });
+  assert.match(html, /data-slot="spinner"/);
+  assert.match(html, /role="status"/);
+  assert.match(html, /class="[^"]*size-4/);
+  assert.match(html, /data:image\/svg\+xml/);
+  assert.match(html, /animateTransform/);
+  assert.match(html, /motion-reduce:hidden/);
+  assert.match(html, /clipPath/);
+  assert.match(html, /motion-reduce:block/);
+  assert.match(html, />Scanning for servers<\/span>/);
+});
+test("gradient keeps primary blobs decorative and content above them", async () => {
+  const html = await render(
+    "Gradient",
+    {
+      as: "main",
+      class: "min-h-dvh",
+      colors: ["var(--primary)"],
+      intensity: "strong",
+      speed: 2,
+    },
+    "Onboarding",
+  );
+  assert.match(html, /^<main[^>]*data-slot="gradient"/);
+  assert.match(html, /aria-hidden="true"/);
+  assert.equal(
+    (html.match(/gradient__axis gradient__axis--/g) ?? []).length,
+    5,
+  );
+  assert.equal(
+    (html.match(/--gradient-color-\d:var\(--primary\)/g) ?? []).length,
+    5,
+  );
+  assert.match(html, /--gradient-strength:1/);
+  assert.match(html, /--gradient-speed:2/);
+  assert.match(html, /class="gradient__grain"/);
+  assert.match(html, /class="gradient__content"/);
+  assert.match(html, /Onboarding/);
+
+  const withoutGrain = await render("Gradient", { grain: false });
+  assert.doesNotMatch(withoutGrain, /gradient__grain/);
+});

@@ -2,6 +2,369 @@
 
 Last updated: 2026-11-10.
 
+## Source change toasts
+
+Added success toasts for source lifecycle changes in Administration. Adding or
+removing a source includes the configured folder, URL, or integration label;
+dragging to save a new order reports “Source order updated.” Notifications are
+emitted only after the corresponding server request succeeds and use the shared
+app-level Reka toast manager.
+
+Added behavioral coverage for all three toast messages and wiring assertions for
+the Administration success paths.
+
+Verified `pnpm --filter @peridot/web test` (34 tests), web typecheck, full
+workspace lint, the web production build, `pnpm format:check`, and
+`git diff --check`; all passed. Database validation was skipped because this
+change does not affect the schema. No browser visual/interaction pass was run.
+Changes remain uncommitted on `dev` alongside existing work; no commit, push,
+tag, publication, or deployment was performed.
+
+## Local source folder search
+
+Added case-insensitive deep folder search to the local-files source picker. The
+browser no longer limits results to branches that were already expanded:
+matching folders are found recursively through the admin-only
+`GET /api/admin/filesystem/search` endpoint and shown as flat selectable results
+with their full paths. Input is debounced, superseded requests are aborted, and
+stale responses are ignored. The server also stops recursive traversal when the
+response connection closes.
+
+Recursive search is bounded to 100 results, 25,000 scanned directories, 48
+levels, and eight seconds, with at most twelve concurrent directory reads. It
+does not follow symbolic links, skips platform virtual/system directories, and
+returns a truncation flag when a bound stops the traversal. Added behavioral
+coverage for a five-level nested folder match, result capping, query validation,
+administrator access, API encoding, loading/error states, and accessible search.
+
+Changes remain uncommitted on `dev` alongside existing work. No commit, push, tag,
+publication, or deployment was performed. Verified `pnpm typecheck`, `pnpm test`
+(26 server, 34 web, and 5 shared UI tests), `pnpm build`, targeted ESLint and
+Prettier checks, and `git diff --check`. Database validation was skipped because
+the schema is unchanged. The root `pnpm check` passed lint but stopped at
+formatting because the unrelated pre-existing `toasts.ts` differs from Prettier;
+that file was preserved. No browser visual/interaction pass was run. Next:
+exercise the source search against Windows drives and a large mounted directory
+to tune the bounds, then format the existing Administration files when their
+owner is ready.
+
+## App-level Reka progress and connection toasts
+
+Added one app-level Reka UI managed toast provider in the bottom-right, above the
+fixed player. Library scan state and polling now live in a shared composable, so
+the persistent queued/running progress toast remains current after leaving the
+Administration page. Poll updates refresh discovered/created/updated counts,
+then the progress toast becomes a brief completion or failure notification.
+Temporary scan-status read failures retry without stacking duplicate toasts.
+
+While a server session is active outside onboarding, the root monitor checks
+`GET /api/health` every ten seconds with a four-second timeout and requires the
+exact Peridot health signature. Entering the disconnected state adds one
+persistent error toast; a successful probe dismisses it. Stable Reka toast IDs
+keep repeated health failures to a single notification. The shared scan
+composable also keeps the Administration inline state and controls in sync.
+
+Added behavioral tests for progress/completion/failure scan copy, active status
+detection, exact health-signature validation, network failures, and root-level
+toast/monitor wiring. Updated README and DECISIONS.md.
+
+Verified `pnpm check`, `pnpm test` (24 server, 32 web, and 5 shared UI tests),
+`pnpm typecheck`, `pnpm build`, and `git diff --check`; all passed. Database
+validation was skipped because this change does not affect the schema. No
+browser visual/interaction pass was run. Changes remain uncommitted on `dev`;
+prior unrelated changes were preserved. No commit, push, tag, publication, or
+deployment was performed.
+
+Known limit: active scan state is tracked after a scan is started in the current
+browser session. A full reload cannot rediscover an already-running server scan
+because the current API exposes scans only by ID. Next: add an active-scan
+lookup or SSE/WebSocket status stream, then visually exercise both toast states.
+
+## Fullscreen settings with Administration, Plugins, and server sources
+
+Added a fullscreen Settings area (`layout: "settings"`) with a category sidebar:
+Account, Library, Playback, Plugins, and Administration. Plugins moved out of the
+main navigation into Settings; `/plugins` redirects to `/settings/plugins`. The
+Settings screen opens from a user avatar in the main header, replacing the old
+Demo badge and the sidebar Settings link. The connected-server label and Change
+server control live in the Settings sidebar.
+
+The header avatar loads the signed-in user's Gravatar image using the MD5 hash
+of their normalized email (`ts-md5`), falling back to the bundled Peridot logo
+when no image exists or the request fails. The profile is kept in a same-site
+cookie so the avatar renders without an extra profile fetch.
+
+Administration manages sources — the places the server gets raw audio from. A
+source is a local folder, an external URL, or a deferred integration (Spotify,
+YouTube Music). The server gained a `Source` model and admin-only
+`GET/POST /api/admin/sources`, `DELETE /api/admin/sources/:id`, and a bounded
+`GET /api/admin/filesystem/tree` for lazy local-folder browsing. The sources
+list is draggable (VueUse/SortableJS) and persists order through
+`PUT /api/admin/sources/order`; removal is confirmed in a Reka alert dialog and
+adding opens a Reka dialog that first asks for the kind, then shows a folder
+tree, a URL field, or a deferred-integration note. Scanning walks every path
+source, stores `sourceId` on each track, and audio streaming resolves a track
+through its source. The first path source seeds from `MUSIC_LIBRARY_PATH`.
+Administration also shows a live server log: Fastify's pino output is captured
+in a bounded in-memory buffer and served only to administrators through
+`GET /api/admin/logs?after=<id>`, which the page polls every two seconds.
+
+Verified `pnpm check`, `pnpm typecheck`, `pnpm test` (24 server, 28 web, 5 shared
+UI), `pnpm db:validate`, `pnpm build`, and `git diff --check`; all passed. No
+browser visual pass was run. Changes remain uncommitted on `dev`; prior unrelated
+changes were preserved. No push, tag, publication, or deployment was performed.
+
+Known limits: Account, Library, and Playback are placeholders; Plugins remains a
+placeholder under Settings. URL and integration sources are stored but not
+fetched yet. Host, port, database URL, and web origins are still
+environment-only. Next: implement URL-source fetching, then account/profile
+settings, then wire the real library client to the stored session.
+
+## Email/username/password profile
+
+Replaced the display-name account field with a required, unique email address so
+a profile consists of email, username, and password. The server validates and
+normalizes email at bootstrap, returns email in the user response, and accepts
+either the username or the email address at sign-in. Onboarding now collects an
+email for the first administrator and presents a single username-or-email
+sign-in field. A new migration rebuilds the users table; existing local rows
+get a placeholder email derived from their username so sessions remain valid.
+Server and web tests were updated and bootstrap email-validation and email
+sign-in cases were added.
+
+## Unknown-route home redirect
+
+Added a Nuxt catch-all page so unknown web routes replace the current history
+entry with the home page instead of rendering a not-found screen. Existing
+server/session middleware remains authoritative, so the home route continues to
+send unconfigured or signed-out users through onboarding. Added a focused route
+regression test. Changes remain uncommitted on `dev`; unrelated working-tree
+changes were preserved. Verification results follow below.
+
+## Development connection-refused fix
+
+Reproduced `pnpm run dev` serving Nuxt successfully while the API port 17430
+refused connections. The server watch process had exited because the root quick
+start did not supply the newly required `DATABASE_URL` and
+`MUSIC_LIBRARY_PATH`; Turbo left the web task running and obscured the failure.
+
+Development startup now applies committed migrations, defaults storage to
+`apps/server/peridot.db` and `apps/server/music`, and creates the music directory
+when needed. User-provided development paths remain authoritative, while built
+server startup still requires explicit storage configuration. Migrations run
+before Turborepo starts its persistent tasks, and the server uses Node's native
+watch mode with the tsx import hook; both avoid Windows child-process stalls seen
+when Prisma or the tsx CLI watch wrapper ran concurrently under Turbo. Added
+behavioral coverage for defaults, directory creation, and override preservation.
+The exact root `pnpm run dev` command then applied both migrations, started the
+API and Nuxt together, and remained healthy. HTTP checks returned 200 from the
+web root, server health endpoint, and authentication status endpoint; the latter
+reported the expected first-administrator setup state. `pnpm check`, full
+typecheck, all 12 server tests, all 18 web tests, all 5 shared UI tests,
+`pnpm db:validate`, the production build, and `git diff --check` passed. No
+browser visual pass was performed. Changes remain uncommitted on `dev`; no push,
+tag, publication, or deployment was performed.
+
+## Shared animated brand spinner
+
+Added a reusable `Spinner` component to the shared UI package around the owner's
+animated `spinner.svg`. It exposes a customizable status label and standard
+Tailwind class sizing. The component hides the animation and shows the static
+brand mark for reduced-motion users. Onboarding network discovery now uses the
+shared spinner instead of rotating a generic refresh icon.
+
+Added shared UI SSR coverage for the animated asset, accessible status text,
+class overrides, and reduced-motion fallback. README and the durable component
+decision are updated. `pnpm test` passed (11 server, 17 web, and 5 shared UI
+tests), as did `pnpm typecheck`, `pnpm build`, `pnpm check`, and
+`git diff --check`. Unchanged tasks used the Turbo cache. Database validation was
+not repeated because this change does not affect storage. No browser visual pass,
+commit, push, publication, or deployment was performed. Changes remain
+uncommitted on `dev` alongside the owner's existing work.
+
+## Windows first-render dev crash fix
+
+Reproduced the reported `@peridot/web:dev` exit `3221226505` (`0xC0000409`). The
+process reached Ready, then Vite discovered the route-level Iconify imports and
+linked `@peridot/ui` dependencies during the first onboarding render; its runtime
+dependency optimization immediately terminated the Windows Node process. Added
+the direct imports and shared UI entries to `vite.optimizeDeps.include`.
+Because Vite resolves optimizer entries from the web workspace, the four runtime
+packages owned by shared UI are also declared as web development dependencies;
+they remain normal runtime dependencies of `@peridot/ui`.
+
+The exact root `pnpm dev` workflow was rerun with a migrated disposable database.
+Both tasks reached Ready, onboarding and the discovery API returned HTTP 200, and
+the process stayed alive beyond the previous crash point without dependency
+warnings. It was then stopped. `pnpm check`, web typecheck, all 17 web tests, web
+production build, and `git diff --check` passed. No push or deployment occurred.
+
+## Primary gradient onboarding background
+
+Implemented the full referenced shadcn.io-style Gradient container and applied it
+to the fullscreen onboarding screen. Five radial blobs move independently on
+their horizontal and vertical axes at non-matching 15–26 second base durations,
+with configurable colors, intensity, speed, and film grain. The blobs use eased
+transparent radial stops without blur filters. The decoration ignores pointer
+input, is hidden from assistive technology, and becomes still when the user
+prefers reduced motion.
+
+The owner explicitly approved this component as an exception to the no-custom-
+styling rule. Its scoped CSS, animation keyframes, generated CSS variables, and
+inline static noise tile are contained inside Gradient.vue and the exception does
+not extend elsewhere. Onboarding explicitly passes only `var(--primary)`, which
+is also the component's product default for all five blobs. Shared UI SSR coverage
+verifies the API, five primary blobs, grain toggle, semantic main element,
+decorative accessibility, and foreground content layer. Web styling coverage
+guards both the exception boundary and primary-only onboarding configuration.
+
+Verified `pnpm check`, `pnpm typecheck`, `pnpm test` (11 server, 18 web, and
+5 shared UI tests), `pnpm build`, and `git diff --check`. Unchanged tasks used
+the Turbo cache. The production build emitted the scoped onboarding animation
+stylesheet successfully. The browser-access host remained unavailable, so no
+visual browser pass was completed. No schema validation was run because this
+change does not affect the database. Changes remain uncommitted on `dev`; no
+push, tag, publication, or deployment was performed.
+
+## Shared favicon and onboarding logo
+
+Exposed the owner-supplied shared brand directory through `@peridot/ui`, set
+`favicon.png` as the global web favicon, and replaced the onboarding text mark
+with `logo.svg`. The source files remain in `packages/ui/src/assets/brand`; Vite
+inlines them into the production output, so no duplicate files or external
+requests were added. The other supplied brand images remain available but are
+not used yet.
+
+Added a web test covering both shared asset imports. Web typecheck, all 16 web
+tests, the production web build, production SSR verification of the favicon and
+logo, formatting, and `git diff --check` passed. The temporary production server
+was stopped. No browser visual pass, commit, push, or deployment was performed.
+
+## Automatic local server discovery
+
+Server selection now continuously probes the typed address after a short debounce
+and automatically scans localhost plus the Nuxt host's private IPv4 `/24` networks
+for the exact Peridot health signature on port 17430. Discovery is bounded to up
+to three local subnets, uses concurrent short-timeout probes, coalesces calls for
+ten seconds, and repeats automatically while the selection step remains open.
+The endpoint does not accept caller-selected targets or ports.
+
+Found servers appear as the only selectable actions. The manual Continue and scan
+buttons were removed; clicking a listed server advances to administrator setup or
+sign-in. A verified address typed into the field joins that list. The UI uses the
+bundled Basil refresh icon as a scanning spinner and otherwise keeps discovery
+labels concise with standard Tailwind and existing shadcn-vue variants.
+
+Added tests for private-range filtering, subnet selection, port use, health
+signature validation, same-origin discovery calls, and typed-address discovery.
+`pnpm check`, `pnpm typecheck`, `pnpm test` (11 server, 15 web, and 3 shared UI
+tests), `pnpm db:validate`, `pnpm build`, and `git diff --check` passed. A built
+Nuxt smoke test scanned the detected private networks and found a temporary
+Peridot health responder on localhost:17430; both temporary processes were
+stopped. Browser-local subnet enumeration remains intentionally unsupported:
+automatic subnet discovery reflects the Nuxt host's network, while the typed
+address probe runs in the browser. No browser visual interaction pass was run.
+
+## Required first administrator and onboarding authentication
+
+Implemented the users/authentication foundation and removed the temporary
+deployment-wide administrator token. The Prisma schema and second migration now
+contain users and expiring sessions. Passwords are salted scrypt hashes, opaque
+session tokens are stored only as SHA-256 hashes, and protected routes resolve a
+real user session. An empty server returns `428 setup_required` for protected
+operations, exposes setup status, and permits exactly one first-user bootstrap;
+that user always receives administrator privileges. Bootstrap closes once any
+user exists. Sign-in, current-user lookup, and session revocation are available.
+
+Onboarding now connects to the selected server, reads its setup state, and then
+either requires first-administrator creation or signs in an existing user. The
+server address and 30-day session are persisted in same-site browser cookies.
+Configured `PERIDOT_WEB_ORIGINS` controls browser API access. The new server and
+onboarding default is port 17430. The old `PERIDOT_ADMIN_TOKEN` setting is no
+longer accepted or documented.
+
+Added behavioral coverage for mandatory setup, one-time bootstrap, administrator
+assignment, password hashing, sign-in failures, authenticated current-user
+access, revocation, CORS, the onboarding API client, safe network errors, and the
+17430 defaults. `pnpm check`, `pnpm typecheck`, `pnpm test` (11 server, 11 web,
+and 3 shared UI tests), `pnpm db:validate`, `pnpm build`, and `git diff --check`
+passed. A fresh database applied both migrations, and the built server smoke test
+confirmed health on 17430, unauthenticated setup enforcement, admin bootstrap,
+and authenticated track access. The test server was stopped and its repository
+temporary files were removed.
+
+Current limits: only bootstrap and sign-in UI exist. Additional user creation,
+role management, password changes/recovery, and a session-management UI remain
+future work. The web music library is still fictional and does not yet use the
+session to fetch real catalog data. All work remains uncommitted on `dev`; prior
+unrelated changes were preserved, and no push, tag, publication, or deployment
+was performed. Next: connect the real library client with the stored session,
+then design administrator-managed user invitations and account settings.
+
+## Fullscreen server onboarding and routed web app
+
+Added a first-launch fullscreen onboarding screen at `/onboarding` that asks for
+the user's Peridot server address. HTTP(S) addresses are normalized, credentials
+and URL parameters are rejected, and the non-secret value is persisted for one
+year in a same-site cookie. Global Nuxt middleware redirects unconfigured app
+requests to onboarding and preserves the requested destination. The current
+server can be changed from the sidebar. This frontend milestone intentionally
+does not probe `/api/health` or fetch server data while the browser/API contract
+is still being implemented; onboarding confirms address format, not reachability.
+
+Replaced the single in-memory section switcher with Nuxt file routes for home,
+library, liked songs, playlists, and plugins. The approved sidebar/content/player
+layout is now shared, navigation uses real links and URLs, and demo player,
+search, and liked state survives client-side route changes. No theme tokens,
+custom CSS, dependencies, or server files were changed by this work.
+
+Verified frontend ESLint, web typecheck, all nine web tests (including new server
+address normalization/rejection coverage), production web build, and git diff
+checks. Production HTTP smoke tests confirmed the unconfigured 302 with preserved
+redirect, standalone onboarding 200, and SSR 200 plus expected content for all
+five configured routes. The temporary production server was stopped. Full root
+lint remains blocked by an unrelated unused `waitForScan` helper in the owner's
+uncommitted `apps/server/test/library.test.ts`; that server work was preserved.
+No browser screenshot/visual interaction pass, schema validation, push, deploy,
+or commit was performed. Next: connect the stored address to a typed API client
+once the server contract and browser access policy are ready, then add connection
+status/error handling and replace demo library data.
+
+## Local library server vertical slice
+
+Implemented the backend-only local library milestone. The Fastify server now
+validates its SQLite URL, one music root, and a minimum-length administrator
+token; public health remains independent of the database. Prisma 7 uses the
+maintained better-sqlite3 adapter and a committed initial migration. Protected
+APIs create and inspect persistent asynchronous scans, list real catalog tracks,
+fetch a track, and stream original audio with HEAD and single-byte-range support.
+
+Scanning supports MP3, M4A/AAC, OGG/Opus, WAV, and FLAC, skips symlinks, uses
+bounded metadata parsing, avoids reparsing unchanged files, preserves existing
+metadata on parse failures, and marks missing files unavailable only after a
+successful traversal. Scan conflicts, interrupted jobs, sanitized failures,
+path containment, and missing files are handled explicitly. Filesystem paths and
+statistics are never returned by API contracts. The web preview remains
+fictional and unchanged.
+
+Behavioral server tests use disposable SQLite databases and generated WAV data;
+they cover configuration, authentication, scan lifecycle and reconciliation,
+metadata failures, symlink exclusion, range streaming, missing files, failed
+traversal, and conflicts. Final verification results are recorded at the end of
+this entry. `pnpm check`, `pnpm typecheck`, `pnpm test` (eight server, nine web,
+and three shared UI tests), `pnpm db:validate`, `pnpm build`, a fresh-database
+`pnpm db:migrate:deploy`, built-server HTTP smoke checks, and `git diff --check`
+all passed. The smoke check returned public health 200, protected catalog 401
+without a token, and catalog 200 with a token; its process and temporary files
+were stopped and removed.
+
+Concurrent uncommitted web and lint-configuration changes appeared during the
+server work and were preserved untouched. Server changes also remain uncommitted
+on `dev`; no push, tag, publication, or deployment was performed. Next: review
+the API and temporary authentication boundary, then connect the web application
+without exposing the administrator token; replace it with user sessions in the
+users milestone.
+
 ## Personal information cleanup
 
 Replaced the demo profile name and initials with generic labels. Removed local
@@ -333,3 +696,15 @@ no push/deployment. Next: visually review larger controls at desktop/mobile size
 then continue the local library milestone.
 
 Production web build and git diff --check also passed.
+
+## 2026-11-10: Silent empty server discovery
+
+Removed the onboarding network discovery empty-result message. When a completed
+scan finds no servers, the section now stays empty; active scans still show the
+spinner, discovered servers remain selectable, and discovery failures retain
+their existing notice. Added a source regression assertion preventing the
+"No servers found" message from returning. Changes remain uncommitted on `dev`;
+unrelated working-tree changes were preserved. All 18 web tests, web typecheck,
+targeted formatting, and `git diff --check` passed. Schema validation, production
+build, and browser visual QA were skipped because this is an isolated empty-state
+presentation change. No commit, push, publication, or deployment was performed.

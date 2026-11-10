@@ -11,11 +11,21 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Web: http://localhost:3000. Server health: http://127.0.0.1:3001/api/health.
-The web app is an interactive design preview with fictional music, local artwork,
-search, favorites, and simulated player controls. It does not yet connect to the
-server or play audio. Demo state resets on reload.
-Neither startup requires a database, API key, or hosted service.
+Web: http://localhost:3000. Server health: http://127.0.0.1:17430/api/health.
+Development startup applies committed migrations and, when the corresponding
+environment variables are unset, uses `apps/server/peridot.db` and creates
+`apps/server/music`. Set `DATABASE_URL` or `MUSIC_LIBRARY_PATH` before starting
+to use different development locations.
+On first launch, the web app asks for the address of the user's Peridot server.
+It then creates the required first user with administrator privileges, or signs
+in when the server already has users. The server address and expiring session
+are kept in same-site browser cookies and the server can be changed from the
+sidebar. Server selection continuously probes the typed address and scans the
+web host's private IPv4 networks for Peridot servers on port 17430; selecting a
+discovered server advances onboarding. The routed web preview still uses fictional music, search, favorites,
+and simulated player controls; it does not yet fetch library data or play audio.
+Demo library/player state resets on reload. The server requires a migrated local
+SQLite database and a music folder, but no API key or hosted service.
 
 ```sh
 pnpm format:check
@@ -48,10 +58,10 @@ under Program Files. Turbo and nested scripts need pnpm itself on PATH.
 ## Structure
 
 - `apps/web`: Nuxt 4 application shell.
-- `apps/server`: Fastify API and initial Prisma catalog schema.
+- `apps/server`: authenticated Fastify catalog/scanning/audio API and Prisma SQLite storage.
 - `apps/desktop`: documented future desktop shell.
 - `packages/contracts`: shared API types.
-- `packages/ui`: shared brand tokens and shadcn-vue Button, Input, Badge, and Slider components.
+- `packages/ui`: shared brand tokens and reusable Button, Input, Badge, Slider, Gradient, and Spinner components.
 - `packages/player`: playback state contract, no audio engine yet.
 - `packages/plugin-sdk`: initial manifest contract, no execution runtime.
 - `packages/config`: shared TypeScript configuration.
@@ -69,13 +79,55 @@ imported explicitly, keeping Nuxt component discovery separate from shared UI.
 Poppins is the main UI font, bundled locally via `@fontsource/poppins`.
 `components.json` files track the registry aliases for the web and UI workspaces.
 Upstream component licensing is preserved in `packages/ui/THIRD_PARTY_NOTICES.md`.
+The shared Spinner uses the animated Peridot brand SVG and substitutes the static
+brand mark when the user prefers reduced motion.
+The web shell mounts one app-level Reka UI toast region in the bottom-right,
+above the fixed player. It keeps library-scan progress visible across route
+changes and keeps a single connection-loss error visible until the configured
+server health endpoint responds again.
 
 ## Configuration
 
-Server defaults to loopback port 3001. Set HOST and PORT in your shell to override.
-See apps/server/.env.example for variable names. Environment files are not loaded
-automatically. Prisma defaults to a local SQLite URL. The schema is an initial
-proposal: runtime client wiring, migrations, storage, and authentication are pending.
+Server defaults to loopback port 17430. Set HOST and PORT in your shell to override.
+See apps/server/.env.example for variables required by built server startup.
+Environment files are not loaded automatically. The development command supplies
+the local defaults described in Quick start. `DATABASE_URL` selects the local SQLite file,
+`MUSIC_LIBRARY_PATH` selects the single authoritative music folder, and
+`PERIDOT_WEB_ORIGINS` lists browser origins allowed to call the API. Its defaults
+support the local web development server; add the exact web origin when accessing
+Peridot from another device.
+Administrators can also manage where the server gets raw audio files from
+Settings → Administration. Each source is a local folder, an external URL, or a
+future integration such as Spotify or YouTube Music. Local folder sources seed
+from `MUSIC_LIBRARY_PATH` on first launch and are used by later library scans;
+URL and integration sources are stored but not indexed yet.
+The local-folder picker supports case-insensitive deep folder search without
+requiring folders to be expanded first.
+
+Apply committed migrations before starting a new database:
+
+```sh
+pnpm db:migrate:deploy
+```
+
+The web onboarding checks `GET /api/auth/status`. An empty server permits exactly
+one `POST /api/auth/bootstrap`, which creates the first user — with an email
+address, username, and password — as an administrator. Existing users sign in
+with their username or email address and password through
+`POST /api/auth/sessions`. Passwords are stored as salted scrypt hashes and
+opaque sessions expire after 30 days.
+Except for health and these setup/sign-in routes, server routes require the
+returned session as `Authorization: Bearer <token>`.
+Start a scan with `POST /api/library/scans`, poll
+`GET /api/library/scans/:id`, list tracks with `GET /api/tracks`, and stream a
+track with `GET /api/tracks/:id/audio`. Scans are explicit and never run at
+startup. MP3, M4A/AAC, OGG/Opus, WAV, and FLAC files are cataloged; originals
+are streamed without transcoding. The web shell polls an active scan globally
+for its progress toast and checks the public health endpoint every ten seconds
+while connected.
+Administrators can search local directories recursively with
+`GET /api/admin/filesystem/search?query=<term>`; results are bounded and do not
+follow symbolic links.
 
 ## Linting and formatting
 

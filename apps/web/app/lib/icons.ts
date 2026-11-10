@@ -1,4 +1,5 @@
 import search from "@iconify-icons/basil/search-outline";
+import arrowLeft from "@iconify-icons/basil/arrow-left-outline";
 import home from "@iconify-icons/basil/home-outline";
 import library from "@iconify-icons/basil/stack-outline";
 import heart from "@iconify-icons/basil/heart-outline";
@@ -13,10 +14,21 @@ import pause from "@iconify-icons/basil/pause-solid";
 import previous from "@iconify-icons/basil/skip-prev-solid";
 import next from "@iconify-icons/basil/skip-next-solid";
 import restart from "@iconify-icons/basil/refresh-outline";
+import caretDown from "@iconify-icons/basil/caret-down-outline";
+import caretRight from "@iconify-icons/basil/caret-right-outline";
+import folder from "@iconify-icons/basil/folder-outline";
+import drag from "@iconify-icons/basil/move-outline";
+import filterIcon from "@iconify-icons/basil/filter-outline";
+import settings from "@iconify-icons/basil/settings-outline";
+import server from "@iconify-icons/basil/server-outline";
+import user from "@iconify-icons/basil/user-outline";
+import check from "@iconify-icons/basil/check-outline";
+import cloudOff from "@iconify-icons/basil/cloud-off-outline";
 
 // Import data directly: icons render during SSR and never require an icon API.
 export const icons = {
   search,
+  arrowLeft,
   home,
   library,
   heart,
@@ -31,4 +43,14 @@ export const icons = {
   previous,
   next,
   restart,
+  caretDown,
+  caretRight,
+  folder,
+  drag,
+  filterIcon,
+  settings,
+  server,
+  user,
+  check,
+  cloudOff,
 };

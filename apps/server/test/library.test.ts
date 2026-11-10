@@ -1,0 +1,278 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { mkdir, rename, rm, symlink, writeFile } from "node:fs/promises";
+import path from "node:path";
+import type { FastifyInstance } from "fastify";
+import { buildApp } from "../src/app.js";
+import { createTestContext, createWav, startScan } from "./helpers.js";
+
+test("protected library routes require a valid user session", async () => {
+  const context = await createTestContext();
+  try {
+    for (const authorization of [undefined, "Bearer wrong", "wrong-scheme"]) {
+      const response = await context.app.inject({
+        method: "GET",
+        url: "/api/tracks",
+        headers: authorization ? { authorization } : undefined,
+      });
+      assert.equal(response.statusCode, 401);
+      assert.deepEqual(response.json(), {
+        error: {
+          code: "unauthorized",
+          message: "Valid user authentication is required",
+        },
+      });
+    }
+    assert.equal(
+      (
+        await context.app.inject({
+          method: "GET",
+          url: "/api/tracks",
+          headers: context.authorization,
+        })
+      ).statusCode,
+      200,
+    );
+  } finally {
+    await context.close();
+  }
+});
+
+test("scans catalog supported regular files, reconcile availability, and persist status", async () => {
+  const context = await createTestContext();
+  const musicRoot = path.join(context.root, "music");
+  const nested = path.join(musicRoot, "Artist", "Album");
+  const external = path.join(context.root, "external");
+  const trackPath = path.join(nested, "Song.wav");
+  try {
+    await mkdir(nested, { recursive: true });
+    await mkdir(external);
+    await writeFile(trackPath, createWav());
+    await writeFile(path.join(nested, "notes.txt"), "not audio");
+    await writeFile(path.join(nested, "broken.mp3"), Buffer.alloc(0));
+    await writeFile(path.join(external, "outside.wav"), createWav());
+    await symlink(external, path.join(musicRoot, "linked"), "junction");
+
+    const firstScan = await startScan(context);
+    assert.equal(firstScan.status, "completed");
+    assert.equal(firstScan.discoveredCount, 2);
+    assert.equal(firstScan.createdCount, 1);
+    assert.equal(firstScan.errorCount, 1);
+
+    const listResponse = await context.app.inject({
+      method: "GET",
+      url: "/api/tracks",
+      headers: context.authorization,
+    });
+    assert.equal(listResponse.statusCode, 200);
+    const list = listResponse.json<{ items: Array<Record<string, unknown>> }>();
+    assert.equal(list.items.length, 1);
+    assert.deepEqual(list.items[0], {
+      id: list.items[0]?.id,
+      title: "Song",
+      artist: "Unknown Artist",
+      album: null,
+      durationMs: 100,
+      mimeType: "audio/wav",
+      available: true,
+    });
+    assert.doesNotMatch(
+      listResponse.body,
+      /relativePath|fileSize|external|Artist[\\/]+Album/,
+    );
+
+    const secondScan = await startScan(context);
+    assert.equal(secondScan.unchangedCount, 1);
+    assert.equal(secondScan.createdCount, 0);
+
+    await rm(trackPath);
+    const missingScan = await startScan(context);
+    assert.equal(missingScan.unavailableCount, 1);
+    const unavailable = await context.app.inject({
+      method: "GET",
+      url: "/api/tracks?availability=unavailable",
+      headers: context.authorization,
+    });
+    assert.equal(unavailable.json<{ items: unknown[] }>().items.length, 1);
+
+    await writeFile(trackPath, createWav(125));
+    const restoredScan = await startScan(context);
+    assert.equal(restoredScan.updatedCount, 1);
+    assert.equal(
+      (
+        await context.app.inject({
+          method: "GET",
+          url: "/api/tracks?availability=invalid",
+          headers: context.authorization,
+        })
+      ).statusCode,
+      400,
+    );
+  } finally {
+    await context.close();
+  }
+});
+
+test("audio endpoint streams complete and ranged responses and marks missing files unavailable", async () => {
+  const context = await createTestContext();
+  const trackPath = path.join(context.root, "music", "range.wav");
+  const wav = createWav(20);
+  try {
+    await writeFile(trackPath, wav);
+    await startScan(context);
+    const track = await context.database.track.findFirstOrThrow({
+      where: { relativePath: "range.wav" },
+    });
+    const url = `/api/tracks/${track.id}/audio`;
+
+    const complete = await context.app.inject({
+      method: "GET",
+      url,
+      headers: context.authorization,
+    });
+    assert.equal(complete.statusCode, 200);
+    assert.equal(complete.headers["accept-ranges"], "bytes");
+    assert.equal(complete.headers["content-type"], "audio/wav");
+    assert.deepEqual(complete.rawPayload, wav);
+
+    for (const [range, expectedStart, expectedEnd] of [
+      ["bytes=0-9", 0, 9],
+      ["bytes=10-", 10, wav.length - 1],
+      ["bytes=-10", wav.length - 10, wav.length - 1],
+    ] as const) {
+      const response = await context.app.inject({
+        method: "GET",
+        url,
+        headers: { ...context.authorization, range },
+      });
+      assert.equal(response.statusCode, 206);
+      assert.equal(
+        response.headers["content-range"],
+        `bytes ${expectedStart}-${expectedEnd}/${wav.length}`,
+      );
+      assert.deepEqual(
+        response.rawPayload,
+        wav.subarray(expectedStart, expectedEnd + 1),
+      );
+    }
+
+    const head = await context.app.inject({
+      method: "HEAD",
+      url,
+      headers: context.authorization,
+    });
+    assert.equal(head.statusCode, 200);
+    assert.equal(head.headers["content-length"], String(wav.length));
+    assert.equal(head.rawPayload.length, 0);
+
+    const invalid = await context.app.inject({
+      method: "GET",
+      url,
+      headers: { ...context.authorization, range: `bytes=${wav.length}-` },
+    });
+    assert.equal(invalid.statusCode, 416);
+    assert.equal(invalid.headers["content-range"], `bytes */${wav.length}`);
+
+    await rm(trackPath);
+    assert.equal(
+      (
+        await context.app.inject({
+          method: "GET",
+          url,
+          headers: context.authorization,
+        })
+      ).statusCode,
+      404,
+    );
+    assert.equal(
+      (
+        await context.database.track.findUniqueOrThrow({
+          where: { id: track.id },
+        })
+      ).available,
+      false,
+    );
+  } finally {
+    await context.close();
+  }
+});
+
+test("failed traversal does not reconcile tracks and active scans are rejected", async () => {
+  const context = await createTestContext();
+  const musicRoot = path.join(context.root, "music");
+  const movedRoot = path.join(context.root, "music-moved");
+  try {
+    await writeFile(path.join(musicRoot, "kept.wav"), createWav());
+    await startScan(context);
+    await rename(musicRoot, movedRoot);
+    const failedScan = await startScan(context);
+    assert.equal(failedScan.status, "failed");
+    assert.equal(failedScan.unavailableCount, 0);
+    assert.equal(
+      (await context.database.track.findFirstOrThrow()).available,
+      true,
+    );
+    await rename(movedRoot, musicRoot);
+
+    await context.database.libraryScan.create({ data: { status: "running" } });
+    const conflict = await context.app.inject({
+      method: "POST",
+      url: "/api/library/scans",
+      headers: context.authorization,
+    });
+    assert.equal(conflict.statusCode, 409);
+  } finally {
+    await context.close();
+  }
+});
+
+test("changed files with unreadable metadata retain their previous catalog metadata", async () => {
+  const context = await createTestContext();
+  const trackPath = path.join(context.root, "music", "stable.wav");
+  try {
+    await writeFile(trackPath, createWav());
+    await startScan(context);
+    const before = await context.database.track.findFirstOrThrow();
+    await writeFile(trackPath, Buffer.alloc(0));
+    const scan = await startScan(context);
+    assert.equal(scan.errorCount, 1);
+    const after = await context.database.track.findFirstOrThrow();
+    assert.equal(after.title, before.title);
+    assert.equal(after.artist, before.artist);
+    assert.equal(after.available, true);
+  } finally {
+    await context.close();
+  }
+});
+
+test("startup marks unfinished persistent scans as interrupted", async () => {
+  const context = await createTestContext();
+  let restartedApp: FastifyInstance | undefined;
+  try {
+    const queued = await context.database.libraryScan.create({
+      data: { status: "queued" },
+    });
+    await context.app.close();
+    restartedApp = await buildApp({
+      config: {
+        databaseUrl: context.databaseUrl,
+        libraryRoot: context.libraryRoot,
+        webOrigins: ["http://127.0.0.1:3000"],
+      },
+      database: context.database,
+      logger: false,
+    });
+    const interrupted = await context.database.libraryScan.findUniqueOrThrow({
+      where: { id: queued.id },
+    });
+    assert.equal(interrupted.status, "interrupted");
+    assert.equal(
+      interrupted.failureSummary,
+      "The server stopped before this scan completed.",
+    );
+    assert.ok(interrupted.completedAt);
+  } finally {
+    await restartedApp?.close();
+    await context.close();
+  }
+});

@@ -38,5 +38,9 @@ export default defineConfig([
     files: ["packages/ui/src/components/ui/**/*.vue"],
     rules: { "vue/multi-word-component-names": "off" },
   },
+  {
+    files: ["apps/web/app/{layouts,pages}/**/*.vue"],
+    rules: { "vue/multi-word-component-names": "off" },
+  },
   prettier,
 ]);

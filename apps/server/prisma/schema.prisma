@@ -1,21 +1,97 @@
 generator client {
   provider = "prisma-client"
-  output   = "../generated/prisma"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "sqlite"
 }
 
-// Initial catalog model. Authentication, playlists, plugin installs and migrations
-// follow in their own milestones. Runtime database wiring is not implemented yet.
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  username     String    @unique
+  passwordHash String
+  role         String
+  bootstrapKey String?   @unique
+  sessions     Session[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([role])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  expiresAt DateTime
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
 model Track {
-  id         String   @id @default(cuid())
-  title      String
-  artist     String
-  album      String?
-  filePath   String   @unique
-  durationMs Int?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id             String   @id @default(cuid())
+  title          String
+  artist         String
+  album          String?
+  relativePath   String
+  mimeType       String
+  durationMs     Int?
+  fileSizeBytes  BigInt
+  fileModifiedAt DateTime
+  available      Boolean  @default(true)
+  lastSeenScanId String?
+  sourceId       String?
+  source         Source?  @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([available])
+  @@index([artist, album, title])
+  @@index([sourceId])
+  @@unique([sourceId, relativePath])
+}
+
+model LibraryScan {
+  id               String   @id @default(cuid())
+  status           String
+  discoveredCount  Int      @default(0)
+  createdCount     Int      @default(0)
+  updatedCount     Int      @default(0)
+  unchangedCount   Int      @default(0)
+  errorCount       Int      @default(0)
+  unavailableCount Int      @default(0)
+  failureSummary   String?
+  createdAt        DateTime @default(now())
+  startedAt        DateTime?
+  completedAt      DateTime?
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model ServerSetting {
+  id          String   @id
+  libraryRoot String
+  updatedAt   DateTime @updatedAt
+}
+
+model Source {
+  id          String   @id @default(cuid())
+  kind        String
+  name        String?
+  path        String?
+  url         String?
+  integration String?
+  position    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  tracks      Track[]
+
+  @@index([kind])
+  @@index([position])
 }

@@ -8,7 +8,7 @@
   "scripts": {
     "prepare": "husky",
     "commitlint": "commitlint",
-    "dev": "turbo run dev",
+    "dev": "pnpm db:migrate:deploy && turbo run dev",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
@@ -17,7 +17,10 @@
     "check": "pnpm lint && pnpm format:check",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "db:validate": "pnpm --filter @peridot/server db:validate"
+    "db:validate": "pnpm --filter @peridot/server db:validate",
+    "db:generate": "pnpm --filter @peridot/server db:generate",
+    "db:migrate": "pnpm --filter @peridot/server db:migrate",
+    "db:migrate:deploy": "pnpm --filter @peridot/server db:migrate:deploy"
   },
   "devDependencies": {
     "@commitlint/cli": "21.2.4",

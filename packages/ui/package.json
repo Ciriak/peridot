@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./assets/brand/*": "./src/assets/brand/*",
     "./tokens.css": "./src/tokens.css",
     "./components/ui/*": "./src/components/ui/*/index.ts",
     "./lib/utils": "./src/lib/utils.ts"

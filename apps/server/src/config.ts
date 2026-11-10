@@ -1,0 +1,59 @@
+import { realpath, stat } from "node:fs/promises";
+
+export const DEFAULT_SERVER_PORT = 17430;
+
+export interface ServerConfig {
+  databaseUrl: string;
+  libraryRoot: string;
+  webOrigins: string[];
+}
+
+function requireValue(environment: NodeJS.ProcessEnv, name: string): string {
+  const value = environment[name]?.trim();
+  if (!value) {
+    throw new Error(`${name} is required`);
+  }
+  return value;
+}
+
+export async function loadServerConfig(
+  environment: NodeJS.ProcessEnv = process.env,
+): Promise<ServerConfig> {
+  const databaseUrl = requireValue(environment, "DATABASE_URL");
+  if (!databaseUrl.startsWith("file:")) {
+    throw new Error("DATABASE_URL must be a file: URL for SQLite");
+  }
+
+  const configuredRoot = requireValue(environment, "MUSIC_LIBRARY_PATH");
+  const libraryRoot = await realpath(configuredRoot);
+  const rootStat = await stat(libraryRoot);
+  if (!rootStat.isDirectory()) {
+    throw new Error("MUSIC_LIBRARY_PATH must reference a directory");
+  }
+
+  const configuredOrigins =
+    environment.PERIDOT_WEB_ORIGINS?.split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean) ?? [];
+  const webOrigins = configuredOrigins.length
+    ? configuredOrigins.map(normalizeOrigin)
+    : ["http://127.0.0.1:3000", "http://localhost:3000"];
+
+  return { databaseUrl, libraryRoot, webOrigins };
+}
+
+function normalizeOrigin(value: string): string {
+  let origin: URL;
+  try {
+    origin = new URL(value);
+  } catch {
+    throw new Error("PERIDOT_WEB_ORIGINS must contain valid HTTP(S) origins");
+  }
+  if (
+    !["http:", "https:"].includes(origin.protocol) ||
+    origin.origin !== value.replace(/\/$/, "")
+  ) {
+    throw new Error("PERIDOT_WEB_ORIGINS must contain HTTP(S) origins only");
+  }
+  return origin.origin;
+}
