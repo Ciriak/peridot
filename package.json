@@ -1,0 +1,24 @@
+{
+  "name": "peridot",
+  "private": true,
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": ">=24.15.0 <25"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:validate": "pnpm --filter @peridot/server db:validate"
+  },
+  "devDependencies": {
+    "turbo": "2.11.10",
+    "typescript": "5.9.3",
+    "prettier": "^3.6.2",
+    "@types/node": "^24.0.0"
+  },
+  "license": "Apache-2.0"
+}

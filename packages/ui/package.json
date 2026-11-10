@@ -1,0 +1,9 @@
+{
+  "name": "@peridot/ui",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./tokens.css": "./src/tokens.css"
+  },
+  "license": "Apache-2.0"
+}
