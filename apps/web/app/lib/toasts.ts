@@ -73,7 +73,7 @@ export function notifySourceMutation(
 }
 
 export function notifyMetadataProviderMutation(
-  action: "added" | "updated" | "removed",
+  action: "added" | "removed",
   providerName?: string,
 ) {
   const name = providerName?.trim() || "Metadata provider";
@@ -84,17 +84,11 @@ export function notifyMetadataProviderMutation(
           description: `${name} will be used for future library scans.`,
           status: "success" as const,
         }
-      : action === "updated"
-        ? {
-            title: "Metadata provider order updated",
-            description: "The new metadata provider order was saved.",
-            status: "success" as const,
-          }
-        : {
-            title: "Metadata provider removed",
-            description: `${name} will no longer be used for metadata matching.`,
-            status: "success" as const,
-          };
+      : {
+          title: "Metadata provider removed",
+          description: `${name} will no longer be used for metadata matching.`,
+          status: "success" as const,
+        };
   appToastManager.add({
     title: content.title,
     description: content.description,

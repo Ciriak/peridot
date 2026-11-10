@@ -51,6 +51,16 @@ test("albums have list and detail routes with searchable derived groups", async 
     "Double-clicking a shared track row plays it",
   );
   assert.match(
+    trackTable,
+    /:class="isCurrent\(track\) && 'bg-primary\/5'"/,
+    "The playing track row has a subtle primary background",
+  );
+  assert.match(
+    trackTable,
+    /currentTrackId\.value === track\.id && playing\.value/,
+    "The row highlight only applies while the current track is playing",
+  );
+  assert.match(
     libraryScreen,
     /variant="library"/,
     "The library uses the shared track table",

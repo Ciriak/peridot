@@ -2,6 +2,34 @@
 
 Last updated: 2026-11-10.
 
+## Quiet default sort state in track tables
+
+Inactive track-table sort headers and the default sort state no longer show the
+neutral sort glyph. A sorted column shows only its ascending or descending
+caret. Removed the now-unused `basil:sort-outline` import from the bundled icon
+registry and added regression coverage for the conditional direction icons.
+
+All 79 web tests, web typecheck, targeted ESLint and Prettier checks, the web
+production build, and `git diff --check` passed. Server checks and database
+schema validation were skipped because no server or storage code changed.
+Browser visual QA was not run. Changes remain uncommitted on `dev`; no commit,
+push, tag, publication, or deployment was performed.
+
+## Silent source and provider reordering
+
+Dragging library sources or metadata providers into a new order no longer emits
+a success toast after the server saves the order. The new row order is visible
+immediately, and failed order requests still show their existing inline error.
+Add and remove toasts remain unchanged.
+
+Updated the notification wiring coverage to require the order APIs but reject
+success-toast calls from both reorder handlers. All 78 web tests, web typecheck,
+targeted ESLint and Prettier checks, the web production build, and
+`git diff --check` passed. Server checks and database schema validation were
+skipped because no server or storage code changed. Browser interaction QA was
+not run. Changes remain uncommitted on `dev`; no commit, push, tag, publication,
+or deployment was performed.
+
 ## Bulk track metadata reset
 
 The Metadata settings page now has a confirmed Reset metadata action. It clears
@@ -604,9 +632,10 @@ publication, or deployment was performed.
 
 Added success toasts for source lifecycle changes in Administration. Adding or
 removing a source includes the configured folder, URL, or integration label;
-dragging to save a new order reports “Source order updated.” Notifications are
-emitted only after the corresponding server request succeeds and use the shared
-app-level Reka toast manager.
+dragging to save a new order originally reported “Source order updated.”
+Reordering is now silent and confirmed by the visible row order; add and remove
+notifications remain. Notifications are emitted only after the corresponding
+server request succeeds and use the shared app-level Reka toast manager.
 
 Added behavioral coverage for all three toast messages and wiring assertions for
 the Administration success paths.

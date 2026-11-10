@@ -49,11 +49,6 @@ function ariaSort(field: TrackSortField): "ascending" | "descending" | "none" {
   return sort.value.direction === "asc" ? "ascending" : "descending";
 }
 
-function sortIcon(field: TrackSortField) {
-  if (sort.value?.field !== field) return icons.sort;
-  return sort.value.direction === "asc" ? icons.caretUp : icons.caretDown;
-}
-
 function sortLabel(label: string, field: TrackSortField): string {
   if (sort.value?.field !== field) return `Sort by ${label} ascending`;
   if (sort.value.direction === "asc") return `Sort by ${label} descending`;
@@ -85,7 +80,10 @@ function isCurrent(track: TrackResponse): boolean {
             >
               #
               <Icon
-                :icon="sortIcon('number')"
+                v-if="sort?.field === 'number'"
+                :icon="
+                  sort.direction === 'asc' ? icons.caretUp : icons.caretDown
+                "
                 aria-hidden="true"
                 class="size-3.5"
               />
@@ -105,7 +103,10 @@ function isCurrent(track: TrackResponse): boolean {
             >
               Title
               <Icon
-                :icon="sortIcon('title')"
+                v-if="sort?.field === 'title'"
+                :icon="
+                  sort.direction === 'asc' ? icons.caretUp : icons.caretDown
+                "
                 aria-hidden="true"
                 class="size-3.5"
               />
@@ -126,7 +127,10 @@ function isCurrent(track: TrackResponse): boolean {
             >
               Artist
               <Icon
-                :icon="sortIcon('artist')"
+                v-if="sort?.field === 'artist'"
+                :icon="
+                  sort.direction === 'asc' ? icons.caretUp : icons.caretDown
+                "
                 aria-hidden="true"
                 class="size-3.5"
               />
@@ -147,7 +151,10 @@ function isCurrent(track: TrackResponse): boolean {
             >
               Album
               <Icon
-                :icon="sortIcon('album')"
+                v-if="sort?.field === 'album'"
+                :icon="
+                  sort.direction === 'asc' ? icons.caretUp : icons.caretDown
+                "
                 aria-hidden="true"
                 class="size-3.5"
               />
@@ -167,7 +174,10 @@ function isCurrent(track: TrackResponse): boolean {
             >
               Duration
               <Icon
-                :icon="sortIcon('duration')"
+                v-if="sort?.field === 'duration'"
+                :icon="
+                  sort.direction === 'asc' ? icons.caretUp : icons.caretDown
+                "
                 aria-hidden="true"
                 class="size-3.5"
               />
@@ -187,6 +197,7 @@ function isCurrent(track: TrackResponse): boolean {
         >
           <tr
             class="border-b last:border-0 hover:bg-muted/50"
+            :class="isCurrent(track) && 'bg-primary/5'"
             @dblclick.prevent="play(track.id)"
           >
             <td

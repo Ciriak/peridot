@@ -130,13 +130,6 @@ test("source mutations map to concise success toasts", () => {
     kind: "success",
     duration: 5000,
   });
-  assert.deepEqual(sourceMutationToast("updated"), {
-    title: "Source order updated",
-    description: "The new source order was saved.",
-    status: "success",
-    kind: "success",
-    duration: 5000,
-  });
   assert.deepEqual(sourceMutationToast("removed", "https://music.test"), {
     title: "Source removed",
     description: "https://music.test was removed from the library sources.",
@@ -238,12 +231,18 @@ test("the app mounts one managed Reka toast region and global status monitor", a
   assert.match(notifications, /notifyLibraryScan/);
   assert.match(sources, /useLibraryScan/);
   assert.match(sources, /notifySourceMutation\("added"/);
-  assert.match(sources, /notifySourceMutation\("updated"\)/);
   assert.match(sources, /notifySourceMutation\("removed"/);
   assert.match(metadata, /notifyMetadataProviderMutation\("added"/);
-  assert.match(metadata, /notifyMetadataProviderMutation\("updated"\)/);
   assert.match(metadata, /notifyMetadataProviderMutation\("removed"/);
   assert.match(metadata, /notifyMetadataReset/);
+  assert.doesNotMatch(
+    sources,
+    /reorderSources\([\s\S]*notifySourceMutation\("updated"\)/,
+  );
+  assert.doesNotMatch(
+    metadata,
+    /reorderMetadataProviders\([\s\S]*notifyMetadataProviderMutation\("updated"\)/,
+  );
   assert.doesNotMatch(administration, /useLibraryScan/);
   assert.doesNotMatch(administration, /getLibraryScan/);
   assert.doesNotMatch(administration, /setTimeout/);

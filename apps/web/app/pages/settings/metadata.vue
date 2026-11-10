@@ -188,7 +188,6 @@ async function persistOrder() {
       token.value ?? "",
       providers.value.map((provider) => provider.id),
     );
-    notifyMetadataProviderMutation("updated");
   } catch (reason) {
     pageError.value =
       reason instanceof Error

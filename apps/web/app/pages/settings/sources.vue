@@ -203,7 +203,6 @@ async function persistOrder() {
       token.value ?? "",
       sources.value.map((source) => source.id),
     );
-    notifySourceMutation("updated");
   } catch (reason) {
     pageError.value =
       reason instanceof Error

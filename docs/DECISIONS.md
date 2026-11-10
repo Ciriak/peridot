@@ -125,9 +125,11 @@ Title, artist, album, duration, and visible track-number fields are sortable.
 Each header cycles through ascending, descending, and default. The default state
 clears the active header sort; library tables return to title ascending, while
 album and artist tables return to track-number ordering so album/disc order
-remains intact. Missing text, duration, and track-number values remain last in
-both directions, and equal values retain source order. Sorting is per-table
-client state and does not mutate or persist the catalog order.
+remains intact. Inactive headers and the default state show no sort glyph;
+active ascending and descending headers show only the matching direction caret.
+Missing text, duration, and track-number values remain last in both directions,
+and equal values retain source order. Sorting is per-table client state and does
+not mutate or persist the catalog order.
 
 ## 2026-11-10: Durable per-user player queue
 
@@ -364,10 +366,12 @@ the connection monitor does not interfere with server selection. Reka's manager
 updates toasts by stable IDs, preventing repeated poll failures from stacking
 duplicate notifications.
 
-Successful source changes also use the app-level toast system. Added and removed
-sources include their configured label, while persisting a new source order uses
-the update notification. Toasts are emitted only after the server confirms the
-mutation, so they report durable state rather than an optimistic local edit.
+Successful source and metadata-provider additions and removals use the app-level
+toast system and include their configured labels. Reordering either list is
+confirmed by the drag result itself and does not show a success toast; a failed
+order request still reports its error in the management page. Add and remove
+toasts are emitted only after the server confirms the mutation, so they report
+durable state rather than an optimistic local edit.
 
 ## 2026-11-10: Gravatar avatar with offline fallback
 

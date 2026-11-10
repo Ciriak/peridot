@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import type { TrackResponse } from "@peridot/contracts";
 import {
@@ -136,6 +137,21 @@ test("sort state cycles through ascending, descending, and default", () => {
 
   sort = nextTrackSort({ field: "title", direction: "desc" }, "duration");
   assert.deepEqual(sort, { field: "duration", direction: "asc" });
+});
+
+test("track-table sort icons appear only for the active direction", async () => {
+  const table = await readFile(
+    new URL("../app/components/TrackTable.vue", import.meta.url),
+    "utf8",
+  );
+  const activeIcons = table.match(/<Icon\s+v-if="sort\?\.field === '[^']+'"/g);
+  const directionIcons = table.match(
+    /sort\.direction === 'asc' \? icons\.caretUp : icons\.caretDown/g,
+  );
+
+  assert.equal(activeIcons?.length, 5);
+  assert.equal(directionIcons?.length, 5);
+  assert.doesNotMatch(table, /icons\.sort\b|sortIcon\(/);
 });
 
 test("missing text values sort last in both directions", () => {
