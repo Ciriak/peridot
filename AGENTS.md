@@ -1,14 +1,13 @@
 # Working on Peridot
 
 Read README.md, docs/PROJECT.md, docs/DECISIONS.md, and docs/HANDOFF.md first.
-The brief was recovered from project chats and is now tracked in this repository.
+The project brief is tracked in this repository.
 Inspect git status and recent commits before editing; preserve unrelated changes.
 
 ## Workflow
 
-- Work in the real clone (C:\Users\cyria\Desktop\peridot on the initial machine).
-  The chat workspace at Documents/ChatGPT/Peridot was empty. Paths on future
-  machines may differ: verify the Git root rather than assuming this path.
+- Work in the project clone. Verify the Git root before running commands;
+  checkout paths may differ between machines.
 - dev is development, master is beta, and tags are releases. Target dev for work.
 - Do not push, tag, publish, or deploy without user authorization.
 - Use Node 24.15+ within major 24 and pnpm 11.25.0; commit pnpm-lock.yaml changes.
@@ -38,3 +37,16 @@ Peridot uses Apache-2.0. Preserve LICENSE and use Apache-2.0 in new package meta
 ## License
 
 Peridot uses Apache-2.0. Preserve LICENSE and use Apache-2.0 in new package metadata.
+
+## UI styling authority
+
+Never add custom styling. Use standard Tailwind utilities, existing shadcn-vue
+component variants, and the authoritative shared theme tokens only. Do not add
+app/component CSS blocks, inline styles, arbitrary Tailwind values, hardcoded
+colors or dimensions, or local theme overrides. Preserve the owner-supplied
+palette and typography in packages/ui/src/tokens.css. Basic app structure is a
+sidebar, main navigation/content screen, and fixed bottom music player.
+
+Use the Basil icon library through bundled Iconify SVGs for all UI icons; never use emoji or text-symbol
+placeholders. The play icon is basil:play-solid. Icons must work offline and inherit
+semantic colors and standard Tailwind sizing.

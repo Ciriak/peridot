@@ -2,10 +2,8 @@
 
 ## Source
 
-Recovered on 2026-11-10 from the Peridot project chats “Monorepo Architecture
-Advice” (6af2ede8-3e84-83ed-b897-d258991149e2) and “Prepare Repo Structure”
-(6af2fa1a-86bc-83eb-87b5-ef4b1efae968). This file preserves the brief in Git
-so future agents do not need project memory or chat access.
+This file preserves the product and architecture brief in Git so contributors
+can work from repository documentation.
 
 ## Product requirements
 
@@ -39,10 +37,20 @@ marketplace trust/distribution protocols still require implementation decisions.
 
 ## Visual identity
 
-Dark-first; primary green #46B54A; near-black surfaces. A green organic SVG blob
-with three corners is the logo, and an animated version is the spinner. Exact
-logo geometry remains to be finalized. Respect reduced motion. Prefer Inter,
-system fallbacks, visible keyboard focus, and accessible contrast.
+Dark-first. The owner's supplied Tailwind hex theme is authoritative and
+supersedes the earlier #46B54A theme color and font defaults. Dark-mode primary
+is #00A63E, background #0A0A0A, and foreground #FAFAFA. Light-mode primary is
+#171717, background #FFFFFF, and foreground #0A0A0A. Use the complete semantic
+palette, sidebar/chart tokens, font stacks, radius (0.625rem), and shadows in
+packages/ui/src/tokens.css. The web Tailwind entry maps these tokens to utilities;
+components should consume semantic tokens rather than redefine theme colors.
+Default to dark mode on the HTML element so portaled UI inherits the same theme.
+Poppins is the main UI font in both themes, overriding the supplied theme's
+system sans default. Bundle font files locally; retain system sans fallbacks.
+
+A green organic SVG blob with three corners is the logo, and an animated version
+is the spinner. Exact logo geometry remains to be finalized. Respect reduced
+motion, visible keyboard focus, and accessible contrast.
 
 ## Delivery sequence
 

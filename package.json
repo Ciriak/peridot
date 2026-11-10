@@ -6,19 +6,34 @@
     "node": ">=24.15.0 <25"
   },
   "scripts": {
+    "prepare": "husky",
+    "commitlint": "commitlint",
     "dev": "turbo run dev",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix",
+    "check": "pnpm lint && pnpm format:check",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "db:validate": "pnpm --filter @peridot/server db:validate"
   },
   "devDependencies": {
+    "@commitlint/cli": "21.2.4",
+    "@commitlint/config-conventional": "21.2.4",
+    "@eslint/js": "10.0.1",
+    "@types/node": "^24.0.0",
+    "eslint": "10.14.0",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-vue": "10.12.0",
+    "globals": "17.14.0",
+    "husky": "9.1.7",
+    "prettier": "^3.6.2",
     "turbo": "2.11.10",
     "typescript": "5.9.3",
-    "prettier": "^3.6.2",
-    "@types/node": "^24.0.0"
+    "typescript-eslint": "8.72.1",
+    "vue-eslint-parser": "10.4.2"
   },
   "license": "Apache-2.0"
 }
