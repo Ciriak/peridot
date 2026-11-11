@@ -199,7 +199,7 @@ test("administrators can manage ordered metadata providers", async () => {
     });
     assert.equal(refresh.statusCode, 202);
     const skipped = await waitForScan(context, refresh.json().id);
-    assert.equal(skipped.metadataStatus, "skipped");
+    assert.equal(skipped.metadataStatus, "failed");
     assert.equal(
       skipped.metadataFailureSummary,
       "No metadata providers are enabled.",
@@ -767,10 +767,7 @@ test("unchanged successful matches are not queried again", async () => {
       headers: context.authorization,
     });
     assert.equal(refreshed.statusCode, 202);
-    assert.equal(
-      refreshed.json<{ metadataStatus: string }>().metadataStatus,
-      "pending",
-    );
+    assert.equal(refreshed.json<{ status: string }>().status, "queued");
     const refreshScan = await waitForScan(context, refreshed.json().id);
     assert.equal(refreshScan.metadataStatus, "completed");
     assert.equal(refreshScan.metadataMatchedCount, 1);

@@ -6,7 +6,6 @@ import type {
   SourceKind,
   SourceResponse,
 } from "@peridot/contracts";
-import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { Input } from "@peridot/ui/components/ui/input";
 import { useSortable } from "@vueuse/integrations/useSortable";
@@ -31,9 +30,9 @@ import {
   DropdownMenuRoot,
   DropdownMenuTrigger,
 } from "reka-ui";
-import { useLibraryScan } from "../../composables/use-library-scan";
 import { useServer } from "../../composables/use-server";
 import { useSession } from "../../composables/use-session";
+import { useTasks } from "../../composables/use-tasks";
 import { useUser } from "../../composables/use-user";
 import { icons } from "../../lib/icons";
 import {
@@ -50,7 +49,12 @@ definePageMeta({ layout: "settings" });
 const { address } = useServer();
 const { token } = useSession();
 const { user } = useUser();
-const { scanning, startSource } = useLibraryScan();
+const {
+  hasActiveTasks,
+  queueLibraryScan,
+  queueSourceScan,
+  track: trackTask,
+} = useTasks();
 const allowed = computed(() => user.value?.role === "admin");
 
 const sources = ref<SourceResponse[]>([]);
@@ -79,6 +83,18 @@ function sourceLabel(source: SourceResponse | null): string {
   if (source.kind === "path") return source.path ?? "";
   if (source.kind === "url") return source.url ?? "";
   return source.integration ?? "";
+}
+
+function sourceKindIcon(kind: SourceKind) {
+  if (kind === "path") return icons.folder;
+  if (kind === "url") return icons.globe;
+  return icons.plugins;
+}
+
+function sourceKindLabel(kind: SourceKind): string {
+  if (kind === "path") return "Local files";
+  if (kind === "url") return "Remote URL";
+  return "Integration";
 }
 
 async function loadSources() {
@@ -152,6 +168,14 @@ async function addSource() {
     closeAddDialog();
     notifySourceMutation("added", sourceLabel(source));
     await loadSources();
+    if (source.kind === "path") {
+      if (source.task) {
+        trackTask(source.task);
+      } else {
+        pageError.value =
+          "Source added, but no library scan could be queued. Rescan this source.";
+      }
+    }
   } catch (reason) {
     addError.value =
       reason instanceof Error ? reason.message : "Could not add the source.";
@@ -161,15 +185,27 @@ async function addSource() {
 }
 
 async function rescan(source: SourceResponse) {
-  if (source.kind !== "path" || scanning.value) return;
+  if (source.kind !== "path") return;
   pageError.value = "";
   try {
-    await startSource(source.id);
+    await queueSourceScan(source.id);
   } catch (reason) {
     pageError.value =
       reason instanceof Error
         ? reason.message
         : "Could not start the source scan.";
+  }
+}
+
+async function rescanAll() {
+  pageError.value = "";
+  try {
+    await queueLibraryScan();
+  } catch (reason) {
+    pageError.value =
+      reason instanceof Error
+        ? reason.message
+        : "Could not start the library rescan.";
   }
 }
 
@@ -236,9 +272,15 @@ onMounted(() => void loadSources());
       <h3 id="sources-heading" class="text-lg font-semibold">
         Library sources
       </h3>
-      <Button type="button" size="sm" @click="openAddDialog">
-        Add source
-      </Button>
+      <div class="flex items-center gap-2">
+        <Button type="button" variant="outline" size="sm" @click="rescanAll">
+          <Icon :icon="icons.restart" aria-hidden="true" />
+          Rescan all
+        </Button>
+        <Button type="button" size="sm" @click="openAddDialog">
+          Add source
+        </Button>
+      </div>
     </div>
     <p v-if="pageError" role="alert" class="text-sm text-destructive">
       {{ pageError }}
@@ -259,15 +301,25 @@ onMounted(() => void loadSources());
           >
             <Icon :icon="icons.drag" aria-hidden="true" class="size-4" />
           </button>
-          <Badge variant="secondary" class="shrink-0">{{ source.kind }}</Badge>
           <span
-            v-if="source.kind === 'path'"
-            class="min-w-0 flex-1 break-all text-sm"
+            role="img"
+            :aria-label="sourceKindLabel(source.kind)"
+            :title="sourceKindLabel(source.kind)"
+            class="flex size-6 shrink-0 items-center justify-center text-muted-foreground"
           >
-            <span class="font-medium">{{
+            <Icon
+              :icon="sourceKindIcon(source.kind)"
+              aria-hidden="true"
+              class="size-5"
+            />
+          </span>
+          <span v-if="source.kind === 'path'" class="min-w-0 flex-1 text-sm">
+            <span class="block font-medium">{{
               sourceFolderName(source.path ?? "")
             }}</span>
-            <span class="text-muted-foreground"> {{ source.path }}</span>
+            <span class="block break-all text-xs text-muted-foreground">{{
+              source.path
+            }}</span>
           </span>
           <span v-else class="min-w-0 flex-1 truncate text-sm">
             {{ sourceLabel(source) }}
@@ -295,8 +347,8 @@ onMounted(() => void loadSources());
                 class="z-50 w-44 rounded-lg border bg-popover p-1 text-popover-foreground shadow-lg"
               >
                 <DropdownMenuItem
-                  :disabled="source.kind !== 'path' || scanning"
-                  class="flex items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none disabled:opacity-50"
+                  :disabled="source.kind !== 'path'"
+                  class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none data-disabled:cursor-default data-disabled:opacity-50"
                   @select="rescan(source)"
                 >
                   <Icon
@@ -307,8 +359,8 @@ onMounted(() => void loadSources());
                   Rescan
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  :disabled="scanning"
-                  class="flex items-center gap-2 rounded-sm px-2 py-2 text-sm text-destructive outline-none disabled:opacity-50"
+                  :disabled="hasActiveTasks"
+                  class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm text-destructive outline-none data-disabled:cursor-default data-disabled:opacity-50"
                   @select="askRemove(source)"
                 >
                   <Icon :icon="icons.close" aria-hidden="true" class="size-4" />
@@ -341,6 +393,7 @@ onMounted(() => void loadSources());
             class="justify-start"
             @click="chooseKind('path')"
           >
+            <Icon :icon="icons.folder" aria-hidden="true" class="size-5" />
             Local files
           </Button>
           <Button
@@ -349,6 +402,7 @@ onMounted(() => void loadSources());
             class="justify-start"
             @click="chooseKind('url')"
           >
+            <Icon :icon="icons.globe" aria-hidden="true" class="size-5" />
             Remote URL
           </Button>
           <Button
@@ -357,6 +411,7 @@ onMounted(() => void loadSources());
             class="justify-start"
             @click="chooseKind('integration')"
           >
+            <Icon :icon="icons.plugins" aria-hidden="true" class="size-5" />
             Integration
           </Button>
         </div>

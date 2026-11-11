@@ -9,8 +9,15 @@ import {
 } from "./artist-credits.js";
 import type { Database } from "./database.js";
 import type { MetadataEnrichment } from "./metadata-enrichment.js";
-import type { LibraryScanRow, TrackRow } from "./prisma/models.js";
+import type { TaskRow, TrackRow } from "./prisma/models.js";
 import { getPathSources, type PathSource } from "./sources.js";
+import {
+  queueMetadataFetch,
+  scanDetails,
+  TaskExecutionError,
+  type TaskExecutionResult,
+  type TaskService,
+} from "./tasks.js";
 
 const AUDIO_MIME_TYPES = new Map([
   [".mp3", "audio/mpeg"],
@@ -121,8 +128,6 @@ async function discoverAudioFiles(root: string): Promise<DiscoveredFile[]> {
 }
 
 export class LibraryScanner {
-  private activeScan: Promise<void> | null = null;
-  private queueing = false;
   private folderCoverCache = new Map<string, CoverImage | null>();
 
   constructor(
@@ -130,107 +135,10 @@ export class LibraryScanner {
     private readonly metadataEnrichment?: MetadataEnrichment,
   ) {}
 
-  hasActiveOperation(): boolean {
-    return this.queueing || this.activeScan !== null;
-  }
-
-  async markInterruptedScans(): Promise<void> {
-    await this.database.orm.LibraryScan.where((scan) =>
-      scan.status.in(["queued", "running"]),
-    ).updateAndCount({
-      status: "interrupted",
-      metadataStatus: "interrupted",
-      completedAt: new Date(),
-      failureSummary: "The server stopped before this scan completed.",
-    });
-    await this.database.orm.LibraryScan.where({ status: "completed" })
-      .where((scan) => scan.metadataStatus.in(["pending", "running"]))
-      .updateAndCount({
-        metadataStatus: "interrupted",
-        metadataFailureSummary:
-          "The server stopped before metadata matching completed.",
-      });
-  }
-
-  async queueScan(source?: PathSource): Promise<LibraryScanRow | null> {
-    if (this.queueing || this.activeScan) return null;
-    this.queueing = true;
-    try {
-      const existing = await this.database.orm.LibraryScan.where((scan) =>
-        or(
-          scan.status.in(["queued", "running"]),
-          scan.metadataStatus.in(["pending", "running"]),
-        ),
-      ).first();
-      if (existing) return null;
-      const scan = await this.database.orm.LibraryScan.create({
-        status: "queued",
-        sourceId: source?.id ?? null,
-        sourceName: source
-          ? source.name || path.basename(source.path)
-          : "All sources",
-        metadataStatus: "pending",
-      });
-      this.activeScan = new Promise((resolve) => setImmediate(resolve))
-        .then(() => this.runScan(scan.id, source))
-        .catch(() => undefined)
-        .finally(() => {
-          this.activeScan = null;
-        });
-      return scan;
-    } finally {
-      this.queueing = false;
-    }
-  }
-
-  async queueMetadataRefresh(): Promise<LibraryScanRow | null> {
-    if (this.queueing || this.activeScan) return null;
-    this.queueing = true;
-    try {
-      const existing = await this.database.orm.LibraryScan.where((scan) =>
-        or(
-          scan.status.in(["queued", "running"]),
-          scan.metadataStatus.in(["pending", "running"]),
-        ),
-      ).first();
-      if (existing) return null;
-      const scan = await this.database.orm.LibraryScan.create({
-        status: "completed",
-        sourceName: "All sources",
-        metadataStatus: "pending",
-        startedAt: new Date(),
-        completedAt: new Date(),
-      });
-      this.activeScan = new Promise((resolve) => setImmediate(resolve))
-        .then(async () => {
-          if (!this.metadataEnrichment) {
-            await this.database.orm.LibraryScan.where({ id: scan.id }).update({
-              metadataStatus: "skipped",
-              metadataFailureSummary: "No metadata providers are configured.",
-            });
-            return;
-          }
-          await this.metadataEnrichment.runScan(scan.id, undefined, true);
-        })
-        .catch(() => undefined)
-        .finally(() => {
-          this.activeScan = null;
-        });
-      return scan;
-    } finally {
-      this.queueing = false;
-    }
-  }
-
-  async close(): Promise<void> {
-    this.metadataEnrichment?.close();
-    await this.activeScan;
-  }
-
-  private async runScan(
-    scanId: string,
-    requestedSource?: PathSource,
-  ): Promise<void> {
+  async runTask(
+    task: TaskRow,
+    tasks: TaskService,
+  ): Promise<TaskExecutionResult> {
     const counts: ScanCounts = {
       createdCount: 0,
       updatedCount: 0,
@@ -240,21 +148,30 @@ export class LibraryScanner {
 
     try {
       this.folderCoverCache.clear();
-      await this.database.orm.LibraryScan.where({ id: scanId }).update({
-        status: "running",
-        startedAt: new Date(),
-      });
+      let requestedSource: PathSource | undefined;
+      if (task.sourceId) {
+        const source = await this.database.orm.Source.first({
+          id: task.sourceId,
+          kind: "path",
+        });
+        if (!source?.path) {
+          throw new TaskExecutionError(
+            "The selected music source is no longer available.",
+          );
+        }
+        requestedSource = {
+          id: source.id,
+          name: source.name || task.sourceName || path.basename(source.path),
+          path: source.path,
+        };
+      }
       const sources = requestedSource
         ? [requestedSource]
         : await getPathSources(this.database);
       if (sources.length === 0) {
-        await this.database.orm.LibraryScan.where({ id: scanId }).update({
-          status: "failed",
-          metadataStatus: "skipped",
-          completedAt: new Date(),
-          failureSummary: "No music library sources are configured.",
-        });
-        return;
+        throw new TaskExecutionError(
+          "No music library sources are configured.",
+        );
       }
       const files: SourceFile[] = [];
       for (const source of sources) {
@@ -262,17 +179,44 @@ export class LibraryScanner {
           files.push({ ...file, sourceId: source.id });
         }
       }
-      await this.database.orm.LibraryScan.where({ id: scanId }).update({
-        discoveredCount: files.length,
-      });
+      await tasks.updateProgress(
+        task.id,
+        0,
+        files.length,
+        scanDetails({
+          source: requestedSource?.name ?? "All sources",
+          discovered: files.length,
+          created: 0,
+          updated: 0,
+          unchanged: 0,
+          unavailable: 0,
+          errors: 0,
+        }),
+      );
 
       let nextFile = 0;
+      let processedFiles = 0;
       const workers = Array.from(
         { length: Math.min(SCAN_CONCURRENCY, files.length) },
         async () => {
           while (nextFile < files.length) {
             const file = files[nextFile++];
-            if (file) await this.processFile(file, scanId, counts);
+            if (file) await this.processFile(file, task.id, counts);
+            processedFiles += 1;
+            await tasks.updateProgress(
+              task.id,
+              processedFiles,
+              files.length,
+              scanDetails({
+                source: requestedSource?.name ?? "All sources",
+                discovered: files.length,
+                created: counts.createdCount,
+                updated: counts.updatedCount,
+                unchanged: counts.unchangedCount,
+                unavailable: 0,
+                errors: counts.errorCount,
+              }),
+            );
           }
         },
       );
@@ -287,24 +231,35 @@ export class LibraryScanner {
       }
       const unavailableCount = await trackQuery
         .where((track) =>
-          or(track.lastSeenScanId.isNull(), track.lastSeenScanId.neq(scanId)),
+          or(track.lastSeenScanId.isNull(), track.lastSeenScanId.neq(task.id)),
         )
         .updateAndCount({ available: 0 });
-      await this.database.orm.LibraryScan.where({ id: scanId }).update({
-        status: "completed",
-        completedAt: new Date(),
-        unavailableCount,
-        ...counts,
-      });
-      await this.metadataEnrichment?.runScan(scanId, requestedSource?.id);
+
+      if (this.metadataEnrichment) {
+        await queueMetadataFetch(tasks, {
+          source: requestedSource
+            ? {
+                id: requestedSource.id,
+                name: requestedSource.name || "Music source",
+              }
+            : null,
+          parentTaskId: task.id,
+        });
+      }
+      return {
+        details: scanDetails({
+          source: requestedSource?.name ?? "All sources",
+          discovered: files.length,
+          created: counts.createdCount,
+          updated: counts.updatedCount,
+          unchanged: counts.unchangedCount,
+          unavailable: unavailableCount,
+          errors: counts.errorCount,
+        }),
+      };
     } catch (error) {
-      await this.database.orm.LibraryScan.where({ id: scanId }).update({
-        status: "failed",
-        metadataStatus: "skipped",
-        completedAt: new Date(),
-        failureSummary: scanFailureSummary(error),
-        ...counts,
-      });
+      if (error instanceof TaskExecutionError) throw error;
+      throw new TaskExecutionError(scanFailureSummary(error));
     }
   }
 

@@ -5,14 +5,18 @@ import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { useSortable } from "@vueuse/integrations/useSortable";
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import TrackArtwork from "./TrackArtwork.vue";
 import TrackArtistLinks from "./TrackArtistLinks.vue";
 import { useLibraryPlayer } from "../composables/use-library-player";
+import { useServer } from "../composables/use-server";
 import { icons } from "../lib/icons";
+import { trackArtistNames } from "../lib/library";
 
 const open = defineModel<boolean>("open", { required: true });
 const queueList = ref<HTMLElement | null>(null);
 const panel = ref<HTMLElement | null>(null);
 const sortableTracks = ref<TrackResponse[]>([]);
+const { address } = useServer();
 const {
   active,
   playing,
@@ -24,6 +28,8 @@ const {
   upcomingTracks,
   removeFromQueue,
   reorderQueue,
+  play,
+  togglePlayback,
 } = useLibraryPlayer();
 
 watch(
@@ -119,16 +125,31 @@ onBeforeUnmount(() => document.removeEventListener("keydown", handleKeydown));
           <p class="mb-2 text-xs font-medium text-muted-foreground">
             Now playing
           </p>
-          <div v-if="active" class="flex min-w-0 items-center gap-3">
-            <Icon
-              :icon="playing ? icons.pause : icons.play"
-              aria-hidden="true"
-              class="size-5 shrink-0 text-primary"
-            />
+          <div
+            v-if="active"
+            class="group/track-artwork flex min-w-0 items-center gap-3"
+          >
+            <TrackArtwork :track="active" :server-address="address ?? ''">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                class="absolute inset-0 size-full rounded-md bg-background/70 opacity-0 transition-opacity hover:bg-background/70 hover:text-foreground dark:hover:bg-background/70 group-hover/track-artwork:opacity-100 group-focus-within/track-artwork:opacity-100"
+                :aria-label="
+                  playing ? `Pause ${active.title}` : `Play ${active.title}`
+                "
+                @click="togglePlayback"
+              >
+                <Icon
+                  :icon="playing ? icons.pause : icons.play"
+                  aria-hidden="true"
+                  class="size-5 text-foreground"
+                />
+              </Button>
+            </TrackArtwork>
             <div class="min-w-0">
               <p class="truncate text-sm font-medium">{{ active.title }}</p>
               <p class="truncate text-xs text-muted-foreground">
-                {{ active.artist }}
+                <TrackArtistLinks :artists="trackArtistNames(active)" />
               </p>
             </div>
           </div>
@@ -176,7 +197,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", handleKeydown));
             <li
               v-for="track in sortableTracks"
               :key="track.id"
-              class="flex cursor-grab items-center gap-2 rounded-md border p-2 active:cursor-grabbing"
+              class="group/track-artwork flex cursor-grab items-center gap-2 rounded-md border p-2 active:cursor-grabbing"
             >
               <span
                 aria-hidden="true"
@@ -184,20 +205,35 @@ onBeforeUnmount(() => document.removeEventListener("keydown", handleKeydown));
               >
                 <Icon :icon="icons.drag" aria-hidden="true" class="size-4" />
               </span>
+              <TrackArtwork :track="track" :server-address="address ?? ''">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  class="absolute inset-0 size-full rounded-md bg-background/70 opacity-0 transition-opacity hover:bg-background/70 hover:text-foreground dark:hover:bg-background/70 group-hover/track-artwork:opacity-100 group-focus-within/track-artwork:opacity-100"
+                  :aria-label="`Play ${track.title} from queue`"
+                  @click.stop="play(track.id)"
+                >
+                  <Icon
+                    :icon="icons.play"
+                    aria-hidden="true"
+                    class="size-5 text-foreground"
+                  />
+                </Button>
+              </TrackArtwork>
               <div class="min-w-0 flex-1">
                 <p class="truncate text-sm font-medium">{{ track.title }}</p>
                 <p class="truncate text-xs text-muted-foreground">
-                  <TrackArtistLinks :artists="track.artists" />
+                  <TrackArtistLinks :artists="trackArtistNames(track)" />
                 </p>
               </div>
               <Button
                 variant="ghost"
-                size="icon-sm"
+                size="icon"
                 :aria-label="`Remove ${track.title} from queue`"
                 :disabled="track.id === currentTrackId"
                 @click="removeFromQueue(track.id)"
               >
-                <Icon :icon="icons.close" aria-hidden="true" class="size-4" />
+                <Icon :icon="icons.close" aria-hidden="true" class="size-5" />
               </Button>
             </li>
           </ol>

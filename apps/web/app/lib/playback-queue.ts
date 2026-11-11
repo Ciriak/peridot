@@ -26,6 +26,19 @@ export function moveTrackToFront(
   return [trackId, ...withoutTrack(trackIds, trackId)];
 }
 
+export function rotateQueueToTrack(
+  trackIds: readonly string[],
+  trackId: string,
+): string[] {
+  const uniqueTrackIds = [...new Set(trackIds)];
+  const startIndex = uniqueTrackIds.indexOf(trackId);
+  if (startIndex <= 0) return uniqueTrackIds;
+  return [
+    ...uniqueTrackIds.slice(startIndex),
+    ...uniqueTrackIds.slice(0, startIndex),
+  ];
+}
+
 export function addTrackNext(
   trackIds: readonly string[],
   trackId: string,

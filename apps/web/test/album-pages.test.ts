@@ -43,10 +43,22 @@ test("albums have list and detail routes with derived groups", async () => {
   assert.match(albumCard, /trackCoverUrl\(/);
   assert.match(albumCard, /<img[\s\S]*object-cover/);
   assert.match(albumCard, /@error="coverFailed = true"/);
+  assert.match(albumCard, /loading="lazy"/);
+  assert.match(albumCard, /decoding="async"/);
   assert.match(albumCard, /<Icon\s+v-else\s+:icon="icons\.music"/);
   assert.match(albumCard, /useLibraryPlayer\(\)/);
   assert.match(albumCard, /playCollection\(props\.album\.trackIds\)/);
   assert.match(albumCard, /togglePlayback\(\)/);
+  assert.match(
+    albumCard,
+    /function toggleAlbumPlayback\(\) \{\s+if \(albumActive\.value && playing\.value\) \{\s+togglePlayback\(\);\s+return;\s+\}\s+if \(props\.album\.trackIds\.length\) playCollection\(props\.album\.trackIds\);/,
+    "The album card pauses while playing but starts a collection from its first track otherwise",
+  );
+  assert.match(
+    albumCard,
+    /Play \$\{album\.title\} by \$\{album\.artist\} from the first track/,
+    "The album card play label explains that playback starts from the first track",
+  );
   assert.match(
     albumCard,
     /albumActive && playing \? icons\.pause : icons\.play/,
@@ -75,6 +87,16 @@ test("albums have list and detail routes with derived groups", async () => {
   assert.match(detailPage, /togglePlayback\(\)/);
   assert.match(
     detailPage,
+    /function toggleAlbumPlayback\(\) \{\s+if \(albumActive\.value && playing\.value\) \{\s+togglePlayback\(\);\s+return;\s+\}\s+playWholeAlbum\(\);/,
+    "The album header pauses while playing but starts a collection from its first track otherwise",
+  );
+  assert.match(
+    detailPage,
+    /Play \$\{album\.title\} by \$\{album\.artist\} from the first track/,
+    "The album header play label explains that playback starts from the first track",
+  );
+  assert.match(
+    detailPage,
     /albumActive && playing \? icons\.pause : icons\.play/,
   );
   assert.doesNotMatch(
@@ -94,18 +116,23 @@ test("albums have list and detail routes with derived groups", async () => {
   assert.match(detailPage, /<Icon v-else :icon="icons\.music"/);
   assert.match(detailPage, /<LikeButton/);
   assert.match(
-    trackTable,
-    /@dblclick\.prevent="play\(track\.id\)"/,
-    "Double-clicking a shared track row plays it",
+    detailPage,
+    /<template v-if="album\.releaseYear"[\s\S]*\{\{ formatTrackDuration\(album\.durationMs\) \}\}/,
+    "The album header shows an available release year beside total duration",
   );
   assert.match(
     trackTable,
-    /class="select-none border-b last:border-0 hover:bg-muted\/50"\s+@dblclick\.prevent="play\(track\.id\)"/,
+    /@dblclick\.prevent="playFromList\(track\.id\)"/,
+    "Double-clicking a shared track row plays it in its list context",
+  );
+  assert.match(
+    trackTable,
+    /class="group\/track-artwork flex h-14 min-w-full select-none items-center whitespace-nowrap border-b hover:bg-muted\/50"[\s\S]*@dblclick\.prevent="playFromList\(track\.id\)"/,
     "The current track row does not add an active background effect",
   );
   assert.match(
     trackTable,
-    /class="select-none border-b last:border-0 hover:bg-muted\/50"/,
+    /class="group\/track-artwork flex h-14 min-w-full select-none items-center whitespace-nowrap border-b hover:bg-muted\/50"/,
     "Track rows prevent their text from being selected",
   );
   assert.match(
@@ -145,13 +172,18 @@ test("albums have list and detail routes with derived groups", async () => {
   );
   assert.match(
     trackTable,
-    /<\/Button>\s*<span\s+:id="trackTitleAnchorId\(track\.id\)"\s+class="scroll-mt-4 truncate"\s+:class="\{ 'opacity-60': !track\.available \}"\s+>\{\{ track\.title \}\}<\/span\s*>/,
-    "Track titles remain plain text beside the play button",
+    /<TrackArtwork[\s\S]*<Button[\s\S]*icons\.play[\s\S]*<\/TrackArtwork>\s*<div class="min-w-0 flex-1">\s*<div class="flex min-w-0 items-center gap-2">\s*<span\s+:id="trackTitleAnchorId\(track\.id\)"\s+class="scroll-mt-4 truncate"\s+:class="\{ 'opacity-60': !track\.available \}"\s+>\{\{ track\.title \}\}<\/span\s*>/,
+    "Track titles remain plain text beside artwork that embeds the play control",
   );
   assert.match(
     trackTable,
     /:to="trackAlbumRoute\(track\)"/,
-    "Track-list album names link to their album",
+    "Track-list album names link to their album in every table variant",
+  );
+  assert.doesNotMatch(
+    trackTable,
+    /variant === 'library' &&\s*track\.album/,
+    "Album links are not hidden from artist track lists",
   );
   assert.match(
     detailPage,
@@ -169,8 +201,18 @@ test("albums have list and detail routes with derived groups", async () => {
   );
   assert.match(
     detailPage,
-    /getElementById\(hash\.slice\(1\)\)\s*\?\.scrollIntoView\(\{ block: "start" \}\)/,
-    "Album pages resolve the title hash after catalog data loads",
+    /trackIdFromTitleHash\(route\.hash\)/,
+    "Album pages translate title hashes into track targets",
+  );
+  assert.match(
+    detailPage,
+    /:scroll-to-track-id="scrollToTrackId"/,
+    "Album pages pass the track target to the shared track table",
+  );
+  assert.match(
+    trackTable,
+    /revealThrough\(index\)/,
+    "A linked track is revealed before the page scrolls to it",
   );
 });
 

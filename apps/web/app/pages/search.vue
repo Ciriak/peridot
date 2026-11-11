@@ -3,12 +3,13 @@ import { useHead, useState } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
-import { Spinner } from "@peridot/ui/components/ui/spinner";
+import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { computed, onMounted, ref, watch } from "vue";
 import AlbumCard from "../components/AlbumCard.vue";
 import TrackTable from "../components/TrackTable.vue";
 import { useLikes } from "../composables/use-likes";
 import { useLibraryTracks } from "../composables/use-library-tracks";
+import { useProgressiveReveal } from "../composables/use-progressive-reveal";
 import { useSearchRecents } from "../composables/use-search-recents";
 import { icons } from "../lib/icons";
 import {
@@ -33,7 +34,7 @@ const albums = computed(() => groupAlbums(tracks.value));
 const searching = computed(() => query.value.trim().length > 0);
 const albumResults = computed(() => filterAlbums(albums.value, query.value));
 const trackResults = computed(() => filterTracks(tracks.value, query.value));
-const visibleAlbumResults = computed(() =>
+const albumResultsForFilter = computed(() =>
   resultFilter.value === "tracks" ? [] : albumResults.value,
 );
 const visibleTrackResults = computed(() =>
@@ -42,6 +43,12 @@ const visibleTrackResults = computed(() =>
 const recentAlbums = computed(() =>
   resolveRecentAlbums(recents.value, albums.value),
 );
+const {
+  target: loadMoreTarget,
+  hasMore: hasMoreAlbums,
+  visibleItems: visibleAlbumResults,
+  revealMore: revealMoreAlbums,
+} = useProgressiveReveal(albumResultsForFilter);
 const resultFilters: { value: ResultFilter; label: string }[] = [
   { value: "all", label: "All" },
   { value: "albums", label: "Albums" },
@@ -92,7 +99,7 @@ onMounted(() => {
       role="status"
       class="flex items-center gap-3 rounded-lg border p-6 text-sm text-muted-foreground"
     >
-      <Spinner label="Loading search results" />
+      <PeridotSpinner label="Loading search results" />
       Loading your library…
     </div>
     <div
@@ -165,6 +172,15 @@ onMounted(() => {
             compact
             @open="openAlbum(album)"
           />
+          <div
+            v-if="hasMoreAlbums"
+            ref="loadMoreTarget"
+            class="col-span-full flex justify-center"
+          >
+            <Button type="button" variant="outline" @click="revealMoreAlbums">
+              Load more matching albums
+            </Button>
+          </div>
         </div>
         <p
           v-else

@@ -33,10 +33,10 @@ import {
   TooltipRoot,
   TooltipTrigger,
 } from "reka-ui";
-import { useLibraryScan } from "../../composables/use-library-scan";
 import { useLibraryTracks } from "../../composables/use-library-tracks";
 import { useServer } from "../../composables/use-server";
 import { useSession } from "../../composables/use-session";
+import { useTasks } from "../../composables/use-tasks";
 import { useUser } from "../../composables/use-user";
 import { icons } from "../../lib/icons";
 import { metadataProviderNeedsConfiguration } from "../../lib/metadata-provider-config";
@@ -59,7 +59,7 @@ const { address } = useServer();
 const { token } = useSession();
 const { user } = useUser();
 const allowed = computed(() => user.value?.role === "admin");
-const { scanning, startMetadataRefresh } = useLibraryScan();
+const { hasActiveTasks, queueMetadataRefresh } = useTasks();
 const { reload: reloadTracks } = useLibraryTracks();
 
 const providers = ref<MetadataProviderResponse[]>([]);
@@ -298,7 +298,7 @@ async function persistOrder() {
 async function refreshProviderMetadata() {
   pageError.value = "";
   try {
-    await startMetadataRefresh();
+    await queueMetadataRefresh();
   } catch (reason) {
     pageError.value =
       reason instanceof Error ? reason.message : "Could not refresh metadata.";
@@ -362,11 +362,12 @@ onMounted(() => void loadProviders());
           type="button"
           variant="outline"
           size="sm"
-          :disabled="scanning || !activeProviders.length"
+          :disabled="!activeProviders.length || hasActiveTasks"
+          :aria-busy="hasActiveTasks"
           @click="refreshProviderMetadata"
         >
           <Icon :icon="icons.restart" aria-hidden="true" class="size-4" />
-          {{ scanning ? "Refreshing…" : "Refresh metadata" }}
+          {{ hasActiveTasks ? "Processing…" : "Refresh metadata" }}
         </Button>
       </div>
     </div>
@@ -488,7 +489,7 @@ onMounted(() => void loadProviders());
         type="button"
         variant="outline"
         class="shrink-0"
-        :disabled="scanning"
+        :disabled="hasActiveTasks"
         @click="requestReset"
       >
         <Icon :icon="icons.trash" aria-hidden="true" class="size-4" />

@@ -59,13 +59,21 @@ test("the player exposes randomize and a persistent right-side queue drawer", as
   assert.doesNotMatch(drawer, /\bpb-52\b|\bpb-32\b/);
   assert.match(layout, /fixed inset-x-0 bottom-0 z-30/);
   assert.match(drawer, />\s*Now playing\s*</);
+  assert.match(
+    drawer,
+    /Now playing[\s\S]*class="group\/track-artwork flex min-w-0 items-center gap-3"[\s\S]*<TrackArtwork[\s\S]*<Button[\s\S]*class="[^"]*absolute inset-0 size-full[^"]*bg-background\/70[^"]*hover:bg-background\/70[^"]*"[\s\S]*:aria-label="\s*playing \? `Pause \$\{active\.title\}` : `Play \$\{active\.title\}`\s*"[\s\S]*@click="togglePlayback"[\s\S]*class="size-5 text-foreground"[\s\S]*<\/TrackArtwork>/,
+    "The now-playing item matches the Quick pick overlay and icon color",
+  );
   assert.match(drawer, /<Badge v-if="shuffleEnabled" variant="secondary">/);
   assert.match(drawer, /Randomized/);
   assert.match(drawer, /shuffleEnabled \? "Queue order" : "Next in queue"/);
   assert.match(drawer, /useSortable\(queueList, sortableTracks/);
   assert.doesNotMatch(drawer, /handle: "\.queue-drag-handle"/);
   assert.match(drawer, /filter: "a, button, input"/);
-  assert.match(drawer, /class="flex cursor-grab items-center/);
+  assert.match(
+    drawer,
+    /class="group\/track-artwork flex cursor-grab items-center/,
+  );
   assert.match(
     drawer,
     /onEnd: \(\{ oldIndex, newIndex \}\) => \{[\s\S]*sortableTracks\.value = next;[\s\S]*reorderQueue\(next\.map/,
@@ -73,8 +81,31 @@ test("the player exposes randomize and a persistent right-side queue drawer", as
   assert.doesNotMatch(drawer, /data-reka-swipe-ignore/);
   assert.doesNotMatch(drawer, /@pointerdown\.stop/);
   assert.match(drawer, /removeFromQueue\(track\.id\)/);
-  assert.match(drawer, /<TrackArtistLinks :artists="track\.artists" \/>/);
-  assert.doesNotMatch(drawer, /@click="play\(track\.id/);
+  assert.match(
+    drawer,
+    /<TrackArtistLinks :artists="trackArtistNames\(active\)" \/>/,
+    "The currently playing artist credit links to artist pages",
+  );
+  assert.match(
+    drawer,
+    /<TrackArtistLinks :artists="trackArtistNames\(track\)" \/>/,
+  );
+  assert.match(
+    drawer,
+    /Now playing[\s\S]*<TrackArtwork[\s\S]*:track="active"[\s\S]*group-focus-within\/track-artwork:opacity-100/,
+    "The active track artwork reveals its play control on hover or focus",
+  );
+  assert.match(
+    drawer,
+    /v-for="track in sortableTracks"[\s\S]*class="group\/track-artwork flex cursor-grab items-center gap-2 rounded-md border p-2 active:cursor-grabbing"[\s\S]*<TrackArtwork[\s\S]*:track="track"[\s\S]*class="[^"]*absolute inset-0 size-full[^"]*bg-background\/70[^"]*hover:bg-background\/70[^"]*"[\s\S]*:aria-label="`Play \$\{track\.title\} from queue`"[\s\S]*@click\.stop="play\(track\.id\)"[\s\S]*class="size-5 text-foreground"/,
+    "Each upcoming queue item matches the Quick pick overlay and icon color",
+  );
+  assert.match(
+    drawer,
+    /size="icon"[\s\S]*:aria-label="`Remove \$\{track\.title\} from queue`"[\s\S]*icons\.close[\s\S]*class="size-5"/,
+    "The queue remove target uses the larger standard button and icon sizes",
+  );
+  assert.match(drawer, /@click\.stop="play\(track\.id\)"/);
 
   assert.match(player, /fetchQueue\(/);
   assert.match(player, /replaceQueue\(/);

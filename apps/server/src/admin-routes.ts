@@ -1,6 +1,8 @@
+import path from "node:path";
 import type {
   CreateMetadataProviderRequest,
   CreateSourceRequest,
+  CreateSourceResponse,
   DirectoryListResponse,
   LogListResponse,
   MetadataProviderDefinitionListResponse,
@@ -16,8 +18,6 @@ import type { FastifyInstance } from "fastify";
 import type { CredentialStore } from "./credential-store.js";
 import type { Database } from "./database.js";
 import { sendError } from "./http.js";
-import type { LibraryScanner } from "./library-scanner.js";
-import { toScanResponse } from "./library-routes.js";
 import type { MetadataEnrichment } from "./metadata-enrichment.js";
 import {
   createMetadataProvider,
@@ -37,12 +37,18 @@ import {
   searchDirectoryEntries,
   SourceError,
 } from "./sources.js";
+import {
+  queueLibraryScan,
+  queueMetadataFetch,
+  toTaskResponse,
+  type TaskService,
+} from "./tasks.js";
 
 export async function registerAdminRoutes(
   app: FastifyInstance,
   database: Database,
   logBuffer: ServerLogBuffer,
-  scanner: LibraryScanner,
+  tasks: TaskService,
   metadataEnrichment: MetadataEnrichment,
   metadataRegistry: MetadataResolverRegistry,
   metadataCredentials: CredentialStore,
@@ -98,7 +104,18 @@ export async function registerAdminRoutes(
       async (request, reply) => {
         try {
           const source = await createSource(database, request.body);
-          return reply.code(201).send(source);
+          const task =
+            source.kind === "path" && source.path
+              ? await queueLibraryScan(tasks, {
+                  id: source.id,
+                  name: source.name || path.basename(source.path),
+                })
+              : null;
+          const response: CreateSourceResponse = {
+            ...source,
+            task: task ? toTaskResponse(task) : null,
+          };
+          return reply.code(201).send(response);
         } catch (error) {
           if (error instanceof SourceError) {
             return sendError(reply, 400, "invalid_source", error.message);
@@ -152,20 +169,11 @@ export async function registerAdminRoutes(
             "Only local folder sources can be rescanned.",
           );
         }
-        const scan = await scanner.queueScan({
+        const task = await queueLibraryScan(tasks, {
           id: source.id,
-          name: source.name,
-          path: source.path,
+          name: source.name || path.basename(source.path),
         });
-        if (!scan) {
-          return sendError(
-            reply,
-            409,
-            "scan_in_progress",
-            "A library scan is already active",
-          );
-        }
-        return reply.code(202).send(toScanResponse(scan));
+        return reply.code(202).send(toTaskResponse(task));
       },
     );
 
@@ -267,7 +275,7 @@ export async function registerAdminRoutes(
     });
 
     admin.post("/api/admin/metadata/reset", async (_request, reply) => {
-      if (scanner.hasActiveOperation()) {
+      if (await tasks.hasActiveWork()) {
         return sendError(
           reply,
           409,
@@ -282,16 +290,8 @@ export async function registerAdminRoutes(
     });
 
     admin.post("/api/admin/metadata/refresh", async (_request, reply) => {
-      const scan = await scanner.queueMetadataRefresh();
-      if (!scan) {
-        return sendError(
-          reply,
-          409,
-          "metadata_refresh_in_progress",
-          "A library operation is already active.",
-        );
-      }
-      return reply.code(202).send(toScanResponse(scan));
+      const task = await queueMetadataFetch(tasks, { force: true });
+      return reply.code(202).send(toTaskResponse(task));
     });
 
     admin.get<{ Querystring: { path?: string } }>(

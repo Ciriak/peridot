@@ -16,7 +16,10 @@ test("app layout respects the owner's Tailwind and shadcn styling authority", as
     "../app/components/ArtistContextMenu.vue",
     "../app/components/LikeButton.vue",
     "../app/components/LibraryScreen.vue",
+    "../app/components/QuickPickTile.vue",
     "../app/components/QueueDrawer.vue",
+    "../app/components/SidebarQuickPicks.vue",
+    "../app/components/TaskProgressIndicator.vue",
     "../app/components/TrackArtistLinks.vue",
     "../app/components/TrackContextMenu.vue",
     "../app/components/TrackTable.vue",
@@ -32,10 +35,12 @@ test("app layout respects the owner's Tailwind and shadcn styling authority", as
     "../app/pages/settings/library.vue",
     "../app/pages/settings/playback.vue",
     "../app/pages/settings/plugins.vue",
+    "../app/pages/settings/tasks.vue",
     "../app/pages/settings/sources.vue",
     "../app/pages/settings/metadata.vue",
     "../app/pages/settings/administration.vue",
-    "../../../packages/ui/src/components/ui/spinner/Spinner.vue",
+    "../../../packages/ui/src/components/ui/progress-circle/ProgressCircle.vue",
+    "../../../packages/ui/src/components/ui/spinner/PeridotSpinner.vue",
   ];
   const source = (
     await Promise.all(

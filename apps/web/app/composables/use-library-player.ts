@@ -15,12 +15,14 @@ import {
   reorderSourceQueue,
   restorePreviousTrack,
   restorePreviousShuffleTrack,
+  rotateQueueToTrack,
   shuffledPoolExcept,
   type RepeatMode,
 } from "../lib/playback-queue";
 import {
   createPlaybackToken,
   fetchQueue,
+  recordTrackPlay,
   replaceQueue,
   trackAudioUrl,
 } from "../lib/peridot-client";
@@ -61,6 +63,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
   const loading = useState("player-loading", () => false);
   const error = useState<string | null>("player-error", () => null);
   const playbackRequest = useState("player-playback-request", () => 0);
+  const playHistoryVersion = useState("player-play-history-version", () => 0);
   const queueTrackIds = useState<string[]>("player-queue-track-ids", () => []);
   const activeTrackId = useState<string | null>(
     "player-active-track-id",
@@ -355,8 +358,14 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     playing.value = true;
   }
 
-  function playCollection(trackIds: readonly string[]) {
-    const nextQueue = normalizeQueueTrackIds(trackIds, availableTrackIds());
+  function playCollection(
+    trackIds: readonly string[],
+    startTrackId: string = trackIds[0] ?? "",
+  ) {
+    const nextQueue = rotateQueueToTrack(
+      normalizeQueueTrackIds(trackIds, availableTrackIds()),
+      startTrackId,
+    );
     const firstTrackId = nextQueue[0];
     if (!firstTrackId) return;
     void loadQueue();
@@ -640,6 +649,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     let loadedTrackId: string | null = null;
     let loadingTrackId: string | null = null;
     let loadAttempt = 0;
+    let lastRecordedPlaybackRequest = -1;
     let stopAudioWatch: (() => void) | undefined;
     let stopPositionWatch: (() => void) | undefined;
     let stopVolumeWatch: (() => void) | undefined;
@@ -658,6 +668,24 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
       }
       try {
         await audio.play();
+        if (
+          attempt === loadAttempt &&
+          loadedTrackId === trackId &&
+          currentTrackId.value === trackId &&
+          playing.value &&
+          lastRecordedPlaybackRequest !== playbackRequest.value
+        ) {
+          lastRecordedPlaybackRequest = playbackRequest.value;
+          const serverAddress = address.value;
+          const sessionToken = token.value;
+          if (serverAddress && sessionToken) {
+            void recordTrackPlay(serverAddress, sessionToken, trackId)
+              .then(() => {
+                playHistoryVersion.value += 1;
+              })
+              .catch(() => undefined);
+          }
+        }
       } catch (reason) {
         if (
           attempt !== loadAttempt ||

@@ -90,6 +90,18 @@ model TrackLike {
   @@index([trackId])
 }
 
+model TrackPlayEvent {
+  id       String   @id @onCreate(cuid(2))
+  userId   String
+  trackId  String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  track    Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  playedAt DateTime @default(now())
+
+  @@index([userId, playedAt])
+  @@index([trackId])
+}
+
 model QueueItem {
   userId         String
   trackId        String
@@ -142,31 +154,26 @@ model ArtistLike {
   @@index([userId, createdAt])
 }
 
-model LibraryScan {
-  id                     String    @id @onCreate(cuid(2))
-  status                 String
-  sourceId               String?
-  sourceName             String?
-  discoveredCount        Int       @default(0)
-  createdCount           Int       @default(0)
-  updatedCount           Int       @default(0)
-  unchangedCount         Int       @default(0)
-  errorCount             Int       @default(0)
-  unavailableCount       Int       @default(0)
-  metadataStatus         String    @default("skipped")
-  metadataTotalCount     Int       @default(0)
-  metadataProcessedCount Int       @default(0)
-  metadataMatchedCount   Int       @default(0)
-  metadataUnmatchedCount Int       @default(0)
-  metadataErrorCount     Int       @default(0)
-  metadataFailureSummary String?
-  failureSummary         String?
-  createdAt              DateTime  @default(now())
-  startedAt              DateTime?
-  completedAt            DateTime?
+model Task {
+  id                String    @id @onCreate(cuid(2))
+  kind              String
+  status            String
+  title             String
+  parentTaskId      String?
+  sourceId          String?
+  sourceName        String?
+  progressCompleted Int?
+  progressTotal     Int?
+  details           String    @default("[]")
+  failureSummary    String?
+  forceRefresh      Int       @default(0)
+  createdAt         DateTime  @default(now())
+  startedAt         DateTime?
+  completedAt       DateTime?
 
-  @@index([status])
-  @@index([createdAt])
+  @@index([status, createdAt])
+  @@index([kind, status])
+  @@index([parentTaskId])
 }
 
 model ServerSetting {

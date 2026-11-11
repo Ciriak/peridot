@@ -14,12 +14,15 @@ import { ensureDefaultMetadataProvider } from "./metadata-providers.js";
 import { MetadataResolverRegistry } from "./metadata-resolver.js";
 import { registerTrackMetadataRoutes } from "./metadata-routes.js";
 import { MusicBrainzClient, MusicBrainzResolver } from "./musicbrainz.js";
+import { registerQuickPickRoutes } from "./quick-picks-routes.js";
 import { registerQueueRoutes } from "./queue-routes.js";
 import {
   PlaybackTokenService,
   redactPlaybackToken,
 } from "./playback-tokens.js";
 import { registerAdminRoutes } from "./admin-routes.js";
+import { registerTaskRoutes } from "./task-routes.js";
+import { TaskService } from "./tasks.js";
 import { ensureServerSettings } from "./server-settings.js";
 import { ensureDefaultSource } from "./sources.js";
 import { ServerLogBuffer } from "./server-log.js";
@@ -66,7 +69,14 @@ export async function buildApp(options: BuildAppOptions = {}) {
     registry,
     credentials,
   );
+  const tasks = new TaskService(database);
   const scanner = new LibraryScanner(database, metadataEnrichment);
+  tasks.registerExecutor("library_scan", (task, taskService) =>
+    scanner.runTask(task, taskService),
+  );
+  tasks.registerExecutor("metadata_fetch", (task, taskService) =>
+    metadataEnrichment.runTask(task, taskService),
+  );
   const playbackTokens = new PlaybackTokenService();
   const logBuffer = options.logBuffer ?? new ServerLogBuffer();
   const app = Fastify({
@@ -105,7 +115,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
   await ensureServerSettings(database, config.libraryRoot);
   await ensureDefaultSource(database, config.libraryRoot);
   await ensureDefaultMetadataProvider(database);
-  await scanner.markInterruptedScans();
+  await tasks.initialize();
   await registerProtectedRoutes(
     app,
     database,
@@ -113,17 +123,19 @@ export async function buildApp(options: BuildAppOptions = {}) {
       await registerLibraryRoutes(
         protectedApp,
         database,
-        scanner,
+        tasks,
         playbackTokens,
       );
+      await registerTaskRoutes(protectedApp, tasks);
       await registerLikeRoutes(protectedApp, database);
+      await registerQuickPickRoutes(protectedApp, database);
       await registerQueueRoutes(protectedApp, database);
       await registerTrackMetadataRoutes(protectedApp, metadataEnrichment);
       await registerAdminRoutes(
         protectedApp,
         database,
         logBuffer,
-        scanner,
+        tasks,
         metadataEnrichment,
         registry,
         credentials,
@@ -132,7 +144,8 @@ export async function buildApp(options: BuildAppOptions = {}) {
     (request) => playbackTokens.authorizeRequest(request.method, request.url),
   );
   app.addHook("onClose", async () => {
-    await scanner.close();
+    metadataEnrichment.close();
+    await tasks.close();
     if (ownsDatabase) await database.close();
   });
   return app;

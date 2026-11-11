@@ -26,17 +26,22 @@ are kept in same-site browser cookies. The server can be changed from Settings
 → Administration by disconnecting first. Server selection continuously probes
 the typed address and scans the web host's private IPv4 networks for Peridot
 servers on port 17430; selecting a
-discovered server advances onboarding. The routed library view reads scanned
-tracks from the authenticated catalog API and refreshes after a completed scan.
+discovered server advances onboarding. The routed library view reads cataloged
+tracks from the authenticated catalog API and refreshes after completed library
+or metadata tasks.
 The Albums view derives groups from available track tags, keeps same-named
 albums by different artists separate, and opens a detail page with disc/track
-ordering and album playback actions. Album artwork is read from embedded
+ordering, album playback actions, and an available provider release year beside
+the total duration. Album artwork is read from embedded
 front-cover tags or same-folder `cover`, `folder`, `front`, or `albumart` images.
 Tracks without album tags remain in the Library view and are omitted from
 Albums. The Artists view groups every tagged performer in the catalog, including
 artists whose tracks have no album metadata, and opens an artist page with album
 cards, an all-tracks list, and artist playback actions. Artist names in the
-shared track list and album detail link to their derived artist pages. The fixed
+shared track list appear beneath each title and link to their derived artist
+pages, while visible album names link to their album details in every track-table
+variant. Artist credits in the fixed player and queue also link to their derived
+artist pages. The fixed
 player streams available tracks from the authenticated server through a
 short-lived, track-scoped playback URL, with play/pause, seeking, volume,
 previous/next, persistent randomized playback, automatic advancement, and
@@ -50,9 +55,14 @@ playback position. Reloading restores the same queue and track at its saved
 position without autoplay. The queue opens in a
 player-clearing, width-constrained custom right-side panel where upcoming tracks
 can be reordered or removed and their artist links opened. The queue button
-directly toggles the panel. The panel and overlay stop above the fixed player,
+directly toggles the panel, and the now-playing play/pause icon toggles playback.
+The panel and overlay stop above the fixed player,
 leaving the player unobstructed. Queue rows remain draggable without closing
 the panel, which is non-modal so the player controls remain interactive.
+Track tables and queue rows show each track's cover artwork beside its title.
+Play and pause controls are embedded in the artwork and reveal on hover or
+keyboard focus, matching the Quick pick interaction; missing artwork uses the
+semantic music-note placeholder.
 Right-clicking a track row opens a Reka UI context menu for
 playback, adding the track next in the queue, favorites, authenticated download,
 album navigation, and per-artist navigation when a track has multiple credits.
@@ -64,6 +74,15 @@ Tracks, albums, and artists can be liked independently from their rows, cards,
 and detail headers. Likes are private to the signed-in user and persist across
 reloads, sessions, and server restarts. The server requires an initialized local
 SQLite database and a music folder, but no API key or hosted service.
+The sidebar's up-to-eight-item `Quick pick` list mixes tracks and albums using
+the signed-in user's successful playback starts, with one item per line. Each
+start is retained as a timestamped event and receives exponential time decay
+with a seven-day half-life; album scores sum the decayed scores of their tracks.
+Each complete row is the play control, with a small type icon before the title
+and the artist names beneath it. The visible order stays fixed while the pointer
+or keyboard focus is inside the list, then adopts the latest order after the
+interaction ends. Tracks use their album cover. Playlist entries remain deferred
+until playlists are implemented.
 
 ```sh
 pnpm format:check
@@ -96,10 +115,10 @@ under Program Files. Turbo and nested scripts need pnpm itself on PATH.
 ## Structure
 
 - `apps/web`: Nuxt 4 application shell.
-- `apps/server`: authenticated Fastify catalog/scanning/audio API and Prisma 8 SQLite storage.
+- `apps/server`: authenticated Fastify catalog/task/audio API and Prisma 8 SQLite storage.
 - `apps/desktop`: documented future desktop shell.
 - `packages/contracts`: shared API types.
-- `packages/ui`: shared brand tokens and reusable Button, Input, Badge, Slider, Gradient, and Spinner components.
+- `packages/ui`: shared brand tokens and reusable Button, Input, Badge, Slider, Gradient, ProgressCircle, PeridotSpinner, and classic Spinner components.
 - `packages/player`: shared playback state contract; the web app owns the browser audio adapter.
 - `packages/plugin-sdk`: initial manifest contract, no execution runtime.
 - `packages/config`: shared TypeScript configuration.
@@ -117,13 +136,34 @@ imported explicitly, keeping Nuxt component discovery separate from shared UI.
 Poppins is the main UI font, bundled locally via `@fontsource/poppins`.
 `components.json` files track the registry aliases for the web and UI workspaces.
 Upstream component licensing is preserved in `packages/ui/THIRD_PARTY_NOTICES.md`.
-The shared Spinner uses the animated Peridot brand SVG and substitutes the static
+The shared PeridotSpinner uses the animated Peridot brand SVG and substitutes the static
 brand mark when the user prefers reduced motion.
+The separate classic Spinner follows shadcn-vue's animated LoaderIcon pattern and
+is available for future loading states; it is not rendered by the current app.
+The shared ProgressCircle accepts a finite `value` from 0 through 100 and clamps
+out-of-range values. Its ring keeps rotating while the numeric value controls
+the determinate arc, and it becomes a reduced-motion-safe circular spinner when
+the value is omitted or invalid. It provides semantic color, size,
+accessible-label, optional percentage, custom center-content variants, and
+configurable stroke width defaulting to 6. The topbar task indicator uses it to
+show the average progress of every running or queued task, appears only while
+work is pending,
+shows indeterminate progress before a queued task starts, and reveals the
+current and queued tasks in a hover/focus tooltip. Clicking the circle opens
+Settings → Tasks, which lists active work and paginated terminal history. The
+same indicator remains visible in the fullscreen Settings header.
+When the server health monitor reports a lost connection, the same topbar slot
+replaces the progress circle with a pulsing destructive-color cloud-off icon
+and an accessible explanation. The task progress returns after a healthy probe.
 The web shell mounts one app-level Reka UI toast region in the bottom-right. It
 sits above the fixed player in the main shell and against the bottom edge in
-playerless fullscreen layouts. It keeps library-scan progress visible across
-route changes and keeps a single connection-loss error visible until the
-configured server health endpoint responds again.
+playerless fullscreen layouts. It reports source and provider changes, likes,
+downloads, and queue operations. Task activity is shown only through the topbar
+and Tasks settings view, while connection loss is indicated by the topbar
+cloud-off warning without a toast.
+The same monitor follows the authenticated task list. It polls every 500 ms
+while tasks are queued or running and less frequently when idle, so activity
+started by another client also becomes visible.
 
 ## Configuration
 
@@ -143,7 +183,9 @@ Administrators can manage where the server gets raw audio files from
 Settings → Sources. Each source is a local folder, an external URL, or a future
 integration such as Spotify or YouTube Music. Local folder sources seed from
 `MUSIC_LIBRARY_PATH` on first launch and are used by library scans; URL and
-integration sources are stored but not indexed yet. Each local source row has a
+integration sources are stored but not indexed yet. Adding a local folder source
+queues its source-scoped library scan automatically. A successful scan queues a
+linked metadata-fetch task for the same source. Each local source row has a
 three-dot action menu for a source-scoped rescan or confirmed removal.
 The local-folder picker supports case-insensitive deep folder search without
 requiring folders to be expanded first.
@@ -159,11 +201,13 @@ Peridot resolves unmatched tracks in provider order in the background.
 Requests to each provider are rate-limited separately.
 Each containing folder is treated as an album: the folder name supplies the
 release title when tracks have no album tag, or when their tags disagree.
-The Metadata page also has a Refresh metadata action that re-runs automatic
+The Metadata page also has a Refresh metadata action that queues automatic
 matching without rescanning audio files and a confirmed Reset metadata action
 that removes all automatic and manual track matches so tracks use their original
-file tags. A configured provider kind cannot be added twice and is disabled or
-re-enabled instead of removed.
+file tags. Refresh is disabled and labeled as processing while any task is
+active. Reset waits until queued and running tasks finish. A configured
+provider kind cannot be added twice and is disabled or re-enabled instead of
+removed.
 Provider metadata is stored separately from local file tags, including
 provider-specific details such as Discogs release year, label, catalog number,
 country, format, and track position. Track context menus merge candidates from
@@ -191,9 +235,9 @@ with their username or email address and password through
 opaque sessions expire after 30 days.
 Except for health and these setup/sign-in routes, server routes require the
 returned session as `Authorization: Bearer <token>`.
-Start a scan with `POST /api/library/scans`, poll
-`GET /api/library/scans/:id`, list tracks with `GET /api/tracks`, and stream a
-track with `GET /api/tracks/:id/audio`. Authenticated clients list the current
+Queue a scan with `POST /api/library/scans`, list tasks with `GET /api/tasks`,
+read one with `GET /api/tasks/:id`, list tracks with `GET /api/tracks`, and
+stream a track with `GET /api/tracks/:id/audio`. Authenticated clients list the current
 user's favorites with `GET /api/likes`; `POST /api/likes` and
 `DELETE /api/likes` accept an independent track, album, or artist target. Track
 likes use catalog IDs, while album and artist likes match trimmed,
@@ -203,14 +247,23 @@ user's source-order track IDs, active track, and remaining randomized pool;
 track outside the queue, and random-pool entries outside the non-active queue
 are rejected. Randomized playback keeps the visible queue order unchanged,
 plays each eligible track once per pass, and resumes the same pass after a
-reload. Scans are explicit and never run at
-startup. MP3, M4A/AAC, OGG/Opus, WAV, and FLAC files are cataloged; originals are
+reload. New scans are explicit and are never started automatically at server
+startup; explicitly queued tasks resume after a restart while tasks that were
+running become interrupted. Library scans and metadata fetches are separate
+linked tasks with queued, running, completed, failed, or interrupted states
+and determinate or indeterminate progress. Finished task history is retained for
+30 days, capped at the newest 500 terminal tasks. MP3, M4A/AAC, OGG/Opus, WAV,
+and FLAC files are cataloged; originals are
 streamed without transcoding. Catalog responses include nullable disc and track
 numbers used for album ordering. A metadata-version marker makes the next scan
 backfill those fields once for catalog rows created before the columns existed,
-including files whose contents have not changed. The web shell polls an active
-scan globally for its progress toast and checks the public health endpoint every
-ten seconds while connected.
+including files whose contents have not changed. The web shell polls the shared
+task list globally for the topbar and Tasks settings view and checks the public
+health endpoint every ten seconds while connected.
+Successful browser playback starts are recorded with
+`POST /api/tracks/:id/plays`. The authenticated per-user mixed ranking is
+available from `GET /api/quick-picks`; the server returns up to eight ordered track
+and album identities after applying seven-day exponential decay.
 Album covers are deduplicated by content hash in the local SQLite database and
 served through short-lived, track-scoped cover URLs so browser image requests do
 not expose the user session. Tracks without readable embedded or folder artwork
@@ -219,21 +272,30 @@ player.
 Administrators can search local directories recursively with
 `GET /api/admin/filesystem/search?query=<term>`; results are bounded and do not
 follow symbolic links.
-Administrators can rescan one local source with
+Creating a local source with `POST /api/admin/sources` returns the source plus
+its automatically queued scan task. Administrators can rescan one local source with
 `POST /api/admin/sources/:id/scans`; a scoped scan only changes availability for
-tracks from that source. Administrators manage metadata providers through
+tracks from that source and queues metadata matching for that source. Requests
+are queued behind active work, and equivalent requests that are still queued
+coalesce into the existing task.
+Administrators manage metadata providers through
 `GET/POST /api/admin/metadata-providers`,
 `GET /api/admin/metadata-providers/definitions`,
 `PUT /api/admin/metadata-providers/order`, and
 `PUT /api/admin/metadata-providers/:id` with configuration, credential, or
 enabled-state updates.
 Disabled providers remain listed but are excluded from matching.
-`POST /api/admin/metadata/refresh` re-runs automatic metadata matching without
-a file scan, while
+`POST /api/admin/metadata/refresh` queues automatic metadata matching without a
+file scan, while
 `POST /api/admin/metadata/reset` clears every track override. Signed-in clients
 can list merged provider candidates for a track and apply or clear an override
 through `GET /api/tracks/:id/metadata/candidates` and
 `PUT/DELETE /api/tracks/:id/metadata`.
+Task responses expose only safe titles, source display names, bounded labeled
+details, progress, and lifecycle timestamps. Source paths and provider
+credentials are never included. Core task kinds are `library_scan` and
+`metadata_fetch`; future isolated jobs may use validated
+`plugin:<plugin-id>:<job-name>` kinds without loading plugin code into Fastify.
 
 ## Linting and formatting
 

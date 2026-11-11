@@ -15,6 +15,7 @@ import {
   reorderSourceQueue,
   restorePreviousTrack,
   restorePreviousShuffleTrack,
+  rotateQueueToTrack,
   shuffledPoolExcept,
   shuffleTrackIds,
   shuffleUpcoming,
@@ -56,6 +57,21 @@ test("queue normalization preserves order while dropping unavailable entries", (
     ),
     ["b", "a"],
   );
+});
+
+test("queue rotation keeps the whole source list and starts on the selected track", () => {
+  assert.deepEqual(rotateQueueToTrack(["a", "b", "c", "d"], "c"), [
+    "c",
+    "d",
+    "a",
+    "b",
+  ]);
+  assert.deepEqual(rotateQueueToTrack(["a", "b", "a", "c"], "b"), [
+    "b",
+    "c",
+    "a",
+  ]);
+  assert.deepEqual(rotateQueueToTrack(["a", "b"], "missing"), ["a", "b"]);
 });
 
 test("source-order edits preserve the active track position", () => {

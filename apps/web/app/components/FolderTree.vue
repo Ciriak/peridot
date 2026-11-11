@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue/offline";
 import { Input } from "@peridot/ui/components/ui/input";
-import { Spinner } from "@peridot/ui/components/ui/spinner";
+import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { TreeItem, TreeRoot } from "reka-ui";
 import { useServer } from "../composables/use-server";
@@ -160,7 +160,7 @@ onBeforeUnmount(() => {
       role="status"
       class="flex items-center gap-2 text-sm text-muted-foreground"
     >
-      <Spinner label="Searching all folders" class="size-4" />
+      <PeridotSpinner label="Searching all folders" class="size-4" />
       Searching all folders…
     </p>
 

@@ -3,8 +3,8 @@ import { definePageMeta, useHead, useRoute } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
-import { Spinner } from "@peridot/ui/components/ui/spinner";
-import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
+import { computed, onMounted, ref, watch } from "vue";
 import LikeButton from "../../components/LikeButton.vue";
 import TrackTable from "../../components/TrackTable.vue";
 import TrackArtistLinks from "../../components/TrackArtistLinks.vue";
@@ -18,6 +18,7 @@ import {
   formatTrackDuration,
   groupAlbums,
   trackCoverUrl,
+  trackIdFromTitleHash,
 } from "../../lib/library";
 
 definePageMeta({ name: "album-detail" });
@@ -45,6 +46,7 @@ const albumArtist = computed(() => {
 const album = computed(() =>
   findAlbum(groupAlbums(tracks.value), albumTitle.value, albumArtist.value),
 );
+const scrollToTrackId = computed(() => trackIdFromTitleHash(route.hash));
 const albumActive = computed(() => {
   const activeTrackId = active.value?.id;
   return album.value && activeTrackId
@@ -70,22 +72,12 @@ function playWholeAlbum() {
 }
 
 function toggleAlbumPlayback() {
-  if (albumActive.value) {
+  if (albumActive.value && playing.value) {
     togglePlayback();
     return;
   }
   playWholeAlbum();
 }
-
-watch(
-  [() => route.hash, () => album.value?.key],
-  async ([hash]) => {
-    if (!import.meta.client || !hash) return;
-    await nextTick();
-    document.getElementById(hash.slice(1))?.scrollIntoView({ block: "start" });
-  },
-  { flush: "post" },
-);
 
 onMounted(() => {
   void load();
@@ -108,7 +100,7 @@ onMounted(() => {
     role="status"
     class="flex items-center gap-3 rounded-lg border p-6 text-sm text-muted-foreground"
   >
-    <Spinner label="Loading album" />
+    <PeridotSpinner label="Loading album" />
     Loading this album…
   </div>
   <div
@@ -157,9 +149,7 @@ onMounted(() => {
             :aria-label="
               albumActive && playing
                 ? `Pause ${album.title} by ${album.artist}`
-                : albumActive
-                  ? `Resume ${album.title} by ${album.artist}`
-                  : `Play ${album.title} by ${album.artist}`
+                : `Play ${album.title} by ${album.artist} from the first track`
             "
             @click="toggleAlbumPlayback"
           >
@@ -193,6 +183,10 @@ onMounted(() => {
             {{ album.tracks.length === 1 ? "track" : "tracks" }}
           </Badge>
           <span class="text-sm text-muted-foreground">
+            <template v-if="album.releaseYear">
+              {{ album.releaseYear }}
+              <span aria-hidden="true">·</span>
+            </template>
             {{ formatTrackDuration(album.durationMs) }}
           </span>
         </div>
@@ -205,6 +199,7 @@ onMounted(() => {
         v-if="album.tracks.length"
         :tracks="album.tracks"
         variant="album"
+        :scroll-to-track-id="scrollToTrackId"
       />
       <p
         v-else

@@ -19,9 +19,9 @@ import type {
 } from '@prisma/orm-sqlite/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'2d939d6fb2d0c3a5d74f66440e1baac30c1fdc5277131579abb64ec07eb0029a'>;
+  StorageHashBase<'ef2695cd1e8e734e1b52913f67e3ec61a956f8be5dcf97751c89b07220e31beb'>;
 export type ExecutionHash =
-  ExecutionHashBase<'5933f9db47ee5fa78da5dd876d8fe49a91ba2a7474bce4bf9aeec166e75dd664'>;
+  ExecutionHashBase<'e6918dabc44861f95d5371170588aab9304df0a025af5fc53222131df7d620c7'>;
 export type ProfileHash =
   ProfileHashBase<'260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53'>;
 
@@ -236,30 +236,6 @@ export namespace Models {
     user: User;
     readonly [RelationKeys]?: 'user';
   };
-  export type LibraryScan = {
-    completedAt: FieldOutputTypes['__unbound__']['LibraryScan']['completedAt'];
-    createdAt: FieldOutputTypes['__unbound__']['LibraryScan']['createdAt'];
-    createdCount: FieldOutputTypes['__unbound__']['LibraryScan']['createdCount'];
-    discoveredCount: FieldOutputTypes['__unbound__']['LibraryScan']['discoveredCount'];
-    errorCount: FieldOutputTypes['__unbound__']['LibraryScan']['errorCount'];
-    failureSummary: FieldOutputTypes['__unbound__']['LibraryScan']['failureSummary'];
-    id: FieldOutputTypes['__unbound__']['LibraryScan']['id'];
-    metadataErrorCount: FieldOutputTypes['__unbound__']['LibraryScan']['metadataErrorCount'];
-    metadataFailureSummary: FieldOutputTypes['__unbound__']['LibraryScan']['metadataFailureSummary'];
-    metadataMatchedCount: FieldOutputTypes['__unbound__']['LibraryScan']['metadataMatchedCount'];
-    metadataProcessedCount: FieldOutputTypes['__unbound__']['LibraryScan']['metadataProcessedCount'];
-    metadataStatus: FieldOutputTypes['__unbound__']['LibraryScan']['metadataStatus'];
-    metadataTotalCount: FieldOutputTypes['__unbound__']['LibraryScan']['metadataTotalCount'];
-    metadataUnmatchedCount: FieldOutputTypes['__unbound__']['LibraryScan']['metadataUnmatchedCount'];
-    sourceId: FieldOutputTypes['__unbound__']['LibraryScan']['sourceId'];
-    sourceName: FieldOutputTypes['__unbound__']['LibraryScan']['sourceName'];
-    startedAt: FieldOutputTypes['__unbound__']['LibraryScan']['startedAt'];
-    status: FieldOutputTypes['__unbound__']['LibraryScan']['status'];
-    unavailableCount: FieldOutputTypes['__unbound__']['LibraryScan']['unavailableCount'];
-    unchangedCount: FieldOutputTypes['__unbound__']['LibraryScan']['unchangedCount'];
-    updatedCount: FieldOutputTypes['__unbound__']['LibraryScan']['updatedCount'];
-    readonly [RelationKeys]?: never;
-  };
   export type MetadataProvider = {
     accountLabel: FieldOutputTypes['__unbound__']['MetadataProvider']['accountLabel'];
     configuration: FieldOutputTypes['__unbound__']['MetadataProvider']['configuration'];
@@ -319,6 +295,24 @@ export namespace Models {
     url: FieldOutputTypes['__unbound__']['Source']['url'];
     readonly [RelationKeys]?: never;
   };
+  export type Task = {
+    completedAt: FieldOutputTypes['__unbound__']['Task']['completedAt'];
+    createdAt: FieldOutputTypes['__unbound__']['Task']['createdAt'];
+    details: FieldOutputTypes['__unbound__']['Task']['details'];
+    failureSummary: FieldOutputTypes['__unbound__']['Task']['failureSummary'];
+    forceRefresh: FieldOutputTypes['__unbound__']['Task']['forceRefresh'];
+    id: FieldOutputTypes['__unbound__']['Task']['id'];
+    kind: FieldOutputTypes['__unbound__']['Task']['kind'];
+    parentTaskId: FieldOutputTypes['__unbound__']['Task']['parentTaskId'];
+    progressCompleted: FieldOutputTypes['__unbound__']['Task']['progressCompleted'];
+    progressTotal: FieldOutputTypes['__unbound__']['Task']['progressTotal'];
+    sourceId: FieldOutputTypes['__unbound__']['Task']['sourceId'];
+    sourceName: FieldOutputTypes['__unbound__']['Task']['sourceName'];
+    startedAt: FieldOutputTypes['__unbound__']['Task']['startedAt'];
+    status: FieldOutputTypes['__unbound__']['Task']['status'];
+    title: FieldOutputTypes['__unbound__']['Task']['title'];
+    readonly [RelationKeys]?: never;
+  };
   export type Track = {
     album: FieldOutputTypes['__unbound__']['Track']['album'];
     artist: FieldOutputTypes['__unbound__']['Track']['artist'];
@@ -375,6 +369,15 @@ export namespace Models {
     user: User;
     readonly [RelationKeys]?: 'track' | 'user';
   };
+  export type TrackPlayEvent = {
+    id: FieldOutputTypes['__unbound__']['TrackPlayEvent']['id'];
+    playedAt: FieldOutputTypes['__unbound__']['TrackPlayEvent']['playedAt'];
+    trackId: FieldOutputTypes['__unbound__']['TrackPlayEvent']['trackId'];
+    userId: FieldOutputTypes['__unbound__']['TrackPlayEvent']['userId'];
+    track: Track;
+    user: User;
+    readonly [RelationKeys]?: 'track' | 'user';
+  };
   export type User = {
     bootstrapKey: FieldOutputTypes['__unbound__']['User']['bootstrapKey'];
     createdAt: FieldOutputTypes['__unbound__']['User']['createdAt'];
@@ -391,16 +394,17 @@ export namespace Models {
 export declare const models: {
   AlbumLike: Models.AlbumLike;
   ArtistLike: Models.ArtistLike;
-  LibraryScan: Models.LibraryScan;
   MetadataProvider: Models.MetadataProvider;
   QueueItem: Models.QueueItem;
   QueueState: Models.QueueState;
   ServerSetting: Models.ServerSetting;
   Session: Models.Session;
   Source: Models.Source;
+  Task: Models.Task;
   Track: Models.Track;
   TrackCover: Models.TrackCover;
   TrackLike: Models.TrackLike;
+  TrackPlayEvent: Models.TrackPlayEvent;
   User: Models.User;
 };
 
@@ -565,202 +569,6 @@ type ContractBase = Omit<
                   };
                 },
               ];
-            };
-            readonly LibraryScan: {
-              columns: {
-                readonly completedAt: {
-                  readonly dataType: 'sqlite/datetime';
-                  readonly codecId: 'sqlite/datetime@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly createdAt: {
-                  readonly dataType: 'sqlite/datetime';
-                  readonly codecId: 'sqlite/datetime@1';
-                  readonly nullable: false;
-                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
-                  readonly many: false;
-                };
-                readonly createdCount: {
-                  readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/integer@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
-                  };
-                  readonly many: false;
-                };
-                readonly discoveredCount: {
-                  readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/integer@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
-                  };
-                  readonly many: false;
-                };
-                readonly errorCount: {
-                  readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/integer@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
-                  };
-                  readonly many: false;
-                };
-                readonly failureSummary: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly id: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly metadataErrorCount: {
-                  readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/integer@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
-                  };
-                  readonly many: false;
-                };
-                readonly metadataFailureSummary: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly metadataMatchedCount: {
-                  readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/integer@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
-                  };
-                  readonly many: false;
-                };
-                readonly metadataProcessedCount: {
-                  readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/integer@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
-                  };
-                  readonly many: false;
-                };
-                readonly metadataStatus: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/text@1', 'skipped'>;
-                  };
-                  readonly many: false;
-                };
-                readonly metadataTotalCount: {
-                  readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/integer@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
-                  };
-                  readonly many: false;
-                };
-                readonly metadataUnmatchedCount: {
-                  readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/integer@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
-                  };
-                  readonly many: false;
-                };
-                readonly sourceId: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly sourceName: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly startedAt: {
-                  readonly dataType: 'sqlite/datetime';
-                  readonly codecId: 'sqlite/datetime@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly status: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly unavailableCount: {
-                  readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/integer@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
-                  };
-                  readonly many: false;
-                };
-                readonly unchangedCount: {
-                  readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/integer@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
-                  };
-                  readonly many: false;
-                };
-                readonly updatedCount: {
-                  readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/integer@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
-                  };
-                  readonly many: false;
-                };
-              };
-              primaryKey: { readonly columns: readonly ['id'] };
-              uniques: readonly [];
-              indexes: readonly [
-                {
-                  readonly name: 'LibraryScan_createdAt_idx_9575dbd7';
-                  readonly prefix: 'LibraryScan_createdAt_idx';
-                  readonly columns: readonly ['createdAt'];
-                  readonly unique: false;
-                },
-                {
-                  readonly name: 'LibraryScan_status_idx_e98638ab';
-                  readonly prefix: 'LibraryScan_status_idx';
-                  readonly columns: readonly ['status'];
-                  readonly unique: false;
-                },
-              ];
-              foreignKeys: readonly [];
             };
             readonly MetadataProvider: {
               columns: {
@@ -1178,6 +986,132 @@ type ContractBase = Omit<
               ];
               foreignKeys: readonly [];
             };
+            readonly Task: {
+              columns: {
+                readonly completedAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly createdAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                  readonly many: false;
+                };
+                readonly details: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/text@1', '[]'>;
+                  };
+                  readonly many: false;
+                };
+                readonly failureSummary: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly forceRefresh: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
+                  };
+                  readonly many: false;
+                };
+                readonly id: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly kind: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly parentTaskId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly progressCompleted: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly progressTotal: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly sourceId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly sourceName: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly startedAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly status: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly title: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [
+                {
+                  readonly name: 'Task_kind_status_idx_8034fcaa';
+                  readonly prefix: 'Task_kind_status_idx';
+                  readonly columns: readonly ['kind', 'status'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'Task_parentTaskId_idx_fb3d4259';
+                  readonly prefix: 'Task_parentTaskId_idx';
+                  readonly columns: readonly ['parentTaskId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'Task_status_createdAt_idx_58610442';
+                  readonly prefix: 'Task_status_createdAt_idx';
+                  readonly columns: readonly ['status', 'createdAt'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [];
+            };
             readonly Track: {
               columns: {
                 readonly album: {
@@ -1557,6 +1491,83 @@ type ContractBase = Omit<
                 },
               ];
             };
+            readonly TrackPlayEvent: {
+              columns: {
+                readonly id: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly playedAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                  readonly many: false;
+                };
+                readonly trackId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly userId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [
+                {
+                  readonly name: 'TrackPlayEvent_trackId_idx_8b560769';
+                  readonly prefix: 'TrackPlayEvent_trackId_idx';
+                  readonly columns: readonly ['trackId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'TrackPlayEvent_userId_idx_a489d58a';
+                  readonly prefix: 'TrackPlayEvent_userId_idx';
+                  readonly columns: readonly ['userId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'TrackPlayEvent_userId_playedAt_idx_b8af8d99';
+                  readonly prefix: 'TrackPlayEvent_userId_playedAt_idx';
+                  readonly columns: readonly ['userId', 'playedAt'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'TrackPlayEvent';
+                    readonly columns: readonly ['userId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'User';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+                {
+                  readonly source: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'TrackPlayEvent';
+                    readonly columns: readonly ['trackId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'Track';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+              ];
+            };
             readonly User: {
               columns: {
                 readonly bootstrapKey: {
@@ -1644,10 +1655,6 @@ type ContractBase = Omit<
       readonly namespace: '__unbound__' & NamespaceId;
       readonly model: 'ArtistLike';
     };
-    readonly LibraryScan: {
-      readonly namespace: '__unbound__' & NamespaceId;
-      readonly model: 'LibraryScan';
-    };
     readonly MetadataProvider: {
       readonly namespace: '__unbound__' & NamespaceId;
       readonly model: 'MetadataProvider';
@@ -1669,6 +1676,7 @@ type ContractBase = Omit<
       readonly model: 'Session';
     };
     readonly Source: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Source' };
+    readonly Task: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Task' };
     readonly Track: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Track' };
     readonly TrackCover: {
       readonly namespace: '__unbound__' & NamespaceId;
@@ -1677,6 +1685,10 @@ type ContractBase = Omit<
     readonly TrackLike: {
       readonly namespace: '__unbound__' & NamespaceId;
       readonly model: 'TrackLike';
+    };
+    readonly TrackPlayEvent: {
+      readonly namespace: '__unbound__' & NamespaceId;
+      readonly model: 'TrackPlayEvent';
     };
     readonly User: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'User' };
   };
@@ -1789,122 +1801,6 @@ type ContractBase = Omit<
                 readonly name: { readonly column: 'name' };
                 readonly normalizedName: { readonly column: 'normalizedName' };
                 readonly userId: { readonly column: 'userId' };
-              };
-            };
-          };
-          readonly LibraryScan: {
-            readonly fields: {
-              readonly completedAt: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
-              };
-              readonly createdAt: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
-              };
-              readonly createdCount: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-              };
-              readonly discoveredCount: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-              };
-              readonly errorCount: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-              };
-              readonly failureSummary: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly id: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly metadataErrorCount: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-              };
-              readonly metadataFailureSummary: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly metadataMatchedCount: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-              };
-              readonly metadataProcessedCount: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-              };
-              readonly metadataStatus: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly metadataTotalCount: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-              };
-              readonly metadataUnmatchedCount: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-              };
-              readonly sourceId: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly sourceName: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly startedAt: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
-              };
-              readonly status: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly unavailableCount: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-              };
-              readonly unchangedCount: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-              };
-              readonly updatedCount: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-              };
-            };
-            readonly relations: Record<string, never>;
-            readonly storage: {
-              readonly table: 'LibraryScan';
-              readonly namespaceId: '__unbound__';
-              readonly fields: {
-                readonly completedAt: { readonly column: 'completedAt' };
-                readonly createdAt: { readonly column: 'createdAt' };
-                readonly createdCount: { readonly column: 'createdCount' };
-                readonly discoveredCount: { readonly column: 'discoveredCount' };
-                readonly errorCount: { readonly column: 'errorCount' };
-                readonly failureSummary: { readonly column: 'failureSummary' };
-                readonly id: { readonly column: 'id' };
-                readonly metadataErrorCount: { readonly column: 'metadataErrorCount' };
-                readonly metadataFailureSummary: { readonly column: 'metadataFailureSummary' };
-                readonly metadataMatchedCount: { readonly column: 'metadataMatchedCount' };
-                readonly metadataProcessedCount: { readonly column: 'metadataProcessedCount' };
-                readonly metadataStatus: { readonly column: 'metadataStatus' };
-                readonly metadataTotalCount: { readonly column: 'metadataTotalCount' };
-                readonly metadataUnmatchedCount: { readonly column: 'metadataUnmatchedCount' };
-                readonly sourceId: { readonly column: 'sourceId' };
-                readonly sourceName: { readonly column: 'sourceName' };
-                readonly startedAt: { readonly column: 'startedAt' };
-                readonly status: { readonly column: 'status' };
-                readonly unavailableCount: { readonly column: 'unavailableCount' };
-                readonly unchangedCount: { readonly column: 'unchangedCount' };
-                readonly updatedCount: { readonly column: 'updatedCount' };
               };
             };
           };
@@ -2217,6 +2113,92 @@ type ContractBase = Omit<
               };
             };
           };
+          readonly Task: {
+            readonly fields: {
+              readonly completedAt: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly details: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly failureSummary: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly forceRefresh: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly kind: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly parentTaskId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly progressCompleted: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly progressTotal: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly sourceId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly sourceName: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly startedAt: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly status: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly title: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly table: 'Task';
+              readonly namespaceId: '__unbound__';
+              readonly fields: {
+                readonly completedAt: { readonly column: 'completedAt' };
+                readonly createdAt: { readonly column: 'createdAt' };
+                readonly details: { readonly column: 'details' };
+                readonly failureSummary: { readonly column: 'failureSummary' };
+                readonly forceRefresh: { readonly column: 'forceRefresh' };
+                readonly id: { readonly column: 'id' };
+                readonly kind: { readonly column: 'kind' };
+                readonly parentTaskId: { readonly column: 'parentTaskId' };
+                readonly progressCompleted: { readonly column: 'progressCompleted' };
+                readonly progressTotal: { readonly column: 'progressTotal' };
+                readonly sourceId: { readonly column: 'sourceId' };
+                readonly sourceName: { readonly column: 'sourceName' };
+                readonly startedAt: { readonly column: 'startedAt' };
+                readonly status: { readonly column: 'status' };
+                readonly title: { readonly column: 'title' };
+              };
+            };
+          };
           readonly Track: {
             readonly fields: {
               readonly album: {
@@ -2512,6 +2494,62 @@ type ContractBase = Omit<
               };
             };
           };
+          readonly TrackPlayEvent: {
+            readonly fields: {
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly playedAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly trackId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly userId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+            };
+            readonly relations: {
+              readonly track: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'Track';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['trackId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+              readonly user: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'User';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['userId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'TrackPlayEvent';
+              readonly namespaceId: '__unbound__';
+              readonly fields: {
+                readonly id: { readonly column: 'id' };
+                readonly playedAt: { readonly column: 'playedAt' };
+                readonly trackId: { readonly column: 'trackId' };
+                readonly userId: { readonly column: 'userId' };
+              };
+            };
+          };
           readonly User: {
             readonly fields: {
               readonly bootstrapKey: {
@@ -2603,14 +2641,6 @@ type ContractBase = Omit<
         {
           readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
           readonly ref: {
-            readonly entry: 'LibraryScan';
-            readonly field: 'id';
-            readonly namespace: '__unbound__';
-          };
-        },
-        {
-          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
-          readonly ref: {
             readonly entry: 'MetadataProvider';
             readonly field: 'id';
             readonly namespace: '__unbound__';
@@ -2671,6 +2701,14 @@ type ContractBase = Omit<
         {
           readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
           readonly ref: {
+            readonly entry: 'Task';
+            readonly field: 'id';
+            readonly namespace: '__unbound__';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
+          readonly ref: {
             readonly entry: 'Track';
             readonly field: 'id';
             readonly namespace: '__unbound__';
@@ -2699,6 +2737,14 @@ type ContractBase = Omit<
           readonly ref: {
             readonly entry: 'TrackCover';
             readonly field: 'updatedAt';
+            readonly namespace: '__unbound__';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'TrackPlayEvent';
+            readonly field: 'id';
             readonly namespace: '__unbound__';
           };
         },

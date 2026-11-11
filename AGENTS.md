@@ -47,6 +47,12 @@ colors or dimensions, or local theme overrides. Preserve the owner-supplied
 palette and typography in packages/ui/src/tokens.css. Basic app structure is a
 sidebar, main navigation/content screen, and fixed bottom music player.
 
+The shared track table may bind VueUse `useVirtualList` container and wrapper
+props, which generate runtime positioning and overflow styles. This narrow
+technical exception is limited to virtual-scroll mechanics; all visual styling
+must continue to use standard Tailwind utilities, shadcn-vue variants, and theme
+tokens.
+
 Use the Basil icon library through bundled Iconify SVGs for all UI icons; never use emoji or text-symbol
 placeholders. The play icon is basil:play-solid. Icons must work offline and inherit
 semantic colors and standard Tailwind sizing.

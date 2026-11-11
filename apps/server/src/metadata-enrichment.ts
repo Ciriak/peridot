@@ -29,7 +29,17 @@ import {
   type MetadataResolverRegistry,
   type MetadataTrackInput,
 } from "./metadata-resolver.js";
-import type { MetadataProviderRow, TrackRow } from "./prisma/models.js";
+import type {
+  MetadataProviderRow,
+  TaskRow,
+  TrackRow,
+} from "./prisma/models.js";
+import {
+  metadataDetails,
+  TaskExecutionError,
+  type TaskExecutionResult,
+  type TaskService,
+} from "./tasks.js";
 
 export { parseStoredMetadataDetails };
 
@@ -199,49 +209,55 @@ export class MetadataEnrichment {
     this.controller.abort();
   }
 
-  async runScan(
-    scanId: string,
-    sourceId?: string,
-    force = false,
-  ): Promise<void> {
+  async runTask(
+    task: TaskRow,
+    tasks: TaskService,
+  ): Promise<TaskExecutionResult> {
     try {
       const providers = await orderedMetadataProviders(this.database);
       if (!providers.length) {
-        await this.database.orm.LibraryScan.where({ id: scanId }).update({
-          metadataStatus: "skipped",
-          metadataFailureSummary: "No metadata providers are enabled.",
-        });
-        return;
+        throw new TaskExecutionError("No metadata providers are enabled.");
       }
 
-      await this.database.orm.LibraryScan.where({ id: scanId }).update({
-        metadataStatus: "running",
-      });
       const trackQuery = this.database.orm.Track.where({
         available: 1,
         metadataMode: "automatic",
       });
       const tracks = await (
-        sourceId ? trackQuery.where({ sourceId }) : trackQuery
+        task.sourceId
+          ? trackQuery.where({ sourceId: task.sourceId })
+          : trackQuery
       ).all();
-      const targets = force
+      const targets = task.forceRefresh
         ? tracks
         : tracks.filter(
             (track) =>
               track.metadataAttemptedSignature !== inputSignature(track),
           );
-      await this.database.orm.LibraryScan.where({ id: scanId }).update({
-        metadataTotalCount: targets.length,
-        metadataProcessedCount: 0,
-        metadataMatchedCount: 0,
-        metadataUnmatchedCount: 0,
-        metadataErrorCount: 0,
-      });
+      await tasks.updateProgress(
+        task.id,
+        0,
+        targets.length,
+        metadataDetails({
+          source: task.sourceName ?? "All sources",
+          total: targets.length,
+          processed: 0,
+          matched: 0,
+          unmatched: 0,
+          errors: 0,
+        }),
+      );
       if (!targets.length) {
-        await this.database.orm.LibraryScan.where({ id: scanId }).update({
-          metadataStatus: "completed",
-        });
-        return;
+        return {
+          details: metadataDetails({
+            source: task.sourceName ?? "All sources",
+            total: 0,
+            processed: 0,
+            matched: 0,
+            unmatched: 0,
+            errors: 0,
+          }),
+        };
       }
 
       const sourcePaths = new Map(
@@ -277,12 +293,19 @@ export class MetadataEnrichment {
       let errorCount = 0;
       let failureSummary: string | null = null;
       const recordProgress = async () => {
-        await this.database.orm.LibraryScan.where({ id: scanId }).update({
-          metadataProcessedCount: processedCount,
-          metadataMatchedCount: matchedCount,
-          metadataUnmatchedCount: unmatchedCount,
-          metadataErrorCount: errorCount,
-        });
+        await tasks.updateProgress(
+          task.id,
+          processedCount,
+          targets.length,
+          metadataDetails({
+            source: task.sourceName ?? "All sources",
+            total: targets.length,
+            processed: processedCount,
+            matched: matchedCount,
+            unmatched: unmatchedCount,
+            errors: errorCount,
+          }),
+        );
       };
 
       const applyAutomatic = async (
@@ -362,31 +385,28 @@ export class MetadataEnrichment {
             await recordNoMatch(track);
           }
         }
-        if (failureSummary) {
-          await this.database.orm.LibraryScan.where({ id: scanId }).update({
-            metadataFailureSummary: failureSummary,
-          });
-        }
       }
 
-      await this.database.orm.LibraryScan.where({ id: scanId }).update({
-        metadataStatus: "completed",
-        metadataProcessedCount: processedCount,
-        metadataMatchedCount: matchedCount,
-        metadataUnmatchedCount: unmatchedCount,
-        metadataErrorCount: errorCount,
-        metadataFailureSummary: failureSummary,
-      });
-    } catch {
+      return {
+        details: metadataDetails({
+          source: task.sourceName ?? "All sources",
+          total: targets.length,
+          processed: processedCount,
+          matched: matchedCount,
+          unmatched: unmatchedCount,
+          errors: errorCount,
+        }),
+        failureSummary,
+      };
+    } catch (error) {
       const interrupted = this.controller.signal.aborted;
-      await this.database.orm.LibraryScan.where({ id: scanId })
-        .update({
-          metadataStatus: interrupted ? "interrupted" : "failed",
-          metadataFailureSummary: interrupted
-            ? "Metadata matching was interrupted by server shutdown."
-            : "Metadata matching could not be completed.",
-        })
-        .catch(() => undefined);
+      if (error instanceof TaskExecutionError) throw error;
+      throw new TaskExecutionError(
+        interrupted
+          ? "Metadata matching was interrupted by server shutdown."
+          : "Metadata matching could not be completed.",
+        interrupted ? "interrupted" : "failed",
+      );
     }
   }
 

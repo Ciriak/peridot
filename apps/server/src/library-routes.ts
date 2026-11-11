@@ -3,19 +3,17 @@ import { createReadStream } from "node:fs";
 import { realpath, stat } from "node:fs/promises";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type {
-  LibraryScanResponse,
-  LibraryScanStatus,
   PlaybackTokenResponse,
   TrackListResponse,
   TrackResponse,
 } from "@peridot/contracts";
 import type { Database } from "./database.js";
 import { sendError } from "./http.js";
-import type { LibraryScanner } from "./library-scanner.js";
 import { effectiveArtistCredits } from "./metadata-enrichment.js";
 import { parseStoredMetadataDetails } from "./metadata-details.js";
-import type { LibraryScanRow, TrackRow } from "./prisma/models.js";
+import type { TrackRow } from "./prisma/models.js";
 import type { PlaybackTokenService } from "./playback-tokens.js";
+import { queueLibraryScan, toTaskResponse, type TaskService } from "./tasks.js";
 
 function toTrackResponse(
   track: TrackRow,
@@ -67,33 +65,6 @@ function toTrackResponse(
   };
 }
 
-export function toScanResponse(scan: LibraryScanRow): LibraryScanResponse {
-  return {
-    id: scan.id,
-    status: scan.status as LibraryScanStatus,
-    sourceId: scan.sourceId,
-    sourceName: scan.sourceName,
-    discoveredCount: scan.discoveredCount,
-    createdCount: scan.createdCount,
-    updatedCount: scan.updatedCount,
-    unchangedCount: scan.unchangedCount,
-    errorCount: scan.errorCount,
-    unavailableCount: scan.unavailableCount,
-    metadataStatus:
-      scan.metadataStatus as LibraryScanResponse["metadataStatus"],
-    metadataTotalCount: scan.metadataTotalCount,
-    metadataProcessedCount: scan.metadataProcessedCount,
-    metadataMatchedCount: scan.metadataMatchedCount,
-    metadataUnmatchedCount: scan.metadataUnmatchedCount,
-    metadataErrorCount: scan.metadataErrorCount,
-    metadataFailureSummary: scan.metadataFailureSummary,
-    failureSummary: scan.failureSummary,
-    createdAt: scan.createdAt.toISOString(),
-    startedAt: scan.startedAt?.toISOString() ?? null,
-    completedAt: scan.completedAt?.toISOString() ?? null,
-  };
-}
-
 function isContained(root: string, candidate: string): boolean {
   const relative = path.relative(root, candidate);
   return (
@@ -141,38 +112,13 @@ interface AudioRequest extends FastifyRequest {
 export async function registerLibraryRoutes(
   app: FastifyInstance,
   database: Database,
-  scanner: LibraryScanner,
+  tasks: TaskService,
   playbackTokens: PlaybackTokenService,
 ) {
   app.post("/api/library/scans", async (_request, reply) => {
-    const scan = await scanner.queueScan();
-    if (!scan) {
-      return sendError(
-        reply,
-        409,
-        "scan_in_progress",
-        "A library scan is already active",
-      );
-    }
-    return reply.code(202).send(toScanResponse(scan));
+    const task = await queueLibraryScan(tasks);
+    return reply.code(202).send(toTaskResponse(task));
   });
-
-  app.get<{ Params: { id: string } }>(
-    "/api/library/scans/:id",
-    async (request, reply) => {
-      const scan = await database.orm.LibraryScan.first({
-        id: request.params.id,
-      });
-      if (!scan)
-        return sendError(
-          reply,
-          404,
-          "scan_not_found",
-          "Library scan not found",
-        );
-      return toScanResponse(scan);
-    },
-  );
 
   app.get<{ Querystring: { availability?: string } }>(
     "/api/tracks",

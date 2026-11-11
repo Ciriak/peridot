@@ -9,6 +9,7 @@ export interface AlbumGroup {
   tracks: TrackResponse[];
   trackIds: string[];
   durationMs: number | null;
+  releaseYear: number | null;
 }
 
 export interface ArtistGroup {
@@ -233,6 +234,22 @@ function totalDuration(tracks: readonly TrackResponse[]): number | null {
   return foundDuration ? duration : null;
 }
 
+function albumReleaseYear(tracks: readonly TrackResponse[]): number | null {
+  const years = new Set<number>();
+  for (const track of tracks) {
+    const detail = track.metadata?.details.find(
+      (item) =>
+        item.key.trim().toLowerCase() === "year" ||
+        item.label.trim().toLowerCase() === "year",
+    );
+    const value = detail?.value.trim() ?? "";
+    if (!/^\d{4}$/.test(value)) continue;
+    const year = Number(value);
+    if (year >= 1000 && year <= 9999) years.add(year);
+  }
+  return years.size === 1 ? [...years][0]! : null;
+}
+
 export function groupArtists(tracks: readonly TrackResponse[]): ArtistGroup[] {
   const groups = new Map<string, ArtistGroup>();
   for (const track of tracks) {
@@ -323,6 +340,7 @@ export function groupAlbums(tracks: readonly TrackResponse[]): AlbumGroup[] {
       tracks: [track],
       trackIds: [],
       durationMs: null,
+      releaseYear: null,
     });
   }
 
@@ -331,6 +349,7 @@ export function groupAlbums(tracks: readonly TrackResponse[]): AlbumGroup[] {
       album.tracks.sort(compareAlbumTracks);
       album.trackIds = album.tracks.map((track) => track.id);
       album.durationMs = totalDuration(album.tracks);
+      album.releaseYear = albumReleaseYear(album.tracks);
       return album;
     })
     .sort(
@@ -385,6 +404,18 @@ export function trackAlbumRoute(track: TrackResponse) {
 
 export function trackTitleAnchorId(trackId: string): string {
   return `track-title-${trackId}`;
+}
+
+export function trackIdFromTitleHash(hash: string): string | null {
+  const prefix = `#${trackTitleAnchorId("")}`;
+  if (!hash.startsWith(prefix)) return null;
+  const encodedId = hash.slice(prefix.length);
+  if (!encodedId) return null;
+  try {
+    return decodeURIComponent(encodedId);
+  } catch {
+    return encodedId;
+  }
 }
 
 export function trackAlbumTitleRoute(track: TrackResponse) {

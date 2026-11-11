@@ -12,10 +12,6 @@
       "model": "ArtistLike",
       "namespace": "__unbound__"
     },
-    "LibraryScan": {
-      "model": "LibraryScan",
-      "namespace": "__unbound__"
-    },
     "MetadataProvider": {
       "model": "MetadataProvider",
       "namespace": "__unbound__"
@@ -40,6 +36,10 @@
       "model": "Source",
       "namespace": "__unbound__"
     },
+    "Task": {
+      "model": "Task",
+      "namespace": "__unbound__"
+    },
     "Track": {
       "model": "Track",
       "namespace": "__unbound__"
@@ -50,6 +50,10 @@
     },
     "TrackLike": {
       "model": "TrackLike",
+      "namespace": "__unbound__"
+    },
+    "TrackPlayEvent": {
+      "model": "TrackPlayEvent",
       "namespace": "__unbound__"
     },
     "User": {
@@ -235,227 +239,6 @@
               },
               "namespaceId": "__unbound__",
               "table": "ArtistLike"
-            }
-          },
-          "LibraryScan": {
-            "fields": {
-              "completedAt": {
-                "nullable": true,
-                "type": {
-                  "codecId": "sqlite/datetime@1",
-                  "kind": "scalar"
-                }
-              },
-              "createdAt": {
-                "nullable": false,
-                "type": {
-                  "codecId": "sqlite/datetime@1",
-                  "kind": "scalar"
-                }
-              },
-              "createdCount": {
-                "nullable": false,
-                "type": {
-                  "codecId": "sqlite/integer@1",
-                  "kind": "scalar"
-                }
-              },
-              "discoveredCount": {
-                "nullable": false,
-                "type": {
-                  "codecId": "sqlite/integer@1",
-                  "kind": "scalar"
-                }
-              },
-              "errorCount": {
-                "nullable": false,
-                "type": {
-                  "codecId": "sqlite/integer@1",
-                  "kind": "scalar"
-                }
-              },
-              "failureSummary": {
-                "nullable": true,
-                "type": {
-                  "codecId": "sqlite/text@1",
-                  "kind": "scalar"
-                }
-              },
-              "id": {
-                "nullable": false,
-                "type": {
-                  "codecId": "sqlite/text@1",
-                  "kind": "scalar"
-                }
-              },
-              "metadataErrorCount": {
-                "nullable": false,
-                "type": {
-                  "codecId": "sqlite/integer@1",
-                  "kind": "scalar"
-                }
-              },
-              "metadataFailureSummary": {
-                "nullable": true,
-                "type": {
-                  "codecId": "sqlite/text@1",
-                  "kind": "scalar"
-                }
-              },
-              "metadataMatchedCount": {
-                "nullable": false,
-                "type": {
-                  "codecId": "sqlite/integer@1",
-                  "kind": "scalar"
-                }
-              },
-              "metadataProcessedCount": {
-                "nullable": false,
-                "type": {
-                  "codecId": "sqlite/integer@1",
-                  "kind": "scalar"
-                }
-              },
-              "metadataStatus": {
-                "nullable": false,
-                "type": {
-                  "codecId": "sqlite/text@1",
-                  "kind": "scalar"
-                }
-              },
-              "metadataTotalCount": {
-                "nullable": false,
-                "type": {
-                  "codecId": "sqlite/integer@1",
-                  "kind": "scalar"
-                }
-              },
-              "metadataUnmatchedCount": {
-                "nullable": false,
-                "type": {
-                  "codecId": "sqlite/integer@1",
-                  "kind": "scalar"
-                }
-              },
-              "sourceId": {
-                "nullable": true,
-                "type": {
-                  "codecId": "sqlite/text@1",
-                  "kind": "scalar"
-                }
-              },
-              "sourceName": {
-                "nullable": true,
-                "type": {
-                  "codecId": "sqlite/text@1",
-                  "kind": "scalar"
-                }
-              },
-              "startedAt": {
-                "nullable": true,
-                "type": {
-                  "codecId": "sqlite/datetime@1",
-                  "kind": "scalar"
-                }
-              },
-              "status": {
-                "nullable": false,
-                "type": {
-                  "codecId": "sqlite/text@1",
-                  "kind": "scalar"
-                }
-              },
-              "unavailableCount": {
-                "nullable": false,
-                "type": {
-                  "codecId": "sqlite/integer@1",
-                  "kind": "scalar"
-                }
-              },
-              "unchangedCount": {
-                "nullable": false,
-                "type": {
-                  "codecId": "sqlite/integer@1",
-                  "kind": "scalar"
-                }
-              },
-              "updatedCount": {
-                "nullable": false,
-                "type": {
-                  "codecId": "sqlite/integer@1",
-                  "kind": "scalar"
-                }
-              }
-            },
-            "relations": {},
-            "storage": {
-              "fields": {
-                "completedAt": {
-                  "column": "completedAt"
-                },
-                "createdAt": {
-                  "column": "createdAt"
-                },
-                "createdCount": {
-                  "column": "createdCount"
-                },
-                "discoveredCount": {
-                  "column": "discoveredCount"
-                },
-                "errorCount": {
-                  "column": "errorCount"
-                },
-                "failureSummary": {
-                  "column": "failureSummary"
-                },
-                "id": {
-                  "column": "id"
-                },
-                "metadataErrorCount": {
-                  "column": "metadataErrorCount"
-                },
-                "metadataFailureSummary": {
-                  "column": "metadataFailureSummary"
-                },
-                "metadataMatchedCount": {
-                  "column": "metadataMatchedCount"
-                },
-                "metadataProcessedCount": {
-                  "column": "metadataProcessedCount"
-                },
-                "metadataStatus": {
-                  "column": "metadataStatus"
-                },
-                "metadataTotalCount": {
-                  "column": "metadataTotalCount"
-                },
-                "metadataUnmatchedCount": {
-                  "column": "metadataUnmatchedCount"
-                },
-                "sourceId": {
-                  "column": "sourceId"
-                },
-                "sourceName": {
-                  "column": "sourceName"
-                },
-                "startedAt": {
-                  "column": "startedAt"
-                },
-                "status": {
-                  "column": "status"
-                },
-                "unavailableCount": {
-                  "column": "unavailableCount"
-                },
-                "unchangedCount": {
-                  "column": "unchangedCount"
-                },
-                "updatedCount": {
-                  "column": "updatedCount"
-                }
-              },
-              "namespaceId": "__unbound__",
-              "table": "LibraryScan"
             }
           },
           "MetadataProvider": {
@@ -965,6 +748,167 @@
               },
               "namespaceId": "__unbound__",
               "table": "Source"
+            }
+          },
+          "Task": {
+            "fields": {
+              "completedAt": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                }
+              },
+              "createdAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                }
+              },
+              "details": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "failureSummary": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "forceRefresh": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "kind": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "parentTaskId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "progressCompleted": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
+              "progressTotal": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
+              "sourceId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "sourceName": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "startedAt": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                }
+              },
+              "status": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "title": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "completedAt": {
+                  "column": "completedAt"
+                },
+                "createdAt": {
+                  "column": "createdAt"
+                },
+                "details": {
+                  "column": "details"
+                },
+                "failureSummary": {
+                  "column": "failureSummary"
+                },
+                "forceRefresh": {
+                  "column": "forceRefresh"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "kind": {
+                  "column": "kind"
+                },
+                "parentTaskId": {
+                  "column": "parentTaskId"
+                },
+                "progressCompleted": {
+                  "column": "progressCompleted"
+                },
+                "progressTotal": {
+                  "column": "progressTotal"
+                },
+                "sourceId": {
+                  "column": "sourceId"
+                },
+                "sourceName": {
+                  "column": "sourceName"
+                },
+                "startedAt": {
+                  "column": "startedAt"
+                },
+                "status": {
+                  "column": "status"
+                },
+                "title": {
+                  "column": "title"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "Task"
             }
           },
           "Track": {
@@ -1490,6 +1434,90 @@
               "table": "TrackLike"
             }
           },
+          "TrackPlayEvent": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "playedAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                }
+              },
+              "trackId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "userId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "track": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "trackId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Track",
+                  "namespace": "__unbound__"
+                }
+              },
+              "user": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "userId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "User",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "playedAt": {
+                  "column": "playedAt"
+                },
+                "trackId": {
+                  "column": "trackId"
+                },
+                "userId": {
+                  "column": "userId"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "TrackPlayEvent"
+            }
+          },
           "User": {
             "fields": {
               "bootstrapKey": {
@@ -1774,192 +1802,6 @@
                   ]
                 }
               ]
-            },
-            "LibraryScan": {
-              "columns": {
-                "completedAt": {
-                  "codecId": "sqlite/datetime@1",
-                  "dataType": "sqlite/datetime",
-                  "nullable": true
-                },
-                "createdAt": {
-                  "codecId": "sqlite/datetime@1",
-                  "dataType": "sqlite/datetime",
-                  "default": {
-                    "expression": "now()",
-                    "kind": "function"
-                  },
-                  "nullable": false
-                },
-                "createdCount": {
-                  "codecId": "sqlite/integer@1",
-                  "dataType": "sqlite/integer",
-                  "default": {
-                    "kind": "literal",
-                    "value": "0"
-                  },
-                  "nullable": false
-                },
-                "discoveredCount": {
-                  "codecId": "sqlite/integer@1",
-                  "dataType": "sqlite/integer",
-                  "default": {
-                    "kind": "literal",
-                    "value": "0"
-                  },
-                  "nullable": false
-                },
-                "errorCount": {
-                  "codecId": "sqlite/integer@1",
-                  "dataType": "sqlite/integer",
-                  "default": {
-                    "kind": "literal",
-                    "value": "0"
-                  },
-                  "nullable": false
-                },
-                "failureSummary": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
-                  "nullable": true
-                },
-                "id": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
-                  "nullable": false
-                },
-                "metadataErrorCount": {
-                  "codecId": "sqlite/integer@1",
-                  "dataType": "sqlite/integer",
-                  "default": {
-                    "kind": "literal",
-                    "value": "0"
-                  },
-                  "nullable": false
-                },
-                "metadataFailureSummary": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
-                  "nullable": true
-                },
-                "metadataMatchedCount": {
-                  "codecId": "sqlite/integer@1",
-                  "dataType": "sqlite/integer",
-                  "default": {
-                    "kind": "literal",
-                    "value": "0"
-                  },
-                  "nullable": false
-                },
-                "metadataProcessedCount": {
-                  "codecId": "sqlite/integer@1",
-                  "dataType": "sqlite/integer",
-                  "default": {
-                    "kind": "literal",
-                    "value": "0"
-                  },
-                  "nullable": false
-                },
-                "metadataStatus": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
-                  "default": {
-                    "kind": "literal",
-                    "value": "skipped"
-                  },
-                  "nullable": false
-                },
-                "metadataTotalCount": {
-                  "codecId": "sqlite/integer@1",
-                  "dataType": "sqlite/integer",
-                  "default": {
-                    "kind": "literal",
-                    "value": "0"
-                  },
-                  "nullable": false
-                },
-                "metadataUnmatchedCount": {
-                  "codecId": "sqlite/integer@1",
-                  "dataType": "sqlite/integer",
-                  "default": {
-                    "kind": "literal",
-                    "value": "0"
-                  },
-                  "nullable": false
-                },
-                "sourceId": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
-                  "nullable": true
-                },
-                "sourceName": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
-                  "nullable": true
-                },
-                "startedAt": {
-                  "codecId": "sqlite/datetime@1",
-                  "dataType": "sqlite/datetime",
-                  "nullable": true
-                },
-                "status": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
-                  "nullable": false
-                },
-                "unavailableCount": {
-                  "codecId": "sqlite/integer@1",
-                  "dataType": "sqlite/integer",
-                  "default": {
-                    "kind": "literal",
-                    "value": "0"
-                  },
-                  "nullable": false
-                },
-                "unchangedCount": {
-                  "codecId": "sqlite/integer@1",
-                  "dataType": "sqlite/integer",
-                  "default": {
-                    "kind": "literal",
-                    "value": "0"
-                  },
-                  "nullable": false
-                },
-                "updatedCount": {
-                  "codecId": "sqlite/integer@1",
-                  "dataType": "sqlite/integer",
-                  "default": {
-                    "kind": "literal",
-                    "value": "0"
-                  },
-                  "nullable": false
-                }
-              },
-              "foreignKeys": [],
-              "indexes": [
-                {
-                  "columns": [
-                    "createdAt"
-                  ],
-                  "name": "LibraryScan_createdAt_idx_9575dbd7",
-                  "prefix": "LibraryScan_createdAt_idx",
-                  "unique": false
-                },
-                {
-                  "columns": [
-                    "status"
-                  ],
-                  "name": "LibraryScan_status_idx_e98638ab",
-                  "prefix": "LibraryScan_status_idx",
-                  "unique": false
-                }
-              ],
-              "primaryKey": {
-                "columns": [
-                  "id"
-                ]
-              },
-              "uniques": []
             },
             "MetadataProvider": {
               "columns": {
@@ -2452,6 +2294,132 @@
               },
               "uniques": []
             },
+            "Task": {
+              "columns": {
+                "completedAt": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/datetime",
+                  "nullable": true
+                },
+                "createdAt": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/datetime",
+                  "default": {
+                    "expression": "now()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                },
+                "details": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "default": {
+                    "kind": "literal",
+                    "value": "[]"
+                  },
+                  "nullable": false
+                },
+                "failureSummary": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "forceRefresh": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "default": {
+                    "kind": "literal",
+                    "value": "0"
+                  },
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "kind": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "parentTaskId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "progressCompleted": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "nullable": true
+                },
+                "progressTotal": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "nullable": true
+                },
+                "sourceId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "sourceName": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "startedAt": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/datetime",
+                  "nullable": true
+                },
+                "status": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "title": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [
+                {
+                  "columns": [
+                    "kind",
+                    "status"
+                  ],
+                  "name": "Task_kind_status_idx_8034fcaa",
+                  "prefix": "Task_kind_status_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "parentTaskId"
+                  ],
+                  "name": "Task_parentTaskId_idx_fb3d4259",
+                  "prefix": "Task_parentTaskId_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "status",
+                    "createdAt"
+                  ],
+                  "name": "Task_status_createdAt_idx_58610442",
+                  "prefix": "Task_status_createdAt_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
             "Track": {
               "columns": {
                 "album": {
@@ -2860,6 +2828,109 @@
               },
               "uniques": []
             },
+            "TrackPlayEvent": {
+              "columns": {
+                "id": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "playedAt": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/datetime",
+                  "default": {
+                    "expression": "now()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                },
+                "trackId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "userId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "name": "TrackPlayEvent_userId_idx_a489d58a"
+                  },
+                  "onDelete": "cascade",
+                  "source": {
+                    "columns": [
+                      "userId"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "TrackPlayEvent"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "User"
+                  }
+                },
+                {
+                  "index": {
+                    "name": "TrackPlayEvent_trackId_idx_8b560769"
+                  },
+                  "onDelete": "cascade",
+                  "source": {
+                    "columns": [
+                      "trackId"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "TrackPlayEvent"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Track"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "trackId"
+                  ],
+                  "name": "TrackPlayEvent_trackId_idx_8b560769",
+                  "prefix": "TrackPlayEvent_trackId_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "userId"
+                  ],
+                  "name": "TrackPlayEvent_userId_idx_a489d58a",
+                  "prefix": "TrackPlayEvent_userId_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "userId",
+                    "playedAt"
+                  ],
+                  "name": "TrackPlayEvent_userId_playedAt_idx_b8af8d99",
+                  "prefix": "TrackPlayEvent_userId_playedAt_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
             "User": {
               "columns": {
                 "bootstrapKey": {
@@ -2946,10 +3017,10 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "2d939d6fb2d0c3a5d74f66440e1baac30c1fdc5277131579abb64ec07eb0029a"
+    "storageHash": "ef2695cd1e8e734e1b52913f67e3ec61a956f8be5dcf97751c89b07220e31beb"
   },
   "execution": {
-    "executionHash": "5933f9db47ee5fa78da5dd876d8fe49a91ba2a7474bce4bf9aeec166e75dd664",
+    "executionHash": "e6918dabc44861f95d5371170588aab9304df0a025af5fc53222131df7d620c7",
     "mutations": {
       "defaults": [
         {
@@ -2970,17 +3041,6 @@
           },
           "ref": {
             "entry": "ArtistLike",
-            "field": "id",
-            "namespace": "__unbound__"
-          }
-        },
-        {
-          "onCreate": {
-            "id": "cuid2",
-            "kind": "generator"
-          },
-          "ref": {
-            "entry": "LibraryScan",
             "field": "id",
             "namespace": "__unbound__"
           }
@@ -3084,6 +3144,17 @@
             "kind": "generator"
           },
           "ref": {
+            "entry": "Task",
+            "field": "id",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "cuid2",
+            "kind": "generator"
+          },
+          "ref": {
             "entry": "Track",
             "field": "id",
             "namespace": "__unbound__"
@@ -3127,6 +3198,17 @@
           "ref": {
             "entry": "TrackCover",
             "field": "updatedAt",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "cuid2",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "TrackPlayEvent",
+            "field": "id",
             "namespace": "__unbound__"
           }
         },

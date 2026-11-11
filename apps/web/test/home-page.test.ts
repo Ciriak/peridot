@@ -13,6 +13,7 @@ test("home presents catalog suggestions with the shared album-card grid", async 
   assert.match(homePage, /<AlbumCard/);
   assert.match(homePage, /:album="album"/);
   assert.match(homePage, /void loadLikes\(\)/);
+  assert.doesNotMatch(homePage, /\$\{albums\.length\} suggestions/);
   assert.doesNotMatch(homePage, /library-search/);
   assert.doesNotMatch(homePage, /<LibraryScreen/);
 

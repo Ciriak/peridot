@@ -1,0 +1,124 @@
+import type { QuickPickItemResponse } from "@peridot/contracts";
+
+export const QUICK_PICK_LIMIT = 8;
+const QUICK_PICK_HALF_LIFE_MS = 7 * 24 * 60 * 60 * 1000;
+
+export interface PlayedTrackInfo {
+  id: string;
+  artist: string;
+  album: string | null;
+  metadataArtist: string | null;
+  metadataAlbum: string | null;
+  available: number | boolean;
+}
+
+export interface PlayedTrackEvent {
+  playedAt: Date;
+  track: PlayedTrackInfo;
+}
+
+interface RankedItem {
+  score: number;
+  lastPlayedAt: number;
+  item: QuickPickItemResponse;
+}
+
+function compareText(left: string, right: string): number {
+  if (left < right) return -1;
+  if (left > right) return 1;
+  return 0;
+}
+
+export function decayedPlayScore(
+  playedAt: Date,
+  now: Date,
+  halfLifeMs = QUICK_PICK_HALF_LIFE_MS,
+): number {
+  const ageMs = Math.max(0, now.getTime() - playedAt.getTime());
+  return 0.5 ** (ageMs / halfLifeMs);
+}
+
+export function rankQuickPicks(
+  events: readonly PlayedTrackEvent[],
+  now: Date,
+  limit = QUICK_PICK_LIMIT,
+): QuickPickItemResponse[] {
+  const tracks = new Map<
+    string,
+    { score: number; lastPlayedAt: number; track: PlayedTrackInfo }
+  >();
+  const albums = new Map<
+    string,
+    {
+      score: number;
+      lastPlayedAt: number;
+      title: string;
+      artist: string;
+    }
+  >();
+
+  for (const event of events) {
+    if (!event.track.available) continue;
+    const playedAt = event.playedAt.getTime();
+    const score = decayedPlayScore(event.playedAt, now);
+    const track = tracks.get(event.track.id);
+    if (track) {
+      track.score += score;
+      track.lastPlayedAt = Math.max(track.lastPlayedAt, playedAt);
+    } else {
+      tracks.set(event.track.id, {
+        score,
+        lastPlayedAt: playedAt,
+        track: event.track,
+      });
+    }
+
+    const title = (event.track.metadataAlbum ?? event.track.album)?.trim();
+    const artist = (event.track.metadataArtist ?? event.track.artist).trim();
+    if (!title || !artist) continue;
+    const key = `${artist.toLowerCase()}\u0000${title.toLowerCase()}`;
+    const album = albums.get(key);
+    if (album) {
+      album.score += score;
+      album.lastPlayedAt = Math.max(album.lastPlayedAt, playedAt);
+    } else {
+      albums.set(key, {
+        score,
+        lastPlayedAt: playedAt,
+        title,
+        artist,
+      });
+    }
+  }
+
+  const ranked: RankedItem[] = [];
+  for (const [trackId, track] of tracks) {
+    ranked.push({
+      score: track.score,
+      lastPlayedAt: track.lastPlayedAt,
+      item: { kind: "track", key: `track:${trackId}`, trackId },
+    });
+  }
+  for (const [albumKey, album] of albums) {
+    ranked.push({
+      score: album.score,
+      lastPlayedAt: album.lastPlayedAt,
+      item: {
+        kind: "album",
+        key: `album:${albumKey}`,
+        title: album.title,
+        artist: album.artist,
+      },
+    });
+  }
+
+  return ranked
+    .sort(
+      (left, right) =>
+        right.score - left.score ||
+        right.lastPlayedAt - left.lastPlayedAt ||
+        compareText(left.item.key, right.item.key),
+    )
+    .slice(0, Math.max(0, Math.floor(limit)))
+    .map(({ item }) => item);
+}

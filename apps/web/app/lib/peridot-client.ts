@@ -5,24 +5,27 @@ import type {
   AuthStatusResponse,
   CreateMetadataProviderRequest,
   CreateSourceRequest,
+  CreateSourceResponse,
   DirectoryListResponse,
   DirectorySearchResponse,
   LikeListResponse,
   LikeResponse,
   LikeTarget,
-  LibraryScanResponse,
   LogListResponse,
   MetadataCandidateListResponse,
   MetadataProviderDefinitionListResponse,
   MetadataProviderListResponse,
   MetadataProviderResponse,
+  QuickPickListResponse,
   PlaybackTokenResponse,
   QueueResponse,
+  RecordTrackPlayResponse,
   ReplaceQueueRequest,
   ResetTrackMetadataResponse,
   ServerSettingsResponse,
   SourceListResponse,
-  SourceResponse,
+  TaskListResponse,
+  TaskResponse,
   TrackListResponse,
   UpdateMetadataProviderRequest,
 } from "@peridot/contracts";
@@ -207,7 +210,7 @@ export function reorderMetadataProviders(
 }
 
 export function refreshMetadata(serverAddress: string, token: string) {
-  return authenticatedRequestJson<LibraryScanResponse>(
+  return authenticatedRequestJson<TaskResponse>(
     serverAddress,
     "/api/admin/metadata/refresh",
     token,
@@ -245,7 +248,7 @@ export function createSource(
   token: string,
   source: CreateSourceRequest,
 ) {
-  return authenticatedRequestJson<SourceResponse>(
+  return authenticatedRequestJson<CreateSourceResponse>(
     serverAddress,
     "/api/admin/sources",
     token,
@@ -284,7 +287,7 @@ export function rescanSource(
   token: string,
   sourceId: string,
 ) {
-  return authenticatedRequestJson<LibraryScanResponse>(
+  return authenticatedRequestJson<TaskResponse>(
     serverAddress,
     `/api/admin/sources/${sourceId}/scans`,
     token,
@@ -324,7 +327,7 @@ export function searchDirectories(
 }
 
 export function startLibraryScan(serverAddress: string, token: string) {
-  return authenticatedRequestJson<LibraryScanResponse>(
+  return authenticatedRequestJson<TaskResponse>(
     serverAddress,
     "/api/library/scans",
     token,
@@ -332,14 +335,33 @@ export function startLibraryScan(serverAddress: string, token: string) {
   );
 }
 
-export function getLibraryScan(
+export function listTasks(
   serverAddress: string,
   token: string,
-  scanId: string,
+  options: {
+    status?: "all" | "active" | "terminal";
+    limit?: number;
+    offset?: number;
+  } = {},
 ) {
-  return authenticatedRequestJson<LibraryScanResponse>(
+  const params = new URLSearchParams();
+  if (options.status) params.set("status", options.status);
+  if (options.limit !== undefined) params.set("limit", String(options.limit));
+  if (options.offset !== undefined) {
+    params.set("offset", String(options.offset));
+  }
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return authenticatedRequestJson<TaskListResponse>(
     serverAddress,
-    `/api/library/scans/${scanId}`,
+    `/api/tasks${suffix}`,
+    token,
+  );
+}
+
+export function getTask(serverAddress: string, token: string, taskId: string) {
+  return authenticatedRequestJson<TaskResponse>(
+    serverAddress,
+    `/api/tasks/${encodeURIComponent(taskId)}`,
     token,
   );
 }
@@ -348,6 +370,27 @@ export function listTracks(serverAddress: string, token: string) {
   return authenticatedRequestJson<TrackListResponse>(
     serverAddress,
     "/api/tracks",
+    token,
+  );
+}
+
+export function recordTrackPlay(
+  serverAddress: string,
+  token: string,
+  trackId: string,
+) {
+  return authenticatedRequestJson<RecordTrackPlayResponse>(
+    serverAddress,
+    `/api/tracks/${encodeURIComponent(trackId)}/plays`,
+    token,
+    { method: "POST" },
+  );
+}
+
+export function fetchQuickPicks(serverAddress: string, token: string) {
+  return authenticatedRequestJson<QuickPickListResponse>(
+    serverAddress,
+    "/api/quick-picks",
     token,
   );
 }

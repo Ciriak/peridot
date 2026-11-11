@@ -2,6 +2,516 @@
 
 Last updated: 2026-11-11.
 
+## Track lists show cover artwork with embedded playback
+
+The shared track table now shows each track's cover artwork beside its title,
+so the library, album detail, artist detail, liked songs, and search track
+lists use the same presentation. The queue also shows artwork in its
+now-playing card and every upcoming row. A reusable `TrackArtwork` component
+resolves the server-relative cover URL and falls back to the semantic music-note
+placeholder when artwork is missing or fails to load.
+
+Playback controls now cover the full artwork like the Quick pick list: they
+reveal on hover or keyboard focus with a 70% semantic background behind a
+readable play icon. The shared table toggles the current track or starts the
+selected list item, the now-playing queue cover toggles playback, and every
+upcoming queue cover starts that track directly. The queue remove action is one
+standard button size larger while retaining its close icon and existing
+behavior.
+
+Verification passed: all 116 web tests, web typecheck, targeted ESLint and
+Prettier checks, the production web build, and `git diff --check`. The build
+reported non-fatal Rolldown `PLUGIN_TIMINGS` performance warnings. Server tests
+and schema validation were skipped because no server or storage code changed.
+Browser visual and pointer QA was not run, so hover/focus reveal behavior,
+embedded controls on touch layouts, and queue remove spacing still need review
+at desktop and mobile widths.
+
+Changes remain uncommitted on `dev` alongside the pre-existing working-tree
+edits; no commit, push, tag, publication, or deployment was performed. Next:
+visually confirm artwork and embedded controls across library, album, artist,
+liked, search, and queue lists with both present and missing cover images.
+
+## Album release year beside total duration
+
+Album detail headers now show an available release year immediately before the
+total duration, for example `1999 · 1:01:01`. The year is derived from an
+explicit four-digit `year` entry in a track's provider metadata. Albums with no
+year keep the existing track count and duration summary, and albums whose
+matched tracks expose conflicting years omit the year rather than choosing an
+edition arbitrarily.
+
+Added behavioral coverage for matching, unanimous, conflicting, and invalid
+provider years plus an album-page regression for the adjacent summary. Verified
+the focused album/library tests (27 passing), all 115 web tests, web typecheck,
+full-workspace lint and formatting, the production web build, and
+`git diff --check`. Server tests and schema validation were skipped because no
+server, API, or storage contract changed. Browser visual QA was not run.
+
+Changes remain uncommitted on `dev` alongside the pre-existing working-tree
+edits; no commit, push, tag, publication, or deployment was performed. Next:
+visually confirm the year/duration summary with a catalog containing a Discogs
+year and at narrow widths.
+
+## Playback continues after leaving Settings
+
+Returning from the fullscreen Settings layout no longer pauses the active song.
+The default layout had called `loadQueue()` whenever it remounted; leaving
+Settings therefore created a fresh composable call site that restored the
+browser snapshot, set `playing` to false, and paused the application-root audio
+element. Queue initialization now stays with the application-root audio owner,
+while layouts only observe and control the shared player state.
+
+The regression test now rejects layout-level `loadQueue()` calls. Runtime
+verification with a mocked audio element reproduced the original pause on the
+return navigation and then confirmed the active element remained playing after
+the fix. The headless-browser run used mocked API responses and a deterministic
+audio element so it could assert play, pause, source removal, and control state
+without depending on a local audio file.
+
+Verification passed: all 114 web tests, web typecheck, targeted ESLint and
+Prettier checks, the web production build, and `git diff --check`. Server tests
+and schema validation were skipped because no server or storage code changed.
+Browser sound output was not exercised; the runtime check covered the player
+lifecycle and navigation transitions. Changes remain uncommitted on `dev`
+alongside the pre-existing working-tree edits; no commit, push, tag,
+publication, or deployment was performed. Next: confirm the same round trip
+once with normal browser playback and real catalog audio.
+
+## Album playback starts from the first track
+
+Album card, album detail, and album quick-pick controls now start the complete
+album from its first ordered track whenever their visible play state is
+activated. If the album is already playing, the control remains a pause action.
+The previous behavior could resume a paused middle track when an album was
+already considered active.
+
+Accessible labels now state that album playback starts from the first track.
+Context-menu album playback retains its existing direct full-collection start.
+
+Verification passed: the focused album and quick-pick tests, all 114 web tests,
+web typecheck, targeted ESLint and Prettier checks, full-workspace `pnpm check`,
+the production web build, and `git diff --check`. Server tests and schema
+validation were skipped because no server or storage code changed. Browser
+visual and audio interaction QA was not run.
+
+Changes remain uncommitted on `dev` alongside the pre-existing working-tree
+edits; no commit, push, tag, publication, or deployment was performed. Next:
+visually confirm that playing a paused album restarts on track one in the card,
+detail header, and quick-pick controls, while the pause state still pauses.
+
+## Connection-loss toast removed
+
+The app-level server health monitor no longer creates or manages a connection
+toast. Losing the configured server now changes only the shared connection state,
+so the existing pulsing cloud-off warning and accessible reconnect explanation
+remain in the topbar without a duplicate bottom-right notification. The
+connection-specific toast ID, helpers, and unused description formatter were
+removed. Other user-action toasts are unchanged.
+
+Verification passed: all 114 web tests, the focused notification regression,
+web typecheck, targeted ESLint and Prettier checks, the production web build,
+and `git diff --check`. Server tests and schema validation were skipped because
+no server or storage code changed. Live visual QA was not run; the remaining
+check is to stop the server with the signed-in app open and confirm that the
+topbar warning appears without a toast, then restart it and confirm the warning
+clears.
+
+Changes remain uncommitted on `dev` alongside the pre-existing working-tree
+edits; no commit, push, tag, publication, or deployment was performed.
+
+## Main-header settings shortcut removed
+
+The redundant icon-only Settings link is removed from the main header. The
+account avatar remains directly before where it was and opens
+`/settings/account`, which provides access to the full Settings navigation. The
+topbar regression now requires the avatar to be the sole settings destination
+while retaining task progress immediately before it.
+
+The decision log records this removal as superseding the earlier
+settings-beside-avatar choice. Changes remain uncommitted on `dev` alongside the
+pre-existing working-tree edits; no commit, push, tag, publication, or
+deployment was performed.
+
+Verification passed: the focused settings regression suite (10 tests), all 114
+web tests, web typecheck, targeted ESLint and Prettier checks, the production web
+build, and `git diff --check`. Server tests and schema validation were skipped
+because no server or storage code changed. Browser visual QA was not run.
+Next: confirm the simplified header at desktop and mobile widths.
+
+## ProgressCircle rotation for determinate values
+
+The shared `ProgressCircle` now keeps its reduced-motion-safe rotation when a
+numeric value is present. The numeric value still controls the determinate arc,
+visible percentage, and accessible `aria-valuenow`/`aria-valuetext`; indeterminate
+values retain their existing rotating arc. The shared UI regression suite now
+asserts that determinate progress includes `motion-safe:animate-spin`.
+
+Verification passed: all 13 shared UI tests, workspace typecheck, targeted
+ESLint and Prettier checks, the production workspace build, and
+`git diff --check`. Server tests and schema validation were skipped because
+only the shared progress component, its test, and documentation changed.
+Changes remain uncommitted on `dev`
+alongside the pre-existing working-tree edits; no commit, push, tag,
+publication, or deployment was performed. Next: visually confirm the rotating
+determinate ring in the topbar and Tasks settings view with active work.
+
+## Topbar connection-loss indicator
+
+The topbar now replaces the task progress circle with a pulsing
+destructive-color Basil cloud-off icon whenever the existing server health
+monitor reports that the configured server is unreachable. Connection loss
+takes precedence over queued or running task state so stale task progress does
+not imply a live server. The icon has a focusable accessible label and a
+tooltip explaining that Peridot will reconnect automatically. A later successful
+health probe removes the icon and restores the task circle if work is active.
+
+The health monitor's status and the topbar indicator now share one app-level
+Nuxt state value, avoiding a second polling loop. The pulse uses the standard
+`motion-safe:animate-pulse` utility; no custom CSS or new API contract was
+introduced.
+
+Verification passed: all 114 web tests, web typecheck, targeted ESLint and
+Prettier checks, full-workspace `pnpm check`, the production web build, and
+`git diff --check`. Server tests and schema validation were skipped because no
+server or storage code changed.
+Live visual and keyboard QA was not run. Changes remain uncommitted on `dev`
+alongside the pre-existing working-tree edits; no commit, push, tag,
+publication, or deployment was performed. Next: visually confirm the pulse,
+tooltip, and placement at desktop and mobile widths while the server is stopped,
+then confirm the task circle returns after restart.
+
+## Topbar task progress queue indicator
+
+The main topbar now shows a task-aware progress circle while any task is running
+or queued, replacing the static metadata-only placeholder. Its fill is the
+equal-weighted average of the active queue: a running determinate task
+contributes its completion percentage, each queued task contributes zero, a
+zero-total running task counts as complete, and an indeterminate running task
+makes the overall ring indeterminate. Queued-only work also renders the ring as
+indeterminate instead of an empty zero-percent circle. The indicator is absent
+whenever no active work exists.
+
+Hovering or focusing the circle opens a Reka UI tooltip containing the running
+task followed by queued tasks in FIFO creation order. Each row shows its title,
+status, and available percentage or completed/total detail. The row list has a
+bounded scrolling height for larger queues. The existing global task monitor
+continues to provide 500 ms active polling; no API, storage, or schema changes
+were introduced.
+
+Verification passed: all 114 web tests, web typecheck, targeted ESLint and
+Prettier checks, full-workspace `pnpm check`, the production workspace build,
+and `git diff --check`. Server tests and schema validation were skipped because
+no server or storage code changed. Live pointer and keyboard visual QA was not
+completed because Computer Use could not verify the existing Brave window URL
+and stopped before interaction. The hover/focus presentation, long-list
+scrolling, and desktop/mobile placement still need visual review.
+
+Changes remain uncommitted on `dev` alongside the pre-existing working-tree
+edits; no commit, push, tag, publication, or deployment was performed. Next:
+review the real task tooltip with an authenticated active queue and confirm its
+desktop/mobile layout and keyboard focus treatment.
+
+## Tasks settings and silent task monitoring
+
+The task progress indicator now remains visible in the fullscreen Settings
+header and links to `/settings/tasks`. The new Tasks settings view is available
+to every signed-in user and separates running/queued work from terminal history.
+Active rows use the shared task state and live progress. History is loaded from
+`GET /api/tasks?status=terminal` in pages of 50 with a Load older tasks control,
+and refreshes when an observed task transitions from active to terminal.
+
+Task-specific progress, completion, and failure toasts were removed, along with
+their formatter, manager hooks, and progress-toast rendering. Task polling still
+runs every 500 ms while active and every five seconds while idle, remains silent
+across transient failures, and still reloads the catalog after library or
+metadata transitions. The Metadata refresh button is disabled and labeled
+`Processing…` whenever any task is queued or running.
+
+Verification passed: all 114 web tests, web typecheck, targeted ESLint and
+Prettier checks, the production web build, and `git diff --check`. Server tests
+and schema validation were skipped because no server or storage code changed.
+Live pointer and keyboard visual QA remains pending because Computer Use could
+not verify the existing browser URL. The Tasks layout, long history pagination,
+click-to-navigate behavior, and shared Settings-header indicator still need
+visual review.
+
+Changes remain uncommitted on `dev` alongside the pre-existing working-tree
+edits; no commit, push, tag, publication, or deployment was performed.
+
+## Queued task activity foundation
+
+Replaced the combined `LibraryScan` record with a persistent task queue. Source
+scans and metadata fetches are separate linked tasks with queued, running,
+completed, failed, or interrupted states and determinate or indeterminate
+progress. One FIFO worker executes tasks sequentially, accepts new work while
+another task is active, and coalesces equivalent requests only while they are
+still queued. Queued work resumes after restart; tasks that were running become
+interrupted.
+
+Authenticated clients can list active-first task history through
+`GET /api/tasks` and read one task through `GET /api/tasks/:id`. Responses use
+bounded safe source names and labeled details without source paths, credentials,
+or arbitrary plugin payloads. Core kinds are `library_scan` and `metadata_fetch`;
+the contract also validates future `plugin:<plugin-id>:<job-name>` kinds without
+adding a plugin execution runtime. Terminal history is retained for 30 days,
+capped at the newest 500 tasks.
+
+The web client now polls the shared task list every 500 ms while work is active
+and every five seconds while idle. Task progress and history are shown in the
+topbar and Tasks settings view rather than toast notifications. The catalog
+refreshes after library or metadata work. Sources can enqueue work while another
+task is active, while Metadata refresh and Reset are blocked until active work
+finishes. WebSocket transport remains deferred.
+
+Verification passed: all 78 server tests, all 107 web tests, all 13 shared UI
+tests, workspace typecheck, ESLint, Prisma contract emission and
+`pnpm db:validate`, the production workspace build, `git diff --check`, and a
+built-server health smoke test on loopback port 43101. The local database was
+synchronized to storage hash
+`ef2695cd1e8e734e1b52913f67e3ec61a956f8be5dcf97751c89b07220e31beb`;
+the obsolete `LibraryScan` table and its scan history were dropped, while catalog,
+account, source, queue, like, and provider tables were preserved.
+
+Known limits: task execution is serialized within one server process; the task
+queue does not provide cancellation, retry controls, or cross-process locking.
+Browser visual QA was not run. Changes remain
+uncommitted on `dev` alongside the pre-existing working-tree edits; no commit,
+push, tag, publication, or deployment was performed. Next: use the task
+progress/details contract for task-level controls.
+
+## Sidebar quick pick uses decayed play history
+
+The sidebar block below primary navigation is now an up-to-eight-item,
+single-column `Quick pick` list. It mixes tracks and albums using
+server-persisted, per-user playback events with continuous seven-day exponential
+decay. Album scores aggregate the decayed scores of their available tracks.
+Tracks use their album artwork, and each complete row is the play/pause control,
+including its title and artist names, with a pointer cursor over the full
+target. A small music or collection icon before the title identifies track versus
+album. The visible order is frozen while the pointer or keyboard focus is inside
+the list, then applies the latest order after all interactions end.
+
+Successful browser audio starts create `POST /api/tracks/:id/plays` events.
+Pause/resume, seeking, failed playback, restored paused sessions, and retries in
+the same run do not double-count. `GET /api/quick-picks` returns up to eight ordered
+track and album identities without exposing scores. The player refreshes the
+ranking after each confirmed event. The former All music and Liked songs rows are
+removed; both remain in primary navigation. Playlist quick picks remain deferred
+until playlist records and playback exist.
+
+Verification for the current eight-item, single-column, full-row interaction
+passed: all 78 server tests, all 114 web tests, workspace typecheck, targeted
+ESLint and Prettier, the production workspace build, and `git diff --check`.
+The web coverage includes overlapping pointer and focus interactions retaining
+the visible order until both end. Schema validation was skipped because no
+database schema changed. Browser visual and pointer QA was not run, so the final
+hover/focus treatment and single-column spacing still need review at desktop and
+mobile widths. Playlist quick-pick entries remain unimplemented with playlists.
+Changes remain uncommitted on `dev` alongside the pre-existing working-tree
+edits; no commit, push, tag, publication, or deployment was performed.
+
+## Shared ProgressCircle component
+
+Added `ProgressCircle` under `@peridot/ui/components/ui/progress-circle`. A
+finite `value` renders determinate progress, clamps out-of-range numbers to
+`0–100`, and exposes accessible progressbar semantics. Omitted, null, or
+non-finite values render a rotating quarter-arc spinner with reduced-motion
+support. The component provides small through extra-large sizes, primary,
+secondary, success, warning, and destructive semantic colors, opt-in percentage
+text, and custom center content. Its numeric stroke width is configurable and
+defaults to 6.
+
+The package exports the component, `progressCircleVariants`, and its variant
+type. Nuxt pre-bundles the new package path, the no-custom-styling guard covers
+the component, and README plus the decision log document the value-driven API.
+The topbar metadata badge now uses the indeterminate variant in place of
+`PeridotSpinner`; other loading surfaces keep the branded spinner.
+
+Verification passed: all 12 shared UI tests, all 104 web tests, all 67 server
+tests, workspace typecheck, ESLint, targeted Prettier for all changed component
+files, the production build, and `git diff --check`. The full `pnpm check`
+Prettier phase still reports the pre-existing unrelated formatting issue in
+`apps/web/app/layouts/default.vue`; that file was intentionally left untouched.
+The shared UI package has no workspace typecheck task, so it was also checked
+directly with `vue-tsc`: the new component is clean, while the existing
+`PeridotSpinner` still lacks TypeScript declarations for its bundled SVG imports.
+Browser visual QA was not run for the new topbar integration. Changes remain
+uncommitted on `dev` alongside the existing
+working-tree edits; no commit, push, tag, publication, or deployment was
+performed. Next: visually verify the compact indeterminate badge and use the
+determinate form in a screen with real numeric progress.
+
+## Shared spinner renamed to PeridotSpinner
+
+The shared branded loading component is now named and exported as
+`PeridotSpinner` from the existing `@peridot/ui/components/ui/spinner` package
+path. Its component file is `PeridotSpinner.vue`, and its data slot is
+`peridot-spinner`. Every app loading surface, the onboarding discovery status,
+toast progress, and the header metadata-status badge use the new name.
+
+The same package also exports the classic shadcn-vue `Spinner`, built on
+`@lucide/vue`'s `LoaderIcon` with the standard `size-4 animate-spin` treatment.
+It has shared UI coverage but is intentionally unused in app pages and layouts
+for now.
+
+The main app header shows a compact `Fetching metadata` badge containing
+`PeridotSpinner` before the icon-only Settings link and avatar. The sidebar footer
+no longer links to Settings. The shared component and app regressions verify the
+new name, data slot, header ordering, accessible labels, and player behavior.
+
+Verification passed: all 7 shared UI tests, all 104 web tests, web typecheck,
+targeted ESLint and Prettier, the production web build, and
+`git diff --check`. Changes remain uncommitted on `dev` alongside the
+pre-existing working-tree edits; no commit, push, tag, publication, or deployment
+was performed.
+
+## New local sources scan and metadata-match automatically
+
+Adding a local folder source now creates the source and immediately queues a
+source-scoped scan on the server. The source-creation response includes the scan,
+and the Sources page adopts it into the shared scan tracker so progress and
+completion notifications continue normally. Remote URL and integration sources
+remain stored without scans until those source kinds become indexable.
+
+Source scans already continue into metadata matching after file discovery and
+catalog reconciliation. A new server regression now verifies that automatically
+added source scans complete both phases, including one processed metadata
+track. If another library operation is active, source creation succeeds
+without a queued scan and the page instructs the administrator to rescan later.
+
+Verification passed: all 67 server tests, all 104 web tests, workspace
+typecheck, `pnpm check`, `pnpm db:validate`, the production build, and
+`git diff --check`. The Prisma CLI again reported that its optional agent skills
+are out of date; validation itself passed. Browser interaction QA was not run
+because the new behavior is covered by the server integration regression and no
+new UI presentation was introduced. Changes remain uncommitted on `dev`
+alongside the existing working-tree edits; no commit, push, tag, publication, or
+deployment was performed.
+
+## Source action menu items use a pointer cursor
+
+The Sources row action menu keeps its existing text-row presentation. Rescan and
+Remove now use a pointer cursor where they are actionable, while disabled menu
+items retain the default cursor and reduced opacity.
+
+The source-page regression test checks the pointer-cursor treatment on both
+actions. All 104 web tests, `pnpm check`, web typecheck, the production web
+build, and `git diff --check` pass; the built CSS includes the disabled-state
+cursor override. Schema/server checks and browser visual QA were skipped because
+this change only affects web menu presentation. Changes remain uncommitted on
+`dev` alongside the pre-existing working-tree edits; no commit, push, tag,
+publication, or deployment was performed.
+
+## Track lists lazily reveal rows with page scrolling
+
+The shared track table no longer mounts every sorted row at once or renders
+inside a virtualized, maximum-height scroll frame. It initially renders 60 rows
+in normal page flow, appends 60 more as a sentinel approaches the viewport, and
+keeps a visible Load more tracks button for keyboard and constrained clients.
+The main content region remains the only vertical scroll owner for library,
+album, artist, liked-song, and search track lists.
+
+The complete sorted list remains available to queue construction, so playing a
+mounted row still queues every track in that table. Direct title-hash navigation
+uses the progressive reveal state to mount the target row before scrolling it
+into view. Table accessibility structure, sorting, collection playback, artist
+links, album links, likes, and fixed player behavior remain intact.
+
+Verification passed: all 104 web tests, web typecheck, targeted ESLint,
+Prettier, the production web build, and `git diff --check`. Schema/server checks
+and browser interaction QA were skipped because this is a web presentation and
+scroll-container change. Changes remain uncommitted on `dev` alongside the
+existing working-tree edits. No commit, push, tag, publication, or deployment
+was performed. Next: visually verify automatic batch revelation, the Load more
+fallback, and deep-link scrolling at desktop and mobile widths.
+
+## Linked local metadata and interactive now-playing control
+
+The shared track row now always renders linked artist credits beneath the track
+title, including album and artist detail lists and narrow viewports. Visible
+album names link to their album details in every applicable table variant, so
+artist-page track lists no longer show plain album text. The redundant desktop
+Artist column was removed.
+
+Fixed-player and queue artist credits use the same `trackArtistNames` fallback
+and therefore link even when only the legacy artist credit string is populated.
+The now-playing play/pause icon is a shared Button that toggles the active track.
+External metadata candidates intentionally remain plain provider results.
+
+`pnpm --filter @peridot/web test` passes all 103 tests. Web typecheck,
+`pnpm check`, the web production build, and `git diff --check` pass. Server,
+schema, and browser interaction checks were skipped because this change is
+limited to web presentation and existing playback actions. The changes remain
+uncommitted on `dev` alongside the pre-existing working-tree changes; no commit,
+push, tag, publication, or deployment was performed. Next: visually verify
+linked metadata and the now-playing toggle at desktop and mobile widths.
+
+## Track-list playback queues the whole list
+
+Playing a shared track-table row now queues every track currently displayed in
+that table instead of reducing the queue to the selected track. The selected
+track starts first, followed by the rows below it and then the rows above it.
+This covers the library, liked songs, search results, album detail tracks, and
+artist detail tracks, including row controls, double-click, and context-menu
+Play.
+
+Queue construction uses a pure rotation helper so duplicate or unavailable
+entries are normalized before the selected track is placed first. Album and
+artist collection buttons retain their existing full-collection behavior.
+
+Focused album, artist, context-menu, search, and queue tests pass (17 of 17).
+Web typecheck, targeted ESLint, Prettier, and the production web build pass. The
+full web suite passes 100 of 101 tests; the only failure is the previously
+documented sidebar assertion expecting the `logo` variable while the checked-in
+layout uses `logoNop`. Schema/server checks and browser interaction QA were
+skipped because this change is limited to web queue behavior and shared track
+presentation. The queue rotation intentionally places preceding rows after the
+following rows so forward playback starts with the next visible track.
+
+The listed changes remain uncommitted on `dev`, alongside pre-existing web,
+test, and documentation changes. No commit, push, tag, publication, or
+deployment was performed. Next: interactively verify row playback from a sorted
+library list and an artist track list, then resolve the known sidebar logo
+assertion.
+
+## Unlinked player title selection
+
+The fixed player's non-link title fallback now uses `select-none`, so titles
+without an album destination cannot be text-selected. Titles that link to an
+album keep their existing selectable link behavior.
+
+Added a focused shared-player regression assertion for the fallback class.
+
+Focused player coverage, web typecheck, targeted ESLint, Prettier, the production
+web build, and `git diff --check` pass. The full web suite passes 95 of 96 tests;
+the only failure is the previously documented sidebar assertion expecting the
+`logo` variable while the checked-in layout uses `logoNop`. Schema/server checks
+and browser visual QA were skipped because this only changes player title
+selection behavior.
+
+## Library source controls
+
+The Sources settings list now identifies source categories with larger bundled
+Basil icons instead of textual `path`/`url` badges: folder for local files,
+globe for remote URLs, and apps for integrations. The icon keeps an accessible
+category label and also exposes that label through its native hover title. Local
+source rows show the folder name first and the complete path beneath it as a
+muted subtitle. The Add source selection dialog shows the same folder, globe,
+and integration icons beside its choices.
+
+The Sources header now includes a Rescan all action wired to the existing global
+library-scan flow. It scans every configured local path source through one
+authenticated library scan and is disabled while source or metadata scan work is
+active. Per-source rescan behavior is unchanged.
+
+Targeted source-page and bundled-icon tests, web typecheck, targeted ESLint,
+Prettier, the production web build, and `git diff --check` pass. The full web
+suite still passes 95 of 96 tests; the only failure is the previously documented
+sidebar assertion expecting the `logo` variable while the checked-in layout uses
+`logoNop`. Browser visual QA was not run. The listed changes remain uncommitted
+on `dev`; no commit, push, tag, publication, or deployment was performed.
+
 ## Player title album navigation
 
 The current track's title in the fixed player now links to that track's album
@@ -1186,7 +1696,7 @@ tag, publication, or deployment was performed.
 
 ## Shared animated brand spinner
 
-Added a reusable `Spinner` component to the shared UI package around the owner's
+Added a reusable `PeridotSpinner` component to the shared UI package around the owner's
 animated `spinner.svg`. It exposes a customizable status label and standard
 Tailwind class sizing. The component hides the animation and shows the static
 brand mark for reduced-motion users. Onboarding network discovery now uses the

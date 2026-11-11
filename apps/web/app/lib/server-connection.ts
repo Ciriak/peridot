@@ -1,9 +1,21 @@
 import type { HealthResponse } from "@peridot/contracts";
 
+export type ServerConnectionStatus = "unknown" | "connected" | "lost";
+export type TopbarStatus = "connection-lost" | "task-progress" | "idle";
+
 type Fetcher = (
   input: RequestInfo | URL,
   init?: RequestInit,
 ) => Promise<Response>;
+
+export function topbarStatus(
+  connectionStatus: ServerConnectionStatus,
+  hasActiveTasks: boolean,
+): TopbarStatus {
+  if (connectionStatus === "lost") return "connection-lost";
+  if (hasActiveTasks) return "task-progress";
+  return "idle";
+}
 
 export async function isPeridotServerReachable(
   serverAddress: string,
@@ -24,8 +36,4 @@ export async function isPeridotServerReachable(
   } catch {
     return false;
   }
-}
-
-export function serverConnectionLostDescription(serverAddress: string): string {
-  return `Peridot cannot reach ${serverAddress}. Check that the server is running and try again.`;
 }

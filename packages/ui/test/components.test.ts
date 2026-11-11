@@ -17,12 +17,22 @@ before(async () => {
 after(async () => {
   await server?.close();
 });
-async function render(name: string, props: Record<string, unknown>, text = "") {
+async function render(
+  name: string,
+  props: Record<string, unknown>,
+  text?: string,
+  directory = name.toLowerCase(),
+) {
   const { default: component } = await server.ssrLoadModule(
-    `/src/components/ui/${name.toLowerCase()}/${name}.vue`,
+    `/src/components/ui/${directory}/${name}.vue`,
   );
   return renderToString(
-    createSSRApp({ render: () => h(component, props, () => text) }),
+    createSSRApp({
+      render: () =>
+        text === undefined
+          ? h(component, props)
+          : h(component, props, () => text),
+    }),
   );
 }
 test("disabled actions remain native disabled buttons with their accessible label", async () => {
@@ -66,12 +76,17 @@ test("player slider renders initial progress and exposes bounds and a named thum
   assert.match(html, /aria-valuemax="246"/);
   assert.match(html, /aria-label="Playback position"/);
 });
-test("spinner uses the animated brand asset with an accessible reduced-motion fallback", async () => {
-  const html = await render("Spinner", {
-    label: "Scanning for servers",
-    class: "size-4",
-  });
-  assert.match(html, /data-slot="spinner"/);
+test("PeridotSpinner uses the animated brand asset with an accessible reduced-motion fallback", async () => {
+  const html = await render(
+    "PeridotSpinner",
+    {
+      label: "Scanning for servers",
+      class: "size-4",
+    },
+    "",
+    "spinner",
+  );
+  assert.match(html, /data-slot="peridot-spinner"/);
   assert.match(html, /role="status"/);
   assert.match(html, /class="[^"]*size-4/);
   assert.match(html, /data:image\/svg\+xml/);
@@ -80,6 +95,121 @@ test("spinner uses the animated brand asset with an accessible reduced-motion fa
   assert.match(html, /clipPath/);
   assert.match(html, /motion-reduce:block/);
   assert.match(html, />Scanning for servers<\/span>/);
+});
+test("Spinner uses the classic shadcn animated loader icon", async () => {
+  const html = await render("Spinner", { class: "size-6" }, "", "spinner");
+  assert.match(html, /<svg/);
+  assert.match(html, /role="status"/);
+  assert.match(html, /aria-label="Loading"/);
+  assert.match(html, /class="[^"]*size-6/);
+  assert.match(html, /animate-spin/);
+});
+test("ProgressCircle renders determinate progress with semantic styles and accessibility", async () => {
+  const html = await render(
+    "ProgressCircle",
+    {
+      class: "custom-progress",
+      label: "Importing album",
+      showValue: true,
+      size: "lg",
+      value: 42.4,
+      variant: "success",
+    },
+    undefined,
+    "progress-circle",
+  );
+  assert.match(html, /data-slot="progress-circle"/);
+  assert.match(html, /data-state="determinate"/);
+  assert.match(html, /data-size="lg"/);
+  assert.match(html, /data-variant="success"/);
+  assert.match(html, /role="progressbar"/);
+  assert.match(html, /aria-label="Importing album"/);
+  assert.match(html, /aria-valuemin="0"/);
+  assert.match(html, /aria-valuemax="100"/);
+  assert.match(html, /aria-valuenow="42\.4"/);
+  assert.match(html, /aria-valuetext="42%"/);
+  assert.match(html, /stroke-dasharray="100"/);
+  assert.match(html, /stroke-dashoffset="57\.6"/);
+  assert.match(html, /stroke-width="6"/);
+  assert.match(html, /class="[^"]*size-16/);
+  assert.match(html, /class="[^"]*stroke-success/);
+  assert.match(html, /class="[^"]*custom-progress/);
+  assert.match(html, /motion-safe:animate-spin/);
+  assert.match(html, /42%<!--\]-->/);
+});
+test("ProgressCircle accepts a configurable stroke width", async () => {
+  const html = await render(
+    "ProgressCircle",
+    { label: "Upload", stroke: 3, value: 50 },
+    undefined,
+    "progress-circle",
+  );
+  assert.match(html, /stroke-width="3"/);
+});
+test("ProgressCircle clamps finite values and treats zero as determinate", async () => {
+  const zero = await render(
+    "ProgressCircle",
+    { label: "Upload", showValue: true, value: 0 },
+    undefined,
+    "progress-circle",
+  );
+  assert.match(zero, /data-state="determinate"/);
+  assert.match(zero, /aria-valuenow="0"/);
+  assert.match(zero, /stroke-dashoffset="100"/);
+  assert.match(zero, /0%<!--\]-->/);
+
+  const aboveRange = await render(
+    "ProgressCircle",
+    { label: "Upload", value: 140 },
+    undefined,
+    "progress-circle",
+  );
+  assert.match(aboveRange, /aria-valuenow="100"/);
+  assert.match(aboveRange, /stroke-dashoffset="0"/);
+
+  const belowRange = await render(
+    "ProgressCircle",
+    { label: "Upload", value: -20 },
+    undefined,
+    "progress-circle",
+  );
+  assert.match(belowRange, /aria-valuenow="0"/);
+  assert.match(belowRange, /stroke-dashoffset="100"/);
+});
+test("ProgressCircle renders an indeterminate reduced-motion-safe spinner", async () => {
+  for (const value of [undefined, null, Number.NaN, Number.POSITIVE_INFINITY]) {
+    const html = await render(
+      "ProgressCircle",
+      { value, showValue: true },
+      undefined,
+      "progress-circle",
+    );
+    assert.match(html, /data-state="indeterminate"/);
+    assert.match(html, /aria-label="Loading"/);
+    assert.doesNotMatch(html, /aria-valuenow/);
+    assert.doesNotMatch(html, /aria-valuetext/);
+    assert.match(html, /stroke-dasharray="25 75"/);
+    assert.match(html, /stroke-dashoffset="0"/);
+    assert.match(html, /motion-safe:animate-spin/);
+    assert.doesNotMatch(html, />\d+%<\/span>/);
+  }
+});
+test("ProgressCircle center slot takes precedence over the built-in percentage", async () => {
+  const html = await render(
+    "ProgressCircle",
+    { label: "Uploading", showValue: true, value: 68 },
+    "Done",
+    "progress-circle",
+  );
+  assert.match(html, /Done<!--\]-->/);
+  assert.doesNotMatch(html, />68%<\/span>/);
+});
+test("ProgressCircle exports its component and variants", async () => {
+  const progressCircle = await server.ssrLoadModule(
+    "/src/components/ui/progress-circle/index.ts",
+  );
+  assert.ok(progressCircle.ProgressCircle);
+  assert.equal(typeof progressCircle.progressCircleVariants, "function");
 });
 test("gradient keeps primary blobs decorative and content above them", async () => {
   const html = await render(

@@ -1,126 +1,12 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import type { LibraryScanResponse } from "@peridot/contracts";
 import {
-  isLibraryScanActive,
-  isLibraryScanWorkActive,
-  libraryScanToast,
-} from "../app/lib/library-scan-toast.ts";
-import { isPeridotServerReachable } from "../app/lib/server-connection.ts";
+  isPeridotServerReachable,
+  topbarStatus,
+} from "../app/lib/server-connection.ts";
 import { sourceMutationToast } from "../app/lib/source-toast.ts";
 import { toastViewportClass } from "../app/lib/toast-position.ts";
-
-function scan(
-  overrides: Partial<LibraryScanResponse> = {},
-): LibraryScanResponse {
-  return {
-    id: "scan-1",
-    status: "running",
-    sourceId: null,
-    sourceName: "All sources",
-    discoveredCount: 0,
-    createdCount: 0,
-    updatedCount: 0,
-    unchangedCount: 0,
-    errorCount: 0,
-    unavailableCount: 0,
-    metadataStatus: "skipped",
-    metadataTotalCount: 0,
-    metadataProcessedCount: 0,
-    metadataMatchedCount: 0,
-    metadataUnmatchedCount: 0,
-    metadataErrorCount: 0,
-    metadataFailureSummary: null,
-    failureSummary: null,
-    createdAt: "2026-11-10T10:00:00.000Z",
-    startedAt: "2026-11-10T10:00:01.000Z",
-    completedAt: null,
-    ...overrides,
-  };
-}
-
-test("library scans map to persistent progress and concise completion toasts", () => {
-  assert.equal(isLibraryScanActive("queued"), true);
-  assert.equal(isLibraryScanActive("running"), true);
-  assert.equal(isLibraryScanActive("completed"), false);
-
-  const running = libraryScanToast(
-    scan({ discoveredCount: 12, createdCount: 8, updatedCount: 2 }),
-  );
-  assert.deepEqual(running, {
-    title: "Library scan in progress",
-    description: "Discovered 12 tracks: 8 added, 2 updated.",
-    status: "loading",
-    kind: "progress",
-    duration: 0,
-  });
-
-  const completed = libraryScanToast(
-    scan({
-      status: "completed",
-      createdCount: 8,
-      updatedCount: 2,
-      unchangedCount: 20,
-      errorCount: 1,
-      completedAt: "2026-11-10T10:01:00.000Z",
-    }),
-  );
-  assert.equal(completed.status, "success");
-  assert.equal(completed.duration, 5000);
-  assert.match(completed.description, /8 added, 2 updated, 20 unchanged/);
-  assert.match(completed.description, /1 files could not be read/);
-});
-
-test("failed library scans preserve the safe failure summary in an error toast", () => {
-  const failed = libraryScanToast(
-    scan({
-      status: "failed",
-      failureSummary: "The music source is unavailable.",
-    }),
-  );
-  assert.equal(failed.title, "Library scan failed");
-  assert.equal(failed.status, "error");
-  assert.equal(failed.kind, "error");
-  assert.equal(failed.description, "The music source is unavailable.");
-});
-
-test("post-scan metadata work keeps the progress toast and polling active", () => {
-  const enriching = scan({
-    status: "completed",
-    completedAt: "2026-11-10T10:01:00.000Z",
-    sourceName: "Albums",
-    metadataStatus: "running",
-    metadataTotalCount: 20,
-    metadataProcessedCount: 8,
-    metadataMatchedCount: 7,
-  });
-  assert.equal(isLibraryScanActive(enriching.status), false);
-  assert.equal(isLibraryScanWorkActive(enriching), true);
-  assert.deepEqual(libraryScanToast(enriching), {
-    title: "Albums metadata matching",
-    description: "Matched 7 of 8 processed tracks (20 total).",
-    status: "loading",
-    kind: "progress",
-    duration: 0,
-  });
-
-  const completed = libraryScanToast(
-    scan({
-      status: "completed",
-      metadataStatus: "completed",
-      metadataMatchedCount: 7,
-      metadataUnmatchedCount: 1,
-      metadataErrorCount: 0,
-    }),
-  );
-  assert.equal(completed.status, "success");
-  assert.match(completed.description, /7 metadata matches, 1 unmatched/);
-  assert.equal(
-    isLibraryScanWorkActive({ ...enriching, metadataStatus: "completed" }),
-    false,
-  );
-});
 
 test("source mutations map to concise success toasts", () => {
   assert.deepEqual(sourceMutationToast("added", " D:\\Music "), {
@@ -188,7 +74,15 @@ test("server health checks require the exact Peridot health signature", async ()
   );
 });
 
-test("the app mounts one managed Reka toast region and global status monitor", async () => {
+test("a lost server connection replaces task progress in the topbar", () => {
+  assert.equal(topbarStatus("lost", false), "connection-lost");
+  assert.equal(topbarStatus("lost", true), "connection-lost");
+  assert.equal(topbarStatus("connected", true), "task-progress");
+  assert.equal(topbarStatus("connected", false), "idle");
+  assert.equal(topbarStatus("unknown", false), "idle");
+});
+
+test("task polling is silent while the toast region handles other notices", async () => {
   const app = await readFile(
     new URL("../app/app.vue", import.meta.url),
     "utf8",
@@ -201,8 +95,16 @@ test("the app mounts one managed Reka toast region and global status monitor", a
     new URL("../app/components/AppToastList.vue", import.meta.url),
     "utf8",
   );
+  const toasts = await readFile(
+    new URL("../app/lib/toasts.ts", import.meta.url),
+    "utf8",
+  );
   const notifications = await readFile(
     new URL("../app/components/AppNotifications.vue", import.meta.url),
+    "utf8",
+  );
+  const connection = await readFile(
+    new URL("../app/composables/use-server-connection.ts", import.meta.url),
     "utf8",
   );
   const sources = await readFile(
@@ -224,29 +126,37 @@ test("the app mounts one managed Reka toast region and global status monitor", a
   assert.match(toaster, /toast-manager/);
   assert.match(list, /<ToastViewport/);
   assert.match(list, /toastViewportClass\(route\.meta\.layout\)/);
-  assert.match(list, /<ToastViewport :class="viewportClass">/);
   assert.match(list, /<ToastRoot/);
   assert.match(notifications, /isPeridotServerReachable/);
-  assert.match(notifications, /notifyServerConnectionLost/);
-  assert.match(notifications, /notifyLibraryScan/);
-  assert.match(sources, /useLibraryScan/);
-  assert.match(sources, /notifySourceMutation\("added"/);
-  assert.match(sources, /notifySourceMutation\("removed"/);
-  assert.match(metadata, /notifyMetadataProviderMutation\("added"/);
-  assert.match(
-    metadata,
-    /provider\.enabled && !previousEnabled\s*\?\s*"enabled"\s*:\s*!provider\.enabled\s*\?\s*"disabled"\s*:\s*"updated"/,
-  );
-  assert.match(metadata, /notifyMetadataReset/);
+  assert.match(notifications, /useServerConnection/);
+  assert.match(notifications, /connectionState\.value = "lost"/);
   assert.doesNotMatch(
-    sources,
-    /reorderSources\([\s\S]*notifySourceMutation\("updated"\)/,
+    notifications,
+    /appToastManager|notifyServerConnectionLost|clearServerConnectionLost|SERVER_CONNECTION_TOAST_ID/,
+  );
+  assert.match(notifications, /isActiveTaskStatus/);
+  assert.match(notifications, /reloadLibrary/);
+  assert.doesNotMatch(
+    notifications,
+    /notifyTasks|notifyTaskStatusFailure|clearTaskToast|task-toast/,
   );
   assert.doesNotMatch(
-    metadata,
-    /reorderMetadataProviders\([\s\S]*notifyMetadataProviderMutation\("updated"\)/,
+    toasts,
+    /TaskResponse|taskToast|notifyTasks|notifyTaskStatusFailure|clearTaskToast|TASK_TOAST_ID|SERVER_CONNECTION_TOAST_ID|notifyServerConnectionLost|clearServerConnectionLost/,
   );
-  assert.doesNotMatch(administration, /useLibraryScan/);
-  assert.doesNotMatch(administration, /getLibraryScan/);
-  assert.doesNotMatch(administration, /setTimeout/);
+  assert.doesNotMatch(
+    list,
+    /Work in progress|PeridotSpinner|kind === 'progress'/,
+  );
+  assert.match(notifications, /ACTIVE_TASK_POLL_DELAY = 500/);
+  assert.match(notifications, /IDLE_TASK_POLL_DELAY = 5000/);
+  assert.match(notifications, /requestedScope !== taskScope/);
+  assert.match(connection, /useState<ServerConnectionStatus>/);
+  assert.match(connection, /"server-connection-status"/);
+  assert.match(sources, /useTasks/);
+  assert.match(sources, /queueLibraryScan/);
+  assert.match(sources, /queueSourceScan/);
+  assert.match(metadata, /queueMetadataRefresh/);
+  assert.match(metadata, /hasActiveTasks/);
+  assert.doesNotMatch(administration, /useTasks/);
 });

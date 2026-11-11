@@ -66,7 +66,15 @@ test("artist names link from navigation and track lists", async () => {
   assert.match(layout, /name: "Artists", to: "\/artists", icon: icons\.user/);
   assert.match(layout, /currentPath\.value\.startsWith\(`\$\{target\}\/`\)/);
   assert.match(albumDetail, /<TrackArtistLinks :artists="album\.artists" \/>/);
-  assert.match(trackTable, /<TrackArtistLinks :artists="track\.artists" \/>/);
+  assert.match(
+    trackTable,
+    /<TrackArtistLinks :artists="trackArtistNames\(track\)" \/>/,
+  );
+  assert.match(
+    trackTable,
+    /:to="trackAlbumRoute\(track\)"/,
+    "Artist-page track lists link their album names",
+  );
   assert.match(libraryScreen, /variant="library"/);
   assert.match(trackTable, /@dblclick\.stop/);
 });

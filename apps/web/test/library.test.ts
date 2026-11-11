@@ -26,6 +26,7 @@ import {
   trackAlbumRoute,
   trackAlbumTitleRoute,
   trackCoverUrl,
+  trackIdFromTitleHash,
   trackTitleAnchorId,
 } from "../app/lib/library.ts";
 
@@ -151,9 +152,60 @@ test("track-table sort icons appear only for the active direction", async () => 
     /sort\.direction === 'asc' \? icons\.caretUp : icons\.caretDown/g,
   );
 
-  assert.equal(activeIcons?.length, 5);
-  assert.equal(directionIcons?.length, 5);
+  assert.equal(activeIcons?.length, 4);
+  assert.equal(directionIcons?.length, 4);
   assert.doesNotMatch(table, /icons\.sort\b|sortIcon\(/);
+});
+
+test("shared track rows always show linked artists beneath the title", async () => {
+  const table = await readFile(
+    new URL("../app/components/TrackTable.vue", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(
+    table,
+    /<p class="truncate text-xs text-muted-foreground">\s*<TrackArtistLinks :artists="trackArtistNames\(track\)" \/>/,
+  );
+  assert.doesNotMatch(table, />\s*Artist\s*<Icon/);
+  assert.equal(table.match(/<TrackArtistLinks/g)?.length, 1);
+});
+
+test("shared track lists show cover artwork beside every title", async () => {
+  const table = await readFile(
+    new URL("../app/components/TrackTable.vue", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(table, /import TrackArtwork from "\.\/TrackArtwork\.vue"/);
+  assert.match(
+    table,
+    /class="group\/track-artwork flex h-14 min-w-full/,
+    "The complete track row owns the artwork hover state",
+  );
+  assert.match(
+    table,
+    /<TrackArtwork[\s\S]*<Button[\s\S]*class="[^"]*absolute inset-0 size-full[^"]*bg-background\/70[^"]*hover:bg-background\/70[^"]*"[\s\S]*:aria-label="[\s\S]*@click="playFromList\(track\.id\)"[\s\S]*class="text-foreground"[\s\S]*<\/TrackArtwork>\s*<div class="min-w-0 flex-1">[\s\S]*\{\{ track\.title \}\}/,
+    "The full-cover track control matches the Quick pick background and icon color",
+  );
+});
+
+test("shared track tables lazily reveal page-flow rows without a nested scroll frame", async () => {
+  const table = await readFile(
+    new URL("../app/components/TrackTable.vue", import.meta.url),
+    "utf8",
+  );
+
+  assert.doesNotMatch(table, /useVirtualList|containerProps|wrapperProps/);
+  assert.doesNotMatch(table, /max-h-svh/);
+  assert.match(table, /useProgressiveReveal\(sortedTracks\)/);
+  assert.match(table, /v-for="\(track, index\) in visibleTracks"/);
+  assert.match(table, /ref="loadMoreTarget"/);
+  assert.match(table, /@click="revealMore"/);
+  assert.match(table, /Load more tracks/);
+  assert.match(table, /role="table"/);
+  assert.match(table, /:aria-rowcount="sortedTracks\.length \+ 1"/);
+  assert.match(table, /:aria-rowindex="index \+ 2"/);
 });
 
 test("unavailable track titles are dimmed without muting available titles", async () => {
@@ -315,6 +367,39 @@ test("albums group by artist and title while ignoring letter case", () => {
     filterAlbums(albums, "someone").map((album) => album.artist),
     ["Someone Else"],
   );
+});
+
+test("albums expose only an unambiguous provider release year", () => {
+  const releaseMetadata = (value: string): TrackResponse["metadata"] => ({
+    providerId: "discogs-provider",
+    providerKind: "discogs",
+    providerName: "Discogs",
+    externalTrackId: "release-track",
+    externalReleaseId: "release",
+    matchedAt: "2026-11-11T10:00:00.000Z",
+    mode: "automatic",
+    sourceUrl: "https://www.discogs.com/release/1",
+    details: [{ key: "year", label: "Year", value }],
+  });
+  const catalog = (firstYear: string, secondYear: string | null) => [
+    {
+      ...tracks[0]!,
+      id: "track-a",
+      trackNumber: 1,
+      metadata: releaseMetadata(firstYear),
+    },
+    {
+      ...tracks[0]!,
+      id: "track-b",
+      trackNumber: 2,
+      metadata: secondYear === null ? null : releaseMetadata(secondYear),
+    },
+  ];
+
+  assert.equal(groupAlbums(catalog("1999", null))[0]?.releaseYear, 1999);
+  assert.equal(groupAlbums(catalog("1999", "1999"))[0]?.releaseYear, 1999);
+  assert.equal(groupAlbums(catalog("1999", "2001"))[0]?.releaseYear, null);
+  assert.equal(groupAlbums(catalog("not-a-year", null))[0]?.releaseYear, null);
 });
 
 test("like identities ignore surrounding whitespace and letter case", () => {
@@ -572,6 +657,12 @@ test("album links encode title and artist without losing identity", () => {
 
 test("player track titles link to their anchored album title", () => {
   assert.equal(trackTitleAnchorId("track / one"), "track-title-track / one");
+  assert.equal(
+    trackIdFromTitleHash("#track-title-track%20%2F%20one"),
+    "track / one",
+  );
+  assert.equal(trackIdFromTitleHash("#track-title-"), null);
+  assert.equal(trackIdFromTitleHash("#other-anchor"), null);
   assert.deepEqual(
     trackAlbumTitleRoute({
       ...tracks[0]!,

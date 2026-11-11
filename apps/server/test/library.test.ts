@@ -330,7 +330,7 @@ test("audio endpoint streams complete and ranged responses with a playback token
   }
 });
 
-test("failed traversal does not reconcile tracks and active scans are rejected", async () => {
+test("failed traversal does not reconcile tracks", async () => {
   const context = await createTestContext();
   const musicRoot = path.join(context.root, "music");
   const movedRoot = path.join(context.root, "music-moved");
@@ -346,14 +346,6 @@ test("failed traversal does not reconcile tracks and active scans are rejected",
       1,
     );
     await rename(movedRoot, musicRoot);
-
-    await context.database.orm.LibraryScan.create({ status: "running" });
-    const conflict = await context.app.inject({
-      method: "POST",
-      url: "/api/library/scans",
-      headers: context.authorization,
-    });
-    assert.equal(conflict.statusCode, 409);
   } finally {
     await context.close();
   }
@@ -378,12 +370,20 @@ test("changed files with unreadable metadata retain their previous catalog metad
   }
 });
 
-test("startup marks unfinished persistent scans as interrupted", async () => {
+test("startup interrupts running tasks and resumes queued tasks", async () => {
   const context = await createTestContext();
   let restartedApp: FastifyInstance | undefined;
   try {
-    const queued = await context.database.orm.LibraryScan.create({
+    const running = await context.database.orm.Task.create({
+      kind: "library_scan",
+      status: "running",
+      title: "Interrupted scan",
+      startedAt: new Date(),
+    });
+    const queued = await context.database.orm.Task.create({
+      kind: "library_scan",
       status: "queued",
+      title: "Queued scan",
     });
     await context.app.close();
     restartedApp = await buildApp({
@@ -395,15 +395,24 @@ test("startup marks unfinished persistent scans as interrupted", async () => {
       database: context.database,
       logger: false,
     });
-    const interrupted = await context.database.orm.LibraryScan.firstOrThrow({
-      id: queued.id,
+    const interrupted = await context.database.orm.Task.firstOrThrow({
+      id: running.id,
     });
     assert.equal(interrupted.status, "interrupted");
     assert.equal(
       interrupted.failureSummary,
-      "The server stopped before this scan completed.",
+      "The server stopped before this task completed.",
     );
     assert.ok(interrupted.completedAt);
+    let resumedStatus = "queued";
+    for (let attempt = 0; attempt < 300; attempt += 1) {
+      resumedStatus = (
+        await context.database.orm.Task.firstOrThrow({ id: queued.id })
+      ).status;
+      if (["completed", "failed", "interrupted"].includes(resumedStatus)) break;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.equal(resumedStatus, "completed");
   } finally {
     await restartedApp?.close();
     await context.close();

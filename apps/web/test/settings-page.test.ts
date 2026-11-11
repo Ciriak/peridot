@@ -10,6 +10,7 @@ test("settings is a fullscreen routed area with administrator-only management ca
   const layout = await readSource("../app/layouts/settings.vue");
   for (const category of [
     "account",
+    "tasks",
     "library",
     "playback",
     "plugins",
@@ -20,7 +21,9 @@ test("settings is a fullscreen routed area with administrator-only management ca
     assert.match(layout, new RegExp(`to: "/settings/${category}"`));
   }
   assert.match(layout, /user\.value\?\.role === "admin"/);
-  for (const page of ["sources", "metadata", "administration"]) {
+  assert.match(layout, /import TaskProgressIndicator/);
+  assert.match(layout, /<TaskProgressIndicator \/>/);
+  for (const page of ["tasks", "sources", "metadata", "administration"]) {
     const source = await readSource(`../app/pages/settings/${page}.vue`);
     assert.match(source, /layout: "settings"/);
   }
@@ -33,7 +36,7 @@ test("/settings redirects to administration and /plugins redirects into settings
   assert.match(plugins, /navigateTo\("\/settings\/plugins"/);
 });
 
-test("the main sidebar has bottom settings access and the avatar opens account settings", async () => {
+test("the header places task progress before the account avatar", async () => {
   const layout = await readSource("../app/layouts/default.vue");
   const sidebar = layout.slice(
     layout.indexOf('id="sidebar"'),
@@ -45,24 +48,31 @@ test("the main sidebar has bottom settings access and the avatar opens account s
   );
 
   assert.doesNotMatch(layout, /name: "Plugins"/);
-  assert.doesNotMatch(layout, /<Badge/);
+  assert.doesNotMatch(layout, /@peridot\/ui\/components\/ui\/badge/);
+  assert.doesNotMatch(layout, /@peridot\/ui\/components\/ui\/progress-circle/);
+  assert.match(
+    layout,
+    /import TaskProgressIndicator from "\.\.\/components\/TaskProgressIndicator\.vue"/,
+  );
+  assert.doesNotMatch(layout, /PeridotSpinner/);
   assert.doesNotMatch(layout, /Change server/);
   assert.doesNotMatch(layout, /\{\{ label \}\}/);
-  assert.match(sidebar, /<div class="border-t border-sidebar-border p-3">/);
-  assert.match(sidebar, /<NuxtLink to="\/settings">/);
+  assert.doesNotMatch(sidebar, /to="\/settings"/);
+  assert.doesNotMatch(sidebar, /Fetching metadata/);
+  assert.doesNotMatch(header, /to="\/settings"/);
+  assert.doesNotMatch(header, /aria-label="Open settings"/);
   assert.match(
-    sidebar,
-    /:icon="icons\.settings"[\s\S]*?class="size-5"[\s\S]*?\/>Settings/,
+    header,
+    /<TaskProgressIndicator \/>[\s\S]*?to="\/settings\/account"/,
   );
   assert.match(header, /to="\/settings\/account"/);
   assert.match(header, /aria-label="Open account settings"/);
-  assert.doesNotMatch(header, /aria-label="Open settings"/);
   assert.match(layout, /gravatarUrl/);
   assert.match(layout, /@peridot\/ui\/assets\/brand\/logo\.svg/);
   assert.match(layout, /flex-1 justify-start text-lg font-semibold/);
   assert.match(
     layout,
-    /<img\s+:src="logo"\s+alt=""\s+class="size-6"\s*\/>\s*peridot/,
+    /<img\s+:src="logoNop"\s+alt=""\s+class="size-6 p-0\.5"\s*\/>\s*Peridot/,
   );
 });
 
@@ -95,15 +105,46 @@ test("sources are managed on their own page with row action menus", async () => 
   assert.match(page, /DialogRoot/);
   assert.match(page, /<FolderTree/);
   assert.match(page, /sourceFolderName\(source\.path \?\? ""\)/);
+  assert.match(page, /sourceKindIcon\(source\.kind\)/);
+  assert.match(page, /sourceKindLabel\(source\.kind\)/);
+  assert.match(page, /:title="sourceKindLabel\(source\.kind\)"/);
+  assert.match(page, /block font-medium/);
+  assert.match(page, /block break-all text-xs text-muted-foreground/);
+  assert.doesNotMatch(page, /Badge variant="secondary">\{\{ source\.kind/);
+  assert.match(
+    page,
+    /<Icon :icon="icons\.folder" aria-hidden="true" class="size-5" \/>\s*Local files/,
+  );
+  assert.match(
+    page,
+    /<Icon :icon="icons\.globe" aria-hidden="true" class="size-5" \/>\s*Remote URL/,
+  );
   assert.match(
     page,
     /:title="source\.kind === 'path' \? \(source\.path \?\? ''\) : undefined"/,
   );
-  assert.match(page, /useLibraryScan/);
+  assert.match(page, /useTasks/);
+  assert.match(page, /queueLibraryScan/);
+  assert.match(
+    page,
+    /if \(source\.kind === "path"\)[\s\S]*?trackTask\(source\.task\)/,
+  );
+  assert.match(page, /await queueLibraryScan\(\)/);
+  assert.match(page, />\s*Rescan all\s*</);
+  assert.match(page, /@click="rescanAll"/);
   assert.match(page, /DropdownMenuRoot/);
   assert.match(page, /DropdownMenuItem/);
-  assert.match(page, /rescanSource|startSource/);
-  assert.match(page, /source\.kind !== 'path' \|\| scanning/);
+  assert.match(
+    page,
+    /<DropdownMenuItem[\s\S]*?class="flex cursor-pointer[\s\S]*?Rescan/,
+  );
+  assert.match(
+    page,
+    /<DropdownMenuItem[\s\S]*?class="flex cursor-pointer[\s\S]*?Remove/,
+  );
+  assert.match(page, /data-disabled:cursor-default/);
+  assert.match(page, /queueSourceScan/);
+  assert.match(page, /:disabled="source\.kind !== 'path'"/);
   assert.match(page, /Actions for/);
 });
 
@@ -165,7 +206,12 @@ test("metadata providers have a dedicated sortable management page", async () =>
     /import musicbrainz from "@iconify-icons\/simple-icons\/musicbrainz"/,
   );
   assert.match(page, /Refresh metadata/);
-  assert.match(page, /startMetadataRefresh/);
+  assert.match(
+    page,
+    /:disabled="!activeProviders\.length \|\| hasActiveTasks"/,
+  );
+  assert.match(page, /hasActiveTasks \? "Processing…" : "Refresh metadata"/);
+  assert.match(page, /queueMetadataRefresh/);
   assert.match(page, /resetMetadata/);
   assert.match(page, /Reset all track metadata/);
   assert.match(page, /notifyMetadataReset/);
@@ -178,6 +224,25 @@ test("metadata providers have a dedicated sortable management page", async () =>
   assert.doesNotMatch(page, /provider-name/);
   assert.doesNotMatch(page, /Remove metadata provider/);
   assert.match(page, /AlertDialogRoot/);
+});
+
+test("tasks have a settings view for active work and paginated history", async () => {
+  const page = await readSource("../app/pages/settings/tasks.vue");
+  assert.match(page, /useTasks/);
+  assert.match(page, /orderedActiveTasks\(activeTasks\.value\)/);
+  assert.match(page, /status: "terminal"/);
+  assert.match(page, /limit: HISTORY_PAGE_SIZE/);
+  assert.match(page, /offset: history\.value\.length/);
+  assert.match(page, /In progress/);
+  assert.match(page, /<h3 id="task-history-heading"/);
+  assert.match(page, />\s*History\s*</);
+  assert.match(page, /taskProgressLabel\(task\)/);
+  assert.match(page, /taskStatusLabel\(task\)/);
+  assert.match(page, /task\.failureSummary/);
+  assert.match(page, /Load older tasks/);
+  assert.match(page, /@click="loadMoreHistory"/);
+  assert.match(page, /visibleDetails\(task\)/);
+  assert.match(page, /taskTimeLabel\(task\)/);
 });
 
 test("administration no longer contains source or library status management", async () => {

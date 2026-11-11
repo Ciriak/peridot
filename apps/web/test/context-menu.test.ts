@@ -52,7 +52,12 @@ test("track rows expose a Reka context menu with playback, favorites, downloads,
   assert.match(menu, /candidate\.details/);
 
   assert.match(trackTable, /<TrackContextMenu/);
-  assert.match(trackTable, /@play="play\(track\.id, true\)"/);
+  assert.match(trackTable, /@play="playFromList\(track\.id, true\)"/);
+  assert.match(
+    trackTable,
+    /playCollection\(\s*sortedTracks\.value\.map\(\(track\) => track\.id\),\s*trackId,?\s*\)/,
+    "Playing a row queues the complete displayed track list",
+  );
 
   for (const [name, source, variant] of [
     ["library", library, "library"],

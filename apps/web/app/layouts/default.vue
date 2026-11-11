@@ -9,6 +9,8 @@ import { Slider } from "@peridot/ui/components/ui/slider";
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import LikeButton from "../components/LikeButton.vue";
 import QueueDrawer from "../components/QueueDrawer.vue";
+import SidebarQuickPicks from "../components/SidebarQuickPicks.vue";
+import TaskProgressIndicator from "../components/TaskProgressIndicator.vue";
 import { useLikes } from "../composables/use-likes";
 import { useLibraryPlayer } from "../composables/use-library-player";
 import { useLibraryTracks } from "../composables/use-library-tracks";
@@ -17,7 +19,11 @@ import { useSession } from "../composables/use-session";
 import { useUser } from "../composables/use-user";
 import { gravatarUrl } from "../lib/gravatar";
 import { icons } from "../lib/icons";
-import { trackAlbumTitleRoute, trackCoverUrl } from "../lib/library";
+import {
+  trackAlbumTitleRoute,
+  trackArtistNames,
+  trackCoverUrl,
+} from "../lib/library";
 
 const route = useRoute();
 const router = useRouter();
@@ -34,7 +40,7 @@ const avatarSrc = computed(() =>
     ? logo
     : gravatarUrl(user.value.email),
 );
-const { tracks, loading: libraryLoading, load } = useLibraryTracks();
+const { tracks, load } = useLibraryTracks();
 const {
   likedTrackIds,
   loaded: likesLoaded,
@@ -56,7 +62,6 @@ const {
   shuffleEnabled,
   canGoNext,
   durationSeconds,
-  loadQueue,
   next,
   previous,
   toggleRandomization,
@@ -130,7 +135,6 @@ watch([address, token, () => user.value?.id], () => {
 onMounted(() => {
   void load();
   void loadLikes();
-  void loadQueue();
 });
 </script>
 
@@ -206,60 +210,7 @@ onMounted(() => {
         <div
           class="min-h-0 flex-1 overflow-y-auto border-t border-sidebar-border p-4"
         >
-          <p class="mb-3 text-xs font-medium text-muted-foreground">
-            Your library
-          </p>
-          <Button
-            as-child
-            variant="ghost"
-            class="h-auto w-full justify-start gap-3 px-0 py-2"
-          >
-            <NuxtLink to="/library"
-              ><span
-                aria-hidden="true"
-                class="flex size-10 items-center justify-center rounded-md bg-muted text-muted-foreground"
-                ><Icon
-                  :icon="icons.music"
-                  aria-hidden="true"
-                  class="size-5" /></span
-              ><span class="text-left"
-                >All music<span class="block text-xs text-muted-foreground">{{
-                  libraryLoading ? "Loading…" : `${tracks.length} tracks`
-                }}</span></span
-              ></NuxtLink
-            >
-          </Button>
-          <Button
-            as-child
-            variant="ghost"
-            class="h-auto w-full justify-start gap-3 px-0 py-2"
-          >
-            <NuxtLink to="/liked"
-              ><span
-                aria-hidden="true"
-                class="flex size-10 items-center justify-center rounded-md bg-muted text-muted-foreground"
-                ><Icon
-                  :icon="icons.heart"
-                  aria-hidden="true"
-                  class="size-5" /></span
-              ><span class="text-left"
-                >Liked songs<span class="block text-xs text-muted-foreground"
-                  >{{ likedTrackCount }} tracks</span
-                ></span
-              ></NuxtLink
-            >
-          </Button>
-        </div>
-        <div class="border-t border-sidebar-border p-3">
-          <Button as-child variant="ghost" class="w-full justify-start">
-            <NuxtLink to="/settings">
-              <Icon
-                :icon="icons.settings"
-                aria-hidden="true"
-                class="size-5"
-              />Settings
-            </NuxtLink>
-          </Button>
+          <SidebarQuickPicks />
         </div>
       </aside>
 
@@ -294,21 +245,22 @@ onMounted(() => {
               @focus="openSearch"
             />
           </div>
-          <Button
-            as-child
-            variant="ghost"
-            size="icon"
-            class="ml-auto shrink-0 rounded-full"
-          >
-            <NuxtLink to="/settings/account" aria-label="Open account settings">
-              <img
-                :src="avatarSrc"
-                alt=""
-                class="size-8 rounded-full object-cover"
-                @error="avatarFailed = true"
-              />
-            </NuxtLink>
-          </Button>
+          <div class="ml-auto flex shrink-0 items-center gap-2">
+            <TaskProgressIndicator />
+            <Button as-child variant="ghost" size="icon" class="rounded-full">
+              <NuxtLink
+                to="/settings/account"
+                aria-label="Open account settings"
+              >
+                <img
+                  :src="avatarSrc"
+                  alt=""
+                  class="size-8 rounded-full object-cover"
+                  @error="avatarFailed = true"
+                />
+              </NuxtLink>
+            </Button>
+          </div>
         </header>
         <main
           id="main-content"
@@ -351,7 +303,7 @@ onMounted(() => {
           >
             {{ active?.title }}
           </NuxtLink>
-          <p v-else class="truncate text-sm font-medium">
+          <p v-else class="select-none truncate text-sm font-medium">
             {{ active?.title ?? "No track selected" }}
           </p>
           <p
@@ -369,7 +321,10 @@ onMounted(() => {
             {{ error }}
           </p>
           <p v-else class="truncate text-xs text-muted-foreground">
-            <TrackArtistLinks v-if="active" :artists="active.artists" />
+            <TrackArtistLinks
+              v-if="active"
+              :artists="trackArtistNames(active)"
+            />
             <template v-else>Scan your library to get started</template>
           </p>
         </div>

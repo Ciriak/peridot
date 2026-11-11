@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
+import type { TaskResponse } from "@peridot/contracts";
 import { buildApp } from "../src/app.js";
 import { createDatabase, type Database } from "../src/database.js";
 import { ServerLogBuffer } from "../src/server-log.js";
@@ -219,26 +220,91 @@ export function createTaggedMp3(tags: {
   return Buffer.concat([id3, audioFrame]);
 }
 
+function taskDetailNumber(task: TaskResponse, key: string): number {
+  return Number(
+    task.details.find((detail) => detail.key === key)?.value ?? "0",
+  );
+}
+
+function taskResult(scan: TaskResponse, metadata: TaskResponse | null) {
+  return {
+    id: scan.id,
+    status: scan.status,
+    sourceId: scan.source?.id ?? null,
+    sourceName: scan.source?.name ?? null,
+    discoveredCount: taskDetailNumber(scan, "progress.total"),
+    createdCount: taskDetailNumber(scan, "files.created"),
+    updatedCount: taskDetailNumber(scan, "files.updated"),
+    unchangedCount: taskDetailNumber(scan, "files.unchanged"),
+    errorCount: taskDetailNumber(scan, "files.failed"),
+    unavailableCount: taskDetailNumber(scan, "files.unavailable"),
+    metadataStatus: metadata?.status ?? "skipped",
+    metadataTotalCount: metadata
+      ? taskDetailNumber(metadata, "progress.total")
+      : 0,
+    metadataProcessedCount: metadata
+      ? taskDetailNumber(metadata, "progress.completed")
+      : 0,
+    metadataMatchedCount: metadata
+      ? taskDetailNumber(metadata, "metadata.matched")
+      : 0,
+    metadataUnmatchedCount: metadata
+      ? taskDetailNumber(metadata, "metadata.unmatched")
+      : 0,
+    metadataErrorCount: metadata
+      ? taskDetailNumber(metadata, "metadata.failed")
+      : 0,
+    metadataFailureSummary: metadata?.failureSummary ?? null,
+    failureSummary: scan.failureSummary,
+    createdAt: scan.createdAt,
+    startedAt: scan.startedAt,
+    completedAt: scan.completedAt,
+    metadataTaskId: metadata?.id ?? null,
+    scan,
+    metadata,
+  };
+}
+
+export async function waitForTask(
+  context: TestContext,
+  taskId: string,
+): Promise<TaskResponse> {
+  for (let attempt = 0; attempt < 500; attempt += 1) {
+    const response = await context.app.inject({
+      method: "GET",
+      url: `/api/tasks/${taskId}`,
+      headers: context.authorization,
+    });
+    const task = response.json<TaskResponse>();
+    if (["completed", "failed", "interrupted"].includes(task.status)) {
+      return task;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error("Task did not finish in time");
+}
+
 export async function waitForScan(
   context: TestContext,
   scanId: string,
 ): Promise<Record<string, unknown>> {
-  for (let attempt = 0; attempt < 200; attempt += 1) {
-    const response = await context.app.inject({
-      method: "GET",
-      url: `/api/library/scans/${scanId}`,
-      headers: context.authorization,
-    });
-    const scan = response.json<Record<string, unknown>>();
-    if (
-      ["completed", "failed", "interrupted"].includes(String(scan.status)) &&
-      !["pending", "running"].includes(String(scan.metadataStatus))
-    ) {
-      return scan;
+  const scan = await waitForTask(context, scanId);
+  if (scan.kind !== "library_scan") return taskResult(scan, scan);
+  if (scan.status !== "completed") return taskResult(scan, null);
+
+  let metadata: TaskResponse | null = null;
+  for (let attempt = 0; attempt < 500; attempt += 1) {
+    const child = await context.database.orm.Task.where({
+      parentTaskId: scan.id,
+      kind: "metadata_fetch",
+    }).first();
+    if (child) {
+      metadata = await waitForTask(context, child.id);
+      break;
     }
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
-  throw new Error("Scan did not finish in time");
+  return taskResult(scan, metadata);
 }
 
 export async function startScan(

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
-import { Spinner } from "@peridot/ui/components/ui/spinner";
+import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { computed, onMounted } from "vue";
 import TrackTable from "./TrackTable.vue";
 import { useLikes } from "../composables/use-likes";
@@ -56,7 +56,7 @@ onMounted(() => {
       role="status"
       class="flex items-center gap-3 rounded-lg border p-6 text-sm text-muted-foreground"
     >
-      <Spinner label="Loading library" />
+      <PeridotSpinner label="Loading library" />
       Loading your library…
     </div>
     <div
@@ -72,7 +72,7 @@ onMounted(() => {
       role="status"
       class="flex items-center gap-3 rounded-lg border p-6 text-sm text-muted-foreground"
     >
-      <Spinner label="Loading liked songs" />
+      <PeridotSpinner label="Loading liked songs" />
       Loading your liked songs…
     </div>
     <div

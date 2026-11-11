@@ -1,5 +1,330 @@
 # Decisions
 
+## 2026-11-11: Track lists embed playback in cover artwork
+
+The shared track table and queue use one `TrackArtwork` component for every
+track cover, including queue now-playing and upcoming rows. A full-cover
+play/pause control reveals on hover or keyboard focus and uses the Quick pick
+70% semantic background so its icon remains legible over artwork. Upcoming
+queue covers start their track directly, while the now-playing cover toggles the
+active track. Missing or failed artwork uses the existing semantic music-note
+placeholder.
+
+The queue remove control uses the standard `icon` button size and a `size-5`
+glyph, one step larger than its previous compact control. This keeps removal
+separate from cover playback without shrinking the row's primary title space.
+
+## 2026-11-11: Album release years come from explicit provider metadata
+
+The album detail header shows a release year beside the total duration only
+when an album track's provider metadata contains an explicit four-digit
+`year` detail. Missing years render no placeholder. If matching tracks expose
+different years, the header omits the year rather than presenting one edition as
+authoritative for a mixed album.
+
+Albums remain client-side projections, so the year is derived while grouping
+tracks and does not add an API or storage field. MusicBrainz candidates without
+a release-year detail continue to show only the existing album summary.
+
+## 2026-11-11: Queue initialization belongs to the application-root audio owner
+
+The persistent player restores its queue and browser-local snapshot only from
+the application-root `useLibraryPlayer({ audio: true })` owner. Layouts observe
+and control that shared state but do not initialize the queue themselves.
+
+The default layout previously called `loadQueue()` on every mount. Leaving the
+fullscreen Settings layout therefore created a new composable call site whose
+local initialization flag was unset; it restored the browser snapshot with
+`playing` set to false and paused an active track. Route changes must not run
+player initialization independently of the audio owner.
+
+## 2026-11-11: Album play controls restart collections from the first track
+
+Album card, album detail, and album quick-pick controls replace the queue with
+the complete ordered album and start at its first track whenever their visible
+play action is used. If that album is already playing, the same control shows a
+pause action and pauses the current track. A paused album therefore restarts
+from its first track instead of resuming a middle track; accessible labels
+state that playback starts from the first track.
+
+This supersedes the earlier album card behavior that toggled playback whenever
+any track from the album was active, even when the album was paused. Album
+context menus continue to start the complete album directly.
+
+## 2026-11-11: Connection loss is a topbar warning without a toast
+
+The server health monitor continues to publish unknown, connected, or lost
+status and drives the pulsing cloud-off warning in the topbar. It no longer adds
+an app-level toast when the configured server becomes unreachable, and it does
+not retain connection-specific toast IDs or helpers.
+
+The persistent topbar warning already communicates the state and remains visible
+until a successful health probe, while the app reconnects automatically. A
+second bottom-right toast duplicates that warning and competes with user-action
+notifications. This supersedes earlier decisions that retained a separate
+connection-loss toast.
+
+## 2026-11-11: The account avatar is the sole main-header settings entry
+
+Remove the separate icon-only Settings link from the main header. The account
+avatar already enters the full Settings area at `/settings/account`, and the
+Settings sidebar exposes every destination from there. Keeping a second adjacent
+settings control duplicates the same navigation and adds unnecessary header
+clutter.
+
+Task progress remains immediately before the avatar. This supersedes the earlier
+decision that placed a separate Settings control beside the account avatar.
+
+## 2026-11-11: Topbar connection loss replaces task progress
+
+The existing server health monitor now publishes its unknown, connected, or
+lost status through one app-level Nuxt state value, so the topbar indicator
+observes the probe result. When the configured server is
+unreachable, the topbar replaces any active task progress circle with the
+bundled Basil cloud-off icon in the destructive semantic color. The icon uses
+the reduced-motion-safe `animate-pulse` utility and exposes its meaning through
+an accessible label and hover/focus tooltip.
+
+Connection loss takes precedence over queued or running task state because a
+stale progress ring would imply live server work. A successful health probe
+returns the topbar to the task progress circle when work remains active. This
+adds no polling cadence, API, or storage contract; it only exposes the existing
+ten-second health-monitor state to the header.
+
+## 2026-11-11: Durable task queue separates scans from metadata fetches
+
+Replace the combined `LibraryScan` lifecycle with a persistent `Task` record.
+Core `library_scan` tasks reconcile source files and report added, updated,
+unchanged, unavailable, and failed file counts. A successful scan queues a
+linked `metadata_fetch` child, while the Metadata refresh action queues that kind
+directly. Each task owns its own queued, running, completed, failed, or
+interrupted state and a determinate or indeterminate progress value.
+
+One in-process FIFO worker executes tasks sequentially for SQLite safety and
+provider rate-limit predictability. New requests are accepted while work is
+active. An equivalent task is coalesced only while it is still queued; work that
+has started does not block a later intentional request. Queued tasks resume
+after restart, while tasks that were running become interrupted and are not
+retried automatically. Metadata reset remains synchronous and is rejected while
+any task is queued or running.
+
+All signed-in users can read `GET /api/tasks` and `GET /api/tasks/:id`. Responses
+contain safe source display names, bounded labeled details, and timestamps, but
+never source paths, provider credentials, or arbitrary plugin payloads. Core
+task kinds are `library_scan` and `metadata_fetch`; future isolated jobs may use
+validated `plugin:<plugin-id>:<job-name>` kinds. Plugins still cannot execute
+inside Fastify or create browser-authored tasks.
+
+Browser clients poll the task list every 500 ms while queued or running work
+exists and at a slower idle interval. WebSockets are intentionally deferred for
+this foundation. Terminal history is retained for 30 days with a hard cap of the
+newest 500 tasks. The source-creation `scan` response property becomes `task`,
+and the previous scan-specific routes and combined metadata fields are removed.
+This supersedes the earlier decision that treated metadata enrichment as a
+second phase of the same scan record and rejected concurrent operations.
+
+## 2026-11-11: Sidebar quick pick uses continuous seven-day decay
+
+The sidebar quick pick list uses one retained `TrackPlayEvent` per successful
+browser playback run. Events are scoped to the signed-in user and cascade with
+their user or track. Recording happens only after `HTMLAudioElement.play()`
+resolves, so pause/resume, seeking, failed starts, restored paused sessions, and
+retries in an already-counted run do not add events. New runs created by explicit
+selection, next/previous, automatic advancement, or repeat-one do count.
+
+Each event contributes `0.5^(ageDays / 7)` to its track score. Album score is the
+sum of decayed events belonging to its available tracks, so album and track
+identities participate in one ranking by decayed score, latest play, and stable
+key. The server exposes only the ordered identity list from
+`GET /api/quick-picks`; individual events and scores stay server-side. The
+sidebar's up-to-eight cover-play rows are labeled `Quick pick`, use one item per
+line, and show artwork, a track or album type icon, title, and artist names.
+Each complete row is one button so artwork and text share the same play/pause
+interaction. The visible order is frozen while the pointer or keyboard focus is
+inside the list, preventing rows from moving beneath an active target; the
+latest resolved order is applied after all interactions end. Retaining events
+makes continuous decay exact without periodic total rewrites. Playlist entries
+remain deferred until playlists exist.
+
+## 2026-11-11: ProgressCircle uses one value-driven progress contract
+
+The shared `ProgressCircle` treats a finite numeric `value` as determinate and
+clamps it to `0–100`. An omitted, null, non-finite, or otherwise non-numeric
+value renders indeterminate progress with a rotating arc. A separate mode prop
+is unnecessary because callers already have a single optional progress value,
+and zero must remain distinguishable from "no value available."
+
+The ring continues to rotate for determinate values. Numeric state controls the
+indicator dash geometry and accessible value rather than whether the visual is
+moving, which keeps active work recognizable in both determinate and
+indeterminate states. Rotation retains the reduced-motion fallback.
+
+The component defaults to the primary semantic color at medium size. Indicator
+colors use the existing primary, secondary, success, warning, and destructive
+tokens; sizes use standard Tailwind utilities. The numeric stroke width defaults
+to 6 and is applied through an inherited SVG presentation attribute, allowing
+callers to tune the ring without arbitrary utility values. Percentage text is
+opt-in and a default slot takes precedence for custom center content. Dynamic
+ring geometry uses native SVG presentation attributes so the shared styling rule
+continues to forbid inline styles.
+
+Progress exposes accessible progressbar semantics with clamped values and a
+percentage value text. Indeterminate progress omits `aria-valuenow`, while both
+states use either the caller-provided label or the context-appropriate default
+of `Progress` or `Loading`. The topbar task indicator can use either state, while
+other application loading surfaces continue to use the branded
+`PeridotSpinner`.
+
+## 2026-11-11: Topbar task progress uses a queue average
+
+The main-header progress circle reflects every task currently running or queued.
+Its value is the equal-weighted average of the active tasks: a running task
+contributes its determinate completion percentage, while each queued task
+contributes zero until it starts. A zero-total running task counts as complete.
+If no task is running or the running progress is indeterminate, the overall
+circle is indeterminate rather than showing a fabricated percentage. The circle
+is hidden when no active tasks remain.
+
+Hovering or focusing the task indicator opens a tooltip with the running task
+first and queued tasks in FIFO creation order. Rows show the task title, status,
+and available percentage or completed/total work. A bounded scrolling list keeps
+large queues usable. Completed, failed, and interrupted history does not affect
+the indicator.
+
+The indicator reads the existing shared task state and therefore adds no API,
+polling, or storage contract. This supersedes the earlier metadata-only
+indeterminate header badge. The fullscreen Settings header uses the same
+indicator.
+
+## 2026-11-11: Task activity uses the headers and Tasks settings, not toasts
+
+The task progress indicator is shared by the main application header and the
+fullscreen Settings header. Clicking the task circle opens
+`/settings/tasks`, which is available to every signed-in user because the task
+read API is authenticated rather than administrator-only. The Settings page
+lists running and queued tasks with their live progress, source, kind, and
+timestamps. It independently pages terminal history and keeps active-task state
+live through the existing monitor.
+
+Task-specific progress, completion, and failure toasts are removed. Polling
+failures continue to retry silently, while server connection loss uses its
+topbar warning. Other user-action notifications, including
+source/provider changes, likes, downloads, and queue operations, remain toasts.
+
+The Metadata refresh button is disabled while any task is queued or running and
+changes its label to `Processing…`. This prevents duplicate refresh requests
+from the UI while preserving the server's task coalescing rules for other
+clients.
+
+## 2026-11-11: Branded loading indicator is named PeridotSpinner
+
+The shared animated loading component is named and exported as
+`PeridotSpinner`. Its file, data slot, imports, tests, and documentation use the
+same product-specific identity so it is not confused with a generic spinner
+control. The package import path remains `@peridot/ui/components/ui/spinner` to
+keep component grouping stable.
+
+The same package also exports the classic shadcn-vue `Spinner` using Lucide's
+`LoaderIcon` and the standard `animate-spin` utility. It is available for future
+loading states but intentionally unused for now, while the branded
+`PeridotSpinner` remains the active application spinner.
+
+## 2026-11-11: Settings access lives beside the account avatar
+
+The persistent main-header actions place an icon-only Settings link immediately
+before the account avatar. The avatar continues to open account settings
+directly, while the new Settings control opens the full Settings area. This
+makes the application-level destination consistently available in the top-right
+header rather than requiring the sidebar footer.
+
+A compact non-interactive metadata-status badge uses `PeridotSpinner` and
+`Fetching metadata` in the header actions, without duplicating the Settings
+navigation. The former sidebar-footer slot is removed.
+
+## 2026-11-11: Adding a local source starts scanning and metadata matching
+
+Creating a `path` source queues a source-scoped file scan on the server and
+returns that scan with the created source. The browser adopts the returned scan
+so its existing progress and completion notifications track work that started
+server-side. URL and integration sources do not start scans because they are not
+indexable yet.
+
+The source scan keeps its existing continuation behavior: once catalog
+reconciliation completes, metadata enrichment runs against available automatic
+tracks from that source. It remains part of the same scan record, with
+`metadataStatus` exposing its pending, running, and terminal state. If another
+library operation is already active, source creation still succeeds with a null
+scan result and the Sources page tells the administrator to rescan after the
+active operation finishes.
+
+## 2026-11-11: Track tables use the page scroll
+
+Shared track tables keep the complete sorted list for queue construction but
+render it in progressive page-flow batches. The first 60 rows mount immediately,
+then another 60 mount as the load-more sentinel approaches the viewport. A
+visible Load more control remains available as the keyboard and
+constrained-client fallback. The table does not create a virtualized viewport,
+maximum-height frame, or independent vertical scrollbar. The main content
+region remains the only vertical scroll owner, so long lists scroll together
+with the rest of the page and the fixed player remains unobstructed.
+
+Track-title hash navigation still resolves the target row's element and calls
+`revealThrough` before `scrollIntoView`, so a linked track beyond the initial
+batch mounts first. This keeps album links working without requiring an internal
+table scroll position. This supersedes the virtualized track-table portion of
+the earlier progressive-card and virtual-row decision.
+
+## 2026-11-11: Local album and artist credits are links in compact track surfaces
+
+Shared track rows place linked artist credits directly beneath the track title
+for every library, search, album, and artist-table variant and at every
+viewport. The separate Artist column is removed because the under-title credit
+is now the canonical location. Visible album names link to their album detail in
+every applicable table variant, including artist-page track lists.
+
+The fixed player, now-playing queue card, and upcoming queue rows derive linked
+artist credits through `trackArtistNames`, which preserves the file-tag fallback
+when the structured artist list is empty. The now-playing play/pause glyph uses
+the shared Button rather than a decorative Icon and controls the active track.
+
+External metadata-search candidates remain plain provider results because they
+do not necessarily identify a local album or artist route. Local catalog
+identities should be navigable wherever they are displayed.
+
+## 2026-11-11: Catalog views use progressive cards and a virtualized track table
+
+Catalog pages keep the complete track response in memory so album and artist
+grouping, collection playback, likes, and sidebar totals remain correct without
+server API changes. Album and artist grids reveal cards in batches of 60 as the
+end sentinel approaches the viewport, with a visible Load more fallback for
+keyboard and constrained clients. Search resets the batch when its filtered
+album set changes. Card cover images load lazily.
+
+The shared track table uses VueUse `useVirtualList` with fixed 56-pixel rows,
+eight overscan rows, and its own bounded scroll area. ARIA table roles expose the
+total row count and original track indices. Album title deep links pass the
+target track ID into the table so the corresponding virtual row is mounted
+before its title anchor is scrolled into view.
+
+This supports personal libraries up to roughly 10,000 tracks without moving
+catalog paging to the server. VueUse-generated container and wrapper positioning
+styles are the sole runtime style-binding exception; all visual styling remains
+standard Tailwind, shadcn-vue variants, and shared theme tokens.
+
+## 2026-11-11: Track-table playback queues the displayed list
+
+The shared track table queues every track in its current displayed order when a
+row is played by its button, double-click, or context-menu Play action. The
+selected track is rotated to the front so playback starts there, then continues
+through the following rows and wraps through any rows that preceded it. The
+queue retains the complete list, while sorting changes the queue order because
+sorting changes what the user sees.
+
+This applies to the library, liked songs, search results, album details, and
+artist detail track lists because they share the track table. Album and artist
+collection play buttons continue to queue their complete collections through
+`playCollection`.
+
 ## 2026-11-11: Current-track waveform uses AT Icons
 
 The shared track table marks the current track with the bundled
@@ -654,7 +979,7 @@ motion behavior, decorative accessibility, and pointer transparency.
 
 ## 2026-11-10: Shared animated brand spinner
 
-Expose the owner-supplied animated blob through a reusable shared Spinner
+Expose the owner-supplied animated blob through a reusable shared PeridotSpinner
 component. The component provides a status label, accepts standard Tailwind
 classes for context-specific sizing, and replaces the animation with the static
 brand mark when reduced motion is preferred. Keep both assets local and bundled

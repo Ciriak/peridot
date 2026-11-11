@@ -5,7 +5,7 @@ import logoW from "@peridot/ui/assets/brand/logo-w.png";
 import { Button } from "@peridot/ui/components/ui/button";
 import { Gradient } from "@peridot/ui/components/ui/gradient";
 import { Input } from "@peridot/ui/components/ui/input";
-import { Spinner } from "@peridot/ui/components/ui/spinner";
+import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useServer } from "../composables/use-server";
 import { useSession } from "../composables/use-session";
@@ -214,7 +214,7 @@ function changeServer() {
       <div v-if="step === 'server'" class="space-y-4">
         <section aria-label="Server discovery" class="space-y-3">
           <div class="flex items-center gap-3">
-            <Spinner
+            <PeridotSpinner
               label="Looking for a server on this network"
               class="size-6"
             />

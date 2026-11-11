@@ -12,6 +12,7 @@ test("server selection prioritizes discovery and reveals manual entry on demand"
     /setTimeout\(\(\) => void scanLocalNetwork\(\), 10_000\)/,
   );
   assert.match(source, /@peridot\/ui\/components\/ui\/spinner/);
+  assert.match(source, /import \{ PeridotSpinner \}/);
   assert.match(
     source,
     /label="Looking for a server on this network"/,

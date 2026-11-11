@@ -3,7 +3,7 @@ import { definePageMeta, useHead, useRoute } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
-import { Spinner } from "@peridot/ui/components/ui/spinner";
+import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { computed, onMounted } from "vue";
 import AlbumCard from "../../components/AlbumCard.vue";
 import LikeButton from "../../components/LikeButton.vue";
@@ -11,6 +11,7 @@ import TrackTable from "../../components/TrackTable.vue";
 import { useLikes } from "../../composables/use-likes";
 import { useLibraryPlayer } from "../../composables/use-library-player";
 import { useLibraryTracks } from "../../composables/use-library-tracks";
+import { useProgressiveReveal } from "../../composables/use-progressive-reveal";
 import { icons } from "../../lib/icons";
 import {
   findArtist,
@@ -42,6 +43,12 @@ const artist = computed(() =>
 const albums = computed(() =>
   artist.value ? groupAlbums(artist.value.tracks) : [],
 );
+const {
+  target: loadMoreTarget,
+  hasMore,
+  visibleItems: visibleAlbums,
+  revealMore,
+} = useProgressiveReveal(albums);
 useHead(() => ({
   title: artist.value ? `${artist.value.name} — Peridot` : "Artist — Peridot",
 }));
@@ -72,7 +79,7 @@ onMounted(() => {
     role="status"
     class="flex items-center gap-3 rounded-lg border p-6 text-sm text-muted-foreground"
   >
-    <Spinner label="Loading artist" />
+    <PeridotSpinner label="Loading artist" />
     Loading this artist…
   </div>
   <div
@@ -143,7 +150,20 @@ onMounted(() => {
       <div
         class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
       >
-        <AlbumCard v-for="album in albums" :key="album.key" :album="album" />
+        <AlbumCard
+          v-for="album in visibleAlbums"
+          :key="album.key"
+          :album="album"
+        />
+        <div
+          v-if="hasMore"
+          ref="loadMoreTarget"
+          class="col-span-full flex justify-center"
+        >
+          <Button type="button" variant="outline" @click="revealMore">
+            Load more albums
+          </Button>
+        </div>
       </div>
     </section>
 

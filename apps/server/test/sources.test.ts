@@ -74,6 +74,7 @@ test("administrators can add and remove path and url sources", async () => {
   const secondRoot = path.join(context.root, "second");
   try {
     await mkdir(secondRoot);
+    await writeFile(path.join(secondRoot, "added.wav"), createWav());
     const created = await context.app.inject({
       method: "POST",
       url: "/api/admin/sources",
@@ -81,7 +82,28 @@ test("administrators can add and remove path and url sources", async () => {
       payload: { kind: "path", path: secondRoot },
     });
     assert.equal(created.statusCode, 201);
-    assert.equal(created.json().path, secondRoot);
+    const createdSource = created.json<{
+      id: string;
+      path: string;
+      task: {
+        id: string;
+        kind: string;
+        source: { id: string; name: string };
+        status: string;
+      };
+    }>();
+    assert.equal(createdSource.path, secondRoot);
+    assert.equal(createdSource.task.kind, "library_scan");
+    assert.equal(createdSource.task.source.id, createdSource.id);
+    assert.equal(createdSource.task.source.name, "second");
+    assert.equal(createdSource.task.status, "queued");
+
+    const sourceScan = await waitForScan(context, createdSource.task.id);
+    assert.equal(sourceScan.status, "completed");
+    assert.equal(sourceScan.metadataStatus, "completed");
+    assert.equal(sourceScan.createdCount, 1);
+    assert.equal(sourceScan.metadataTotalCount, 1);
+    assert.equal(sourceScan.metadataProcessedCount, 1);
 
     const url = await context.app.inject({
       method: "POST",
@@ -91,6 +113,7 @@ test("administrators can add and remove path and url sources", async () => {
     });
     assert.equal(url.statusCode, 201);
     assert.equal(url.json().url, "https://example.com/music");
+    assert.equal(url.json().task, null);
 
     const list = await context.app.inject({
       method: "GET",
@@ -101,7 +124,7 @@ test("administrators can add and remove path and url sources", async () => {
 
     const removed = await context.app.inject({
       method: "DELETE",
-      url: `/api/admin/sources/${created.json().id}`,
+      url: `/api/admin/sources/${createdSource.id}`,
       headers: context.authorization,
     });
     assert.equal(removed.statusCode, 204);
@@ -318,15 +341,18 @@ test("a rescan reads all configured path sources", async () => {
     await mkdir(secondRoot);
     await writeFile(path.join(context.libraryRoot, "first.wav"), createWav());
     await writeFile(path.join(secondRoot, "second.wav"), createWav());
-    await context.app.inject({
+    const secondSource = await context.app.inject({
       method: "POST",
       url: "/api/admin/sources",
       headers: context.authorization,
       payload: { kind: "path", path: secondRoot },
     });
+    const secondSourceScan = secondSource.json<{ task: { id: string } }>().task;
+    await waitForScan(context, secondSourceScan.id);
     const scan = await startScan(context);
     assert.equal(scan.status, "completed");
-    assert.equal(scan.createdCount, 2);
+    assert.equal(scan.createdCount, 1);
+    assert.equal(scan.unchangedCount, 1);
   } finally {
     await context.close();
   }
@@ -346,6 +372,8 @@ test("source rescans isolate availability changes to the selected source", async
       headers: context.authorization,
       payload: { kind: "path", path: secondRoot },
     });
+    const secondSourceScan = secondSource.json<{ task: { id: string } }>().task;
+    await waitForScan(context, secondSourceScan.id);
     await startScan(context);
     await rm(firstTrack);
 
@@ -355,8 +383,8 @@ test("source rescans isolate availability changes to the selected source", async
       headers: context.authorization,
     });
     assert.equal(scoped.statusCode, 202);
-    assert.equal(scoped.json().sourceId, secondSource.json().id);
-    assert.equal(scoped.json().sourceName, "second");
+    assert.equal(scoped.json().source.id, secondSource.json().id);
+    assert.equal(scoped.json().source.name, "second");
     const scopedScan = await waitForScan(context, scoped.json().id);
     assert.equal(scopedScan.status, "completed");
     assert.equal(scopedScan.unavailableCount, 0);

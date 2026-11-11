@@ -13,8 +13,9 @@ import {
   fetchAuthStatus,
   fetchQueue,
   fetchLogs,
+  fetchQuickPicks,
   fetchServerSettings,
-  getLibraryScan,
+  getTask,
   applyTrackMetadata,
   listDirectories,
   listLikes,
@@ -22,11 +23,13 @@ import {
   listMetadataProviderDefinitions,
   listMetadataProviders,
   listSources,
+  listTasks,
   listTracks,
   reorderSources,
   reorderMetadataProviders,
   replaceQueue,
   refreshMetadata,
+  recordTrackPlay,
   resetMetadata,
   rescanSource,
   revertTrackMetadata,
@@ -36,6 +39,27 @@ import {
   startLibraryScan,
   trackAudioUrl,
 } from "../app/lib/peridot-client.ts";
+
+function queuedTask(
+  id: string,
+  kind: "library_scan" | "metadata_fetch",
+  source: { id: string; name: string } | null,
+) {
+  return {
+    id,
+    kind,
+    status: "queued",
+    title: source ? `${source.name} scan` : "Library metadata matching",
+    parentTaskId: null,
+    source,
+    progress: { state: "indeterminate", completed: null, total: null },
+    details: [],
+    failureSummary: null,
+    createdAt: "2026-11-11T10:00:00.000Z",
+    startedAt: null,
+    completedAt: null,
+  };
+}
 
 test("metadata provider, source scan, and correction calls use authenticated endpoints", async (context) => {
   const originalFetch = globalThis.fetch;
@@ -52,25 +76,16 @@ test("metadata provider, source scan, and correction calls use authenticated end
     }
     if (url.endsWith("/scans")) {
       return Response.json(
-        {
-          id: "scan-1",
-          status: "queued",
-          sourceId: "source-1",
-          sourceName: "Albums",
-          metadataStatus: "pending",
-        },
+        queuedTask("scan-1", "library_scan", {
+          id: "source-1",
+          name: "Albums",
+        }),
         { status: 202 },
       );
     }
     if (url.endsWith("/api/admin/metadata/refresh")) {
       return Response.json(
-        {
-          id: "scan-metadata",
-          status: "completed",
-          sourceId: null,
-          sourceName: "All sources",
-          metadataStatus: "pending",
-        },
+        queuedTask("scan-metadata", "metadata_fetch", null),
         { status: 202 },
       );
     }
@@ -147,8 +162,8 @@ test("metadata provider, source scan, and correction calls use authenticated end
     false,
   );
   assert.equal(
-    (await refreshMetadata("http://127.0.0.1:17430", "s")).metadataStatus,
-    "pending",
+    (await refreshMetadata("http://127.0.0.1:17430", "s")).status,
+    "queued",
   );
   assert.deepEqual(await resetMetadata("http://127.0.0.1:17430", "s"), {
     resetCount: 3,
@@ -158,7 +173,7 @@ test("metadata provider, source scan, and correction calls use authenticated end
     "s",
     "source-1",
   );
-  assert.equal(sourceScan.sourceName, "Albums");
+  assert.equal(sourceScan.source?.name, "Albums");
   assert.deepEqual(
     await listMetadataCandidates(
       "http://127.0.0.1:17430",
@@ -243,6 +258,37 @@ test("metadata provider, source scan, and correction calls use authenticated end
       "Bearer s",
     );
   }
+});
+
+test("task list polling sends status and bounded pagination", async (context) => {
+  const originalFetch = globalThis.fetch;
+  context.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  let requestedUrl = "";
+  globalThis.fetch = async (input, init) => {
+    requestedUrl = String(input);
+    assert.equal(
+      new Headers(init?.headers).get("Authorization"),
+      "Bearer task-session",
+    );
+    return Response.json({
+      items: [queuedTask("task-1", "library_scan", null)],
+      activeCount: 1,
+      queuedCount: 1,
+    });
+  };
+
+  const result = await listTasks("http://127.0.0.1:17430", "task-session", {
+    status: "active",
+    limit: 25,
+    offset: 5,
+  });
+  assert.equal(result.items[0]?.id, "task-1");
+  assert.equal(
+    requestedUrl,
+    "http://127.0.0.1:17430/api/tasks?status=active&limit=25&offset=5",
+  );
 });
 
 test("queue reads and writes are authenticated ordered snapshots", async (context) => {
@@ -347,6 +393,51 @@ test("playback tokens are requested with authentication and produce a scoped aud
     trackAudioUrl("http://127.0.0.1:17430", "track/one", issued.token),
     "http://127.0.0.1:17430/api/tracks/track%2Fone/audio?playbackToken=signed-token",
   );
+});
+
+test("play history writes and quick-pick reads use authenticated endpoints", async (context) => {
+  const originalFetch = globalThis.fetch;
+  context.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  const requests: Array<{ input: string; init?: RequestInit }> = [];
+  globalThis.fetch = async (input, init) => {
+    requests.push({ input: String(input), init });
+    if (String(input).endsWith("/plays")) {
+      return Response.json(
+        { trackId: "track/one", playedAt: "2026-11-11T12:00:00.000Z" },
+        { status: 201 },
+      );
+    }
+    return Response.json({
+      items: [{ kind: "track", key: "track:track/one", trackId: "track/one" }],
+    });
+  };
+
+  const recorded = await recordTrackPlay(
+    "http://127.0.0.1:17430",
+    "session-token",
+    "track/one",
+  );
+  const quickPicks = await fetchQuickPicks(
+    "http://127.0.0.1:17430",
+    "session-token",
+  );
+
+  assert.equal(recorded.trackId, "track/one");
+  assert.equal(quickPicks.items[0]?.kind, "track");
+  assert.equal(
+    requests[0]?.input,
+    "http://127.0.0.1:17430/api/tracks/track%2Fone/plays",
+  );
+  assert.equal(requests[0]?.init?.method, "POST");
+  assert.equal(requests[1]?.input, "http://127.0.0.1:17430/api/quick-picks");
+  for (const request of requests) {
+    assert.equal(
+      new Headers(request.init?.headers).get("Authorization"),
+      "Bearer session-token",
+    );
+  }
 });
 
 test("like requests use the authenticated likes endpoint and expected targets", async (context) => {
@@ -546,10 +637,16 @@ test("authenticated admin calls send the bearer token and expected bodies", asyn
     requests.push({ input: String(input), init });
     const url = String(input);
     if (init?.method === "POST" && url.endsWith("/api/library/scans")) {
-      return Response.json({ id: "scan-1", status: "queued" }, { status: 202 });
+      return Response.json(queuedTask("scan-1", "library_scan", null), {
+        status: 202,
+      });
     }
-    if (url.includes("/api/library/scans/")) {
-      return Response.json({ id: "scan-1", status: "completed" });
+    if (url.includes("/api/tasks/")) {
+      return Response.json({
+        ...queuedTask("scan-1", "library_scan", null),
+        status: "completed",
+        completedAt: "2026-11-11T10:01:00.000Z",
+      });
     }
     if (init?.method === "POST" && url.endsWith("/api/admin/sources")) {
       return Response.json(
@@ -629,7 +726,7 @@ test("authenticated admin calls send the bearer token and expected bodies", asyn
     "queued",
   );
   assert.equal(
-    (await getLibraryScan("http://127.0.0.1:17430", "s", "scan-1")).status,
+    (await getTask("http://127.0.0.1:17430", "s", "scan-1")).status,
     "completed",
   );
 
@@ -645,7 +742,7 @@ test("authenticated admin calls send the bearer token and expected bodies", asyn
       "http://127.0.0.1:17430/api/admin/sources/src-1",
       "http://127.0.0.1:17430/api/auth/session",
       "http://127.0.0.1:17430/api/library/scans",
-      "http://127.0.0.1:17430/api/library/scans/scan-1",
+      "http://127.0.0.1:17430/api/tasks/scan-1",
     ],
   );
   for (const request of requests) {

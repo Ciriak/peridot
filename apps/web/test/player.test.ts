@@ -14,6 +14,13 @@ test("the persistent player controls a native audio element", async () => {
 
   assert.match(player, /new Audio\(\)/);
   assert.match(player, /createPlaybackToken\(/);
+  assert.match(player, /recordTrackPlay\(/);
+  assert.match(
+    player,
+    /await audio\.play\(\);[\s\S]*?lastRecordedPlaybackRequest !== playbackRequest\.value[\s\S]*?recordTrackPlay\(/,
+    "Play history is recorded only after successful playback for a new run",
+  );
+  assert.match(player, /\.catch\(\(\) => undefined\)/);
   assert.match(player, /trackAudioUrl\(/);
   assert.match(player, /downloadTrack\(trackId = currentTrackId\.value\)/);
   assert.match(player, /anchor\.download = trackDownloadFileName\(track\)/);
@@ -61,13 +68,23 @@ test("the persistent player controls a native audio element", async () => {
     /useLibraryPlayer\(\{ audio: true \}\)/,
     "Changing layouts must not tear down audio playback",
   );
+  assert.doesNotMatch(
+    layout,
+    /loadQueue\(\)/,
+    "Changing layouts must not restore player state over active playback",
+  );
   assert.match(layout, /currentCoverUrl = computed\(/);
   assert.match(layout, /<img[\s\S]*object-cover/);
   assert.match(layout, /<Icon v-else :icon="icons\.music"/);
   assert.match(
     layout,
-    /<TrackArtistLinks v-if="active" :artists="active\.artists" \/>/,
+    /<TrackArtistLinks\s+v-if="active"\s+:artists="trackArtistNames\(active\)"\s+\/>/,
     "The active track's credited artists link from the persistent player",
+  );
+  assert.match(
+    layout,
+    /<p v-else class="select-none truncate text-sm font-medium">/,
+    "Unlinked player titles cannot be selected",
   );
   assert.match(layout, /@click="togglePlayback"/);
   assert.match(layout, /@click="cycleRepeatMode"/);
@@ -85,7 +102,15 @@ test("the persistent player controls a native audio element", async () => {
     layout,
     /:icon="icons\.volume"[\s\S]*thumb-label="Playback volume"/,
   );
-  assert.doesNotMatch(layout, /<Spinner/);
+  const playerFooter = layout.slice(
+    layout.indexOf("<footer"),
+    layout.indexOf("</footer>"),
+  );
+  assert.doesNotMatch(
+    playerFooter,
+    /<PeridotSpinner/,
+    "The player switches directly between play and pause without a spinner",
+  );
   assert.match(
     layout,
     /:icon="playing \? icons\.pause : icons\.play"/,

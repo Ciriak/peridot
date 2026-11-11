@@ -2,7 +2,6 @@
 import { useRoute } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import { Button } from "@peridot/ui/components/ui/button";
-import { Spinner } from "@peridot/ui/components/ui/spinner";
 import {
   ToastClose,
   ToastDescription,
@@ -36,13 +35,7 @@ function iconFor(kind: AppToastKind | undefined) {
         toast.data?.kind === 'error' && 'border-destructive/60',
       ]"
     >
-      <Spinner
-        v-if="toast.data?.kind === 'progress'"
-        label="Work in progress"
-        class="size-8"
-      />
       <span
-        v-else
         aria-hidden="true"
         :class="[
           'flex size-8 shrink-0 items-center justify-center rounded-full',

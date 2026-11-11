@@ -2,11 +2,12 @@
 import { useHead } from "#imports";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
-import { Spinner } from "@peridot/ui/components/ui/spinner";
+import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { computed, onMounted } from "vue";
 import AlbumCard from "../../components/AlbumCard.vue";
 import { useLikes } from "../../composables/use-likes";
 import { useLibraryTracks } from "../../composables/use-library-tracks";
+import { useProgressiveReveal } from "../../composables/use-progressive-reveal";
 import { groupAlbums } from "../../lib/library";
 
 useHead({ title: "Albums — Peridot" });
@@ -14,6 +15,12 @@ useHead({ title: "Albums — Peridot" });
 const { tracks, loading, error, load } = useLibraryTracks();
 const { load: loadLikes } = useLikes();
 const albums = computed(() => groupAlbums(tracks.value));
+const {
+  target: loadMoreTarget,
+  hasMore,
+  visibleItems: visibleAlbums,
+  revealMore,
+} = useProgressiveReveal(albums);
 
 onMounted(() => {
   void load();
@@ -40,7 +47,7 @@ onMounted(() => {
       role="status"
       class="flex items-center gap-3 rounded-lg border p-6 text-sm text-muted-foreground"
     >
-      <Spinner label="Loading albums" />
+      <PeridotSpinner label="Loading albums" />
       Loading your albums…
     </div>
     <div
@@ -56,7 +63,20 @@ onMounted(() => {
       class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
       :aria-busy="loading"
     >
-      <AlbumCard v-for="album in albums" :key="album.key" :album="album" />
+      <AlbumCard
+        v-for="album in visibleAlbums"
+        :key="album.key"
+        :album="album"
+      />
+      <div
+        v-if="hasMore"
+        ref="loadMoreTarget"
+        class="col-span-full flex justify-center"
+      >
+        <Button type="button" variant="outline" @click="revealMore">
+          Load more albums
+        </Button>
+      </div>
     </div>
     <p
       v-else

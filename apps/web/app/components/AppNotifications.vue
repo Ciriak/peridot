@@ -1,85 +1,107 @@
 <script setup lang="ts">
 import { useRoute } from "#imports";
+import type { TaskStatus } from "@peridot/contracts";
 import { onBeforeUnmount, onMounted, watch } from "vue";
-import { useLibraryScan } from "../composables/use-library-scan";
 import { useLibraryTracks } from "../composables/use-library-tracks";
 import { useServer } from "../composables/use-server";
-import { isLibraryScanWorkActive } from "../lib/library-scan-toast";
+import { useServerConnection } from "../composables/use-server-connection";
+import { useSession } from "../composables/use-session";
+import { useTasks } from "../composables/use-tasks";
 import { isPeridotServerReachable } from "../lib/server-connection";
-import {
-  clearServerConnectionLost,
-  notifyLibraryScan,
-  notifyScanStatusFailure,
-  notifyServerConnectionLost,
-} from "../lib/toasts";
+import { isActiveTaskStatus } from "../lib/task-progress";
 
-const SCAN_POLL_DELAY = 500;
-const SCAN_RETRY_DELAY = 2000;
-const SCAN_UNAVAILABLE_RETRY_DELAY = 10_000;
-const SCAN_FAILURE_LIMIT = 3;
+const ACTIVE_TASK_POLL_DELAY = 500;
+const IDLE_TASK_POLL_DELAY = 5000;
+const TASK_RETRY_DELAY = 2000;
+const TASK_UNAVAILABLE_RETRY_DELAY = 10_000;
+const TASK_FAILURE_LIMIT = 3;
 const CONNECTION_POLL_DELAY = 10_000;
 const CONNECTION_TIMEOUT = 4000;
 
 const route = useRoute();
 const { address } = useServer();
-const { scan, refresh } = useLibraryScan();
+const { status: connectionState } = useServerConnection();
+const { token } = useSession();
+const { tasks, activeTasks, refresh } = useTasks();
 const { reload: reloadLibrary } = useLibraryTracks();
 
-let scanTimer: ReturnType<typeof setTimeout> | undefined;
-let scanFailures = 0;
+let taskTimer: ReturnType<typeof setTimeout> | undefined;
+let taskFailures = 0;
+let refreshingTasks = false;
 let connectionTimer: ReturnType<typeof setTimeout> | undefined;
 let connectionController: AbortController | undefined;
-let connectionState: "unknown" | "connected" | "lost" = "unknown";
 let disposed = false;
+let taskScope = "";
+const previousStatuses = new Map<string, TaskStatus>();
 
-function clearScanTimer() {
-  if (scanTimer) clearTimeout(scanTimer);
-  scanTimer = undefined;
+function clearTaskTimer() {
+  if (taskTimer) clearTimeout(taskTimer);
+  taskTimer = undefined;
 }
 
-function scheduleScanRefresh(scanId: string, delay: number) {
-  clearScanTimer();
-  scanTimer = setTimeout(() => void refreshScan(scanId), delay);
+function currentScope(): string {
+  return `${address.value ?? ""}\u0000${token.value ?? ""}`;
 }
 
-async function refreshScan(scanId: string) {
-  try {
-    const next = await refresh();
-    scanFailures = 0;
-    if (next?.id === scanId && isLibraryScanWorkActive(next)) {
-      // The scan state watcher schedules the next poll after each update.
-      return;
+function scheduleTaskRefresh(delay: number) {
+  clearTaskTimer();
+  if (!address.value || !token.value || route.path === "/onboarding") return;
+  taskTimer = setTimeout(() => void refreshTasks(), delay);
+}
+
+function reactToTaskChanges() {
+  for (const task of tasks.value) {
+    const previous = previousStatuses.get(task.id);
+    if (
+      previous &&
+      isActiveTaskStatus(previous) &&
+      !isActiveTaskStatus(task.status) &&
+      (task.kind === "library_scan" || task.kind === "metadata_fetch")
+    ) {
+      void reloadLibrary();
     }
-  } catch (reason) {
-    scanFailures += 1;
-    if (scanFailures >= SCAN_FAILURE_LIMIT) {
-      notifyScanStatusFailure(
-        reason instanceof Error
-          ? reason.message
-          : "The server could not provide the latest scan status.",
-      );
-      scheduleScanRefresh(scanId, SCAN_UNAVAILABLE_RETRY_DELAY);
-    } else {
-      scheduleScanRefresh(scanId, SCAN_RETRY_DELAY);
-    }
+    previousStatuses.set(task.id, task.status);
   }
 }
 
-watch(
-  scan,
-  (current) => {
-    if (!current) return;
-    notifyLibraryScan(current);
-    if (isLibraryScanWorkActive(current)) {
-      scanFailures = 0;
-      scheduleScanRefresh(current.id, SCAN_POLL_DELAY);
+async function refreshTasks() {
+  if (refreshingTasks || !address.value || !token.value) return;
+  refreshingTasks = true;
+  const requestedScope = currentScope();
+  try {
+    await refresh();
+    if (requestedScope !== taskScope || disposed) return;
+    taskFailures = 0;
+    reactToTaskChanges();
+  } catch {
+    if (requestedScope !== taskScope || disposed) return;
+    taskFailures += 1;
+    if (taskFailures >= TASK_FAILURE_LIMIT) {
+      scheduleTaskRefresh(TASK_UNAVAILABLE_RETRY_DELAY);
     } else {
-      clearScanTimer();
-      if (current.status === "completed") void reloadLibrary();
+      scheduleTaskRefresh(TASK_RETRY_DELAY);
     }
-  },
-  { immediate: true },
-);
+    return;
+  } finally {
+    refreshingTasks = false;
+  }
+  if (!disposed && !taskTimer) {
+    scheduleTaskRefresh(
+      activeTasks.value.length ? ACTIVE_TASK_POLL_DELAY : IDLE_TASK_POLL_DELAY,
+    );
+  }
+}
+
+function resetTaskTracking(nextScope: string) {
+  taskScope = nextScope;
+  taskFailures = 0;
+  previousStatuses.clear();
+  clearTaskTimer();
+  if (!address.value || !token.value || route.path === "/onboarding") {
+    return;
+  }
+  void refreshTasks();
+}
 
 function scheduleConnectionCheck() {
   if (connectionTimer) clearTimeout(connectionTimer);
@@ -92,8 +114,7 @@ function scheduleConnectionCheck() {
 async function checkConnection() {
   const serverAddress = address.value;
   if (!serverAddress || route.path === "/onboarding") {
-    connectionState = "unknown";
-    clearServerConnectionLost();
+    connectionState.value = "unknown";
     return;
   }
 
@@ -113,20 +134,21 @@ async function checkConnection() {
   }
 
   if (reachable) {
-    if (connectionState === "lost") clearServerConnectionLost();
-    connectionState = "connected";
+    connectionState.value = "connected";
   } else {
-    if (connectionState !== "lost") {
-      notifyServerConnectionLost(serverAddress);
-    }
-    connectionState = "lost";
+    connectionState.value = "lost";
   }
   scheduleConnectionCheck();
 }
 
+watch(
+  [address, token, () => route.path === "/onboarding"],
+  () => resetTaskTracking(currentScope()),
+  { immediate: true },
+);
+
 watch([() => address.value, () => route.path === "/onboarding"], () => {
-  connectionState = "unknown";
-  clearServerConnectionLost();
+  connectionState.value = "unknown";
   if (connectionTimer) clearTimeout(connectionTimer);
   void checkConnection();
 });
@@ -134,7 +156,7 @@ watch([() => address.value, () => route.path === "/onboarding"], () => {
 onMounted(() => void checkConnection());
 onBeforeUnmount(() => {
   disposed = true;
-  clearScanTimer();
+  clearTaskTimer();
   if (connectionTimer) clearTimeout(connectionTimer);
   connectionController?.abort();
 });

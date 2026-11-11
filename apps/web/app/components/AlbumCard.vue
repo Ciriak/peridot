@@ -37,7 +37,7 @@ const albumActive = computed(() => {
   return activeTrackId ? props.album.trackIds.includes(activeTrackId) : false;
 });
 function toggleAlbumPlayback() {
-  if (albumActive.value) {
+  if (albumActive.value && playing.value) {
     togglePlayback();
     return;
   }
@@ -67,6 +67,8 @@ function toggleAlbumPlayback() {
                 v-if="coverUrl && !coverFailed"
                 :src="coverUrl"
                 alt=""
+                loading="lazy"
+                decoding="async"
                 class="size-full object-cover"
                 @error="coverFailed = true"
               />
@@ -86,9 +88,7 @@ function toggleAlbumPlayback() {
             :aria-label="
               albumActive && playing
                 ? `Pause ${album.title} by ${album.artist}`
-                : albumActive
-                  ? `Resume ${album.title} by ${album.artist}`
-                  : `Play ${album.title} by ${album.artist}`
+                : `Play ${album.title} by ${album.artist} from the first track`
             "
             @click.prevent.stop="toggleAlbumPlayback"
           >

@@ -55,6 +55,31 @@ export interface PlaybackTokenResponse {
   expiresAt: string;
 }
 
+export interface RecordTrackPlayResponse {
+  trackId: string;
+  playedAt: string;
+}
+
+export interface QuickPickTrackResponse {
+  kind: "track";
+  key: string;
+  trackId: string;
+}
+
+export interface QuickPickAlbumResponse {
+  kind: "album";
+  key: string;
+  title: string;
+  artist: string;
+}
+
+export type QuickPickItemResponse =
+  QuickPickTrackResponse | QuickPickAlbumResponse;
+
+export interface QuickPickListResponse {
+  items: QuickPickItemResponse[];
+}
+
 export interface QueueResponse {
   trackIds: string[];
   activeTrackId: string | null;
@@ -101,34 +126,53 @@ export type LikeResponse =
   | ({ kind: "album" } & AlbumLikeResponse)
   | ({ kind: "artist" } & ArtistLikeResponse);
 
-export type LibraryScanStatus =
+export type TaskStatus =
   "queued" | "running" | "completed" | "failed" | "interrupted";
 
-export type LibraryMetadataStatus =
-  "pending" | "running" | "completed" | "skipped" | "failed" | "interrupted";
+export type TaskKind = "library_scan" | "metadata_fetch" | `plugin:${string}`;
 
-export interface LibraryScanResponse {
+export type TaskProgressResponse =
+  | {
+      state: "indeterminate";
+      completed: null;
+      total: null;
+    }
+  | {
+      state: "determinate";
+      completed: number;
+      total: number;
+    };
+
+export interface TaskDetailResponse {
+  key: string;
+  label: string;
+  value: string;
+}
+
+export interface TaskSourceResponse {
+  id: string | null;
+  name: string;
+}
+
+export interface TaskResponse {
   id: string;
-  status: LibraryScanStatus;
-  sourceId: string | null;
-  sourceName: string | null;
-  discoveredCount: number;
-  createdCount: number;
-  updatedCount: number;
-  unchangedCount: number;
-  errorCount: number;
-  unavailableCount: number;
-  metadataStatus: LibraryMetadataStatus;
-  metadataTotalCount: number;
-  metadataProcessedCount: number;
-  metadataMatchedCount: number;
-  metadataUnmatchedCount: number;
-  metadataErrorCount: number;
-  metadataFailureSummary: string | null;
+  kind: TaskKind;
+  status: TaskStatus;
+  title: string;
+  parentTaskId: string | null;
+  source: TaskSourceResponse | null;
+  progress: TaskProgressResponse;
+  details: TaskDetailResponse[];
   failureSummary: string | null;
   createdAt: string;
   startedAt: string | null;
   completedAt: string | null;
+}
+
+export interface TaskListResponse {
+  items: TaskResponse[];
+  activeCount: number;
+  queuedCount: number;
 }
 
 export interface ApiErrorResponse {
@@ -147,6 +191,10 @@ export interface SourceResponse {
   path: string | null;
   url: string | null;
   integration: string | null;
+}
+
+export interface CreateSourceResponse extends SourceResponse {
+  task: TaskResponse | null;
 }
 
 export interface SourceListResponse {

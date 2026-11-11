@@ -3,6 +3,7 @@ import { useRoute } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import { Button } from "@peridot/ui/components/ui/button";
 import { computed, ref, watch } from "vue";
+import TaskProgressIndicator from "../components/TaskProgressIndicator.vue";
 import { useUser } from "../composables/use-user";
 import { icons } from "../lib/icons";
 
@@ -11,6 +12,7 @@ const { user } = useUser();
 const mobileNavigation = ref(false);
 const commonCategories = [
   { name: "Account", to: "/settings/account", icon: icons.user },
+  { name: "Tasks", to: "/settings/tasks", icon: icons.restart },
   { name: "Library", to: "/settings/library", icon: icons.library },
   { name: "Playback", to: "/settings/playback", icon: icons.music },
   { name: "Plugins", to: "/settings/plugins", icon: icons.plugins },
@@ -116,6 +118,9 @@ watch(
           ><Icon :icon="icons.menu" aria-hidden="true"
         /></Button>
         <h1 class="text-lg font-semibold">Settings</h1>
+        <div class="ml-auto flex items-center">
+          <TaskProgressIndicator />
+        </div>
       </header>
       <main
         id="settings-content"

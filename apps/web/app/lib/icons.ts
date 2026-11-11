@@ -20,6 +20,7 @@ import caretUp from "@iconify-icons/basil/caret-up-outline";
 import caretDown from "@iconify-icons/basil/caret-down-outline";
 import caretRight from "@iconify-icons/basil/caret-right-outline";
 import folder from "@iconify-icons/basil/folder-outline";
+import globe from "@iconify-icons/basil/globe-outline";
 import drag from "@iconify-icons/akar-icons/drag-vertical";
 import filterIcon from "@iconify-icons/basil/filter-outline";
 import settings from "@iconify-icons/basil/settings-outline";
@@ -64,6 +65,7 @@ export const icons = {
   caretDown,
   caretRight,
   folder,
+  globe,
   drag,
   filterIcon,
   settings,
