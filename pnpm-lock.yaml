@@ -90,6 +90,9 @@ importers:
       '@iconify-icons/akar-icons':
         specifier: ^2.0.0
         version: 2.0.0
+      '@iconify-icons/at-icons':
+        specifier: 2.0.3
+        version: 2.0.3
       '@iconify-icons/basil':
         specifier: ^2.0.0
         version: 2.0.0
@@ -725,6 +728,9 @@ packages:
 
   '@iconify-icons/akar-icons@2.0.0':
     resolution: {integrity: sha512-/6st2L1hSQ6jN4TEtc+1YM1SdkICZdBL8tiqFKCW1PWtlqNF/KTxE+m1RfYCV0YLDe9j3Lfs5yjvLSIjbPdiWg==}
+
+  '@iconify-icons/at-icons@2.0.3':
+    resolution: {integrity: sha512-YsKN41TMZsGIOTjygJPBLO5fa4CrOnM66ueRQQEo9wnv4K6BvkeBDzAb/WKofx3KA9rucCEFQ9iP6XVLbK5ZVg==}
 
   '@iconify-icons/basil@2.0.0':
     resolution: {integrity: sha512-KrBCiwOplHnVX3m4AlGP4IlrtOiHcl0sHqV5olnwSayYoXhQppKhUm4pBCGsYRCuyUhy9iYee5RJbH1t1azAew==}
@@ -5313,6 +5319,10 @@ snapshots:
   '@humanwhocodes/retry@0.4.3': {}
 
   '@iconify-icons/akar-icons@2.0.0':
+    dependencies:
+      '@iconify/types': 2.0.0
+
+  '@iconify-icons/at-icons@2.0.3':
     dependencies:
       '@iconify/types': 2.0.0
 

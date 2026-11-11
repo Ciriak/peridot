@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-11-11: Current-track waveform uses AT Icons
+
+The shared track table marks the current track with the bundled
+`at-icons:waveform` glyph in the primary color. It remains visible
+when the track is paused and does not add an active-row background. This is an
+owner-requested exception to the otherwise Basil-only UI icon rule for this
+specific playback indicator.
+
 ## 2026-11-11: Search is a dedicated local-library view with result-type quick filters
 
 Search now has one dedicated `/search` route instead of filtering whichever

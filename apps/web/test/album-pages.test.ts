@@ -33,6 +33,11 @@ test("albums have list and detail routes with derived groups", async () => {
   assert.match(listPage, /<AlbumCard/);
   assert.match(listPage, /:album="album"/);
   assert.match(albumCard, /:to="albumRoute\(album\)"/);
+  assert.match(
+    albumCard,
+    /<\/NuxtLink>\s+<p class="truncate text-xs text-muted-foreground">\s+<TrackArtistLinks :artists="album\.artists" \/>/,
+    "Album card artist credits link to their artist pages",
+  );
   assert.match(albumCard, /useLikes\(\)/);
   assert.match(albumCard, /<LikeButton/);
   assert.match(albumCard, /trackCoverUrl\(/);
@@ -45,6 +50,11 @@ test("albums have list and detail routes with derived groups", async () => {
   assert.match(
     albumCard,
     /albumActive && playing \? icons\.pause : icons\.play/,
+  );
+  assert.doesNotMatch(
+    albumCard,
+    /albumLoading|Loading \$\{album\.title\}/,
+    "Album cards switch directly from play to pause",
   );
   assert.match(albumCard, /@click\.prevent\.stop="toggleAlbumPlayback"/);
   assert.match(albumCard, /group-hover:opacity-100/);
@@ -67,6 +77,11 @@ test("albums have list and detail routes with derived groups", async () => {
     detailPage,
     /albumActive && playing \? icons\.pause : icons\.play/,
   );
+  assert.doesNotMatch(
+    detailPage,
+    /albumPlaybackLoading/,
+    "The album header switches directly from play to pause",
+  );
   assert.match(detailPage, /@click="toggleAlbumPlayback"/);
   assert.match(detailPage, /size="icon-lg"/);
   assert.match(detailPage, /:aria-label=/);
@@ -85,8 +100,8 @@ test("albums have list and detail routes with derived groups", async () => {
   );
   assert.match(
     trackTable,
-    /:class="isActive\(track\) && 'bg-primary\/10'"/,
-    "The current track row has a subtle primary background",
+    /class="select-none border-b last:border-0 hover:bg-muted\/50"\s+@dblclick\.prevent="play\(track\.id\)"/,
+    "The current track row does not add an active background effect",
   );
   assert.match(
     trackTable,
@@ -102,6 +117,11 @@ test("albums have list and detail routes with derived groups", async () => {
     trackTable,
     /function isPlaying\(track: TrackResponse\): boolean \{\s+return isActive\(track\) && playing\.value;/,
     "The pause icon still follows actual playback state",
+  );
+  assert.match(
+    trackTable,
+    /v-if="isActive\(track\)"\s+:icon="icons\.waveform"\s+aria-hidden="true"\s+class="size-4 shrink-0 text-primary"/,
+    "The primary waveform follows the current track even while paused",
   );
   assert.match(
     libraryScreen,
@@ -120,8 +140,13 @@ test("albums have list and detail routes with derived groups", async () => {
   );
   assert.match(
     trackTable,
-    /<\/Button>\s*<span class="truncate">\{\{ track\.title \}\}<\/span>/,
-    "Track titles are plain text beside the play button",
+    /:id="trackTitleAnchorId\(track\.id\)"/,
+    "Track titles expose stable album-page anchors",
+  );
+  assert.match(
+    trackTable,
+    /<\/Button>\s*<span\s+:id="trackTitleAnchorId\(track\.id\)"\s+class="scroll-mt-4 truncate"\s+:class="\{ 'opacity-60': !track\.available \}"\s+>\{\{ track\.title \}\}<\/span\s*>/,
+    "Track titles remain plain text beside the play button",
   );
   assert.match(
     trackTable,
@@ -131,6 +156,21 @@ test("albums have list and detail routes with derived groups", async () => {
   assert.match(
     detailPage,
     /This album is not available in your current library/,
+  );
+  assert.match(
+    detailPage,
+    /<div class="mb-2">\s+<Button as-child variant="ghost" size="lg"/,
+    "The album back control is large with tighter page spacing",
+  );
+  assert.doesNotMatch(
+    detailPage,
+    /Album order/,
+    "The album tracks heading does not render an album-order tag",
+  );
+  assert.match(
+    detailPage,
+    /getElementById\(hash\.slice\(1\)\)\s*\?\.scrollIntoView\(\{ block: "start" \}\)/,
+    "Album pages resolve the title hash after catalog data loads",
   );
 });
 
@@ -142,5 +182,10 @@ test("albums are available in persistent navigation", async () => {
   assert.match(layout, /name: "Albums", to: "\/albums", icon: icons\.music/);
   assert.match(layout, /currentPath\.value\.startsWith\(`\$\{target\}\/`\)/);
   assert.match(layout, /useLibraryPlayer\(\)/);
+  assert.match(layout, /trackAlbumTitleRoute\(active\.value\)/);
+  assert.match(
+    layout,
+    /<NuxtLink\s+v-if="currentTrackTitleRoute"\s+:to="currentTrackTitleRoute"/,
+  );
   assert.match(app, /useLibraryPlayer\(\{ audio: true \}\)/);
 });

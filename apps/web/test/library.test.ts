@@ -24,7 +24,9 @@ import {
   resolvePlayerQueue,
   sortTracks,
   trackAlbumRoute,
+  trackAlbumTitleRoute,
   trackCoverUrl,
+  trackTitleAnchorId,
 } from "../app/lib/library.ts";
 
 const tracks: TrackResponse[] = [
@@ -152,6 +154,18 @@ test("track-table sort icons appear only for the active direction", async () => 
   assert.equal(activeIcons?.length, 5);
   assert.equal(directionIcons?.length, 5);
   assert.doesNotMatch(table, /icons\.sort\b|sortIcon\(/);
+});
+
+test("unavailable track titles are dimmed without muting available titles", async () => {
+  const table = await readFile(
+    new URL("../app/components/TrackTable.vue", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(
+    table,
+    /<span\s+:id="trackTitleAnchorId\(track\.id\)"\s+class="scroll-mt-4 truncate"\s+:class="\{ 'opacity-60': !track\.available \}"\s+>\{\{ track\.title \}\}<\/span/,
+  );
 });
 
 test("missing text values sort last in both directions", () => {
@@ -554,6 +568,25 @@ test("album links encode title and artist without losing identity", () => {
       query: { artist: "Elliot Lake" },
     },
   );
+});
+
+test("player track titles link to their anchored album title", () => {
+  assert.equal(trackTitleAnchorId("track / one"), "track-title-track / one");
+  assert.deepEqual(
+    trackAlbumTitleRoute({
+      ...tracks[0]!,
+      id: "track / one",
+      album: "  Night/Sessions & More  ",
+      artist: "  Elliot Lake  ",
+    }),
+    {
+      name: "album-detail",
+      params: { album: "Night/Sessions & More" },
+      query: { artist: "Elliot Lake" },
+      hash: "#track-title-track / one",
+    },
+  );
+  assert.equal(trackAlbumTitleRoute(tracks[1]!), null);
 });
 
 test("player queues preserve album order and reset to the catalog", () => {

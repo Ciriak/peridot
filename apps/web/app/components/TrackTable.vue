@@ -16,6 +16,7 @@ import {
   nextTrackSort,
   sortTracks,
   trackAlbumRoute,
+  trackTitleAnchorId,
   type TrackSort,
   type TrackTableVariant,
   type TrackSortField,
@@ -201,7 +202,6 @@ function isPlaying(track: TrackResponse): boolean {
         >
           <tr
             class="select-none border-b last:border-0 hover:bg-muted/50"
-            :class="isActive(track) && 'bg-primary/10'"
             @dblclick.prevent="play(track.id)"
           >
             <td
@@ -233,7 +233,18 @@ function isPlaying(track: TrackResponse): boolean {
                     "
                   />
                 </Button>
-                <span class="truncate">{{ track.title }}</span>
+                <span
+                  :id="trackTitleAnchorId(track.id)"
+                  class="scroll-mt-4 truncate"
+                  :class="{ 'opacity-60': !track.available }"
+                  >{{ track.title }}</span
+                >
+                <Icon
+                  v-if="isActive(track)"
+                  :icon="icons.waveform"
+                  aria-hidden="true"
+                  class="size-4 shrink-0 text-primary"
+                />
               </div>
             </td>
             <td

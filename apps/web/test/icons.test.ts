@@ -4,6 +4,7 @@ import { createSSRApp, h } from "vue";
 import { renderToString } from "vue/server-renderer";
 import { Icon } from "@iconify/vue/offline";
 import dragIcon from "@iconify-icons/akar-icons/drag-vertical";
+import waveformIcon from "@iconify-icons/at-icons/waveform";
 import playIcon from "@iconify-icons/basil/play-solid";
 import { icons } from "../app/lib/icons.ts";
 
@@ -29,4 +30,5 @@ test("transport uses basil:play-solid and a distinct pause icon", async () => {
   assert.deepEqual(icons.play, playIcon);
   assert.notEqual(await render(icons.play), await render(icons.pause));
   assert.deepEqual(icons.drag, dragIcon);
+  assert.deepEqual(icons.waveform, waveformIcon);
 });

@@ -283,6 +283,7 @@ not permitted. Album placeholders use the theme's muted/secondary surfaces.
 When no readable album image is available, the music-note placeholder remains.
 
 UI icons use Iconify's offline Vue component with individually bundled icon
-data. UI icons are Basil, with `basil:play-solid` for play and the owner-requested
-`akar-icons:drag-vertical` for queue drag handles.
+data. UI icons are Basil, with `basil:play-solid` for play,
+`akar-icons:drag-vertical` for queue drag handles, and the owner-requested
+`at-icons:waveform` for the current-track indicator.
 Icons render on the server and need no runtime icon API or network access.

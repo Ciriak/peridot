@@ -58,8 +58,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <div>
-    <Button as-child variant="ghost" size="sm"
+  <div class="mb-2">
+    <Button as-child variant="ghost" size="lg"
       ><NuxtLink to="/artists"
         ><Icon :icon="icons.arrowLeft" aria-hidden="true" />Back to
         artists</NuxtLink

@@ -2,6 +2,69 @@
 
 Last updated: 2026-11-11.
 
+## Player title album navigation
+
+The current track's title in the fixed player now links to that track's album
+detail page. The destination includes a stable track-title hash, and the album
+page scrolls to that title after its asynchronously loaded catalog rows render.
+Tracks without album metadata keep the non-link title treatment because no
+album destination exists.
+
+Added route/anchor helper coverage plus layout and album-page regressions for
+the player link and deferred hash scrolling.
+
+## Playing track waveform
+
+The shared track table now shows the bundled AT Icons
+`waveform` glyph in the primary color immediately after the current
+track title. It remains visible while that track is paused. The active-row
+background tint was removed, leaving only the existing hover treatment. The
+icon remains decorative to assistive technology because the play/pause control
+already exposes the playback state.
+
+Added focused icon and album-page regressions for the requested bundled glyph,
+the current-track condition, and the removed active-row background.
+
+Verified with a frozen-lockfile install, 26 passing focused album/icon/library
+tests, web typecheck, targeted ESLint, Prettier, and the production web build.
+The full web suite passes 95 of 96 tests; the only failure is the previously
+documented sidebar assertion expecting the `logo` variable while the checked-in
+layout uses `logoNop`.
+
+## Unavailable track title opacity
+
+Shared track-table titles now use the existing 60% opacity utility when their
+catalog entry is unavailable. Available track titles and all other row content
+remain unchanged. Queue entries do not need the treatment because unavailable
+tracks are removed from playback queues.
+
+Added a focused regression assertion for the shared title rendering. Existing
+unrelated scanner changes and the pre-existing untracked `$null` file were
+preserved.
+
+Focused album/library tests (23 passing), web typecheck, targeted ESLint,
+Prettier, the production web build, and `git diff --check` pass. The full web
+suite passes 94 of 95 tests; the only failure is the previously documented
+sidebar assertion expecting the `logo` variable while the checked-in layout uses
+`logoNop`.
+
+## SQLite-safe library scanning
+
+Library file processing is now serialized for SQLite. The scanner previously
+ran four file workers in parallel, each reading and writing the same local
+database. Repeated scans of existing files could therefore fail with
+`SqlConnectionError: database is locked`, which the scan record reported as a
+misleading configured-root failure.
+
+All per-file work, including existing-file lookup and unchanged-file updates, is
+now inside the per-file error guard. A persistent SQLite lock still counts as a
+file error instead of aborting the entire scan. If a scan-level database lock is
+encountered, the stored failure now identifies database contention rather than
+file traversal.
+
+Added a regression that scans four files, then repeats the scan three times and
+requires every run to complete with four unchanged tracks and no errors.
+
 ## Dedicated search view and quick filters
 
 Search now opens a dedicated `/search` content view from the persistent top-bar

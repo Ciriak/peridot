@@ -196,6 +196,33 @@ test("scans track, disc, and album tags and backfills legacy metadata once", asy
   }
 });
 
+test("repeated scans of multiple existing tracks complete without SQLite contention", async () => {
+  const context = await createTestContext();
+  const musicRoot = path.join(context.root, "music");
+  try {
+    for (let index = 0; index < 4; index++) {
+      await writeFile(
+        path.join(musicRoot, `track-${index}.wav`),
+        createWav(100 + index),
+      );
+    }
+
+    const firstScan = await startScan(context);
+    assert.equal(firstScan.status, "completed");
+    assert.equal(firstScan.createdCount, 4);
+
+    for (let index = 0; index < 3; index++) {
+      const repeatScan = await startScan(context);
+      assert.equal(repeatScan.status, "completed");
+      assert.equal(repeatScan.failureSummary, null);
+      assert.equal(repeatScan.unchangedCount, 4);
+      assert.equal(repeatScan.errorCount, 0);
+    }
+  } finally {
+    await context.close();
+  }
+});
+
 test("audio endpoint streams complete and ranged responses with a playback token and marks missing files unavailable", async () => {
   const context = await createTestContext();
   const trackPath = path.join(context.root, "music", "range.wav");

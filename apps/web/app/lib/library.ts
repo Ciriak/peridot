@@ -383,6 +383,18 @@ export function trackAlbumRoute(track: TrackResponse) {
   });
 }
 
+export function trackTitleAnchorId(trackId: string): string {
+  return `track-title-${trackId}`;
+}
+
+export function trackAlbumTitleRoute(track: TrackResponse) {
+  if (!track.album?.trim() || !track.artist.trim()) return null;
+  return {
+    ...trackAlbumRoute(track),
+    hash: `#${trackTitleAnchorId(track.id)}`,
+  };
+}
+
 export function filterTracks(
   tracks: readonly TrackResponse[],
   query: string,

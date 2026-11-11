@@ -4,7 +4,7 @@ import { Icon } from "@iconify/vue/offline";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { Spinner } from "@peridot/ui/components/ui/spinner";
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import LikeButton from "../../components/LikeButton.vue";
 import TrackTable from "../../components/TrackTable.vue";
 import TrackArtistLinks from "../../components/TrackArtistLinks.vue";
@@ -25,13 +25,7 @@ definePageMeta({ name: "album-detail" });
 const route = useRoute();
 const { address } = useServer();
 const { tracks, loading, error, load } = useLibraryTracks();
-const {
-  active,
-  playing,
-  loading: playbackLoading,
-  playCollection,
-  togglePlayback,
-} = useLibraryPlayer();
+const { active, playing, playCollection, togglePlayback } = useLibraryPlayer();
 const {
   likedAlbumKeys,
   loaded: likesLoaded,
@@ -57,9 +51,6 @@ const albumActive = computed(() => {
     ? album.value.trackIds.includes(activeTrackId)
     : false;
 });
-const albumPlaybackLoading = computed(
-  () => albumActive.value && playbackLoading.value,
-);
 const coverFailed = ref(false);
 const coverUrl = computed(() =>
   trackCoverUrl(address.value ?? "", album.value?.coverUrl ?? null),
@@ -86,6 +77,16 @@ function toggleAlbumPlayback() {
   playWholeAlbum();
 }
 
+watch(
+  [() => route.hash, () => album.value?.key],
+  async ([hash]) => {
+    if (!import.meta.client || !hash) return;
+    await nextTick();
+    document.getElementById(hash.slice(1))?.scrollIntoView({ block: "start" });
+  },
+  { flush: "post" },
+);
+
 onMounted(() => {
   void load();
   void loadLikes();
@@ -93,8 +94,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <div>
-    <Button as-child variant="ghost" size="sm"
+  <div class="mb-2">
+    <Button as-child variant="ghost" size="lg"
       ><NuxtLink to="/albums"
         ><Icon :icon="icons.arrowLeft" aria-hidden="true" />Back to
         albums</NuxtLink
@@ -153,25 +154,16 @@ onMounted(() => {
             size="icon-lg"
             class="rounded-full"
             :disabled="!album.tracks.length"
-            :aria-busy="albumPlaybackLoading"
             :aria-label="
-              albumPlaybackLoading
-                ? `Cancel loading ${album.title}`
-                : albumActive && playing
-                  ? `Pause ${album.title} by ${album.artist}`
-                  : albumActive
-                    ? `Resume ${album.title} by ${album.artist}`
-                    : `Play ${album.title} by ${album.artist}`
+              albumActive && playing
+                ? `Pause ${album.title} by ${album.artist}`
+                : albumActive
+                  ? `Resume ${album.title} by ${album.artist}`
+                  : `Play ${album.title} by ${album.artist}`
             "
             @click="toggleAlbumPlayback"
           >
-            <Spinner
-              v-if="albumPlaybackLoading"
-              :label="`Loading ${album.title}`"
-              class="size-5"
-            />
             <Icon
-              v-else
               :icon="albumActive && playing ? icons.pause : icons.play"
               aria-hidden="true"
               class="size-5"
@@ -208,10 +200,7 @@ onMounted(() => {
     </section>
 
     <section aria-labelledby="album-tracks-heading" class="space-y-4">
-      <div class="flex items-center justify-between gap-4">
-        <h2 id="album-tracks-heading" class="text-lg font-semibold">Tracks</h2>
-        <Badge variant="secondary">Album order</Badge>
-      </div>
+      <h2 id="album-tracks-heading" class="text-lg font-semibold">Tracks</h2>
       <TrackTable
         v-if="album.tracks.length"
         :tracks="album.tracks"

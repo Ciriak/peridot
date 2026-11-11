@@ -85,7 +85,12 @@ test("the persistent player controls a native audio element", async () => {
     layout,
     /:icon="icons\.volume"[\s\S]*thumb-label="Playback volume"/,
   );
-  assert.match(layout, /<Spinner\s+v-if="loading"/);
+  assert.doesNotMatch(layout, /<Spinner/);
+  assert.match(
+    layout,
+    /:icon="playing \? icons\.pause : icons\.play"/,
+    "The player switches directly from play to pause",
+  );
   assert.match(layout, /role="alert"/);
   assert.match(player, /useState<RepeatMode>\("player-repeat-mode"/);
   assert.match(

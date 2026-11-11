@@ -9,7 +9,7 @@ import {
 } from "./artist-credits.js";
 import type { Database } from "./database.js";
 import type { MetadataEnrichment } from "./metadata-enrichment.js";
-import type { LibraryScanRow } from "./prisma/models.js";
+import type { LibraryScanRow, TrackRow } from "./prisma/models.js";
 import { getPathSources, type PathSource } from "./sources.js";
 
 const AUDIO_MIME_TYPES = new Map([
@@ -22,7 +22,9 @@ const AUDIO_MIME_TYPES = new Map([
   [".flac", "audio/flac"],
 ]);
 
-const SCAN_CONCURRENCY = 4;
+// SQLite has a single-writer model. Keep catalog mutations serialized so
+// concurrent file workers cannot fail a scan with SQLITE_BUSY.
+const SCAN_CONCURRENCY = 1;
 const CURRENT_METADATA_VERSION = 3;
 const MAX_COVER_BYTES = 5 * 1024 * 1024;
 const FOLDER_COVER_NAMES = new Set([
@@ -78,6 +80,12 @@ function positiveInteger(value: number | null | undefined): number | null {
     value > 0
     ? value
     : null;
+}
+
+function scanFailureSummary(error: unknown): string {
+  return error instanceof Error && /database is locked/i.test(error.message)
+    ? "The local library database was busy during the scan. Try again."
+    : "The library scan failed while reading the configured root.";
 }
 
 async function discoverAudioFiles(root: string): Promise<DiscoveredFile[]> {
@@ -289,13 +297,12 @@ export class LibraryScanner {
         ...counts,
       });
       await this.metadataEnrichment?.runScan(scanId, requestedSource?.id);
-    } catch {
+    } catch (error) {
       await this.database.orm.LibraryScan.where({ id: scanId }).update({
         status: "failed",
         metadataStatus: "skipped",
         completedAt: new Date(),
-        failureSummary:
-          "The library scan failed while reading the configured root.",
+        failureSummary: scanFailureSummary(error),
         ...counts,
       });
     }
@@ -306,26 +313,27 @@ export class LibraryScanner {
     scanId: string,
     counts: ScanCounts,
   ): Promise<void> {
-    const unique = {
-      sourceId: file.sourceId,
-      relativePath: file.relativePath,
-    };
-    const existing = await this.database.orm.Track.where(unique).first();
-    const unchanged =
-      existing?.fileSizeBytes === file.size &&
-      existing.fileModifiedAt.getTime() === file.modifiedAt.getTime() &&
-      existing.metadataVersion >= CURRENT_METADATA_VERSION;
-
-    if (existing && unchanged) {
-      await this.database.orm.Track.where({ id: existing.id }).update({
-        available: 1,
-        lastSeenScanId: scanId,
-      });
-      counts.unchangedCount += 1;
-      return;
-    }
-
+    let existing: TrackRow | null = null;
     try {
+      const unique = {
+        sourceId: file.sourceId,
+        relativePath: file.relativePath,
+      };
+      existing = await this.database.orm.Track.where(unique).first();
+      const unchanged =
+        existing?.fileSizeBytes === file.size &&
+        existing.fileModifiedAt.getTime() === file.modifiedAt.getTime() &&
+        existing.metadataVersion >= CURRENT_METADATA_VERSION;
+
+      if (existing && unchanged) {
+        await this.database.orm.Track.where({ id: existing.id }).update({
+          available: 1,
+          lastSeenScanId: scanId,
+        });
+        counts.unchangedCount += 1;
+        return;
+      }
+
       const metadata = await parseFile(file.absolutePath, {
         duration: true,
         skipCovers: false,
@@ -383,12 +391,17 @@ export class LibraryScanner {
     } catch {
       counts.errorCount += 1;
       if (existing) {
-        await this.database.orm.Track.where({ id: existing.id }).update({
-          fileSizeBytes: file.size,
-          fileModifiedAt: file.modifiedAt,
-          available: 1,
-          lastSeenScanId: scanId,
-        });
+        try {
+          await this.database.orm.Track.where({ id: existing.id }).update({
+            fileSizeBytes: file.size,
+            fileModifiedAt: file.modifiedAt,
+            available: 1,
+            lastSeenScanId: scanId,
+          });
+        } catch {
+          // The file remains counted as an error if even the fallback write
+          // cannot acquire SQLite's write lock.
+        }
       }
     }
   }

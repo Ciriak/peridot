@@ -6,7 +6,6 @@ import logoNop from "@peridot/ui/assets/brand/logo-nop.png";
 import { Button } from "@peridot/ui/components/ui/button";
 import { Input } from "@peridot/ui/components/ui/input";
 import { Slider } from "@peridot/ui/components/ui/slider";
-import { Spinner } from "@peridot/ui/components/ui/spinner";
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import LikeButton from "../components/LikeButton.vue";
 import QueueDrawer from "../components/QueueDrawer.vue";
@@ -18,7 +17,7 @@ import { useSession } from "../composables/use-session";
 import { useUser } from "../composables/use-user";
 import { gravatarUrl } from "../lib/gravatar";
 import { icons } from "../lib/icons";
-import { trackCoverUrl } from "../lib/library";
+import { trackAlbumTitleRoute, trackCoverUrl } from "../lib/library";
 
 const route = useRoute();
 const router = useRouter();
@@ -95,6 +94,9 @@ const currentTrackLikeTarget = computed(() =>
 const coverFailed = ref(false);
 const currentCoverUrl = computed(() =>
   trackCoverUrl(address.value ?? "", active.value?.coverUrl ?? null),
+);
+const currentTrackTitleRoute = computed(() =>
+  active.value ? trackAlbumTitleRoute(active.value) : null,
 );
 watch(currentCoverUrl, () => {
   coverFailed.value = false;
@@ -342,7 +344,14 @@ onMounted(() => {
           <Icon v-else :icon="icons.music" aria-hidden="true" class="size-6" />
         </div>
         <div class="min-w-0">
-          <p class="truncate text-sm font-medium">
+          <NuxtLink
+            v-if="currentTrackTitleRoute"
+            :to="currentTrackTitleRoute"
+            class="block truncate rounded-sm text-sm font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {{ active?.title }}
+          </NuxtLink>
+          <p v-else class="truncate text-sm font-medium">
             {{ active?.title ?? "No track selected" }}
           </p>
           <p
@@ -420,20 +429,10 @@ onMounted(() => {
             size="icon-lg"
             class="size-12 translate-y-1 rounded-full"
             :disabled="!active"
-            :aria-label="
-              loading
-                ? 'Cancel loading track'
-                : playing
-                  ? 'Pause track'
-                  : 'Play track'
-            "
+            :aria-label="playing ? 'Pause track' : 'Play track'"
             :aria-busy="loading"
             @click="togglePlayback"
-            ><Spinner
-              v-if="loading"
-              label="Preparing audio"
-              class="size-6" /><Icon
-              v-else
+            ><Icon
               :icon="playing ? icons.pause : icons.play"
               aria-hidden="true"
               class="size-6"

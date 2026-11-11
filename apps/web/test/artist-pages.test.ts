@@ -39,6 +39,11 @@ test("artists have list and detail routes with artist-scoped content", async () 
     detailPage,
     /This artist is not available in your current library/,
   );
+  assert.match(
+    detailPage,
+    /<div class="mb-2">\s+<Button as-child variant="ghost" size="lg"/,
+    "The artist back control is large with tighter page spacing",
+  );
 });
 
 test("artist names link from navigation and track lists", async () => {

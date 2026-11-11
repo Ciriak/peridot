@@ -11,6 +11,7 @@ import menu from "@iconify-icons/basil/menu-outline";
 import music from "@iconify-icons/basil/music-outline";
 import play from "@iconify-icons/basil/play-solid";
 import pause from "@iconify-icons/basil/pause-solid";
+import waveform from "@iconify-icons/at-icons/waveform";
 import previous from "@iconify-icons/basil/skip-prev-solid";
 import next from "@iconify-icons/basil/skip-next-solid";
 import restart from "@iconify-icons/basil/refresh-outline";
@@ -53,6 +54,7 @@ export const icons = {
   music,
   play,
   pause,
+  waveform,
   previous,
   next,
   restart,

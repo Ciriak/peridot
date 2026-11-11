@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue/offline";
 import { Button } from "@peridot/ui/components/ui/button";
-import { Spinner } from "@peridot/ui/components/ui/spinner";
 import type { AlbumGroup } from "../lib/library";
 import { albumRoute, trackCoverUrl } from "../lib/library";
 import { icons } from "../lib/icons";
@@ -11,6 +10,7 @@ import { useLibraryPlayer } from "../composables/use-library-player";
 import { useServer } from "../composables/use-server";
 import AlbumContextMenu from "./AlbumContextMenu.vue";
 import LikeButton from "./LikeButton.vue";
+import TrackArtistLinks from "./TrackArtistLinks.vue";
 
 const props = withDefaults(
   defineProps<{ album: AlbumGroup; compact?: boolean }>(),
@@ -18,8 +18,7 @@ const props = withDefaults(
 );
 const emit = defineEmits<{ open: [] }>();
 const { address } = useServer();
-const { active, playing, loading, playCollection, togglePlayback } =
-  useLibraryPlayer();
+const { active, playing, playCollection, togglePlayback } = useLibraryPlayer();
 const coverFailed = ref(false);
 const coverUrl = computed(() =>
   trackCoverUrl(address.value ?? "", props.album.coverUrl),
@@ -37,8 +36,6 @@ const albumActive = computed(() => {
   const activeTrackId = active.value?.id;
   return activeTrackId ? props.album.trackIds.includes(activeTrackId) : false;
 });
-const albumLoading = computed(() => albumActive.value && loading.value);
-
 function toggleAlbumPlayback() {
   if (albumActive.value) {
     togglePlayback();
@@ -87,50 +84,41 @@ function toggleAlbumPlayback() {
             :class="compact ? 'bottom-1 right-1' : 'bottom-2 right-2'"
             :disabled="!album.trackIds.length"
             :aria-label="
-              albumLoading
-                ? `Cancel loading ${album.title}`
-                : albumActive && playing
-                  ? `Pause ${album.title} by ${album.artist}`
-                  : albumActive
-                    ? `Resume ${album.title} by ${album.artist}`
-                    : `Play ${album.title} by ${album.artist}`
+              albumActive && playing
+                ? `Pause ${album.title} by ${album.artist}`
+                : albumActive
+                  ? `Resume ${album.title} by ${album.artist}`
+                  : `Play ${album.title} by ${album.artist}`
             "
-            :aria-busy="albumLoading"
             @click.prevent.stop="toggleAlbumPlayback"
           >
-            <Spinner
-              v-if="albumLoading"
-              :label="`Loading ${album.title}`"
-              :class="compact ? 'size-3' : 'size-4'"
-            />
             <Icon
-              v-else
               :icon="albumActive && playing ? icons.pause : icons.play"
               aria-hidden="true"
               :class="compact ? 'size-4' : 'size-5'"
             />
           </Button>
         </div>
-        <NuxtLink
-          :to="albumRoute(album)"
-          class="block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          :aria-label="`Open ${album.title} by ${album.artist}`"
-          @click="emit('open')"
-        >
-          <div class="min-w-0" :class="compact ? 'pr-6' : 'pr-12'">
+        <div class="min-w-0" :class="compact ? 'pr-6' : 'pr-12'">
+          <NuxtLink
+            :to="albumRoute(album)"
+            class="block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            :aria-label="`Open ${album.title} by ${album.artist}`"
+            @click="emit('open')"
+          >
             <h3
               class="truncate font-medium"
               :class="compact ? 'text-xs' : 'text-sm'"
             >
               {{ album.title }}
             </h3>
-            <p class="truncate text-xs text-muted-foreground">
-              {{ album.artist }} ·
-              {{ album.tracks.length }}
-              {{ album.tracks.length === 1 ? "track" : "tracks" }}
-            </p>
-          </div>
-        </NuxtLink>
+          </NuxtLink>
+          <p class="truncate text-xs text-muted-foreground">
+            <TrackArtistLinks :artists="album.artists" /> ·
+            {{ album.tracks.length }}
+            {{ album.tracks.length === 1 ? "track" : "tracks" }}
+          </p>
+        </div>
       </div>
       <LikeButton
         class="absolute"
