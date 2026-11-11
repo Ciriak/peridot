@@ -2,14 +2,21 @@ import { useState } from "#imports";
 import { computed, onMounted, onUnmounted, watch } from "vue";
 import { resolvePlayerQueue, trackDownloadFileName } from "../lib/library";
 import {
-  addTrackNext,
+  addTrackAfterActive,
+  advanceShuffle,
+  appendToShufflePool,
+  compactQueueAfterShuffle,
   consumeQueue,
   moveTrackToFront,
+  nextRepeatMode,
   normalizeQueueTrackIds,
+  removeFromShufflePool,
   removeQueueTrack,
-  reorderUpcoming,
+  reorderSourceQueue,
   restorePreviousTrack,
-  shuffleUpcoming,
+  restorePreviousShuffleTrack,
+  shuffledPoolExcept,
+  type RepeatMode,
 } from "../lib/playback-queue";
 import {
   createPlaybackToken,
@@ -29,12 +36,20 @@ import { useUser } from "./use-user";
 
 let queueWriteTail = Promise.resolve();
 
+interface QueueSnapshot {
+  trackIds: readonly string[];
+  activeTrackId: string | null;
+  shuffleEnabled: boolean;
+  shuffleTrackIds: readonly string[];
+}
+
 export function useLibraryPlayer(options: { audio?: boolean } = {}) {
   const { tracks, loaded: tracksLoaded } = useLibraryTracks();
   const { address } = useServer();
   const { token } = useSession();
   const { user } = useUser();
   const playing = useState("player-playing", () => false);
+  const repeatMode = useState<RepeatMode>("player-repeat-mode", () => "off");
   const elapsed = useState("player-elapsed", () => 0);
   const volume = useState("player-volume", () => 72);
   const mediaDuration = useState("player-media-duration", () => 0);
@@ -42,6 +57,15 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
   const error = useState<string | null>("player-error", () => null);
   const playbackRequest = useState("player-playback-request", () => 0);
   const queueTrackIds = useState<string[]>("player-queue-track-ids", () => []);
+  const activeTrackId = useState<string | null>(
+    "player-active-track-id",
+    () => null,
+  );
+  const shuffleEnabled = useState("player-shuffle-enabled", () => false);
+  const shuffleTrackIds = useState<string[]>(
+    "player-shuffle-track-ids",
+    () => [],
+  );
   const queueLoaded = useState("player-queue-loaded", () => false);
   const queueLoading = useState("player-queue-loading", () => false);
   const queueError = useState<string | null>("player-queue-error", () => null);
@@ -54,13 +78,32 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     () => 0,
   );
   const queueHistory = useState<string[]>("player-queue-history", () => []);
+  const repeatCycleTrackIds = useState<string[]>(
+    "player-repeat-cycle-track-ids",
+    () => [],
+  );
   const queueTracks = computed(() =>
     resolvePlayerQueue(tracks.value, queueTrackIds.value),
   );
-  const active = computed(() => queueTracks.value[0] ?? null);
+  const active = computed(
+    () =>
+      queueTracks.value.find((track) => track.id === activeTrackId.value) ??
+      queueTracks.value[0] ??
+      null,
+  );
   const currentTrackId = computed(() => active.value?.id ?? null);
-  const upcomingTracks = computed(() => queueTracks.value.slice(1));
-  const canGoNext = computed(() => upcomingTracks.value.length > 0);
+  const upcomingTracks = computed(() =>
+    queueTracks.value.filter((track) => track.id !== currentTrackId.value),
+  );
+  const canGoNext = computed(
+    () =>
+      Boolean(currentTrackId.value) &&
+      (shuffleEnabled.value
+        ? shuffleTrackIds.value.length > 0 ||
+          (repeatMode.value === "all" && queueTracks.value.length > 1)
+        : upcomingTracks.value.length > 0 ||
+          (repeatMode.value === "all" && repeatCycleTrackIds.value.length > 0)),
+  );
   const durationSeconds = computed(() => {
     const catalogDuration = Math.floor((active.value?.durationMs ?? 0) / 1000);
     return catalogDuration > 0 ? catalogDuration : mediaDuration.value;
@@ -77,15 +120,22 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
   function normalizedQueue(
     trackIds: readonly string[] = queueTrackIds.value,
   ): string[] {
-    return normalizeQueueTrackIds(trackIds, availableTrackIds());
+    return tracksLoaded.value
+      ? normalizeQueueTrackIds(trackIds, availableTrackIds())
+      : [...new Set(trackIds)];
   }
 
   function clearQueue() {
     queueTrackIds.value = [];
+    activeTrackId.value = null;
+    shuffleEnabled.value = false;
+    shuffleTrackIds.value = [];
     queueHistory.value = [];
     queueLoaded.value = false;
     queueLoading.value = false;
     queueError.value = null;
+    repeatCycleTrackIds.value = [];
+    repeatMode.value = "off";
     playing.value = false;
     elapsed.value = 0;
     mediaDuration.value = 0;
@@ -100,12 +150,17 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     return true;
   }
 
-  function saveQueue(trackIds: readonly string[]) {
+  function saveQueue(snapshot: QueueSnapshot) {
     const serverAddress = address.value;
     const sessionToken = token.value;
     const scope = currentScope();
     const version = queueMutationVersion.value;
-    const snapshot = [...trackIds];
+    const body = {
+      trackIds: [...snapshot.trackIds],
+      activeTrackId: snapshot.activeTrackId,
+      shuffleEnabled: snapshot.shuffleEnabled,
+      shuffleTrackIds: [...snapshot.shuffleTrackIds],
+    };
     queueWriteTail = queueWriteTail
       .catch(() => undefined)
       .then(async () => {
@@ -118,7 +173,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
         if (!serverAddress || !sessionToken) {
           throw new Error("Connect to your Peridot server and try again.");
         }
-        await replaceQueue(serverAddress, sessionToken, snapshot);
+        await replaceQueue(serverAddress, sessionToken, body);
       })
       .catch((reason: unknown) => {
         notifyQueueSaveFailed(
@@ -129,9 +184,39 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
       });
   }
 
-  function setQueue(trackIds: readonly string[], persist = true) {
-    const normalized = normalizedQueue(trackIds);
-    queueTrackIds.value = normalized;
+  function setQueueSnapshot(
+    snapshot: QueueSnapshot,
+    persist = true,
+    rememberRepeatCycle = true,
+  ) {
+    const normalizedTrackIds = normalizedQueue(snapshot.trackIds);
+    const normalizedActiveTrackId =
+      snapshot.activeTrackId &&
+      normalizedTrackIds.includes(snapshot.activeTrackId)
+        ? snapshot.activeTrackId
+        : (normalizedTrackIds[0] ?? null);
+    const allowedShuffleIds = new Set(
+      normalizedTrackIds.filter(
+        (trackId) => trackId !== normalizedActiveTrackId,
+      ),
+    );
+    const normalizedShuffleTrackIds = snapshot.shuffleEnabled
+      ? [...new Set(snapshot.shuffleTrackIds)].filter((trackId) =>
+          allowedShuffleIds.has(trackId),
+        )
+      : [];
+    const normalized: QueueSnapshot = {
+      trackIds: normalizedTrackIds,
+      activeTrackId: normalizedActiveTrackId,
+      shuffleEnabled: snapshot.shuffleEnabled,
+      shuffleTrackIds: normalizedShuffleTrackIds,
+    };
+
+    queueTrackIds.value = normalizedTrackIds;
+    activeTrackId.value = normalizedActiveTrackId;
+    shuffleEnabled.value = snapshot.shuffleEnabled;
+    shuffleTrackIds.value = normalizedShuffleTrackIds;
+    if (rememberRepeatCycle) repeatCycleTrackIds.value = normalizedTrackIds;
     queueLoaded.value = true;
     queueError.value = null;
     queueMutationVersion.value += 1;
@@ -161,11 +246,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
       ) {
         return;
       }
-      queueTrackIds.value =
-        tracksLoaded.value && tracks.value.length
-          ? normalizeQueueTrackIds(response.trackIds, availableTrackIds())
-          : response.trackIds;
-      queueLoaded.value = true;
+      setQueueSnapshot(response, false);
       playing.value = false;
       elapsed.value = 0;
       mediaDuration.value = 0;
@@ -201,7 +282,15 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     void loadQueue();
     const changed = nextTrackId !== currentTrackId.value;
     if (changed) rememberCurrentTrack(nextTrackId);
-    setQueue(moveTrackToFront(normalizedQueue(), nextTrackId));
+    const trackIds = moveTrackToFront(normalizedQueue(), nextTrackId);
+    setQueueSnapshot({
+      trackIds,
+      activeTrackId: nextTrackId,
+      shuffleEnabled: shuffleEnabled.value,
+      shuffleTrackIds: shuffleEnabled.value
+        ? removeFromShufflePool(shuffleTrackIds.value, nextTrackId)
+        : [],
+    });
     if (restart || changed) {
       elapsed.value = 0;
       playbackRequest.value++;
@@ -215,7 +304,14 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     if (!firstTrackId) return;
     void loadQueue();
     rememberCurrentTrack(firstTrackId);
-    setQueue(nextQueue);
+    setQueueSnapshot({
+      trackIds: nextQueue,
+      activeTrackId: firstTrackId,
+      shuffleEnabled: shuffleEnabled.value,
+      shuffleTrackIds: shuffleEnabled.value
+        ? shuffledPoolExcept(nextQueue, firstTrackId)
+        : [],
+    });
     elapsed.value = 0;
     playbackRequest.value++;
     playing.value = true;
@@ -225,11 +321,53 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     const current = currentTrackId.value;
     if (!current) return;
     queueHistory.value = [...queueHistory.value, current];
+    if (shuffleEnabled.value) {
+      const trackIds = normalizedQueue();
+      const advanced = advanceShuffle(
+        trackIds,
+        current,
+        shuffleTrackIds.value,
+        repeatMode.value === "all",
+      );
+      if (advanced.activeTrackId === current) {
+        playing.value = false;
+        return;
+      }
+      setQueueSnapshot(
+        {
+          trackIds,
+          activeTrackId: advanced.activeTrackId,
+          shuffleEnabled: true,
+          shuffleTrackIds: advanced.shuffleTrackIds,
+        },
+        true,
+        false,
+      );
+      elapsed.value = 0;
+      mediaDuration.value = 0;
+      playbackRequest.value++;
+      playing.value = true;
+      return;
+    }
+
     const nextQueue = consumeQueue(normalizedQueue());
-    setQueue(nextQueue);
+    const repeatingAll =
+      repeatMode.value === "all" && repeatCycleTrackIds.value.length > 0;
+    const sourceQueue =
+      repeatingAll && !nextQueue.length ? repeatCycleTrackIds.value : nextQueue;
+    setQueueSnapshot(
+      {
+        trackIds: sourceQueue,
+        activeTrackId: sourceQueue[0] ?? null,
+        shuffleEnabled: false,
+        shuffleTrackIds: [],
+      },
+      true,
+      false,
+    );
     elapsed.value = 0;
     mediaDuration.value = 0;
-    if (nextQueue.length) {
+    if (nextQueue.length || repeatingAll) {
       playbackRequest.value++;
       playing.value = true;
     } else {
@@ -248,7 +386,35 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     const previousTrackId = queueHistory.value.at(-1);
     if (previousTrackId) {
       queueHistory.value = queueHistory.value.slice(0, -1);
-      setQueue(restorePreviousTrack(normalizedQueue(), previousTrackId));
+      if (shuffleEnabled.value) {
+        const trackIds = normalizedQueue();
+        const pool = removeFromShufflePool(
+          shuffleTrackIds.value,
+          previousTrackId,
+        );
+        setQueueSnapshot({
+          trackIds: trackIds.includes(previousTrackId)
+            ? trackIds
+            : [previousTrackId, ...trackIds],
+          activeTrackId: previousTrackId,
+          shuffleEnabled: true,
+          shuffleTrackIds: restorePreviousShuffleTrack(
+            pool,
+            currentTrackId.value,
+          ),
+        });
+      } else {
+        const trackIds = restorePreviousTrack(
+          normalizedQueue(),
+          previousTrackId,
+        );
+        setQueueSnapshot({
+          trackIds,
+          activeTrackId: trackIds[0] ?? null,
+          shuffleEnabled: false,
+          shuffleTrackIds: [],
+        });
+      }
       elapsed.value = 0;
       playbackRequest.value++;
       playing.value = true;
@@ -264,23 +430,74 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     if (!tracks.value.some((track) => track.id === trackId)) return false;
     if (!queueLoaded.value) await loadQueue();
     if (!queueLoaded.value) return false;
-    setQueue(addTrackNext(normalizedQueue(), trackId));
+    const trackIds = addTrackAfterActive(
+      normalizedQueue(),
+      currentTrackId.value,
+      trackId,
+    );
+    setQueueSnapshot({
+      trackIds,
+      activeTrackId: currentTrackId.value,
+      shuffleEnabled: shuffleEnabled.value,
+      shuffleTrackIds:
+        shuffleEnabled.value && trackId !== currentTrackId.value
+          ? appendToShufflePool(shuffleTrackIds.value, trackId)
+          : [],
+    });
     return true;
   }
 
   function removeFromQueue(trackId: string) {
     const current = currentTrackId.value;
     if (!trackId || trackId === current) return;
-    setQueue(removeQueueTrack(normalizedQueue(), trackId));
+    setQueueSnapshot({
+      trackIds: removeQueueTrack(normalizedQueue(), trackId),
+      activeTrackId: current,
+      shuffleEnabled: shuffleEnabled.value,
+      shuffleTrackIds: removeFromShufflePool(shuffleTrackIds.value, trackId),
+    });
   }
 
   function reorderQueue(upcomingTrackIds: readonly string[]) {
-    setQueue(reorderUpcoming(normalizedQueue(), upcomingTrackIds));
+    setQueueSnapshot({
+      trackIds: reorderSourceQueue(
+        normalizedQueue(),
+        currentTrackId.value,
+        upcomingTrackIds,
+      ),
+      activeTrackId: currentTrackId.value,
+      shuffleEnabled: shuffleEnabled.value,
+      shuffleTrackIds: shuffleTrackIds.value,
+    });
   }
 
-  function randomizeQueue() {
-    if (upcomingTracks.value.length < 2) return;
-    setQueue(shuffleUpcoming(normalizedQueue()));
+  function toggleRandomization() {
+    if (shuffleEnabled.value) {
+      const trackIds = compactQueueAfterShuffle(
+        normalizedQueue(),
+        currentTrackId.value,
+        shuffleTrackIds.value,
+      );
+      setQueueSnapshot({
+        trackIds,
+        activeTrackId: currentTrackId.value,
+        shuffleEnabled: false,
+        shuffleTrackIds: [],
+      });
+      return;
+    }
+    const trackIds = normalizedQueue();
+    if (trackIds.length < 2 || !currentTrackId.value) return;
+    setQueueSnapshot({
+      trackIds,
+      activeTrackId: currentTrackId.value,
+      shuffleEnabled: true,
+      shuffleTrackIds: shuffledPoolExcept(trackIds, currentTrackId.value),
+    });
+  }
+
+  function cycleRepeatMode() {
+    repeatMode.value = nextRepeatMode(repeatMode.value);
   }
 
   function togglePlayback() {
@@ -446,7 +663,14 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
         if (elapsed.value > 0) audio.currentTime = elapsed.value;
       };
       const handleEnded = () => {
-        if (loadedTrackId === currentTrackId.value) next();
+        if (loadedTrackId !== currentTrackId.value) return;
+        if (repeatMode.value === "one") {
+          elapsed.value = 0;
+          playbackRequest.value++;
+          playing.value = true;
+          return;
+        }
+        next();
       };
       const handleError = () => {
         if (!loadedTrackId) return;
@@ -551,6 +775,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
   return {
     tracks,
     playing,
+    repeatMode,
     currentTrackId,
     elapsed,
     volume,
@@ -559,6 +784,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     queueError,
     queueLoaded,
     queueLoading,
+    shuffleEnabled,
     active,
     queueTracks,
     upcomingTracks,
@@ -570,7 +796,8 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     addToQueue,
     removeFromQueue,
     reorderQueue,
-    randomizeQueue,
+    toggleRandomization,
+    cycleRepeatMode,
     next,
     previous,
     togglePlayback,

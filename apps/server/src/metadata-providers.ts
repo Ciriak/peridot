@@ -4,7 +4,7 @@ import type {
   MetadataProviderResponse,
 } from "@peridot/contracts";
 import type { Database } from "./database.js";
-import type { MetadataProvider } from "./generated/prisma/client.js";
+import type { MetadataProviderRow } from "./prisma/models.js";
 
 const PROVIDER_NAME_LIMIT = 80;
 const CONTACT_LIMIT = 512;
@@ -21,7 +21,7 @@ function providerName(kind: MetadataProviderKind): string {
 }
 
 function toProviderResponse(
-  provider: MetadataProvider,
+  provider: MetadataProviderRow,
 ): MetadataProviderResponse {
   return {
     id: provider.id,
@@ -29,6 +29,7 @@ function toProviderResponse(
     name: provider.name,
     contact: provider.contact,
     hasCredential: Boolean(provider.credentialCiphertext),
+    enabled: Boolean(provider.enabled),
   };
 }
 
@@ -64,17 +65,48 @@ function normalizeContact(value: unknown): string | null {
 export async function listMetadataProviders(
   database: Database,
 ): Promise<MetadataProviderResponse[]> {
-  const providers = await database.metadataProvider.findMany({
-    orderBy: [{ position: "asc" }, { createdAt: "asc" }],
-  });
+  const providers = await database.orm.MetadataProvider.orderBy([
+    (provider) => provider.position.asc(),
+    (provider) => provider.createdAt.asc(),
+  ]).all();
   return providers.map(toProviderResponse);
 }
 
 export async function orderedMetadataProviders(
   database: Database,
-): Promise<MetadataProvider[]> {
-  return database.metadataProvider.findMany({
-    orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+): Promise<MetadataProviderRow[]> {
+  return database.orm.MetadataProvider.where({ enabled: 1 })
+    .orderBy([
+      (provider) => provider.position.asc(),
+      (provider) => provider.createdAt.asc(),
+    ])
+    .all();
+}
+
+export async function ensureDefaultMetadataProvider(
+  database: Pick<Database, "orm">,
+  contact?: string,
+): Promise<void> {
+  const existing = await database.orm.MetadataProvider.first({
+    kind: "musicbrainz",
+  });
+  if (existing) return;
+
+  const admin = contact
+    ? null
+    : await database.orm.User.first({ role: "admin" });
+  const normalizedContact = normalizeContact(contact ?? admin?.email);
+  if (!normalizedContact) return;
+
+  const { count: position } = await database.orm.MetadataProvider.aggregate(
+    (aggregate) => ({ count: aggregate.count() }),
+  );
+  await database.orm.MetadataProvider.create({
+    kind: "musicbrainz",
+    name: providerName("musicbrainz"),
+    contact: normalizedContact,
+    enabled: 1,
+    position,
   });
 }
 
@@ -101,36 +133,45 @@ export async function createMetadataProvider(
       `Provider names must be ${PROVIDER_NAME_LIMIT} characters or fewer.`,
     );
   }
-  const duplicate = await database.metadataProvider.findUnique({
-    where: { kind: value.kind },
+  const duplicate = await database.orm.MetadataProvider.first({
+    kind: value.kind,
   });
   if (duplicate) {
     throw new MetadataProviderError(
       "This metadata provider is already configured.",
     );
   }
-  const position = await database.metadataProvider.count();
-  const provider = await database.metadataProvider.create({
-    data: {
-      kind: value.kind,
-      name: suppliedName || providerName(value.kind),
-      contact,
-      position,
-    },
+  const { count: position } = await database.orm.MetadataProvider.aggregate(
+    (aggregate) => ({ count: aggregate.count() }),
+  );
+  const provider = await database.orm.MetadataProvider.create({
+    kind: value.kind,
+    name: suppliedName || providerName(value.kind),
+    contact,
+    enabled: 1,
+    position,
   });
   return toProviderResponse(provider);
 }
 
-export async function deleteMetadataProvider(
+export async function setMetadataProviderEnabled(
   database: Database,
   id: string,
-): Promise<boolean> {
-  try {
-    await database.metadataProvider.delete({ where: { id } });
-    return true;
-  } catch {
-    return false;
+  enabled: unknown,
+): Promise<MetadataProviderResponse | null> {
+  if (typeof enabled !== "boolean") {
+    throw new MetadataProviderError(
+      "Metadata provider enabled state must be true or false.",
+    );
   }
+  const count = await database.orm.MetadataProvider.where({
+    id,
+  }).updateAndCount({
+    enabled: enabled ? 1 : 0,
+  });
+  if (!count) return null;
+  const provider = await database.orm.MetadataProvider.first({ id });
+  return provider ? toProviderResponse(provider) : null;
 }
 
 export async function reorderMetadataProviders(
@@ -142,9 +183,7 @@ export async function reorderMetadataProviders(
       "Provider order must be a list of provider ids.",
     );
   }
-  const providers = await database.metadataProvider.findMany({
-    select: { id: true },
-  });
+  const providers = await database.orm.MetadataProvider.select("id").all();
   const existingIds = new Set(providers.map(({ id }) => id));
   if (
     ids.length !== existingIds.size ||
@@ -155,13 +194,12 @@ export async function reorderMetadataProviders(
       "Provider order does not match the configured providers.",
     );
   }
-  await database.$transaction(
-    ids.map((id, index) =>
-      database.metadataProvider.update({
-        where: { id },
-        data: { position: index },
-      }),
-    ),
-  );
+  await database.transaction(async (transaction) => {
+    for (const [index, id] of ids.entries()) {
+      await transaction.orm.MetadataProvider.where({ id }).update({
+        position: index,
+      });
+    }
+  });
   return listMetadataProviders(database);
 }

@@ -15,11 +15,18 @@ test("protected library routes require a valid user session", async () => {
   const context = await createTestContext();
   try {
     for (const authorization of [undefined, "Bearer wrong", "wrong-scheme"]) {
-      const response = await context.app.inject({
-        method: "GET",
-        url: "/api/tracks",
-        headers: authorization ? { authorization } : undefined,
-      });
+      const response = await context.app.inject(
+        authorization
+          ? {
+              method: "GET",
+              url: "/api/tracks",
+              headers: { authorization },
+            }
+          : {
+              method: "GET",
+              url: "/api/tracks",
+            },
+      );
       assert.equal(response.statusCode, 401);
       assert.deepEqual(response.json(), {
         error: {
@@ -140,7 +147,7 @@ test("scans track, disc, and album tags and backfills legacy metadata once", asy
 
     const firstScan = await startScan(context);
     assert.equal(firstScan.status, "completed");
-    const firstTrack = await context.database.track.findFirstOrThrow();
+    const firstTrack = await context.database.orm.Track.firstOrThrow();
     assert.equal(firstTrack.artist, "Elliot Lake, Óra");
     assert.equal(
       firstTrack.artistCredits,
@@ -152,14 +159,15 @@ test("scans track, disc, and album tags and backfills legacy metadata once", asy
     assert.equal(firstTrack.trackNumber, 5);
     assert.equal(firstTrack.metadataVersion, 3);
 
-    await context.database.track.update({
-      where: { id: firstTrack.id },
-      data: { metadataVersion: 0, discNumber: null, trackNumber: null },
+    await context.database.orm.Track.where({ id: firstTrack.id }).update({
+      metadataVersion: 0,
+      discNumber: null,
+      trackNumber: null,
     });
     const backfillScan = await startScan(context);
     assert.equal(backfillScan.updatedCount, 1);
-    const backfilledTrack = await context.database.track.findUniqueOrThrow({
-      where: { id: firstTrack.id },
+    const backfilledTrack = await context.database.orm.Track.firstOrThrow({
+      id: firstTrack.id,
     });
     assert.equal(backfilledTrack.discNumber, 2);
     assert.equal(backfilledTrack.trackNumber, 5);
@@ -195,9 +203,9 @@ test("audio endpoint streams complete and ranged responses with a playback token
   try {
     await writeFile(trackPath, wav);
     await startScan(context);
-    const track = await context.database.track.findFirstOrThrow({
-      where: { relativePath: "range.wav" },
-    });
+    const track = await context.database.orm.Track.where({
+      relativePath: "range.wav",
+    }).firstOrThrow();
     const url = `/api/tracks/${track.id}/audio`;
 
     const tokenResponse = await context.app.inject({
@@ -286,12 +294,9 @@ test("audio endpoint streams complete and ranged responses with a playback token
       404,
     );
     assert.equal(
-      (
-        await context.database.track.findUniqueOrThrow({
-          where: { id: track.id },
-        })
-      ).available,
-      false,
+      (await context.database.orm.Track.firstOrThrow({ id: track.id }))
+        .available,
+      0,
     );
   } finally {
     await context.close();
@@ -310,12 +315,12 @@ test("failed traversal does not reconcile tracks and active scans are rejected",
     assert.equal(failedScan.status, "failed");
     assert.equal(failedScan.unavailableCount, 0);
     assert.equal(
-      (await context.database.track.findFirstOrThrow()).available,
-      true,
+      (await context.database.orm.Track.firstOrThrow()).available,
+      1,
     );
     await rename(movedRoot, musicRoot);
 
-    await context.database.libraryScan.create({ data: { status: "running" } });
+    await context.database.orm.LibraryScan.create({ status: "running" });
     const conflict = await context.app.inject({
       method: "POST",
       url: "/api/library/scans",
@@ -333,14 +338,14 @@ test("changed files with unreadable metadata retain their previous catalog metad
   try {
     await writeFile(trackPath, createWav());
     await startScan(context);
-    const before = await context.database.track.findFirstOrThrow();
+    const before = await context.database.orm.Track.firstOrThrow();
     await writeFile(trackPath, Buffer.alloc(0));
     const scan = await startScan(context);
     assert.equal(scan.errorCount, 1);
-    const after = await context.database.track.findFirstOrThrow();
+    const after = await context.database.orm.Track.firstOrThrow();
     assert.equal(after.title, before.title);
     assert.equal(after.artist, before.artist);
-    assert.equal(after.available, true);
+    assert.equal(after.available, 1);
   } finally {
     await context.close();
   }
@@ -350,8 +355,8 @@ test("startup marks unfinished persistent scans as interrupted", async () => {
   const context = await createTestContext();
   let restartedApp: FastifyInstance | undefined;
   try {
-    const queued = await context.database.libraryScan.create({
-      data: { status: "queued" },
+    const queued = await context.database.orm.LibraryScan.create({
+      status: "queued",
     });
     await context.app.close();
     restartedApp = await buildApp({
@@ -363,8 +368,8 @@ test("startup marks unfinished persistent scans as interrupted", async () => {
       database: context.database,
       logger: false,
     });
-    const interrupted = await context.database.libraryScan.findUniqueOrThrow({
-      where: { id: queued.id },
+    const interrupted = await context.database.orm.LibraryScan.firstOrThrow({
+      id: queued.id,
     });
     assert.equal(interrupted.status, "interrupted");
     assert.equal(

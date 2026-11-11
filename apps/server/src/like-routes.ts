@@ -7,13 +7,13 @@ import type {
   TrackLikeResponse,
 } from "@peridot/contracts";
 import type { FastifyInstance } from "fastify";
-import type {
-  AlbumLike,
-  ArtistLike,
-  TrackLike,
-} from "./generated/prisma/client.js";
 import type { Database } from "./database.js";
 import { sendError } from "./http.js";
+import type {
+  AlbumLikeRow,
+  ArtistLikeRow,
+  TrackLikeRow,
+} from "./prisma/models.js";
 
 const MAX_LIKE_LABEL_LENGTH = 512;
 const MAX_TRACK_ID_LENGTH = 200;
@@ -61,14 +61,14 @@ function parseLikeTarget(body: unknown): LikeTarget | null {
   return null;
 }
 
-function trackLikeResponse(like: TrackLike): TrackLikeResponse {
+function trackLikeResponse(like: TrackLikeRow): TrackLikeResponse {
   return {
     trackId: like.trackId,
     likedAt: like.createdAt.toISOString(),
   };
 }
 
-function albumLikeResponse(like: AlbumLike): AlbumLikeResponse {
+function albumLikeResponse(like: AlbumLikeRow): AlbumLikeResponse {
   return {
     title: like.title,
     artist: like.artist,
@@ -76,7 +76,7 @@ function albumLikeResponse(like: AlbumLike): AlbumLikeResponse {
   };
 }
 
-function artistLikeResponse(like: ArtistLike): ArtistLikeResponse {
+function artistLikeResponse(like: ArtistLikeRow): ArtistLikeResponse {
   return {
     name: like.name,
     likedAt: like.createdAt.toISOString(),
@@ -90,18 +90,15 @@ export async function registerLikeRoutes(
   app.get("/api/likes", async (request): Promise<LikeListResponse> => {
     const userId = request.authenticatedUser!.id;
     const [tracks, albums, artists] = await Promise.all([
-      database.trackLike.findMany({
-        where: { userId },
-        orderBy: { createdAt: "desc" },
-      }),
-      database.albumLike.findMany({
-        where: { userId },
-        orderBy: { createdAt: "desc" },
-      }),
-      database.artistLike.findMany({
-        where: { userId },
-        orderBy: { createdAt: "desc" },
-      }),
+      database.orm.TrackLike.where({ userId })
+        .orderBy((like) => like.createdAt.desc())
+        .all(),
+      database.orm.AlbumLike.where({ userId })
+        .orderBy((like) => like.createdAt.desc())
+        .all(),
+      database.orm.ArtistLike.where({ userId })
+        .orderBy((like) => like.createdAt.desc())
+        .all(),
     ]);
     return {
       tracks: tracks.map(trackLikeResponse),
@@ -123,20 +120,21 @@ export async function registerLikeRoutes(
     const userId = request.authenticatedUser!.id;
 
     if (target.kind === "track") {
-      const track = await database.track.findUnique({
-        where: { id: target.trackId },
-        select: { id: true },
+      const track = await database.orm.Track.select("id").first({
+        id: target.trackId,
       });
       if (!track) {
         return sendError(reply, 404, "track_not_found", "Track not found");
       }
-      const like = await database.trackLike.upsert({
-        where: {
-          userId_trackId: { userId, trackId: track.id },
-        },
-        create: { userId, trackId: track.id },
-        update: {},
-      });
+      const like =
+        (await database.orm.TrackLike.where({
+          userId,
+          trackId: track.id,
+        }).first()) ??
+        (await database.orm.TrackLike.create({
+          userId,
+          trackId: track.id,
+        }));
       const response: LikeResponse = {
         kind: "track",
         ...trackLikeResponse(like),
@@ -147,23 +145,19 @@ export async function registerLikeRoutes(
     if (target.kind === "album") {
       const normalizedArtist = normalize(target.artist);
       const normalizedTitle = normalize(target.title);
-      const like = await database.albumLike.upsert({
-        where: {
-          userId_normalizedArtist_normalizedTitle: {
-            userId,
-            normalizedArtist,
-            normalizedTitle,
-          },
-        },
-        create: {
+      const like =
+        (await database.orm.AlbumLike.where({
+          userId,
+          normalizedArtist,
+          normalizedTitle,
+        }).first()) ??
+        (await database.orm.AlbumLike.create({
           userId,
           title: target.title,
           artist: target.artist,
           normalizedTitle,
           normalizedArtist,
-        },
-        update: {},
-      });
+        }));
       const response: LikeResponse = {
         kind: "album",
         ...albumLikeResponse(like),
@@ -172,17 +166,16 @@ export async function registerLikeRoutes(
     }
 
     const normalizedName = normalize(target.name);
-    const like = await database.artistLike.upsert({
-      where: {
-        userId_normalizedName: { userId, normalizedName },
-      },
-      create: {
+    const like =
+      (await database.orm.ArtistLike.where({
+        userId,
+        normalizedName,
+      }).first()) ??
+      (await database.orm.ArtistLike.create({
         userId,
         name: target.name,
         normalizedName,
-      },
-      update: {},
-    });
+      }));
     const response: LikeResponse = {
       kind: "artist",
       ...artistLikeResponse(like),
@@ -203,28 +196,27 @@ export async function registerLikeRoutes(
     const userId = request.authenticatedUser!.id;
 
     if (target.kind === "track") {
-      const track = await database.track.findUnique({
-        where: { id: target.trackId },
-        select: { id: true },
+      const track = await database.orm.Track.select("id").first({
+        id: target.trackId,
       });
       if (!track) {
         return sendError(reply, 404, "track_not_found", "Track not found");
       }
-      await database.trackLike.deleteMany({
-        where: { userId, trackId: track.id },
-      });
+      await database.orm.TrackLike.where({
+        userId,
+        trackId: track.id,
+      }).deleteAndCount();
     } else if (target.kind === "album") {
-      await database.albumLike.deleteMany({
-        where: {
-          userId,
-          normalizedArtist: normalize(target.artist),
-          normalizedTitle: normalize(target.title),
-        },
-      });
+      await database.orm.AlbumLike.where({
+        userId,
+        normalizedArtist: normalize(target.artist),
+        normalizedTitle: normalize(target.title),
+      }).deleteAndCount();
     } else {
-      await database.artistLike.deleteMany({
-        where: { userId, normalizedName: normalize(target.name) },
-      });
+      await database.orm.ArtistLike.where({
+        userId,
+        normalizedName: normalize(target.name),
+      }).deleteAndCount();
     }
 
     return reply.code(204).send();

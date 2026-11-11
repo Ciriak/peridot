@@ -53,7 +53,7 @@ test("the persistent player controls a native audio element", async () => {
     "The active track's credited artists link from the persistent player",
   );
   assert.match(layout, /@click="togglePlayback"/);
-  assert.match(layout, /@click="seek\(0\)"/);
+  assert.match(layout, /@click="cycleRepeatMode"/);
   assert.match(layout, /@update:model-value="seek\(\$event\?\.\[0\] \?\? 0\)"/);
   assert.match(
     layout,
@@ -70,4 +70,33 @@ test("the persistent player controls a native audio element", async () => {
   );
   assert.match(layout, /<Spinner\s+v-if="loading"/);
   assert.match(layout, /role="alert"/);
+  assert.match(player, /useState<RepeatMode>\("player-repeat-mode"/);
+  assert.match(
+    player,
+    /repeatMode\.value === "one"[\s\S]*playbackRequest\.value\+\+/,
+  );
+  assert.match(
+    player,
+    /repeatMode\.value === "all"[\s\S]*repeatCycleTrackIds\.value/,
+  );
+  assert.match(
+    layout,
+    /repeatMode === 'one' \? icons\.repeatOne : icons\.repeat/,
+  );
+  assert.match(layout, /:aria-pressed="repeatMode !== 'off'"/);
+  assert.match(
+    layout,
+    /repeatMode === 'off'\s*\?\s*'text-muted-foreground'\s*:\s*'text-primary group-hover:text-primary group-active:text-primary'/,
+    "Enabled repeat modes color the icon primary",
+  );
+  assert.match(
+    layout,
+    /absolute right-1 top-1 text-xs font-semibold leading-none text-primary/,
+    "The repeat-one marker floats at the icon's top-right",
+  );
+  assert.doesNotMatch(
+    layout,
+    /active:bg-primary|bg-primary text-primary-foreground/,
+    "Player hover and press states color the icon instead of the button",
+  );
 });

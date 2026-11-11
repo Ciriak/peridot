@@ -1,14 +1,15 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { opendir, readdir, readFile, stat } from "node:fs/promises";
+import { or } from "@prisma/orm-sqlite/orm-client";
 import { parseFile } from "music-metadata";
 import {
   normalizeArtistCredits,
   serializeArtistCredits,
 } from "./artist-credits.js";
-import type { LibraryScan } from "./generated/prisma/client.js";
 import type { Database } from "./database.js";
 import type { MetadataEnrichment } from "./metadata-enrichment.js";
+import type { LibraryScanRow } from "./prisma/models.js";
 import { getPathSources, type PathSource } from "./sources.js";
 
 const AUDIO_MIME_TYPES = new Map([
@@ -126,50 +127,41 @@ export class LibraryScanner {
   }
 
   async markInterruptedScans(): Promise<void> {
-    await this.database.libraryScan.updateMany({
-      where: { status: { in: ["queued", "running"] } },
-      data: {
-        status: "interrupted",
-        metadataStatus: "interrupted",
-        completedAt: new Date(),
-        failureSummary: "The server stopped before this scan completed.",
-      },
+    await this.database.orm.LibraryScan.where((scan) =>
+      scan.status.in(["queued", "running"]),
+    ).updateAndCount({
+      status: "interrupted",
+      metadataStatus: "interrupted",
+      completedAt: new Date(),
+      failureSummary: "The server stopped before this scan completed.",
     });
-    await this.database.libraryScan.updateMany({
-      where: {
-        status: "completed",
-        metadataStatus: { in: ["pending", "running"] },
-      },
-      data: {
+    await this.database.orm.LibraryScan.where({ status: "completed" })
+      .where((scan) => scan.metadataStatus.in(["pending", "running"]))
+      .updateAndCount({
         metadataStatus: "interrupted",
         metadataFailureSummary:
           "The server stopped before metadata matching completed.",
-      },
-    });
+      });
   }
 
-  async queueScan(source?: PathSource): Promise<LibraryScan | null> {
+  async queueScan(source?: PathSource): Promise<LibraryScanRow | null> {
     if (this.queueing || this.activeScan) return null;
     this.queueing = true;
     try {
-      const existing = await this.database.libraryScan.findFirst({
-        where: {
-          OR: [
-            { status: { in: ["queued", "running"] } },
-            { metadataStatus: { in: ["pending", "running"] } },
-          ],
-        },
-      });
+      const existing = await this.database.orm.LibraryScan.where((scan) =>
+        or(
+          scan.status.in(["queued", "running"]),
+          scan.metadataStatus.in(["pending", "running"]),
+        ),
+      ).first();
       if (existing) return null;
-      const scan = await this.database.libraryScan.create({
-        data: {
-          status: "queued",
-          sourceId: source?.id ?? null,
-          sourceName: source
-            ? source.name || path.basename(source.path)
-            : "All sources",
-          metadataStatus: "pending",
-        },
+      const scan = await this.database.orm.LibraryScan.create({
+        status: "queued",
+        sourceId: source?.id ?? null,
+        sourceName: source
+          ? source.name || path.basename(source.path)
+          : "All sources",
+        metadataStatus: "pending",
       });
       this.activeScan = new Promise((resolve) => setImmediate(resolve))
         .then(() => this.runScan(scan.id, source))
@@ -183,37 +175,30 @@ export class LibraryScanner {
     }
   }
 
-  async queueMetadataRefresh(): Promise<LibraryScan | null> {
+  async queueMetadataRefresh(): Promise<LibraryScanRow | null> {
     if (this.queueing || this.activeScan) return null;
     this.queueing = true;
     try {
-      const existing = await this.database.libraryScan.findFirst({
-        where: {
-          OR: [
-            { status: { in: ["queued", "running"] } },
-            { metadataStatus: { in: ["pending", "running"] } },
-          ],
-        },
-      });
+      const existing = await this.database.orm.LibraryScan.where((scan) =>
+        or(
+          scan.status.in(["queued", "running"]),
+          scan.metadataStatus.in(["pending", "running"]),
+        ),
+      ).first();
       if (existing) return null;
-      const scan = await this.database.libraryScan.create({
-        data: {
-          status: "completed",
-          sourceName: "All sources",
-          metadataStatus: "pending",
-          startedAt: new Date(),
-          completedAt: new Date(),
-        },
+      const scan = await this.database.orm.LibraryScan.create({
+        status: "completed",
+        sourceName: "All sources",
+        metadataStatus: "pending",
+        startedAt: new Date(),
+        completedAt: new Date(),
       });
       this.activeScan = new Promise((resolve) => setImmediate(resolve))
         .then(async () => {
           if (!this.metadataEnrichment) {
-            await this.database.libraryScan.update({
-              where: { id: scan.id },
-              data: {
-                metadataStatus: "skipped",
-                metadataFailureSummary: "No metadata providers are configured.",
-              },
+            await this.database.orm.LibraryScan.where({ id: scan.id }).update({
+              metadataStatus: "skipped",
+              metadataFailureSummary: "No metadata providers are configured.",
             });
             return;
           }
@@ -247,22 +232,19 @@ export class LibraryScanner {
 
     try {
       this.folderCoverCache.clear();
-      await this.database.libraryScan.update({
-        where: { id: scanId },
-        data: { status: "running", startedAt: new Date() },
+      await this.database.orm.LibraryScan.where({ id: scanId }).update({
+        status: "running",
+        startedAt: new Date(),
       });
       const sources = requestedSource
         ? [requestedSource]
         : await getPathSources(this.database);
       if (sources.length === 0) {
-        await this.database.libraryScan.update({
-          where: { id: scanId },
-          data: {
-            status: "failed",
-            metadataStatus: "skipped",
-            completedAt: new Date(),
-            failureSummary: "No music library sources are configured.",
-          },
+        await this.database.orm.LibraryScan.where({ id: scanId }).update({
+          status: "failed",
+          metadataStatus: "skipped",
+          completedAt: new Date(),
+          failureSummary: "No music library sources are configured.",
         });
         return;
       }
@@ -272,9 +254,8 @@ export class LibraryScanner {
           files.push({ ...file, sourceId: source.id });
         }
       }
-      await this.database.libraryScan.update({
-        where: { id: scanId },
-        data: { discoveredCount: files.length },
+      await this.database.orm.LibraryScan.where({ id: scanId }).update({
+        discoveredCount: files.length,
       });
 
       let nextFile = 0;
@@ -290,35 +271,32 @@ export class LibraryScanner {
       await Promise.all(workers);
       await this.removeUnusedCovers();
 
-      const unavailable = await this.database.track.updateMany({
-        where: {
-          available: true,
-          ...(requestedSource ? { sourceId: requestedSource.id } : {}),
-          OR: [{ lastSeenScanId: null }, { lastSeenScanId: { not: scanId } }],
-        },
-        data: { available: false },
-      });
-      await this.database.libraryScan.update({
-        where: { id: scanId },
-        data: {
-          status: "completed",
-          completedAt: new Date(),
-          unavailableCount: unavailable.count,
-          ...counts,
-        },
+      let trackQuery = this.database.orm.Track.where({ available: 1 });
+      if (requestedSource) {
+        trackQuery = trackQuery.where({
+          sourceId: requestedSource.id,
+        });
+      }
+      const unavailableCount = await trackQuery
+        .where((track) =>
+          or(track.lastSeenScanId.isNull(), track.lastSeenScanId.neq(scanId)),
+        )
+        .updateAndCount({ available: 0 });
+      await this.database.orm.LibraryScan.where({ id: scanId }).update({
+        status: "completed",
+        completedAt: new Date(),
+        unavailableCount,
+        ...counts,
       });
       await this.metadataEnrichment?.runScan(scanId, requestedSource?.id);
     } catch {
-      await this.database.libraryScan.update({
-        where: { id: scanId },
-        data: {
-          status: "failed",
-          metadataStatus: "skipped",
-          completedAt: new Date(),
-          failureSummary:
-            "The library scan failed while reading the configured root.",
-          ...counts,
-        },
+      await this.database.orm.LibraryScan.where({ id: scanId }).update({
+        status: "failed",
+        metadataStatus: "skipped",
+        completedAt: new Date(),
+        failureSummary:
+          "The library scan failed while reading the configured root.",
+        ...counts,
       });
     }
   }
@@ -328,24 +306,20 @@ export class LibraryScanner {
     scanId: string,
     counts: ScanCounts,
   ): Promise<void> {
-    const where = {
-      sourceId_relativePath: {
-        sourceId: file.sourceId,
-        relativePath: file.relativePath,
-      },
+    const unique = {
+      sourceId: file.sourceId,
+      relativePath: file.relativePath,
     };
-    const existing = await this.database.track.findUnique({
-      where,
-    });
+    const existing = await this.database.orm.Track.where(unique).first();
     const unchanged =
       existing?.fileSizeBytes === file.size &&
       existing.fileModifiedAt.getTime() === file.modifiedAt.getTime() &&
       existing.metadataVersion >= CURRENT_METADATA_VERSION;
 
     if (existing && unchanged) {
-      await this.database.track.update({
-        where: { id: existing.id },
-        data: { available: true, lastSeenScanId: scanId },
+      await this.database.orm.Track.where({ id: existing.id }).update({
+        available: 1,
+        lastSeenScanId: scanId,
       });
       counts.unchangedCount += 1;
       return;
@@ -377,56 +351,43 @@ export class LibraryScanner {
         await this.coverFor(file.absolutePath, metadata.common.picture),
       );
 
-      await this.database.track.upsert({
-        where,
-        create: {
-          title,
-          artist,
-          artistCredits: serializeArtistCredits(artistCredits),
-          album,
-          discNumber,
-          trackNumber,
-          durationMs,
-          coverId,
+      const trackData = {
+        title,
+        artist,
+        artistCredits: serializeArtistCredits(artistCredits),
+        album,
+        discNumber,
+        trackNumber,
+        durationMs,
+        coverId,
+        mimeType: file.mimeType,
+        fileSizeBytes: file.size,
+        fileModifiedAt: file.modifiedAt,
+        available: 1,
+        lastSeenScanId: scanId,
+        metadataVersion: CURRENT_METADATA_VERSION,
+      };
+      if (existing) {
+        await this.database.orm.Track.where({ id: existing.id }).update(
+          trackData,
+        );
+        counts.updatedCount += 1;
+      } else {
+        await this.database.orm.Track.create({
+          ...trackData,
           relativePath: file.relativePath,
           sourceId: file.sourceId,
-          mimeType: file.mimeType,
-          fileSizeBytes: file.size,
-          fileModifiedAt: file.modifiedAt,
-          available: true,
-          lastSeenScanId: scanId,
-          metadataVersion: CURRENT_METADATA_VERSION,
-        },
-        update: {
-          title,
-          artist,
-          artistCredits: serializeArtistCredits(artistCredits),
-          album,
-          discNumber,
-          trackNumber,
-          durationMs,
-          coverId,
-          mimeType: file.mimeType,
-          fileSizeBytes: file.size,
-          fileModifiedAt: file.modifiedAt,
-          available: true,
-          lastSeenScanId: scanId,
-          metadataVersion: CURRENT_METADATA_VERSION,
-        },
-      });
-      if (existing) counts.updatedCount += 1;
-      else counts.createdCount += 1;
+        });
+        counts.createdCount += 1;
+      }
     } catch {
       counts.errorCount += 1;
       if (existing) {
-        await this.database.track.update({
-          where: { id: existing.id },
-          data: {
-            fileSizeBytes: file.size,
-            fileModifiedAt: file.modifiedAt,
-            available: true,
-            lastSeenScanId: scanId,
-          },
+        await this.database.orm.Track.where({ id: existing.id }).update({
+          fileSizeBytes: file.size,
+          fileModifiedAt: file.modifiedAt,
+          available: 1,
+          lastSeenScanId: scanId,
         });
       }
     }
@@ -495,28 +456,32 @@ export class LibraryScanner {
   private async storeCover(cover: CoverImage | null): Promise<string | null> {
     if (!cover) return null;
     const hash = createHash("sha256").update(cover.data).digest("hex");
-    const stored = await this.database.trackCover.upsert({
-      where: { hash },
-      create: {
+    const existing = await this.database.orm.TrackCover.where({ hash }).first();
+    const stored =
+      existing ??
+      (await this.database.orm.TrackCover.create({
         hash,
         mimeType: cover.mimeType,
         data: Uint8Array.from(cover.data),
-      },
-      update: {},
-    });
+      }));
     return stored.id;
   }
 
   private async removeUnusedCovers(): Promise<void> {
-    const tracks = await this.database.track.findMany({
-      where: { coverId: { not: null } },
-      select: { coverId: true },
-    });
+    const tracks = await this.database.orm.Track.where((track) =>
+      track.coverId.isNotNull(),
+    )
+      .select("coverId")
+      .all();
     const coverIds = [
       ...new Set(tracks.flatMap(({ coverId }) => (coverId ? [coverId] : []))),
     ];
-    await this.database.trackCover.deleteMany({
-      ...(coverIds.length ? { where: { id: { notIn: coverIds } } } : {}),
-    });
+    await (
+      coverIds.length
+        ? this.database.orm.TrackCover.where((cover) =>
+            cover.id.notIn(coverIds),
+          )
+        : this.database.orm.TrackCover.where((cover) => cover.id.isNotNull())
+    ).deleteAndCount();
   }
 }

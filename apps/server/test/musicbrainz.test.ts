@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { MetadataProvider } from "../src/generated/prisma/client.js";
+import type { MetadataProviderRow } from "../src/prisma/models.js";
 import { MusicBrainzClient } from "../src/musicbrainz.js";
 
 const provider = {
@@ -12,7 +12,7 @@ const provider = {
   position: 0,
   createdAt: new Date(),
   updatedAt: new Date(),
-} as MetadataProvider;
+} as MetadataProviderRow;
 
 test("MusicBrainz client uses the official origin, contact User-Agent, and request spacing", async () => {
   const requests: URL[] = [];

@@ -1,6 +1,145 @@
 # Handoff
 
-Last updated: 2026-11-10.
+Last updated: 2026-11-11.
+
+## Default MusicBrainz provider and disable lifecycle
+
+MusicBrainz is now created and enabled when the first administrator account is
+created, using the required administrator email as the MusicBrainz contact.
+Startup also backfills the default provider for an existing installation that
+has an administrator but no provider row. A persisted `enabled` flag keeps an
+administrator-disabled provider from being recreated or silently re-enabled.
+
+Settings â†’ Metadata now shows Disable for an active provider and Enable for a
+disabled one. Disabling requires confirmation, preserves the provider record
+and contact, and leaves existing track matches intact. The provider remains in
+the ordered list but is ignored by automatic enrichment, manual candidate
+search, and manual match application until enabled again. The admin API now
+uses `PUT /api/admin/metadata-providers/:id` with `{ "enabled": boolean }`;
+physical provider deletion is no longer exposed.
+
+Verified server and web type checks, all 59 server tests, the focused metadata
+web tests, notification wiring tests, `pnpm check`, Prisma contract
+emission/validation, the local `pnpm db:update` (including the new
+`MetadataProvider.enabled` column), and the full production workspace build.
+The full web suite passed 82 of 83 tests; the remaining pre-existing failure
+expects the sidebar logo variable `logo`, while the current unrelated worktree
+uses `logoNop`. Browser interaction QA was not run. Changes remain uncommitted
+on `dev`; no commit, push, tag, publication, or deployment was performed.
+
+## Persistent randomized playback toggle
+
+Randomize is now an explicit per-user playback toggle rather than an immediate
+queue shuffle. The queue API and SQLite state persist the source-order queue, an
+independent active track, the enabled flag, and the remaining no-repeat random
+pool. Reloading resumes the same active track and pass paused. Repeat-all starts
+a new shuffled pass after exhaustion; repeat-one intentionally replays the
+active track.
+
+The player uses a separate random pool, so enabling randomization leaves the
+visible queue order unchanged. The drawer pins the active track, keeps
+source-order rows below it, and displays a secondary `Randomized` badge while
+the mode is enabled. Add, remove, direct-play, Previous, and drag-reorder actions
+keep the source queue unique and the random pool consistent.
+
+Verification results and any remaining limits are recorded after the final
+workspace checks. Changes remain uncommitted on `dev`; unrelated working-tree
+changes and the pre-existing untracked files were preserved. No commit, push,
+tag, publication, or deployment was performed.
+
+## Prisma 8 upgrade and fresh local database
+
+The server now runs on Prisma 8's contract-first ORM instead of Prisma 7 and its
+generated client. `prisma@8.0.0-rc.33`, `@prisma/cli-engine@0.9.0`, and
+`@prisma/orm-sqlite@8.0.0-rc.23` form the currently published compatible stack.
+The authoritative model is `apps/server/src/prisma/contract.prisma`; emitted
+`contract.json` and `contract.d.ts` are committed beside it. All server queries
+and tests now use `db.orm`, `db.transaction`, `db.close`, and scalar row types
+derived from the emitted contract.
+
+The upgrade intentionally has no migration path. The old Prisma 7 schema,
+twelve committed migrations, generated client, and `prisma7.config.ts` were
+removed. A temporary recoverable copy of those old artifacts is under
+`C:\Users\CYRIAQ~1.DEL\AppData\Local\Temp\peridot-prisma7-artifacts-20261111`.
+`pnpm db:update` applies the current contract to an existing local database;
+`pnpm db:reset` explicitly deletes and recreates it. Prisma's local refs and
+snapshots are written under ignored `apps/server/.peridot/`. Development startup
+uses `db:update`, never `db:reset`.
+
+The actual `apps/server/peridot.db` was reset from scratch. Verification opened
+it read-only and found all 12 application tables plus Prisma's marker, with zero
+users, tracks, sources, and server settings. The database marker matches contract
+storage hash `a80f96be326f8d1f4f7c7fc115b56c0fbae666a95214c66cbae73423cd2d8547`.
+SQLite track availability is stored as `Int` because this SQLite target does not
+provide a boolean codec; API contracts still expose booleans.
+
+Checks passed: frozen-lockfile install, contract emission, workspace typecheck,
+all 79 web tests, all 5 shared UI tests, all 58 server tests, lint/format checks,
+the full workspace build, and a built-server smoke test against a separately
+initialized fresh database. The smoke server returned the expected health payload
+and `requiresAdminUser: true`. The CLI prints a non-failing notice that its
+bundled agent skill is not synced to the repository.
+
+Known limits: Prisma 8 is still a release candidate, so dependency updates require
+checking the published ORM/CLI pairing. No migrations are retained and no data
+was preserved from the previous local database. Changes remain uncommitted on
+`dev`; unrelated working-tree changes, including the pre-existing untracked
+`package-lock.json`, were preserved. No commit, push, tag, publication, or
+deployment was performed. Next: continue normal development against the fresh
+database, then revisit a migration strategy before any production data upgrade.
+
+## Reliable Node 24 development startup
+
+The root development command now runs under a project-scoped Node 24.22.2
+runtime even when the machine-wide Node installation is outside the supported
+major. The previous system Node 22 startup failed with Windows exit
+`3221226505` (`0xC0000409`) after migrations, and its native SQLite module used
+an incompatible ABI. `devEngines.runtime` lets pnpm download and use Node
+24.22.2 for workspace lifecycle scripts.
+
+The development launcher now starts the web and server workspace tasks in
+parallel through pnpm instead of Turbo. Turbo remains the runner for build,
+typecheck, and test, but `turbo run dev` inherited the Windows terminal crash
+even with streamed output. The exact root `pnpm dev` command was verified in an
+interactive terminal: migrations completed, Nuxt served on port 3000, Fastify
+served health on port 17430, and both endpoints returned HTTP 200.
+
+Server test fixtures now canonicalize their temporary roots before constructing
+paths. Node 24 can return a Windows 8.3 alias from `mkdtemp()` while `realpath()`
+returns the long form, which made source deduplication and audio lookup tests
+compare different names for the same directory.
+
+Verified `pnpm install --frozen-lockfile`, `pnpm check`, workspace typecheck,
+`pnpm db:validate`, all 58 server tests after the path fix, and the interactive
+development smoke test. The earlier full test run passed all 79 web and 5
+shared UI tests. The machine-wide Node installer could not be replaced without
+administrator elevation; the project runtime makes that optional. Changes are
+uncommitted on `dev`, including `package.json`, `pnpm-lock.yaml`, the server test
+fixtures, this handoff, and the decision log. The pre-existing untracked
+`package-lock.json` was preserved. No commit, push, tag, publication, or
+deployment was performed.
+
+## Persistent onboarding server discovery
+
+Onboarding now keeps the branded spinner and "Looking for a server on this
+network" status visible throughout server selection, including between
+automatic discovery cycles. Discovered Peridot servers remain listed as direct
+selection actions below the status.
+
+The URL field is no longer shown by default. A bottom-aligned manual-entry
+option reveals and focuses it; address probing remains debounced and verified
+servers are added to the same discovery list. Selection errors stay outside the
+collapsed manual section so they remain visible.
+
+Added onboarding coverage for the permanent spinner copy, found-server list,
+reveal control, and collapsed URL field. The focused test, all 79 web tests,
+web type check, `pnpm check`, the web production build, and `git diff --check`
+passed. A built-app request to `/onboarding` returned HTTP 200 with the spinner
+copy and manual option present and the URL field absent from the initial render.
+Server/schema checks were skipped because no server or storage code changed.
+Browser visual interaction QA was not run. Changes remain uncommitted on `dev`
+with unrelated working-tree changes preserved; no commit, push, tag,
+publication, or deployment was performed.
 
 ## Quiet default sort state in track tables
 

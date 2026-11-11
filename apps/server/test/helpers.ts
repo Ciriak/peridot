@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { copyFile, mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
@@ -27,40 +27,27 @@ export interface TestContextOptions {
 export async function createTestContext(
   options: TestContextOptions = {},
 ): Promise<TestContext> {
-  const root = await mkdtemp(path.join(tmpdir(), "peridot-server-"));
+  const root = await realpath(
+    await mkdtemp(path.join(tmpdir(), "peridot-server-")),
+  );
   const libraryRoot = path.join(root, "music");
   const { mkdir } = await import("node:fs/promises");
   await mkdir(libraryRoot);
   const databasePath = path.join(root, "test.db").replaceAll("\\", "/");
   const databaseUrl = `file:${databasePath}`;
+  const templatePath = process.env.PERIDOT_TEST_DB_TEMPLATE;
+  if (!templatePath) {
+    throw new Error(
+      "Run server tests through pnpm test so the Prisma 8 test database is prepared.",
+    );
+  }
+  await copyFile(templatePath, databasePath);
   const database = createDatabase(databaseUrl);
   const logBuffer = new ServerLogBuffer();
-  for (const migrationName of [
-    "20261110120000_local_library",
-    "20261110180000_users",
-    "20261110190000_user_email",
-    "20261110200000_server_settings",
-    "20261110210000_sources",
-    "20261110220000_source_order",
-    "20261110230000_track_album_order",
-    "20261110240000_track_artist_credits",
-    "20261110250000_user_likes",
-    "20261110260000_user_queue",
-    "20261110270000_metadata_providers",
-    "20261110280000_track_covers",
-  ]) {
-    const migrationPath = new URL(
-      `../prisma/migrations/${migrationName}/migration.sql`,
-      import.meta.url,
-    );
-    const migration = await readFile(migrationPath, "utf8");
-    for (const statement of migration
-      .split(";")
-      .map((value) => value.trim())
-      .filter(Boolean)) {
-      await database.$executeRawUnsafe(statement);
-    }
-  }
+  const metadataFetch =
+    options.metadataFetch ??
+    (async () => Response.json({ releases: [], recordings: [] }));
+  const metadataRequestIntervalMs = options.metadataRequestIntervalMs ?? 0;
   const app = await buildApp({
     config: {
       databaseUrl,
@@ -70,10 +57,8 @@ export async function createTestContext(
     database,
     logger: options.logger ?? false,
     logBuffer,
-    ...(options.metadataFetch ? { metadataFetch: options.metadataFetch } : {}),
-    ...(options.metadataRequestIntervalMs !== undefined
-      ? { metadataRequestIntervalMs: options.metadataRequestIntervalMs }
-      : {}),
+    metadataFetch,
+    metadataRequestIntervalMs,
   });
   const bootstrap = await app.inject({
     method: "POST",
@@ -98,7 +83,7 @@ export async function createTestContext(
     logBuffer,
     async close() {
       await app.close();
-      await database.$disconnect();
+      await database.close();
       await rm(root, { recursive: true, force: true });
     },
   };
@@ -107,22 +92,18 @@ export async function createTestContext(
 export async function createMemberSession(
   context: TestContext,
 ): Promise<{ authorization: string }> {
-  const user = await context.database.user.create({
-    data: {
-      email: "member@example.com",
-      username: "test-member",
-      passwordHash: "unused",
-      role: "member",
-    },
+  const user = await context.database.orm.User.create({
+    email: "member@example.com",
+    username: "test-member",
+    passwordHash: "unused",
+    role: "member",
   });
   const token = "member-session-token";
   const tokenHash = createHash("sha256").update(token).digest("hex");
-  await context.database.session.create({
-    data: {
-      tokenHash,
-      expiresAt: new Date(Date.now() + 60_000),
-      userId: user.id,
-    },
+  await context.database.orm.Session.create({
+    tokenHash,
+    expiresAt: new Date(Date.now() + 60_000),
+    userId: user.id,
   });
   return { authorization: `Bearer ${token}` };
 }

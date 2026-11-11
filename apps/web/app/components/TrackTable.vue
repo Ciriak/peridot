@@ -196,7 +196,7 @@ function isCurrent(track: TrackResponse): boolean {
           @play="play(track.id, true)"
         >
           <tr
-            class="border-b last:border-0 hover:bg-muted/50"
+            class="select-none border-b last:border-0 hover:bg-muted/50"
             :class="isCurrent(track) && 'bg-primary/5'"
             @dblclick.prevent="play(track.id)"
           >
@@ -207,26 +207,30 @@ function isCurrent(track: TrackResponse): boolean {
               {{ formatTrackNumber(track) }}
             </td>
             <td class="p-2">
-              <Button
-                variant="ghost"
-                class="max-w-full justify-start"
-                :aria-label="
-                  isCurrent(track)
-                    ? `Pause ${track.title}`
-                    : `Play track ${track.title}`
-                "
-                @click="play(track.id)"
-                @dblclick.stop
-              >
-                <Icon
-                  :icon="isCurrent(track) ? icons.pause : icons.play"
-                  aria-hidden="true"
-                  :class="
-                    isCurrent(track) ? 'text-primary' : 'text-muted-foreground'
+              <div class="flex min-w-0 items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  :aria-label="
+                    isCurrent(track)
+                      ? `Pause ${track.title}`
+                      : `Play track ${track.title}`
                   "
-                />
+                  @click="play(track.id)"
+                  @dblclick.stop
+                >
+                  <Icon
+                    :icon="isCurrent(track) ? icons.pause : icons.play"
+                    aria-hidden="true"
+                    :class="
+                      isCurrent(track)
+                        ? 'text-primary'
+                        : 'text-muted-foreground'
+                    "
+                  />
+                </Button>
                 <span class="truncate">{{ track.title }}</span>
-              </Button>
+              </div>
             </td>
             <td
               v-if="variant === 'library'"

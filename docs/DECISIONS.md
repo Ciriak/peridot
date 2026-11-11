@@ -1,5 +1,103 @@
 # Decisions
 
+## 2026-11-11: MusicBrainz is enabled by default and providers are disabled, not deleted
+
+The first administrator's required email is also the MusicBrainz contact used
+in Peridot's MusicBrainz User-Agent. Creating that administrator enables
+MusicBrainz automatically. On startup, Peridot also creates the default
+MusicBrainz provider for an existing installation that has an administrator but
+no provider row, so upgrades receive the same zero-configuration behavior.
+
+Providers persist an enabled state and administrators disable or re-enable them
+instead of deleting them. Disabled providers remain visible in Settings with
+their contact information intact, but automatic enrichment, manual candidate
+search, and applying a manual match ignore them. Reordering includes disabled
+rows so their position is retained for later re-enabling. This supersedes the
+earlier deletion behavior, which stopped enrichment while preserving existing
+track match snapshots.
+
+## 2026-11-11: Persistent randomized playback without queue reordering
+
+Randomization is a per-user playback mode, not an immediate queue mutation.
+The queue API returns the source-order `trackIds`, an independent
+`activeTrackId`, `shuffleEnabled`, and the ordered `shuffleTrackIds` remaining in
+the current no-repeat pass. `QueueState` persists the active track and enabled
+flag per user, while `QueueItem.randomPosition` persists the remaining pass
+order. SQLite stores the enabled flag as an integer and the API exposes a
+boolean.
+
+Enabling randomization seeds a Fisher-Yates pool from every source track except
+the current track. Forward advancement consumes the pool once, so a track
+cannot play twice within a pass. Repeat-all starts a fresh shuffled pass only
+after the current pool is exhausted. Repeat-one remains an explicit exception
+and may replay the active track. Disabling randomization clears the pool and
+compacts the visible queue to the active track followed by unplayed source-order
+tracks.
+
+The queue drawer pins the independent active track and renders the saved source
+order below it with a `Randomized` badge. Toggling randomization never shuffles
+the visible source array. Browser writes remain serialized and last-write-wins,
+and the persisted active track and remaining pool restore paused after reload.
+
+## 2026-11-11: Prisma 8 contract runtime with no migration history
+
+Use Prisma 8's contract-first data layer instead of the Prisma 7 generated client.
+The server pins `prisma@8.0.0-rc.33` with
+`@prisma/cli-engine@0.9.0`, matching the toolchain pinned by
+`@prisma/orm-sqlite@8.0.0-rc.23`; these are the current published Prisma 8 CLI
+and SQLite ORM package lines. Prisma 8 remains a release candidate, so these
+versions must move together after checking the ORM package's release tags.
+
+The authoritative schema is `apps/server/src/prisma/contract.prisma`. Contract
+emission writes the committed `contract.json` and `contract.d.ts` beside it.
+Server code uses `db.orm` from the initialized SQLite runtime. SQLite stores the
+track availability flag as an integer because the current SQLite target exposes
+integer, not boolean, codecs; API responses continue to expose a boolean.
+
+Local development intentionally keeps no migration history. `db:update`
+synchronizes an existing database directly from the emitted contract, and
+`db:reset` explicitly removes the configured local SQLite file before applying
+the contract to a new database. Startup never resets data implicitly. Prisma's
+local ref/snapshot state lives under ignored `.peridot/` rather than a tracked
+migrations directory. The old Prisma 7 schema, generated client, and committed
+migrations were removed after the local database was reset.
+
+## 2026-11-11: Project-scoped Node 24 and parallel dev launcher
+
+Pin Node 24.22.2 through pnpm's `devEngines.runtime` with automatic download so
+repository commands honor the required Node major even when a contributor's
+system Node is older. pnpm uses this runtime for workspace lifecycle and package
+scripts, and `pnpm-lock.yaml` records the platform binaries. A system Node
+installation in the supported range remains preferred, but it is not required
+for the documented pnpm workflow.
+
+Run development as two pnpm workspace tasks for the web and server, after the
+same migration step as before. Turbo remains the task graph for build,
+typecheck, and test. On this Windows environment, `turbo run dev` terminated
+with `0xC0000409` when attached to the interactive terminal, while pnpm's
+parallel workspace runner started both persistent tasks and kept them running.
+
+Server test helpers canonicalize their temporary root before deriving database
+and library paths. Node 24 on Windows can return an 8.3 temporary alias from
+`mkdtemp()` while filesystem operations report the long canonical path; using
+the canonical root keeps duplicate-source and audio-file tests aligned with the
+runtime configuration boundary.
+
+## 2026-11-11: Onboarding discovery remains visible beside optional manual entry
+
+Server onboarding presents automatic network discovery as the primary path. The
+shared brand spinner and the exact status "Looking for a server on this network"
+remain visible for the whole server-selection step, including between polling
+cycles and after a scan completes. Found Peridot servers appear in a selectable
+list below that status.
+
+The URL field stays collapsed behind a bottom-aligned "Enter the server address
+manually" option so manual configuration does not compete with the normal
+discovery path. Activating the option reveals and focuses the URL field; the
+existing debounced probe still verifies that address and adds a valid server to
+the same found-server list. Connection failures remain visible outside the
+collapsible section.
+
 ## 2026-11-10: Bulk metadata reset returns tracks to file metadata
 
 Administrators can clear every stored track metadata match from Settings →

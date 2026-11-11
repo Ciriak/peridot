@@ -64,6 +64,12 @@ test("track, album, and artist likes share accessible persistent state wiring", 
   assert.match(button, /aria-pressed/);
   assert.match(button, /icons\.heartFilled/);
   assert.match(button, /icons\.heart/);
+  assert.match(button, /class="group"/);
+  assert.match(
+    button,
+    /class="size-6[^"]*group-hover:text-primary group-active:text-primary"[\s\S]*:class="liked && 'text-primary'"/,
+    "Like feedback colors the icon rather than the button",
+  );
   assert.match(library, /useLikes\(\)/);
   assert.match(library, /props\.favorites \? likedTrackIds\.value/);
   assert.match(layout, /loadLikes\(\)/);

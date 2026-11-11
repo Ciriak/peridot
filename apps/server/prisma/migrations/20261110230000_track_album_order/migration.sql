@@ -1,4 +1,0 @@
--- AlterTable
-ALTER TABLE "Track" ADD COLUMN "discNumber" INTEGER;
-ALTER TABLE "Track" ADD COLUMN "trackNumber" INTEGER;
-ALTER TABLE "Track" ADD COLUMN "metadataVersion" INTEGER NOT NULL DEFAULT 0;

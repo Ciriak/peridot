@@ -2,10 +2,24 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createTestContext } from "./helpers.js";
 
+async function countUsers(
+  context: Awaited<ReturnType<typeof createTestContext>>,
+): Promise<number> {
+  const result = await context.database.orm.User.aggregate((aggregate) => ({
+    count: aggregate.count(),
+  }));
+  return result.count;
+}
+
 test("an empty server requires one administrator and closes bootstrap afterward", async () => {
   const context = await createTestContext();
   try {
-    await context.database.user.deleteMany();
+    await context.database.orm.MetadataProvider.where((provider) =>
+      provider.id.isNotNull(),
+    ).deleteAndCount();
+    await context.database.orm.User.where((user) =>
+      user.id.isNotNull(),
+    ).deleteAndCount();
     const status = await context.app.inject("/api/auth/status");
     assert.equal(status.statusCode, 200);
     assert.deepEqual(status.json(), { requiresAdminUser: true });
@@ -26,7 +40,7 @@ test("an empty server requires one administrator and closes bootstrap afterward"
       },
     });
     assert.equal(invalid.statusCode, 400);
-    assert.equal(await context.database.user.count(), 0);
+    assert.equal(await countUsers(context), 0);
 
     const created = await context.app.inject({
       method: "POST",
@@ -47,12 +61,18 @@ test("an empty server requires one administrator and closes bootstrap afterward"
       false,
     );
 
-    const stored = await context.database.user.findUniqueOrThrow({
-      where: { username: "owner" },
-    });
+    const stored = await context.database.orm.User.where({
+      username: "owner",
+    }).firstOrThrow();
     assert.equal(stored.email, "owner@example.com");
     assert.notEqual(stored.passwordHash, "a-secure-local-password");
     assert.equal(stored.role, "admin");
+
+    const provider = await context.database.orm.MetadataProvider.firstOrThrow({
+      kind: "musicbrainz",
+    });
+    assert.equal(provider.contact, "owner@example.com");
+    assert.equal(provider.enabled, 1);
 
     const duplicate = await context.app.inject({
       method: "POST",
@@ -64,7 +84,7 @@ test("an empty server requires one administrator and closes bootstrap afterward"
       },
     });
     assert.equal(duplicate.statusCode, 409);
-    assert.equal(await context.database.user.count(), 1);
+    assert.equal(await countUsers(context), 1);
   } finally {
     await context.close();
   }

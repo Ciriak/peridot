@@ -233,7 +233,10 @@ test("the app mounts one managed Reka toast region and global status monitor", a
   assert.match(sources, /notifySourceMutation\("added"/);
   assert.match(sources, /notifySourceMutation\("removed"/);
   assert.match(metadata, /notifyMetadataProviderMutation\("added"/);
-  assert.match(metadata, /notifyMetadataProviderMutation\("removed"/);
+  assert.match(
+    metadata,
+    /notifyMetadataProviderMutation\(\s*enabled \? "enabled" : "disabled"/,
+  );
   assert.match(metadata, /notifyMetadataReset/);
   assert.doesNotMatch(
     sources,

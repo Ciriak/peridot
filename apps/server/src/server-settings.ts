@@ -6,12 +6,13 @@ export async function ensureServerSettings(
   database: Database,
   seedLibraryRoot: string,
 ): Promise<void> {
-  const existing = await database.serverSetting.findUnique({
-    where: { id: SERVER_SETTING_ID },
+  const existing = await database.orm.ServerSetting.first({
+    id: SERVER_SETTING_ID,
   });
   if (!existing) {
-    await database.serverSetting.create({
-      data: { id: SERVER_SETTING_ID, libraryRoot: seedLibraryRoot },
+    await database.orm.ServerSetting.create({
+      id: SERVER_SETTING_ID,
+      libraryRoot: seedLibraryRoot,
     });
   }
 }

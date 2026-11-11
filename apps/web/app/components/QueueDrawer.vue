@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue/offline";
 import type { TrackResponse } from "@peridot/contracts";
+import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { useSortable } from "@vueuse/integrations/useSortable";
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
@@ -19,6 +20,7 @@ const {
   loadQueue,
   queueError,
   queueLoading,
+  shuffleEnabled,
   upcomingTracks,
   removeFromQueue,
   reorderQueue,
@@ -91,9 +93,15 @@ onBeforeUnmount(() => document.removeEventListener("keydown", handleKeydown));
       >
         <div class="flex items-start justify-between gap-4">
           <div class="min-w-0">
-            <h2 id="queue-heading" class="text-lg font-semibold">Queue</h2>
+            <div class="flex flex-wrap items-center gap-2">
+              <h2 id="queue-heading" class="text-lg font-semibold">Queue</h2>
+              <Badge v-if="shuffleEnabled" variant="secondary">
+                <Icon :icon="icons.shuffle" aria-hidden="true" />
+                Randomized
+              </Badge>
+            </div>
             <p id="queue-description" class="text-sm text-muted-foreground">
-              Now playing and tracks coming next.
+              Now playing and the saved queue order.
             </p>
           </div>
           <Button
@@ -131,7 +139,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", handleKeydown));
 
         <div class="mt-4 flex items-center justify-between gap-4">
           <h3 id="queue-upcoming-heading" class="text-sm font-semibold">
-            Next in queue
+            {{ shuffleEnabled ? "Queue order" : "Next in queue" }}
           </h3>
           <span class="text-xs text-muted-foreground">
             {{ upcomingTracks.length }}

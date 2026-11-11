@@ -33,7 +33,14 @@ test("embedded artwork is deduplicated and served through a signed URL", async (
       );
     }
     await startScan(context);
-    assert.equal(await context.database.trackCover.count(), 1);
+    assert.equal(
+      (
+        await context.database.orm.TrackCover.aggregate((aggregate) => ({
+          count: aggregate.count(),
+        }))
+      ).count,
+      1,
+    );
     const tracks = await context.app.inject({
       method: "GET",
       url: "/api/tracks",

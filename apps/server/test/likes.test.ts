@@ -27,7 +27,7 @@ async function createCatalogTrack(
   );
   const scan = await startScan(context);
   assert.equal(scan.status, "completed");
-  return context.database.track.findFirstOrThrow();
+  return context.database.orm.Track.firstOrThrow();
 }
 
 async function listLikes(
@@ -79,7 +79,14 @@ test("likes persist for tracks, albums, and artists with normalized identities",
       },
     });
     assert.equal(repeatedAlbum.statusCode, 200);
-    assert.equal((await context.database.albumLike.count()) as number, 1);
+    assert.equal(
+      (
+        await context.database.orm.AlbumLike.aggregate((aggregate) => ({
+          count: aggregate.count(),
+        }))
+      ).count,
+      1,
+    );
 
     const likes = await listLikes(context);
     assert.deepEqual(
@@ -258,14 +265,19 @@ test("deleting a track or user removes their likes", async () => {
   const context = await createTestContext();
   try {
     const track = await createCatalogTrack(context);
-    await context.database.trackLike.create({
-      data: {
-        userId: (await context.database.user.findFirstOrThrow()).id,
-        trackId: track.id,
-      },
+    await context.database.orm.TrackLike.create({
+      userId: (await context.database.orm.User.firstOrThrow()).id,
+      trackId: track.id,
     });
-    await context.database.track.delete({ where: { id: track.id } });
-    assert.equal(await context.database.trackLike.count(), 0);
+    await context.database.orm.Track.where({ id: track.id }).delete();
+    assert.equal(
+      (
+        await context.database.orm.TrackLike.aggregate((aggregate) => ({
+          count: aggregate.count(),
+        }))
+      ).count,
+      0,
+    );
 
     const member = await createMemberSession(context);
     await context.app.inject({
@@ -280,11 +292,25 @@ test("deleting a track or user removes their likes", async () => {
       headers: member,
       payload: { kind: "artist", name: "Artist" },
     });
-    await context.database.user.delete({
-      where: { username: "test-member" },
-    });
-    assert.equal(await context.database.albumLike.count(), 0);
-    assert.equal(await context.database.artistLike.count(), 0);
+    await context.database.orm.User.where({
+      username: "test-member",
+    }).delete();
+    assert.equal(
+      (
+        await context.database.orm.AlbumLike.aggregate((aggregate) => ({
+          count: aggregate.count(),
+        }))
+      ).count,
+      0,
+    );
+    assert.equal(
+      (
+        await context.database.orm.ArtistLike.aggregate((aggregate) => ({
+          count: aggregate.count(),
+        }))
+      ).count,
+      0,
+    );
   } finally {
     await context.close();
   }

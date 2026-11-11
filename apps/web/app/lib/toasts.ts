@@ -73,26 +73,28 @@ export function notifySourceMutation(
 }
 
 export function notifyMetadataProviderMutation(
-  action: "added" | "removed",
+  action: "added" | "disabled" | "enabled",
   providerName?: string,
 ) {
   const name = providerName?.trim() || "Metadata provider";
-  const content =
-    action === "added"
-      ? {
-          title: "Metadata provider added",
-          description: `${name} will be used for future library scans.`,
-          status: "success" as const,
-        }
-      : {
-          title: "Metadata provider removed",
-          description: `${name} will no longer be used for metadata matching.`,
-          status: "success" as const,
-        };
+  const content = {
+    added: {
+      title: "Metadata provider added",
+      description: `${name} will be used for future library scans.`,
+    },
+    disabled: {
+      title: "Metadata provider disabled",
+      description: `${name} will no longer be used for metadata matching.`,
+    },
+    enabled: {
+      title: "Metadata provider enabled",
+      description: `${name} will be used for future metadata matching.`,
+    },
+  }[action];
   appToastManager.add({
     title: content.title,
     description: content.description,
-    status: content.status,
+    status: "success",
     duration: 5000,
     type: "foreground",
     data: { kind: "success" },

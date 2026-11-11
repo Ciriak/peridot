@@ -2,6 +2,7 @@
 import { useRoute, useState } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import logo from "@peridot/ui/assets/brand/logo.svg";
+import logoNop from "@peridot/ui/assets/brand/logo-nop.png";
 import { Button } from "@peridot/ui/components/ui/button";
 import { Input } from "@peridot/ui/components/ui/input";
 import { Slider } from "@peridot/ui/components/ui/slider";
@@ -43,19 +44,22 @@ const {
 } = useLikes();
 const {
   playing,
+  repeatMode,
   currentTrackId,
   elapsed,
   volume,
   loading,
   error,
   active,
+  queueTracks,
+  shuffleEnabled,
   canGoNext,
   durationSeconds,
   loadQueue,
   next,
   previous,
-  randomizeQueue,
-  upcomingTracks,
+  toggleRandomization,
+  cycleRepeatMode,
   togglePlayback,
   seek,
   setVolume,
@@ -142,7 +146,11 @@ onMounted(() => {
             variant="ghost"
             class="flex-1 justify-start text-lg font-semibold"
             ><NuxtLink to="/"
-              ><img :src="logo" alt="" class="size-6" />peridot</NuxtLink
+              ><img
+                :src="logoNop"
+                alt=""
+                class="size-6 p-0.5"
+              />Peridot</NuxtLink
             ></Button
           >
           <Button
@@ -357,22 +365,40 @@ onMounted(() => {
           <Button
             variant="ghost"
             size="icon-lg"
-            aria-label="Randomize upcoming tracks"
-            :disabled="upcomingTracks.length < 2"
-            @click="randomizeQueue"
-            ><Icon :icon="icons.shuffle" aria-hidden="true" class="size-6"
+            class="group"
+            :aria-label="
+              shuffleEnabled
+                ? 'Disable randomized playback'
+                : 'Enable randomized playback'
+            "
+            :aria-pressed="shuffleEnabled"
+            :disabled="!shuffleEnabled && (!active || queueTracks.length < 2)"
+            @click="toggleRandomization"
+            ><Icon
+              :icon="icons.shuffle"
+              aria-hidden="true"
+              class="size-6 transition-colors"
+              :class="
+                shuffleEnabled
+                  ? 'text-primary group-hover:text-primary group-active:text-primary'
+                  : 'text-muted-foreground'
+              "
           /></Button>
           <Button
             variant="ghost"
             size="icon-lg"
+            class="group"
             aria-label="Previous track"
             :disabled="!active"
             @click="previous"
-            ><Icon :icon="icons.previous" aria-hidden="true" class="size-6"
+            ><Icon
+              :icon="icons.previous"
+              aria-hidden="true"
+              class="size-6 transition-colors group-hover:text-primary group-active:text-primary"
           /></Button>
           <Button
             size="icon-lg"
-            class="size-12 rounded-full"
+            class="size-12 translate-y-1 rounded-full"
             :disabled="!active"
             :aria-label="
               loading
@@ -395,19 +421,47 @@ onMounted(() => {
           <Button
             variant="ghost"
             size="icon-lg"
+            class="group"
             aria-label="Next track"
             :disabled="!canGoNext"
             @click="next()"
-            ><Icon :icon="icons.next" aria-hidden="true" class="size-6"
+            ><Icon
+              :icon="icons.next"
+              aria-hidden="true"
+              class="size-6 transition-colors group-hover:text-primary group-active:text-primary"
           /></Button>
           <Button
             variant="ghost"
             size="icon-lg"
-            aria-label="Restart track"
+            class="group relative"
+            :aria-label="
+              repeatMode === 'off'
+                ? 'Enable repeat'
+                : repeatMode === 'all'
+                  ? 'Switch to repeat one'
+                  : 'Turn off repeat'
+            "
+            :aria-pressed="repeatMode !== 'off'"
             :disabled="!active"
-            @click="seek(0)"
-            ><Icon :icon="icons.restart" aria-hidden="true" class="size-6"
-          /></Button>
+            @click="cycleRepeatMode"
+          >
+            <Icon
+              :icon="repeatMode === 'one' ? icons.repeatOne : icons.repeat"
+              aria-hidden="true"
+              class="size-6 transition-colors"
+              :class="
+                repeatMode === 'off'
+                  ? 'text-muted-foreground'
+                  : 'text-primary group-hover:text-primary group-active:text-primary'
+              "
+            />
+            <span
+              v-if="repeatMode === 'one'"
+              aria-hidden="true"
+              class="absolute right-1 top-1 text-xs font-semibold leading-none text-primary"
+              >1</span
+            >
+          </Button>
         </div>
         <div
           class="flex items-center gap-3 text-xs tabular-nums text-muted-foreground"
@@ -429,13 +483,19 @@ onMounted(() => {
         <Button
           variant="ghost"
           size="icon-lg"
+          class="group"
           :aria-label="queueOpen ? 'Close queue' : 'Open queue'"
           aria-controls="queue-drawer"
           :aria-expanded="queueOpen"
           data-queue-toggle
           @click="queueOpen = !queueOpen"
         >
-          <Icon :icon="icons.queue" aria-hidden="true" class="size-6" />
+          <Icon
+            :icon="icons.queue"
+            aria-hidden="true"
+            class="size-6 transition-colors group-hover:text-primary group-active:text-primary"
+            :class="queueOpen && 'text-primary'"
+          />
         </Button>
         <div class="hidden items-center gap-3 lg:flex">
           <Icon

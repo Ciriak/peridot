@@ -108,7 +108,7 @@ test("metadata providers have a dedicated sortable management page", async () =>
   const page = await readSource("../app/pages/settings/metadata.vue");
   assert.match(page, /listMetadataProviders/);
   assert.match(page, /createMetadataProvider/);
-  assert.match(page, /deleteMetadataProvider/);
+  assert.match(page, /setMetadataProviderEnabled/);
   assert.match(page, /reorderMetadataProviders/);
   assert.match(page, /useSortable/);
   assert.match(page, /Contact email or URL/);
@@ -127,9 +127,12 @@ test("metadata providers have a dedicated sortable management page", async () =>
   assert.match(page, /Peridot will display the original tags/);
   assert.match(page, /Providers and audio files are not changed/);
   assert.match(page, /musicBrainzAdded/);
-  assert.match(page, /Already added/);
+  assert.match(page, /Configured. Enable or disable/);
+  assert.match(page, /Disable metadata provider\?/);
+  assert.match(page, /provider\.enabled/);
   assert.doesNotMatch(page, /Display name/);
   assert.doesNotMatch(page, /provider-name/);
+  assert.doesNotMatch(page, /Remove metadata provider/);
   assert.match(page, /No API key is required/);
   assert.match(page, /AlertDialogRoot/);
 });

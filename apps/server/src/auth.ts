@@ -13,6 +13,7 @@ import type {
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { Database } from "./database.js";
 import { sendError } from "./http.js";
+import { ensureDefaultMetadataProvider } from "./metadata-providers.js";
 
 const scrypt = promisify(scryptCallback);
 const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -95,8 +96,10 @@ async function createSession(
 ): Promise<AuthSessionResponse> {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + SESSION_DURATION_MS);
-  await database.session.create({
-    data: { tokenHash: tokenHash(token), expiresAt, userId: user.id },
+  await database.orm.Session.create({
+    tokenHash: tokenHash(token),
+    expiresAt,
+    userId: user.id,
   });
   return { token, expiresAt: expiresAt.toISOString(), user: publicUser(user) };
 }
@@ -106,7 +109,12 @@ export async function registerAuthRoutes(
   database: Database,
 ) {
   app.get("/api/auth/status", async (): Promise<AuthStatusResponse> => ({
-    requiresAdminUser: (await database.user.count()) === 0,
+    requiresAdminUser:
+      (
+        await database.orm.User.aggregate((aggregate) => ({
+          count: aggregate.count(),
+        }))
+      ).count === 0,
   }));
 
   app.post<{ Body: CredentialsBody }>(
@@ -123,7 +131,13 @@ export async function registerAuthRoutes(
           "Use a valid email, a 3–32 character username, and a 12+ character password",
         );
       }
-      if ((await database.user.count()) > 0) {
+      if (
+        (
+          await database.orm.User.aggregate((aggregate) => ({
+            count: aggregate.count(),
+          }))
+        ).count > 0
+      ) {
         return sendError(
           reply,
           409,
@@ -132,18 +146,23 @@ export async function registerAuthRoutes(
         );
       }
       try {
-        const user = await database.user.create({
-          data: {
-            email,
-            username,
-            passwordHash: await hashPassword(password),
-            role: "admin",
-            bootstrapKey: BOOTSTRAP_KEY,
-          },
+        const user = await database.orm.User.create({
+          email,
+          username,
+          passwordHash: await hashPassword(password),
+          role: "admin",
+          bootstrapKey: BOOTSTRAP_KEY,
         });
+        await ensureDefaultMetadataProvider(database, email);
         return reply.code(201).send(await createSession(database, user));
       } catch (error) {
-        if ((await database.user.count()) > 0) {
+        if (
+          (
+            await database.orm.User.aggregate((aggregate) => ({
+              count: aggregate.count(),
+            }))
+          ).count > 0
+        ) {
           return sendError(
             reply,
             409,
@@ -181,8 +200,8 @@ export async function registerAuthRoutes(
         );
       }
       const user = username
-        ? await database.user.findUnique({ where: { username } })
-        : await database.user.findUnique({ where: { email: email! } });
+        ? await database.orm.User.first({ username })
+        : await database.orm.User.first({ email: email! });
       if (!user || !(await verifyPassword(password, user.passwordHash))) {
         return sendError(
           reply,
@@ -212,14 +231,21 @@ export async function registerProtectedRoutes(
         ? authorization.slice(prefix.length)
         : "";
       const session = token
-        ? await database.session.findUnique({
-            where: { tokenHash: tokenHash(token) },
-            include: { user: true },
+        ? await database.orm.Session.where({
+            tokenHash: tokenHash(token),
           })
+            .include("user")
+            .first()
         : null;
       if (!session || session.expiresAt <= new Date()) {
         if (authorizeRequest?.(request)) return;
-        if ((await database.user.count()) === 0) {
+        if (
+          (
+            await database.orm.User.aggregate((aggregate) => ({
+              count: aggregate.count(),
+            }))
+          ).count === 0
+        ) {
           return sendError(
             reply,
             428,
@@ -228,7 +254,7 @@ export async function registerProtectedRoutes(
           );
         }
         if (session) {
-          await database.session.deleteMany({ where: { id: session.id } });
+          await database.orm.Session.where({ id: session.id }).deleteAndCount();
         }
         return sendError(
           reply,
@@ -246,9 +272,9 @@ export async function registerProtectedRoutes(
       async (request) => request.authenticatedUser,
     );
     protectedApp.delete("/api/auth/session", async (request, reply) => {
-      await database.session.delete({
-        where: { id: request.authenticatedSessionId! },
-      });
+      await database.orm.Session.where({
+        id: request.authenticatedSessionId!,
+      }).delete();
       return reply.code(204).send();
     });
     await routes(protectedApp);

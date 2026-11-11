@@ -1,32 +1,20 @@
-generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
-}
-
-datasource db {
-  provider = "sqlite"
-}
+// use prisma-8
 
 model User {
-  id           String       @id @default(cuid())
-  email        String       @unique
-  username     String       @unique
+  id           String   @id @onCreate(cuid(2))
+  email        String   @unique
+  username     String   @unique
   passwordHash String
   role         String
-  bootstrapKey String?      @unique
-  sessions     Session[]
-  trackLikes   TrackLike[]
-  albumLikes   AlbumLike[]
-  artistLikes  ArtistLike[]
-  queueItems   QueueItem[]
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  bootstrapKey String?  @unique
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @onCreate(now()) @onUpdate(now())
 
   @@index([role])
 }
 
 model Session {
-  id        String   @id @default(cuid())
+  id        String   @id @onCreate(cuid(2))
   tokenHash String   @unique
   expiresAt DateTime
   userId    String
@@ -38,7 +26,7 @@ model Session {
 }
 
 model Track {
-  id                         String      @id @default(cuid())
+  id                         String     @id @onCreate(cuid(2))
   title                      String
   artist                     String
   artistCredits              String?
@@ -50,8 +38,8 @@ model Track {
   durationMs                 Int?
   fileSizeBytes              BigInt
   fileModifiedAt             DateTime
-  metadataVersion            Int         @default(0)
-  metadataMode               String      @default("automatic")
+  metadataVersion            Int        @default(0)
+  metadataMode               String     @default("automatic")
   metadataTitle              String?
   metadataArtist             String?
   metadataArtistCredits      String?
@@ -66,14 +54,12 @@ model Track {
   metadataMatchedAt          DateTime?
   metadataAttemptedSignature String?
   coverId                    String?
-  available                  Boolean     @default(true)
+  available                  Int        @default(1)
   lastSeenScanId             String?
   sourceId                   String?
-  source                     Source?     @relation(fields: [sourceId], references: [id], onDelete: SetNull)
-  likes                      TrackLike[]
-  queueItems                 QueueItem[]
-  createdAt                  DateTime    @default(now())
-  updatedAt                  DateTime    @updatedAt
+  source                     Source?    @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  createdAt                  DateTime   @default(now())
+  updatedAt                  DateTime   @onCreate(now()) @onUpdate(now())
 
   @@unique([sourceId, relativePath])
   @@index([available])
@@ -83,12 +69,12 @@ model Track {
 }
 
 model TrackCover {
-  id        String   @id @default(cuid())
+  id        String   @id @onCreate(cuid(2))
   hash      String   @unique
   mimeType  String
   data      Bytes
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @onCreate(now()) @onUpdate(now())
 }
 
 model TrackLike {
@@ -103,20 +89,33 @@ model TrackLike {
 }
 
 model QueueItem {
-  userId    String
-  trackId   String
-  position  Int
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  track     Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
+  userId         String
+  trackId        String
+  position       Int
+  randomPosition Int?
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  track          Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now())
 
   @@id([userId, trackId])
   @@index([userId, position])
+  @@index([userId, randomPosition])
   @@index([trackId])
 }
 
+model QueueState {
+  userId         String   @id
+  activeTrackId  String?
+  shuffleEnabled Int      @default(0)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activeTrack    Track?   @relation(fields: [activeTrackId], references: [id], onDelete: SetNull)
+  updatedAt      DateTime @onCreate(now()) @onUpdate(now())
+
+  @@index([activeTrackId])
+}
+
 model AlbumLike {
-  id               String   @id @default(cuid())
+  id               String   @id @onCreate(cuid(2))
   userId           String
   title            String
   artist           String
@@ -130,7 +129,7 @@ model AlbumLike {
 }
 
 model ArtistLike {
-  id             String   @id @default(cuid())
+  id             String   @id @onCreate(cuid(2))
   userId         String
   name           String
   normalizedName String
@@ -142,7 +141,7 @@ model ArtistLike {
 }
 
 model LibraryScan {
-  id                     String    @id @default(cuid())
+  id                     String    @id @onCreate(cuid(2))
   status                 String
   sourceId               String?
   sourceName             String?
@@ -171,11 +170,11 @@ model LibraryScan {
 model ServerSetting {
   id          String   @id
   libraryRoot String
-  updatedAt   DateTime @updatedAt
+  updatedAt   DateTime @onCreate(now()) @onUpdate(now())
 }
 
 model Source {
-  id          String   @id @default(cuid())
+  id          String   @id @onCreate(cuid(2))
   kind        String
   name        String?
   path        String?
@@ -183,22 +182,22 @@ model Source {
   integration String?
   position    Int      @default(0)
   createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  tracks      Track[]
+  updatedAt   DateTime @onCreate(now()) @onUpdate(now())
 
   @@index([kind])
   @@index([position])
 }
 
 model MetadataProvider {
-  id                   String   @id @default(cuid())
+  id                   String   @id @onCreate(cuid(2))
   kind                 String   @unique
   name                 String
   contact              String
   credentialCiphertext String?
+  enabled              Int      @default(1)
   position             Int      @default(0)
   createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  updatedAt            DateTime @onCreate(now()) @onUpdate(now())
 
   @@index([position])
 }

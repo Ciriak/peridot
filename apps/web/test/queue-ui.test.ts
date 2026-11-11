@@ -15,14 +15,29 @@ test("the player exposes randomize and a persistent right-side queue drawer", as
     ),
   ]);
 
-  assert.match(layout, /aria-label="Randomize upcoming tracks"/);
-  assert.match(layout, /:disabled="upcomingTracks\.length < 2"/);
-  assert.match(layout, /@click="randomizeQueue"/);
+  assert.match(layout, /shuffleEnabled\s*\?\s*'Disable randomized playback'/);
+  assert.match(layout, /'Enable randomized playback'/);
+  assert.match(layout, /:aria-pressed="shuffleEnabled"/);
+  assert.match(
+    layout,
+    /:disabled="\s*!shuffleEnabled && \(!active \|\| queueTracks\.length < 2\)\s*"/,
+  );
+  assert.match(
+    layout,
+    /shuffleEnabled\s*\?\s*'text-primary group-hover:text-primary group-active:text-primary'\s*:\s*'text-muted-foreground'/,
+    "Randomization uses Repeat-style active and inactive icon colors",
+  );
+  assert.match(layout, /@click="toggleRandomization"/);
   assert.match(
     layout,
     /:aria-label="queueOpen \? 'Close queue' : 'Open queue'"/,
   );
   assert.match(layout, /:aria-expanded="queueOpen"/);
+  assert.match(
+    layout,
+    /:class="queueOpen && 'text-primary'"/,
+    "An open queue colors only its icon primary",
+  );
   assert.match(layout, /data-queue-toggle/);
   assert.doesNotMatch(layout, /@pointerdown\.stop/);
   assert.match(layout, /@click="queueOpen = !queueOpen"/);
@@ -44,6 +59,9 @@ test("the player exposes randomize and a persistent right-side queue drawer", as
   assert.doesNotMatch(drawer, /\bpb-52\b|\bpb-32\b/);
   assert.match(layout, /fixed inset-x-0 bottom-0 z-30/);
   assert.match(drawer, />\s*Now playing\s*</);
+  assert.match(drawer, /<Badge v-if="shuffleEnabled" variant="secondary">/);
+  assert.match(drawer, /Randomized/);
+  assert.match(drawer, /shuffleEnabled \? "Queue order" : "Next in queue"/);
   assert.match(drawer, /useSortable\(queueList, sortableTracks/);
   assert.doesNotMatch(drawer, /handle: "\.queue-drag-handle"/);
   assert.match(
@@ -62,6 +80,18 @@ test("the player exposes randomize and a persistent right-side queue drawer", as
   assert.match(player, /saveQueue\(normalized\)/);
   assert.match(player, /queueAuthScope/);
   assert.match(player, /queueHistory/);
+  assert.match(player, /shuffleTrackIds/);
+  assert.match(player, /compactQueueAfterShuffle/);
+  assert.match(
+    player,
+    /function toggleRandomization\(\)[\s\S]*shuffledPoolExcept\(/,
+    "Enabling randomization builds a separate playback pool",
+  );
+  assert.match(
+    player,
+    /function toggleRandomization\(\)[\s\S]*setQueueSnapshot\(\{\s*trackIds,\s*activeTrackId: currentTrackId\.value,\s*shuffleEnabled: true/,
+    "Enabling randomization does not reorder source queue IDs",
+  );
 });
 
 test("track context menus add a selected track as the next queue entry", async () => {

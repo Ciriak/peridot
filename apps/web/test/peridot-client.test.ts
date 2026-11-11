@@ -9,7 +9,6 @@ import {
   createUserSession,
   deleteSource,
   deleteLike,
-  deleteMetadataProvider,
   discoverLocalServers,
   fetchAuthStatus,
   fetchQueue,
@@ -32,6 +31,7 @@ import {
   revertTrackMetadata,
   revokeSession,
   searchDirectories,
+  setMetadataProviderEnabled,
   startLibraryScan,
   trackAudioUrl,
 } from "../app/lib/peridot-client.ts";
@@ -87,12 +87,26 @@ test("metadata provider, source scan, and correction calls use authenticated end
           name: "MusicBrainz",
           contact: "owner@example.com",
           hasCredential: false,
+          enabled: true,
         },
         { status: 201 },
       );
     }
     if (init?.method === "PUT" && url.endsWith("/metadata-providers/order")) {
       return Response.json({ items: [] });
+    }
+    if (
+      init?.method === "PUT" &&
+      url.endsWith("/metadata-providers/provider-1")
+    ) {
+      return Response.json({
+        id: "provider-1",
+        kind: "musicbrainz",
+        name: "MusicBrainz",
+        contact: "owner@example.com",
+        hasCredential: false,
+        enabled: false,
+      });
     }
     return Response.json({ items: [] });
   };
@@ -111,7 +125,17 @@ test("metadata provider, source scan, and correction calls use authenticated end
     "provider-1",
   );
   await reorderMetadataProviders("http://127.0.0.1:17430", "s", ["provider-1"]);
-  await deleteMetadataProvider("http://127.0.0.1:17430", "s", "provider-1");
+  assert.equal(
+    (
+      await setMetadataProviderEnabled(
+        "http://127.0.0.1:17430",
+        "s",
+        "provider-1",
+        false,
+      )
+    ).enabled,
+    false,
+  );
   assert.equal(
     (await refreshMetadata("http://127.0.0.1:17430", "s")).metadataStatus,
     "pending",
@@ -167,7 +191,7 @@ test("metadata provider, source scan, and correction calls use authenticated end
       },
       {
         input: "http://127.0.0.1:17430/api/admin/metadata-providers/provider-1",
-        method: "DELETE",
+        method: "PUT",
       },
       {
         input: "http://127.0.0.1:17430/api/admin/metadata/refresh",
@@ -205,6 +229,12 @@ test("metadata provider, source scan, and correction calls use authenticated end
 });
 
 test("queue reads and writes are authenticated ordered snapshots", async (context) => {
+  const queue = {
+    trackIds: ["track-2", "track-1"],
+    activeTrackId: "track-2",
+    shuffleEnabled: true,
+    shuffleTrackIds: ["track-1"],
+  };
   const originalFetch = globalThis.fetch;
   context.after(() => {
     globalThis.fetch = originalFetch;
@@ -212,19 +242,16 @@ test("queue reads and writes are authenticated ordered snapshots", async (contex
   const requests: Array<{ input: string; init?: RequestInit }> = [];
   globalThis.fetch = async (input, init) => {
     requests.push({ input: String(input), init });
-    return Response.json({ trackIds: ["track-2", "track-1"] });
+    return Response.json(queue);
   };
 
   assert.deepEqual(
     await fetchQueue("http://127.0.0.1:17430", "session-token"),
-    { trackIds: ["track-2", "track-1"] },
+    queue,
   );
   assert.deepEqual(
-    await replaceQueue("http://127.0.0.1:17430", "session-token", [
-      "track-2",
-      "track-1",
-    ]),
-    { trackIds: ["track-2", "track-1"] },
+    await replaceQueue("http://127.0.0.1:17430", "session-token", queue),
+    queue,
   );
 
   assert.equal(requests[0]?.input, "http://127.0.0.1:17430/api/queue");
@@ -238,9 +265,7 @@ test("queue reads and writes are authenticated ordered snapshots", async (contex
     new Headers(requests[1]?.init?.headers).get("Content-Type"),
     "application/json",
   );
-  assert.deepEqual(JSON.parse(String(requests[1]?.init?.body)), {
-    trackIds: ["track-2", "track-1"],
-  });
+  assert.deepEqual(JSON.parse(String(requests[1]?.init?.body)), queue);
 });
 
 test("library track listing sends the session to the catalog endpoint", async (context) => {

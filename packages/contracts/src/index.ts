@@ -57,10 +57,16 @@ export interface PlaybackTokenResponse {
 
 export interface QueueResponse {
   trackIds: string[];
+  activeTrackId: string | null;
+  shuffleEnabled: boolean;
+  shuffleTrackIds: string[];
 }
 
 export interface ReplaceQueueRequest {
   trackIds: string[];
+  activeTrackId?: string | null;
+  shuffleEnabled?: boolean;
+  shuffleTrackIds?: string[];
 }
 
 export interface TrackLikeResponse {
@@ -167,6 +173,7 @@ export interface MetadataProviderResponse {
   name: string;
   contact: string;
   hasCredential: boolean;
+  enabled: boolean;
 }
 
 export interface MetadataProviderListResponse {
@@ -182,6 +189,10 @@ export interface CreateMetadataProviderRequest {
 
 export interface ReorderMetadataProvidersRequest {
   ids: string[];
+}
+
+export interface SetMetadataProviderEnabledRequest {
+  enabled: boolean;
 }
 
 export type TrackMetadataMatchMode = "automatic" | "manual";

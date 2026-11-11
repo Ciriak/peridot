@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { DEFAULT_SERVER_PORT, loadServerConfig } from "../src/config.js";
@@ -10,7 +10,7 @@ import { createTestContext } from "./helpers.js";
 test("health endpoint responds without database or external services", async () => {
   const context = await createTestContext();
   try {
-    await context.database.$disconnect();
+    await context.database.close();
     const response = await context.app.inject({
       method: "GET",
       url: "/api/health",
@@ -43,7 +43,7 @@ test("server configuration validates storage and browser origins", async () => {
       MUSIC_LIBRARY_PATH: libraryRoot,
       PERIDOT_WEB_ORIGINS: "https://music.example.com",
     });
-    assert.equal(config.libraryRoot, libraryRoot);
+    assert.equal(config.libraryRoot, await realpath(libraryRoot));
     assert.deepEqual(config.webOrigins, ["https://music.example.com"]);
   } finally {
     await rm(root, { recursive: true, force: true });

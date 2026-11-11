@@ -11,13 +11,13 @@ import {
   serializeArtistCredits,
 } from "./artist-credits.js";
 import type { Database } from "./database.js";
-import type { Track } from "./generated/prisma/client.js";
 import { orderedMetadataProviders } from "./metadata-providers.js";
 import {
   MusicBrainzClient,
   MusicBrainzError,
   type MetadataTrackInput,
 } from "./musicbrainz.js";
+import type { TrackRow } from "./prisma/models.js";
 
 export class MetadataEnrichmentError extends Error {
   constructor(
@@ -29,7 +29,7 @@ export class MetadataEnrichmentError extends Error {
   }
 }
 
-function trackInput(track: Track): MetadataTrackInput {
+function trackInput(track: TrackRow): MetadataTrackInput {
   return {
     id: track.id,
     title: track.title,
@@ -41,7 +41,7 @@ function trackInput(track: Track): MetadataTrackInput {
   };
 }
 
-function inputSignature(track: Track): string {
+function inputSignature(track: TrackRow): string {
   return createHash("sha256")
     .update(
       JSON.stringify([
@@ -58,10 +58,10 @@ function inputSignature(track: Track): string {
 
 interface FolderAlbum {
   title: string;
-  tracks: Track[];
+  tracks: TrackRow[];
 }
 
-function folderKey(track: Track): string {
+function folderKey(track: TrackRow): string {
   return `${track.sourceId ?? ""}\u0000${path.dirname(track.relativePath)}`;
 }
 
@@ -76,7 +76,10 @@ function sourceFolderTitle(
   return path.basename(sourcePath ?? "") || "Unknown Album";
 }
 
-function folderAlbumTitle(tracks: readonly Track[], fallback: string): string {
+function folderAlbumTitle(
+  tracks: readonly TrackRow[],
+  fallback: string,
+): string {
   const taggedAlbums = tracks
     .map((track) => track.album?.trim())
     .filter((album): album is string => Boolean(album));
@@ -179,67 +182,54 @@ export class MetadataEnrichment {
     try {
       const providers = await orderedMetadataProviders(this.database);
       if (!providers.length) {
-        await this.database.libraryScan.update({
-          where: { id: scanId },
-          data: {
-            metadataStatus: "skipped",
-            metadataFailureSummary: "No metadata providers are configured.",
-          },
+        await this.database.orm.LibraryScan.where({ id: scanId }).update({
+          metadataStatus: "skipped",
+          metadataFailureSummary: "No metadata providers are enabled.",
         });
         return;
       }
 
-      await this.database.libraryScan.update({
-        where: { id: scanId },
-        data: { metadataStatus: "running" },
+      await this.database.orm.LibraryScan.where({ id: scanId }).update({
+        metadataStatus: "running",
       });
-      const tracks = await this.database.track.findMany({
-        where: {
-          available: true,
-          metadataMode: "automatic",
-          ...(sourceId ? { sourceId } : {}),
-        },
+      const trackQuery = this.database.orm.Track.where({
+        available: 1,
+        metadataMode: "automatic",
       });
+      const tracks = await (
+        sourceId ? trackQuery.where({ sourceId }) : trackQuery
+      ).all();
       const targets = force
         ? tracks
         : tracks.filter(
             (track) =>
               track.metadataAttemptedSignature !== inputSignature(track),
           );
-      await this.database.libraryScan.update({
-        where: { id: scanId },
-        data: {
-          metadataTotalCount: targets.length,
-          metadataProcessedCount: 0,
-          metadataMatchedCount: 0,
-          metadataUnmatchedCount: 0,
-          metadataErrorCount: 0,
-        },
+      await this.database.orm.LibraryScan.where({ id: scanId }).update({
+        metadataTotalCount: targets.length,
+        metadataProcessedCount: 0,
+        metadataMatchedCount: 0,
+        metadataUnmatchedCount: 0,
+        metadataErrorCount: 0,
       });
       if (!targets.length) {
-        await this.database.libraryScan.update({
-          where: { id: scanId },
-          data: { metadataStatus: "completed" },
+        await this.database.orm.LibraryScan.where({ id: scanId }).update({
+          metadataStatus: "completed",
         });
         return;
       }
 
       const sourcePaths = new Map(
         (
-          await this.database.source.findMany({
-            where: {
-              id: {
-                in: [
-                  ...new Set(
-                    targets.flatMap(({ sourceId }) =>
-                      sourceId ? [sourceId] : [],
-                    ),
-                  ),
-                ],
-              },
-            },
-            select: { id: true, path: true },
-          })
+          await this.database.orm.Source.where((source) =>
+            source.id.in([
+              ...new Set(
+                targets.flatMap(({ sourceId }) => (sourceId ? [sourceId] : [])),
+              ),
+            ]),
+          )
+            .select("id", "path")
+            .all()
         ).map((source) => [source.id, source.path ?? undefined]),
       );
       const groups = new Map<string, FolderAlbum>();
@@ -261,37 +251,30 @@ export class MetadataEnrichment {
       let unmatchedCount = 0;
       let errorCount = 0;
       const recordProgress = async () => {
-        await this.database.libraryScan.update({
-          where: { id: scanId },
-          data: {
-            metadataProcessedCount: processedCount,
-            metadataMatchedCount: matchedCount,
-            metadataUnmatchedCount: unmatchedCount,
-            metadataErrorCount: errorCount,
-          },
+        await this.database.orm.LibraryScan.where({ id: scanId }).update({
+          metadataProcessedCount: processedCount,
+          metadataMatchedCount: matchedCount,
+          metadataUnmatchedCount: unmatchedCount,
+          metadataErrorCount: errorCount,
         });
       };
 
       const applyAutomatic = async (
-        track: Track,
+        track: TrackRow,
         candidate: MetadataCandidateResponse,
       ) => {
-        await this.database.track.update({
-          where: { id: track.id },
-          data: {
-            ...matchData(candidate, "automatic"),
-            metadataAttemptedSignature: inputSignature(track),
-          },
+        await this.database.orm.Track.where({ id: track.id }).update({
+          ...matchData(candidate, "automatic"),
+          metadataAttemptedSignature: inputSignature(track),
         });
         matchedCount += 1;
         processedCount += 1;
         await recordProgress();
       };
 
-      const recordNoMatch = async (track: Track) => {
-        await this.database.track.update({
-          where: { id: track.id },
-          data: { metadataAttemptedSignature: inputSignature(track) },
+      const recordNoMatch = async (track: TrackRow) => {
+        await this.database.orm.Track.where({ id: track.id }).update({
+          metadataAttemptedSignature: inputSignature(track),
         });
         unmatchedCount += 1;
         processedCount += 1;
@@ -318,7 +301,7 @@ export class MetadataEnrichment {
               })),
               this.controller.signal,
             );
-            const nextUnresolved: Track[] = [];
+            const nextUnresolved: TrackRow[] = [];
             for (const track of unresolved) {
               const candidate = candidates.get(track.id);
               if (
@@ -338,9 +321,8 @@ export class MetadataEnrichment {
             for (let index = 0; index < unresolved.length; index += 1) {
               await recordError();
             }
-            await this.database.libraryScan.update({
-              where: { id: scanId },
-              data: { metadataFailureSummary: error.message },
+            await this.database.orm.LibraryScan.where({ id: scanId }).update({
+              metadataFailureSummary: error.message,
             });
             unresolved = [];
           }
@@ -348,27 +330,21 @@ export class MetadataEnrichment {
         for (const track of unresolved) await recordNoMatch(track);
       }
 
-      await this.database.libraryScan.update({
-        where: { id: scanId },
-        data: {
-          metadataStatus: "completed",
-          metadataProcessedCount: processedCount,
-          metadataMatchedCount: matchedCount,
-          metadataUnmatchedCount: unmatchedCount,
-          metadataErrorCount: errorCount,
-        },
+      await this.database.orm.LibraryScan.where({ id: scanId }).update({
+        metadataStatus: "completed",
+        metadataProcessedCount: processedCount,
+        metadataMatchedCount: matchedCount,
+        metadataUnmatchedCount: unmatchedCount,
+        metadataErrorCount: errorCount,
       });
     } catch {
       const interrupted = this.controller.signal.aborted;
-      await this.database.libraryScan
+      await this.database.orm.LibraryScan.where({ id: scanId })
         .update({
-          where: { id: scanId },
-          data: {
-            metadataStatus: interrupted ? "interrupted" : "failed",
-            metadataFailureSummary: interrupted
-              ? "Metadata matching was interrupted by server shutdown."
-              : "Metadata matching could not be completed.",
-          },
+          metadataStatus: interrupted ? "interrupted" : "failed",
+          metadataFailureSummary: interrupted
+            ? "Metadata matching was interrupted by server shutdown."
+            : "Metadata matching could not be completed.",
         })
         .catch(() => undefined);
     }
@@ -378,16 +354,14 @@ export class MetadataEnrichment {
     trackId: string,
     query?: string,
   ): Promise<MetadataCandidateResponse[]> {
-    const track = await this.database.track.findUnique({
-      where: { id: trackId },
-    });
+    const track = await this.database.orm.Track.first({ id: trackId });
     if (!track || !track.available) {
       throw new MetadataEnrichmentError("Available track not found", 404);
     }
     const providers = await orderedMetadataProviders(this.database);
     if (!providers.length) {
       throw new MetadataEnrichmentError(
-        "Configure a metadata provider before matching tracks.",
+        "Enable a metadata provider before matching tracks.",
         409,
       );
     }
@@ -416,40 +390,38 @@ export class MetadataEnrichment {
   }
 
   async resetAll(): Promise<number> {
-    const result = await this.database.track.updateMany({
-      data: {
-        metadataMode: "file",
-        metadataTitle: null,
-        metadataArtist: null,
-        metadataArtistCredits: null,
-        metadataAlbum: null,
-        metadataDiscNumber: null,
-        metadataTrackNumber: null,
-        metadataProviderId: null,
-        metadataProviderKind: null,
-        metadataProviderName: null,
-        metadataRecordingId: null,
-        metadataReleaseId: null,
-        metadataMatchedAt: null,
-        metadataAttemptedSignature: null,
-      },
+    return this.database.orm.Track.where((track) =>
+      track.id.isNotNull(),
+    ).updateAndCount({
+      metadataMode: "file",
+      metadataTitle: null,
+      metadataArtist: null,
+      metadataArtistCredits: null,
+      metadataAlbum: null,
+      metadataDiscNumber: null,
+      metadataTrackNumber: null,
+      metadataProviderId: null,
+      metadataProviderKind: null,
+      metadataProviderName: null,
+      metadataRecordingId: null,
+      metadataReleaseId: null,
+      metadataMatchedAt: null,
+      metadataAttemptedSignature: null,
     });
-    return result.count;
   }
 
   async apply(trackId: string, body: ApplyTrackMetadataRequest): Promise<void> {
-    const track = await this.database.track.findUnique({
-      where: { id: trackId },
-    });
+    const track = await this.database.orm.Track.first({ id: trackId });
     if (!track) {
       throw new MetadataEnrichmentError("Track not found", 404);
     }
-    const provider = await this.database.metadataProvider.findUnique({
-      where: { id: body?.providerId },
+    const provider = await this.database.orm.MetadataProvider.first({
+      id: body?.providerId ?? "",
+      enabled: 1,
     });
     if (!provider) {
       throw new MetadataEnrichmentError(
-        "The selected metadata provider is no longer configured.",
+        "The selected metadata provider is no longer available.",
         409,
       );
     }
@@ -489,44 +461,36 @@ export class MetadataEnrichment {
     if (!validCandidate(candidate)) {
       throw new MetadataEnrichmentError("Choose a valid metadata match.");
     }
-    await this.database.track.update({
-      where: { id: track.id },
-      data: {
-        ...matchData(candidate, "manual"),
-        metadataAttemptedSignature: inputSignature(track),
-      },
+    await this.database.orm.Track.where({ id: track.id }).update({
+      ...matchData(candidate, "manual"),
+      metadataAttemptedSignature: inputSignature(track),
     });
   }
 
   async revert(trackId: string): Promise<boolean> {
-    const track = await this.database.track.findUnique({
-      where: { id: trackId },
-    });
+    const track = await this.database.orm.Track.first({ id: trackId });
     if (!track) return false;
-    await this.database.track.update({
-      where: { id: track.id },
-      data: {
-        metadataMode: "file",
-        metadataTitle: null,
-        metadataArtist: null,
-        metadataArtistCredits: null,
-        metadataAlbum: null,
-        metadataDiscNumber: null,
-        metadataTrackNumber: null,
-        metadataProviderId: null,
-        metadataProviderKind: null,
-        metadataProviderName: null,
-        metadataRecordingId: null,
-        metadataReleaseId: null,
-        metadataMatchedAt: null,
-        metadataAttemptedSignature: inputSignature(track),
-      },
+    await this.database.orm.Track.where({ id: track.id }).update({
+      metadataMode: "file",
+      metadataTitle: null,
+      metadataArtist: null,
+      metadataArtistCredits: null,
+      metadataAlbum: null,
+      metadataDiscNumber: null,
+      metadataTrackNumber: null,
+      metadataProviderId: null,
+      metadataProviderKind: null,
+      metadataProviderName: null,
+      metadataRecordingId: null,
+      metadataReleaseId: null,
+      metadataMatchedAt: null,
+      metadataAttemptedSignature: inputSignature(track),
     });
     return true;
   }
 }
 
-export function effectiveArtistCredits(track: Track): string[] {
+export function effectiveArtistCredits(track: TrackRow): string[] {
   return parseStoredArtistCredits(
     track.metadataArtistCredits,
     track.metadataArtist ?? track.artist,

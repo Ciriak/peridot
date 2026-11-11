@@ -57,6 +57,11 @@ test("albums have list and detail routes with searchable derived groups", async 
   );
   assert.match(
     trackTable,
+    /class="select-none border-b last:border-0 hover:bg-muted\/50"/,
+    "Track rows prevent their text from being selected",
+  );
+  assert.match(
+    trackTable,
     /currentTrackId\.value === track\.id && playing\.value/,
     "The row highlight only applies while the current track is playing",
   );
@@ -74,6 +79,11 @@ test("albums have list and detail routes with searchable derived groups", async 
     trackTable,
     /@dblclick\.stop/,
     "Track controls do not also trigger row playback",
+  );
+  assert.match(
+    trackTable,
+    /<\/Button>\s*<span class="truncate">\{\{ track\.title \}\}<\/span>/,
+    "Track titles are plain text beside the play button",
   );
   assert.match(
     trackTable,

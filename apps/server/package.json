@@ -5,25 +5,25 @@
   "scripts": {
     "dev": "node --watch --import tsx src/dev.ts",
     "build": "pnpm db:generate && tsc -p tsconfig.json",
-    "typecheck": "pnpm db:generate && tsc --noEmit -p tsconfig.json",
-    "test": "pnpm db:generate && tsx --test test/*.test.ts",
-    "db:validate": "prisma validate",
-    "db:generate": "prisma generate",
+    "typecheck": "pnpm db:generate && tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
+    "test": "pnpm db:generate && tsx scripts/run-tests.ts",
+    "db:validate": "prisma contract emit",
+    "db:generate": "prisma contract emit",
     "db:ensure": "tsx scripts/ensure-database-file.ts",
-    "db:migrate": "pnpm db:ensure && prisma migrate dev",
-    "db:migrate:deploy": "pnpm db:ensure && prisma migrate deploy"
+    "db:update": "pnpm db:ensure && prisma db update --no-interactive",
+    "db:reset": "pnpm db:ensure && tsx scripts/reset-database.ts && prisma db update --no-interactive"
   },
   "dependencies": {
     "@fastify/cors": "^11.4.1",
     "@peridot/contracts": "workspace:*",
-    "@prisma/adapter-better-sqlite3": "7.10.1",
-    "@prisma/client": "7.10.1",
+    "@prisma/orm-sqlite": "8.0.0-rc.23",
     "fastify": "5.12.8",
-    "music-metadata": "12.3.5"
+    "music-metadata": "12.3.5",
+    "temporal-polyfill": "^1.0.4"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^9.6.0",
-    "prisma": "7.10.1",
+    "@prisma/cli-engine": "0.9.0",
+    "prisma": "8.0.0-rc.33",
     "tsx": "^4.20.0"
   },
   "license": "Apache-2.0"

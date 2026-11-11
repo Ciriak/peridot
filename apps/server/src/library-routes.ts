@@ -9,15 +9,15 @@ import type {
   TrackListResponse,
   TrackResponse,
 } from "@peridot/contracts";
-import type { LibraryScan, Track } from "./generated/prisma/client.js";
 import type { Database } from "./database.js";
 import { sendError } from "./http.js";
 import type { LibraryScanner } from "./library-scanner.js";
 import { effectiveArtistCredits } from "./metadata-enrichment.js";
+import type { LibraryScanRow, TrackRow } from "./prisma/models.js";
 import type { PlaybackTokenService } from "./playback-tokens.js";
 
 function toTrackResponse(
-  track: Track,
+  track: TrackRow,
   playbackTokens: PlaybackTokenService,
 ): TrackResponse {
   const artists = effectiveArtistCredits(track);
@@ -54,13 +54,13 @@ function toTrackResponse(
     trackNumber: track.metadataTrackNumber ?? track.trackNumber,
     durationMs: track.durationMs,
     mimeType: track.mimeType,
-    available: track.available,
+    available: Boolean(track.available),
     coverUrl,
     metadata: matched,
   };
 }
 
-export function toScanResponse(scan: LibraryScan): LibraryScanResponse {
+export function toScanResponse(scan: LibraryScanRow): LibraryScanResponse {
   return {
     id: scan.id,
     status: scan.status as LibraryScanStatus,
@@ -153,8 +153,8 @@ export async function registerLibraryRoutes(
   app.get<{ Params: { id: string } }>(
     "/api/library/scans/:id",
     async (request, reply) => {
-      const scan = await database.libraryScan.findUnique({
-        where: { id: request.params.id },
+      const scan = await database.orm.LibraryScan.first({
+        id: request.params.id,
       });
       if (!scan)
         return sendError(
@@ -179,12 +179,19 @@ export async function registerLibraryRoutes(
           "availability must be available, unavailable, or all",
         );
       }
-      const tracks = await database.track.findMany({
-        ...(availability === "all"
-          ? {}
-          : { where: { available: availability === "available" } }),
-        orderBy: [{ artist: "asc" }, { album: "asc" }, { title: "asc" }],
-      });
+      const tracks = await (
+        availability === "all"
+          ? database.orm.Track
+          : database.orm.Track.where({
+              available: availability === "available" ? 1 : 0,
+            })
+      )
+        .orderBy([
+          (track) => track.artist.asc(),
+          (track) => track.album.asc(),
+          (track) => track.title.asc(),
+        ])
+        .all();
       const response: TrackListResponse = {
         items: tracks.map((track) => toTrackResponse(track, playbackTokens)),
       };
@@ -195,9 +202,7 @@ export async function registerLibraryRoutes(
   app.get<{ Params: { id: string } }>(
     "/api/tracks/:id",
     async (request, reply) => {
-      const track = await database.track.findUnique({
-        where: { id: request.params.id },
-      });
+      const track = await database.orm.Track.first({ id: request.params.id });
       if (!track)
         return sendError(reply, 404, "track_not_found", "Track not found");
       return toTrackResponse(track, playbackTokens);
@@ -207,11 +212,10 @@ export async function registerLibraryRoutes(
   app.post<{ Params: { id: string } }>(
     "/api/tracks/:id/playback-token",
     async (request, reply) => {
-      const track = await database.track.findUnique({
-        where: { id: request.params.id },
-        select: { id: true, available: true },
+      const track = await database.orm.Track.select("id", "available").first({
+        id: request.params.id,
       });
-      if (!track?.available) {
+      if (!track || !track.available) {
         return sendError(
           reply,
           404,
@@ -233,17 +237,16 @@ export async function registerLibraryRoutes(
     reply: Parameters<typeof sendError>[0],
     head: boolean,
   ) {
-    const track = await database.track.findUnique({
-      where: { id: request.params.id },
-      select: { coverId: true },
+    const track = await database.orm.Track.select("coverId").first({
+      id: request.params.id,
     });
     if (!track?.coverId) {
       return sendError(reply, 404, "cover_not_found", "Cover not found");
     }
-    const cover = await database.trackCover.findUnique({
-      where: { id: track.coverId },
-      select: { data: true, mimeType: true },
-    });
+    const cover = await database.orm.TrackCover.select(
+      "data",
+      "mimeType",
+    ).first({ id: track.coverId });
     if (!cover) {
       return sendError(reply, 404, "cover_not_found", "Cover not found");
     }
@@ -270,10 +273,11 @@ export async function registerLibraryRoutes(
     reply: Parameters<typeof sendError>[0],
     head: boolean,
   ) {
-    const track = await database.track.findUnique({
-      where: { id: request.params.id },
-      include: { source: true },
-    });
+    const track = await database.orm.Track.where({
+      id: request.params.id,
+    })
+      .include("source")
+      .first();
     if (!track || !track.available) {
       return sendError(
         reply,
@@ -313,9 +317,8 @@ export async function registerLibraryRoutes(
       if (!isContained(libraryRoot, resolved) || !fileStat.isFile())
         throw new Error("invalid file");
     } catch {
-      await database.track.update({
-        where: { id: track.id },
-        data: { available: false },
+      await database.orm.Track.where({ id: track.id }).update({
+        available: 0,
       });
       return sendError(
         reply,

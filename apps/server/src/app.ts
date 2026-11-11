@@ -8,6 +8,7 @@ import { registerLibraryRoutes } from "./library-routes.js";
 import { registerLikeRoutes } from "./like-routes.js";
 import { LibraryScanner } from "./library-scanner.js";
 import { MetadataEnrichment } from "./metadata-enrichment.js";
+import { ensureDefaultMetadataProvider } from "./metadata-providers.js";
 import { registerTrackMetadataRoutes } from "./metadata-routes.js";
 import { MusicBrainzClient } from "./musicbrainz.js";
 import { registerQueueRoutes } from "./queue-routes.js";
@@ -80,6 +81,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
   await registerAuthRoutes(app, database);
   await ensureServerSettings(database, config.libraryRoot);
   await ensureDefaultSource(database, config.libraryRoot);
+  await ensureDefaultMetadataProvider(database);
   await scanner.markInterruptedScans();
   await registerProtectedRoutes(
     app,
@@ -106,7 +108,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
   );
   app.addHook("onClose", async () => {
     await scanner.close();
-    if (ownsDatabase) await database.$disconnect();
+    if (ownsDatabase) await database.close();
   });
   return app;
 }

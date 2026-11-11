@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { test } from "node:test";
+import { buildApp } from "../src/app.js";
 import {
   createMemberSession,
   createTaggedMp3,
@@ -22,7 +23,7 @@ function musicBrainzResponses(): typeof fetch {
     assert.equal(url.origin, "https://musicbrainz.org");
     assert.equal(
       new Headers(init?.headers).get("User-Agent"),
-      "Peridot/0.1.0 (owner@example.com)",
+      "Peridot/0.1.0 (admin@example.com)",
     );
     if (url.pathname.endsWith("/ws/2/release")) {
       return Response.json({
@@ -108,23 +109,20 @@ test("administrators can manage ordered metadata providers", async () => {
       headers: context.authorization,
     });
     assert.equal(initial.statusCode, 200);
-    assert.deepEqual(initial.json(), { items: [] });
-
-    const created = await context.app.inject({
-      method: "POST",
-      url: "/api/admin/metadata-providers",
-      headers: context.authorization,
-      payload: providerBody,
+    assert.deepEqual(initial.json(), {
+      items: [
+        {
+          id: initial.json().items[0].id,
+          kind: "musicbrainz",
+          name: "MusicBrainz",
+          contact: "admin@example.com",
+          hasCredential: false,
+          enabled: true,
+        },
+      ],
     });
-    assert.equal(created.statusCode, 201);
-    assert.deepEqual(created.json(), {
-      id: created.json().id,
-      kind: "musicbrainz",
-      name: "MusicBrainz",
-      contact: "owner@example.com",
-      hasCredential: false,
-    });
-    assert.doesNotMatch(created.body, /apiKey|api-key/i);
+    assert.doesNotMatch(initial.body, /apiKey|api-key/i);
+    const providerId = initial.json().items[0].id;
 
     const duplicate = await context.app.inject({
       method: "POST",
@@ -147,17 +145,68 @@ test("administrators can manage ordered metadata providers", async () => {
       method: "PUT",
       url: "/api/admin/metadata-providers/order",
       headers: context.authorization,
-      payload: { ids: [created.json().id] },
+      payload: { ids: [providerId] },
     });
     assert.equal(reordered.statusCode, 200);
-    assert.deepEqual(reordered.json(), { items: [created.json()] });
+    assert.deepEqual(reordered.json(), initial.json());
 
-    const removed = await context.app.inject({
-      method: "DELETE",
-      url: `/api/admin/metadata-providers/${created.json().id}`,
+    const disabled = await context.app.inject({
+      method: "PUT",
+      url: `/api/admin/metadata-providers/${providerId}`,
+      headers: context.authorization,
+      payload: { enabled: false },
+    });
+    assert.equal(disabled.statusCode, 200);
+    assert.deepEqual(disabled.json(), {
+      id: providerId,
+      kind: "musicbrainz",
+      name: "MusicBrainz",
+      contact: "admin@example.com",
+      hasCredential: false,
+      enabled: false,
+    });
+    const stillListed = await context.app.inject({
+      method: "GET",
+      url: "/api/admin/metadata-providers",
       headers: context.authorization,
     });
-    assert.equal(removed.statusCode, 204);
+    assert.deepEqual(stillListed.json(), { items: [disabled.json()] });
+    const unsupportedDelete = await context.app.inject({
+      method: "DELETE",
+      url: `/api/admin/metadata-providers/${providerId}`,
+      headers: context.authorization,
+    });
+    assert.equal(unsupportedDelete.statusCode, 404);
+    const refresh = await context.app.inject({
+      method: "POST",
+      url: "/api/admin/metadata/refresh",
+      headers: context.authorization,
+    });
+    assert.equal(refresh.statusCode, 202);
+    const skipped = await waitForScan(context, refresh.json().id);
+    assert.equal(skipped.metadataStatus, "skipped");
+    assert.equal(
+      skipped.metadataFailureSummary,
+      "No metadata providers are enabled.",
+    );
+
+    const enabled = await context.app.inject({
+      method: "PUT",
+      url: `/api/admin/metadata-providers/${providerId}`,
+      headers: context.authorization,
+      payload: { enabled: true },
+    });
+    assert.equal(enabled.statusCode, 200);
+    assert.deepEqual(enabled.json(), initial.json().items[0]);
+
+    const invalidToggle = await context.app.inject({
+      method: "PUT",
+      url: `/api/admin/metadata-providers/${providerId}`,
+      headers: context.authorization,
+      payload: { enabled: "no" },
+    });
+    assert.equal(invalidToggle.statusCode, 400);
+    assert.equal(invalidToggle.json().error.code, "invalid_metadata_provider");
 
     const member = await createMemberSession(context);
     const forbidden = await context.app.inject({
@@ -208,6 +257,60 @@ test("invalid MusicBrainz contacts are rejected", async () => {
       assert.equal(response.statusCode, 400);
       assert.equal(response.json().error.code, "invalid_metadata_provider");
     }
+  } finally {
+    await context.close();
+  }
+});
+
+test("startup backfills MusicBrainz without re-enabling a disabled provider", async () => {
+  const context = await createTestContext();
+  try {
+    const provider = await context.database.orm.MetadataProvider.firstOrThrow({
+      kind: "musicbrainz",
+    });
+    await context.database.orm.MetadataProvider.where({
+      id: provider.id,
+    }).update({ enabled: 0 });
+
+    let restarted = await buildApp({
+      config: {
+        databaseUrl: context.databaseUrl,
+        libraryRoot: context.libraryRoot,
+        webOrigins: ["http://127.0.0.1:3000"],
+      },
+      database: context.database,
+      logger: false,
+    });
+    await restarted.close();
+    assert.equal(
+      (
+        await context.database.orm.MetadataProvider.firstOrThrow({
+          id: provider.id,
+        })
+      ).enabled,
+      0,
+    );
+
+    await context.database.orm.MetadataProvider.where({
+      id: provider.id,
+    }).delete();
+    restarted = await buildApp({
+      config: {
+        databaseUrl: context.databaseUrl,
+        libraryRoot: context.libraryRoot,
+        webOrigins: ["http://127.0.0.1:3000"],
+      },
+      database: context.database,
+      logger: false,
+    });
+    await restarted.close();
+    const backfilled = await context.database.orm.MetadataProvider.firstOrThrow(
+      {
+        kind: "musicbrainz",
+      },
+    );
+    assert.equal(backfilled.contact, "admin@example.com");
+    assert.equal(backfilled.enabled, 1);
   } finally {
     await context.close();
   }
@@ -265,14 +368,6 @@ test("scans automatically enrich album tracks with MusicBrainz provenance", asyn
         trackNumber: 2,
       }),
     );
-    const created = await context.app.inject({
-      method: "POST",
-      url: "/api/admin/metadata-providers",
-      headers: context.authorization,
-      payload: providerBody,
-    });
-    assert.equal(created.statusCode, 201);
-
     const scan = await startScan(context);
     assert.equal(scan.status, "completed");
     assert.equal(scan.metadataStatus, "completed");
@@ -392,13 +487,6 @@ test("treats a containing folder as an album when its tracks have no album tags"
         trackNumber: 2,
       }),
     );
-    await context.app.inject({
-      method: "POST",
-      url: "/api/admin/metadata-providers",
-      headers: context.authorization,
-      payload: providerBody,
-    });
-
     const scan = await startScan(context);
     assert.equal(scan.metadataStatus, "completed");
     assert.equal(scan.metadataTotalCount, 2);
@@ -432,12 +520,6 @@ test("unchanged successful matches are not queried again", async () => {
         trackNumber: 1,
       }),
     );
-    await context.app.inject({
-      method: "POST",
-      url: "/api/admin/metadata-providers",
-      headers: context.authorization,
-      payload: providerBody,
-    });
     await startScan(context);
     assert.ok(requests > 0);
     const requestsAfterFirstScan = requests;
@@ -482,11 +564,8 @@ test("members can replace and revert a manual metadata match", async () => {
         trackNumber: 1,
       }),
     );
-    const provider = await context.app.inject({
-      method: "POST",
-      url: "/api/admin/metadata-providers",
-      headers: context.authorization,
-      payload: providerBody,
+    const provider = await context.database.orm.MetadataProvider.firstOrThrow({
+      kind: "musicbrainz",
     });
     const member = await createMemberSession(context);
     await startScan(context);
@@ -511,7 +590,7 @@ test("members can replace and revert a manual metadata match", async () => {
       url: `/api/tracks/${track.id}/metadata`,
       headers: member,
       payload: {
-        providerId: provider.json().id,
+        providerId: provider.id,
         recordingId: candidate.recordingId,
         releaseId: candidate.releaseId,
         title: candidate.title,
@@ -586,23 +665,14 @@ test("administrators can reset all track metadata to file tags", async () => {
         trackNumber: 2,
       }),
     );
-    const provider = await context.app.inject({
-      method: "POST",
-      url: "/api/admin/metadata-providers",
-      headers: context.authorization,
-      payload: providerBody,
-    });
     await startScan(context);
-    const tracks = await context.database.track.findMany({
-      orderBy: { title: "asc" },
-    });
+    const tracks = await context.database.orm.Track.orderBy((track) =>
+      track.title.asc(),
+    ).all();
     assert.equal(tracks.length, 2);
-    await context.database.track.update({
-      where: { id: tracks[0]!.id },
-      data: {
-        metadataMode: "manual",
-        metadataAlbum: "Wrong Album",
-      },
+    await context.database.orm.Track.where({ id: tracks[0]!.id }).update({
+      metadataMode: "manual",
+      metadataAlbum: "Wrong Album",
     });
 
     const member = await createMemberSession(context);
@@ -634,9 +704,9 @@ test("administrators can reset all track metadata to file tags", async () => {
     assert.equal(reset.statusCode, 200);
     assert.deepEqual(reset.json(), { resetCount: 2 });
 
-    const resetTracks = await context.database.track.findMany({
-      orderBy: { title: "asc" },
-    });
+    const resetTracks = await context.database.orm.Track.orderBy((track) =>
+      track.title.asc(),
+    ).all();
     for (const track of resetTracks) {
       assert.equal(track.metadataMode, "file");
       assert.equal(track.metadataTitle, null);
@@ -675,7 +745,6 @@ test("administrators can reset all track metadata to file tags", async () => {
       ).json().items.length,
       1,
     );
-    assert.equal(provider.statusCode, 201);
   } finally {
     await context.close();
   }

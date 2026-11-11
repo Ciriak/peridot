@@ -32,10 +32,10 @@ import { useLibraryTracks } from "../../composables/use-library-tracks";
 import { icons } from "../../lib/icons";
 import {
   createMetadataProvider,
-  deleteMetadataProvider,
   listMetadataProviders,
   reorderMetadataProviders,
   resetMetadata,
+  setMetadataProviderEnabled,
 } from "../../lib/peridot-client";
 import {
   notifyMetadataProviderMutation,
@@ -61,12 +61,16 @@ const newKind = ref<"musicbrainz" | null>(null);
 const newContact = ref("");
 const adding = ref(false);
 const addError = ref("");
-const removeOpen = ref(false);
-const pendingDelete = ref<MetadataProviderResponse | null>(null);
+const disableOpen = ref(false);
+const pendingDisable = ref<MetadataProviderResponse | null>(null);
+const togglingProviderId = ref<string | null>(null);
 const resetOpen = ref(false);
 const resetting = ref(false);
 const musicBrainzAdded = computed(() =>
   providers.value.some((provider) => provider.kind === "musicbrainz"),
+);
+const activeProviders = computed(() =>
+  providers.value.filter((provider) => provider.enabled),
 );
 
 useSortable(providerList, providers, {
@@ -155,30 +159,51 @@ async function addProvider() {
   }
 }
 
-function askRemove(provider: MetadataProviderResponse) {
-  pendingDelete.value = provider;
-  removeOpen.value = true;
+function requestProviderToggle(provider: MetadataProviderResponse) {
+  if (provider.enabled) {
+    pendingDisable.value = provider;
+    disableOpen.value = true;
+    return;
+  }
+  void setProviderEnabled(provider, true);
 }
 
-async function confirmRemove() {
-  if (!pendingDelete.value) return;
-  const removed = pendingDelete.value;
+async function setProviderEnabled(
+  provider: MetadataProviderResponse,
+  enabled: boolean,
+) {
+  if (togglingProviderId.value) return;
+  togglingProviderId.value = provider.id;
   pageError.value = "";
   try {
-    await deleteMetadataProvider(
+    const updated = await setMetadataProviderEnabled(
       address.value ?? "",
       token.value ?? "",
-      removed.id,
+      provider.id,
+      enabled,
     );
-    notifyMetadataProviderMutation("removed", removed.name);
-    pendingDelete.value = null;
-    await loadProviders();
+    providers.value = providers.value.map((item) =>
+      item.id === updated.id ? updated : item,
+    );
+    notifyMetadataProviderMutation(
+      enabled ? "enabled" : "disabled",
+      updated.name,
+    );
+    pendingDisable.value = null;
+    disableOpen.value = false;
   } catch (reason) {
     pageError.value =
       reason instanceof Error
         ? reason.message
-        : "Could not remove the metadata provider.";
+        : `Could not ${enabled ? "enable" : "disable"} the metadata provider.`;
+  } finally {
+    togglingProviderId.value = null;
   }
+}
+
+async function confirmDisable() {
+  if (!pendingDisable.value) return;
+  await setProviderEnabled(pendingDisable.value, false);
 }
 
 async function persistOrder() {
@@ -237,7 +262,7 @@ onMounted(() => void loadProviders());
   <div class="space-y-2">
     <h2 class="text-2xl font-semibold tracking-tight">Metadata</h2>
     <p class="text-sm text-muted-foreground">
-      Match library tracks with metadata from services you configure.
+      Match library tracks with metadata from services enabled below.
     </p>
   </div>
 
@@ -263,7 +288,7 @@ onMounted(() => void loadProviders());
           type="button"
           variant="outline"
           size="sm"
-          :disabled="scanning || !providers.length"
+          :disabled="scanning || !activeProviders.length"
           @click="refreshProviderMetadata"
         >
           <Icon :icon="icons.restart" aria-hidden="true" class="size-4" />
@@ -288,6 +313,7 @@ onMounted(() => void loadProviders());
         <li
           v-for="provider in providers"
           :key="provider.id"
+          :class="{ 'opacity-60': !provider.enabled }"
           class="flex items-center gap-2 rounded-md border p-2"
         >
           <button
@@ -299,6 +325,9 @@ onMounted(() => void loadProviders());
           </button>
           <Badge variant="secondary" class="shrink-0">
             {{ provider.kind }}
+          </Badge>
+          <Badge v-if="!provider.enabled" variant="outline" class="shrink-0">
+            Disabled
           </Badge>
           <span class="min-w-0 flex-1">
             <span class="block truncate text-sm font-medium">
@@ -312,9 +341,10 @@ onMounted(() => void loadProviders());
             type="button"
             variant="ghost"
             size="sm"
-            @click="askRemove(provider)"
+            :disabled="togglingProviderId === provider.id"
+            @click="requestProviderToggle(provider)"
           >
-            Remove
+            {{ provider.enabled ? "Disable" : "Enable" }}
           </Button>
         </li>
       </ul>
@@ -381,7 +411,7 @@ onMounted(() => void loadProviders());
             <span class="mt-1 block text-sm text-muted-foreground">
               {{
                 musicBrainzAdded
-                  ? "Already added."
+                  ? "Configured. Enable or disable it from the provider list."
                   : "Match releases and recordings using your contact details."
               }}
             </span>
@@ -434,25 +464,35 @@ onMounted(() => void loadProviders());
     </DialogPortal>
   </DialogRoot>
 
-  <AlertDialogRoot v-model:open="removeOpen">
+  <AlertDialogRoot v-model:open="disableOpen">
     <AlertDialogPortal>
       <AlertDialogOverlay class="fixed inset-0 z-50 bg-background/80" />
       <AlertDialogContent
         class="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-card p-6 text-card-foreground shadow-lg"
       >
         <AlertDialogTitle class="text-lg font-semibold">
-          Remove metadata provider?
+          Disable metadata provider?
         </AlertDialogTitle>
         <AlertDialogDescription class="text-sm text-muted-foreground">
-          {{ pendingDelete?.name }} will no longer enrich future scans. Existing
-          track matches remain available.
+          {{ pendingDisable?.name }} will no longer be used for metadata
+          matching. Existing track matches remain available, and you can enable
+          it again.
         </AlertDialogDescription>
         <div class="mt-6 flex justify-end gap-3">
           <AlertDialogCancel as-child>
             <Button type="button" variant="outline">Cancel</Button>
           </AlertDialogCancel>
-          <AlertDialogAction as-child @click="confirmRemove">
-            <Button type="button" variant="destructive">Remove</Button>
+          <AlertDialogAction as-child @click="confirmDisable">
+            <Button
+              type="button"
+              :disabled="togglingProviderId === pendingDisable?.id"
+            >
+              {{
+                togglingProviderId === pendingDisable?.id
+                  ? "Disabling…"
+                  : "Disable"
+              }}
+            </Button>
           </AlertDialogAction>
         </div>
       </AlertDialogContent>

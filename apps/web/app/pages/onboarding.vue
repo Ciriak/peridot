@@ -6,7 +6,7 @@ import { Button } from "@peridot/ui/components/ui/button";
 import { Gradient } from "@peridot/ui/components/ui/gradient";
 import { Input } from "@peridot/ui/components/ui/input";
 import { Spinner } from "@peridot/ui/components/ui/spinner";
-import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useServer } from "../composables/use-server";
 import { useSession } from "../composables/use-session";
 import { useUser } from "../composables/use-user";
@@ -43,6 +43,7 @@ const addressScanState = ref<"idle" | "checking" | "found" | "not-found">(
 );
 const discoveryState = ref<"scanning" | "complete" | "failed">("scanning");
 const discoveredServers = ref<DiscoveredServer[]>([]);
+const manualEntryOpen = ref(false);
 let addressScanTimer: ReturnType<typeof setTimeout> | undefined;
 let networkScanTimer: ReturnType<typeof setTimeout> | undefined;
 let addressScanSequence = 0;
@@ -53,6 +54,13 @@ function rememberServer(server: DiscoveredServer) {
   ) {
     discoveredServers.value.push(server);
   }
+}
+
+function revealManualEntry() {
+  manualEntryOpen.value = true;
+  void nextTick(() => {
+    document.querySelector<HTMLInputElement>("#server-address")?.focus();
+  });
 }
 
 async function scanAddress(value: string) {
@@ -196,7 +204,7 @@ function changeServer() {
         <p class="text-sm text-muted-foreground">
           {{
             step === "server"
-              ? "Connect this player to your self-hosted Peridot server. You can change it later."
+              ? "Connect to your self-hosted Peridot server."
               : requiresAdminUser
                 ? "This server has no users yet. Its first account is required and receives administrator privileges."
                 : "Sign in to continue to this Peridot server."
@@ -204,90 +212,98 @@ function changeServer() {
         </p>
       </div>
       <div v-if="step === 'server'" class="space-y-4">
-        <div class="space-y-2">
-          <label for="server-address" class="text-sm font-medium"
-            >Server address</label
-          >
-          <Input
-            id="server-address"
-            v-model="serverAddress"
-            type="text"
-            inputmode="url"
-            autocomplete="url"
-            placeholder="http://192.168.1.20:17430"
-            :aria-invalid="Boolean(error)"
-            :aria-describedby="
-              error ? 'server-help server-error' : 'server-help'
-            "
-            autofocus
-          />
-          <p id="server-help" class="text-xs text-muted-foreground">
-            Use the address you open from this device, including its port when
-            needed.
-          </p>
-          <p
-            v-if="addressScanState !== 'idle'"
-            role="status"
-            class="text-xs"
-            :class="
-              addressScanState === 'found'
-                ? 'text-primary'
-                : 'text-muted-foreground'
-            "
-          >
-            {{
-              addressScanState === "checking"
-                ? "Checking this address…"
-                : addressScanState === "found"
-                  ? "Peridot server found."
-                  : "No Peridot server responded at this address."
-            }}
-          </p>
-          <p
-            v-if="error"
-            id="server-error"
-            role="alert"
-            class="text-sm text-destructive"
-          >
-            {{ error }}
-          </p>
-        </div>
-        <section aria-labelledby="discovered-servers" class="space-y-3">
-          <div class="flex items-center justify-between gap-3">
-            <h2 id="discovered-servers" class="text-sm font-medium">
-              Servers on this network
-            </h2>
+        <section aria-label="Server discovery" class="space-y-3">
+          <div class="flex items-center gap-3">
             <Spinner
-              v-if="discoveryState === 'scanning'"
-              label="Scanning for servers"
-              class="size-4"
+              label="Looking for a server on this network"
+              class="size-6"
             />
+            <p aria-hidden="true" class="text-sm text-muted-foreground">
+              Looking for a server on this network
+            </p>
           </div>
           <div v-if="discoveredServers.length" class="space-y-2">
-            <Button
-              v-for="server in discoveredServers"
-              :key="server.address"
-              type="button"
-              class="h-auto w-full justify-between gap-2 py-3"
-              @click="selectDiscoveredServer(server)"
-            >
-              <span class="truncate">{{ server.address }}</span>
-              <img
-                :src="logoW"
-                alt=""
-                aria-hidden="true"
-                class="size-4 shrink-0"
-              />
-            </Button>
+            <h2 class="text-sm font-medium">Servers found</h2>
+            <ul class="space-y-2">
+              <li v-for="server in discoveredServers" :key="server.address">
+                <Button
+                  type="button"
+                  class="h-auto w-full justify-between gap-2 py-3"
+                  @click="selectDiscoveredServer(server)"
+                >
+                  <span class="truncate">{{ server.address }}</span>
+                  <img
+                    :src="logoW"
+                    alt=""
+                    aria-hidden="true"
+                    class="size-4 shrink-0"
+                  />
+                </Button>
+              </li>
+            </ul>
           </div>
           <p
-            v-if="!discoveredServers.length && discoveryState === 'failed'"
+            v-if="discoveryState === 'failed'"
             role="status"
             class="rounded-md border p-3 text-xs text-muted-foreground"
           >
             Discovery unavailable.
           </p>
         </section>
+        <div class="border-t pt-4">
+          <div v-if="!manualEntryOpen" class="flex justify-center">
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              aria-controls="manual-server-entry"
+              @click="revealManualEntry"
+            >
+              Enter the server address manually
+            </Button>
+          </div>
+          <div v-else id="manual-server-entry" class="space-y-2">
+            <label for="server-address" class="text-sm font-medium">
+              Server URL
+            </label>
+            <Input
+              id="server-address"
+              v-model="serverAddress"
+              type="text"
+              inputmode="url"
+              autocomplete="url"
+              placeholder="http://192.168.1.20:17430"
+              :aria-invalid="Boolean(error)"
+              :aria-describedby="error ? 'server-error' : undefined"
+            />
+            <p
+              v-if="addressScanState !== 'idle'"
+              role="status"
+              class="text-xs"
+              :class="
+                addressScanState === 'found'
+                  ? 'text-primary'
+                  : 'text-muted-foreground'
+              "
+            >
+              {{
+                addressScanState === "checking"
+                  ? "Checking this address…"
+                  : addressScanState === "found"
+                    ? "Peridot instance found."
+                    : "No server responded at this address."
+              }}
+            </p>
+          </div>
+        </div>
+        <p
+          v-if="error"
+          id="server-error"
+          role="alert"
+          class="text-sm text-destructive"
+        >
+          {{ error }}
+        </p>
       </div>
       <form v-else class="space-y-4" @submit.prevent="finishOnboarding">
         <div v-if="requiresAdminUser" class="space-y-2">
@@ -368,10 +384,6 @@ function changeServer() {
           </Button>
         </div>
       </form>
-      <p class="text-center text-xs text-muted-foreground">
-        Your server address and session stay in this browser. Peridot does not
-        require a hosted account.
-      </p>
     </section>
   </Gradient>
 </template>

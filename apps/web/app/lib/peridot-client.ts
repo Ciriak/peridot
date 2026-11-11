@@ -20,6 +20,7 @@ import type {
   ReplaceQueueRequest,
   ResetTrackMetadataResponse,
   ServerSettingsResponse,
+  SetMetadataProviderEnabledRequest,
   SourceListResponse,
   SourceResponse,
   TrackListResponse,
@@ -166,16 +167,18 @@ export function createMetadataProvider(
   );
 }
 
-export function deleteMetadataProvider(
+export function setMetadataProviderEnabled(
   serverAddress: string,
   token: string,
   providerId: string,
+  enabled: boolean,
 ) {
-  return authenticatedRequestJson<void>(
+  const body: SetMetadataProviderEnabledRequest = { enabled };
+  return authenticatedRequestJson<MetadataProviderResponse>(
     serverAddress,
     `/api/admin/metadata-providers/${providerId}`,
     token,
-    { method: "DELETE" },
+    { method: "PUT", body: JSON.stringify(body) },
   );
 }
 
@@ -392,14 +395,13 @@ export function fetchQueue(serverAddress: string, token: string) {
 export function replaceQueue(
   serverAddress: string,
   token: string,
-  trackIds: string[],
+  queue: ReplaceQueueRequest,
 ) {
-  const body: ReplaceQueueRequest = { trackIds };
   return authenticatedRequestJson<QueueResponse>(
     serverAddress,
     "/api/queue",
     token,
-    { method: "PUT", body: JSON.stringify(body) },
+    { method: "PUT", body: JSON.stringify(queue) },
   );
 }
 

@@ -5,6 +5,9 @@ Your music. Your space. A self-hosted music platform with a plugin-first ecosyst
 ## Quick start
 
 Use Node 24.15 or newer within Node 24, and pnpm 11.25.0.
+pnpm uses the Node 24.22.2 runtime pinned in `package.json`, downloading it when
+the active Node version is outside the supported major. A system Node 24
+installation remains useful for commands run outside pnpm.
 
 ```sh
 pnpm install --frozen-lockfile
@@ -12,8 +15,8 @@ pnpm dev
 ```
 
 Web: http://localhost:3000. Server health: http://127.0.0.1:17430/api/health.
-Development startup applies committed migrations and, when the corresponding
-environment variables are unset, uses `apps/server/peridot.db` and creates
+Development startup synchronizes the local database with the Prisma 8 contract
+and, when the corresponding environment variables are unset, uses `apps/server/peridot.db` and creates
 `apps/server/music`. Set `DATABASE_URL` or `MUSIC_LIBRARY_PATH` before starting
 to use different development locations.
 On first launch, the web app asks for the address of the user's Peridot server.
@@ -36,7 +39,7 @@ cards, an all-tracks list, and artist playback actions. Artist names in the
 shared track list and album detail link to their derived artist pages. The fixed
 player streams available tracks from the authenticated server through a
 short-lived, track-scoped playback URL, with play/pause, seeking, volume,
-previous/next, randomized upcoming playback, automatic advancement, and
+previous/next, persistent randomized playback, automatic advancement, and
 retryable loading and error states. Audio playback is owned by the application
 root, so entering fullscreen settings keeps the current track playing while its
 controls are hidden. Original files are served with HTTP range support and are
@@ -56,7 +59,7 @@ long-pressing an album or artist card opens a collection menu for playing it,
 changing its favorite state, or opening its details.
 Tracks, albums, and artists can be liked independently from their rows, cards,
 and detail headers. Likes are private to the signed-in user and persist across
-reloads, sessions, and server restarts. The server requires a migrated local
+reloads, sessions, and server restarts. The server requires an initialized local
 SQLite database and a music folder, but no API key or hosted service.
 
 ```sh
@@ -90,7 +93,7 @@ under Program Files. Turbo and nested scripts need pnpm itself on PATH.
 ## Structure
 
 - `apps/web`: Nuxt 4 application shell.
-- `apps/server`: authenticated Fastify catalog/scanning/audio API and Prisma SQLite storage.
+- `apps/server`: authenticated Fastify catalog/scanning/audio API and Prisma 8 SQLite storage.
 - `apps/desktop`: documented future desktop shell.
 - `packages/contracts`: shared API types.
 - `packages/ui`: shared brand tokens and reusable Button, Input, Badge, Slider, Gradient, and Spinner components.
@@ -140,23 +143,35 @@ requiring folders to be expanded first.
 
 Administrators can configure ordered metadata providers from
 Settings → Metadata. MusicBrainz is supported first and requires a contact email
-or URL for its User-Agent; it does not require an API key. After a library scan
-discovers new or changed tracks, Peridot matches them against configured
-providers in the background at no more than one MusicBrainz request per second.
+or URL for its User-Agent. Peridot enables MusicBrainz automatically when the
+first administrator is created and uses that account's email as the contact.
+It does not require an API key. Administrators can
+disable and re-enable a provider without deleting its stored configuration.
+After a library scan discovers new or changed tracks, Peridot matches them
+against enabled providers in the background at no more than one MusicBrainz
+request per second.
 Each containing folder is treated as an album: the folder name supplies the
 release title when tracks have no album tag, or when their tags disagree.
 The Metadata page also has a Refresh metadata action that re-runs automatic
 matching without rescanning audio files and a confirmed Reset metadata action
 that removes all automatic and manual track matches so tracks use their original
-file tags. A configured provider kind cannot be added twice.
+file tags. A configured provider kind cannot be added twice and is disabled or
+re-enabled instead of removed.
 Provider metadata is stored separately from local file tags, and track context
 menus let signed-in users choose another match or return to the original file
 metadata. Peridot never rewrites the audio files.
 
-Apply committed migrations before starting a new database:
+Synchronize an existing local database with the current Prisma 8 contract:
 
 ```sh
-pnpm db:migrate:deploy
+pnpm db:update
+```
+
+To intentionally discard local catalog, account, queue, and settings data and
+start from an empty database:
+
+```sh
+pnpm db:reset
 ```
 
 The web onboarding checks `GET /api/auth/status`. An empty server permits exactly
@@ -174,8 +189,12 @@ user's favorites with `GET /api/likes`; `POST /api/likes` and
 `DELETE /api/likes` accept an independent track, album, or artist target. Track
 likes use catalog IDs, while album and artist likes match trimmed,
 case-insensitive metadata identities. `GET /api/queue` returns the current
-user's ordered track IDs and `PUT /api/queue` atomically replaces that snapshot;
-duplicate or unknown IDs are rejected. Scans are explicit and never run at
+user's source-order track IDs, active track, and remaining randomized pool;
+`PUT /api/queue` atomically replaces that snapshot. Duplicate IDs, an active
+track outside the queue, and random-pool entries outside the non-active queue
+are rejected. Randomized playback keeps the visible queue order unchanged,
+plays each eligible track once per pass, and resumes the same pass after a
+reload. Scans are explicit and never run at
 startup. MP3, M4A/AAC, OGG/Opus, WAV, and FLAC files are cataloged; originals are
 streamed without transcoding. Catalog responses include nullable disc and track
 numbers used for album ordering. A metadata-version marker makes the next scan
@@ -196,8 +215,10 @@ Administrators can rescan one local source with
 tracks from that source. Administrators manage metadata providers through
 `GET/POST /api/admin/metadata-providers`,
 `PUT /api/admin/metadata-providers/order`, and
-`DELETE /api/admin/metadata-providers/:id`. `POST /api/admin/metadata/refresh`
-re-runs automatic metadata matching without a file scan, while
+`PUT /api/admin/metadata-providers/:id` with an `enabled` boolean.
+Disabled providers remain listed but are excluded from matching.
+`POST /api/admin/metadata/refresh` re-runs automatic metadata matching without
+a file scan, while
 `POST /api/admin/metadata/reset` clears every track override. Signed-in clients
 can list MusicBrainz candidates for a track and apply or clear an override
 through `GET /api/tracks/:id/metadata/candidates` and

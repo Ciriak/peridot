@@ -8,7 +8,7 @@ import type {
   SourceResponse,
 } from "@peridot/contracts";
 import type { Database } from "./database.js";
-import type { Source } from "./generated/prisma/client.js";
+import type { SourceRow } from "./prisma/models.js";
 
 const DIRECTORY_ENTRY_LIMIT = 100;
 const DIRECTORY_SEARCH_RESULT_LIMIT = 100;
@@ -34,7 +34,7 @@ export class SourceError extends Error {
   }
 }
 
-function toSourceResponse(source: Source): SourceResponse {
+function toSourceResponse(source: SourceRow): SourceResponse {
   return {
     id: source.id,
     kind: source.kind as SourceKind,
@@ -49,10 +49,14 @@ export async function ensureDefaultSource(
   database: Database,
   seedLibraryRoot: string,
 ): Promise<void> {
-  const count = await database.source.count();
+  const { count } = await database.orm.Source.aggregate((aggregate) => ({
+    count: aggregate.count(),
+  }));
   if (count === 0) {
-    await database.source.create({
-      data: { kind: "path", path: seedLibraryRoot, position: 0 },
+    await database.orm.Source.create({
+      kind: "path",
+      path: seedLibraryRoot,
+      position: 0,
     });
   }
 }
@@ -60,9 +64,10 @@ export async function ensureDefaultSource(
 export async function listSources(
   database: Database,
 ): Promise<SourceResponse[]> {
-  const sources = await database.source.findMany({
-    orderBy: [{ position: "asc" }, { createdAt: "asc" }],
-  });
+  const sources = await database.orm.Source.orderBy([
+    (source) => source.position.asc(),
+    (source) => source.createdAt.asc(),
+  ]).all();
   return sources.map(toSourceResponse);
 }
 
@@ -79,21 +84,27 @@ export async function createSource(
     typeof value.name === "string" && value.name.trim()
       ? value.name.trim()
       : null;
-  const position = await database.source.count();
+  const { count: position } = await database.orm.Source.aggregate(
+    (aggregate) => ({ count: aggregate.count() }),
+  );
 
   if (kind === "path") {
     if (typeof value.path !== "string" || !value.path.trim()) {
       throw new SourceError("Enter a folder for this source.");
     }
     const resolved = await resolveDirectory(value.path);
-    const duplicate = await database.source.findFirst({
-      where: { kind: "path", path: resolved },
+    const duplicate = await database.orm.Source.first({
+      kind: "path",
+      path: resolved,
     });
     if (duplicate) {
       throw new SourceError("This folder is already a source.");
     }
-    const source = await database.source.create({
-      data: { kind, name, path: resolved, position },
+    const source = await database.orm.Source.create({
+      kind,
+      name,
+      path: resolved,
+      position,
     });
     return toSourceResponse(source);
   }
@@ -103,14 +114,15 @@ export async function createSource(
     if (!url) {
       throw new SourceError("Enter a valid HTTP or HTTPS URL.");
     }
-    const duplicate = await database.source.findFirst({
-      where: { kind: "url", url },
-    });
+    const duplicate = await database.orm.Source.first({ kind: "url", url });
     if (duplicate) {
       throw new SourceError("This URL is already a source.");
     }
-    const source = await database.source.create({
-      data: { kind, name, url, position },
+    const source = await database.orm.Source.create({
+      kind,
+      name,
+      url,
+      position,
     });
     return toSourceResponse(source);
   }
@@ -122,14 +134,18 @@ export async function createSource(
   if (!integration) {
     throw new SourceError("Choose an integration.");
   }
-  const duplicate = await database.source.findFirst({
-    where: { kind: "integration", integration },
+  const duplicate = await database.orm.Source.first({
+    kind: "integration",
+    integration,
   });
   if (duplicate) {
     throw new SourceError("This integration is already a source.");
   }
-  const source = await database.source.create({
-    data: { kind, name, integration, position },
+  const source = await database.orm.Source.create({
+    kind,
+    name,
+    integration,
+    position,
   });
   return toSourceResponse(source);
 }
@@ -166,7 +182,7 @@ export async function deleteSource(
   id: string,
 ): Promise<boolean> {
   try {
-    await database.source.delete({ where: { id } });
+    await database.orm.Source.where({ id }).delete();
     return true;
   } catch {
     return false;
@@ -180,7 +196,7 @@ export async function reorderSources(
   if (!Array.isArray(ids) || ids.some((id) => typeof id !== "string")) {
     throw new SourceError("Source order must be a list of source ids.");
   }
-  const existing = await database.source.findMany({ select: { id: true } });
+  const existing = await database.orm.Source.select("id").all();
   const existingIds = new Set(existing.map((source) => source.id));
   if (
     ids.length !== existingIds.size ||
@@ -191,14 +207,11 @@ export async function reorderSources(
       "Source order does not match the configured sources.",
     );
   }
-  await database.$transaction(
-    ids.map((id, index) =>
-      database.source.update({
-        where: { id },
-        data: { position: index },
-      }),
-    ),
-  );
+  await database.transaction(async (transaction) => {
+    for (const [index, id] of ids.entries()) {
+      await transaction.orm.Source.where({ id }).update({ position: index });
+    }
+  });
   return listSources(database);
 }
 
@@ -211,9 +224,9 @@ export interface PathSource {
 export async function getPathSources(
   database: Database,
 ): Promise<PathSource[]> {
-  const sources = await database.source.findMany({ where: { kind: "path" } });
+  const sources = await database.orm.Source.where({ kind: "path" }).all();
   return sources
-    .filter((source): source is Source & { path: string } =>
+    .filter((source): source is SourceRow & { path: string } =>
       Boolean(source.path),
     )
     .map((source) => ({

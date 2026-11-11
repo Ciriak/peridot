@@ -28,6 +28,7 @@ node_modules/
 dist/
 coverage/
 generated/
+.peridot/
 *.db
 *.db-journal
 *.db-shm

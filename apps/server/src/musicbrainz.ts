@@ -3,7 +3,7 @@ import type {
   MetadataProviderKind,
 } from "@peridot/contracts";
 import { normalizeArtistCredits } from "./artist-credits.js";
-import type { MetadataProvider } from "./generated/prisma/client.js";
+import type { MetadataProviderRow } from "./prisma/models.js";
 
 const MUSICBRAINZ_ORIGIN = "https://musicbrainz.org";
 const MUSICBRAINZ_API_ROOT = `${MUSICBRAINZ_ORIGIN}/ws/2/`;
@@ -84,7 +84,7 @@ function artistCredits(value: unknown): string[] {
 }
 
 function candidateFromRecording(
-  provider: MetadataProvider,
+  provider: MetadataProviderRow,
   value: unknown,
 ): MetadataCandidateResponse | null {
   const recording = asRecord(value);
@@ -157,7 +157,7 @@ function releaseMatches(
 }
 
 function recordingCandidateFromRelease(
-  provider: MetadataProvider,
+  provider: MetadataProviderRow,
   releaseId: string,
   album: string,
   releaseTrack: ReleaseTrack,
@@ -166,7 +166,7 @@ function recordingCandidateFromRelease(
     {
       ...provider,
       // candidateFromRecording only needs identity metadata from the provider.
-    } as MetadataProvider,
+    } as MetadataProviderRow,
     {
       ...releaseTrack.recording,
       releases: [{ id: releaseId, title: album }],
@@ -260,7 +260,7 @@ export class MusicBrainzClient {
   }
 
   async findCandidates(
-    provider: MetadataProvider,
+    provider: MetadataProviderRow,
     track: MetadataTrackInput,
     query?: string,
     signal?: AbortSignal,
@@ -284,7 +284,7 @@ export class MusicBrainzClient {
   }
 
   async findAlbumMatches(
-    provider: MetadataProvider,
+    provider: MetadataProviderRow,
     targets: readonly MetadataTrackInput[],
     signal?: AbortSignal,
   ): Promise<Map<string, MetadataCandidateResponse>> {
@@ -348,7 +348,7 @@ export class MusicBrainzClient {
   }
 
   private async request(
-    provider: MetadataProvider,
+    provider: MetadataProviderRow,
     path: string,
     parameters: Record<string, string>,
     signal?: AbortSignal,

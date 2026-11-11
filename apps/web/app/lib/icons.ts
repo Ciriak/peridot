@@ -14,6 +14,7 @@ import pause from "@iconify-icons/basil/pause-solid";
 import previous from "@iconify-icons/basil/skip-prev-solid";
 import next from "@iconify-icons/basil/skip-next-solid";
 import restart from "@iconify-icons/basil/refresh-outline";
+import repeatOne from "@iconify-icons/basil/refresh-solid";
 import caretUp from "@iconify-icons/basil/caret-up-outline";
 import caretDown from "@iconify-icons/basil/caret-down-outline";
 import caretRight from "@iconify-icons/basil/caret-right-outline";
@@ -51,6 +52,8 @@ export const icons = {
   previous,
   next,
   restart,
+  repeat: restart,
+  repeatOne,
   caretUp,
   caretDown,
   caretRight,

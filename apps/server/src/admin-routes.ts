@@ -7,6 +7,7 @@ import type {
   ReorderMetadataProvidersRequest,
   ReorderSourcesRequest,
   ResetTrackMetadataResponse,
+  SetMetadataProviderEnabledRequest,
   ServerSettingsResponse,
   SourceListResponse,
 } from "@peridot/contracts";
@@ -18,10 +19,10 @@ import { toScanResponse } from "./library-routes.js";
 import type { MetadataEnrichment } from "./metadata-enrichment.js";
 import {
   createMetadataProvider,
-  deleteMetadataProvider,
   listMetadataProviders,
   MetadataProviderError,
   reorderMetadataProviders,
+  setMetadataProviderEnabled,
 } from "./metadata-providers.js";
 import type { ServerLogBuffer } from "./server-log.js";
 import {
@@ -57,10 +58,17 @@ export async function registerAdminRoutes(
       "/api/admin/server",
       async (): Promise<ServerSettingsResponse> => {
         const [trackCount, availableTrackCount] = await Promise.all([
-          database.track.count(),
-          database.track.count({ where: { available: true } }),
+          database.orm.Track.aggregate((aggregate) => ({
+            count: aggregate.count(),
+          })),
+          database.orm.Track.where({ available: 1 }).aggregate((aggregate) => ({
+            count: aggregate.count(),
+          })),
         ]);
-        return { trackCount, availableTrackCount };
+        return {
+          trackCount: trackCount.count,
+          availableTrackCount: availableTrackCount.count,
+        };
       },
     );
 
@@ -125,8 +133,8 @@ export async function registerAdminRoutes(
     admin.post<{ Params: { id: string } }>(
       "/api/admin/sources/:id/scans",
       async (request, reply) => {
-        const source = await database.source.findUnique({
-          where: { id: request.params.id },
+        const source = await database.orm.Source.first({
+          id: request.params.id,
         });
         if (!source) {
           return sendError(reply, 404, "source_not_found", "Source not found");
@@ -205,14 +213,17 @@ export async function registerAdminRoutes(
       },
     );
 
-    admin.delete<{ Params: { id: string } }>(
-      "/api/admin/metadata-providers/:id",
-      async (request, reply) => {
-        const removed = await deleteMetadataProvider(
+    admin.put<{
+      Params: { id: string };
+      Body: SetMetadataProviderEnabledRequest;
+    }>("/api/admin/metadata-providers/:id", async (request, reply) => {
+      try {
+        const provider = await setMetadataProviderEnabled(
           database,
           request.params.id,
+          request.body?.enabled,
         );
-        if (!removed) {
+        if (!provider) {
           return sendError(
             reply,
             404,
@@ -220,9 +231,19 @@ export async function registerAdminRoutes(
             "Metadata provider not found",
           );
         }
-        return reply.code(204).send();
-      },
-    );
+        return provider;
+      } catch (error) {
+        if (error instanceof MetadataProviderError) {
+          return sendError(
+            reply,
+            400,
+            "invalid_metadata_provider",
+            error.message,
+          );
+        }
+        throw error;
+      }
+    });
 
     admin.post("/api/admin/metadata/reset", async (_request, reply) => {
       if (scanner.hasActiveOperation()) {
