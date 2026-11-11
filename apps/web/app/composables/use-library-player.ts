@@ -28,7 +28,6 @@ import {
 } from "../lib/peridot-client";
 import {
   notifyQueueSaveFailed,
-  notifyTrackDownloaded,
   notifyTrackDownloadFailed,
 } from "../lib/toasts";
 import {
@@ -617,7 +616,6 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
       anchor.click();
       anchor.remove();
       setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
-      notifyTrackDownloaded(track.title);
     } catch (reason) {
       notifyTrackDownloadFailed(
         track.title,

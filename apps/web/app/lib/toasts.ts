@@ -106,17 +106,6 @@ export function notifyMetadataUpdateFailed(
   });
 }
 
-export function notifyTrackDownloaded(trackTitle: string) {
-  appToastManager.add({
-    title: "Download ready",
-    description: `${trackTitle} was saved by your browser.`,
-    status: "success",
-    duration: 5000,
-    type: "foreground",
-    data: { kind: "success" },
-  });
-}
-
 export function notifyTrackDownloadFailed(trackTitle: string, message: string) {
   appToastManager.add({
     title: "Download failed",

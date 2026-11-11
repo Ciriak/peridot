@@ -279,12 +279,43 @@ onMounted(() => {
 
     <footer
       aria-label="Music player"
-      class="fixed inset-x-0 bottom-0 z-30 flex h-48 flex-col justify-center gap-3 border-t bg-card px-4 text-card-foreground md:h-28 md:flex-row md:items-center md:gap-6 md:px-6"
+      class="fixed inset-x-0 bottom-0 z-30 isolate flex h-48 flex-col justify-center gap-3 overflow-hidden border-t bg-card px-4 text-card-foreground md:h-28 md:flex-row md:items-center md:gap-6 md:px-6"
     >
+      <div
+        v-if="currentCoverUrl && !coverFailed"
+        aria-hidden="true"
+        class="pointer-events-none absolute inset-y-0 left-0 -z-10 w-2/3 overflow-hidden md:w-1/2"
+      >
+        <div class="absolute inset-0 opacity-40">
+          <Transition
+            enter-active-class="transition-opacity duration-3000 delay-150 ease-in-out motion-reduce:transition-none"
+            enter-from-class="opacity-0"
+            enter-to-class="opacity-100"
+            leave-active-class="transition-opacity duration-3000 delay-150 ease-in-out motion-reduce:transition-none"
+            leave-from-class="opacity-100"
+            leave-to-class="opacity-0"
+          >
+            <img
+              :key="currentCoverUrl"
+              :src="currentCoverUrl"
+              alt=""
+              class="absolute inset-0 size-full scale-125 object-cover object-left blur-3xl"
+            />
+          </Transition>
+        </div>
+        <div
+          aria-hidden="true"
+          class="absolute inset-y-0 right-0 w-1/2 bg-linear-to-r from-transparent via-card/60 to-card"
+        />
+      </div>
+      <div
+        aria-hidden="true"
+        class="pointer-events-none absolute inset-0 -z-10 bg-linear-to-r from-card/20 via-card/70 to-card"
+      />
       <div class="flex min-w-0 items-center gap-3 md:flex-1">
         <div
           aria-hidden="true"
-          class="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted text-muted-foreground"
+          class="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted text-muted-foreground md:size-20"
         >
           <img
             v-if="currentCoverUrl && !coverFailed"
@@ -293,7 +324,7 @@ onMounted(() => {
             class="size-full object-cover"
             @error="coverFailed = true"
           />
-          <Icon v-else :icon="icons.music" aria-hidden="true" class="size-6" />
+          <Icon v-else :icon="icons.music" aria-hidden="true" class="size-8" />
         </div>
         <div class="min-w-0">
           <NuxtLink
@@ -307,14 +338,7 @@ onMounted(() => {
             {{ active?.title ?? "No track selected" }}
           </p>
           <p
-            v-if="loading"
-            role="status"
-            class="truncate text-xs text-muted-foreground"
-          >
-            Preparing audio…
-          </p>
-          <p
-            v-else-if="error"
+            v-if="error"
             role="alert"
             class="truncate text-xs text-destructive"
           >

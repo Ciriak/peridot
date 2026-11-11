@@ -3,13 +3,14 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 test("the persistent player controls a native audio element", async () => {
-  const [player, layout, app] = await Promise.all([
+  const [player, layout, app, toasts] = await Promise.all([
     readFile(
       new URL("../app/composables/use-library-player.ts", import.meta.url),
       "utf8",
     ),
     readFile(new URL("../app/layouts/default.vue", import.meta.url), "utf8"),
     readFile(new URL("../app/app.vue", import.meta.url), "utf8"),
+    readFile(new URL("../app/lib/toasts.ts", import.meta.url), "utf8"),
   ]);
 
   assert.match(player, /new Audio\(\)/);
@@ -24,6 +25,16 @@ test("the persistent player controls a native audio element", async () => {
   assert.match(player, /trackAudioUrl\(/);
   assert.match(player, /downloadTrack\(trackId = currentTrackId\.value\)/);
   assert.match(player, /anchor\.download = trackDownloadFileName\(track\)/);
+  assert.doesNotMatch(
+    player,
+    /notifyTrackDownloaded\(/,
+    "A successful browser download does not add a toast",
+  );
+  assert.doesNotMatch(
+    toasts,
+    /Download ready/,
+    "Downloads have no success toast",
+  );
   assert.match(player, /notifyTrackDownloadFailed\(/);
   assert.match(player, /addEventListener\("timeupdate"/);
   assert.match(player, /addEventListener\("loadedmetadata"/);
@@ -111,10 +122,50 @@ test("the persistent player controls a native audio element", async () => {
     /<PeridotSpinner/,
     "The player switches directly between play and pause without a spinner",
   );
+  assert.doesNotMatch(
+    playerFooter,
+    /nowPlayingKey/,
+    "Now-playing metadata changes immediately with the active track",
+  );
+  assert.doesNotMatch(
+    playerFooter,
+    /Preparing audio|v-if="loading"/,
+    "The player never replaces the artist list with a preparing-audio label",
+  );
+  assert.match(
+    playerFooter,
+    /class="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted text-muted-foreground md:size-20"/,
+    "The player artwork is larger on compact and medium layouts",
+  );
   assert.match(
     layout,
     /:icon="playing \? icons\.pause : icons\.play"/,
     "The player switches directly from play to pause",
+  );
+  assert.match(
+    playerFooter,
+    /v-if="currentCoverUrl && !coverFailed"[\s\S]*absolute inset-y-0 left-0 -z-10 w-2\/3[\s\S]*<div class="absolute inset-0 opacity-40">[\s\S]*<img[\s\S]*:src="currentCoverUrl"[\s\S]*scale-125 object-cover object-left blur-3xl/,
+    "The current cover is cloned into a very blurred background anchored to the player's left side",
+  );
+  assert.match(
+    playerFooter,
+    /<Transition\s+enter-active-class="transition-opacity duration-3000 delay-150 ease-in-out motion-reduce:transition-none"[\s\S]*leave-active-class="transition-opacity duration-3000 delay-150 ease-in-out motion-reduce:transition-none"[\s\S]*<img\s+:key="currentCoverUrl"\s+:src="currentCoverUrl"/,
+    "The blurred cover background waits briefly, then directly crossfades over three seconds",
+  );
+  assert.doesNotMatch(
+    playerFooter,
+    /mode="out-in"/,
+    "The cover crossfade overlaps the outgoing and incoming artwork",
+  );
+  assert.match(
+    playerFooter,
+    /absolute inset-y-0 right-0 w-1\/2 bg-linear-to-r from-transparent via-card\/60 to-card/,
+    "The blurred clone fades into the player's card surface on its right edge",
+  );
+  assert.match(
+    playerFooter,
+    /bg-linear-to-r from-card\/20 via-card\/70 to-card/,
+    "The source-colored player background fades into the card surface",
   );
   assert.match(layout, /role="alert"/);
   assert.match(player, /useState<RepeatMode>\("player-repeat-mode"/);

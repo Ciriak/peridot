@@ -2,6 +2,63 @@
 
 Last updated: 2026-11-11.
 
+## Successful download toast removed
+
+Completing a track download no longer adds a bottom-right success toast. The
+browser download remains the confirmation, while failure and missing-connection
+messages still use the app-level toast region to explain why no file was saved.
+The successful-download toast helper and its call site are removed.
+
+Verification passed: the focused player test, the full web test suite, web
+typecheck, targeted ESLint and Prettier checks, the production web build, and
+`git diff --check`. Server tests and schema validation were skipped because no
+server, API, or storage contract changed. Browser visual QA was not run.
+
+Changes remain uncommitted on `dev` alongside the pre-existing working-tree
+edits; no commit, push, tag, publication, or deployment was performed. Next:
+confirm in a browser that a successful download produces no toast while a
+failed request still explains the failure.
+
+## Current cover background in the player
+
+The fixed player now reuses the active track's resolved cover as a decorative
+background clone. The clone covers the left two-thirds of the player on narrow
+screens and the left half from the medium breakpoint, remains anchored to the
+left edge, and uses a strong `blur-3xl` treatment with a scale-up to avoid
+visible blur edges. A second layer-local card-token gradient fades its right
+edge into the normal surface before the rest of the player begins, while a
+broader card gradient preserves semantic contrast for track details and
+transport controls.
+
+The decorative cover clone waits 150 ms and then directly crossfades over three
+seconds when its resolved URL changes. Both covers use the same ease-in-out
+curve so their opacity remains balanced as outgoing and incoming blurred
+artwork overlap. Tracks that share the same cover do not animate because the
+image key does not change. The displayed title, artist, and controls update
+immediately. Reduced-motion preferences disable the transition.
+
+The player no longer renders a preparing-audio label while a new track starts.
+The active track's artist list is shown immediately as soon as track metadata is
+available. Playback failures still replace that secondary line with the existing
+retryable error message.
+
+The player's foreground artwork is larger at every responsive size: 64 px on
+compact layouts and 80 px from the medium breakpoint. Its music-note fallback
+uses a matching larger glyph while keeping the existing rounded artwork frame.
+
+The layer is hidden from assistive technology, ignores pointer input, and uses
+the same missing-or-failed-cover condition as the foreground artwork, so no
+broken image is shown. No custom CSS, inline styles, hardcoded colors, or
+arbitrary Tailwind values were introduced.
+
+Changes remain uncommitted on `dev`; no commit, push, tag, publication, or
+deployment was performed. Verification passed: the focused player and styling
+tests, all 116 web tests, web typecheck, targeted ESLint and Prettier checks,
+the production web build, and `git diff --check`. The build reported non-fatal
+Rolldown `PLUGIN_TIMINGS` performance warnings. Server tests and schema
+validation were skipped because no server or storage code changed. Browser
+visual QA was not run.
+
 ## Track lists show cover artwork with embedded playback
 
 The shared track table now shows each track's cover artwork beside its title,

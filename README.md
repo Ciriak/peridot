@@ -158,7 +158,7 @@ and an accessible explanation. The task progress returns after a healthy probe.
 The web shell mounts one app-level Reka UI toast region in the bottom-right. It
 sits above the fixed player in the main shell and against the bottom edge in
 playerless fullscreen layouts. It reports source and provider changes, likes,
-downloads, and queue operations. Task activity is shown only through the topbar
+download failures, and queue operations. Task activity is shown only through the topbar
 and Tasks settings view, while connection loss is indicated by the topbar
 cloud-off warning without a toast.
 The same monitor follows the authenticated task list. It polls every 500 ms

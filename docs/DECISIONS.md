@@ -1,5 +1,51 @@
 # Decisions
 
+## 2026-11-11: Successful downloads do not add a toast
+
+Downloading a track still creates the browser file through the authenticated
+audio response and temporary blob URL, but completing that action no longer
+shows a bottom-right success toast. The browser download itself is the
+confirmation, so a second notification adds unnecessary interruption.
+
+Download failures and the missing-connection guidance remain toasts because
+they explain why no file was downloaded. The obsolete successful-download toast
+helper is removed rather than left unused.
+
+## 2026-11-11: Player background reuses the active cover on the left
+
+The persistent player derives its decorative background from the same resolved
+cover URL and failure flag as the foreground artwork. The clone is anchored to
+the left edge, occupies the left two-thirds on narrow screens and the left half
+from the medium breakpoint, and uses a strong blur so it adds album color without
+competing with track metadata or controls. A layer-local gradient fades the
+clone's right edge into the standard `card` semantic token, while a broader card
+gradient restores readability across the player.
+
+The clone is purely presentational: it is hidden from assistive technology,
+cannot intercept pointer input, and disappears with the foreground artwork when
+the track has no cover or the image fails to load. Standard Tailwind utilities
+and semantic theme tokens keep this within the owner's styling authority.
+
+The decorative cover background waits 150 ms and then directly crossfades
+between different resolved cover URLs over three seconds. The outgoing and
+incoming covers overlap instead of pausing on an empty fade frame, and both use
+the same ease-in-out curve to keep the crossfade balanced. The URL key prevents
+animation when consecutive tracks share artwork. Displayed metadata and
+playback controls remain immediate. Standard Tailwind transition utilities
+disable the motion when the user prefers reduced motion.
+
+The persistent player does not expose a separate preparing-audio state in its
+metadata line. Artist credits render immediately while the audio is loading, so
+starting a track does not temporarily replace useful metadata with a status
+label. Playback errors remain separate and continue to replace the artist line
+with the existing retryable message.
+
+The persistent player uses larger foreground artwork than its earlier compact
+48 px treatment: 64 px below the medium breakpoint and 80 px from it upward.
+The placeholder music-note glyph scales with the frame so both artwork and
+fallback retain the same visual weight. Standard Tailwind sizing and the
+existing semantic muted frame are unchanged.
+
 ## 2026-11-11: Track lists embed playback in cover artwork
 
 The shared track table and queue use one `TrackArtwork` component for every
