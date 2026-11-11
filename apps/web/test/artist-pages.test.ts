@@ -19,13 +19,14 @@ test("artists have list and detail routes with artist-scoped content", async () 
   ]);
 
   assert.match(listPage, /groupArtists\(tracks\.value\)/);
-  assert.match(listPage, /filterArtists\(artists\.value, search\.value\)/);
+  assert.match(listPage, /const artists = computed\(\(\) => groupArtists/);
+  assert.doesNotMatch(listPage, /library-search/);
   assert.match(listPage, /<ArtistCard/);
   assert.match(listPage, /:artist="artist"/);
   assert.match(artistCard, /:to="artistRoute\(artist\)"/);
   assert.match(artistCard, /useLikes\(\)/);
   assert.match(artistCard, /<LikeButton/);
-  assert.match(listPage, /No artists match your search/);
+  assert.match(listPage, /No artists found/);
   assert.match(detailPage, /findArtist\(/);
   assert.match(detailPage, /route\.params\.artist/);
   assert.match(detailPage, /groupAlbums\(artist\.value\.tracks\)/);

@@ -55,8 +55,12 @@ function sortLabel(label: string, field: TrackSortField): string {
   return `Reset ${label} sorting to default`;
 }
 
-function isCurrent(track: TrackResponse): boolean {
-  return currentTrackId.value === track.id && playing.value;
+function isActive(track: TrackResponse): boolean {
+  return currentTrackId.value === track.id;
+}
+
+function isPlaying(track: TrackResponse): boolean {
+  return isActive(track) && playing.value;
 }
 </script>
 
@@ -197,7 +201,7 @@ function isCurrent(track: TrackResponse): boolean {
         >
           <tr
             class="select-none border-b last:border-0 hover:bg-muted/50"
-            :class="isCurrent(track) && 'bg-primary/5'"
+            :class="isActive(track) && 'bg-primary/10'"
             @dblclick.prevent="play(track.id)"
           >
             <td
@@ -212,7 +216,7 @@ function isCurrent(track: TrackResponse): boolean {
                   variant="ghost"
                   size="icon-sm"
                   :aria-label="
-                    isCurrent(track)
+                    isPlaying(track)
                       ? `Pause ${track.title}`
                       : `Play track ${track.title}`
                   "
@@ -220,10 +224,10 @@ function isCurrent(track: TrackResponse): boolean {
                   @dblclick.stop
                 >
                   <Icon
-                    :icon="isCurrent(track) ? icons.pause : icons.play"
+                    :icon="isPlaying(track) ? icons.pause : icons.play"
                     aria-hidden="true"
                     :class="
-                      isCurrent(track)
+                      isPlaying(track)
                         ? 'text-primary'
                         : 'text-muted-foreground'
                     "

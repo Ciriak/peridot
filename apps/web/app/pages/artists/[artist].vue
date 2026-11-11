@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { definePageMeta, useHead, useRoute, useState } from "#imports";
+import { definePageMeta, useHead, useRoute } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
@@ -13,7 +13,6 @@ import { useLibraryPlayer } from "../../composables/use-library-player";
 import { useLibraryTracks } from "../../composables/use-library-tracks";
 import { icons } from "../../lib/icons";
 import {
-  filterTracks,
   findArtist,
   formatTrackDuration,
   groupAlbums,
@@ -23,7 +22,6 @@ import {
 definePageMeta({ name: "artist-detail" });
 
 const route = useRoute();
-const search = useState("library-search", () => "");
 const { tracks, loading, error, load } = useLibraryTracks();
 const { playCollection } = useLibraryPlayer();
 const {
@@ -44,10 +42,6 @@ const artist = computed(() =>
 const albums = computed(() =>
   artist.value ? groupAlbums(artist.value.tracks) : [],
 );
-const visibleTracks = computed(() =>
-  artist.value ? filterTracks(artist.value.tracks, search.value) : [],
-);
-
 useHead(() => ({
   title: artist.value ? `${artist.value.name} — Peridot` : "Artist — Peridot",
 }));
@@ -155,16 +149,12 @@ onMounted(() => {
 
     <section aria-labelledby="artist-tracks-heading" class="space-y-4">
       <div class="flex items-center justify-between gap-4">
-        <h2 id="artist-tracks-heading" class="text-lg font-semibold">
-          {{ search ? "Matching tracks" : "Tracks" }}
-        </h2>
-        <Badge variant="secondary">
-          {{ search ? `${visibleTracks.length} matching` : "All tracks" }}
-        </Badge>
+        <h2 id="artist-tracks-heading" class="text-lg font-semibold">Tracks</h2>
+        <Badge variant="secondary">All tracks</Badge>
       </div>
       <TrackTable
-        v-if="visibleTracks.length"
-        :tracks="visibleTracks"
+        v-if="artist.tracks.length"
+        :tracks="artist.tracks"
         variant="artist"
       />
       <p
@@ -172,7 +162,7 @@ onMounted(() => {
         role="status"
         class="rounded-lg border p-6 text-sm text-muted-foreground"
       >
-        No tracks by this artist match your search.
+        This artist has no playable tracks.
       </p>
     </section>
   </template>

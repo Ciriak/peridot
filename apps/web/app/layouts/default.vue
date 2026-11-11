@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useRoute, useState } from "#imports";
+import { useRoute, useRouter, useState } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import logo from "@peridot/ui/assets/brand/logo.svg";
 import logoNop from "@peridot/ui/assets/brand/logo-nop.png";
@@ -7,7 +7,7 @@ import { Button } from "@peridot/ui/components/ui/button";
 import { Input } from "@peridot/ui/components/ui/input";
 import { Slider } from "@peridot/ui/components/ui/slider";
 import { Spinner } from "@peridot/ui/components/ui/spinner";
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import LikeButton from "../components/LikeButton.vue";
 import QueueDrawer from "../components/QueueDrawer.vue";
 import { useLikes } from "../composables/use-likes";
@@ -21,7 +21,9 @@ import { icons } from "../lib/icons";
 import { trackCoverUrl } from "../lib/library";
 
 const route = useRoute();
-const search = useState("library-search", () => "");
+const router = useRouter();
+const searchQuery = useState("search-query", () => "");
+const searchInput = ref<{ $el?: HTMLInputElement } | null>(null);
 const mobileNavigation = ref(false);
 const queueOpen = ref(false);
 const { address } = useServer();
@@ -103,9 +105,19 @@ function toggleCurrentTrackLike() {
     void toggleLike({ kind: "track", trackId: currentTrackId.value });
 }
 
-watch(currentPath, () => {
+async function openSearch() {
+  if (currentPath.value !== "/search") await router.push("/search");
+  await nextTick();
+  searchInput.value?.$el?.focus();
+}
+
+watch(currentPath, (path) => {
   mobileNavigation.value = false;
-  search.value = "";
+  if (path !== "/search") {
+    searchQuery.value = "";
+  } else {
+    void nextTick(() => searchInput.value?.$el?.focus());
+  }
 });
 
 watch([address, token, () => user.value?.id], () => {
@@ -270,11 +282,14 @@ onMounted(() => {
               class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
             />
             <Input
-              v-model="search"
+              ref="searchInput"
+              v-model="searchQuery"
               type="search"
-              aria-label="Search library"
-              placeholder="Search your library"
+              aria-label="Search albums and tracks"
+              placeholder="Search albums and tracks"
               class="pl-9"
+              @click="openSearch"
+              @focus="openSearch"
             />
           </div>
           <Button
@@ -298,7 +313,12 @@ onMounted(() => {
           tabindex="-1"
           class="min-h-0 flex-1 overflow-y-auto p-4 md:p-6"
         >
-          <div class="mx-auto max-w-7xl space-y-8"><slot /></div>
+          <div
+            class="mx-auto space-y-8"
+            :class="currentPath === '/search' ? 'max-w-none' : 'max-w-7xl'"
+          >
+            <slot />
+          </div>
         </main>
       </div>
     </div>

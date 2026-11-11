@@ -1,5 +1,25 @@
 # Decisions
 
+## 2026-11-11: Search is a dedicated local-library view with result-type quick filters
+
+Search now has one dedicated `/search` route instead of filtering whichever
+catalog page happens to be open. The persistent top-bar input owns the query and
+navigates to the route when clicked or focused; the page itself does not render a
+second input. The route uses the full main content area while retaining the
+sidebar, header, and fixed player. An empty query shows recently opened albums;
+a non-empty query groups local album and track results before the external-source
+section.
+
+The first quick-filter tags are `All`, `Albums`, and `Tracks`. They are
+client-side toggles over the current query results. They are not catalog genre
+metadata because the track contract does not expose tags or genres.
+
+Recent search albums are identified by normalized title and artist, scoped in
+browser storage by server and user, deduplicated, bounded to eight entries, and
+reconciled against the current catalog before display. External sources remain a
+non-functional placeholder with no provider calls, downloads, or simulated
+results until a real credential-backed integration exists.
+
 ## 2026-11-11: Like hover stays scoped to the like control
 
 The shared `LikeButton` applies its primary hover and active colors to the

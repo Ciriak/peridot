@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { useState } from "#imports";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { Spinner } from "@peridot/ui/components/ui/spinner";
@@ -13,7 +12,6 @@ const props = withDefaults(
   defineProps<{ title: string; home?: boolean; favorites?: boolean }>(),
   { home: false, favorites: false },
 );
-const search = useState("library-search", () => "");
 const { tracks, loading, error, load } = useLibraryTracks();
 const {
   likedTrackIds,
@@ -25,7 +23,7 @@ const {
 const visible = computed(() =>
   filterTracks(
     tracks.value,
-    search.value,
+    "",
     props.favorites ? likedTrackIds.value : undefined,
   ),
 );
@@ -38,9 +36,7 @@ onMounted(() => {
 
 <template>
   <div class="space-y-2">
-    <h1 class="text-2xl font-semibold tracking-tight">
-      {{ search ? "Search results" : title }}
-    </h1>
+    <h1 class="text-2xl font-semibold tracking-tight">{{ title }}</h1>
     <p class="text-sm text-muted-foreground">
       Tracks cataloged from your configured music sources.
     </p>
@@ -95,10 +91,7 @@ onMounted(() => {
       role="status"
       class="rounded-lg border p-6 text-sm text-muted-foreground"
     >
-      <template v-if="search">No tracks match your search.</template>
-      <template v-else-if="favorites">
-        You have not liked any tracks yet.
-      </template>
+      <template v-if="favorites"> You have not liked any tracks yet. </template>
       <template v-else>
         No tracks in your library yet. Add a music source and run a scan from
         Settings → Sources.

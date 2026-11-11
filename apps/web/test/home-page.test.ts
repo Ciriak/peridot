@@ -9,11 +9,11 @@ test("home presents catalog suggestions with the shared album-card grid", async 
   ]);
 
   assert.match(homePage, /groupAlbums\(tracks\.value\)/);
-  assert.match(homePage, /filterAlbums\(albums\.value, search\.value\)/);
+  assert.match(homePage, /const albums = computed\(\(\) => groupAlbums/);
   assert.match(homePage, /<AlbumCard/);
   assert.match(homePage, /:album="album"/);
   assert.match(homePage, /void loadLikes\(\)/);
-  assert.match(homePage, /No suggestions match your search/);
+  assert.doesNotMatch(homePage, /library-search/);
   assert.doesNotMatch(homePage, /<LibraryScreen/);
 
   const gridClass =

@@ -9,8 +9,9 @@ withDefaults(
     label: string;
     pending?: boolean;
     disabled?: boolean;
+    compact?: boolean;
   }>(),
-  { pending: false, disabled: false },
+  { pending: false, disabled: false, compact: false },
 );
 
 const emit = defineEmits<{ toggle: [] }>();
@@ -19,7 +20,7 @@ const emit = defineEmits<{ toggle: [] }>();
 <template>
   <Button
     variant="ghost"
-    size="icon-lg"
+    :size="compact ? 'icon-xs' : 'icon-lg'"
     class="hover:text-primary active:text-primary"
     :disabled="disabled || pending"
     :aria-label="`${liked ? 'Unlike' : 'Like'} ${label}`"
@@ -30,8 +31,8 @@ const emit = defineEmits<{ toggle: [] }>();
     <Icon
       :icon="liked ? icons.heartFilled : icons.heart"
       aria-hidden="true"
-      class="size-6 transition-colors"
-      :class="liked && 'text-primary'"
+      class="transition-colors"
+      :class="[compact ? 'size-3' : 'size-6', liked && 'text-primary']"
     />
   </Button>
 </template>

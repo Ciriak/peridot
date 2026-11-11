@@ -2,6 +2,65 @@
 
 Last updated: 2026-11-11.
 
+## Dedicated search view and quick filters
+
+Search now opens a dedicated `/search` content view from the persistent top-bar
+input. Clicking or focusing that input navigates to `/search`, and the same input
+owns the query state while the page renders results only. The view uses the
+available main content width, keeps the sidebar, header, and fixed player, and
+replaces the previous shared query that filtered Home, Library, Albums, Artists,
+and detail pages.
+
+With an empty query, search shows up to eight recently opened local albums,
+newest first. With a query, it groups local album cards and the shared track
+table, then shows the non-functional External sources notice. The `All`,
+`Albums`, and `Tracks` toggle tags below the input act as client-side quick
+filters over the current results and expose `aria-pressed` state.
+
+Search album cards use a compact variant with tighter padding, smaller artwork
+placeholders, smaller titles and like controls, and a dense grid that reaches ten
+columns on wide screens.
+Album cards elsewhere retain their existing size.
+
+Every shared album card now exposes a small cover play button that appears on
+hover, uses a pointer cursor, and starts the album immediately without following
+the card link. Focus on other card controls does not keep the button visible;
+keyboard focus on the play control itself still reveals it. The album-detail
+cover is not a shared album card and remains unchanged.
+
+When a card's album contains the active player track, its cover control mirrors
+the main player button: it shows pause while playing, play while paused, shows
+the loading spinner while preparing audio, and toggles the existing playback
+instead of restarting the album.
+
+The album-detail header button follows the same active-album behavior as a
+circular icon-only control. Play, pause, and loading states are conveyed through
+the icon or spinner, with a descriptive accessible label.
+
+Track-table active styling now follows the player's current track even while
+playback is paused. Play/pause icons and labels still depend on whether that
+current track is actually playing. The active row uses a slightly stronger
+`bg-primary/10` tint.
+
+Recent albums are stored in browser-local storage under a versioned key scoped
+by server and user. Saved identities are normalized and deduplicated, then
+reconciled against the current catalog so removed albums do not appear. Album
+card navigation emits an open event so likes and other controls do not
+incorrectly update the recent list. Existing album context menus, likes, track
+playback, and player behavior are unchanged.
+
+Verified: web typecheck, targeted ESLint, Prettier, the production web build,
+and all new search tests passed. The full web suite passed 93 of 94 tests; the
+only failure is the previously documented stale sidebar assertion expecting the
+`logo` variable while the checked-in layout uses `logoNop`. A native browser
+visual pass was attempted, but Computer Use stopped because it could not verify
+that the local browser URL was allowed.
+
+No server API, schema, credential, provider, or download integration changed.
+The external-source section intentionally has no simulated items or actions.
+Changes remain uncommitted on `dev`; the pre-existing untracked `$null` file was
+preserved. No commit, push, tag, publication, or deployment was performed.
+
 ## Like hover scoped to the control
 
 The shared like button now changes its icon color only when the button itself is

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-test("albums have list and detail routes with searchable derived groups", async () => {
+test("albums have list and detail routes with derived groups", async () => {
   const [listPage, detailPage, libraryScreen, trackTable, albumCard] =
     await Promise.all([
       readFile(
@@ -28,7 +28,8 @@ test("albums have list and detail routes with searchable derived groups", async 
     ]);
 
   assert.match(listPage, /groupAlbums\(tracks\.value\)/);
-  assert.match(listPage, /filterAlbums\(albums\.value, search\.value\)/);
+  assert.match(listPage, /const albums = computed\(\(\) => groupAlbums/);
+  assert.doesNotMatch(listPage, /library-search/);
   assert.match(listPage, /<AlbumCard/);
   assert.match(listPage, /:album="album"/);
   assert.match(albumCard, /:to="albumRoute\(album\)"/);
@@ -37,11 +38,43 @@ test("albums have list and detail routes with searchable derived groups", async 
   assert.match(albumCard, /trackCoverUrl\(/);
   assert.match(albumCard, /<img[\s\S]*object-cover/);
   assert.match(albumCard, /@error="coverFailed = true"/);
-  assert.match(albumCard, /<Icon v-else :icon="icons\.music"/);
+  assert.match(albumCard, /<Icon\s+v-else\s+:icon="icons\.music"/);
+  assert.match(albumCard, /useLibraryPlayer\(\)/);
+  assert.match(albumCard, /playCollection\(props\.album\.trackIds\)/);
+  assert.match(albumCard, /togglePlayback\(\)/);
+  assert.match(
+    albumCard,
+    /albumActive && playing \? icons\.pause : icons\.play/,
+  );
+  assert.match(albumCard, /@click\.prevent\.stop="toggleAlbumPlayback"/);
+  assert.match(albumCard, /group-hover:opacity-100/);
+  assert.doesNotMatch(albumCard, /group-focus-within:opacity-100/);
+  assert.match(albumCard, /focus-visible:opacity-100/);
+  assert.match(albumCard, /cursor-pointer/);
+  assert.match(albumCard, /compact \? 'icon-sm' : 'icon'/);
+  assert.match(albumCard, /compact \? 'bottom-1 right-1' : 'bottom-2 right-2'/);
+  assert.doesNotMatch(
+    detailPage,
+    /<AlbumCard/,
+    "The album detail cover does not use the shared card play control",
+  );
   assert.match(listPage, /No albums found/);
   assert.match(detailPage, /findAlbum\(/);
   assert.match(detailPage, /route\.query\.artist/);
   assert.match(detailPage, /playCollection\(/);
+  assert.match(detailPage, /togglePlayback\(\)/);
+  assert.match(
+    detailPage,
+    /albumActive && playing \? icons\.pause : icons\.play/,
+  );
+  assert.match(detailPage, /@click="toggleAlbumPlayback"/);
+  assert.match(detailPage, /size="icon-lg"/);
+  assert.match(detailPage, /:aria-label=/);
+  assert.doesNotMatch(
+    detailPage,
+    />\s*Play album\s*</,
+    "The album-detail playback control is icon-only",
+  );
   assert.match(detailPage, /<img[\s\S]*object-cover/);
   assert.match(detailPage, /<Icon v-else :icon="icons\.music"/);
   assert.match(detailPage, /<LikeButton/);
@@ -52,8 +85,8 @@ test("albums have list and detail routes with searchable derived groups", async 
   );
   assert.match(
     trackTable,
-    /:class="isCurrent\(track\) && 'bg-primary\/5'"/,
-    "The playing track row has a subtle primary background",
+    /:class="isActive\(track\) && 'bg-primary\/10'"/,
+    "The current track row has a subtle primary background",
   );
   assert.match(
     trackTable,
@@ -62,8 +95,13 @@ test("albums have list and detail routes with searchable derived groups", async 
   );
   assert.match(
     trackTable,
-    /currentTrackId\.value === track\.id && playing\.value/,
-    "The row highlight only applies while the current track is playing",
+    /function isActive\(track: TrackResponse\): boolean \{\s+return currentTrackId\.value === track\.id;/,
+    "The row highlight follows the current track independently of playback",
+  );
+  assert.match(
+    trackTable,
+    /function isPlaying\(track: TrackResponse\): boolean \{\s+return isActive\(track\) && playing\.value;/,
+    "The pause icon still follows actual playback state",
   );
   assert.match(
     libraryScreen,

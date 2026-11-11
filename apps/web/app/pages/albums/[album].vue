@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { definePageMeta, useHead, useRoute, useState } from "#imports";
+import { definePageMeta, useHead, useRoute } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
@@ -14,7 +14,6 @@ import { useLibraryTracks } from "../../composables/use-library-tracks";
 import { useServer } from "../../composables/use-server";
 import { icons } from "../../lib/icons";
 import {
-  filterTracks,
   findAlbum,
   formatTrackDuration,
   groupAlbums,
@@ -25,9 +24,14 @@ definePageMeta({ name: "album-detail" });
 
 const route = useRoute();
 const { address } = useServer();
-const search = useState("library-search", () => "");
 const { tracks, loading, error, load } = useLibraryTracks();
-const { playCollection } = useLibraryPlayer();
+const {
+  active,
+  playing,
+  loading: playbackLoading,
+  playCollection,
+  togglePlayback,
+} = useLibraryPlayer();
 const {
   likedAlbumKeys,
   loaded: likesLoaded,
@@ -47,6 +51,15 @@ const albumArtist = computed(() => {
 const album = computed(() =>
   findAlbum(groupAlbums(tracks.value), albumTitle.value, albumArtist.value),
 );
+const albumActive = computed(() => {
+  const activeTrackId = active.value?.id;
+  return album.value && activeTrackId
+    ? album.value.trackIds.includes(activeTrackId)
+    : false;
+});
+const albumPlaybackLoading = computed(
+  () => albumActive.value && playbackLoading.value,
+);
 const coverFailed = ref(false);
 const coverUrl = computed(() =>
   trackCoverUrl(address.value ?? "", album.value?.coverUrl ?? null),
@@ -54,10 +67,6 @@ const coverUrl = computed(() =>
 watch(coverUrl, () => {
   coverFailed.value = false;
 });
-const visibleTracks = computed(() =>
-  album.value ? filterTracks(album.value.tracks, search.value) : [],
-);
-
 useHead(() => ({
   title: album.value
     ? `${album.value.title} by ${album.value.artist} — Peridot`
@@ -67,6 +76,14 @@ useHead(() => ({
 function playWholeAlbum() {
   const currentAlbum = album.value;
   if (currentAlbum?.trackIds.length) playCollection(currentAlbum.trackIds);
+}
+
+function toggleAlbumPlayback() {
+  if (albumActive.value) {
+    togglePlayback();
+    return;
+  }
+  playWholeAlbum();
 }
 
 onMounted(() => {
@@ -132,8 +149,33 @@ onMounted(() => {
           <TrackArtistLinks :artists="album.artists" />
         </p>
         <div class="flex flex-wrap items-center gap-3">
-          <Button :disabled="!album.tracks.length" @click="playWholeAlbum">
-            <Icon :icon="icons.play" aria-hidden="true" />Play album
+          <Button
+            size="icon-lg"
+            class="rounded-full"
+            :disabled="!album.tracks.length"
+            :aria-busy="albumPlaybackLoading"
+            :aria-label="
+              albumPlaybackLoading
+                ? `Cancel loading ${album.title}`
+                : albumActive && playing
+                  ? `Pause ${album.title} by ${album.artist}`
+                  : albumActive
+                    ? `Resume ${album.title} by ${album.artist}`
+                    : `Play ${album.title} by ${album.artist}`
+            "
+            @click="toggleAlbumPlayback"
+          >
+            <Spinner
+              v-if="albumPlaybackLoading"
+              :label="`Loading ${album.title}`"
+              class="size-5"
+            />
+            <Icon
+              v-else
+              :icon="albumActive && playing ? icons.pause : icons.play"
+              aria-hidden="true"
+              class="size-5"
+            />
           </Button>
           <LikeButton
             :liked="likedAlbumKeys.includes(album.key)"
@@ -167,16 +209,12 @@ onMounted(() => {
 
     <section aria-labelledby="album-tracks-heading" class="space-y-4">
       <div class="flex items-center justify-between gap-4">
-        <h2 id="album-tracks-heading" class="text-lg font-semibold">
-          {{ search ? "Matching tracks" : "Tracks" }}
-        </h2>
-        <Badge variant="secondary">
-          {{ search ? `${visibleTracks.length} matching` : "Album order" }}
-        </Badge>
+        <h2 id="album-tracks-heading" class="text-lg font-semibold">Tracks</h2>
+        <Badge variant="secondary">Album order</Badge>
       </div>
       <TrackTable
-        v-if="visibleTracks.length"
-        :tracks="visibleTracks"
+        v-if="album.tracks.length"
+        :tracks="album.tracks"
         variant="album"
       />
       <p
@@ -184,7 +222,7 @@ onMounted(() => {
         role="status"
         class="rounded-lg border p-6 text-sm text-muted-foreground"
       >
-        No tracks in this album match your search.
+        This album has no playable tracks.
       </p>
     </section>
   </template>
