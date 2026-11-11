@@ -165,13 +165,39 @@ export interface ReorderSourcesRequest {
   ids: string[];
 }
 
-export type MetadataProviderKind = "musicbrainz";
+export type MetadataProviderKind = "musicbrainz" | "discogs";
+
+export type MetadataProviderFieldType = "text" | "url" | "password";
+
+export interface MetadataProviderFieldDefinition {
+  key: string;
+  label: string;
+  type: MetadataProviderFieldType;
+  required: boolean;
+  placeholder: string | null;
+  helpText: string | null;
+}
+
+export interface MetadataProviderDefinitionResponse {
+  kind: MetadataProviderKind;
+  name: string;
+  description: string;
+  configurationFields: MetadataProviderFieldDefinition[];
+  credentialField: MetadataProviderFieldDefinition | null;
+  supportsAutomaticMatching: boolean;
+  supportsManualSearch: boolean;
+}
+
+export interface MetadataProviderDefinitionListResponse {
+  items: MetadataProviderDefinitionResponse[];
+}
 
 export interface MetadataProviderResponse {
   id: string;
   kind: MetadataProviderKind;
   name: string;
-  contact: string;
+  accountLabel: string | null;
+  configuration: Record<string, string>;
   hasCredential: boolean;
   enabled: boolean;
 }
@@ -183,37 +209,46 @@ export interface MetadataProviderListResponse {
 export interface CreateMetadataProviderRequest {
   kind: MetadataProviderKind;
   name?: string | null;
-  contact: string;
-  apiKey?: string | null;
+  configuration?: Record<string, string>;
+  credential?: string | null;
+}
+
+export interface UpdateMetadataProviderRequest {
+  enabled?: boolean;
+  configuration?: Record<string, string>;
+  credential?: string | null;
 }
 
 export interface ReorderMetadataProvidersRequest {
   ids: string[];
 }
 
-export interface SetMetadataProviderEnabledRequest {
-  enabled: boolean;
-}
-
 export type TrackMetadataMatchMode = "automatic" | "manual";
 
 export interface TrackMetadataResponse {
-  providerId: string | null;
+  providerId: string;
   providerKind: MetadataProviderKind;
   providerName: string;
-  recordingId: string;
-  releaseId: string | null;
+  externalTrackId: string;
+  externalReleaseId: string | null;
   matchedAt: string;
   mode: TrackMetadataMatchMode;
   sourceUrl: string;
+  details: TrackMetadataDetail[];
+}
+
+export interface TrackMetadataDetail {
+  key: string;
+  label: string;
+  value: string;
 }
 
 export interface MetadataCandidateResponse {
   providerId: string;
   providerKind: MetadataProviderKind;
   providerName: string;
-  recordingId: string;
-  releaseId: string | null;
+  externalTrackId: string;
+  externalReleaseId: string | null;
   title: string;
   artist: string;
   artists: string[];
@@ -222,6 +257,8 @@ export interface MetadataCandidateResponse {
   trackNumber: number | null;
   durationMs: number | null;
   score: number;
+  sourceUrl: string;
+  details: TrackMetadataDetail[];
 }
 
 export interface MetadataCandidateListResponse {
@@ -230,14 +267,16 @@ export interface MetadataCandidateListResponse {
 
 export interface ApplyTrackMetadataRequest {
   providerId: string;
-  recordingId: string;
-  releaseId: string | null;
+  externalTrackId: string;
+  externalReleaseId: string | null;
   title: string;
   artist: string;
   artists: string[];
   album: string | null;
   discNumber: number | null;
   trackNumber: number | null;
+  sourceUrl: string;
+  details: TrackMetadataDetail[];
 }
 
 export interface ResetTrackMetadataResponse {

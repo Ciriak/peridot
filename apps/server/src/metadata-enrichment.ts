@@ -10,14 +10,28 @@ import {
   parseStoredArtistCredits,
   serializeArtistCredits,
 } from "./artist-credits.js";
+import type { CredentialStore } from "./credential-store.js";
 import type { Database } from "./database.js";
-import { orderedMetadataProviders } from "./metadata-providers.js";
 import {
-  MusicBrainzClient,
-  MusicBrainzError,
+  normalizeMetadataDetails,
+  parseStoredMetadataDetails,
+  serializeMetadataDetails,
+} from "./metadata-details.js";
+import {
+  orderedMetadataProviders,
+  parseProviderConfiguration,
+  providerContext,
+} from "./metadata-providers.js";
+import {
+  candidateIdentity,
+  type MetadataProviderContext,
+  type MetadataResolver,
+  type MetadataResolverRegistry,
   type MetadataTrackInput,
-} from "./musicbrainz.js";
-import type { TrackRow } from "./prisma/models.js";
+} from "./metadata-resolver.js";
+import type { MetadataProviderRow, TrackRow } from "./prisma/models.js";
+
+export { parseStoredMetadataDetails };
 
 export class MetadataEnrichmentError extends Error {
   constructor(
@@ -96,21 +110,8 @@ function folderAlbumTitle(
 function matchData(
   candidate: MetadataCandidateResponse,
   mode: TrackMetadataMatchMode,
-): {
-  metadataMode: string;
-  metadataTitle: string;
-  metadataArtist: string;
-  metadataArtistCredits: string;
-  metadataAlbum: string | null;
-  metadataDiscNumber: number | null;
-  metadataTrackNumber: number | null;
-  metadataProviderId: string;
-  metadataProviderKind: string;
-  metadataProviderName: string;
-  metadataRecordingId: string;
-  metadataReleaseId: string | null;
-  metadataMatchedAt: Date;
-} {
+) {
+  const details = normalizeMetadataDetails(candidate.details);
   return {
     metadataMode: mode,
     metadataTitle: candidate.title,
@@ -122,8 +123,10 @@ function matchData(
     metadataProviderId: candidate.providerId,
     metadataProviderKind: candidate.providerKind,
     metadataProviderName: candidate.providerName,
-    metadataRecordingId: candidate.recordingId,
-    metadataReleaseId: candidate.releaseId,
+    metadataExternalTrackId: candidate.externalTrackId,
+    metadataExternalReleaseId: candidate.externalReleaseId,
+    metadataSourceUrl: candidate.sourceUrl,
+    metadataDetails: serializeMetadataDetails(details),
     metadataMatchedAt: new Date(),
   };
 }
@@ -131,10 +134,11 @@ function matchData(
 function validCandidate(candidate: MetadataCandidateResponse): boolean {
   return Boolean(
     candidate.providerId &&
-    candidate.recordingId &&
+    candidate.externalTrackId &&
     candidate.title.trim() &&
     candidate.artist.trim() &&
-    candidate.artists.length,
+    candidate.artists.length &&
+    candidate.sourceUrl.startsWith("https://"),
   );
 }
 
@@ -147,6 +151,8 @@ function normalizeCandidate(
   ]);
   return {
     ...candidate,
+    externalTrackId: candidate.externalTrackId.trim(),
+    externalReleaseId: candidate.externalReleaseId?.trim() || null,
     title: candidate.title.trim(),
     artist: candidate.artist.trim() || artists.join(", "),
     artists,
@@ -159,6 +165,24 @@ function normalizeCandidate(
       Number.isInteger(candidate.trackNumber) && candidate.trackNumber! > 0
         ? candidate.trackNumber
         : null,
+    sourceUrl: candidate.sourceUrl,
+    details: normalizeMetadataDetails(candidate.details),
+  };
+}
+
+function providerIdentity(
+  provider: MetadataProviderRow,
+  resolver: MetadataResolver,
+  credential: string | null,
+): MetadataProviderContext {
+  return {
+    id: provider.id,
+    kind: resolver.definition.kind,
+    name: provider.name,
+    configuration: resolver.normalizeConfiguration(
+      parseProviderConfiguration(provider.configuration),
+    ),
+    credential,
   };
 }
 
@@ -167,7 +191,8 @@ export class MetadataEnrichment {
 
   constructor(
     private readonly database: Database,
-    private readonly client = new MusicBrainzClient(),
+    private readonly registry: MetadataResolverRegistry,
+    private readonly credentials: CredentialStore,
   ) {}
 
   close(): void {
@@ -250,6 +275,7 @@ export class MetadataEnrichment {
       let matchedCount = 0;
       let unmatchedCount = 0;
       let errorCount = 0;
+      let failureSummary: string | null = null;
       const recordProgress = async () => {
         await this.database.orm.LibraryScan.where({ id: scanId }).update({
           metadataProcessedCount: processedCount,
@@ -293,8 +319,14 @@ export class MetadataEnrichment {
         for (const provider of providers) {
           if (!unresolved.length) break;
           try {
-            const candidates = await this.client.findAlbumMatches(
+            const resolver = this.registry.require(provider.kind);
+            const context = await providerContext(
               provider,
+              resolver,
+              this.credentials,
+            );
+            const candidates = await resolver.findAlbumMatches(
+              context,
               unresolved.map((track) => ({
                 ...trackInput(track),
                 album,
@@ -303,13 +335,13 @@ export class MetadataEnrichment {
             );
             const nextUnresolved: TrackRow[] = [];
             for (const track of unresolved) {
-              const candidate = candidates.get(track.id);
-              if (
-                candidate &&
-                validCandidate(candidate) &&
-                this.client.isExactMatch(trackInput(track), candidate)
-              ) {
-                await applyAutomatic(track, normalizeCandidate(candidate));
+              const input = trackInput(track);
+              const items = (candidates.get(track.id) ?? [])
+                .map(normalizeCandidate)
+                .filter(validCandidate);
+              const result = resolver.automaticMatch(input, items);
+              if (result.status === "matched") {
+                await applyAutomatic(track, result.candidate);
               } else {
                 nextUnresolved.push(track);
               }
@@ -317,17 +349,24 @@ export class MetadataEnrichment {
             unresolved = nextUnresolved;
           } catch (error) {
             if (this.controller.signal.aborted) throw error;
-            if (!(error instanceof MusicBrainzError)) throw error;
-            for (let index = 0; index < unresolved.length; index += 1) {
-              await recordError();
-            }
-            await this.database.orm.LibraryScan.where({ id: scanId }).update({
-              metadataFailureSummary: error.message,
-            });
-            unresolved = [];
+            failureSummary =
+              error instanceof Error
+                ? error.message
+                : `${provider.name} metadata matching failed.`;
           }
         }
-        for (const track of unresolved) await recordNoMatch(track);
+        for (const track of unresolved) {
+          if (failureSummary) {
+            await recordError();
+          } else {
+            await recordNoMatch(track);
+          }
+        }
+        if (failureSummary) {
+          await this.database.orm.LibraryScan.where({ id: scanId }).update({
+            metadataFailureSummary: failureSummary,
+          });
+        }
       }
 
       await this.database.orm.LibraryScan.where({ id: scanId }).update({
@@ -336,6 +375,7 @@ export class MetadataEnrichment {
         metadataMatchedCount: matchedCount,
         metadataUnmatchedCount: unmatchedCount,
         metadataErrorCount: errorCount,
+        metadataFailureSummary: failureSummary,
       });
     } catch {
       const interrupted = this.controller.signal.aborted;
@@ -370,23 +410,44 @@ export class MetadataEnrichment {
         "Enter a search term up to 200 characters.",
       );
     }
-    try {
-      for (const provider of providers) {
-        const items = await this.client.findCandidates(
+    const items: MetadataCandidateResponse[] = [];
+    let firstError: unknown = null;
+    for (const provider of providers) {
+      try {
+        const resolver = this.registry.require(provider.kind);
+        const context = await providerContext(
           provider,
+          resolver,
+          this.credentials,
+        );
+        const candidates = await resolver.findCandidates(
+          context,
           trackInput(track),
           query?.trim() || undefined,
           this.controller.signal,
         );
-        if (items.length) return items.map(normalizeCandidate);
+        items.push(
+          ...candidates.map(normalizeCandidate).filter(validCandidate),
+        );
+      } catch (error) {
+        firstError ??= error;
       }
-      return [];
-    } catch (error) {
-      if (error instanceof MusicBrainzError) {
-        throw new MetadataEnrichmentError(error.message, 502);
-      }
-      throw error;
     }
+    if (!items.length && firstError) {
+      if (firstError instanceof Error) {
+        throw new MetadataEnrichmentError(
+          firstError.message,
+          "statusCode" in firstError &&
+            typeof firstError.statusCode === "number"
+            ? firstError.statusCode
+            : 502,
+        );
+      }
+      throw firstError;
+    }
+    return [
+      ...new Map(items.map((item) => [candidateIdentity(item), item])).values(),
+    ];
   }
 
   async resetAll(): Promise<number> {
@@ -403,8 +464,10 @@ export class MetadataEnrichment {
       metadataProviderId: null,
       metadataProviderKind: null,
       metadataProviderName: null,
-      metadataRecordingId: null,
-      metadataReleaseId: null,
+      metadataExternalTrackId: null,
+      metadataExternalReleaseId: null,
+      metadataSourceUrl: null,
+      metadataDetails: null,
       metadataMatchedAt: null,
       metadataAttemptedSignature: null,
     });
@@ -427,15 +490,30 @@ export class MetadataEnrichment {
     }
     if (
       !body ||
-      typeof body.recordingId !== "string" ||
-      !body.recordingId.trim() ||
+      typeof body.externalTrackId !== "string" ||
+      !body.externalTrackId.trim() ||
       typeof body.title !== "string" ||
       !body.title.trim() ||
       typeof body.artist !== "string" ||
       !body.artist.trim() ||
-      !Array.isArray(body.artists)
+      !Array.isArray(body.artists) ||
+      !Array.isArray(body.details)
     ) {
       throw new MetadataEnrichmentError("Choose a valid metadata match.");
+    }
+    let resolver: MetadataResolver;
+    let context: MetadataProviderContext;
+    try {
+      resolver = this.registry.require(provider.kind);
+      const credential = provider.credentialCiphertext
+        ? this.credentials.decrypt(provider.credentialCiphertext)
+        : null;
+      context = providerIdentity(provider, resolver, credential);
+    } catch (error) {
+      throw new MetadataEnrichmentError(
+        error instanceof Error ? error.message : "Provider is unavailable.",
+        409,
+      );
     }
     const artists = normalizeArtistCredits([
       ...body.artists.filter(
@@ -443,12 +521,16 @@ export class MetadataEnrichment {
       ),
       body.artist,
     ]);
+    const externalReleaseId =
+      typeof body.externalReleaseId === "string"
+        ? body.externalReleaseId.trim() || null
+        : null;
     const candidate = normalizeCandidate({
-      providerId: provider.id,
-      providerKind: "musicbrainz",
-      providerName: provider.name,
-      recordingId: body.recordingId.trim(),
-      releaseId: typeof body.releaseId === "string" ? body.releaseId : null,
+      providerId: context.id,
+      providerKind: context.kind,
+      providerName: context.name,
+      externalTrackId: body.externalTrackId,
+      externalReleaseId,
       title: body.title,
       artist: body.artist,
       artists,
@@ -457,6 +539,11 @@ export class MetadataEnrichment {
       trackNumber: body.trackNumber,
       durationMs: track.durationMs,
       score: 100,
+      sourceUrl: resolver.sourceUrl(
+        body.externalTrackId.trim(),
+        externalReleaseId,
+      ),
+      details: body.details,
     });
     if (!validCandidate(candidate)) {
       throw new MetadataEnrichmentError("Choose a valid metadata match.");
@@ -481,8 +568,10 @@ export class MetadataEnrichment {
       metadataProviderId: null,
       metadataProviderKind: null,
       metadataProviderName: null,
-      metadataRecordingId: null,
-      metadataReleaseId: null,
+      metadataExternalTrackId: null,
+      metadataExternalReleaseId: null,
+      metadataSourceUrl: null,
+      metadataDetails: null,
       metadataMatchedAt: null,
       metadataAttemptedSignature: inputSignature(track),
     });

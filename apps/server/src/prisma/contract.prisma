@@ -49,8 +49,10 @@ model Track {
   metadataProviderId         String?
   metadataProviderKind       String?
   metadataProviderName       String?
-  metadataRecordingId        String?
-  metadataReleaseId          String?
+  metadataExternalTrackId    String?
+  metadataExternalReleaseId  String?
+  metadataSourceUrl          String?
+  metadataDetails            String?
   metadataMatchedAt          DateTime?
   metadataAttemptedSignature String?
   coverId                    String?
@@ -192,7 +194,8 @@ model MetadataProvider {
   id                   String   @id @onCreate(cuid(2))
   kind                 String   @unique
   name                 String
-  contact              String
+  accountLabel         String?
+  configuration        String   @default("{}")
   credentialCiphertext String?
   enabled              Int      @default(1)
   position             Int      @default(0)

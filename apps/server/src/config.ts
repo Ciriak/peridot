@@ -6,6 +6,7 @@ export interface ServerConfig {
   databaseUrl: string;
   libraryRoot: string;
   webOrigins: string[];
+  credentialEncryptionKey?: string;
 }
 
 function requireValue(environment: NodeJS.ProcessEnv, name: string): string {
@@ -39,7 +40,15 @@ export async function loadServerConfig(
     ? configuredOrigins.map(normalizeOrigin)
     : ["http://127.0.0.1:3000", "http://localhost:3000"];
 
-  return { databaseUrl, libraryRoot, webOrigins };
+  const credentialEncryptionKey =
+    environment.PERIDOT_CREDENTIAL_KEY?.trim() || undefined;
+
+  return {
+    databaseUrl,
+    libraryRoot,
+    webOrigins,
+    ...(credentialEncryptionKey ? { credentialEncryptionKey } : {}),
+  };
 }
 
 function normalizeOrigin(value: string): string {

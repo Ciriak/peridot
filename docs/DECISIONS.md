@@ -1,5 +1,81 @@
 # Decisions
 
+## 2026-11-11: Like hover stays scoped to the like control
+
+The shared `LikeButton` applies its primary hover and active colors to the
+button itself instead of using `group-hover` or `group-active`. Album and artist
+cards deliberately mark their full card as a hover group for placeholder
+treatment, and descendant `group-hover` utilities also match that ancestor
+group. Scoping the color change to the control prevents hovering anywhere else
+on a card from making its like button appear active.
+
+## 2026-11-11: Sortable rows use the full item as the drag target
+
+User-reorderable rows use the complete row as the Sortable target. The grip icon
+is an affordance rather than a restrictive handle. Interactive descendants
+(`a`, `button`, and `input`) are filtered from drag initiation so links, action
+menus, and controls keep their normal behavior. Unconfigured provider rows are
+excluded from sorting because they do not yet have persisted provider order.
+
+## 2026-11-11: Provider definitions drive the always-visible settings list
+
+The Metadata settings list is built from provider definitions rather than
+configured provider rows, so MusicBrainz and Discogs remain discoverable before
+setup. An unconfigured provider has a dimmed title, a `Not configured` warning
+label, no drag handle, and a cog that opens its setup form. Configured providers
+show `Active` or `Disabled`, remain reorderable, and expose their on/off switch
+inside the configuration dialog so provider state and settings are saved
+together.
+
+Enabled providers that lack required configuration or credentials retain their
+row but show a warning above the cog with a tooltip. The shared theme adds
+semantic warning and success colors so these labels and the enabled-state
+indicator do not use hardcoded component colors.
+
+## 2026-11-11: Metadata providers use a resolver registry and generic provenance
+
+Metadata providers are trusted core resolver adapters registered through a
+shared contract. Each adapter declares its provider definition, configuration
+fields, credential requirements, discovery methods, automatic-match policy, and
+canonical source URL. Settings renders provider cards and forms from those
+definitions, so adding a provider does not require provider-specific branches in
+the enrichment engine or metadata dialog.
+
+MusicBrainz and Discogs remain ordered automatic fallbacks. Automatic matching
+passes only unresolved tracks to the next provider. Manual candidate search
+queries every enabled provider and preserves provider order in the merged
+result list. Discogs applies an automatic match only when exactly one exact
+normalized release and track candidate remains; multiple exact editions stay
+manual.
+
+Track matches store provider-neutral track and release IDs, a canonical source
+URL, and bounded labeled details. Discogs preserves year, label, catalog number,
+country, format, and raw track position without adding provider-specific Track
+columns. This replaces the earlier MusicBrainz-shaped ID columns and requires a
+local database reset because the project has no migration history.
+
+Discogs uses an administrator-provided personal access token instead of OAuth.
+`PERIDOT_CREDENTIAL_KEY` supplies a base64-encoded 32-byte AES key required
+before a token can be stored. Credentials use versioned AES-256-GCM envelopes,
+never enter browser responses or URLs, and can be rotated without deleting
+existing matches. MusicBrainz-only installations continue to run without the
+credential key until a keyed provider is configured.
+
+## 2026-11-11: Browser-local playback resumes the queue and position
+
+The full player queue, its active track, shuffle state and remaining pool, and
+the active track's elapsed position are mirrored to `localStorage` under a key
+scoped by server address and user ID. A valid browser snapshot is restored
+before the server queue fallback, so a reload presents the same queue and track
+at the saved position. Restoration remains paused and does not attempt autoplay.
+
+The existing per-user server queue remains the cross-session queue source and
+continues receiving every queue mutation. Browser snapshots provide the reload
+fast path and preserve playback progress, which the server queue does not store.
+Malformed, wrong-version, or cross-scope snapshots are ignored, allowing the
+normal server queue load to recover. localStorage remains browser- and
+origin-local; it is not a substitute for account or cross-device persistence.
+
 ## 2026-11-11: MusicBrainz is enabled by default and providers are disabled, not deleted
 
 The first administrator's required email is also the MusicBrainz contact used

@@ -29,6 +29,11 @@ import {
   notifyTrackDownloaded,
   notifyTrackDownloadFailed,
 } from "../lib/toasts";
+import {
+  readPersistedPlayerState,
+  savePersistedPlayerState,
+  type PlayerStateScope,
+} from "../lib/player-storage";
 import { useLibraryTracks } from "./use-library-tracks";
 import { useServer } from "./use-server";
 import { useSession } from "./use-session";
@@ -82,6 +87,8 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     "player-repeat-cycle-track-ids",
     () => [],
   );
+  let localStateChecked = false;
+  let localPersistenceReady = false;
   const queueTracks = computed(() =>
     resolvePlayerQueue(tracks.value, queueTrackIds.value),
   );
@@ -111,6 +118,50 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
 
   function currentScope(): string {
     return `${address.value ?? ""}|${user.value?.id ?? ""}`;
+  }
+
+  function playerStateScope(): PlayerStateScope | null {
+    if (!address.value || !user.value?.id) return null;
+    return {
+      serverAddress: address.value,
+      userId: user.value.id,
+    };
+  }
+
+  function persistLocalPlayerState() {
+    if (!localPersistenceReady || !import.meta.client) return;
+    const scope = playerStateScope();
+    if (!scope) return;
+    savePersistedPlayerState(window.localStorage, scope, {
+      currentTrackId: activeTrackId.value,
+      positionSeconds: elapsed.value,
+      queueTrackIds: queueTrackIds.value,
+      shuffleEnabled: shuffleEnabled.value,
+      shuffleTrackIds: shuffleTrackIds.value,
+    });
+  }
+
+  function restoreLocalPlayerState(): boolean {
+    if (!import.meta.client) return false;
+    const scope = playerStateScope();
+    if (!scope) return false;
+    const stored = readPersistedPlayerState(window.localStorage, scope);
+    if (!stored) return false;
+
+    queueAuthScope.value = currentScope();
+    setQueueSnapshot(
+      {
+        trackIds: stored.queueTrackIds,
+        activeTrackId: stored.currentTrackId,
+        shuffleEnabled: stored.shuffleEnabled,
+        shuffleTrackIds: stored.shuffleTrackIds,
+      },
+      false,
+    );
+    elapsed.value = stored.positionSeconds;
+    mediaDuration.value = 0;
+    playing.value = false;
+    return true;
   }
 
   function availableTrackIds(): Set<string> {
@@ -146,6 +197,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     if (queueAuthScope.value === scope) return false;
     clearQueue();
     queueAuthScope.value = scope;
+    localStateChecked = false;
     queueMutationVersion.value += 1;
     return true;
   }
@@ -226,6 +278,11 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
 
   async function loadQueue(force = false) {
     syncScope();
+    if (!force && !localStateChecked) {
+      localStateChecked = true;
+      if (restoreLocalPlayerState()) return;
+    }
+    if (force) localStateChecked = true;
     if (queueLoading.value || (!force && queueLoaded.value)) return;
     const serverAddress = address.value;
     const sessionToken = token.value;
@@ -568,6 +625,16 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     });
   }
 
+  if (options.audio && import.meta.client) {
+    localPersistenceReady = true;
+    const stopLocalStateWatch = watch(
+      [queueTrackIds, activeTrackId, shuffleEnabled, shuffleTrackIds, elapsed],
+      persistLocalPlayerState,
+      { deep: true },
+    );
+    onUnmounted(stopLocalStateWatch);
+  }
+
   if (options.audio) {
     let audio: HTMLAudioElement | undefined;
     let loadedTrackId: string | null = null;
@@ -652,6 +719,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
       audio = new Audio();
       audio.preload = "auto";
       audio.volume = volume.value / 100;
+      void loadQueue();
 
       const updatePosition = () => {
         if (!audio || !Number.isFinite(audio.currentTime)) return;

@@ -13,6 +13,7 @@ import type { Database } from "./database.js";
 import { sendError } from "./http.js";
 import type { LibraryScanner } from "./library-scanner.js";
 import { effectiveArtistCredits } from "./metadata-enrichment.js";
+import { parseStoredMetadataDetails } from "./metadata-details.js";
 import type { LibraryScanRow, TrackRow } from "./prisma/models.js";
 import type { PlaybackTokenService } from "./playback-tokens.js";
 
@@ -24,21 +25,27 @@ function toTrackResponse(
   const title = track.metadataTitle ?? track.title;
   const artist = track.metadataArtist ?? track.artist;
   const matched =
-    track.metadataRecordingId &&
-    track.metadataProviderKind === "musicbrainz" &&
+    track.metadataExternalTrackId &&
+    (track.metadataProviderKind === "musicbrainz" ||
+      track.metadataProviderKind === "discogs") &&
     track.metadataMatchedAt
       ? {
-          providerId: track.metadataProviderId,
-          providerKind: "musicbrainz" as const,
-          providerName: track.metadataProviderName ?? "MusicBrainz",
-          recordingId: track.metadataRecordingId,
-          releaseId: track.metadataReleaseId,
+          providerId: track.metadataProviderId!,
+          providerKind: track.metadataProviderKind as "musicbrainz" | "discogs",
+          providerName: track.metadataProviderName ?? "Metadata provider",
+          externalTrackId: track.metadataExternalTrackId,
+          externalReleaseId: track.metadataExternalReleaseId,
           matchedAt: track.metadataMatchedAt.toISOString(),
           mode:
             track.metadataMode === "manual"
               ? ("manual" as const)
               : ("automatic" as const),
-          sourceUrl: `https://musicbrainz.org/recording/${encodeURIComponent(track.metadataRecordingId)}`,
+          sourceUrl:
+            track.metadataSourceUrl ??
+            (track.metadataProviderKind === "musicbrainz"
+              ? `https://musicbrainz.org/recording/${encodeURIComponent(track.metadataExternalTrackId)}`
+              : "https://www.discogs.com/"),
+          details: parseStoredMetadataDetails(track.metadataDetails),
         }
       : null;
   const coverUrl = track.coverId

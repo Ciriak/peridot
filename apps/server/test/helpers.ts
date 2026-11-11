@@ -22,6 +22,9 @@ export interface TestContextOptions {
   logger?: boolean;
   metadataFetch?: typeof fetch;
   metadataRequestIntervalMs?: number;
+  discogsFetch?: typeof fetch;
+  discogsRequestIntervalMs?: number;
+  credentialEncryptionKey?: string | null;
 }
 
 export async function createTestContext(
@@ -47,18 +50,34 @@ export async function createTestContext(
   const metadataFetch =
     options.metadataFetch ??
     (async () => Response.json({ releases: [], recordings: [] }));
+  const discogsFetch =
+    options.discogsFetch ??
+    (async (input: string | URL | Request) =>
+      new URL(String(input)).pathname.endsWith("/oauth/identity")
+        ? Response.json({ username: "test-discogs-owner" })
+        : new Response("not found", { status: 404 }));
   const metadataRequestIntervalMs = options.metadataRequestIntervalMs ?? 0;
+  const credentialEncryptionKey =
+    options.credentialEncryptionKey === null
+      ? undefined
+      : (options.credentialEncryptionKey ??
+        Buffer.alloc(32, 7).toString("base64"));
   const app = await buildApp({
     config: {
       databaseUrl,
       libraryRoot,
       webOrigins: ["http://127.0.0.1:3000"],
+      ...(credentialEncryptionKey ? { credentialEncryptionKey } : {}),
     },
     database,
     logger: options.logger ?? false,
     logBuffer,
     metadataFetch,
     metadataRequestIntervalMs,
+    discogsFetch,
+    ...(options.discogsRequestIntervalMs !== undefined
+      ? { discogsRequestIntervalMs: options.discogsRequestIntervalMs }
+      : { discogsRequestIntervalMs: 0 }),
   });
   const bootstrap = await app.inject({
     method: "POST",

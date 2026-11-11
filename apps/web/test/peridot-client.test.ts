@@ -19,6 +19,7 @@ import {
   listDirectories,
   listLikes,
   listMetadataCandidates,
+  listMetadataProviderDefinitions,
   listMetadataProviders,
   listSources,
   listTracks,
@@ -31,7 +32,7 @@ import {
   revertTrackMetadata,
   revokeSession,
   searchDirectories,
-  setMetadataProviderEnabled,
+  updateMetadataProvider,
   startLibraryScan,
   trackAudioUrl,
 } from "../app/lib/peridot-client.ts";
@@ -79,13 +80,17 @@ test("metadata provider, source scan, and correction calls use authenticated end
     if (url.includes("/metadata/candidates")) {
       return Response.json({ items: [] });
     }
+    if (url.endsWith("/metadata-providers/definitions")) {
+      return Response.json({ items: [] });
+    }
     if (init?.method === "POST" && url.endsWith("/metadata-providers")) {
       return Response.json(
         {
           id: "provider-1",
           kind: "musicbrainz",
           name: "MusicBrainz",
-          contact: "owner@example.com",
+          accountLabel: null,
+          configuration: { contact: "owner@example.com" },
           hasCredential: false,
           enabled: true,
         },
@@ -103,7 +108,8 @@ test("metadata provider, source scan, and correction calls use authenticated end
         id: "provider-1",
         kind: "musicbrainz",
         name: "MusicBrainz",
-        contact: "owner@example.com",
+        accountLabel: null,
+        configuration: { contact: "owner@example.com" },
         hasCredential: false,
         enabled: false,
       });
@@ -114,12 +120,16 @@ test("metadata provider, source scan, and correction calls use authenticated end
   assert.deepEqual(await listMetadataProviders("http://127.0.0.1:17430", "s"), {
     items: [],
   });
+  assert.deepEqual(
+    await listMetadataProviderDefinitions("http://127.0.0.1:17430", "s"),
+    { items: [] },
+  );
   assert.equal(
     (
       await createMetadataProvider("http://127.0.0.1:17430", "s", {
         kind: "musicbrainz",
         name: "MusicBrainz",
-        contact: "owner@example.com",
+        configuration: { contact: "owner@example.com" },
       })
     ).id,
     "provider-1",
@@ -127,11 +137,11 @@ test("metadata provider, source scan, and correction calls use authenticated end
   await reorderMetadataProviders("http://127.0.0.1:17430", "s", ["provider-1"]);
   assert.equal(
     (
-      await setMetadataProviderEnabled(
+      await updateMetadataProvider(
         "http://127.0.0.1:17430",
         "s",
         "provider-1",
-        false,
+        { enabled: false },
       )
     ).enabled,
     false,
@@ -160,14 +170,16 @@ test("metadata provider, source scan, and correction calls use authenticated end
   );
   await applyTrackMetadata("http://127.0.0.1:17430", "s", "track/one", {
     providerId: "provider-1",
-    recordingId: "recording-1",
-    releaseId: "release-1",
+    externalTrackId: "recording-1",
+    externalReleaseId: "release-1",
     title: "Blue Hours",
     artist: "Elliot Lake",
     artists: ["Elliot Lake"],
     album: "Night Sessions",
     discNumber: 1,
     trackNumber: 2,
+    sourceUrl: "https://musicbrainz.org/recording/recording-1",
+    details: [],
   });
   await revertTrackMetadata("http://127.0.0.1:17430", "s", "track/one");
 
@@ -179,6 +191,11 @@ test("metadata provider, source scan, and correction calls use authenticated end
     [
       {
         input: "http://127.0.0.1:17430/api/admin/metadata-providers",
+        method: undefined,
+      },
+      {
+        input:
+          "http://127.0.0.1:17430/api/admin/metadata-providers/definitions",
         method: undefined,
       },
       {

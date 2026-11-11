@@ -19,7 +19,7 @@ import type {
 } from '@prisma/orm-sqlite/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'545226f0a9d9e739a363c554422c02267b6f6ffc614450ca6e4cd10ba68af450'>;
+  StorageHashBase<'2d939d6fb2d0c3a5d74f66440e1baac30c1fdc5277131579abb64ec07eb0029a'>;
 export type ExecutionHash =
   ExecutionHashBase<'5933f9db47ee5fa78da5dd876d8fe49a91ba2a7474bce4bf9aeec166e75dd664'>;
 export type ProfileHash =
@@ -261,7 +261,8 @@ export namespace Models {
     readonly [RelationKeys]?: never;
   };
   export type MetadataProvider = {
-    contact: FieldOutputTypes['__unbound__']['MetadataProvider']['contact'];
+    accountLabel: FieldOutputTypes['__unbound__']['MetadataProvider']['accountLabel'];
+    configuration: FieldOutputTypes['__unbound__']['MetadataProvider']['configuration'];
     createdAt: FieldOutputTypes['__unbound__']['MetadataProvider']['createdAt'];
     credentialCiphertext: FieldOutputTypes['__unbound__']['MetadataProvider']['credentialCiphertext'];
     enabled: FieldOutputTypes['__unbound__']['MetadataProvider']['enabled'];
@@ -335,14 +336,16 @@ export namespace Models {
     metadataArtist: FieldOutputTypes['__unbound__']['Track']['metadataArtist'];
     metadataArtistCredits: FieldOutputTypes['__unbound__']['Track']['metadataArtistCredits'];
     metadataAttemptedSignature: FieldOutputTypes['__unbound__']['Track']['metadataAttemptedSignature'];
+    metadataDetails: FieldOutputTypes['__unbound__']['Track']['metadataDetails'];
     metadataDiscNumber: FieldOutputTypes['__unbound__']['Track']['metadataDiscNumber'];
+    metadataExternalReleaseId: FieldOutputTypes['__unbound__']['Track']['metadataExternalReleaseId'];
+    metadataExternalTrackId: FieldOutputTypes['__unbound__']['Track']['metadataExternalTrackId'];
     metadataMatchedAt: FieldOutputTypes['__unbound__']['Track']['metadataMatchedAt'];
     metadataMode: FieldOutputTypes['__unbound__']['Track']['metadataMode'];
     metadataProviderId: FieldOutputTypes['__unbound__']['Track']['metadataProviderId'];
     metadataProviderKind: FieldOutputTypes['__unbound__']['Track']['metadataProviderKind'];
     metadataProviderName: FieldOutputTypes['__unbound__']['Track']['metadataProviderName'];
-    metadataRecordingId: FieldOutputTypes['__unbound__']['Track']['metadataRecordingId'];
-    metadataReleaseId: FieldOutputTypes['__unbound__']['Track']['metadataReleaseId'];
+    metadataSourceUrl: FieldOutputTypes['__unbound__']['Track']['metadataSourceUrl'];
     metadataTitle: FieldOutputTypes['__unbound__']['Track']['metadataTitle'];
     metadataTrackNumber: FieldOutputTypes['__unbound__']['Track']['metadataTrackNumber'];
     metadataVersion: FieldOutputTypes['__unbound__']['Track']['metadataVersion'];
@@ -761,10 +764,20 @@ type ContractBase = Omit<
             };
             readonly MetadataProvider: {
               columns: {
-                readonly contact: {
+                readonly accountLabel: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly configuration: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/text@1', '{}'>;
+                  };
                   readonly many: false;
                 };
                 readonly createdAt: {
@@ -1268,9 +1281,27 @@ type ContractBase = Omit<
                   readonly nullable: true;
                   readonly many: false;
                 };
+                readonly metadataDetails: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
                 readonly metadataDiscNumber: {
                   readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly metadataExternalReleaseId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly metadataExternalTrackId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
                   readonly nullable: true;
                   readonly many: false;
                 };
@@ -1308,13 +1339,7 @@ type ContractBase = Omit<
                   readonly nullable: true;
                   readonly many: false;
                 };
-                readonly metadataRecordingId: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly metadataReleaseId: {
+                readonly metadataSourceUrl: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: true;
@@ -1885,7 +1910,11 @@ type ContractBase = Omit<
           };
           readonly MetadataProvider: {
             readonly fields: {
-              readonly contact: {
+              readonly accountLabel: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly configuration: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
@@ -1927,7 +1956,8 @@ type ContractBase = Omit<
               readonly table: 'MetadataProvider';
               readonly namespaceId: '__unbound__';
               readonly fields: {
-                readonly contact: { readonly column: 'contact' };
+                readonly accountLabel: { readonly column: 'accountLabel' };
+                readonly configuration: { readonly column: 'configuration' };
                 readonly createdAt: { readonly column: 'createdAt' };
                 readonly credentialCiphertext: { readonly column: 'credentialCiphertext' };
                 readonly enabled: { readonly column: 'enabled' };
@@ -2253,9 +2283,21 @@ type ContractBase = Omit<
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
+              readonly metadataDetails: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
               readonly metadataDiscNumber: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly metadataExternalReleaseId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly metadataExternalTrackId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
               readonly metadataMatchedAt: {
                 readonly nullable: true;
@@ -2277,11 +2319,7 @@ type ContractBase = Omit<
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
-              readonly metadataRecordingId: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly metadataReleaseId: {
+              readonly metadataSourceUrl: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
@@ -2358,14 +2396,18 @@ type ContractBase = Omit<
                 readonly metadataAttemptedSignature: {
                   readonly column: 'metadataAttemptedSignature';
                 };
+                readonly metadataDetails: { readonly column: 'metadataDetails' };
                 readonly metadataDiscNumber: { readonly column: 'metadataDiscNumber' };
+                readonly metadataExternalReleaseId: {
+                  readonly column: 'metadataExternalReleaseId';
+                };
+                readonly metadataExternalTrackId: { readonly column: 'metadataExternalTrackId' };
                 readonly metadataMatchedAt: { readonly column: 'metadataMatchedAt' };
                 readonly metadataMode: { readonly column: 'metadataMode' };
                 readonly metadataProviderId: { readonly column: 'metadataProviderId' };
                 readonly metadataProviderKind: { readonly column: 'metadataProviderKind' };
                 readonly metadataProviderName: { readonly column: 'metadataProviderName' };
-                readonly metadataRecordingId: { readonly column: 'metadataRecordingId' };
-                readonly metadataReleaseId: { readonly column: 'metadataReleaseId' };
+                readonly metadataSourceUrl: { readonly column: 'metadataSourceUrl' };
                 readonly metadataTitle: { readonly column: 'metadataTitle' };
                 readonly metadataTrackNumber: { readonly column: 'metadataTrackNumber' };
                 readonly metadataVersion: { readonly column: 'metadataVersion' };

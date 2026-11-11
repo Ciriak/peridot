@@ -20,7 +20,7 @@ const emit = defineEmits<{ toggle: [] }>();
   <Button
     variant="ghost"
     size="icon-lg"
-    class="group"
+    class="hover:text-primary active:text-primary"
     :disabled="disabled || pending"
     :aria-label="`${liked ? 'Unlike' : 'Like'} ${label}`"
     :aria-pressed="liked"
@@ -30,7 +30,7 @@ const emit = defineEmits<{ toggle: [] }>();
     <Icon
       :icon="liked ? icons.heartFilled : icons.heart"
       aria-hidden="true"
-      class="size-6 transition-colors group-hover:text-primary group-active:text-primary"
+      class="size-6 transition-colors"
       :class="liked && 'text-primary'"
     />
   </Button>

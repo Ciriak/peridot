@@ -43,6 +43,16 @@ test("search input preserves its initial model and accessible name during SSR", 
   assert.match(html, /value="Ambient"/);
   assert.match(html, /aria-label="Search library"/);
 });
+test("switch renders its checked state and accessible name", async () => {
+  const html = await render("Switch", {
+    modelValue: true,
+    "aria-label": "Enable MusicBrainz",
+  });
+  assert.match(html, /data-slot="switch"/);
+  assert.match(html, /data-state="checked"/);
+  assert.match(html, /aria-label="Enable MusicBrainz"/);
+  assert.match(html, /role="switch"/);
+});
 test("player slider renders initial progress and exposes bounds and a named thumb during SSR", async () => {
   const html = await render("Slider", {
     modelValue: [72],

@@ -73,7 +73,7 @@ export function notifySourceMutation(
 }
 
 export function notifyMetadataProviderMutation(
-  action: "added" | "disabled" | "enabled",
+  action: "added" | "disabled" | "enabled" | "updated",
   providerName?: string,
 ) {
   const name = providerName?.trim() || "Metadata provider";
@@ -89,6 +89,10 @@ export function notifyMetadataProviderMutation(
     enabled: {
       title: "Metadata provider enabled",
       description: `${name} will be used for future metadata matching.`,
+    },
+    updated: {
+      title: "Metadata provider updated",
+      description: `${name} connection details were saved.`,
     },
   }[action];
   appToastManager.add({

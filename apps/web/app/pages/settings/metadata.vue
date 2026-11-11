@@ -3,11 +3,14 @@ import { computed, definePageMeta, onMounted, ref } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import type {
   CreateMetadataProviderRequest,
+  MetadataProviderDefinitionResponse,
+  MetadataProviderKind,
   MetadataProviderResponse,
+  UpdateMetadataProviderRequest,
 } from "@peridot/contracts";
-import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { Input } from "@peridot/ui/components/ui/input";
+import { Switch } from "@peridot/ui/components/ui/switch";
 import { useSortable } from "@vueuse/integrations/useSortable";
 import {
   AlertDialogAction,
@@ -24,24 +27,31 @@ import {
   DialogPortal,
   DialogRoot,
   DialogTitle,
+  TooltipContent,
+  TooltipPortal,
+  TooltipProvider,
+  TooltipRoot,
+  TooltipTrigger,
 } from "reka-ui";
+import { useLibraryScan } from "../../composables/use-library-scan";
+import { useLibraryTracks } from "../../composables/use-library-tracks";
 import { useServer } from "../../composables/use-server";
 import { useSession } from "../../composables/use-session";
 import { useUser } from "../../composables/use-user";
-import { useLibraryTracks } from "../../composables/use-library-tracks";
 import { icons } from "../../lib/icons";
+import { metadataProviderNeedsConfiguration } from "../../lib/metadata-provider-config";
 import {
   createMetadataProvider,
+  listMetadataProviderDefinitions,
   listMetadataProviders,
   reorderMetadataProviders,
   resetMetadata,
-  setMetadataProviderEnabled,
+  updateMetadataProvider,
 } from "../../lib/peridot-client";
 import {
   notifyMetadataProviderMutation,
   notifyMetadataReset,
 } from "../../lib/toasts";
-import { useLibraryScan } from "../../composables/use-library-scan";
 
 definePageMeta({ layout: "settings" });
 
@@ -53,29 +63,55 @@ const { scanning, startMetadataRefresh } = useLibraryScan();
 const { reload: reloadTracks } = useLibraryTracks();
 
 const providers = ref<MetadataProviderResponse[]>([]);
+const definitions = ref<MetadataProviderDefinitionResponse[]>([]);
+const providerRows = ref<
+  Array<{
+    definition: MetadataProviderDefinitionResponse;
+    provider: MetadataProviderResponse | null;
+  }>
+>([]);
 const providerList = ref<HTMLElement | null>(null);
 const loading = ref(true);
 const pageError = ref("");
-const addOpen = ref(false);
-const newKind = ref<"musicbrainz" | null>(null);
-const newContact = ref("");
-const adding = ref(false);
-const addError = ref("");
-const disableOpen = ref(false);
-const pendingDisable = ref<MetadataProviderResponse | null>(null);
-const togglingProviderId = ref<string | null>(null);
+const formOpen = ref(false);
+const selectedKind = ref<MetadataProviderKind | null>(null);
+const editingProvider = ref<MetadataProviderResponse | null>(null);
+const formConfiguration = ref<Record<string, string>>({});
+const formCredential = ref("");
+const formEnabled = ref(false);
+const saving = ref(false);
+const formError = ref("");
 const resetOpen = ref(false);
 const resetting = ref(false);
-const musicBrainzAdded = computed(() =>
-  providers.value.some((provider) => provider.kind === "musicbrainz"),
+
+const selectedDefinition = computed(
+  () =>
+    definitions.value.find(
+      (definition) => definition.kind === selectedKind.value,
+    ) ?? null,
 );
 const activeProviders = computed(() =>
   providers.value.filter((provider) => provider.enabled),
 );
+const formValid = computed(() => {
+  const definition = selectedDefinition.value;
+  if (!definition) return false;
+  const configurationValid = definition.configurationFields.every(
+    (field) =>
+      !field.required || Boolean(formConfiguration.value[field.key]?.trim()),
+  );
+  const credentialValid =
+    !definition.credentialField?.required ||
+    Boolean(editingProvider.value?.hasCredential) ||
+    Boolean(formCredential.value.trim());
+  return configurationValid && credentialValid;
+});
 
-useSortable(providerList, providers, {
+useSortable(providerList, providerRows, {
   animation: 150,
-  handle: ".drag-handle",
+  draggable: ".sortable-item",
+  filter: "a, button, input",
+  preventOnFilter: false,
   watchElement: true,
   onEnd: () => void persistOrder(),
 });
@@ -88,11 +124,13 @@ async function loadProviders() {
   loading.value = true;
   pageError.value = "";
   try {
-    const result = await listMetadataProviders(
-      address.value ?? "",
-      token.value ?? "",
-    );
-    providers.value = result.items;
+    const [providerResult, definitionResult] = await Promise.all([
+      listMetadataProviders(address.value ?? "", token.value ?? ""),
+      listMetadataProviderDefinitions(address.value ?? "", token.value ?? ""),
+    ]);
+    providers.value = providerResult.items;
+    definitions.value = definitionResult.items;
+    syncProviderRows();
   } catch (reason) {
     pageError.value =
       reason instanceof Error
@@ -103,107 +141,141 @@ async function loadProviders() {
   }
 }
 
-function openAddDialog() {
-  addError.value = "";
-  newKind.value = null;
-  newContact.value = "";
-  addOpen.value = true;
+function resetForm() {
+  selectedKind.value = null;
+  editingProvider.value = null;
+  formConfiguration.value = {};
+  formCredential.value = "";
+  formEnabled.value = false;
+  formError.value = "";
 }
 
-function closeAddDialog() {
-  addOpen.value = false;
-  newKind.value = null;
-  newContact.value = "";
+function syncProviderRows() {
+  const definitionsByKind = new Map(
+    definitions.value.map((definition) => [definition.kind, definition]),
+  );
+  const configuredKinds = new Set(
+    providers.value.map((provider) => provider.kind),
+  );
+  providerRows.value = [
+    ...providers.value.flatMap((provider) => {
+      const definition = definitionsByKind.get(provider.kind);
+      return definition ? [{ definition, provider }] : [];
+    }),
+    ...definitions.value
+      .filter((definition) => !configuredKinds.has(definition.kind))
+      .map((definition) => ({ definition, provider: null })),
+  ];
 }
 
-function chooseKind(kind: "musicbrainz") {
-  if (musicBrainzAdded.value) return;
-  addError.value = "";
-  newKind.value = kind;
+function openProviderDialog(definition: MetadataProviderDefinitionResponse) {
+  const provider =
+    providers.value.find((item) => item.kind === definition.kind) ?? null;
+  resetForm();
+  editingProvider.value = provider;
+  formEnabled.value = provider?.enabled ?? false;
+  selectedKind.value = definition.kind;
+  formConfiguration.value = Object.fromEntries(
+    definition.configurationFields.map((field) => [
+      field.key,
+      provider?.configuration[field.key] ?? "",
+    ]),
+  );
+  formOpen.value = true;
+}
+
+function closeFormDialog() {
+  formOpen.value = false;
+  resetForm();
 }
 
 function handleDialogBack() {
-  if (newKind.value) {
-    newKind.value = null;
-    newContact.value = "";
-    addError.value = "";
-    return;
-  }
-  closeAddDialog();
+  closeFormDialog();
 }
 
-async function addProvider() {
-  if (!newKind.value) return;
-  adding.value = true;
-  addError.value = "";
-  const body: CreateMetadataProviderRequest = {
-    kind: newKind.value,
-    contact: newContact.value,
-  };
+async function saveProvider() {
+  const definition = selectedDefinition.value;
+  if (!definition || !formValid.value) return;
+  saving.value = true;
+  formError.value = "";
+  const configuration = Object.fromEntries(
+    definition.configurationFields.map((field) => [
+      field.key,
+      formConfiguration.value[field.key]?.trim() ?? "",
+    ]),
+  );
   try {
-    const provider = await createMetadataProvider(
-      address.value ?? "",
-      token.value ?? "",
-      body,
-    );
-    closeAddDialog();
-    notifyMetadataProviderMutation("added", provider.name);
-    await loadProviders();
+    if (editingProvider.value) {
+      const previousEnabled = editingProvider.value.enabled;
+      const update: UpdateMetadataProviderRequest = {
+        configuration,
+        enabled: formEnabled.value,
+      };
+      if (formCredential.value.trim()) {
+        update.credential = formCredential.value.trim();
+      }
+      const provider = await updateMetadataProvider(
+        address.value ?? "",
+        token.value ?? "",
+        editingProvider.value.id,
+        update,
+      );
+      providers.value = providers.value.map((item) =>
+        item.id === provider.id ? provider : item,
+      );
+      syncProviderRows();
+      notifyMetadataProviderMutation(
+        provider.enabled && !previousEnabled
+          ? "enabled"
+          : !provider.enabled
+            ? "disabled"
+            : "updated",
+        provider.name,
+      );
+    } else {
+      const body: CreateMetadataProviderRequest = {
+        kind: definition.kind,
+        configuration,
+        credential: definition.credentialField
+          ? formCredential.value.trim()
+          : null,
+      };
+      const provider = await createMetadataProvider(
+        address.value ?? "",
+        token.value ?? "",
+        body,
+      );
+      providers.value = [...providers.value, provider];
+      syncProviderRows();
+      notifyMetadataProviderMutation("added", provider.name);
+    }
+    closeFormDialog();
   } catch (reason) {
-    addError.value =
+    formError.value =
       reason instanceof Error
         ? reason.message
-        : "Could not add the metadata provider.";
+        : "Could not save the metadata provider.";
   } finally {
-    adding.value = false;
+    saving.value = false;
   }
 }
 
-function requestProviderToggle(provider: MetadataProviderResponse) {
-  if (provider.enabled) {
-    pendingDisable.value = provider;
-    disableOpen.value = true;
-    return;
-  }
-  void setProviderEnabled(provider, true);
+function providerStatusLabel(provider: MetadataProviderResponse | null) {
+  if (!provider) return "Not configured";
+  return provider.enabled ? "Active" : "Disabled";
 }
 
-async function setProviderEnabled(
-  provider: MetadataProviderResponse,
-  enabled: boolean,
-) {
-  if (togglingProviderId.value) return;
-  togglingProviderId.value = provider.id;
-  pageError.value = "";
-  try {
-    const updated = await setMetadataProviderEnabled(
-      address.value ?? "",
-      token.value ?? "",
-      provider.id,
-      enabled,
-    );
-    providers.value = providers.value.map((item) =>
-      item.id === updated.id ? updated : item,
-    );
-    notifyMetadataProviderMutation(
-      enabled ? "enabled" : "disabled",
-      updated.name,
-    );
-    pendingDisable.value = null;
-    disableOpen.value = false;
-  } catch (reason) {
-    pageError.value =
-      reason instanceof Error
-        ? reason.message
-        : `Could not ${enabled ? "enable" : "disable"} the metadata provider.`;
-  } finally {
-    togglingProviderId.value = null;
-  }
+function providerStatusClass(provider: MetadataProviderResponse | null) {
+  if (!provider) return "text-warning";
+  return provider.enabled ? "text-success" : "text-muted-foreground";
 }
 
-async function confirmDisable() {
-  if (!pendingDisable.value) return;
-  await setProviderEnabled(pendingDisable.value, false);
+function providerIcon(kind: MetadataProviderKind) {
+  return kind === "discogs" ? icons.discogs : icons.musicbrainz;
+}
+
+function providerNeedsConfiguration(provider: MetadataProviderResponse) {
+  return metadataProviderNeedsConfiguration(provider, definitions.value);
 }
 
 async function persistOrder() {
@@ -211,7 +283,9 @@ async function persistOrder() {
     await reorderMetadataProviders(
       address.value ?? "",
       token.value ?? "",
-      providers.value.map((provider) => provider.id),
+      providerRows.value.flatMap((row) =>
+        row.provider ? [row.provider.id] : [],
+      ),
     );
   } catch (reason) {
     pageError.value =
@@ -294,14 +368,6 @@ onMounted(() => void loadProviders());
           <Icon :icon="icons.restart" aria-hidden="true" class="size-4" />
           {{ scanning ? "Refreshing…" : "Refresh metadata" }}
         </Button>
-        <Button
-          type="button"
-          size="sm"
-          :disabled="musicBrainzAdded"
-          @click="openAddDialog"
-        >
-          Add provider
-        </Button>
       </div>
     </div>
     <p v-if="pageError" role="alert" class="text-sm text-destructive">
@@ -309,48 +375,93 @@ onMounted(() => void loadProviders());
     </p>
     <div class="rounded-lg border bg-card p-6 text-card-foreground">
       <p v-if="loading" class="text-sm text-muted-foreground">Loading…</p>
-      <ul v-else-if="providers.length" ref="providerList" class="space-y-2">
-        <li
-          v-for="provider in providers"
-          :key="provider.id"
-          :class="{ 'opacity-60': !provider.enabled }"
-          class="flex items-center gap-2 rounded-md border p-2"
-        >
-          <button
-            type="button"
-            class="drag-handle cursor-grab rounded-md p-1 text-muted-foreground"
-            aria-label="Drag to reorder metadata provider"
+      <TooltipProvider v-else-if="providerRows.length">
+        <ul ref="providerList" class="space-y-2">
+          <li
+            v-for="row in providerRows"
+            :key="row.definition.kind"
+            :class="{
+              'opacity-60': row.provider && !row.provider.enabled,
+              'sortable-item cursor-grab active:cursor-grabbing': row.provider,
+            }"
+            class="flex items-center gap-2 rounded-md border p-2"
           >
-            <Icon :icon="icons.drag" aria-hidden="true" class="size-4" />
-          </button>
-          <Badge variant="secondary" class="shrink-0">
-            {{ provider.kind }}
-          </Badge>
-          <Badge v-if="!provider.enabled" variant="outline" class="shrink-0">
-            Disabled
-          </Badge>
-          <span class="min-w-0 flex-1">
-            <span class="block truncate text-sm font-medium">
-              {{ provider.name }}
+            <button
+              v-if="row.provider"
+              type="button"
+              class="rounded-md p-1 text-muted-foreground"
+              aria-label="Drag to reorder metadata provider"
+            >
+              <Icon :icon="icons.drag" aria-hidden="true" class="size-4" />
+            </button>
+            <span v-else class="size-6 shrink-0" aria-hidden="true" />
+            <Icon
+              :icon="providerIcon(row.definition.kind)"
+              aria-hidden="true"
+              class="size-5 shrink-0"
+            />
+            <span class="min-w-0 flex-1">
+              <span
+                class="block truncate text-sm font-medium"
+                :class="{ 'opacity-60': !row.provider }"
+              >
+                {{ row.definition.name }}
+              </span>
+              <span
+                class="block truncate text-sm"
+                :class="providerStatusClass(row.provider)"
+              >
+                {{ providerStatusLabel(row.provider) }}
+              </span>
             </span>
-            <span class="block truncate text-sm text-muted-foreground">
-              {{ provider.contact }}
-            </span>
-          </span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            :disabled="togglingProviderId === provider.id"
-            @click="requestProviderToggle(provider)"
-          >
-            {{ provider.enabled ? "Disable" : "Enable" }}
-          </Button>
-        </li>
-      </ul>
+            <div class="flex flex-col items-center gap-1">
+              <TooltipRoot
+                v-if="row.provider && providerNeedsConfiguration(row.provider)"
+              >
+                <TooltipTrigger as-child>
+                  <span
+                    tabindex="0"
+                    class="rounded-full bg-card p-0.5 text-destructive"
+                    aria-label="Configuration required"
+                  >
+                    <Icon
+                      :icon="icons.warning"
+                      aria-hidden="true"
+                      class="size-4"
+                    />
+                  </span>
+                </TooltipTrigger>
+                <TooltipPortal>
+                  <TooltipContent
+                    side="left"
+                    :side-offset="6"
+                    class="z-50 max-w-56 rounded-md border bg-popover px-3 py-1.5 text-xs text-popover-foreground shadow-md"
+                  >
+                    Configure the required settings for
+                    {{ row.definition.name }}
+                    before using this provider.
+                  </TooltipContent>
+                </TooltipPortal>
+              </TooltipRoot>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                :aria-label="`Configure ${row.definition.name}`"
+                @click="openProviderDialog(row.definition)"
+              >
+                <Icon
+                  :icon="icons.settings"
+                  aria-hidden="true"
+                  class="size-4"
+                />
+              </Button>
+            </div>
+          </li>
+        </ul>
+      </TooltipProvider>
       <p v-else class="text-sm text-muted-foreground">
-        No metadata providers configured. Add MusicBrainz to enrich new and
-        changed tracks after a library scan.
+        No metadata providers are available.
       </p>
     </div>
   </section>
@@ -386,118 +497,131 @@ onMounted(() => void loadProviders());
     </div>
   </section>
 
-  <DialogRoot v-model:open="addOpen">
+  <DialogRoot v-model:open="formOpen">
     <DialogPortal>
       <DialogOverlay class="fixed inset-0 z-50 bg-background/80" />
       <DialogContent
         class="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-card p-6 text-card-foreground shadow-lg"
       >
         <DialogTitle class="text-lg font-semibold">
-          Add metadata provider
+          {{
+            editingProvider
+              ? `Configure ${editingProvider.name}`
+              : `Set up ${selectedDefinition?.name ?? "metadata provider"}`
+          }}
         </DialogTitle>
         <DialogDescription class="text-sm text-muted-foreground">
-          Choose a service to provide track metadata.
+          {{
+            editingProvider
+              ? "Manage this provider and its connection details."
+              : "Add the required details to start using this provider."
+          }}
         </DialogDescription>
 
-        <div v-if="!newKind" class="mt-4 grid gap-2">
-          <button
-            type="button"
-            data-provider-option="musicbrainz"
-            :disabled="musicBrainzAdded"
-            class="w-full rounded-lg border bg-card p-4 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:opacity-60"
-            @click="chooseKind('musicbrainz')"
+        <div v-if="selectedDefinition" class="mt-4 space-y-4">
+          <p class="text-sm text-muted-foreground">
+            {{ selectedDefinition.description }}
+          </p>
+          <div
+            v-if="editingProvider"
+            class="flex items-center justify-between gap-4 rounded-md border p-3"
           >
-            <span class="block text-sm font-medium">MusicBrainz</span>
-            <span class="mt-1 block text-sm text-muted-foreground">
-              {{
-                musicBrainzAdded
-                  ? "Configured. Enable or disable it from the provider list."
-                  : "Match releases and recordings using your contact details."
-              }}
-            </span>
-          </button>
-          <button
-            type="button"
-            data-provider-option="spotify"
-            disabled
-            class="w-full cursor-not-allowed rounded-lg border bg-muted p-4 text-left text-muted-foreground opacity-60"
+            <div class="space-y-1">
+              <p class="text-sm font-medium">Provider enabled</p>
+              <p class="text-sm text-muted-foreground">
+                Use this provider for automatic matching and manual search.
+              </p>
+            </div>
+            <Switch
+              v-model="formEnabled"
+              :aria-label="`${formEnabled ? 'Disable' : 'Enable'} ${selectedDefinition.name}`"
+            />
+          </div>
+          <div
+            v-for="field in selectedDefinition.configurationFields"
+            :key="field.key"
+            class="space-y-2"
           >
-            <span class="block text-sm font-medium">Spotify</span>
-            <span class="mt-1 block text-sm">Coming soon</span>
-          </button>
-        </div>
-
-        <div v-else class="mt-4 space-y-4">
-          <div class="space-y-2">
-            <label for="provider-contact" class="text-sm font-medium">
-              Contact email or URL
+            <label :for="`provider-${field.key}`" class="text-sm font-medium">
+              {{ field.label }}
             </label>
             <Input
-              id="provider-contact"
-              v-model="newContact"
-              type="text"
-              placeholder="you@example.com"
+              :id="`provider-${field.key}`"
+              v-model="formConfiguration[field.key]"
+              :type="field.type"
+              :placeholder="field.placeholder ?? undefined"
             />
-            <p class="text-sm text-muted-foreground">
-              MusicBrainz requires this contact in Peridot's request User-Agent.
-              No API key is required.
+            <p v-if="field.helpText" class="text-sm text-muted-foreground">
+              {{ field.helpText }}
             </p>
           </div>
-          <p v-if="addError" role="alert" class="text-sm text-destructive">
-            {{ addError }}
+          <div v-if="selectedDefinition.credentialField" class="space-y-2">
+            <label
+              :for="`provider-${selectedDefinition.credentialField.key}`"
+              class="text-sm font-medium"
+            >
+              {{ selectedDefinition.credentialField.label }}
+            </label>
+            <Input
+              :id="`provider-${selectedDefinition.credentialField.key}`"
+              v-model="formCredential"
+              type="password"
+              autocomplete="new-password"
+              :placeholder="
+                editingProvider
+                  ? 'Leave blank to keep the current token'
+                  : (selectedDefinition.credentialField.placeholder ??
+                    undefined)
+              "
+            />
+            <p class="text-sm text-muted-foreground">
+              <template v-if="selectedDefinition.kind === 'discogs'">
+                Create a personal access token in your
+                <a
+                  href="https://www.discogs.com/settings/developers"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex items-center gap-1 underline underline-offset-4 hover:text-foreground"
+                >
+                  Discogs account settings
+                  <Icon
+                    :icon="icons.externalLink"
+                    aria-hidden="true"
+                    class="size-3"
+                  /> </a
+                >.
+              </template>
+              <template v-else>
+                {{ selectedDefinition.credentialField.helpText }}
+              </template>
+            </p>
+          </div>
+          <p v-if="formError" role="alert" class="text-sm text-destructive">
+            {{ formError }}
           </p>
         </div>
         <div class="mt-6 flex justify-end gap-3">
           <Button type="button" variant="outline" @click="handleDialogBack">
-            {{ newKind ? "Back" : "Cancel" }}
+            Cancel
           </Button>
           <Button
-            v-if="newKind"
+            v-if="selectedDefinition"
             type="button"
-            :disabled="adding || !newContact.trim()"
-            @click="addProvider"
+            :disabled="saving || !formValid"
+            @click="saveProvider"
           >
-            {{ adding ? "Adding…" : "Add provider" }}
+            {{
+              saving
+                ? "Saving…"
+                : editingProvider
+                  ? "Save changes"
+                  : "Enable provider"
+            }}
           </Button>
         </div>
       </DialogContent>
     </DialogPortal>
   </DialogRoot>
-
-  <AlertDialogRoot v-model:open="disableOpen">
-    <AlertDialogPortal>
-      <AlertDialogOverlay class="fixed inset-0 z-50 bg-background/80" />
-      <AlertDialogContent
-        class="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-card p-6 text-card-foreground shadow-lg"
-      >
-        <AlertDialogTitle class="text-lg font-semibold">
-          Disable metadata provider?
-        </AlertDialogTitle>
-        <AlertDialogDescription class="text-sm text-muted-foreground">
-          {{ pendingDisable?.name }} will no longer be used for metadata
-          matching. Existing track matches remain available, and you can enable
-          it again.
-        </AlertDialogDescription>
-        <div class="mt-6 flex justify-end gap-3">
-          <AlertDialogCancel as-child>
-            <Button type="button" variant="outline">Cancel</Button>
-          </AlertDialogCancel>
-          <AlertDialogAction as-child @click="confirmDisable">
-            <Button
-              type="button"
-              :disabled="togglingProviderId === pendingDisable?.id"
-            >
-              {{
-                togglingProviderId === pendingDisable?.id
-                  ? "Disabling…"
-                  : "Disable"
-              }}
-            </Button>
-          </AlertDialogAction>
-        </div>
-      </AlertDialogContent>
-    </AlertDialogPortal>
-  </AlertDialogRoot>
 
   <AlertDialogRoot v-model:open="resetOpen">
     <AlertDialogPortal>

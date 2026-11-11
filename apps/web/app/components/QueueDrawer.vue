@@ -36,7 +36,7 @@ watch(
 
 useSortable(queueList, sortableTracks, {
   animation: 150,
-  filter: "a",
+  filter: "a, button, input",
   preventOnFilter: false,
   watchElement: true,
   onEnd: ({ oldIndex, newIndex }) => {
@@ -176,11 +176,11 @@ onBeforeUnmount(() => document.removeEventListener("keydown", handleKeydown));
             <li
               v-for="track in sortableTracks"
               :key="track.id"
-              class="flex items-center gap-2 rounded-md border p-2"
+              class="flex cursor-grab items-center gap-2 rounded-md border p-2 active:cursor-grabbing"
             >
               <span
                 aria-hidden="true"
-                class="cursor-grab rounded-md p-1 text-muted-foreground"
+                class="rounded-md p-1 text-muted-foreground"
               >
                 <Icon :icon="icons.drag" aria-hidden="true" class="size-4" />
               </span>

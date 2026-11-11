@@ -47,7 +47,9 @@ test("track rows expose a Reka context menu with playback, favorites, downloads,
   assert.match(menu, /listMetadataCandidates/);
   assert.match(menu, /applyTrackMetadata/);
   assert.match(menu, /revertTrackMetadata/);
-  assert.match(menu, /Search MusicBrainz/);
+  assert.match(menu, /Search metadata providers/);
+  assert.match(menu, /externalTrackId/);
+  assert.match(menu, /candidate\.details/);
 
   assert.match(trackTable, /<TrackContextMenu/);
   assert.match(trackTable, /@play="play\(track\.id, true\)"/);

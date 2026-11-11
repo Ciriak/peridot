@@ -88,6 +88,9 @@ test("sources are managed on their own page with row action menus", async () => 
   assert.match(page, /deleteSource/);
   assert.match(page, /reorderSources/);
   assert.match(page, /useSortable/);
+  assert.doesNotMatch(page, /handle: "\.drag-handle"/);
+  assert.match(page, /filter: "a, button, input"/);
+  assert.match(page, /class="flex cursor-grab items-center/);
   assert.match(page, /AlertDialogRoot/);
   assert.match(page, /DialogRoot/);
   assert.match(page, /<FolderTree/);
@@ -106,17 +109,61 @@ test("sources are managed on their own page with row action menus", async () => 
 
 test("metadata providers have a dedicated sortable management page", async () => {
   const page = await readSource("../app/pages/settings/metadata.vue");
+  const icons = await readSource("../app/lib/icons.ts");
   assert.match(page, /listMetadataProviders/);
+  assert.match(page, /listMetadataProviderDefinitions/);
   assert.match(page, /createMetadataProvider/);
-  assert.match(page, /setMetadataProviderEnabled/);
+  assert.match(page, /updateMetadataProvider/);
   assert.match(page, /reorderMetadataProviders/);
   assert.match(page, /useSortable/);
-  assert.match(page, /Contact email or URL/);
-  assert.match(page, /MusicBrainz/);
-  assert.match(page, /data-provider-option="musicbrainz"/);
-  assert.match(page, /data-provider-option="spotify"/);
-  assert.match(page, /Coming soon/);
-  assert.match(page, /disabled/);
+  assert.doesNotMatch(page, /handle: "\.drag-handle"/);
+  assert.match(page, /draggable: "\.sortable-item"/);
+  assert.match(page, /'sortable-item cursor-grab active:cursor-grabbing'/);
+  assert.match(page, /configurationFields/);
+  assert.match(page, /credentialField/);
+  assert.match(page, /@peridot\/ui\/components\/ui\/switch/);
+  assert.match(page, /providerRows/);
+  assert.match(page, /syncProviderRows/);
+  assert.match(page, /v-for="row in providerRows"/);
+  assert.match(page, /row\.definition\.name/);
+  assert.match(page, /Not configured/);
+  assert.match(page, /providerStatusLabel/);
+  assert.match(page, /providerStatusClass/);
+  assert.match(page, /text-warning/);
+  assert.match(page, /text-success/);
+  assert.match(page, /'opacity-60': !row\.provider/);
+  assert.match(page, /providerNeedsConfiguration/);
+  assert.match(page, /Configuration required/);
+  assert.match(page, /TooltipRoot/);
+  assert.match(page, /TooltipContent/);
+  assert.match(page, /providerIcon\(row\.definition\.kind\)/);
+  assert.match(page, /:aria-label="`Configure \$\{row\.definition\.name\}`"/);
+  assert.match(page, /v-model="formEnabled"/);
+  assert.match(page, /enabled: formEnabled\.value/);
+  assert.doesNotMatch(page, />\s*Add provider\s*</);
+  assert.doesNotMatch(page, /data-provider-option/);
+  assert.doesNotMatch(page, /Coming soon/);
+  assert.match(
+    page,
+    /href="https:\/\/www\.discogs\.com\/settings\/developers"/,
+  );
+  assert.match(page, /target="_blank"/);
+  assert.match(page, /rel="noopener noreferrer"/);
+  assert.match(
+    page,
+    /Discogs account settings\s*<Icon[\s\S]*?:icon="icons\.externalLink"[\s\S]*?<\/a\s*>/,
+  );
+  assert.match(page, /Create a personal access token in your/);
+  assert.match(page, /:icon="icons\.externalLink"/);
+  assert.match(page, /selectedDefinition\.credentialField\.helpText/);
+  assert.match(
+    icons,
+    /import discogs from "@iconify-icons\/simple-icons\/discogs"/,
+  );
+  assert.match(
+    icons,
+    /import musicbrainz from "@iconify-icons\/simple-icons\/musicbrainz"/,
+  );
   assert.match(page, /Refresh metadata/);
   assert.match(page, /startMetadataRefresh/);
   assert.match(page, /resetMetadata/);
@@ -126,14 +173,10 @@ test("metadata providers have a dedicated sortable management page", async () =>
   assert.match(page, /Reset all track metadata\?/);
   assert.match(page, /Peridot will display the original tags/);
   assert.match(page, /Providers and audio files are not changed/);
-  assert.match(page, /musicBrainzAdded/);
-  assert.match(page, /Configured. Enable or disable/);
-  assert.match(page, /Disable metadata provider\?/);
-  assert.match(page, /provider\.enabled/);
+  assert.doesNotMatch(page, /Disable metadata provider\?/);
   assert.doesNotMatch(page, /Display name/);
   assert.doesNotMatch(page, /provider-name/);
   assert.doesNotMatch(page, /Remove metadata provider/);
-  assert.match(page, /No API key is required/);
   assert.match(page, /AlertDialogRoot/);
 });
 

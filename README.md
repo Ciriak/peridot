@@ -44,7 +44,10 @@ retryable loading and error states. Audio playback is owned by the application
 root, so entering fullscreen settings keeps the current track playing while its
 controls are hidden. Original files are served with HTTP range support and are
 not transcoded. One durable queue is
-stored per signed-in user, restores paused after reloads, and opens in a
+stored per signed-in user on the server, while a browser-local snapshot scoped
+to that server and user records the complete queue, active track, and elapsed
+playback position. Reloading restores the same queue and track at its saved
+position without autoplay. The queue opens in a
 player-clearing, width-constrained custom right-side panel where upcoming tracks
 can be reordered or removed and their artist links opened. The queue button
 directly toggles the panel. The panel and overlay stop above the fixed player,
@@ -132,6 +135,10 @@ the local defaults described in Quick start. `DATABASE_URL` selects the local SQ
 `PERIDOT_WEB_ORIGINS` lists browser origins allowed to call the API. Its defaults
 support the local web development server; add the exact web origin when accessing
 Peridot from another device.
+Discogs metadata uses an administrator-provided personal access token. Set
+`PERIDOT_CREDENTIAL_KEY` to a base64-encoded 32-byte key before adding Discogs;
+Peridot uses it to encrypt provider credentials at rest. Keep the key backed up
+separately from the database. MusicBrainz-only installations do not require it.
 Administrators can manage where the server gets raw audio files from
 Settings → Sources. Each source is a local folder, an external URL, or a future
 integration such as Spotify or YouTube Music. Local folder sources seed from
@@ -142,14 +149,14 @@ The local-folder picker supports case-insensitive deep folder search without
 requiring folders to be expanded first.
 
 Administrators can configure ordered metadata providers from
-Settings → Metadata. MusicBrainz is supported first and requires a contact email
-or URL for its User-Agent. Peridot enables MusicBrainz automatically when the
-first administrator is created and uses that account's email as the contact.
-It does not require an API key. Administrators can
-disable and re-enable a provider without deleting its stored configuration.
-After a library scan discovers new or changed tracks, Peridot matches them
-against enabled providers in the background at no more than one MusicBrainz
-request per second.
+Settings → Metadata. MusicBrainz requires a contact email or URL for its
+User-Agent and is enabled automatically for the first administrator. Discogs
+uses a personal access token validated against the user's Discogs account.
+Peridot stores tokens encrypted and never returns them to browser code.
+Administrators can disable, re-enable, or edit a provider without deleting its
+stored configuration. After a library scan discovers new or changed tracks,
+Peridot resolves unmatched tracks in provider order in the background.
+Requests to each provider are rate-limited separately.
 Each containing folder is treated as an album: the folder name supplies the
 release title when tracks have no album tag, or when their tags disagree.
 The Metadata page also has a Refresh metadata action that re-runs automatic
@@ -157,9 +164,11 @@ matching without rescanning audio files and a confirmed Reset metadata action
 that removes all automatic and manual track matches so tracks use their original
 file tags. A configured provider kind cannot be added twice and is disabled or
 re-enabled instead of removed.
-Provider metadata is stored separately from local file tags, and track context
-menus let signed-in users choose another match or return to the original file
-metadata. Peridot never rewrites the audio files.
+Provider metadata is stored separately from local file tags, including
+provider-specific details such as Discogs release year, label, catalog number,
+country, format, and track position. Track context menus merge candidates from
+every enabled provider and let signed-in users choose another match or return
+to the original file metadata. Peridot never rewrites the audio files.
 
 Synchronize an existing local database with the current Prisma 8 contract:
 
@@ -167,8 +176,8 @@ Synchronize an existing local database with the current Prisma 8 contract:
 pnpm db:update
 ```
 
-To intentionally discard local catalog, account, queue, and settings data and
-start from an empty database:
+To intentionally discard local catalog, account, server queue, and settings data
+and start from an empty database:
 
 ```sh
 pnpm db:reset
@@ -214,13 +223,15 @@ Administrators can rescan one local source with
 `POST /api/admin/sources/:id/scans`; a scoped scan only changes availability for
 tracks from that source. Administrators manage metadata providers through
 `GET/POST /api/admin/metadata-providers`,
+`GET /api/admin/metadata-providers/definitions`,
 `PUT /api/admin/metadata-providers/order`, and
-`PUT /api/admin/metadata-providers/:id` with an `enabled` boolean.
+`PUT /api/admin/metadata-providers/:id` with configuration, credential, or
+enabled-state updates.
 Disabled providers remain listed but are excluded from matching.
 `POST /api/admin/metadata/refresh` re-runs automatic metadata matching without
 a file scan, while
 `POST /api/admin/metadata/reset` clears every track override. Signed-in clients
-can list MusicBrainz candidates for a track and apply or clear an override
+can list merged provider candidates for a track and apply or clear an override
 through `GET /api/tracks/:id/metadata/candidates` and
 `PUT/DELETE /api/tracks/:id/metadata`.
 

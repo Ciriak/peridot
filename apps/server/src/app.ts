@@ -3,14 +3,17 @@ import cors from "@fastify/cors";
 import type { HealthResponse } from "@peridot/contracts";
 import { registerAuthRoutes, registerProtectedRoutes } from "./auth.js";
 import { loadServerConfig, type ServerConfig } from "./config.js";
+import { CredentialStore } from "./credential-store.js";
 import { createDatabase, type Database } from "./database.js";
+import { DiscogsClient, DiscogsResolver } from "./discogs.js";
 import { registerLibraryRoutes } from "./library-routes.js";
 import { registerLikeRoutes } from "./like-routes.js";
 import { LibraryScanner } from "./library-scanner.js";
 import { MetadataEnrichment } from "./metadata-enrichment.js";
 import { ensureDefaultMetadataProvider } from "./metadata-providers.js";
+import { MetadataResolverRegistry } from "./metadata-resolver.js";
 import { registerTrackMetadataRoutes } from "./metadata-routes.js";
-import { MusicBrainzClient } from "./musicbrainz.js";
+import { MusicBrainzClient, MusicBrainzResolver } from "./musicbrainz.js";
 import { registerQueueRoutes } from "./queue-routes.js";
 import {
   PlaybackTokenService,
@@ -28,20 +31,40 @@ export interface BuildAppOptions {
   logBuffer?: ServerLogBuffer;
   metadataFetch?: typeof fetch;
   metadataRequestIntervalMs?: number;
+  discogsFetch?: typeof fetch;
+  discogsRequestIntervalMs?: number;
 }
 
 export async function buildApp(options: BuildAppOptions = {}) {
   const config = options.config ?? (await loadServerConfig());
   const database = options.database ?? createDatabase(config.databaseUrl);
   const ownsDatabase = options.database === undefined;
+  const credentials = new CredentialStore(config.credentialEncryptionKey);
+  const registry = new MetadataResolverRegistry()
+    .register(
+      new MusicBrainzResolver(
+        new MusicBrainzClient({
+          ...(options.metadataFetch ? { fetch: options.metadataFetch } : {}),
+          ...(options.metadataRequestIntervalMs !== undefined
+            ? { requestIntervalMs: options.metadataRequestIntervalMs }
+            : {}),
+        }),
+      ),
+    )
+    .register(
+      new DiscogsResolver(
+        new DiscogsClient({
+          ...(options.discogsFetch ? { fetch: options.discogsFetch } : {}),
+          ...(options.discogsRequestIntervalMs !== undefined
+            ? { requestIntervalMs: options.discogsRequestIntervalMs }
+            : {}),
+        }),
+      ),
+    );
   const metadataEnrichment = new MetadataEnrichment(
     database,
-    new MusicBrainzClient({
-      ...(options.metadataFetch ? { fetch: options.metadataFetch } : {}),
-      ...(options.metadataRequestIntervalMs !== undefined
-        ? { requestIntervalMs: options.metadataRequestIntervalMs }
-        : {}),
-    }),
+    registry,
+    credentials,
   );
   const scanner = new LibraryScanner(database, metadataEnrichment);
   const playbackTokens = new PlaybackTokenService();
@@ -102,6 +125,8 @@ export async function buildApp(options: BuildAppOptions = {}) {
         logBuffer,
         scanner,
         metadataEnrichment,
+        registry,
+        credentials,
       );
     },
     (request) => playbackTokens.authorizeRequest(request.method, request.url),

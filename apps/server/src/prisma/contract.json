@@ -460,7 +460,14 @@
           },
           "MetadataProvider": {
             "fields": {
-              "contact": {
+              "accountLabel": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "configuration": {
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/text@1",
@@ -527,8 +534,11 @@
             "relations": {},
             "storage": {
               "fields": {
-                "contact": {
-                  "column": "contact"
+                "accountLabel": {
+                  "column": "accountLabel"
+                },
+                "configuration": {
+                  "column": "configuration"
                 },
                 "createdAt": {
                   "column": "createdAt"
@@ -1071,10 +1081,31 @@
                   "kind": "scalar"
                 }
               },
+              "metadataDetails": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
               "metadataDiscNumber": {
                 "nullable": true,
                 "type": {
                   "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
+              "metadataExternalReleaseId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "metadataExternalTrackId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
                   "kind": "scalar"
                 }
               },
@@ -1113,14 +1144,7 @@
                   "kind": "scalar"
                 }
               },
-              "metadataRecordingId": {
-                "nullable": true,
-                "type": {
-                  "codecId": "sqlite/text@1",
-                  "kind": "scalar"
-                }
-              },
-              "metadataReleaseId": {
+              "metadataSourceUrl": {
                 "nullable": true,
                 "type": {
                   "codecId": "sqlite/text@1",
@@ -1259,8 +1283,17 @@
                 "metadataAttemptedSignature": {
                   "column": "metadataAttemptedSignature"
                 },
+                "metadataDetails": {
+                  "column": "metadataDetails"
+                },
                 "metadataDiscNumber": {
                   "column": "metadataDiscNumber"
+                },
+                "metadataExternalReleaseId": {
+                  "column": "metadataExternalReleaseId"
+                },
+                "metadataExternalTrackId": {
+                  "column": "metadataExternalTrackId"
                 },
                 "metadataMatchedAt": {
                   "column": "metadataMatchedAt"
@@ -1277,11 +1310,8 @@
                 "metadataProviderName": {
                   "column": "metadataProviderName"
                 },
-                "metadataRecordingId": {
-                  "column": "metadataRecordingId"
-                },
-                "metadataReleaseId": {
-                  "column": "metadataReleaseId"
+                "metadataSourceUrl": {
+                  "column": "metadataSourceUrl"
                 },
                 "metadataTitle": {
                   "column": "metadataTitle"
@@ -1933,9 +1963,18 @@
             },
             "MetadataProvider": {
               "columns": {
-                "contact": {
+                "accountLabel": {
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "configuration": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "default": {
+                    "kind": "literal",
+                    "value": "{}"
+                  },
                   "nullable": false
                 },
                 "createdAt": {
@@ -2503,9 +2542,24 @@
                   "dataType": "sqlite/text",
                   "nullable": true
                 },
+                "metadataDetails": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
                 "metadataDiscNumber": {
                   "codecId": "sqlite/integer@1",
                   "dataType": "sqlite/integer",
+                  "nullable": true
+                },
+                "metadataExternalReleaseId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "metadataExternalTrackId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
                   "nullable": true
                 },
                 "metadataMatchedAt": {
@@ -2537,12 +2591,7 @@
                   "dataType": "sqlite/text",
                   "nullable": true
                 },
-                "metadataRecordingId": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
-                  "nullable": true
-                },
-                "metadataReleaseId": {
+                "metadataSourceUrl": {
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
                   "nullable": true
@@ -2897,7 +2946,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "545226f0a9d9e739a363c554422c02267b6f6ffc614450ca6e4cd10ba68af450"
+    "storageHash": "2d939d6fb2d0c3a5d74f66440e1baac30c1fdc5277131579abb64ec07eb0029a"
   },
   "execution": {
     "executionHash": "5933f9db47ee5fa78da5dd876d8fe49a91ba2a7474bce4bf9aeec166e75dd664",

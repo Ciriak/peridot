@@ -1,18 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { MetadataProviderRow } from "../src/prisma/models.js";
+import type { MetadataProviderContext } from "../src/metadata-resolver.js";
 import { MusicBrainzClient } from "../src/musicbrainz.js";
 
-const provider = {
+const provider: MetadataProviderContext = {
   id: "provider-1",
   kind: "musicbrainz",
   name: "MusicBrainz",
-  contact: "owner@example.com",
-  credentialCiphertext: null,
-  position: 0,
-  createdAt: new Date(),
-  updatedAt: new Date(),
-} as MetadataProviderRow;
+  configuration: { contact: "owner@example.com" },
+  credential: null,
+};
 
 test("MusicBrainz client uses the official origin, contact User-Agent, and request spacing", async () => {
   const requests: URL[] = [];
@@ -72,7 +69,7 @@ test("MusicBrainz client uses the official origin, contact User-Agent, and reque
     },
   });
 
-  const matches = await client.findAlbumMatches(provider, [
+  const matches = await client.findAlbumMatches(provider, "owner@example.com", [
     {
       id: "track-1",
       title: "Blue Hours",
@@ -91,8 +88,8 @@ test("MusicBrainz client uses the official origin, contact User-Agent, and reque
   }
   assert.ok(delays.length >= 1);
   assert.ok(delays[0]! > 0);
-  assert.equal(matches.get("track-1")?.recordingId, "recording-1");
-  assert.equal(matches.get("track-1")?.trackNumber, 1);
+  assert.equal(matches.get("track-1")?.[0]?.externalTrackId, "recording-1");
+  assert.equal(matches.get("track-1")?.[0]?.trackNumber, 1);
 });
 
 test("MusicBrainz client retries rate limits before succeeding", async () => {
@@ -112,7 +109,7 @@ test("MusicBrainz client retries rate limits before succeeding", async () => {
     },
   });
 
-  const items = await client.findCandidates(provider, {
+  const items = await client.findCandidates(provider, "owner@example.com", {
     id: "track-1",
     title: "Blue Hours",
     artist: "Elliot Lake",

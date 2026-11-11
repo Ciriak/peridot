@@ -29,6 +29,10 @@ dist/
 coverage/
 generated/
 .peridot/
+.agents/skills/
+.claude/skills/
+.cursor/skills/
+.devin/skills/
 *.db
 *.db-journal
 *.db-shm

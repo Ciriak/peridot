@@ -13,6 +13,7 @@ import type {
   LibraryScanResponse,
   LogListResponse,
   MetadataCandidateListResponse,
+  MetadataProviderDefinitionListResponse,
   MetadataProviderListResponse,
   MetadataProviderResponse,
   PlaybackTokenResponse,
@@ -20,10 +21,10 @@ import type {
   ReplaceQueueRequest,
   ResetTrackMetadataResponse,
   ServerSettingsResponse,
-  SetMetadataProviderEnabledRequest,
   SourceListResponse,
   SourceResponse,
   TrackListResponse,
+  UpdateMetadataProviderRequest,
 } from "@peridot/contracts";
 
 export interface AdministratorCredentials {
@@ -154,6 +155,17 @@ export function listMetadataProviders(serverAddress: string, token: string) {
   );
 }
 
+export function listMetadataProviderDefinitions(
+  serverAddress: string,
+  token: string,
+) {
+  return authenticatedRequestJson<MetadataProviderDefinitionListResponse>(
+    serverAddress,
+    "/api/admin/metadata-providers/definitions",
+    token,
+  );
+}
+
 export function createMetadataProvider(
   serverAddress: string,
   token: string,
@@ -167,18 +179,17 @@ export function createMetadataProvider(
   );
 }
 
-export function setMetadataProviderEnabled(
+export function updateMetadataProvider(
   serverAddress: string,
   token: string,
   providerId: string,
-  enabled: boolean,
+  update: UpdateMetadataProviderRequest,
 ) {
-  const body: SetMetadataProviderEnabledRequest = { enabled };
   return authenticatedRequestJson<MetadataProviderResponse>(
     serverAddress,
     `/api/admin/metadata-providers/${providerId}`,
     token,
-    { method: "PUT", body: JSON.stringify(body) },
+    { method: "PUT", body: JSON.stringify(update) },
   );
 }
 

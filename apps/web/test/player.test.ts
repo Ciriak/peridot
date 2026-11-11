@@ -29,6 +29,23 @@ test("the persistent player controls a native audio element", async () => {
     "Changing the shared position seeks the native media",
   );
   assert.match(player, /audio\.currentTime = position/);
+  assert.match(player, /readPersistedPlayerState\(window\.localStorage/);
+  assert.match(player, /savePersistedPlayerState\(window\.localStorage/);
+  assert.match(
+    player,
+    /watch\(\s*\[queueTrackIds, activeTrackId, shuffleEnabled, shuffleTrackIds, elapsed\]/,
+    "Queue changes and progress updates are mirrored to local storage",
+  );
+  assert.match(
+    player,
+    /positionSeconds: elapsed\.value/,
+    "The persisted snapshot includes playback progress",
+  );
+  assert.match(
+    player,
+    /queueTrackIds: queueTrackIds\.value/,
+    "The persisted snapshot includes the complete queue",
+  );
   assert.match(
     player,
     /previous !== undefined && trackId !== previousTrackId/,

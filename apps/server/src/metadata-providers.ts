@@ -1,23 +1,47 @@
 import type {
   CreateMetadataProviderRequest,
-  MetadataProviderKind,
   MetadataProviderResponse,
+  UpdateMetadataProviderRequest,
 } from "@peridot/contracts";
+import type { CredentialStore } from "./credential-store.js";
+import { CredentialStoreError } from "./credential-store.js";
 import type { Database } from "./database.js";
+import {
+  type MetadataProviderContext,
+  type MetadataResolver,
+  type MetadataResolverRegistry,
+  MetadataResolverError,
+} from "./metadata-resolver.js";
 import type { MetadataProviderRow } from "./prisma/models.js";
 
 const PROVIDER_NAME_LIMIT = 80;
-const CONTACT_LIMIT = 512;
 
 export class MetadataProviderError extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    readonly statusCode = 400,
+  ) {
     super(message);
     this.name = "MetadataProviderError";
   }
 }
 
-function providerName(kind: MetadataProviderKind): string {
-  return kind === "musicbrainz" ? "MusicBrainz" : kind;
+export function parseProviderConfiguration(
+  value: string,
+): Record<string, string> {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+    return Object.fromEntries(
+      Object.entries(parsed as Record<string, unknown>).flatMap(
+        ([key, item]) => (typeof item === "string" ? [[key, item]] : []),
+      ),
+    );
+  } catch {
+    return {};
+  }
 }
 
 function toProviderResponse(
@@ -25,41 +49,64 @@ function toProviderResponse(
 ): MetadataProviderResponse {
   return {
     id: provider.id,
-    kind: provider.kind as MetadataProviderKind,
+    kind: provider.kind as MetadataProviderResponse["kind"],
     name: provider.name,
-    contact: provider.contact,
+    accountLabel: provider.accountLabel,
+    configuration: parseProviderConfiguration(provider.configuration),
     hasCredential: Boolean(provider.credentialCiphertext),
     enabled: Boolean(provider.enabled),
   };
 }
 
-function normalizeContact(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const contact = value.trim();
-  if (!contact || contact.length > CONTACT_LIMIT) {
-    return null;
+function configurationObject(value: unknown): Record<string, string> {
+  if (value === undefined) return {};
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new MetadataProviderError(
+      "Provider configuration must be an object.",
+    );
   }
-  for (const character of contact) {
-    const code = character.charCodeAt(0);
-    if (code <= 31 || code === 127) return null;
-  }
-  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact)) {
-    return contact.toLowerCase();
-  }
-  try {
-    const url = new URL(contact);
-    if (
-      !["http:", "https:"].includes(url.protocol) ||
-      !url.hostname ||
-      url.username ||
-      url.password
-    ) {
-      return null;
+  const configuration: Record<string, string> = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (typeof item !== "string") {
+      throw new MetadataProviderError(
+        "Provider configuration values must be strings.",
+      );
     }
-    return url.toString();
-  } catch {
-    return null;
+    configuration[key] = item;
   }
+  return configuration;
+}
+
+function normalizedCredential(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string") {
+    throw new MetadataProviderError("Provider credentials must be text.");
+  }
+  const credential = value.trim();
+  if (!credential || credential.length > 1_024) {
+    throw new MetadataProviderError(
+      "Enter a valid provider credential up to 1024 characters.",
+    );
+  }
+  for (const character of credential) {
+    const code = character.charCodeAt(0);
+    if (code <= 31 || code === 127) {
+      throw new MetadataProviderError(
+        "Provider credentials cannot contain control characters.",
+      );
+    }
+  }
+  return credential;
+}
+
+function resolverError(error: unknown): MetadataProviderError {
+  if (error instanceof MetadataResolverError) {
+    return new MetadataProviderError(error.message, error.statusCode);
+  }
+  if (error instanceof CredentialStoreError) {
+    return new MetadataProviderError(error.message, error.statusCode);
+  }
+  throw error;
 }
 
 export async function listMetadataProviders(
@@ -83,6 +130,33 @@ export async function orderedMetadataProviders(
     .all();
 }
 
+export async function providerContext(
+  provider: MetadataProviderRow,
+  resolver: MetadataResolver,
+  credentials: CredentialStore,
+): Promise<MetadataProviderContext> {
+  const configuration = resolver.normalizeConfiguration(
+    parseProviderConfiguration(provider.configuration),
+  );
+  const credential = provider.credentialCiphertext
+    ? credentials.decrypt(provider.credentialCiphertext)
+    : null;
+  if (resolver.definition.credentialField?.required && !credential) {
+    throw new MetadataResolverError(
+      `${resolver.definition.name} requires a credential.`,
+      409,
+      false,
+    );
+  }
+  return {
+    id: provider.id,
+    kind: resolver.definition.kind,
+    name: provider.name,
+    configuration,
+    credential,
+  };
+}
+
 export async function ensureDefaultMetadataProvider(
   database: Pick<Database, "orm">,
   contact?: string,
@@ -95,7 +169,7 @@ export async function ensureDefaultMetadataProvider(
   const admin = contact
     ? null
     : await database.orm.User.first({ role: "admin" });
-  const normalizedContact = normalizeContact(contact ?? admin?.email);
+  const normalizedContact = (contact ?? admin?.email)?.trim();
   if (!normalizedContact) return;
 
   const { count: position } = await database.orm.MetadataProvider.aggregate(
@@ -103,8 +177,9 @@ export async function ensureDefaultMetadataProvider(
   );
   await database.orm.MetadataProvider.create({
     kind: "musicbrainz",
-    name: providerName("musicbrainz"),
-    contact: normalizedContact,
+    name: "MusicBrainz",
+    accountLabel: null,
+    configuration: JSON.stringify({ contact: normalizedContact }),
     enabled: 1,
     position,
   });
@@ -112,20 +187,19 @@ export async function ensureDefaultMetadataProvider(
 
 export async function createMetadataProvider(
   database: Database,
+  registry: MetadataResolverRegistry,
+  credentials: CredentialStore,
   body: unknown,
 ): Promise<MetadataProviderResponse> {
   const value = (body ?? {}) as Partial<CreateMetadataProviderRequest>;
-  if (value.kind !== "musicbrainz") {
+  if (typeof value.kind !== "string" || !value.kind.trim()) {
     throw new MetadataProviderError("Choose a supported metadata provider.");
   }
-  const contact = normalizeContact(value.contact);
-  if (!contact) {
-    throw new MetadataProviderError(
-      "Enter a contact email or HTTP(S) URL for MusicBrainz.",
-    );
-  }
-  if (value.apiKey != null && String(value.apiKey).trim()) {
-    throw new MetadataProviderError("MusicBrainz does not require an API key.");
+  let resolver: MetadataResolver;
+  try {
+    resolver = registry.require(value.kind);
+  } catch (error) {
+    throw resolverError(error);
   }
   const suppliedName = typeof value.name === "string" ? value.name.trim() : "";
   if (suppliedName.length > PROVIDER_NAME_LIMIT) {
@@ -134,44 +208,140 @@ export async function createMetadataProvider(
     );
   }
   const duplicate = await database.orm.MetadataProvider.first({
-    kind: value.kind,
+    kind: resolver.definition.kind,
   });
   if (duplicate) {
     throw new MetadataProviderError(
       "This metadata provider is already configured.",
     );
   }
-  const { count: position } = await database.orm.MetadataProvider.aggregate(
-    (aggregate) => ({ count: aggregate.count() }),
-  );
-  const provider = await database.orm.MetadataProvider.create({
-    kind: value.kind,
-    name: suppliedName || providerName(value.kind),
-    contact,
-    enabled: 1,
-    position,
-  });
-  return toProviderResponse(provider);
+
+  try {
+    const configuration = resolver.normalizeConfiguration(
+      configurationObject(value.configuration),
+    );
+    const credential = normalizedCredential(value.credential);
+    if (resolver.definition.credentialField?.required && !credential) {
+      throw new MetadataProviderError(
+        `${resolver.definition.name} requires a credential.`,
+      );
+    }
+    if (!resolver.definition.credentialField && credential) {
+      throw new MetadataProviderError(
+        `${resolver.definition.name} does not accept a credential.`,
+      );
+    }
+    const context: MetadataProviderContext = {
+      id: "pending",
+      kind: resolver.definition.kind,
+      name: suppliedName || resolver.definition.name,
+      configuration,
+      credential,
+    };
+    if (credential) credentials.ensureConfigured();
+    const accountLabel = credential
+      ? await resolver.validateCredential(context, credential)
+      : null;
+    const encryptedCredential = credential
+      ? credentials.encrypt(credential)
+      : null;
+    const { count: position } = await database.orm.MetadataProvider.aggregate(
+      (aggregate) => ({
+        count: aggregate.count(),
+      }),
+    );
+    const provider = await database.orm.MetadataProvider.create({
+      kind: resolver.definition.kind,
+      name: suppliedName || resolver.definition.name,
+      accountLabel,
+      configuration: JSON.stringify(configuration),
+      credentialCiphertext: encryptedCredential,
+      enabled: 1,
+      position,
+    });
+    return toProviderResponse(provider);
+  } catch (error) {
+    throw resolverError(error);
+  }
 }
 
-export async function setMetadataProviderEnabled(
+export async function updateMetadataProvider(
   database: Database,
+  registry: MetadataResolverRegistry,
+  credentials: CredentialStore,
   id: string,
-  enabled: unknown,
+  body: unknown,
 ): Promise<MetadataProviderResponse | null> {
-  if (typeof enabled !== "boolean") {
+  const provider = await database.orm.MetadataProvider.first({ id });
+  if (!provider) return null;
+  const value = (body ?? {}) as Partial<UpdateMetadataProviderRequest>;
+  if (
+    value.enabled === undefined &&
+    value.configuration === undefined &&
+    value.credential === undefined
+  ) {
     throw new MetadataProviderError(
-      "Metadata provider enabled state must be true or false.",
+      "Choose at least one metadata provider setting to update.",
     );
   }
-  const count = await database.orm.MetadataProvider.where({
-    id,
-  }).updateAndCount({
-    enabled: enabled ? 1 : 0,
-  });
-  if (!count) return null;
-  const provider = await database.orm.MetadataProvider.first({ id });
-  return provider ? toProviderResponse(provider) : null;
+  try {
+    const resolver = registry.require(provider.kind);
+    const configuration =
+      value.configuration === undefined
+        ? resolver.normalizeConfiguration(
+            parseProviderConfiguration(provider.configuration),
+          )
+        : resolver.normalizeConfiguration(
+            configurationObject(value.configuration),
+          );
+    let accountLabel = provider.accountLabel;
+    let credentialCiphertext = provider.credentialCiphertext;
+    if (value.credential !== undefined && value.credential !== null) {
+      if (!resolver.definition.credentialField) {
+        throw new MetadataProviderError(
+          `${resolver.definition.name} does not accept a credential.`,
+        );
+      }
+      const credential = normalizedCredential(value.credential);
+      if (credential) {
+        const context: MetadataProviderContext = {
+          id: provider.id,
+          kind: resolver.definition.kind,
+          name: provider.name,
+          configuration,
+          credential,
+        };
+        credentials.ensureConfigured();
+        accountLabel = await resolver.validateCredential(context, credential);
+        credentialCiphertext = credentials.encrypt(credential);
+      }
+    }
+    if (
+      resolver.definition.credentialField?.required &&
+      !credentialCiphertext
+    ) {
+      throw new MetadataProviderError(
+        `${resolver.definition.name} requires a credential.`,
+      );
+    }
+    if (value.enabled !== undefined && typeof value.enabled !== "boolean") {
+      throw new MetadataProviderError(
+        "Metadata provider enabled state must be true or false.",
+      );
+    }
+    await database.orm.MetadataProvider.where({ id }).update({
+      ...(value.enabled === undefined
+        ? {}
+        : { enabled: value.enabled ? 1 : 0 }),
+      accountLabel,
+      configuration: JSON.stringify(configuration),
+      credentialCiphertext,
+    });
+    const updated = await database.orm.MetadataProvider.first({ id });
+    return updated ? toProviderResponse(updated) : null;
+  } catch (error) {
+    throw resolverError(error);
+  }
 }
 
 export async function reorderMetadataProviders(

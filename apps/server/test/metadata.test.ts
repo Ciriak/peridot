@@ -14,7 +14,7 @@ import {
 const providerBody = {
   kind: "musicbrainz",
   name: "MusicBrainz",
-  contact: "owner@example.com",
+  configuration: { contact: "owner@example.com" },
 };
 
 function musicBrainzResponses(): typeof fetch {
@@ -115,7 +115,8 @@ test("administrators can manage ordered metadata providers", async () => {
           id: initial.json().items[0].id,
           kind: "musicbrainz",
           name: "MusicBrainz",
-          contact: "admin@example.com",
+          accountLabel: null,
+          configuration: { contact: "admin@example.com" },
           hasCredential: false,
           enabled: true,
         },
@@ -123,6 +124,19 @@ test("administrators can manage ordered metadata providers", async () => {
     });
     assert.doesNotMatch(initial.body, /apiKey|api-key/i);
     const providerId = initial.json().items[0].id;
+
+    const definitions = await context.app.inject({
+      method: "GET",
+      url: "/api/admin/metadata-providers/definitions",
+      headers: context.authorization,
+    });
+    assert.equal(definitions.statusCode, 200);
+    assert.deepEqual(
+      definitions
+        .json<{ items: Array<{ kind: string }> }>()
+        .items.map((item) => item.kind),
+      ["musicbrainz", "discogs"],
+    );
 
     const duplicate = await context.app.inject({
       method: "POST",
@@ -137,7 +151,7 @@ test("administrators can manage ordered metadata providers", async () => {
       method: "POST",
       url: "/api/admin/metadata-providers",
       headers: context.authorization,
-      payload: { ...providerBody, apiKey: "not-needed" },
+      payload: { ...providerBody, credential: "not-needed" },
     });
     assert.equal(keyed.statusCode, 400);
 
@@ -161,7 +175,8 @@ test("administrators can manage ordered metadata providers", async () => {
       id: providerId,
       kind: "musicbrainz",
       name: "MusicBrainz",
-      contact: "admin@example.com",
+      accountLabel: null,
+      configuration: { contact: "admin@example.com" },
       hasCredential: false,
       enabled: false,
     });
@@ -244,6 +259,26 @@ test("administrators can manage ordered metadata providers", async () => {
   }
 });
 
+test("Discogs token storage requires the credential encryption key", async () => {
+  const context = await createTestContext({ credentialEncryptionKey: null });
+  try {
+    const response = await context.app.inject({
+      method: "POST",
+      url: "/api/admin/metadata-providers",
+      headers: context.authorization,
+      payload: {
+        kind: "discogs",
+        configuration: {},
+        credential: "discogs-token",
+      },
+    });
+    assert.equal(response.statusCode, 503);
+    assert.match(response.json().error.message, /PERIDOT_CREDENTIAL_KEY/);
+  } finally {
+    await context.close();
+  }
+});
+
 test("invalid MusicBrainz contacts are rejected", async () => {
   const context = await createTestContext();
   try {
@@ -252,7 +287,10 @@ test("invalid MusicBrainz contacts are rejected", async () => {
         method: "POST",
         url: "/api/admin/metadata-providers",
         headers: context.authorization,
-        payload: { ...providerBody, contact },
+        payload: {
+          ...providerBody,
+          configuration: { contact },
+        },
       });
       assert.equal(response.statusCode, 400);
       assert.equal(response.json().error.code, "invalid_metadata_provider");
@@ -309,7 +347,9 @@ test("startup backfills MusicBrainz without re-enabling a disabled provider", as
         kind: "musicbrainz",
       },
     );
-    assert.equal(backfilled.contact, "admin@example.com");
+    assert.deepEqual(JSON.parse(backfilled.configuration), {
+      contact: "admin@example.com",
+    });
     assert.equal(backfilled.enabled, 1);
   } finally {
     await context.close();
@@ -394,6 +434,199 @@ test("scans automatically enrich album tracks with MusicBrainz provenance", asyn
       assert.equal(track.metadata?.mode, "automatic");
       assert.match(String(track.metadata?.sourceUrl), /recording/);
     }
+  } finally {
+    await context.close();
+  }
+});
+
+test("Discogs credentials fall back after MusicBrainz and manual results merge providers", async () => {
+  const discogsToken = "discogs-private-token";
+  let expectedToken = discogsToken;
+  const context = await createTestContext({
+    metadataRequestIntervalMs: 0,
+    discogsRequestIntervalMs: 0,
+    metadataFetch: async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("/ws/2/release")) {
+        return Response.json({ releases: [] });
+      }
+      if (url.pathname.endsWith("/ws/2/recording")) {
+        return Response.json({
+          recordings: [
+            {
+              id: "mb-recording",
+              title: "Blue Hours",
+              score: 100,
+              length: 125000,
+              "artist-credit": [
+                { name: "Elliot Lake", artist: { name: "Elliot Lake" } },
+              ],
+              releases: [{ id: "mb-release", title: "Night Sessions" }],
+            },
+          ],
+        });
+      }
+      return Response.json({});
+    },
+    discogsFetch: async (input, init) => {
+      const url = new URL(String(input));
+      assert.equal(url.origin, "https://api.discogs.com");
+      assert.equal(
+        new Headers(init?.headers).get("Authorization"),
+        `Discogs token=${expectedToken}`,
+      );
+      if (url.pathname.endsWith("/oauth/identity")) {
+        return Response.json({ username: "peridot-owner" });
+      }
+      if (url.pathname.endsWith("/database/search")) {
+        return Response.json({ results: [{ id: 301 }] });
+      }
+      if (url.pathname.endsWith("/releases/301")) {
+        return Response.json({
+          id: 301,
+          title: "Night Sessions",
+          year: 1999,
+          country: "UK",
+          labels: [{ name: "Night Records", catno: "NIGHT-301" }],
+          formats: [{ name: "Vinyl", descriptions: ["LP", "Album"] }],
+          artists: [{ name: "Elliot Lake" }],
+          tracklist: [{ position: "A1", type_: "track", title: "Blue Hours" }],
+        });
+      }
+      return new Response("not found", { status: 404 });
+    },
+  });
+  try {
+    const created = await context.app.inject({
+      method: "POST",
+      url: "/api/admin/metadata-providers",
+      headers: context.authorization,
+      payload: {
+        kind: "discogs",
+        configuration: {},
+        credential: discogsToken,
+      },
+    });
+    assert.equal(created.statusCode, 201);
+    assert.equal(created.json().accountLabel, "peridot-owner");
+    assert.equal(created.json().hasCredential, true);
+    assert.doesNotMatch(created.body, /discogs-private-token/);
+    const stored = await context.database.orm.MetadataProvider.firstOrThrow({
+      kind: "discogs",
+    });
+    assert.ok(stored.credentialCiphertext);
+    assert.doesNotMatch(stored.credentialCiphertext!, /discogs-private-token/);
+
+    const rotatedToken = "discogs-rotated-token";
+    expectedToken = rotatedToken;
+    const rotated = await context.app.inject({
+      method: "PUT",
+      url: `/api/admin/metadata-providers/${created.json().id}`,
+      headers: context.authorization,
+      payload: { credential: rotatedToken },
+    });
+    assert.equal(rotated.statusCode, 200);
+    assert.doesNotMatch(rotated.body, /discogs-rotated-token/);
+
+    await writeFile(
+      path.join(context.libraryRoot, "01 - Blue Hours.mp3"),
+      createTaggedMp3({
+        title: "Blue Hours",
+        artist: "Elliot Lake",
+        album: "Night Sessions",
+        discNumber: 1,
+        trackNumber: 1,
+      }),
+    );
+    const scan = await startScan(context);
+    assert.equal(scan.metadataMatchedCount, 1);
+
+    const catalog = await context.app.inject({
+      method: "GET",
+      url: "/api/tracks",
+      headers: context.authorization,
+    });
+    const track = catalog.json<{
+      items: Array<{
+        id: string;
+        metadata: {
+          providerKind: string;
+          externalTrackId: string;
+          details: Array<{ key: string; value: string }>;
+          sourceUrl: string;
+        } | null;
+      }>;
+    }>().items[0]!;
+    assert.equal(track.metadata?.providerKind, "discogs");
+    assert.equal(track.metadata?.externalTrackId, "301:0");
+    assert.equal(
+      track.metadata?.details.find((detail) => detail.key === "year")?.value,
+      "1999",
+    );
+    assert.match(track.metadata?.sourceUrl ?? "", /discogs\.com\/release\/301/);
+
+    const candidates = await context.app.inject({
+      method: "GET",
+      url: `/api/tracks/${track.id}/metadata/candidates`,
+      headers: context.authorization,
+    });
+    assert.equal(candidates.statusCode, 200);
+    const merged = candidates.json<{
+      items: Array<{
+        providerId: string;
+        providerKind: string;
+        externalTrackId: string;
+        externalReleaseId: string | null;
+        title: string;
+        artist: string;
+        artists: string[];
+        album: string | null;
+        discNumber: number | null;
+        trackNumber: number | null;
+        sourceUrl: string;
+        details: Array<{ key: string; label: string; value: string }>;
+      }>;
+    }>().items;
+    assert.deepEqual(
+      merged.map((item) => item.providerKind),
+      ["musicbrainz", "discogs"],
+    );
+    const discogsCandidate = merged.find(
+      (item) => item.providerKind === "discogs",
+    )!;
+    const applied = await context.app.inject({
+      method: "PUT",
+      url: `/api/tracks/${track.id}/metadata`,
+      headers: context.authorization,
+      payload: {
+        providerId: discogsCandidate.providerId,
+        externalTrackId: discogsCandidate.externalTrackId,
+        externalReleaseId: discogsCandidate.externalReleaseId,
+        title: discogsCandidate.title,
+        artist: discogsCandidate.artist,
+        artists: discogsCandidate.artists,
+        album: discogsCandidate.album,
+        discNumber: discogsCandidate.discNumber,
+        trackNumber: discogsCandidate.trackNumber,
+        sourceUrl: discogsCandidate.sourceUrl,
+        details: discogsCandidate.details,
+      },
+    });
+    assert.equal(applied.statusCode, 204);
+    const manual = await context.app.inject({
+      method: "GET",
+      url: `/api/tracks/${track.id}`,
+      headers: context.authorization,
+    });
+    assert.equal(manual.json().metadata.mode, "manual");
+    assert.equal(
+      manual
+        .json()
+        .metadata.details.find(
+          (detail: { key: string }) => detail.key === "catalogNumber",
+        ).value,
+      "NIGHT-301",
+    );
   } finally {
     await context.close();
   }
@@ -591,14 +824,16 @@ test("members can replace and revert a manual metadata match", async () => {
       headers: member,
       payload: {
         providerId: provider.id,
-        recordingId: candidate.recordingId,
-        releaseId: candidate.releaseId,
+        externalTrackId: candidate.externalTrackId,
+        externalReleaseId: candidate.externalReleaseId,
         title: candidate.title,
         artist: candidate.artist,
         artists: candidate.artists,
         album: candidate.album,
         discNumber: candidate.discNumber,
         trackNumber: candidate.trackNumber,
+        sourceUrl: candidate.sourceUrl,
+        details: candidate.details,
       },
     });
     assert.equal(applied.statusCode, 204);
@@ -718,8 +953,10 @@ test("administrators can reset all track metadata to file tags", async () => {
       assert.equal(track.metadataProviderId, null);
       assert.equal(track.metadataProviderKind, null);
       assert.equal(track.metadataProviderName, null);
-      assert.equal(track.metadataRecordingId, null);
-      assert.equal(track.metadataReleaseId, null);
+      assert.equal(track.metadataExternalTrackId, null);
+      assert.equal(track.metadataExternalReleaseId, null);
+      assert.equal(track.metadataSourceUrl, null);
+      assert.equal(track.metadataDetails, null);
       assert.equal(track.metadataMatchedAt, null);
       assert.equal(track.metadataAttemptedSignature, null);
     }

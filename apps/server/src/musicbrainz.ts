@@ -1,9 +1,13 @@
-import type {
-  MetadataCandidateResponse,
-  MetadataProviderKind,
-} from "@peridot/contracts";
+import type { MetadataCandidateResponse } from "@peridot/contracts";
 import { normalizeArtistCredits } from "./artist-credits.js";
-import type { MetadataProviderRow } from "./prisma/models.js";
+import {
+  candidateIdentity,
+  type AutomaticMatchResult,
+  type MetadataProviderContext,
+  type MetadataResolver,
+  type MetadataTrackInput,
+  MetadataResolverError,
+} from "./metadata-resolver.js";
 
 const MUSICBRAINZ_ORIGIN = "https://musicbrainz.org";
 const MUSICBRAINZ_API_ROOT = `${MUSICBRAINZ_ORIGIN}/ws/2/`;
@@ -16,16 +20,6 @@ interface MusicBrainzClientOptions {
   fetch?: typeof fetch;
   requestIntervalMs?: number;
   sleep?: (milliseconds: number, signal?: AbortSignal) => Promise<void>;
-}
-
-export interface MetadataTrackInput {
-  id: string;
-  title: string;
-  artist: string;
-  album: string | null;
-  discNumber: number | null;
-  trackNumber: number | null;
-  durationMs: number | null;
 }
 
 export class MusicBrainzError extends Error {
@@ -84,7 +78,7 @@ function artistCredits(value: unknown): string[] {
 }
 
 function candidateFromRecording(
-  provider: MetadataProviderRow,
+  provider: MetadataProviderContext,
   value: unknown,
 ): MetadataCandidateResponse | null {
   const recording = asRecord(value);
@@ -94,12 +88,13 @@ function candidateFromRecording(
   const artists = artistCredits(recording["artist-credit"]);
   if (!id || !title || !artists.length) return null;
   const release = asArray(recording.releases).map(asRecord).find(Boolean);
+  const releaseId = text(release?.id) || null;
   return {
     providerId: provider.id,
-    providerKind: provider.kind as MetadataProviderKind,
+    providerKind: provider.kind,
     providerName: provider.name,
-    recordingId: id,
-    releaseId: text(release?.id) || null,
+    externalTrackId: id,
+    externalReleaseId: releaseId,
     title,
     artist: artists.join(", "),
     artists,
@@ -108,6 +103,8 @@ function candidateFromRecording(
     trackNumber: null,
     durationMs: durationMs(recording.length),
     score: Number(recording.score ?? 0) || 0,
+    sourceUrl: `https://musicbrainz.org/recording/${encodeURIComponent(id)}`,
+    details: [],
   };
 }
 
@@ -157,7 +154,7 @@ function releaseMatches(
 }
 
 function recordingCandidateFromRelease(
-  provider: MetadataProviderRow,
+  provider: MetadataProviderContext,
   releaseId: string,
   album: string,
   releaseTrack: ReleaseTrack,
@@ -166,7 +163,7 @@ function recordingCandidateFromRelease(
     {
       ...provider,
       // candidateFromRecording only needs identity metadata from the provider.
-    } as MetadataProviderRow,
+    },
     {
       ...releaseTrack.recording,
       releases: [{ id: releaseId, title: album }],
@@ -175,7 +172,7 @@ function recordingCandidateFromRelease(
   if (!base) return null;
   return {
     ...base,
-    releaseId,
+    externalReleaseId: releaseId,
     album,
     discNumber: releaseTrack.discNumber,
     trackNumber: releaseTrack.trackNumber,
@@ -260,7 +257,8 @@ export class MusicBrainzClient {
   }
 
   async findCandidates(
-    provider: MetadataProviderRow,
+    provider: MetadataProviderContext,
+    contact: string,
     track: MetadataTrackInput,
     query?: string,
     signal?: AbortSignal,
@@ -269,7 +267,7 @@ export class MusicBrainzClient {
       ? `${escapeLucene(query.trim())}`
       : `recording:"${escapeLucene(track.title)}" AND artist:"${escapeLucene(track.artist)}"`;
     const response = await this.request(
-      provider,
+      contact,
       "recording",
       { query: search, limit: "10" },
       signal,
@@ -284,16 +282,17 @@ export class MusicBrainzClient {
   }
 
   async findAlbumMatches(
-    provider: MetadataProviderRow,
+    provider: MetadataProviderContext,
+    contact: string,
     targets: readonly MetadataTrackInput[],
     signal?: AbortSignal,
-  ): Promise<Map<string, MetadataCandidateResponse>> {
-    const matches = new Map<string, MetadataCandidateResponse>();
+  ): Promise<Map<string, MetadataCandidateResponse[]>> {
+    const matches = new Map<string, MetadataCandidateResponse[]>();
     const first = targets[0];
     if (!first?.album) return matches;
 
     const searchResponse = await this.request(
-      provider,
+      contact,
       "release",
       {
         query: `release:"${escapeLucene(first.album)}" AND artist:"${escapeLucene(first.artist)}"`,
@@ -311,7 +310,7 @@ export class MusicBrainzClient {
     if (!releaseId) return matches;
 
     const releaseResponse = await this.request(
-      provider,
+      contact,
       `release/${releaseId}`,
       { inc: "recordings+artist-credits" },
       signal,
@@ -327,7 +326,7 @@ export class MusicBrainzClient {
         album,
         releaseTrack,
       );
-      if (candidate) matches.set(target.id, candidate);
+      if (candidate) matches.set(target.id, [candidate]);
     }
     return matches;
   }
@@ -348,7 +347,7 @@ export class MusicBrainzClient {
   }
 
   private async request(
-    provider: MetadataProviderRow,
+    contact: string,
     path: string,
     parameters: Record<string, string>,
     signal?: AbortSignal,
@@ -376,7 +375,7 @@ export class MusicBrainzClient {
         response = await this.fetcher(url, {
           headers: {
             Accept: "application/json",
-            "User-Agent": `${MUSICBRAINZ_USER_AGENT} (${provider.contact})`,
+            "User-Agent": `${MUSICBRAINZ_USER_AGENT} (${contact})`,
           },
           signal: requestSignal,
         });
@@ -444,5 +443,156 @@ export class MusicBrainzClient {
     const delay = this.nextRequestAt - Date.now();
     if (delay > 0) await this.sleeper(delay, signal);
     this.nextRequestAt = Date.now() + this.requestIntervalMs;
+  }
+}
+
+function normalizedContact(value: unknown): string {
+  if (typeof value !== "string") {
+    throw new MetadataResolverError(
+      "Enter a contact email or HTTP(S) URL for MusicBrainz.",
+      400,
+      false,
+    );
+  }
+  const contact = value.trim();
+  if (!contact || contact.length > 512) {
+    throw new MetadataResolverError(
+      "Enter a contact email or HTTP(S) URL for MusicBrainz.",
+      400,
+      false,
+    );
+  }
+  for (const character of contact) {
+    const code = character.charCodeAt(0);
+    if (code <= 31 || code === 127) {
+      throw new MetadataResolverError(
+        "MusicBrainz contact details cannot contain control characters.",
+        400,
+        false,
+      );
+    }
+  }
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact)) {
+    return contact.toLowerCase();
+  }
+  try {
+    const url = new URL(contact);
+    if (
+      !["http:", "https:"].includes(url.protocol) ||
+      !url.hostname ||
+      url.username ||
+      url.password
+    ) {
+      throw new Error("invalid contact URL");
+    }
+    return url.toString();
+  } catch {
+    throw new MetadataResolverError(
+      "Enter a valid contact email or HTTP(S) URL for MusicBrainz.",
+      400,
+      false,
+    );
+  }
+}
+
+export class MusicBrainzResolver implements MetadataResolver {
+  readonly definition = {
+    kind: "musicbrainz" as const,
+    name: "MusicBrainz",
+    description:
+      "Match canonical recordings and releases using a contact User-Agent.",
+    configurationFields: [
+      {
+        key: "contact",
+        label: "Contact email or URL",
+        type: "text" as const,
+        required: true,
+        placeholder: "you@example.com",
+        helpText:
+          "MusicBrainz requires this contact in Peridot's request User-Agent.",
+      },
+    ],
+    credentialField: null,
+    supportsAutomaticMatching: true,
+    supportsManualSearch: true,
+  };
+
+  constructor(private readonly client = new MusicBrainzClient()) {}
+
+  normalizeConfiguration(value: unknown): Record<string, string> {
+    const record =
+      value && typeof value === "object"
+        ? (value as Record<string, unknown>)
+        : {};
+    return { contact: normalizedContact(record.contact) };
+  }
+
+  async validateCredential(): Promise<string> {
+    throw new MetadataResolverError(
+      "MusicBrainz does not require a credential.",
+      400,
+      false,
+    );
+  }
+
+  findAlbumMatches(
+    provider: MetadataProviderContext,
+    targets: readonly MetadataTrackInput[],
+    signal?: AbortSignal,
+  ): Promise<Map<string, MetadataCandidateResponse[]>> {
+    return this.client.findAlbumMatches(
+      provider,
+      this.contact(provider),
+      targets,
+      signal,
+    );
+  }
+
+  findCandidates(
+    provider: MetadataProviderContext,
+    track: MetadataTrackInput,
+    query?: string,
+    signal?: AbortSignal,
+  ): Promise<MetadataCandidateResponse[]> {
+    return this.client.findCandidates(
+      provider,
+      this.contact(provider),
+      track,
+      query,
+      signal,
+    );
+  }
+
+  automaticMatch(
+    track: MetadataTrackInput,
+    candidates: readonly MetadataCandidateResponse[],
+  ): AutomaticMatchResult {
+    const exact = candidates.filter((candidate) =>
+      this.client.isExactMatch(track, candidate),
+    );
+    const unique = [
+      ...new Map(
+        exact.map((candidate) => [candidateIdentity(candidate), candidate]),
+      ).values(),
+    ];
+    return unique[0]
+      ? { status: "matched", candidate: unique[0] }
+      : { status: "unmatched" };
+  }
+
+  sourceUrl(externalTrackId: string): string {
+    return `https://musicbrainz.org/recording/${encodeURIComponent(externalTrackId)}`;
+  }
+
+  private contact(provider: MetadataProviderContext): string {
+    const value = provider.configuration.contact;
+    if (!value) {
+      throw new MetadataResolverError(
+        "MusicBrainz contact details are missing.",
+        409,
+        false,
+      );
+    }
+    return value;
   }
 }

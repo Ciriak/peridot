@@ -31,6 +31,10 @@ import trash from "@iconify-icons/basil/trash-outline";
 import download from "@iconify-icons/basil/download-outline";
 import volume from "@iconify-icons/basil/volume-up-outline";
 import shuffle from "@iconify-icons/basil/shuffle-outline";
+import warning from "@iconify-icons/basil/info-triangle-outline";
+import externalLink from "@iconify-icons/akar-icons/arrow-up-right";
+import discogs from "@iconify-icons/simple-icons/discogs";
+import musicbrainz from "@iconify-icons/simple-icons/musicbrainz";
 
 // Import data directly: icons render during SSR and never require an icon API.
 export const icons = {
@@ -70,4 +74,8 @@ export const icons = {
   download,
   volume,
   shuffle,
+  warning,
+  externalLink,
+  discogs,
+  musicbrainz,
 };

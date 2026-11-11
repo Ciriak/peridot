@@ -2,6 +2,7 @@ import tailwindcss from "@tailwindcss/vite";
 
 const optimizedDependencies = [
   "@iconify-icons/akar-icons/drag-vertical",
+  "@iconify-icons/akar-icons/arrow-up-right",
   "@iconify-icons/basil/apps-outline",
   "@iconify-icons/basil/caret-down-outline",
   "@iconify-icons/basil/caret-right-outline",
@@ -15,6 +16,7 @@ const optimizedDependencies = [
   "@iconify-icons/basil/heart-outline",
   "@iconify-icons/basil/heart-solid",
   "@iconify-icons/basil/home-outline",
+  "@iconify-icons/basil/info-triangle-outline",
   "@iconify-icons/basil/logout-outline",
   "@iconify-icons/basil/menu-outline",
   "@iconify-icons/basil/move-outline",
@@ -33,6 +35,8 @@ const optimizedDependencies = [
   "@iconify-icons/basil/stack-outline",
   "@iconify-icons/basil/user-outline",
   "@iconify-icons/basil/volume-up-outline",
+  "@iconify-icons/simple-icons/discogs",
+  "@iconify-icons/simple-icons/musicbrainz",
   "@iconify/vue/offline",
   "@peridot/ui/components/ui/badge",
   "@peridot/ui/components/ui/button",
@@ -41,6 +45,7 @@ const optimizedDependencies = [
   "@peridot/ui/components/ui/input",
   "@peridot/ui/components/ui/slider",
   "@peridot/ui/components/ui/spinner",
+  "@peridot/ui/components/ui/switch",
   "@vueuse/core",
   "class-variance-authority",
   "cn",

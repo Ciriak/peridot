@@ -71,7 +71,9 @@ test("an empty server requires one administrator and closes bootstrap afterward"
     const provider = await context.database.orm.MetadataProvider.firstOrThrow({
       kind: "musicbrainz",
     });
-    assert.equal(provider.contact, "owner@example.com");
+    assert.deepEqual(JSON.parse(provider.configuration), {
+      contact: "owner@example.com",
+    });
     assert.equal(provider.enabled, 1);
 
     const duplicate = await context.app.inject({

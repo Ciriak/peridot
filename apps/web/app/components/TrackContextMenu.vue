@@ -5,6 +5,7 @@ import type {
   TrackResponse,
 } from "@peridot/contracts";
 import { Icon } from "@iconify/vue/offline";
+import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import {
   ContextMenu,
@@ -123,18 +124,20 @@ async function searchMetadata() {
 }
 
 async function chooseMetadata(candidate: MetadataCandidateResponse) {
-  applyingMetadataId.value = candidate.recordingId;
+  applyingMetadataId.value = candidate.externalTrackId;
   metadataError.value = "";
   const body: ApplyTrackMetadataRequest = {
     providerId: candidate.providerId,
-    recordingId: candidate.recordingId,
-    releaseId: candidate.releaseId,
+    externalTrackId: candidate.externalTrackId,
+    externalReleaseId: candidate.externalReleaseId,
     title: candidate.title,
     artist: candidate.artist,
     artists: candidate.artists,
     album: candidate.album,
     discNumber: candidate.discNumber,
     trackNumber: candidate.trackNumber,
+    sourceUrl: candidate.sourceUrl,
+    details: candidate.details,
   };
   try {
     await applyTrackMetadata(
@@ -256,6 +259,17 @@ async function revertMetadata() {
       <ContextMenuLabel v-if="track.metadata" class="text-xs">
         Matched with {{ track.metadata.providerName }}
       </ContextMenuLabel>
+      <ContextMenuLabel
+        v-if="track.metadata?.details.length"
+        class="truncate text-xs"
+      >
+        {{
+          track.metadata.details
+            .slice(0, 2)
+            .map((detail) => `${detail.label}: ${detail.value}`)
+            .join(" · ")
+        }}
+      </ContextMenuLabel>
       <ContextMenuItem v-if="track.metadata" as-child>
         <a :href="track.metadata.sourceUrl" target="_blank" rel="noreferrer">
           <Icon :icon="icons.plugins" aria-hidden="true" />
@@ -287,14 +301,14 @@ async function revertMetadata() {
           Match metadata
         </DialogTitle>
         <DialogDescription class="mt-1 text-sm text-muted-foreground">
-          Search MusicBrainz and choose the release metadata for
+          Search enabled metadata providers and choose the match for
           {{ track.title }}.
         </DialogDescription>
         <form class="mt-4 flex gap-2" @submit.prevent="searchMetadata">
           <Input
             v-model="metadataQuery"
             type="search"
-            aria-label="Search MusicBrainz"
+            aria-label="Search metadata providers"
             placeholder="Track or artist"
             class="min-w-0 flex-1"
           />
@@ -313,27 +327,44 @@ async function revertMetadata() {
         <ul v-if="candidates.length" class="mt-4 space-y-2">
           <li
             v-for="candidate in candidates"
-            :key="`${candidate.providerId}:${candidate.recordingId}:${candidate.releaseId ?? ''}`"
+            :key="`${candidate.providerId}:${candidate.externalTrackId}:${candidate.externalReleaseId ?? ''}`"
             class="flex items-center gap-3 rounded-md border p-3"
           >
             <div class="min-w-0 flex-1">
-              <p class="truncate text-sm font-medium">{{ candidate.title }}</p>
+              <div class="flex items-center gap-2">
+                <p class="truncate text-sm font-medium">
+                  {{ candidate.title }}
+                </p>
+                <Badge variant="secondary" class="shrink-0">
+                  {{ candidate.providerName }}
+                </Badge>
+              </div>
               <p class="truncate text-sm text-muted-foreground">
                 {{ candidate.artist }}
                 <template v-if="candidate.album">
                   · {{ candidate.album }}
                 </template>
               </p>
+              <p
+                v-if="candidate.details.length"
+                class="mt-1 line-clamp-2 text-xs text-muted-foreground"
+              >
+                {{
+                  candidate.details
+                    .map((detail) => `${detail.label}: ${detail.value}`)
+                    .join(" · ")
+                }}
+              </p>
             </div>
             <Button
               type="button"
               variant="outline"
               size="sm"
-              :disabled="applyingMetadataId === candidate.recordingId"
+              :disabled="applyingMetadataId === candidate.externalTrackId"
               @click="chooseMetadata(candidate)"
             >
               {{
-                applyingMetadataId === candidate.recordingId
+                applyingMetadataId === candidate.externalTrackId
                   ? "Applying…"
                   : "Use match"
               }}

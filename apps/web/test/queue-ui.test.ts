@@ -64,6 +64,8 @@ test("the player exposes randomize and a persistent right-side queue drawer", as
   assert.match(drawer, /shuffleEnabled \? "Queue order" : "Next in queue"/);
   assert.match(drawer, /useSortable\(queueList, sortableTracks/);
   assert.doesNotMatch(drawer, /handle: "\.queue-drag-handle"/);
+  assert.match(drawer, /filter: "a, button, input"/);
+  assert.match(drawer, /class="flex cursor-grab items-center/);
   assert.match(
     drawer,
     /onEnd: \(\{ oldIndex, newIndex \}\) => \{[\s\S]*sortableTracks\.value = next;[\s\S]*reorderQueue\(next\.map/,

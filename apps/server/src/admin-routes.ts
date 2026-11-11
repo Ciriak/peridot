@@ -3,15 +3,17 @@ import type {
   CreateSourceRequest,
   DirectoryListResponse,
   LogListResponse,
+  MetadataProviderDefinitionListResponse,
   MetadataProviderListResponse,
   ReorderMetadataProvidersRequest,
   ReorderSourcesRequest,
   ResetTrackMetadataResponse,
-  SetMetadataProviderEnabledRequest,
   ServerSettingsResponse,
   SourceListResponse,
+  UpdateMetadataProviderRequest,
 } from "@peridot/contracts";
 import type { FastifyInstance } from "fastify";
+import type { CredentialStore } from "./credential-store.js";
 import type { Database } from "./database.js";
 import { sendError } from "./http.js";
 import type { LibraryScanner } from "./library-scanner.js";
@@ -22,8 +24,9 @@ import {
   listMetadataProviders,
   MetadataProviderError,
   reorderMetadataProviders,
-  setMetadataProviderEnabled,
+  updateMetadataProvider,
 } from "./metadata-providers.js";
+import type { MetadataResolverRegistry } from "./metadata-resolver.js";
 import type { ServerLogBuffer } from "./server-log.js";
 import {
   createSource,
@@ -41,6 +44,8 @@ export async function registerAdminRoutes(
   logBuffer: ServerLogBuffer,
   scanner: LibraryScanner,
   metadataEnrichment: MetadataEnrichment,
+  metadataRegistry: MetadataResolverRegistry,
+  metadataCredentials: CredentialStore,
 ) {
   await app.register(async (admin) => {
     admin.addHook("onRequest", async (request, reply) => {
@@ -165,6 +170,13 @@ export async function registerAdminRoutes(
     );
 
     admin.get(
+      "/api/admin/metadata-providers/definitions",
+      async (): Promise<MetadataProviderDefinitionListResponse> => ({
+        items: metadataRegistry.definitions(),
+      }),
+    );
+
+    admin.get(
       "/api/admin/metadata-providers",
       async (): Promise<MetadataProviderListResponse> => ({
         items: await listMetadataProviders(database),
@@ -177,12 +189,19 @@ export async function registerAdminRoutes(
         try {
           return reply
             .code(201)
-            .send(await createMetadataProvider(database, request.body));
+            .send(
+              await createMetadataProvider(
+                database,
+                metadataRegistry,
+                metadataCredentials,
+                request.body,
+              ),
+            );
         } catch (error) {
           if (error instanceof MetadataProviderError) {
             return sendError(
               reply,
-              400,
+              error.statusCode,
               "invalid_metadata_provider",
               error.message,
             );
@@ -215,13 +234,15 @@ export async function registerAdminRoutes(
 
     admin.put<{
       Params: { id: string };
-      Body: SetMetadataProviderEnabledRequest;
+      Body: UpdateMetadataProviderRequest;
     }>("/api/admin/metadata-providers/:id", async (request, reply) => {
       try {
-        const provider = await setMetadataProviderEnabled(
+        const provider = await updateMetadataProvider(
           database,
+          metadataRegistry,
+          metadataCredentials,
           request.params.id,
-          request.body?.enabled,
+          request.body,
         );
         if (!provider) {
           return sendError(
@@ -236,7 +257,7 @@ export async function registerAdminRoutes(
         if (error instanceof MetadataProviderError) {
           return sendError(
             reply,
-            400,
+            error.statusCode,
             "invalid_metadata_provider",
             error.message,
           );

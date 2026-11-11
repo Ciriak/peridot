@@ -68,7 +68,8 @@ const pendingDelete = ref<SourceResponse | null>(null);
 
 useSortable(sourceList, sources, {
   animation: 150,
-  handle: ".drag-handle",
+  filter: "a, button, input",
+  preventOnFilter: false,
   watchElement: true,
   onEnd: () => void persistOrder(),
 });
@@ -248,12 +249,12 @@ onMounted(() => void loadSources());
         <li
           v-for="source in sources"
           :key="source.id"
-          class="flex items-center gap-2 rounded-md border p-2"
+          class="flex cursor-grab items-center gap-2 rounded-md border p-2 active:cursor-grabbing"
           :title="source.kind === 'path' ? (source.path ?? '') : undefined"
         >
           <button
             type="button"
-            class="drag-handle cursor-grab rounded-md p-1 text-muted-foreground"
+            class="rounded-md p-1 text-muted-foreground"
             aria-label="Drag to reorder source"
           >
             <Icon :icon="icons.drag" aria-hidden="true" class="size-4" />

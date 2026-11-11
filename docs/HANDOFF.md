@@ -2,6 +2,137 @@
 
 Last updated: 2026-11-11.
 
+## Like hover scoped to the control
+
+The shared like button now changes its icon color only when the button itself is
+hovered or active. Previously its `group-hover` and `group-active` utilities also
+matched the album and artist cards' ancestor hover group, so hovering anywhere
+on a card colored the heart. All track, collection, header, player, and context
+menu uses inherit the corrected shared behavior.
+
+An application-wide scan found the remaining `group-hover` uses only on player
+buttons contained in their own button groups and on album/artist placeholder
+artwork; neither reproduces the card-to-like-button coupling.
+
+The focused likes UI test (3/3), targeted ESLint and Prettier checks, web
+typecheck, and `git diff --check` pass. The full web suite passes 86 of 87 tests;
+the only failure is the previously documented sidebar assertion expecting the
+`logo` variable while the current layout uses `logoNop`. Existing unrelated
+working-tree changes were preserved. No commit, push, tag, publication, or
+deployment was performed.
+
+## Full-row sortable targets
+
+Queue tracks, library sources, and configured metadata providers now use their
+entire row as the drag target rather than exposing only the grip icon as the
+handle. Action buttons, links, and inputs are filtered from drag initiation so
+their normal click and keyboard behavior remains available. Unconfigured
+metadata providers remain visible but are not sortable. Rows show a grab cursor
+and switch to a grabbing cursor while dragging.
+
+Focused queue and settings tests pass except for the previously documented
+sidebar logo assertion. Web typecheck, targeted ESLint, formatting checks, and
+the production web build pass. Browser interaction QA was unavailable because
+Computer Use rejected URL verification. No commit, push, tag, publication, or
+deployment was performed.
+
+## Metadata provider list controls
+
+The Metadata settings list now renders every server-provided provider
+definition, including providers that have not been configured. The add-provider
+button and the separate provider-picker step were removed. Each row uses the
+Simple Icons MusicBrainz or Discogs mark, a cog that opens that provider's
+configuration dialog, and a state subtitle: `Not configured` in the warning
+color, `Active` in the success color, or `Disabled` in the muted color.
+Unconfigured titles are dimmed. Enabled providers with missing required fields
+or credentials show a destructive warning above the cog with an explanatory
+tooltip.
+
+The enabled switch now lives inside the configuration dialog and is saved
+together with provider configuration. Discogs credential help links only the
+`Discogs account settings` phrase, with an external-link icon, to
+`https://www.discogs.com/settings/developers` in a new tab with
+`noopener noreferrer`. The shared UI package now provides a Reka-based Switch,
+and the web app includes bundled `@iconify-icons/simple-icons` data for offline
+rendering.
+
+Verified focused metadata settings, notification, and provider-configuration
+tests (17 passing; the only focused failure is the pre-existing sidebar logo
+assertion), web typecheck, targeted ESLint, and Prettier. Browser interaction QA
+was attempted but Computer Use rejected browser URL verification, so the visual
+dialog and tooltip behavior still need an interactive pass. Changes remain
+uncommitted on `dev`; no commit, push, tag, publication, or deployment was
+performed.
+
+## Extensible Discogs metadata integration
+
+Metadata providers now use a registry of trusted resolver adapters with
+declarative configuration fields, credential requirements, provider-specific
+automatic-match policies, and canonical source URLs. MusicBrainz remains the
+default first provider. Discogs is the second provider, receives only tracks
+MusicBrainz leaves unresolved during automatic matching, and uses a token
+validated through the Discogs identity endpoint. Manual candidate search merges
+results from every enabled provider in configured order.
+
+Track metadata storage now uses provider-neutral external track and release IDs,
+a canonical source URL, and bounded labeled details. Discogs preserves release
+year, label, catalog number, country, format, and raw track position. Settings
+builds provider cards and forms from server definitions and supports editing
+configuration, replacing tokens, disabling, re-enabling, and reordering
+providers. Provider tokens are encrypted with AES-256-GCM using the required
+`PERIDOT_CREDENTIAL_KEY`; they are never returned to the browser or placed in
+request URLs.
+
+The approved clean schema break replaced the MusicBrainz-shaped metadata
+columns and generated a new Prisma 8 contract. `pnpm db:reset` was applied to
+`apps/server/peridot.db`, so the local database is intentionally empty and must
+be onboarded and scanned again. Existing local catalog, account, queue, and like
+data were removed as expected. The new storage hash is
+`2d939d6fb2d0c3a5d74f66440e1baac30c1fdc5277131579abb64ec07eb0029a`.
+
+Checks passed: workspace type check (6 packages), `pnpm check`, Prisma contract
+emission and `pnpm db:validate`, all 66 server tests, all 5 shared UI tests,
+the production workspace build, and a fresh-database built-server smoke test
+returning the expected health payload. The web suite passed 84 of 85 tests. Its
+only failure is the previously documented sidebar test expecting the `logo`
+variable while the current checked-in layout uses `logoNop`.
+
+No live Discogs request was performed because no administrator token or
+credential encryption key was supplied. Next: set a base64-encoded 32-byte
+`PERIDOT_CREDENTIAL_KEY`, onboard the reset server, add a personal Discogs
+token, rescan the library, and verify one exact automatic match plus one manual
+edition override. Changes remain uncommitted on `dev`; unrelated existing
+working-tree changes, including the pre-existing untracked files, were
+preserved. No commit, push, tag, publication, or deployment was performed.
+
+## Browser-local queue and playback position
+
+The player now writes a versioned, server-and-user-scoped `localStorage`
+snapshot containing the complete queue, active track, shuffle state and
+remaining random pool, and elapsed playback position. Queue mutations and media
+clock updates refresh the snapshot. On reload, a valid local snapshot is restored
+paused before the existing server queue fallback, so the same queue and track
+return at the saved position without autoplay.
+
+Added serialization and validation helpers plus behavioral coverage for full
+snapshot round trips, queue ordering, scope isolation, malformed data, and
+invalid progress. Extended the native-player regression coverage for the
+local-storage read/write and reactive persistence wiring.
+
+Verified the focused player/storage tests (3/3), web typecheck, targeted ESLint
+and Prettier checks, the production web build, and `git diff --check`. The full
+web suite passed 84 of 85 tests; the remaining pre-existing failure expects the
+sidebar logo variable `logo`, while the checked-in layout uses `logoNop`.
+Browser interaction QA could not run because Computer Use rejected browser URL
+verification. Schema/server checks were skipped because this is web-only state
+persistence. Changes remain uncommitted on `dev`; no commit, push, tag,
+publication, or deployment was performed.
+
+Known limits: progress is browser- and origin-local and does not synchronize
+between devices or reset when the server database is reset. If browser storage
+is unavailable or invalid, the player falls back to the server queue and starts
+that queue at position zero.
+
 ## Default MusicBrainz provider and disable lifecycle
 
 MusicBrainz is now created and enabled when the first administrator account is
