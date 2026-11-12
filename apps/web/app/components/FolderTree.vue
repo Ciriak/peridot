@@ -3,12 +3,15 @@ import { useI18n } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import { Input } from "@peridot/ui/components/ui/input";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
+import { useQueryClient } from "@tanstack/vue-query";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { TreeItem, TreeRoot } from "reka-ui";
 import { useServer } from "../composables/use-server";
 import { useSession } from "../composables/use-session";
 import { useLocalizedMessage } from "../composables/use-localized-message";
+import { useQueryScope } from "../composables/use-query-scope";
 import { icons } from "../lib/icons";
+import { queryKeys } from "../lib/query-keys";
 import {
   isAuthenticationRedirectError,
   listDirectories,
@@ -27,6 +30,8 @@ const emit = defineEmits<{ (e: "update:modelValue", value: string): void }>();
 
 const { address } = useServer();
 const { token } = useSession();
+const { scope } = useQueryScope();
+const queryClient = useQueryClient();
 const { t } = useI18n();
 const { errorMessage } = useLocalizedMessage();
 
@@ -62,11 +67,14 @@ function getChildren(node: FolderNode): FolderNode[] | undefined {
 
 async function loadChildren(node?: FolderNode) {
   const key = node?.path;
-  const result = await listDirectories(
-    address.value ?? "",
-    token.value ?? "",
-    key,
-  );
+  if (!scope.value || !token.value) return;
+  const result = await queryClient.fetchQuery({
+    queryKey: queryKeys.directories(scope.value, key),
+    queryFn: () =>
+      listDirectories(scope.value!.serverAddress, token.value!, key),
+    staleTime: 0,
+    meta: { persist: false },
+  });
   if (key) {
     loaded.value = new Set([...loaded.value, key]);
     childrenByPath.value = { ...childrenByPath.value, [key]: result.items };

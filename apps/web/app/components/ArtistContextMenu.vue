@@ -18,6 +18,7 @@ import {
   ContextMenuTrigger,
 } from "@peridot/ui/components/ui/context-menu";
 import { Input } from "@peridot/ui/components/ui/input";
+import { useQueryClient } from "@tanstack/vue-query";
 import {
   DialogContent,
   DialogDescription,
@@ -31,14 +32,19 @@ import { useCatalogRevision } from "../composables/use-catalog-query";
 import { useLikes } from "../composables/use-likes";
 import { useLibraryPlayer } from "../composables/use-library-player";
 import { useLocalizedMessage } from "../composables/use-localized-message";
+import { useOfflineTracks } from "../composables/use-offline-tracks";
+import { useQueryScope } from "../composables/use-query-scope";
 import { useServer } from "../composables/use-server";
+import { useServerConnection } from "../composables/use-server-connection";
 import { useSession } from "../composables/use-session";
-import { loadCollectionTrackIds } from "../lib/catalog-collections";
+import { loadCollectionTracks } from "../lib/catalog-collections";
 import { icons } from "../lib/icons";
-import { artistRoute } from "../lib/library";
+import { artistRoute, trackArtistNames } from "../lib/library";
+import { queryKeys } from "../lib/query-keys";
 import {
   applyArtistMetadata,
   isAuthenticationRedirectError,
+  isPeridotNetworkError,
   listArtistMetadataCandidates,
   revertArtistMetadata,
 } from "../lib/peridot-client";
@@ -46,6 +52,7 @@ import {
   notifyArtistMetadataMatched,
   notifyArtistMetadataReverted,
   notifyMetadataUpdateFailed,
+  notifyOfflineTrackFailed,
 } from "../lib/toasts";
 
 const props = defineProps<{
@@ -54,8 +61,13 @@ const props = defineProps<{
 const { t } = useI18n();
 const { errorMessage } = useLocalizedMessage();
 const { address } = useServer();
+const { scope } = useQueryScope();
+const queryClient = useQueryClient();
+const { status: serverStatus } = useServerConnection();
+const serverLost = computed(() => serverStatus.value === "lost");
 const { token } = useSession();
 const { playCollection } = useLibraryPlayer();
+const { tracksMatching } = useOfflineTracks();
 const { invalidate: invalidateCatalog } = useCatalogRevision();
 const {
   loaded: likesLoaded,
@@ -77,11 +89,35 @@ const target = computed<LikeTarget>(() => ({
 
 async function playArtist() {
   if (!address.value || !token.value) return;
-  playCollection(
-    await loadCollectionTrackIds(address.value, token.value, {
-      artistId: props.artist.id,
-    }),
-  );
+  const playSaved = async () => {
+    const localName = props.artist.localName.trim().toLowerCase();
+    const saved = await tracksMatching((track) =>
+      trackArtistNames(track).some(
+        (name) => name.trim().toLowerCase() === localName,
+      ),
+    );
+    if (saved.length) {
+      playCollection(saved);
+    } else {
+      notifyOfflineTrackFailed(
+        props.artist.name,
+        t("error.offlineCollectionEmpty"),
+      );
+    }
+  };
+  if (serverLost.value) {
+    await playSaved();
+    return;
+  }
+  try {
+    playCollection(
+      await loadCollectionTracks(address.value, token.value, {
+        artistId: props.artist.id,
+      }),
+    );
+  } catch (reason) {
+    if (isPeridotNetworkError(reason)) await playSaved();
+  }
 }
 
 async function openMetadataDialog() {
@@ -94,12 +130,26 @@ async function searchMetadata() {
   metadataLoading.value = true;
   metadataError.value = "";
   try {
-    const result = await listArtistMetadataCandidates(
-      address.value ?? "",
-      token.value ?? "",
-      props.artist.id,
-      metadataQuery.value || undefined,
-    );
+    if (!scope.value || !token.value) {
+      throw new Error("Peridot query scope is unavailable.");
+    }
+    const queryValue = metadataQuery.value || undefined;
+    const result = await queryClient.fetchQuery({
+      queryKey: queryKeys.artistMetadataCandidates(
+        scope.value,
+        props.artist.id,
+        queryValue,
+      ),
+      queryFn: () =>
+        listArtistMetadataCandidates(
+          scope.value!.serverAddress,
+          token.value!,
+          props.artist.id,
+          queryValue,
+        ),
+      staleTime: 0,
+      meta: { persist: false },
+    });
     candidates.value = result.items;
   } catch (reason) {
     candidates.value = [];
@@ -200,7 +250,7 @@ async function revertMetadata() {
           {{ t("context.openArtist", { artist: artist.name }) }}
         </NuxtLink>
       </ContextMenuItem>
-      <ContextMenuItem @select="openMetadataDialog">
+      <ContextMenuItem :disabled="serverLost" @select="openMetadataDialog">
         <Icon :icon="icons.edit" aria-hidden="true" />
         {{
           artist.metadata
@@ -226,7 +276,10 @@ async function revertMetadata() {
             {{ t("context.viewMetadataSource") }}
           </a>
         </ContextMenuItem>
-        <ContextMenuItem :disabled="revertingMetadata" @select="revertMetadata">
+        <ContextMenuItem
+          :disabled="revertingMetadata || serverLost"
+          @select="revertMetadata"
+        >
           <Icon :icon="icons.restart" aria-hidden="true" />
           {{
             revertingMetadata
@@ -307,7 +360,9 @@ async function revertMetadata() {
               type="button"
               variant="outline"
               size="sm"
-              :disabled="applyingMetadataId === candidate.externalArtistId"
+              :disabled="
+                serverLost || applyingMetadataId === candidate.externalArtistId
+              "
               @click="chooseMetadata(candidate)"
             >
               {{

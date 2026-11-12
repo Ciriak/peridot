@@ -191,8 +191,8 @@ test("shared track lists show cover artwork beside every title", async () => {
   );
   assert.match(
     table,
-    /<TrackArtwork :track="item\.data"[\s\S]*class="[^"]*absolute inset-0 size-full[^"]*bg-background\/70[^"]*hover:bg-background\/70[^"]*"[\s\S]*@click="playFromList\(item\.data\.id\)"[\s\S]*class="text-foreground"[\s\S]*<\/TrackArtwork>\s*<div class="min-w-0 flex-1">[\s\S]*\{\{ item\.data\.title \}\}/,
-    "The full-cover track control matches the Quick pick background and icon color",
+    /<TrackArtwork :track="item\.data"[\s\S]*class="[^"]*absolute inset-0 size-full cursor-pointer[^"]*bg-background\/70[^"]*hover:bg-background\/70[^"]*"[\s\S]*@click="playFromList\(item\.data\)"[\s\S]*class="text-foreground"[\s\S]*<\/TrackArtwork>\s*<div class="min-w-0 flex-1">[\s\S]*\{\{ item\.data\.title \}\}/,
+    "The full-cover track control uses a pointer cursor and matches the Quick pick colors",
   );
 });
 

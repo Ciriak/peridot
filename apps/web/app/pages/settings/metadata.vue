@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { computed, definePageMeta, onMounted, ref, useI18n } from "#imports";
+import {
+  computed,
+  definePageMeta,
+  onMounted,
+  ref,
+  useI18n,
+  watch,
+} from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import type {
   CreateMetadataProviderRequest,
@@ -35,7 +42,9 @@ import {
   TooltipTrigger,
 } from "reka-ui";
 import { useCatalogRevision } from "../../composables/use-catalog-query";
+import { useMetadataProvidersQuery } from "../../composables/use-admin-queries";
 import { useServer } from "../../composables/use-server";
+import { useServerConnection } from "../../composables/use-server-connection";
 import { useSession } from "../../composables/use-session";
 import { useTasks } from "../../composables/use-tasks";
 import { useUser } from "../../composables/use-user";
@@ -45,8 +54,6 @@ import { metadataProviderNeedsConfiguration } from "../../lib/metadata-provider-
 import {
   createMetadataProvider,
   isAuthenticationRedirectError,
-  listMetadataProviderDefinitions,
-  listMetadataProviders,
   reorderMetadataProviders,
   resetMetadata,
   updateMetadataProvider,
@@ -67,10 +74,13 @@ const { translate, errorMessage } = useLocalizedMessage();
 const { address } = useServer();
 const { token } = useSession();
 const { user } = useUser();
+const { status: serverStatus } = useServerConnection();
 const allowed = computed(() => user.value?.role === "admin");
+const serverLost = computed(() => serverStatus.value === "lost");
 const { hasActiveTasks, queueMetadataRefresh, tasks } = useTasks();
 const { invalidate: invalidateCatalog } = useCatalogRevision();
 
+const providersQuery = useMetadataProvidersQuery();
 const providers = ref<MetadataProviderResponse[]>([]);
 const definitions = ref<MetadataProviderDefinitionResponse[]>([]);
 const providerRows = ref<
@@ -80,7 +90,7 @@ const providerRows = ref<
   }>
 >([]);
 const providerList = ref<HTMLElement | null>(null);
-const loading = ref(true);
+const loading = providersQuery.loading;
 const pageError = ref("");
 const formOpen = ref(false);
 const selectedKind = ref<MetadataProviderKind | null>(null);
@@ -126,27 +136,23 @@ useSortable(providerList, providerRows, {
 });
 
 async function loadProviders() {
-  if (!allowed.value) {
-    loading.value = false;
-    return;
-  }
-  loading.value = true;
+  if (!allowed.value) return;
   pageError.value = "";
-  try {
-    const [providerResult, definitionResult] = await Promise.all([
-      listMetadataProviders(address.value ?? "", token.value ?? ""),
-      listMetadataProviderDefinitions(address.value ?? "", token.value ?? ""),
-    ]);
-    providers.value = providerResult.items;
-    definitions.value = definitionResult.items;
-    syncProviderRows();
-  } catch (reason) {
-    if (isAuthenticationRedirectError(reason)) return;
-    pageError.value = errorMessage(reason, "settings.metadata.loadError");
-  } finally {
-    loading.value = false;
-  }
+  await providersQuery.load(true);
 }
+
+watch(
+  [providersQuery.providers, providersQuery.definitions],
+  ([providerItems, definitionItems]) => {
+    providers.value = [...providerItems];
+    definitions.value = [...definitionItems];
+    syncProviderRows();
+  },
+  { immediate: true },
+);
+watch(providersQuery.error, (value) => {
+  if (value) pageError.value = value;
+});
 
 function resetForm() {
   selectedKind.value = null;
@@ -376,7 +382,7 @@ onMounted(() => void loadProviders());
           type="button"
           variant="outline"
           size="sm"
-          :disabled="!activeProviders.length || hasActiveTasks"
+          :disabled="!activeProviders.length || hasActiveTasks || serverLost"
           :aria-busy="hasActiveTasks"
           @click="refreshProviderMetadata"
         >
@@ -481,6 +487,7 @@ onMounted(() => void loadProviders());
                 type="button"
                 variant="ghost"
                 size="icon-sm"
+                :disabled="serverLost"
                 :aria-label="
                   t('settings.metadata.configure', {
                     provider: translate(row.definition.nameMessage),
@@ -527,7 +534,7 @@ onMounted(() => void loadProviders());
         type="button"
         variant="outline"
         class="shrink-0"
-        :disabled="hasActiveTasks"
+        :disabled="hasActiveTasks || serverLost"
         @click="requestReset"
       >
         <Icon :icon="icons.trash" aria-hidden="true" class="size-4" />
@@ -581,6 +588,7 @@ onMounted(() => void loadProviders());
             </div>
             <Switch
               v-model="formEnabled"
+              :disabled="serverLost"
               :aria-label="
                 t(
                   formEnabled
@@ -672,7 +680,7 @@ onMounted(() => void loadProviders());
           <Button
             v-if="selectedDefinition"
             type="button"
-            :disabled="saving || !formValid"
+            :disabled="saving || !formValid || serverLost"
             @click="saveProvider"
           >
             {{
@@ -707,7 +715,11 @@ onMounted(() => void loadProviders());
             }}</Button>
           </AlertDialogCancel>
           <AlertDialogAction as-child @click="confirmReset">
-            <Button type="button" variant="destructive" :disabled="resetting">
+            <Button
+              type="button"
+              variant="destructive"
+              :disabled="resetting || serverLost"
+            >
               <Icon :icon="icons.trash" aria-hidden="true" class="size-4" />
               {{
                 resetting

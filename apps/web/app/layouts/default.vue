@@ -289,13 +289,22 @@ onMounted(() => {
         class="pointer-events-none absolute inset-y-0 left-0 -z-10 w-2/3 overflow-hidden md:w-1/2"
       >
         <div class="absolute inset-0 opacity-40">
-          <img
-            v-if="currentCoverUrl && !coverFailed"
-            :key="currentCoverUrl"
-            :src="currentCoverUrl"
-            alt=""
-            class="absolute inset-0 size-full scale-125 object-cover object-left blur-3xl"
-          />
+          <Transition
+            enter-active-class="transition-opacity duration-3000 delay-150 ease-in-out motion-reduce:transition-none"
+            enter-from-class="opacity-0"
+            enter-to-class="opacity-100"
+            leave-active-class="transition-opacity duration-3000 delay-150 ease-in-out motion-reduce:transition-none"
+            leave-from-class="opacity-100"
+            leave-to-class="opacity-0"
+          >
+            <img
+              v-if="currentCoverUrl && !coverFailed"
+              :key="currentCoverUrl"
+              :src="currentCoverUrl"
+              alt=""
+              class="absolute inset-0 size-full scale-125 object-cover object-left blur-3xl"
+            />
+          </Transition>
         </div>
         <div
           aria-hidden="true"
@@ -466,7 +475,8 @@ onMounted(() => {
             :max="Math.max(durationSeconds, 1)"
             :step="1"
             :disabled="!active || durationSeconds <= 0"
-            class="min-h-11 flex-1"
+            :aria-busy="loading"
+            :class="['min-h-11 flex-1', loading && 'motion-safe:animate-pulse']"
             :thumb-label="t('player.position')"
             @update:model-value="seek($event?.[0] ?? 0)"
           /><span>{{ clock(durationSeconds) }}</span>

@@ -157,8 +157,8 @@ test("the sidebar renders cover-playback quick picks without library shortcuts",
   assert.match(tile, /group-hover\/quick-pick:opacity-100/);
   assert.match(tile, /group-focus-visible\/quick-pick:opacity-100/);
   assert.match(tile, /activeItem && playing \? icons\.pause : icons\.play/);
-  assert.match(tile, /play\(props\.item\.track\.id\)/);
-  assert.match(tile, /playCollection\(await albumTrackIds\(\)\)/);
+  assert.match(tile, /play\(props\.item\.track\)/);
+  assert.match(tile, /playCollection\(await albumTracks\(\)\)/);
   assert.match(tile, /togglePlayback\(\)/);
   assert.match(
     tile,

@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { computed, definePageMeta, onMounted, ref, useI18n } from "#imports";
+import {
+  computed,
+  definePageMeta,
+  onMounted,
+  ref,
+  useI18n,
+  watch,
+} from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import type {
   CreateSourceRequest,
@@ -32,7 +39,9 @@ import {
   DropdownMenuTrigger,
 } from "reka-ui";
 import { useServer } from "../../composables/use-server";
+import { useServerConnection } from "../../composables/use-server-connection";
 import { useSession } from "../../composables/use-session";
+import { useAdminSourcesQuery } from "../../composables/use-admin-queries";
 import { useTasks } from "../../composables/use-tasks";
 import { useUser } from "../../composables/use-user";
 import { useLocalizedMessage } from "../../composables/use-localized-message";
@@ -41,7 +50,6 @@ import {
   createSource,
   deleteSource,
   isAuthenticationRedirectError,
-  listSources,
   reorderSources,
 } from "../../lib/peridot-client";
 import { sourceFolderName } from "../../lib/source-label";
@@ -58,6 +66,7 @@ const { errorMessage } = useLocalizedMessage();
 const { address } = useServer();
 const { token } = useSession();
 const { user } = useUser();
+const { status: serverStatus } = useServerConnection();
 const {
   hasActiveTasks,
   queueLibraryScan,
@@ -66,10 +75,12 @@ const {
   track: trackTask,
 } = useTasks();
 const allowed = computed(() => user.value?.role === "admin");
+const serverLost = computed(() => serverStatus.value === "lost");
 
+const sourcesQuery = useAdminSourcesQuery();
 const sources = ref<SourceResponse[]>([]);
 const sourceList = ref<HTMLElement | null>(null);
-const loading = ref(true);
+const loading = sourcesQuery.loading;
 const pageError = ref("");
 const addOpen = ref(false);
 const newKind = ref<SourceKind | null>(null);
@@ -117,22 +128,21 @@ function sourceProgress(source: SourceResponse): number | null {
 }
 
 async function loadSources() {
-  if (!allowed.value) {
-    loading.value = false;
-    return;
-  }
-  loading.value = true;
+  if (!allowed.value) return;
   pageError.value = "";
-  try {
-    const result = await listSources(address.value ?? "", token.value ?? "");
-    sources.value = result.items;
-  } catch (reason) {
-    if (isAuthenticationRedirectError(reason)) return;
-    pageError.value = errorMessage(reason, "settings.sources.loadError");
-  } finally {
-    loading.value = false;
-  }
+  await sourcesQuery.load(true);
 }
+
+watch(
+  sourcesQuery.items,
+  (items) => {
+    sources.value = [...items];
+  },
+  { immediate: true },
+);
+watch(sourcesQuery.error, (value) => {
+  if (value) pageError.value = value;
+});
 
 function openAddDialog() {
   addError.value = "";
@@ -285,11 +295,22 @@ onMounted(() => void loadSources());
         {{ t("settings.sources.heading") }}
       </h3>
       <div class="flex items-center gap-2">
-        <Button type="button" variant="outline" size="sm" @click="rescanAll">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          :disabled="serverLost"
+          @click="rescanAll"
+        >
           <Icon :icon="icons.restart" aria-hidden="true" />
           {{ t("settings.sources.rescanAll") }}
         </Button>
-        <Button type="button" size="sm" @click="openAddDialog">
+        <Button
+          type="button"
+          size="sm"
+          :disabled="serverLost"
+          @click="openAddDialog"
+        >
           {{ t("settings.sources.add") }}
         </Button>
       </div>
@@ -376,7 +397,7 @@ onMounted(() => void loadSources());
                 class="z-50 w-44 rounded-lg border bg-popover p-1 text-popover-foreground shadow-lg"
               >
                 <DropdownMenuItem
-                  :disabled="source.kind !== 'path'"
+                  :disabled="source.kind !== 'path' || serverLost"
                   class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none data-disabled:cursor-default data-disabled:opacity-50"
                   @select="rescan(source)"
                 >
@@ -388,7 +409,7 @@ onMounted(() => void loadSources());
                   {{ t("settings.sources.rescan") }}
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  :disabled="hasActiveTasks"
+                  :disabled="hasActiveTasks || serverLost"
                   class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm text-destructive outline-none data-disabled:cursor-default data-disabled:opacity-50"
                   @select="askRemove(source)"
                 >
@@ -488,7 +509,7 @@ onMounted(() => void loadSources());
           <Button
             v-if="newKind"
             type="button"
-            :disabled="adding || !canAdd()"
+            :disabled="adding || !canAdd() || serverLost"
             @click="addSource"
           >
             {{ adding ? t("common.adding") : t("settings.sources.add") }}
@@ -517,9 +538,12 @@ onMounted(() => void loadSources());
             }}</Button>
           </AlertDialogCancel>
           <AlertDialogAction as-child @click="confirmRemove">
-            <Button type="button" variant="destructive">{{
-              t("common.remove")
-            }}</Button>
+            <Button
+              type="button"
+              variant="destructive"
+              :disabled="serverLost"
+              >{{ t("common.remove") }}</Button
+            >
           </AlertDialogAction>
         </div>
       </AlertDialogContent>

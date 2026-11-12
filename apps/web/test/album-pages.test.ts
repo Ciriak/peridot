@@ -47,7 +47,7 @@ test("albums have list and detail routes with derived groups", async () => {
   assert.match(albumCard, /decoding="async"/);
   assert.match(albumCard, /<Icon\s+v-else\s+:icon="icons\.music"/);
   assert.match(albumCard, /useLibraryPlayer\(\)/);
-  assert.match(albumCard, /loadCollectionTrackIds\(/);
+  assert.match(albumCard, /loadCollectionTracks\(/);
   assert.match(albumCard, /togglePlayback\(\)/);
   assert.match(
     albumCard,
@@ -81,7 +81,24 @@ test("albums have list and detail routes with derived groups", async () => {
     "The album detail cover does not use the shared card play control",
   );
   assert.match(listPage, /t\("page\.albums\.empty"\)/);
-  assert.match(detailPage, /listAlbums\(/);
+  assert.match(detailPage, /useCatalogAlbumQuery/);
+  assert.match(detailPage, /albumMatches/);
+  assert.match(
+    detailPage,
+    /const albumLoading = computed\(\s*\(\) =>\s*albumMatchesLoading\.value && !album\.value,?\s*\);/,
+    "Album detail loading is blocking only until cached matches resolve",
+  );
+  assert.match(detailPage, /function loadAlbum\(force = false\)/);
+  assert.match(
+    detailPage,
+    /onMounted\(\(\) => \{\s+loadAlbum\(\);/,
+    "Album detail mounts without forcing a background catalog refresh",
+  );
+  assert.doesNotMatch(
+    detailPage,
+    /albumLoading\.value = true/,
+    "Album detail does not override cached query loading state",
+  );
   assert.match(detailPage, /route\.query\.artist/);
   assert.match(detailPage, /playCollection\(/);
   assert.match(detailPage, /togglePlayback\(\)/);
@@ -122,12 +139,12 @@ test("albums have list and detail routes with derived groups", async () => {
   );
   assert.match(
     trackTable,
-    /@dblclick\.prevent="playFromList\(item\.data\.id\)"/,
+    /@dblclick\.prevent="playFromList\(item\.data\)"/,
     "Double-clicking a shared track row plays it in its list context",
   );
   assert.match(
     trackTable,
-    /class="group\/track-artwork flex h-14 min-w-full select-none items-center whitespace-nowrap border-b hover:bg-muted\/50"[\s\S]*@dblclick\.prevent="playFromList\(item\.data\.id\)"/,
+    /class="group\/track-artwork flex h-14 min-w-full select-none items-center whitespace-nowrap border-b hover:bg-muted\/50"[\s\S]*@dblclick\.prevent="playFromList\(item\.data\)"/,
     "The current track row does not add an active background effect",
   );
   assert.match(

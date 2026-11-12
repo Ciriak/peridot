@@ -12,24 +12,27 @@ import ArtistContextMenu from "../../components/ArtistContextMenu.vue";
 import LikeButton from "../../components/LikeButton.vue";
 import TrackTable from "../../components/TrackTable.vue";
 import {
-  useCatalogRevision,
+  useCatalogArtistQuery,
   useCatalogAlbumQuery,
   useCatalogTrackQuery,
 } from "../../composables/use-catalog-query";
 import { useLikes } from "../../composables/use-likes";
 import { useLibraryPlayer } from "../../composables/use-library-player";
+import { useOfflineTracks } from "../../composables/use-offline-tracks";
+import { useServerConnection } from "../../composables/use-server-connection";
 import { useServer } from "../../composables/use-server";
 import { useSession } from "../../composables/use-session";
-import { loadCollectionTrackIds } from "../../lib/catalog-collections";
+import { loadCollectionTracks } from "../../lib/catalog-collections";
 import { icons } from "../../lib/icons";
 import {
   artistLikeKey,
   formatTrackDuration,
+  trackArtistNames,
   type TrackSort,
 } from "../../lib/library";
 import {
   isAuthenticationRedirectError,
-  listArtists,
+  isPeridotNetworkError,
 } from "../../lib/peridot-client";
 
 definePageMeta({ name: "artist-detail" });
@@ -39,7 +42,8 @@ const { t } = useI18n();
 const { address } = useServer();
 const { token } = useSession();
 const { playCollection } = useLibraryPlayer();
-const { revision: catalogRevision } = useCatalogRevision();
+const { status: serverStatus } = useServerConnection();
+const { tracksMatching } = useOfflineTracks();
 const {
   likedArtistKeys,
   loaded: likesLoaded,
@@ -52,8 +56,20 @@ const artistName = computed(() => {
   return String(Array.isArray(value) ? (value[0] ?? "") : (value ?? ""));
 });
 const artist = ref<ArtistSummaryResponse | null>(null);
-const artistLoading = ref(true);
-const artistError = ref("");
+const offlinePlaybackError = ref("");
+const {
+  items: artistMatches,
+  loading: artistMatchesLoading,
+  error: artistMatchesError,
+  load: loadArtistMatches,
+} = useCatalogArtistQuery(() => ({
+  query: artistName.value,
+  limit: 20,
+}));
+const artistLoading = computed(
+  () => artistMatchesLoading.value && !artist.value,
+);
+const artistError = computed(() => artistMatchesError.value ?? "");
 const trackSort = ref<TrackSort>({ field: "number", direction: "asc" });
 const {
   items: albums,
@@ -87,50 +103,73 @@ useHead(() => ({
     : t("page.artist.fallbackTitle"),
 }));
 
-async function loadArtist() {
-  if (!address.value || !token.value) return;
-  artistLoading.value = true;
-  artistError.value = "";
-  try {
-    const page = await listArtists(address.value, token.value, {
-      query: artistName.value,
-      limit: 20,
-    });
-    artist.value =
-      page.items.find(
-        (candidate) =>
-          candidate.localName.toLowerCase() === artistName.value.toLowerCase(),
-      ) ?? null;
-    if (artist.value) {
-      await Promise.all([loadAlbums(true), loadTracks(true)]);
-    }
-  } catch (reason) {
-    if (isAuthenticationRedirectError(reason)) return;
-    artistError.value = t("page.artist.loadError");
-  } finally {
-    artistLoading.value = false;
-  }
+function loadArtist(force = false) {
+  void loadArtistMatches(force);
 }
 
 async function playWholeArtist() {
   if (!address.value || !token.value || !artist.value) return;
-  playCollection(
-    await loadCollectionTrackIds(address.value, token.value, {
-      artistId: artist.value.id,
-    }),
-  );
+  offlinePlaybackError.value = "";
+  const playSavedTracks = async () => {
+    const localName = artist.value?.localName.trim().toLowerCase();
+    const saved = await tracksMatching((track) =>
+      trackArtistNames(track).some(
+        (name) => name.trim().toLowerCase() === localName,
+      ),
+    );
+    if (!saved.length) {
+      offlinePlaybackError.value = t("error.offlineCollectionEmpty");
+      return;
+    }
+    playCollection(saved);
+  };
+  if (serverStatus.value === "lost") {
+    await playSavedTracks();
+    return;
+  }
+  try {
+    playCollection(
+      await loadCollectionTracks(address.value, token.value, {
+        artistId: artist.value.id,
+      }),
+    );
+  } catch (reason) {
+    if (isPeridotNetworkError(reason)) {
+      await playSavedTracks();
+      return;
+    }
+    if (!isAuthenticationRedirectError(reason)) {
+      offlinePlaybackError.value = t("page.artist.loadError");
+    }
+  }
 }
 
 function setTrackSort(next: TrackSort | null) {
   trackSort.value = next ?? { field: "number", direction: "asc" };
 }
 
-watch([artistName, address, token, catalogRevision], () => {
+watch([artistName, address, token], () => {
   artist.value = null;
-  void loadArtist();
+  loadArtist();
 });
+watch(
+  artistMatches,
+  (matches) => {
+    const nextArtist =
+      matches.find(
+        (candidate) =>
+          candidate.localName.toLowerCase() === artistName.value.toLowerCase(),
+      ) ?? null;
+    const changed = nextArtist?.id !== artist.value?.id;
+    artist.value = nextArtist;
+    if (nextArtist && changed) {
+      void Promise.all([loadAlbums(), loadTracks()]);
+    }
+  },
+  { immediate: true },
+);
 onMounted(() => {
-  void loadArtist();
+  loadArtist();
   void loadLikes();
 });
 </script>
@@ -155,16 +194,23 @@ onMounted(() => {
     {{ t("page.artist.loading") }}…
   </div>
   <div
-    v-else-if="artistError || albumsError || tracksError"
+    v-else-if="artistError"
     role="alert"
     class="space-y-3 rounded-lg border p-6 text-sm"
   >
-    <p>{{ artistError || albumsError || tracksError }}</p>
-    <Button variant="outline" @click="loadArtist">{{
+    <p>{{ artistError }}</p>
+    <Button variant="outline" @click="loadArtist(true)">{{
       t("common.tryAgain")
     }}</Button>
   </div>
   <template v-else-if="artist">
+    <p
+      v-if="offlinePlaybackError"
+      role="alert"
+      class="mb-4 text-sm text-destructive"
+    >
+      {{ offlinePlaybackError }}
+    </p>
     <ArtistContextMenu :artist="artist">
       <section
         aria-labelledby="artist-heading"
@@ -230,8 +276,18 @@ onMounted(() => {
       </section>
     </ArtistContextMenu>
 
+    <div
+      v-if="albumsError"
+      role="alert"
+      class="space-y-3 rounded-lg border p-6 text-sm"
+    >
+      <p>{{ albumsError }}</p>
+      <Button variant="outline" @click="loadAlbums(true)">{{
+        t("common.tryAgain")
+      }}</Button>
+    </div>
     <section
-      v-if="albums.length"
+      v-else-if="albums.length"
       aria-labelledby="artist-albums-heading"
       class="space-y-4"
     >
@@ -286,7 +342,17 @@ onMounted(() => {
         </Badge>
       </div>
       <div
-        v-if="tracksLoading && !tracks.length"
+        v-if="tracksError"
+        role="alert"
+        class="space-y-3 rounded-lg border p-6 text-sm"
+      >
+        <p>{{ tracksError }}</p>
+        <Button variant="outline" @click="loadTracks(true)">{{
+          t("common.tryAgain")
+        }}</Button>
+      </div>
+      <div
+        v-else-if="tracksLoading && !tracks.length"
         role="status"
         class="flex items-center gap-2 text-sm text-muted-foreground"
       >

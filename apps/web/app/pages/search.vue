@@ -5,6 +5,7 @@ import type { AlbumSummaryResponse } from "@peridot/contracts";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
+import { useQuery } from "@tanstack/vue-query";
 import { watchDebounced } from "@vueuse/core";
 import { computed, onMounted, ref, watch } from "vue";
 import AlbumCard from "../components/AlbumCard.vue";
@@ -15,10 +16,12 @@ import {
 } from "../composables/use-catalog-query";
 import { useLikes } from "../composables/use-likes";
 import { useSearchRecents } from "../composables/use-search-recents";
+import { useQueryScope } from "../composables/use-query-scope";
 import { useServer } from "../composables/use-server";
 import { useSession } from "../composables/use-session";
 import { icons } from "../lib/icons";
 import { listAlbums } from "../lib/peridot-client";
+import { queryKeys } from "../lib/query-keys";
 import type { TrackSort } from "../lib/library";
 
 const { t } = useI18n();
@@ -32,9 +35,42 @@ const resultFilter = ref<ResultFilter>("all");
 const trackSort = ref<TrackSort>({ field: "title", direction: "asc" });
 const { address } = useServer();
 const { token } = useSession();
+const { scope } = useQueryScope();
 const { load: loadLikes } = useLikes();
 const { recents, remember } = useSearchRecents();
-const recentAlbums = ref<AlbumSummaryResponse[]>([]);
+const recentAlbumsQuery = useQuery({
+  queryKey: computed(() =>
+    scope.value
+      ? queryKeys.albums(scope.value, {
+          query: `__peridot_recent_albums__:${recents.value
+            .map((album) => `${album.artist}\u0000${album.title}`)
+            .join("|")}`,
+        })
+      : ["peridot", "unscoped", "recent-albums"],
+  ),
+  queryFn: async () => {
+    if (!address.value || !token.value) return [];
+    const items: AlbumSummaryResponse[] = [];
+    for (const recent of recents.value) {
+      const page = await listAlbums(address.value, token.value, {
+        query: `${recent.title} ${recent.artist}`,
+        limit: 20,
+      });
+      const match = page.items.find(
+        (album) =>
+          album.title.toLowerCase() === recent.title.toLowerCase() &&
+          album.artist.toLowerCase() === recent.artist.toLowerCase(),
+      );
+      if (match) items.push(match);
+    }
+    return items;
+  },
+  enabled: computed(() =>
+    Boolean(address.value && token.value && recents.value.length),
+  ),
+  meta: { persist: true },
+});
+const recentAlbums = computed(() => recentAlbumsQuery.data.value ?? []);
 
 watchDebounced(
   query,
@@ -90,40 +126,14 @@ function setTrackSort(next: TrackSort | null) {
   trackSort.value = next ?? { field: "title", direction: "asc" };
 }
 
-async function loadRecentAlbums() {
-  if (!address.value || !token.value || !recents.value.length) {
-    recentAlbums.value = [];
-    return;
-  }
-  const items: AlbumSummaryResponse[] = [];
-  for (const recent of recents.value) {
-    const page = await listAlbums(address.value, token.value, {
-      query: `${recent.title} ${recent.artist}`,
-      limit: 20,
-    });
-    const match = page.items.find(
-      (album) =>
-        album.title.toLowerCase() === recent.title.toLowerCase() &&
-        album.artist.toLowerCase() === recent.artist.toLowerCase(),
-    );
-    if (match) items.push(match);
-  }
-  recentAlbums.value = items;
-}
-
 watch(searching, (active) => {
   if (!active) resultFilter.value = "all";
 });
-watch([recents, address, token], () => void loadRecentAlbums(), {
-  deep: true,
-});
-
 onMounted(() => {
   debouncedQuery.value = query.value.trim();
   void loadAlbums();
   void loadTracks();
   void loadLikes();
-  void loadRecentAlbums();
 });
 </script>
 

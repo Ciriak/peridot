@@ -20,6 +20,7 @@ import {
   ContextMenuTrigger,
 } from "@peridot/ui/components/ui/context-menu";
 import { Input } from "@peridot/ui/components/ui/input";
+import { useQueryClient } from "@tanstack/vue-query";
 import {
   DialogContent,
   DialogDescription,
@@ -33,10 +34,13 @@ import { useLikes } from "../composables/use-likes";
 import { useLibraryPlayer } from "../composables/use-library-player";
 import { useCatalogRevision } from "../composables/use-catalog-query";
 import { useLocalizedMessage } from "../composables/use-localized-message";
+import { useQueryScope } from "../composables/use-query-scope";
 import { useServer } from "../composables/use-server";
+import { useServerConnection } from "../composables/use-server-connection";
 import { useSession } from "../composables/use-session";
 import { icons } from "../lib/icons";
 import { artistRoute, trackAlbumRoute, trackArtistNames } from "../lib/library";
+import { queryKeys } from "../lib/query-keys";
 import {
   applyTrackMetadata,
   isAuthenticationRedirectError,
@@ -57,6 +61,10 @@ const { translate, errorMessage } = useLocalizedMessage();
 const { addToQueue, downloadTrack, queueLoaded } = useLibraryPlayer();
 const { invalidate: invalidateCatalog } = useCatalogRevision();
 const { address } = useServer();
+const { scope } = useQueryScope();
+const queryClient = useQueryClient();
+const { status: serverStatus } = useServerConnection();
+const serverLost = computed(() => serverStatus.value === "lost");
 const { token } = useSession();
 const {
   likedTrackIds,
@@ -110,12 +118,26 @@ async function searchMetadata() {
   metadataLoading.value = true;
   metadataError.value = "";
   try {
-    const result = await listMetadataCandidates(
-      address.value ?? "",
-      token.value ?? "",
-      props.track.id,
-      metadataQuery.value || undefined,
-    );
+    if (!scope.value || !token.value) {
+      throw new Error("Peridot query scope is unavailable.");
+    }
+    const queryValue = metadataQuery.value || undefined;
+    const result = await queryClient.fetchQuery({
+      queryKey: queryKeys.metadataCandidates(
+        scope.value,
+        props.track.id,
+        queryValue,
+      ),
+      queryFn: () =>
+        listMetadataCandidates(
+          scope.value!.serverAddress,
+          token.value!,
+          props.track.id,
+          queryValue,
+        ),
+      staleTime: 0,
+      meta: { persist: false },
+    });
     candidates.value = result.items;
   } catch (reason) {
     candidates.value = [];
@@ -225,7 +247,7 @@ async function revertMetadata() {
             : t("context.like")
         }}
       </ContextMenuItem>
-      <ContextMenuItem :disabled="downloading" @select="download">
+      <ContextMenuItem :disabled="downloading || serverLost" @select="download">
         <Icon :icon="icons.download" aria-hidden="true" />
         {{ downloading ? t("common.downloading") : t("common.download") }}
       </ContextMenuItem>
@@ -290,7 +312,7 @@ async function revertMetadata() {
           {{ t("context.viewMetadataSource") }}
         </a>
       </ContextMenuItem>
-      <ContextMenuItem @select="openMetadataDialog">
+      <ContextMenuItem :disabled="serverLost" @select="openMetadataDialog">
         <Icon :icon="icons.search" aria-hidden="true" />
         {{
           track.metadata
@@ -300,7 +322,7 @@ async function revertMetadata() {
       </ContextMenuItem>
       <ContextMenuItem
         v-if="track.metadata"
-        :disabled="revertingMetadata"
+        :disabled="revertingMetadata || serverLost"
         @select="revertMetadata"
       >
         <Icon :icon="icons.restart" aria-hidden="true" />
@@ -384,7 +406,9 @@ async function revertMetadata() {
               type="button"
               variant="outline"
               size="sm"
-              :disabled="applyingMetadataId === candidate.externalTrackId"
+              :disabled="
+                serverLost || applyingMetadataId === candidate.externalTrackId
+              "
               @click="chooseMetadata(candidate)"
             >
               {{

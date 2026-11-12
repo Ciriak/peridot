@@ -4,7 +4,13 @@ import type {
   ArtistSummaryResponse,
   TrackResponse,
 } from "@peridot/contracts";
-import { computed, ref, shallowRef, watch } from "vue";
+import {
+  useInfiniteQuery,
+  useQueryClient,
+  type InfiniteData,
+  type QueryKey,
+} from "@tanstack/vue-query";
+import { computed } from "vue";
 import {
   isAuthenticationRedirectError,
   listAlbums,
@@ -13,24 +19,42 @@ import {
   type CardListOptions,
   type TrackListOptions,
 } from "../lib/peridot-client";
-import { useServer } from "./use-server";
-import { useSession } from "./use-session";
+import {
+  PERIDOT_QUERY_ROOT,
+  peridotScopeKey,
+  queryKeys,
+  type PeridotQueryScope,
+} from "../lib/query-keys";
+import {
+  blockingQueryLoading,
+  visibleQueryError,
+} from "../lib/query-view-state";
 import { useLocalizedMessage } from "./use-localized-message";
+import { useQueryScope } from "./use-query-scope";
+import { useSession } from "./use-session";
 
 export function useCatalogRevision() {
   const revision = useState("catalog-revision", () => 0);
   const resyncVersion = useState("catalog-resync-version", () => 0);
+  const queryClient = useQueryClient();
+  const { scope } = useQueryScope();
+
+  function invalidate() {
+    revision.value += 1;
+    if (!scope.value) return;
+    void queryClient.invalidateQueries({
+      queryKey: [...peridotScopeKey(scope.value), "catalog"],
+    });
+  }
 
   function applyRevision(value: number) {
     revision.value = Math.max(revision.value, value);
+    invalidate();
   }
 
   function requestResync() {
     resyncVersion.value += 1;
-  }
-
-  function invalidate() {
-    revision.value += 1;
+    invalidate();
   }
 
   function reset() {
@@ -48,244 +72,96 @@ export function useCatalogRevision() {
   };
 }
 
-function stableOptions(options: object): string {
-  return JSON.stringify(options);
-}
-
-export function useCatalogTrackQuery(
-  options: () => TrackListOptions = () => ({}),
+function catalogErrorMessage(
+  reason: unknown,
+  errorMessage: (reason: unknown, fallbackKey: string) => string | null,
 ) {
-  const { address } = useServer();
-  const { token } = useSession();
-  const { errorMessage } = useLocalizedMessage();
-  const catalogError = (reason: unknown) =>
-    isAuthenticationRedirectError(reason)
-      ? null
-      : errorMessage(reason, "error.catalogLoad");
-  const { revision, resyncVersion, applyRevision } = useCatalogRevision();
-  const tracks = ref<TrackResponse[]>([]);
-  const loading = ref(false);
-  const loadingMore = ref(false);
-  const loaded = ref(false);
-  const error = ref<string | null>(null);
-  const nextCursor = ref<string | null>(null);
-  const hasMore = computed(() => Boolean(nextCursor.value));
-  let requestVersion = 0;
-
-  function scope(): string {
-    return `${address.value ?? ""}\u0000${token.value ?? ""}`;
-  }
-
-  async function load(force = false) {
-    if (!import.meta.client || loading.value) return;
-    const serverAddress = address.value;
-    const sessionToken = token.value;
-    if (!serverAddress || !sessionToken) {
-      tracks.value = [];
-      loaded.value = false;
-      nextCursor.value = null;
-      return;
-    }
-    if (!force && loaded.value) return;
-    const requestedScope = scope();
-    const request = ++requestVersion;
-    loading.value = true;
-    error.value = null;
-    try {
-      const result = await listTracks(serverAddress, sessionToken, options());
-      if (request !== requestVersion || requestedScope !== scope()) return;
-      if (result.catalogRevision < revision.value) return;
-      applyRevision(result.catalogRevision);
-      tracks.value = result.items;
-      nextCursor.value = result.nextCursor;
-      loaded.value = true;
-    } catch (reason) {
-      if (request !== requestVersion || requestedScope !== scope()) return;
-      error.value = catalogError(reason);
-    } finally {
-      if (request === requestVersion) loading.value = false;
-    }
-  }
-
-  async function loadMore() {
-    if (
-      !import.meta.client ||
-      loading.value ||
-      loadingMore.value ||
-      !nextCursor.value ||
-      !address.value ||
-      !token.value
-    ) {
-      return;
-    }
-    const requestedScope = scope();
-    const request = ++requestVersion;
-    loadingMore.value = true;
-    error.value = null;
-    try {
-      const result = await listTracks(address.value, token.value, {
-        ...options(),
-        cursor: nextCursor.value,
-      });
-      if (request !== requestVersion || requestedScope !== scope()) return;
-      if (result.catalogRevision < revision.value) return;
-      applyRevision(result.catalogRevision);
-      const existing = new Set(tracks.value.map((track) => track.id));
-      tracks.value = [
-        ...tracks.value,
-        ...result.items.filter((track) => !existing.has(track.id)),
-      ];
-      nextCursor.value = result.nextCursor;
-      loaded.value = true;
-    } catch (reason) {
-      if (request !== requestVersion || requestedScope !== scope()) return;
-      error.value = catalogError(reason);
-    } finally {
-      if (request === requestVersion) loadingMore.value = false;
-    }
-  }
-
-  const optionKey = computed(() => stableOptions(options()));
-  watch([address, token, optionKey], () => {
-    requestVersion += 1;
-    tracks.value = [];
-    loaded.value = false;
-    nextCursor.value = null;
-    loading.value = false;
-    if (import.meta.client) void load(true);
-  });
-  watch([revision, resyncVersion], () => {
-    if (import.meta.client && loaded.value) void load(true);
-  });
-
-  return {
-    tracks,
-    loading,
-    loadingMore,
-    loaded,
-    error,
-    nextCursor,
-    hasMore,
-    load,
-    loadMore,
-    reload: () => load(true),
-  };
+  return isAuthenticationRedirectError(reason)
+    ? null
+    : errorMessage(reason, "error.catalogLoad");
 }
 
-function useCatalogCardQuery<T>(
-  fetcher: (
-    address: string,
+function useCatalogInfiniteQuery<T>(options: {
+  queryKey: () => QueryKey;
+  fetchPage: (
+    cursor: string | null,
+    scope: PeridotQueryScope,
     token: string,
-    options: CardListOptions,
   ) => Promise<{
     items: T[];
     nextCursor: string | null;
     catalogRevision: number;
-  }>,
-  options: () => CardListOptions,
-  itemKey: (item: T) => string,
-) {
-  const { address } = useServer();
+  }>;
+  itemKey: (item: T) => string;
+}) {
+  const { scope } = useQueryScope();
   const { token } = useSession();
   const { errorMessage } = useLocalizedMessage();
-  const catalogError = (reason: unknown) =>
-    isAuthenticationRedirectError(reason)
-      ? null
-      : errorMessage(reason, "error.catalogLoad");
-  const { revision, resyncVersion, applyRevision } = useCatalogRevision();
-  const items = shallowRef<T[]>([]);
-  const loading = ref(false);
-  const loadingMore = ref(false);
-  const loaded = ref(false);
-  const error = ref<string | null>(null);
-  const nextCursor = ref<string | null>(null);
-  const hasMore = computed(() => Boolean(nextCursor.value));
-  let requestVersion = 0;
+  const query = useInfiniteQuery<
+    {
+      items: T[];
+      nextCursor: string | null;
+      catalogRevision: number;
+    },
+    Error,
+    InfiniteData<
+      { items: T[]; nextCursor: string | null; catalogRevision: number },
+      string | null
+    >,
+    QueryKey,
+    string | null
+  >({
+    queryKey: computed(() => options.queryKey()),
+    queryFn: ({ pageParam }) => {
+      if (!scope.value || !token.value) {
+        throw new Error("Peridot query scope is unavailable.");
+      }
+      return options.fetchPage(pageParam, scope.value, token.value);
+    },
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    enabled: computed(() => Boolean(scope.value && token.value)),
+    meta: { persist: true },
+  });
 
-  function scope(): string {
-    return `${address.value ?? ""}\u0000${token.value ?? ""}`;
-  }
+  const items = computed(() => {
+    const seen = new Set<string>();
+    return (query.data.value?.pages ?? []).flatMap((page) =>
+      page.items.filter((item) => {
+        const key = options.itemKey(item);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }),
+    );
+  });
+  const loaded = computed(() => query.data.value !== undefined);
+  const loading = computed(() =>
+    blockingQueryLoading(loaded.value, query.isPending.value),
+  );
+  const loadingMore = computed(() => query.isFetchingNextPage.value);
+  const error = computed(() =>
+    visibleQueryError(
+      loaded.value,
+      query.error.value
+        ? catalogErrorMessage(query.error.value, errorMessage)
+        : null,
+    ),
+  );
+  const nextCursor = computed(
+    () => query.data.value?.pages.at(-1)?.nextCursor ?? null,
+  );
+  const hasMore = computed(() => query.hasNextPage.value);
 
   async function load(force = false) {
-    if (!import.meta.client || loading.value) return;
-    const serverAddress = address.value;
-    const sessionToken = token.value;
-    if (!serverAddress || !sessionToken) {
-      items.value = [];
-      loaded.value = false;
-      nextCursor.value = null;
-      return;
-    }
-    if (!force && loaded.value) return;
-    const requestedScope = scope();
-    const request = ++requestVersion;
-    loading.value = true;
-    error.value = null;
-    try {
-      const result = await fetcher(serverAddress, sessionToken, options());
-      if (request !== requestVersion || requestedScope !== scope()) return;
-      if (result.catalogRevision < revision.value) return;
-      applyRevision(result.catalogRevision);
-      items.value = result.items;
-      nextCursor.value = result.nextCursor;
-      loaded.value = true;
-    } catch (reason) {
-      if (request !== requestVersion || requestedScope !== scope()) return;
-      error.value = catalogError(reason);
-    } finally {
-      if (request === requestVersion) loading.value = false;
-    }
+    if (!scope.value || !token.value) return;
+    if (force || !query.data.value) await query.refetch();
   }
 
   async function loadMore() {
-    if (
-      !import.meta.client ||
-      loading.value ||
-      loadingMore.value ||
-      !nextCursor.value ||
-      !address.value ||
-      !token.value
-    ) {
-      return;
-    }
-    const requestedScope = scope();
-    const request = ++requestVersion;
-    loadingMore.value = true;
-    error.value = null;
-    try {
-      const result = await fetcher(address.value, token.value, {
-        ...options(),
-        cursor: nextCursor.value,
-      });
-      if (request !== requestVersion || requestedScope !== scope()) return;
-      if (result.catalogRevision < revision.value) return;
-      applyRevision(result.catalogRevision);
-      const existing = new Set(items.value.map(itemKey));
-      items.value = [
-        ...items.value,
-        ...result.items.filter((item) => !existing.has(itemKey(item))),
-      ];
-      nextCursor.value = result.nextCursor;
-    } catch (reason) {
-      if (request !== requestVersion || requestedScope !== scope()) return;
-      error.value = catalogError(reason);
-    } finally {
-      if (request === requestVersion) loadingMore.value = false;
-    }
+    if (!query.hasNextPage.value || query.isFetchingNextPage.value) return;
+    await query.fetchNextPage();
   }
-
-  const optionKey = computed(() => stableOptions(options()));
-  watch([address, token, optionKey], () => {
-    requestVersion += 1;
-    items.value = [];
-    loaded.value = false;
-    nextCursor.value = null;
-    loading.value = false;
-    if (import.meta.client) void load(true);
-  });
-  watch([revision, resyncVersion], () => {
-    if (import.meta.client && loaded.value) void load(true);
-  });
 
   return {
     items,
@@ -301,22 +177,84 @@ function useCatalogCardQuery<T>(
   };
 }
 
+export function useCatalogTrackQuery(
+  options: () => TrackListOptions = () => ({}),
+) {
+  const { scope } = useQueryScope();
+  const optionKey = computed(() => options());
+  const query = useCatalogInfiniteQuery<TrackResponse>({
+    queryKey: () => {
+      const scopeValue = scope.value;
+      return scopeValue
+        ? queryKeys.tracks(scopeValue, optionKey.value)
+        : [
+            PERIDOT_QUERY_ROOT,
+            "unscoped",
+            "catalog",
+            "tracks",
+            optionKey.value,
+          ];
+    },
+    fetchPage: (cursor, scopeValue, token) =>
+      listTracks(scopeValue.serverAddress, token, {
+        ...optionKey.value,
+        ...(cursor ? { cursor } : {}),
+      }),
+    itemKey: (track) => track.id,
+  });
+  return { ...query, tracks: query.items };
+}
+
+function useCatalogCardQuery<T extends { id: string }>(config: {
+  queryKey: (
+    scope: PeridotQueryScope,
+    listOptions: CardListOptions,
+  ) => QueryKey;
+  fetchPage: (
+    address: string,
+    token: string,
+    listOptions: CardListOptions,
+  ) => Promise<{
+    items: T[];
+    nextCursor: string | null;
+    catalogRevision: number;
+  }>;
+  options: () => CardListOptions;
+}) {
+  const { scope } = useQueryScope();
+  const optionKey = computed(() => config.options());
+  return useCatalogInfiniteQuery<T>({
+    queryKey: () => {
+      const scopeValue = scope.value;
+      return scopeValue
+        ? config.queryKey(scopeValue, optionKey.value)
+        : [PERIDOT_QUERY_ROOT, "unscoped", "catalog", optionKey.value];
+    },
+    fetchPage: (cursor, scopeValue, token) =>
+      config.fetchPage(scopeValue.serverAddress, token, {
+        ...optionKey.value,
+        ...(cursor ? { cursor } : {}),
+      }),
+    itemKey: (item) => item.id,
+  });
+}
+
 export function useCatalogAlbumQuery(
   options: () => CardListOptions = () => ({}),
 ) {
-  return useCatalogCardQuery<AlbumSummaryResponse>(
-    listAlbums,
+  return useCatalogCardQuery<AlbumSummaryResponse>({
+    queryKey: queryKeys.albums,
+    fetchPage: listAlbums,
     options,
-    (album) => album.id,
-  );
+  });
 }
 
 export function useCatalogArtistQuery(
   options: () => CardListOptions = () => ({}),
 ) {
-  return useCatalogCardQuery<ArtistSummaryResponse>(
-    listArtists,
+  return useCatalogCardQuery<ArtistSummaryResponse>({
+    queryKey: queryKeys.artists,
+    fetchPage: listArtists,
     options,
-    (artist) => artist.id,
-  );
+  });
 }

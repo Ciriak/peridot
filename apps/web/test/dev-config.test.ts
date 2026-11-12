@@ -3,10 +3,10 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 test("Nuxt pre-bundles dependencies discovered by the first onboarding render", async () => {
-  const source = await readFile(
-    new URL("../nuxt.config.ts", import.meta.url),
-    "utf8",
-  );
+  const [source, packageSource] = await Promise.all([
+    readFile(new URL("../nuxt.config.ts", import.meta.url), "utf8"),
+    readFile(new URL("../package.json", import.meta.url), "utf8"),
+  ]);
   for (const dependency of [
     "@iconify/vue/offline",
     "@iconify-icons/basil/caret-down-outline",
@@ -34,4 +34,13 @@ test("Nuxt pre-bundles dependencies discovered by the first onboarding render", 
     assert.match(source, new RegExp(dependency.replace("/", "\\/")));
   }
   assert.match(source, /optimizeDeps: \{ include: optimizedDependencies \}/);
+
+  const packageJson = JSON.parse(packageSource) as {
+    devDependencies?: Record<string, string>;
+  };
+  assert.equal(
+    packageJson.devDependencies?.["@lucide/vue"],
+    "^1.71.0",
+    "@lucide/vue must resolve from the web workspace for Vite optimization",
+  );
 });

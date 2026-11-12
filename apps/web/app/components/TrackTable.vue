@@ -11,8 +11,14 @@ import TrackArtistLinks from "./TrackArtistLinks.vue";
 import TrackContextMenu from "./TrackContextMenu.vue";
 import { useLikes } from "../composables/use-likes";
 import { useLibraryPlayer } from "../composables/use-library-player";
+import { useOfflineTracks } from "../composables/use-offline-tracks";
 import { useServer } from "../composables/use-server";
 import { icons } from "../lib/icons";
+import {
+  notifyOfflineTrackFailed,
+  notifyTrackOfflineCopyRemoved,
+  notifyTrackSavedOffline,
+} from "../lib/toasts";
 import {
   defaultTrackSort,
   formatTrackDuration,
@@ -48,6 +54,14 @@ const {
   toggle: toggleLike,
   isPending: isLikePending,
 } = useLikes();
+const {
+  canSave: canSaveOffline,
+  error: offlineError,
+  isSaved: isSavedOffline,
+  isPending: isOfflinePending,
+  save: saveOffline,
+  remove: removeOffline,
+} = useOfflineTracks();
 
 const activeSort = computed(
   () => props.sort ?? defaultTrackSort(props.variant),
@@ -125,15 +139,35 @@ function loadMoreRows() {
   emit("load-more");
 }
 
-function playFromList(trackId: string, restart = false) {
-  if (!restart && currentTrackId.value === trackId) {
-    play(trackId);
+function playFromList(track: TrackResponse, restart = false) {
+  if (!restart && currentTrackId.value === track.id) {
+    play(track);
     return;
   }
-  playCollection(
-    props.tracks.map((track) => track.id),
-    trackId,
-  );
+  playCollection(props.tracks, track.id);
+}
+
+async function toggleOffline(track: TrackResponse) {
+  if (isOfflinePending(track.id)) return;
+  if (isSavedOffline(track.id)) {
+    if (await removeOffline(track.id)) {
+      notifyTrackOfflineCopyRemoved(track.title);
+    } else {
+      notifyOfflineTrackFailed(
+        track.title,
+        offlineError.value ?? t("error.apiUnavailable"),
+      );
+    }
+    return;
+  }
+  if (await saveOffline(track)) {
+    notifyTrackSavedOffline(track.title);
+  } else {
+    notifyOfflineTrackFailed(
+      track.title,
+      offlineError.value ?? t("error.apiUnavailable"),
+    );
+  }
 }
 
 watch(
@@ -263,6 +297,12 @@ watch(
           role="columnheader"
           class="w-14 shrink-0 p-3 text-right font-medium"
         >
+          <span class="sr-only">{{ t("trackTable.offline") }}</span>
+        </div>
+        <div
+          role="columnheader"
+          class="w-14 shrink-0 p-3 text-right font-medium"
+        >
           <span class="sr-only">{{ t("trackTable.favorite") }}</span>
         </div>
       </div>
@@ -273,7 +313,7 @@ watch(
         v-for="item in visibleRows"
         :key="item.data.id"
         :track="item.data"
-        @play="playFromList(item.data.id, true)"
+        @play="playFromList(item.data, true)"
       >
         <div
           role="row"
@@ -282,7 +322,7 @@ watch(
           :class="{
             'border-0': item.index === tracks.length - 1,
           }"
-          @dblclick.prevent="playFromList(item.data.id)"
+          @dblclick.prevent="playFromList(item.data)"
         >
           <div
             v-if="variant !== 'library'"
@@ -296,13 +336,13 @@ watch(
               <Button
                 variant="ghost"
                 size="icon-sm"
-                class="absolute inset-0 size-full rounded-md bg-background/70 opacity-0 transition-opacity hover:bg-background/70 hover:text-foreground dark:hover:bg-background/70 group-hover/track-artwork:opacity-100 group-focus-within/track-artwork:opacity-100"
+                class="absolute inset-0 size-full cursor-pointer rounded-md bg-background/70 opacity-0 transition-opacity hover:bg-background/70 hover:text-foreground dark:hover:bg-background/70 group-hover/track-artwork:opacity-100 group-focus-within/track-artwork:opacity-100"
                 :aria-label="
                   isPlaying(item.data)
                     ? t('trackTable.pause', { title: item.data.title })
                     : t('trackTable.play', { title: item.data.title })
                 "
-                @click="playFromList(item.data.id)"
+                @click="playFromList(item.data)"
                 @dblclick.stop
               >
                 <Icon
@@ -354,6 +394,45 @@ watch(
             class="w-20 shrink-0 p-3 text-right tabular-nums text-muted-foreground"
           >
             {{ formatTrackDuration(item.data.durationMs) }}
+          </div>
+          <div role="cell" class="w-14 shrink-0 p-2 text-right">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              :disabled="
+                isOfflinePending(item.data.id) ||
+                (!isSavedOffline(item.data.id) && !canSaveOffline)
+              "
+              :aria-busy="isOfflinePending(item.data.id)"
+              :aria-label="
+                isSavedOffline(item.data.id)
+                  ? t('trackTable.removeOffline', { title: item.data.title })
+                  : t('trackTable.saveOffline', { title: item.data.title })
+              "
+              :title="
+                isSavedOffline(item.data.id)
+                  ? t('trackTable.removeOffline', { title: item.data.title })
+                  : t('trackTable.saveOffline', { title: item.data.title })
+              "
+              :aria-pressed="isSavedOffline(item.data.id)"
+              @click="toggleOffline(item.data)"
+              @dblclick.stop
+            >
+              <Icon
+                :icon="
+                  isSavedOffline(item.data.id)
+                    ? icons.cloudCheck
+                    : icons.cloudDownload
+                "
+                aria-hidden="true"
+                :class="
+                  isSavedOffline(item.data.id)
+                    ? 'text-primary'
+                    : 'text-muted-foreground'
+                "
+              />
+            </Button>
           </div>
           <div role="cell" class="w-14 shrink-0 p-2 text-right">
             <LikeButton

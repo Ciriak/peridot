@@ -39,6 +39,9 @@ test("the persistent player controls a native audio element", async () => {
   assert.match(player, /addEventListener\("timeupdate"/);
   assert.match(player, /addEventListener\("loadedmetadata"/);
   assert.match(player, /addEventListener\("ended"/);
+  assert.match(player, /addEventListener\("waiting"/);
+  assert.match(player, /addEventListener\("stalled"/);
+  assert.match(player, /addEventListener\("playing"/);
   assert.match(player, /audio\.currentTime = elapsed\.value/);
   assert.match(player, /audio\.volume = value \/ 100/);
   assert.match(
@@ -112,8 +115,8 @@ test("the persistent player controls a native audio element", async () => {
   assert.match(layout, /@update:model-value="seek\(\$event\?\.\[0\] \?\? 0\)"/);
   assert.match(
     layout,
-    /class="min-h-11 flex-1"[\s\S]*t\('player\.position'\)/,
-    "The playback progress uses a taller invisible hit target than its track",
+    /<Slider\s+:model-value="\[elapsed\]"[\s\S]*?:aria-busy="loading"[\s\S]*?:class="\[\s*'min-h-11 flex-1',\s*loading && 'motion-safe:animate-pulse',?\s*\]"[\s\S]*?t\('player\.position'\)/,
+    "The playback progress uses a taller hit target and pulses while loading",
   );
   assert.match(
     layout,
@@ -151,7 +154,7 @@ test("the persistent player controls a native audio element", async () => {
   );
   assert.match(
     playerFooter,
-    /<div\s+aria-hidden="true"\s+class="pointer-events-none absolute inset-y-0 left-0 -z-10 w-2\/3[\s\S]*<div class="absolute inset-0 opacity-40">[\s\S]*<img\s+v-if="currentCoverUrl && !coverFailed"[\s\S]*:src="currentCoverUrl"[\s\S]*scale-125 object-cover object-left blur-3xl/,
+    /<div\s+aria-hidden="true"\s+class="pointer-events-none absolute inset-y-0 left-0 -z-10 w-2\/3[\s\S]*<div class="absolute inset-0 opacity-40">[\s\S]*<Transition[\s\S]*<img\s+v-if="currentCoverUrl && !coverFailed"[\s\S]*:src="currentCoverUrl"[\s\S]*scale-125 object-cover object-left blur-3xl/,
     "The decorative background stays mounted while its current cover is rendered",
   );
   assert.doesNotMatch(
@@ -162,12 +165,22 @@ test("the persistent player controls a native audio element", async () => {
   assert.equal(
     playerFooter.match(/:key="currentCoverUrl"/g)?.length,
     2,
-    "Both player cover layers remount immediately when the track cover changes",
+    "Both player cover layers update when the track cover changes",
+  );
+  assert.match(
+    playerFooter,
+    /<Transition\s+enter-active-class="transition-opacity duration-3000 delay-150 ease-in-out motion-reduce:transition-none"[\s\S]*leave-active-class="transition-opacity duration-3000 delay-150 ease-in-out motion-reduce:transition-none"[\s\S]*<img\s+v-if="currentCoverUrl && !coverFailed"\s+:key="currentCoverUrl"\s+:src="currentCoverUrl"/,
+    "The decorative player background waits briefly, then directly crossfades over three seconds",
+  );
+  assert.equal(
+    playerFooter.match(/<Transition/g)?.length,
+    1,
+    "The visible player artwork changes immediately instead of crossfading",
   );
   assert.doesNotMatch(
     playerFooter,
-    /<Transition|duration-3000|delay-150/,
-    "The player never delays a track cover behind a crossfade",
+    /mode="out-in"/,
+    "The decorative cover crossfade overlaps the outgoing and incoming artwork",
   );
   assert.match(
     playerFooter,
@@ -208,5 +221,57 @@ test("the persistent player controls a native audio element", async () => {
     layout,
     /active:bg-primary|bg-primary text-primary-foreground/,
     "Player hover and press states color the icon instead of the button",
+  );
+});
+
+test("the player replaces known track metadata without an unresolved frame", async () => {
+  const [player, trackTable, queueDrawer, collections] = await Promise.all([
+    readFile(
+      new URL("../app/composables/use-library-player.ts", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/components/TrackTable.vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/components/QueueDrawer.vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/lib/catalog-collections.ts", import.meta.url),
+      "utf8",
+    ),
+  ]);
+
+  assert.match(
+    player,
+    /const active = computed\(\(\) => \{\s+if \(!activeTrackId\.value\) return resolvedQueueTracks\.value\[0\] \?\? null;\s+return \(\s+resolvedQueueTracks\.value\.find\([\s\S]*?\?\? null\s+\);\s+\}\);/,
+    "A pending active-track detail never falls back to another queue track",
+  );
+  assert.match(
+    player,
+    /rememberQueueTrackDetails\(track \? \[track\] : \[\], trackIds\);\s+setQueueSnapshot\(/,
+    "A selected known track is added before its queue snapshot becomes active",
+  );
+  assert.match(
+    player,
+    /rememberQueueTrackDetails\(tracks, nextQueue\);\s+setQueueSnapshot\(/,
+    "Known collection tracks are added before the collection queue becomes active",
+  );
+  assert.match(
+    trackTable,
+    /playCollection\(\s*props\.tracks,\s*trackId,?\s*\)/,
+    "Track-table playback forwards the loaded track objects",
+  );
+  assert.match(
+    queueDrawer,
+    /@click\.stop="play\(track\)"/,
+    "Queue playback forwards its loaded track object",
+  );
+  assert.match(
+    collections,
+    /Promise<TrackResponse\[\]>[\s\S]*tracks\.push\(\.\.\.page\.items\)/,
+    "Collection loading retains track metadata instead of returning IDs only",
   );
 });

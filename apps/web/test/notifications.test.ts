@@ -154,8 +154,8 @@ test("task and log updates use the shared realtime subscription", async () => {
   assert.doesNotMatch(notifications, /setTimeout|setInterval/);
   assert.match(serverSettings, /subscribe\(\["logs"\]/);
   assert.doesNotMatch(serverSettings, /setInterval/);
-  assert.match(connection, /useState<ServerConnectionStatus>/);
-  assert.match(connection, /"server-connection-status"/);
+  assert.match(connection, /serverReachability/);
+  assert.match(connection, /reportServerReachability/);
   assert.match(sources, /useTasks/);
   assert.match(sources, /queueLibraryScan/);
   assert.match(sources, /queueSourceScan/);

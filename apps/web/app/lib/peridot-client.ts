@@ -42,6 +42,7 @@ import type {
   UserResponse,
 } from "@peridot/contracts";
 import { localizedError, message } from "./messages.ts";
+import { reportServerReachability } from "./server-connectivity.ts";
 
 export interface AdministratorCredentials {
   email: string;
@@ -101,6 +102,20 @@ export class PeridotApiError extends Error {
   }
 }
 
+export class PeridotNetworkError extends Error {
+  readonly messageDescriptor: MessageDescriptor;
+
+  constructor(fallbackMessage = "Could not reach this Peridot server.") {
+    super(fallbackMessage);
+    this.name = "PeridotNetworkError";
+    this.messageDescriptor = message("error.apiUnavailable");
+  }
+}
+
+export function isPeridotNetworkError(reason: unknown): boolean {
+  return reason instanceof PeridotNetworkError;
+}
+
 let authenticationRedirectHandler:
   ((reason: AuthenticationRedirectReason) => void) | null = null;
 
@@ -136,12 +151,14 @@ async function requestJson<T>(
       ...init,
       headers,
     });
-  } catch {
-    throw localizedError(
-      "error.apiUnavailable",
-      "Could not reach this Peridot server.",
-    );
+  } catch (reason) {
+    if (reason instanceof DOMException && reason.name === "AbortError") {
+      throw reason;
+    }
+    reportServerReachability(false);
+    throw new PeridotNetworkError();
   }
+  reportServerReachability(true);
   if (!response.ok) {
     const body = (await response
       .json()

@@ -176,6 +176,46 @@ export function notifyTrackDownloadFailed(
   });
 }
 
+export function notifyTrackSavedOffline(trackTitle: string) {
+  addToast({
+    titleMessage: message("toast.offlineSavedTitle"),
+    descriptionMessage: message("toast.offlineSaved", {
+      track: trackTitle,
+    }),
+    status: "success",
+    duration: 5000,
+    kind: "success",
+  });
+}
+
+export function notifyTrackOfflineCopyRemoved(trackTitle: string) {
+  addToast({
+    titleMessage: message("toast.offlineRemovedTitle"),
+    descriptionMessage: message("toast.offlineRemoved", {
+      track: trackTitle,
+    }),
+    status: "success",
+    duration: 5000,
+    kind: "success",
+  });
+}
+
+export function notifyOfflineTrackFailed(
+  trackTitle: string,
+  detailMessage: string,
+) {
+  addToast({
+    titleMessage: message("toast.offlineFailedTitle"),
+    descriptionMessage: message("toast.offlineFailed", {
+      track: trackTitle,
+      message: detailMessage,
+    }),
+    status: "error",
+    duration: 8000,
+    kind: "error",
+  });
+}
+
 export function notifyLikeFailed(target: string, detailMessage: string) {
   addToast({
     titleMessage: message("toast.likeFailedTitle"),

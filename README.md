@@ -103,6 +103,37 @@ Build output: `apps/web/.output` and `apps/server/dist`. Start the built server
 with `node apps/server/dist/index.js`, and the web app with
 `node apps/web/.output/server/index.mjs` (separate terminals).
 
+## Offline SPA
+
+The web app is client-rendered in SPA mode but keeps its Nitro web server for
+the SPA document and local server discovery. Nuxt PWA generates the manifest,
+service worker, and installable shell during `pnpm build`. The service worker
+precaches application chunks, local fonts and icons, and the SPA navigation
+fallback. Track and artist artwork uses CacheFirst runtime caching; API JSON is
+owned by TanStack Query rather than duplicated in the service worker.
+Development enables the PWA development server as well, so the manifest and
+development service worker are served as PWA assets instead of the SPA HTML
+fallback.
+
+Authenticated server state is cached with TanStack Vue Query and persisted per
+server and user in IndexedDB. Previously visited catalog pages, details,
+settings, likes, queue, quick picks, and tasks remain available with no
+application-level expiry, subject to browser storage eviction. Discovery,
+health checks, filesystem browsing, and metadata-candidate searches remain
+ephemeral.
+
+Tracks become playable offline only after the cloud-download control beside the
+favorite action has saved them. Saving requests persistent browser storage,
+downloads the complete original audio and available artwork into Cache
+Storage, and records the track in a local manifest. The same control removes
+the offline copy. Queue changes remain local while the server is unreachable and
+the latest snapshot is sent after reconnection; other mutations are disabled
+offline. Logging out or disconnecting clears persisted queries and saved audio.
+
+Browser quotas and eviction still apply. Service-worker registration and offline
+playback require one successful online load first, and direct offline routes are
+limited to the cached SPA shell and query pages that were previously visited.
+
 ## Windows package-manager setup
 
 If PowerShell cannot find pnpm, enable Corepack's pnpm shim in your existing
@@ -120,7 +151,7 @@ under Program Files. Turbo and nested scripts need pnpm itself on PATH.
 
 ## Structure
 
-- `apps/web`: Nuxt 4 application shell.
+- `apps/web`: Nuxt 4 SPA/PWA application and TanStack Query cache.
 - `apps/server`: authenticated Fastify catalog/task/audio API and Prisma 8 SQLite storage.
 - `apps/desktop`: documented future desktop shell.
 - `packages/contracts`: shared API types.

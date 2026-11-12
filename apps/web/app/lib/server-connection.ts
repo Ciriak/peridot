@@ -1,4 +1,5 @@
 import type { HealthResponse } from "@peridot/contracts";
+import { reportServerReachability } from "./server-connectivity.ts";
 
 export type ServerConnectionStatus = "unknown" | "connected" | "lost";
 export type TopbarStatus = "connection-lost" | "task-progress" | "idle";
@@ -29,11 +30,17 @@ export async function isPeridotServerReachable(
       headers: { accept: "application/json" },
       signal,
     });
-    if (!response.ok) return false;
+    if (!response.ok) {
+      reportServerReachability(false);
+      return false;
+    }
 
     const health = (await response.json()) as Partial<HealthResponse>;
-    return health.status === "ok" && health.service === "peridot";
+    const reachable = health.status === "ok" && health.service === "peridot";
+    reportServerReachability(reachable);
+    return reachable;
   } catch {
+    reportServerReachability(false);
     return false;
   }
 }

@@ -8,9 +8,12 @@ import { icons } from "../lib/icons";
 import { computed, ref, watch } from "vue";
 import { useLikes } from "../composables/use-likes";
 import { useLibraryPlayer } from "../composables/use-library-player";
+import { useOfflineTracks } from "../composables/use-offline-tracks";
 import { useServer } from "../composables/use-server";
+import { useServerConnection } from "../composables/use-server-connection";
 import { useSession } from "../composables/use-session";
-import { loadCollectionTrackIds } from "../lib/catalog-collections";
+import { loadCollectionTracks } from "../lib/catalog-collections";
+import { isPeridotNetworkError } from "../lib/peridot-client";
 import AlbumContextMenu from "./AlbumContextMenu.vue";
 import LikeButton from "./LikeButton.vue";
 import TrackArtistLinks from "./TrackArtistLinks.vue";
@@ -24,6 +27,8 @@ const { t } = useI18n();
 const { address } = useServer();
 const { token } = useSession();
 const { active, playing, playCollection, togglePlayback } = useLibraryPlayer();
+const { tracksMatching } = useOfflineTracks();
+const { status: serverStatus } = useServerConnection();
 const coverFailed = ref(false);
 const coverUrl = computed(() =>
   trackCoverUrl(address.value ?? "", props.album.coverUrl),
@@ -50,11 +55,29 @@ async function toggleAlbumPlayback() {
     return;
   }
   if (!address.value || !token.value || !props.album.trackCount) return;
-  playCollection(
-    await loadCollectionTrackIds(address.value, token.value, {
-      albumId: props.album.id,
-    }),
-  );
+  const playSaved = async () => {
+    const saved = await tracksMatching(
+      (track) =>
+        track.album?.trim().toLowerCase() ===
+          props.album.title.trim().toLowerCase() &&
+        track.artist.trim().toLowerCase() ===
+          props.album.artist.trim().toLowerCase(),
+    );
+    if (saved.length) playCollection(saved);
+  };
+  if (serverStatus.value === "lost") {
+    await playSaved();
+    return;
+  }
+  try {
+    playCollection(
+      await loadCollectionTracks(address.value, token.value, {
+        albumId: props.album.id,
+      }),
+    );
+  } catch (reason) {
+    if (isPeridotNetworkError(reason)) await playSaved();
+  }
 }
 </script>
 

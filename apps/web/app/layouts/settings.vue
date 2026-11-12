@@ -19,6 +19,8 @@ import { useSession } from "../composables/use-session";
 import { useUser } from "../composables/use-user";
 import { icons } from "../lib/icons";
 import { revokeSession } from "../lib/peridot-client";
+import { clearAllOfflineTracks } from "../lib/offline-audio";
+import { clearAllPeridotQueries } from "../lib/query-persister";
 
 const route = useRoute();
 const { t } = useI18n();
@@ -69,6 +71,7 @@ async function confirmLogout() {
   const currentToken = token.value;
   token.value = null;
   user.value = null;
+  await Promise.all([clearAllPeridotQueries(), clearAllOfflineTracks()]);
   try {
     if (currentAddress && currentToken) {
       await revokeSession(currentAddress, currentToken);

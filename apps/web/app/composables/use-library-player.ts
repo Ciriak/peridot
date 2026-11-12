@@ -1,5 +1,6 @@
 import { useI18n, useState } from "#imports";
 import type { TrackResponse } from "@peridot/contracts";
+import { useQueryClient } from "@tanstack/vue-query";
 import { computed, onMounted, onUnmounted, watch } from "vue";
 import {
   haveSameTrackReferences,
@@ -29,11 +30,13 @@ import {
   createPlaybackToken,
   fetchQueue,
   isAuthenticationRedirectError,
+  isPeridotNetworkError,
   recordTrackPlay,
   replaceQueue,
   resolveTracks,
   trackAudioUrl,
 } from "../lib/peridot-client";
+import { offlineAudioBlob, readSavedOfflineTracks } from "../lib/offline-audio";
 import {
   notifyQueueSaveFailed,
   notifyTrackDownloadFailed,
@@ -49,8 +52,21 @@ import { useSession } from "./use-session";
 import { useUser } from "./use-user";
 import { useLocalizedMessage } from "./use-localized-message";
 import { localizedError } from "../lib/messages.ts";
+import { useServerConnection } from "./use-server-connection";
+import { queryKeys } from "../lib/query-keys";
+import { persistQueryKey } from "../lib/query-persister";
 
 let queueWriteTail = Promise.resolve();
+let pendingQueueSave: {
+  scope: string;
+  version: number;
+  body: {
+    trackIds: string[];
+    activeTrackId: string | null;
+    shuffleEnabled: boolean;
+    shuffleTrackIds: string[];
+  };
+} | null = null;
 
 interface QueueSnapshot {
   trackIds: readonly string[];
@@ -59,12 +75,16 @@ interface QueueSnapshot {
   shuffleTrackIds: readonly string[];
 }
 
+type PlayerTrack = string | TrackResponse;
+
 export function useLibraryPlayer(options: { audio?: boolean } = {}) {
   const { address } = useServer();
   const { token } = useSession();
   const { user } = useUser();
   const { t } = useI18n();
   const { errorMessage } = useLocalizedMessage();
+  const { status: serverStatus } = useServerConnection();
+  const queryClient = useQueryClient();
   const { revision: catalogRevision } = useCatalogRevision();
   const playing = useState("player-playing", () => false);
   const repeatMode = useState<RepeatMode>("player-repeat-mode", () => "off");
@@ -111,14 +131,14 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
   const resolvedQueueTracks = computed(() =>
     resolvePlayerQueue(queueTracks.value, queueTrackIds.value),
   );
-  const active = computed(
-    () =>
+  const active = computed(() => {
+    if (!activeTrackId.value) return resolvedQueueTracks.value[0] ?? null;
+    return (
       resolvedQueueTracks.value.find(
         (track) => track.id === activeTrackId.value,
-      ) ??
-      resolvedQueueTracks.value[0] ??
-      null,
-  );
+      ) ?? null
+    );
+  });
   const currentTrackId = computed(() => active.value?.id ?? null);
   const upcomingTracks = computed(() =>
     resolvedQueueTracks.value.filter(
@@ -188,7 +208,29 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
         queueTracks.value = resolved;
       }
     } catch {
-      // Keep already-resolved queue rows visible when a refresh fails.
+      const scope = playerStateScope();
+      if (scope && import.meta.client) {
+        try {
+          const saved = await readSavedOfflineTracks(scope);
+          const savedById = new Map(
+            saved.map((item) => [item.track.id, item.track]),
+          );
+          const fallbackItems = requestedIds.flatMap((trackId) => {
+            const track = savedById.get(trackId);
+            return track ? [track] : [];
+          });
+          const resolved = mergePlayerQueueTracks(
+            queueTracks.value,
+            fallbackItems,
+            requestedIds,
+          );
+          if (!haveSameTrackReferences(resolved, queueTracks.value)) {
+            queueTracks.value = resolved;
+          }
+        } catch {
+          // Keep already-resolved queue rows visible when both sources fail.
+        }
+      }
     }
   }
 
@@ -246,6 +288,28 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     return [...new Set(trackIds)];
   }
 
+  function trackIdFor(track: PlayerTrack): string {
+    return typeof track === "string" ? track : track.id;
+  }
+
+  function rememberQueueTrackDetails(
+    tracks: readonly PlayerTrack[],
+    nextQueueTrackIds: readonly string[],
+  ) {
+    const trackDetails = tracks.filter(
+      (track): track is TrackResponse => typeof track !== "string",
+    );
+    if (!trackDetails.length) return;
+    const resolved = mergePlayerQueueTracks(
+      queueTracks.value,
+      trackDetails,
+      nextQueueTrackIds,
+    );
+    if (!haveSameTrackReferences(resolved, queueTracks.value)) {
+      queueTracks.value = resolved;
+    }
+  }
+
   function clearQueue() {
     queueTrackIds.value = [];
     activeTrackId.value = null;
@@ -283,6 +347,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
       shuffleEnabled: snapshot.shuffleEnabled,
       shuffleTrackIds: [...snapshot.shuffleTrackIds],
     };
+    pendingQueueSave = { scope, version, body };
     queueWriteTail = queueWriteTail
       .catch(() => undefined)
       .then(async () => {
@@ -298,11 +363,59 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
             "Connect to your Peridot server and try again.",
           );
         }
-        await replaceQueue(serverAddress, sessionToken, body);
+        const savedQueue = await replaceQueue(
+          serverAddress,
+          sessionToken,
+          body,
+        );
+        if (user.value?.id) {
+          const queueKey = queryKeys.queue({
+            serverAddress,
+            userId: user.value.id,
+          });
+          queryClient.setQueryData(queueKey, savedQueue);
+          await persistQueryKey(queueKey);
+        }
+        if (
+          pendingQueueSave?.scope === scope &&
+          pendingQueueSave.version === version
+        ) {
+          pendingQueueSave = null;
+        }
       })
       .catch((reason: unknown) => {
+        if (
+          isPeridotNetworkError(reason) ||
+          serverStatus.value === "lost" ||
+          isAuthenticationRedirectError(reason)
+        ) {
+          return;
+        }
         notifyQueueSaveFailed(errorMessage(reason, "error.queueSave"));
       });
+  }
+
+  function flushPendingQueue() {
+    const pending = pendingQueueSave;
+    const serverAddress = address.value;
+    const sessionToken = token.value;
+    if (
+      !pending ||
+      !serverAddress ||
+      !sessionToken ||
+      pending.scope !== currentScope()
+    ) {
+      return;
+    }
+    queueWriteTail = queueWriteTail
+      .catch(() => undefined)
+      .then(async () => {
+        await replaceQueue(serverAddress, sessionToken, pending.body);
+        if (pendingQueueSave?.version === pending.version) {
+          pendingQueueSave = null;
+        }
+      })
+      .catch(() => undefined);
   }
 
   function setQueueSnapshot(
@@ -341,6 +454,14 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     queueLoaded.value = true;
     queueError.value = null;
     queueMutationVersion.value += 1;
+    if (address.value && user.value?.id) {
+      const queueKey = queryKeys.queue({
+        serverAddress: address.value,
+        userId: user.value.id,
+      });
+      queryClient.setQueryData(queueKey, normalized);
+      void persistQueryKey(queueKey);
+    }
     if (persist) saveQueue(normalized);
     return normalized;
   }
@@ -365,7 +486,15 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     queueLoading.value = true;
     queueError.value = null;
     try {
-      const response = await fetchQueue(serverAddress, sessionToken);
+      const response = await queryClient.fetchQuery({
+        queryKey: queryKeys.queue({
+          serverAddress,
+          userId: user.value?.id ?? "",
+        }),
+        queryFn: () => fetchQueue(serverAddress, sessionToken),
+        staleTime: 0,
+        meta: { persist: true },
+      });
       if (
         queueAuthScope.value !== scope ||
         queueMutationVersion.value !== version
@@ -391,8 +520,8 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     }
   }
 
-  function play(trackId?: string, restart = false) {
-    const nextTrackId = trackId ?? currentTrackId.value;
+  function play(track?: PlayerTrack, restart = false) {
+    const nextTrackId = track ? trackIdFor(track) : currentTrackId.value;
     if (!nextTrackId) return;
     if (!restart && nextTrackId === currentTrackId.value && playing.value) {
       playing.value = false;
@@ -402,6 +531,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     const changed = nextTrackId !== currentTrackId.value;
     if (changed) rememberCurrentTrack(nextTrackId);
     const trackIds = moveTrackToFront(normalizedQueue(), nextTrackId);
+    rememberQueueTrackDetails(track ? [track] : [], trackIds);
     setQueueSnapshot({
       trackIds,
       activeTrackId: nextTrackId,
@@ -418,9 +548,10 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
   }
 
   function playCollection(
-    trackIds: readonly string[],
-    startTrackId: string = trackIds[0] ?? "",
+    tracks: readonly PlayerTrack[],
+    startTrackId: string = tracks[0] ? trackIdFor(tracks[0]) : "",
   ) {
+    const trackIds = tracks.map(trackIdFor);
     const nextQueue = rotateQueueToTrack(
       normalizeQueueTrackIds(trackIds, new Set(trackIds)),
       startTrackId,
@@ -429,6 +560,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     if (!firstTrackId) return;
     void loadQueue();
     rememberCurrentTrack(firstTrackId);
+    rememberQueueTrackDetails(tracks, nextQueue);
     setQueueSnapshot({
       trackIds: nextQueue,
       activeTrackId: firstTrackId,
@@ -699,6 +831,12 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     });
   }
 
+  if (options.audio) {
+    watch(serverStatus, (status) => {
+      if (status === "connected") flushPendingQueue();
+    });
+  }
+
   if (options.audio && import.meta.client) {
     localPersistenceReady = true;
     const stopLocalStateWatch = watch(
@@ -713,6 +851,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     let audio: HTMLAudioElement | undefined;
     let loadedTrackId: string | null = null;
     let loadingTrackId: string | null = null;
+    let offlineObjectUrl: string | null = null;
     let loadAttempt = 0;
     let lastRecordedPlaybackRequest = -1;
     let stopAudioWatch: (() => void) | undefined;
@@ -732,6 +871,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
         return;
       }
       try {
+        loading.value = true;
         await audio.play();
         if (
           attempt === loadAttempt &&
@@ -751,6 +891,13 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
               .catch(() => undefined);
           }
         }
+        if (
+          attempt === loadAttempt &&
+          loadedTrackId === trackId &&
+          currentTrackId.value === trackId
+        ) {
+          loading.value = false;
+        }
       } catch (reason) {
         if (
           attempt !== loadAttempt ||
@@ -766,6 +913,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
           ? t("error.playbackBlocked")
           : t("error.audioUnavailable");
         if (!blocked) loadedTrackId = null;
+        loading.value = false;
       }
     }
 
@@ -797,6 +945,22 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
         loadedTrackId = null;
         playing.value = false;
         if (isAuthenticationRedirectError(reason)) return;
+        if (isPeridotNetworkError(reason)) {
+          const scope = playerStateScope();
+          const blob = scope ? await offlineAudioBlob(scope, trackId) : null;
+          if (blob && attempt === loadAttempt && audio) {
+            if (offlineObjectUrl) URL.revokeObjectURL(offlineObjectUrl);
+            offlineObjectUrl = URL.createObjectURL(blob);
+            audio.src = offlineObjectUrl;
+            loadedTrackId = trackId;
+            audio.load();
+            if (elapsed.value > 0) audio.currentTime = elapsed.value;
+            await playLoadedTrack(trackId, attempt);
+            return;
+          }
+          error.value = t("error.offlineTrackMissing");
+          return;
+        }
         error.value = playbackError(reason, "error.audioPrepare");
       } finally {
         if (attempt === loadAttempt) {
@@ -838,11 +1002,22 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
         playing.value = false;
         error.value = t("error.audioDecode");
       };
+      const handleWaiting = () => {
+        if (!audio || !playing.value) return;
+        loading.value = true;
+      };
+      const handlePlaying = () => {
+        if (!audio || loadedTrackId !== currentTrackId.value) return;
+        loading.value = false;
+      };
 
       audio.addEventListener("timeupdate", updatePosition);
       audio.addEventListener("loadedmetadata", updateDuration);
       audio.addEventListener("ended", handleEnded);
       audio.addEventListener("error", handleError);
+      audio.addEventListener("waiting", handleWaiting);
+      audio.addEventListener("stalled", handleWaiting);
+      audio.addEventListener("playing", handlePlaying);
 
       stopVolumeWatch = watch(volume, (value) => {
         if (audio) audio.volume = value / 100;
@@ -882,11 +1057,16 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
             audio.pause();
             audio.removeAttribute("src");
             audio.load();
+            if (offlineObjectUrl) {
+              URL.revokeObjectURL(offlineObjectUrl);
+              offlineObjectUrl = null;
+            }
           }
 
           if (!trackId) return;
           if (!shouldPlay) {
             audio.pause();
+            loading.value = false;
             return;
           }
 
@@ -927,6 +1107,10 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
       audio.pause();
       audio.removeAttribute("src");
       audio.load();
+      if (offlineObjectUrl) {
+        URL.revokeObjectURL(offlineObjectUrl);
+        offlineObjectUrl = null;
+      }
       audio = undefined;
     });
   }

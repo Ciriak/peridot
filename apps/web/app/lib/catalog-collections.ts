@@ -1,3 +1,4 @@
+import type { TrackResponse } from "@peridot/contracts";
 import { listTracks } from "./peridot-client";
 
 interface CollectionQuery {
@@ -5,12 +6,12 @@ interface CollectionQuery {
   artistId?: string;
 }
 
-export async function loadCollectionTrackIds(
+export async function loadCollectionTracks(
   serverAddress: string,
   token: string,
   query: CollectionQuery,
-): Promise<string[]> {
-  const trackIds: string[] = [];
+): Promise<TrackResponse[]> {
+  const tracks: TrackResponse[] = [];
   let cursor: string | null = null;
   do {
     const page = await listTracks(serverAddress, token, {
@@ -20,8 +21,8 @@ export async function loadCollectionTrackIds(
       direction: "asc",
       ...(cursor ? { cursor } : {}),
     });
-    trackIds.push(...page.items.map((track) => track.id));
+    tracks.push(...page.items);
     cursor = page.nextCursor;
   } while (cursor);
-  return trackIds;
+  return tracks;
 }

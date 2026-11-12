@@ -2,6 +2,232 @@
 
 Last updated: 2026-11-12.
 
+## Cache-first query presentation
+
+Cached TanStack data now renders immediately instead of being hidden by
+background refresh activity or a failed refresh. Shared query presentation
+helpers distinguish blocking initial loading from a refresh with data, and
+suppress fatal query errors while cached data exists.
+
+Album and artist detail pages derive their loading state from the cached match
+query and the resolved page entity. They no longer set a manual loading flag on
+mount or force the match query to refetch. Cached tracks start loading without
+forcing another request. Track and album-list failures are shown within their
+own sections, so a secondary failure does not hide an otherwise usable detail
+header. Administrator list loading follows the same data-first rule.
+
+Checks run:
+
+- `pnpm --filter @peridot/web test` (142 passing)
+- `pnpm --filter @peridot/web typecheck`
+- Targeted Prettier and ESLint checks for the changed query, detail-page, and
+  regression-test files
+- `pnpm --filter @peridot/web build` (PWA precached 94 entries)
+- `git diff --check`
+
+Known limits: the exact away-and-back interaction was not exercised in a live
+browser during this run. The runtime regression covers TanStack's
+data-plus-error state and the page tests guard against forced mount loading.
+Cold offline restoration may briefly show loading until IndexedDB resolves.
+Server, schema, and non-web package checks were skipped because this change is
+limited to client query presentation and detail-page state. Existing
+uncommitted work remains preserved. No commit, push, tag, publication, or
+deployment was performed.
+
+Next: manually revisit an album and artist from another page while the server is
+online, then repeat with the server stopped after those pages have been cached.
+
+## Cover play controls use the pointer cursor
+
+The full-cover play controls in the shared track table and both the current and
+upcoming queue artwork now use the standard `cursor-pointer` utility. This
+matches the existing album-card play control, including tracks shown on album
+detail pages.
+
+Checks run:
+
+- `pnpm --filter @peridot/web test` (141 passing)
+- `pnpm --filter @peridot/web typecheck`
+- Targeted ESLint and Prettier checks for the changed components and tests
+- `git diff --check`
+
+Browser visual QA was not run for this presentation-only change. Existing
+uncommitted work remains preserved. No commit, push, tag, publication, or
+deployment was performed.
+
+## Vite Lucide optimizer resolution
+
+Nuxt's explicit Vite pre-bundle list includes `@lucide/vue` through the shared
+spinner entry. pnpm's strict workspace layout did not make that package
+resolvable from `apps/web`, producing the `NUXT_B7002` warning during dev
+startup. The web workspace now declares the same `@lucide/vue` version as a
+development dependency, keeping runtime ownership in `@peridot/ui` while making
+the optimizer entry resolvable. A dev-config regression test checks that
+declaration.
+
+Checks run:
+
+- `pnpm install`
+- `pnpm --filter @peridot/web test` (141 passing)
+- `pnpm --filter @peridot/web typecheck`
+- Targeted ESLint and Prettier checks
+- `pnpm --filter @peridot/web build` (94 PWA precache entries; existing
+  non-fatal Rolldown `PLUGIN_TIMINGS` warning)
+- Isolated Nuxt dev startup on port 3011 (ready without `NUXT_B7002`)
+- HTTP smoke test for `/` (200)
+- `git diff --check`
+
+No commit, push, tag, publication, or deployment was performed. Existing
+uncommitted work remains preserved.
+
+## PWA manifest dev-server fix
+
+The browser's `Manifest: Line: 1, column: 1, Syntax error` came from the Nuxt
+development server returning the SPA HTML document for
+`/manifest.webmanifest`. `@vite-pwa/nuxt` does not serve generated PWA assets in
+development unless `devOptions.enabled` is true. The Nuxt configuration now
+enables that development mode, and the offline-SPA regression test requires it.
+
+Checks run:
+
+- Dev-server HTTP check: `GET /manifest.webmanifest` returned 200 with
+  `application/manifest+json`; JSON parsed with the Peridot name and three icons
+- Dev-server HTTP check: `GET /dev-sw.js?dev-sw` returned 200 with JavaScript
+- Full web tests (141 passing)
+- Web typecheck
+- Targeted ESLint and Prettier checks
+- Production web build (PWA precached 94 entries)
+- Production Nitro smoke test: root and manifest returned 200; manifest JSON
+  parsed and the root HTML contained the manifest link
+
+Known limits: browser DevTools was not manually inspected after the fix; the
+equivalent manifest and service-worker requests were validated over HTTP.
+Existing uncommitted offline, catalog, localization, and account work remains
+preserved. This fix and its documentation are also uncommitted. No commit,
+push, tag, publication, or deployment was performed.
+
+Next: reload `http://127.0.0.1:3000/` with a fresh development server and
+confirm the manifest syntax message is absent from the browser console.
+
+## Native track action tooltips
+
+The cloud save/remove control and favorite control in each shared track row now
+use native browser `title` tooltips. Their text follows the current localized
+action, so it changes between save/remove and like/unlike states alongside the
+existing accessible label. The shared favorite button derives both labels from
+one computed value. No custom styling or tooltip runtime was added.
+
+Checks run:
+
+- Focused likes UI and offline SPA tests (7 passing)
+- Full web tests (141 passing)
+- Web typecheck
+- Targeted ESLint and Prettier checks
+- Production web build (PWA precached 94 entries)
+
+Known limits: browser-native tooltip placement and timing remain controlled by
+the browser, and visual hover QA was not run. Existing uncommitted work remains
+preserved. No commit, push, tag, publication, or deployment was performed.
+
+## Player progress-bar loading effect
+
+The persistent player's playback slider now pulses while a track is being
+prepared or the native audio element is buffering. The slider exposes
+`aria-busy` during the same period, uses the shared primary progress styling,
+and applies the pulse with `motion-safe:animate-pulse` so reduced-motion users
+receive a static loading state. Native `waiting` and `stalled` events start the
+effect, while `playing` clears it, covering both initial preparation and stalls
+later in a track.
+
+Checks run:
+
+- `pnpm --filter @peridot/web test` (141 passing)
+- `pnpm --filter @peridot/web typecheck`
+- Targeted ESLint and Prettier checks for the player composable, layout, and
+  regression test
+- `pnpm --filter @peridot/web build` (PWA precached 94 entries)
+- `git diff --check` for the changed files
+
+Known limits: visual browser QA was not run against a live buffering track. The
+existing uncommitted offline, catalog, localization, and account work remains
+preserved. No commit, push, tag, publication, or deployment was performed.
+
+## Profile email field removed
+
+Settings → Profile now contains only the editable display-name form. The
+read-only email field and its now-unused helper copy were removed because the
+signed-in user's email is immutable through Profile. Email remains visible on
+each account row and in the administrator edit dialog under
+Settings → Admin → User Management. Regression coverage asserts the profile
+field is absent while User Management continues to render `account.email`.
+
+Checks run:
+
+- Focused settings tests (13 passing)
+- Full web tests (141 passing)
+- Web typecheck
+- Targeted ESLint and Prettier checks
+- Production web build
+
+Server, schema, and browser visual checks were skipped because this change only
+removes a client-side form field and its unused locale copy.
+
+## Offline-compatible SPA and TanStack Query cache
+
+The web application now runs in Nuxt SPA mode while retaining Nitro for the
+application document and local server discovery. `@vite-pwa/nuxt` generates an
+installable manifest and service worker that precaches the SPA root shell, all
+client chunks, fonts, icons, and the navigation fallback. Signed cover and artist
+image routes use a non-expiring browser CacheFirst cache; API JSON is not routed
+through Workbox.
+
+Authenticated read state now uses TanStack Vue Query. The official per-query
+IndexedDB persister stores visited data indefinitely with a versioned buster,
+query keys are scoped by server and user, and realtime catalog events invalidate
+the matching catalog query prefix. Catalog tracks, albums, artists, detail
+lookups, likes, quick picks, queue, tasks, administrator lists, and server logs
+were migrated. Discovery, health, filesystem browsing, and metadata-candidate
+searches remain ephemeral. Likes and task creation use Query mutations; task
+realtime updates and queue snapshots update the persistent cache explicitly.
+
+Each shared track row has a Basil cloud-download/check action beside Favorite.
+Saving requests persistent browser storage, fetches the complete authenticated
+audio and available artwork, and stores them under a server/user/track key. The
+player falls back to that cached blob only for a typed network failure and
+revokes object URLs on track changes and teardown. Album and artist play controls
+use the saved-track manifest when the server is unavailable. Logout, disconnect,
+session invalidation, or identity changes clear persisted queries and offline
+audio/artwork. Queue edits remain local offline and the latest snapshot is
+retried after server reachability returns; other mutations are disabled offline.
+
+Checks run:
+
+- `pnpm format:check`
+- `pnpm lint`
+- `pnpm typecheck`
+- `pnpm test` (141 web, 98 server, and 13 UI tests passing)
+- `pnpm build` (5 successful tasks; PWA precached 94 entries and emitted `sw.js`
+  plus Workbox)
+- Production Nitro smoke test: root and deep `/albums` returned 200; manifest,
+  service worker, and discovery returned 200; the root HTML contained the manifest
+  link and client mount; the service worker contained the root precache and
+  artwork route
+- `git diff --check`
+
+Known limits: offline catalog coverage is limited to pages previously visited
+online, and offline audio requires the explicit row action. Saved media remains
+subject to browser quota and eviction. The browser automation host was
+unavailable, so service-worker activation, an offline browser reload, and real
+cached-audio playback were not exercised end to end. Queue synchronization is
+the only offline write retained; likes, metadata, scans, and administrator
+changes require connectivity. All changes remain uncommitted on `dev`; no
+commit, push, tag, publication, or deployment was performed.
+
+Next: in a supported browser, load library and detail pages online, save a track,
+activate the service worker, stop the Peridot server, and verify deep-link reload,
+search over visited terms, artwork, seek/next playback, queue reconnection, and
+private-cache clearing on logout.
+
 ## Development server startup during catalog backfills
 
 `npm run dev` now starts Fastify immediately even when the local catalog needs a
@@ -113,34 +339,37 @@ concurrent metadata work is resolved and its schema is applied, exercise play,
 queue reorder, and queue open/close with browser network tools and confirm one
 request per distinct cover.
 
-## Immediate player cover updates
+## Player background crossfade restored
 
-The persistent player now replaces both its foreground cover and blurred
-background cover as soon as the resolved cover URL changes. Both image elements
-are keyed by that URL, and the previous 150 ms delay plus three-second crossfade
-has been removed. This prevents the outgoing artwork from visually lingering
-after a track change. The existing placeholder, cover-background gradients, and
-responsive sizing are unchanged.
+The persistent player's decorative blurred cover now waits 150 ms and directly
+crossfades to a different resolved cover over three seconds. The fade wraps only
+the decorative background; the visible square artwork and track metadata remain
+immediate, so no foreground element lingers after a track change. Reduced motion
+continues to disable the transition. The transition is absent when consecutive
+tracks share the same cover URL, and the existing mounted decorative layer still
+allows the background to fade out when artwork disappears or fails.
 
-The player regression test now requires both cover layers to be URL-keyed and
-rejects the delayed transition utilities. Browser visual QA remains pending.
-All changes remain uncommitted on `dev` with the existing localization, catalog,
-realtime, and account work preserved; no commit, push, tag, publication, or
-deployment was performed.
+The player regression test now requires the background transition, rejects an
+`out-in` mode that would create an empty frame, and verifies that only one player
+cover layer uses the transition. Durable behavior is recorded in
+`docs/DECISIONS.md`. Browser visual QA remains pending. All changes remain
+uncommitted on `dev` with the existing localization, catalog, realtime, account,
+and offline work preserved; no commit, push, tag, publication, or deployment was
+performed.
 
 Checks run:
 
-- `pnpm --filter @peridot/web test` (136 passing)
+- Focused player regression test
+- `pnpm --filter @peridot/web test` (141 passing)
 - `pnpm --filter @peridot/web typecheck`
 - Targeted ESLint and Prettier checks for the player and tests
-- `pnpm --filter @peridot/web build` (passed with the existing non-fatal
-  Rolldown `PLUGIN_TIMINGS` warning)
+- `pnpm --filter @peridot/web build`
 - `git diff --check`
 
 Server tests and schema validation were skipped because this change only
-affects web player presentation. Browser visual QA remains pending: switch
-between tracks with distinct artwork and verify that both the square cover and
-blurred background change on the same render.
+affects web player presentation. Next: switch between tracks with distinct
+artwork and verify the foreground cover changes immediately while the blurred
+background crossfades, then repeat with reduced motion enabled.
 
 ## Main-frame track-list scrolling
 

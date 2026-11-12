@@ -152,7 +152,7 @@ test("the settings sidebar omits server details and its brand links back home", 
 
 test("sources are managed on their own page with row action menus", async () => {
   const page = await readSource("../app/pages/settings/sources.vue");
-  assert.match(page, /listSources/);
+  assert.match(page, /useAdminSourcesQuery/);
   assert.match(page, /createSource/);
   assert.match(page, /deleteSource/);
   assert.match(page, /reorderSources/);
@@ -207,7 +207,7 @@ test("sources are managed on their own page with row action menus", async () => 
   );
   assert.match(page, /data-disabled:cursor-default/);
   assert.match(page, /queueSourceScan/);
-  assert.match(page, /:disabled="source\.kind !== 'path'"/);
+  assert.match(page, /:disabled="source\.kind !== 'path' \|\| serverLost"/);
   assert.match(page, /settings\.sources\.actions/);
   assert.match(
     page,
@@ -223,8 +223,7 @@ test("sources are managed on their own page with row action menus", async () => 
 test("metadata providers have a dedicated sortable management page", async () => {
   const page = await readSource("../app/pages/settings/metadata.vue");
   const icons = await readSource("../app/lib/icons.ts");
-  assert.match(page, /listMetadataProviders/);
-  assert.match(page, /listMetadataProviderDefinitions/);
+  assert.match(page, /useMetadataProvidersQuery/);
   assert.match(page, /createMetadataProvider/);
   assert.match(page, /updateMetadataProvider/);
   assert.match(page, /reorderMetadataProviders/);
@@ -295,7 +294,7 @@ test("metadata providers have a dedicated sortable management page", async () =>
   assert.match(page, /settings\.metadata\.refresh/);
   assert.match(
     page,
-    /:disabled="!activeProviders\.length \|\| hasActiveTasks"/,
+    /:disabled="!activeProviders\.length \|\| hasActiveTasks \|\| serverLost"/,
   );
   assert.match(
     page,
@@ -327,9 +326,8 @@ test("tasks have a settings view for active work and paginated history", async (
   );
   assert.match(page, /useTasks/);
   assert.match(page, /orderedActiveTasks\(activeTasks\.value\)/);
-  assert.match(page, /status: "terminal"/);
-  assert.match(page, /limit: HISTORY_PAGE_SIZE/);
-  assert.match(page, /offset: history\.value\.length/);
+  assert.match(page, /useTaskHistoryQuery/);
+  assert.match(page, /historyQuery\.loadMore\(\)/);
   assert.match(page, /settings\.tasks\.inProgress/);
   assert.match(page, /<h3 id="task-history-heading"/);
   assert.match(page, /settings\.tasks\.history/);
@@ -347,7 +345,7 @@ test("administrators can create, edit, promote, and delete managed accounts", as
   const page = await readSource("../app/pages/settings/users.vue");
 
   assert.match(page, /layout: "settings"/);
-  assert.match(page, /listUsers/);
+  assert.match(page, /useAdminUsersQuery/);
   assert.match(page, /createManagedUser/);
   assert.match(page, /updateManagedUser/);
   assert.match(page, /deleteManagedUser/);
@@ -358,6 +356,7 @@ test("administrators can create, edit, promote, and delete managed accounts", as
   assert.match(page, /settings\.users\.add/);
   assert.match(page, /v-for="account in users"/);
   assert.match(page, /gravatarUrl\(account\.email, 80\)/);
+  assert.match(page, /{{ account\.email }}/);
   assert.match(page, /:src="avatarSource\(account\)"/);
   assert.match(page, /@error="markAvatarFailed\(account\)"/);
   assert.match(page, /class="size-10 shrink-0 rounded-full object-cover"/);
@@ -391,7 +390,7 @@ test("server settings no longer contain source or library status management", as
   assert.doesNotMatch(page, /Rescan library/);
   assert.doesNotMatch(page, /listSources/);
   assert.doesNotMatch(page, /fetchServerSettings/);
-  assert.match(page, /fetchLogs/);
+  assert.match(page, /useServerLogsQuery/);
   assert.match(page, /settings\.server\.log/);
   assert.match(page, /settings\.server\.search/);
   assert.match(page, /settings\.server\.categories/);
@@ -426,7 +425,7 @@ test("server settings confirm before disconnecting from the connected server", a
   assert.match(page, /navigateTo\("\/onboarding", \{ replace: true \}\)/);
 });
 
-test("profile settings show email and update the editable display name", async () => {
+test("profile settings omit email and update the editable display name", async () => {
   const page = await readSource("../app/pages/settings/account.vue");
 
   assert.match(page, /settings\.account\.title/);
@@ -435,8 +434,9 @@ test("profile settings show email and update the editable display name", async (
     page,
     /const displayName = ref\(user\.value\?\.displayName \?\? ""\)/,
   );
-  assert.match(page, /id="account-email"/);
-  assert.match(page, /readonly/);
+  assert.doesNotMatch(page, /id="account-email"/);
+  assert.doesNotMatch(page, /settings\.account\.email/);
+  assert.doesNotMatch(page, /settings\.account\.emailHelp/);
   assert.match(page, /id="account-display-name"/);
   assert.match(page, /autocomplete="nickname"/);
   assert.match(page, /minlength="2"/);

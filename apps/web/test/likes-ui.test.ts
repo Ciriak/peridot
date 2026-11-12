@@ -61,13 +61,13 @@ test("track, album, and artist likes share accessible persistent state wiring", 
   assert.match(likes, /createLike\(/);
   assert.match(likes, /deleteLike\(/);
   assert.match(likes, /pendingTargets/);
-  assert.match(likes, /setTrackLiked\(target\.trackId, wasLiked/);
+  assert.match(likes, /useMutation\(\{/);
+  assert.match(likes, /updateLikedTarget\(/);
+  assert.match(likes, /persistQueryKey\(/);
   assert.match(likes, /notifyLikeFailed\(/);
-  assert.match(
-    likes,
-    /setArtistLiked\(response, true, response\);[\s\S]*notifyLikeSucceeded\(target\)/,
-  );
+  assert.match(likes, /notifyLikeSucceeded\(variables\.target\)/);
   assert.match(button, /aria-pressed/);
+  assert.match(button, /:title="actionLabel"/);
   assert.match(button, /icons\.heartFilled/);
   assert.match(button, /icons\.heart/);
   assert.match(button, /class="hover:text-primary active:text-primary"/);

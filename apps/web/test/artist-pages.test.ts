@@ -35,7 +35,24 @@ test("artists have list and detail routes with artist-scoped content", async () 
   assert.match(artistCard, /useLikes\(\)/);
   assert.match(artistCard, /<LikeButton/);
   assert.match(listPage, /t\("page\.artists\.empty"\)/);
-  assert.match(detailPage, /listArtists\(/);
+  assert.match(detailPage, /useCatalogArtistQuery/);
+  assert.match(detailPage, /artistMatches/);
+  assert.match(
+    detailPage,
+    /const artistLoading = computed\(\s+\(\) => artistMatchesLoading\.value && !artist\.value,?\s+\);/,
+    "Artist detail loading is blocking only until cached matches resolve",
+  );
+  assert.match(detailPage, /function loadArtist\(force = false\)/);
+  assert.match(
+    detailPage,
+    /onMounted\(\(\) => \{\s+loadArtist\(\);/,
+    "Artist detail mounts without forcing a background catalog refresh",
+  );
+  assert.doesNotMatch(
+    detailPage,
+    /artistLoading\.value = true/,
+    "Artist detail does not override cached query loading state",
+  );
   assert.match(detailPage, /route\.params\.artist/);
   assert.match(detailPage, /useCatalogAlbumQuery/);
   assert.match(detailPage, /artistId: artist\.value\?\.id/);

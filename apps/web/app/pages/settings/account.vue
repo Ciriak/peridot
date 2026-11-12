@@ -87,22 +87,6 @@ async function saveProfile() {
       @submit.prevent="saveProfile"
     >
       <div class="space-y-2">
-        <label for="account-email" class="text-sm font-medium">{{
-          t("settings.account.email")
-        }}</label>
-        <Input
-          id="account-email"
-          :model-value="user?.email ?? ''"
-          type="email"
-          readonly
-          autocomplete="email"
-        />
-        <p class="text-xs text-muted-foreground">
-          {{ t("settings.account.emailHelp") }}
-        </p>
-      </div>
-
-      <div class="space-y-2">
         <label for="account-display-name" class="text-sm font-medium">
           {{ t("settings.account.displayName") }}
         </label>

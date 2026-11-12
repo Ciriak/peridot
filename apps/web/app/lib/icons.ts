@@ -30,6 +30,8 @@ import userPlus from "@iconify-icons/basil/user-plus-outline";
 import edit from "@iconify-icons/basil/edit-outline";
 import check from "@iconify-icons/basil/check-outline";
 import cloudOff from "@iconify-icons/basil/cloud-off-outline";
+import cloudCheck from "@iconify-icons/basil/cloud-check-outline";
+import cloudDownload from "@iconify-icons/basil/cloud-download-outline";
 import logout from "@iconify-icons/basil/logout-outline";
 import trash from "@iconify-icons/basil/trash-outline";
 import download from "@iconify-icons/basil/download-outline";
@@ -77,6 +79,8 @@ export const icons = {
   edit,
   check,
   cloudOff,
+  cloudCheck,
+  cloudDownload,
   logout,
   trash,
   download,

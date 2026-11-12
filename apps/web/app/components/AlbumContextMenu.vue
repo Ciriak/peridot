@@ -13,11 +13,14 @@ import {
 import { computed } from "vue";
 import { useLikes } from "../composables/use-likes";
 import { useLibraryPlayer } from "../composables/use-library-player";
+import { useOfflineTracks } from "../composables/use-offline-tracks";
 import { icons } from "../lib/icons";
 import { albumRoute } from "../lib/library";
-import { loadCollectionTrackIds } from "../lib/catalog-collections";
+import { loadCollectionTracks } from "../lib/catalog-collections";
 import { useServer } from "../composables/use-server";
+import { useServerConnection } from "../composables/use-server-connection";
 import { useSession } from "../composables/use-session";
+import { isPeridotNetworkError } from "../lib/peridot-client";
 
 const props = defineProps<{
   album: AlbumSummaryResponse;
@@ -26,6 +29,8 @@ const { t } = useI18n();
 const { address } = useServer();
 const { token } = useSession();
 const { playCollection } = useLibraryPlayer();
+const { tracksMatching } = useOfflineTracks();
+const { status: serverStatus } = useServerConnection();
 const {
   loaded: likesLoaded,
   toggle: toggleLike,
@@ -40,11 +45,29 @@ const target = computed<LikeTarget>(() => ({
 
 async function playAlbum() {
   if (!address.value || !token.value) return;
-  playCollection(
-    await loadCollectionTrackIds(address.value, token.value, {
-      albumId: props.album.id,
-    }),
-  );
+  const playSaved = async () => {
+    const saved = await tracksMatching(
+      (track) =>
+        track.album?.trim().toLowerCase() ===
+          props.album.title.trim().toLowerCase() &&
+        track.artist.trim().toLowerCase() ===
+          props.album.artist.trim().toLowerCase(),
+    );
+    if (saved.length) playCollection(saved);
+  };
+  if (serverStatus.value === "lost") {
+    await playSaved();
+    return;
+  }
+  try {
+    playCollection(
+      await loadCollectionTracks(address.value, token.value, {
+        albumId: props.album.id,
+      }),
+    );
+  } catch (reason) {
+    if (isPeridotNetworkError(reason)) await playSaved();
+  }
 }
 </script>
 

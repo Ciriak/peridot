@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { computed, definePageMeta, onMounted, ref, useI18n } from "#imports";
+import {
+  computed,
+  definePageMeta,
+  onMounted,
+  ref,
+  useI18n,
+  watch,
+} from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import logo from "@peridot/ui/assets/brand/logo.svg";
 import type {
@@ -29,7 +36,9 @@ import {
   DialogTitle,
 } from "reka-ui";
 import { useServer } from "../../composables/use-server";
+import { useServerConnection } from "../../composables/use-server-connection";
 import { useSession } from "../../composables/use-session";
+import { useAdminUsersQuery } from "../../composables/use-admin-queries";
 import { useUser } from "../../composables/use-user";
 import { useLocalizedMessage } from "../../composables/use-localized-message";
 import { icons } from "../../lib/icons";
@@ -42,7 +51,6 @@ import {
   createManagedUser,
   deleteManagedUser,
   isAuthenticationRedirectError,
-  listUsers,
   updateManagedUser,
 } from "../../lib/peridot-client";
 
@@ -53,9 +61,12 @@ const { errorMessage } = useLocalizedMessage();
 const { address } = useServer();
 const { token } = useSession();
 const { user } = useUser();
+const { status: serverStatus } = useServerConnection();
 const canManageUsers = computed(() => user.value?.role === "admin");
+const serverLost = computed(() => serverStatus.value === "lost");
+const usersQuery = useAdminUsersQuery();
 const users = ref<UserResponse[]>([]);
-const loading = ref(true);
+const loading = usersQuery.loading;
 const pageError = ref("");
 const pageNotice = ref("");
 const failedAvatarKeys = ref<Set<string>>(new Set());
@@ -159,22 +170,21 @@ function setRole(role: UserRole) {
 }
 
 async function loadUsers() {
-  if (!canManageUsers.value) {
-    loading.value = false;
-    return;
-  }
-  loading.value = true;
+  if (!canManageUsers.value) return;
   pageError.value = "";
-  try {
-    const result = await listUsers(address.value ?? "", token.value ?? "");
-    users.value = result.items;
-  } catch (reason) {
-    if (isAuthenticationRedirectError(reason)) return;
-    pageError.value = errorMessage(reason, "settings.users.loadError");
-  } finally {
-    loading.value = false;
-  }
+  await usersQuery.load(true);
 }
+
+watch(
+  usersQuery.items,
+  (items) => {
+    users.value = [...items];
+  },
+  { immediate: true },
+);
+watch(usersQuery.error, (value) => {
+  if (value) pageError.value = value;
+});
 
 async function saveAccount() {
   if (!formValid.value || saving.value) return;
@@ -287,7 +297,12 @@ onMounted(() => void loadUsers());
         </h3>
         <Badge variant="outline">{{ users.length }}</Badge>
       </div>
-      <Button type="button" size="sm" @click="openCreateDialog">
+      <Button
+        type="button"
+        size="sm"
+        :disabled="serverLost"
+        @click="openCreateDialog"
+      >
         <Icon :icon="icons.userPlus" aria-hidden="true" class="size-4" />
         {{ t("settings.users.add") }}
       </Button>
@@ -342,6 +357,7 @@ onMounted(() => void loadUsers());
               type="button"
               variant="ghost"
               size="icon-sm"
+              :disabled="serverLost"
               :aria-label="
                 t('settings.users.edit', { name: account.displayName })
               "
@@ -354,7 +370,7 @@ onMounted(() => void loadUsers());
               variant="ghost"
               size="icon-sm"
               class="text-destructive"
-              :disabled="account.id === user?.id"
+              :disabled="account.id === user?.id || serverLost"
               :aria-label="
                 t('settings.users.delete', { name: account.displayName })
               "
@@ -536,7 +552,7 @@ onMounted(() => void loadUsers());
             </Button>
             <Button
               type="submit"
-              :disabled="saving || !formValid"
+              :disabled="saving || !formValid || serverLost"
               :aria-busy="saving"
             >
               {{
@@ -579,7 +595,7 @@ onMounted(() => void loadUsers());
             <Button
               type="button"
               variant="destructive"
-              :disabled="deleting"
+              :disabled="deleting || serverLost"
               :aria-busy="deleting"
             >
               {{ deleting ? t("common.deleting") : t("common.deleteAccount") }}

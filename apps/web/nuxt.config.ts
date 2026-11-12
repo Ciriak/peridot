@@ -8,6 +8,8 @@ const optimizedDependencies = [
   "@iconify-icons/basil/caret-right-outline",
   "@iconify-icons/basil/caret-up-outline",
   "@iconify-icons/basil/check-outline",
+  "@iconify-icons/basil/cloud-check-outline",
+  "@iconify-icons/basil/cloud-download-outline",
   "@iconify-icons/basil/cloud-off-outline",
   "@iconify-icons/basil/cross-outline",
   "@iconify-icons/basil/download-outline",
@@ -53,12 +55,17 @@ const optimizedDependencies = [
   "cn",
   "reka-ui",
   "ts-md5",
+  "@tanstack/vue-query",
+  "@tanstack/query-persist-client-core",
+  "idb-keyval",
 ];
+const pwaBuildRevision = new Date().toISOString();
 
 export default defineNuxtConfig({
+  ssr: false,
   compatibilityDate: "2026-11-10",
   devtools: { enabled: false },
-  modules: ["@nuxtjs/i18n"],
+  modules: ["@nuxtjs/i18n", "@vite-pwa/nuxt"],
   i18n: {
     defaultLocale: "en-US",
     strategy: "no_prefix",
@@ -85,6 +92,65 @@ export default defineNuxtConfig({
   app: {
     head: {
       htmlAttrs: { class: "dark", lang: "en-US" },
+      link: [{ rel: "manifest", href: "/manifest.webmanifest" }],
+    },
+  },
+  pwa: {
+    registerType: "autoUpdate",
+    client: {
+      installPrompt: false,
+    },
+    devOptions: {
+      enabled: true,
+    },
+    manifest: {
+      name: "Peridot",
+      short_name: "Peridot",
+      description: "Your music. Your space.",
+      theme_color: "#0A0A0A",
+      background_color: "#FFFFFF",
+      display: "standalone",
+      orientation: "any",
+      start_url: "/",
+      scope: "/",
+      icons: [
+        {
+          src: "/pwa-192x192.png",
+          sizes: "192x192",
+          type: "image/png",
+        },
+        {
+          src: "/pwa-512x512.png",
+          sizes: "512x512",
+          type: "image/png",
+        },
+        {
+          src: "/pwa-maskable-512x512.png",
+          sizes: "512x512",
+          type: "image/png",
+          purpose: "maskable",
+        },
+      ],
+    },
+    workbox: {
+      additionalManifestEntries: [{ url: "/", revision: pwaBuildRevision }],
+      cleanupOutdatedCaches: true,
+      globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+      navigateFallback: "/",
+      navigateFallbackDenylist: [/^\/api\//],
+      runtimeCaching: [
+        {
+          urlPattern:
+            /\/api\/(?:covers\/[^/?]+|artists\/[^/?]+\/image)(?:\?.*)?$/,
+          handler: "CacheFirst",
+          options: {
+            cacheName: "peridot-artwork-v1",
+            cacheableResponse: {
+              statuses: [0, 200],
+            },
+          },
+        },
+      ],
     },
   },
 });

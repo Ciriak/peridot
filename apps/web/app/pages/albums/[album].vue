@@ -9,12 +9,17 @@ import { computed, onMounted, ref, watch } from "vue";
 import LikeButton from "../../components/LikeButton.vue";
 import TrackArtistLinks from "../../components/TrackArtistLinks.vue";
 import TrackTable from "../../components/TrackTable.vue";
-import { useCatalogTrackQuery } from "../../composables/use-catalog-query";
+import {
+  useCatalogAlbumQuery,
+  useCatalogTrackQuery,
+} from "../../composables/use-catalog-query";
 import { useLikes } from "../../composables/use-likes";
 import { useLibraryPlayer } from "../../composables/use-library-player";
+import { useOfflineTracks } from "../../composables/use-offline-tracks";
+import { useServerConnection } from "../../composables/use-server-connection";
 import { useServer } from "../../composables/use-server";
 import { useSession } from "../../composables/use-session";
-import { loadCollectionTrackIds } from "../../lib/catalog-collections";
+import { loadCollectionTracks } from "../../lib/catalog-collections";
 import { icons } from "../../lib/icons";
 import {
   formatTrackDuration,
@@ -24,7 +29,7 @@ import {
 } from "../../lib/library";
 import {
   isAuthenticationRedirectError,
-  listAlbums,
+  isPeridotNetworkError,
 } from "../../lib/peridot-client";
 
 definePageMeta({ name: "album-detail" });
@@ -34,6 +39,8 @@ const { t } = useI18n();
 const { address } = useServer();
 const { token } = useSession();
 const { active, playing, playCollection, togglePlayback } = useLibraryPlayer();
+const { status: serverStatus } = useServerConnection();
+const { tracksMatching } = useOfflineTracks();
 const {
   likedAlbumKeys,
   loaded: likesLoaded,
@@ -51,8 +58,19 @@ const albumArtist = computed(() => {
   return String(Array.isArray(value) ? (value[0] ?? "") : (value ?? ""));
 });
 const album = ref<AlbumSummaryResponse | null>(null);
-const albumLoading = ref(true);
-const albumError = ref("");
+const offlinePlaybackError = ref("");
+const {
+  items: albumMatches,
+  loading: albumMatchesLoading,
+  error: albumMatchesError,
+  load: loadAlbumMatches,
+} = useCatalogAlbumQuery(() => ({
+  query: `${albumTitle.value} ${albumArtist.value}`.trim(),
+  limit: 20,
+  sort: "title",
+}));
+const albumLoading = computed(() => albumMatchesLoading.value && !album.value);
+const albumError = computed(() => albumMatchesError.value ?? "");
 const trackSort = ref<TrackSort>({ field: "number", direction: "asc" });
 const {
   tracks,
@@ -93,37 +111,46 @@ useHead(() => ({
     : t("page.album.fallbackTitle"),
 }));
 
-async function loadAlbum() {
-  if (!address.value || !token.value) return;
-  albumLoading.value = true;
-  albumError.value = "";
-  try {
-    const page = await listAlbums(address.value, token.value, {
-      query: `${albumTitle.value} ${albumArtist.value}`,
-      limit: 20,
-    });
-    album.value =
-      page.items.find(
-        (candidate) =>
-          candidate.title.toLowerCase() === albumTitle.value.toLowerCase() &&
-          candidate.artist.toLowerCase() === albumArtist.value.toLowerCase(),
-      ) ?? null;
-    if (album.value) await loadTracks(true);
-  } catch (reason) {
-    if (isAuthenticationRedirectError(reason)) return;
-    albumError.value = t("page.album.loadError");
-  } finally {
-    albumLoading.value = false;
-  }
+function loadAlbum(force = false) {
+  void loadAlbumMatches(force);
 }
 
 async function playWholeAlbum() {
   if (!address.value || !token.value || !album.value) return;
-  playCollection(
-    await loadCollectionTrackIds(address.value, token.value, {
-      albumId: album.value.id,
-    }),
-  );
+  offlinePlaybackError.value = "";
+  const playSavedTracks = async () => {
+    const saved = await tracksMatching(
+      (track) =>
+        track.album?.trim().toLowerCase() ===
+          album.value?.title.trim().toLowerCase() &&
+        track.artist.trim().toLowerCase() ===
+          album.value?.artist.trim().toLowerCase(),
+    );
+    if (!saved.length) {
+      offlinePlaybackError.value = t("error.offlineCollectionEmpty");
+      return;
+    }
+    playCollection(saved);
+  };
+  if (serverStatus.value === "lost") {
+    await playSavedTracks();
+    return;
+  }
+  try {
+    playCollection(
+      await loadCollectionTracks(address.value, token.value, {
+        albumId: album.value.id,
+      }),
+    );
+  } catch (reason) {
+    if (isPeridotNetworkError(reason)) {
+      await playSavedTracks();
+      return;
+    }
+    if (!isAuthenticationRedirectError(reason)) {
+      offlinePlaybackError.value = t("page.album.loadError");
+    }
+  }
 }
 
 function toggleAlbumPlayback() {
@@ -140,10 +167,25 @@ function setTrackSort(next: TrackSort | null) {
 
 watch([albumTitle, albumArtist, address, token], () => {
   album.value = null;
-  void loadAlbum();
+  loadAlbum();
 });
+watch(
+  albumMatches,
+  (matches) => {
+    const nextAlbum =
+      matches.find(
+        (candidate) =>
+          candidate.title.toLowerCase() === albumTitle.value.toLowerCase() &&
+          candidate.artist.toLowerCase() === albumArtist.value.toLowerCase(),
+      ) ?? null;
+    const changed = nextAlbum?.id !== album.value?.id;
+    album.value = nextAlbum;
+    if (nextAlbum && changed) void loadTracks();
+  },
+  { immediate: true },
+);
 onMounted(() => {
-  void loadAlbum();
+  loadAlbum();
   void loadLikes();
 });
 </script>
@@ -168,16 +210,23 @@ onMounted(() => {
     {{ t("page.album.loading") }}…
   </div>
   <div
-    v-else-if="albumError || tracksError"
+    v-else-if="albumError"
     role="alert"
     class="space-y-3 rounded-lg border p-6 text-sm"
   >
-    <p>{{ albumError || tracksError }}</p>
-    <Button variant="outline" @click="loadAlbum">{{
+    <p>{{ albumError }}</p>
+    <Button variant="outline" @click="loadAlbum(true)">{{
       t("common.tryAgain")
     }}</Button>
   </div>
   <template v-else-if="album">
+    <p
+      v-if="offlinePlaybackError"
+      role="alert"
+      class="mb-4 text-sm text-destructive"
+    >
+      {{ offlinePlaybackError }}
+    </p>
     <section
       aria-labelledby="album-heading"
       class="flex flex-col gap-6 rounded-lg border bg-card p-6 text-card-foreground sm:flex-row sm:items-end"
@@ -275,7 +324,17 @@ onMounted(() => {
         {{ t("components.tracks.label") }}
       </h2>
       <div
-        v-if="tracksLoading && !tracks.length"
+        v-if="tracksError"
+        role="alert"
+        class="space-y-3 rounded-lg border p-6 text-sm"
+      >
+        <p>{{ tracksError }}</p>
+        <Button variant="outline" @click="loadTracks(true)">{{
+          t("common.tryAgain")
+        }}</Button>
+      </div>
+      <div
+        v-else-if="tracksLoading && !tracks.length"
         role="status"
         class="flex items-center gap-2 text-sm text-muted-foreground"
       >

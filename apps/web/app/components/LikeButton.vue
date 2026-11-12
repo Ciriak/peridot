@@ -2,9 +2,10 @@
 import { useI18n } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import { Button } from "@peridot/ui/components/ui/button";
+import { computed } from "vue";
 import { icons } from "../lib/icons";
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     liked: boolean;
     label: string;
@@ -17,6 +18,11 @@ withDefaults(
 
 const emit = defineEmits<{ toggle: [] }>();
 const { t } = useI18n();
+const actionLabel = computed(() =>
+  props.liked
+    ? t("like.unlike", { label: props.label })
+    : t("like.like", { label: props.label }),
+);
 </script>
 
 <template>
@@ -25,9 +31,8 @@ const { t } = useI18n();
     :size="compact ? 'icon-xs' : 'icon-lg'"
     class="hover:text-primary active:text-primary"
     :disabled="disabled || pending"
-    :aria-label="
-      liked ? t('like.unlike', { label }) : t('like.like', { label })
-    "
+    :aria-label="actionLabel"
+    :title="actionLabel"
     :aria-pressed="liked"
     :aria-busy="pending"
     @click="emit('toggle')"

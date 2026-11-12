@@ -9,7 +9,6 @@ import {
   useI18n,
 } from "#imports";
 import { Icon } from "@iconify/vue/offline";
-import type { LogEntryResponse } from "@peridot/contracts";
 import { Button } from "@peridot/ui/components/ui/button";
 import { Input } from "@peridot/ui/components/ui/input";
 import {
@@ -28,11 +27,14 @@ import {
   DropdownMenuTrigger,
 } from "reka-ui";
 import { useServer } from "../../composables/use-server";
+import { useServerLogsQuery } from "../../composables/use-admin-queries";
 import { useRealtime } from "../../composables/use-realtime";
 import { useSession } from "../../composables/use-session";
 import { useUser } from "../../composables/use-user";
 import { icons } from "../../lib/icons";
-import { fetchLogs, revokeSession } from "../../lib/peridot-client";
+import { clearAllOfflineTracks } from "../../lib/offline-audio";
+import { clearAllPeridotQueries } from "../../lib/query-persister";
+import { revokeSession } from "../../lib/peridot-client";
 
 definePageMeta({ layout: "settings" });
 
@@ -41,7 +43,8 @@ const { address } = useServer();
 const { token } = useSession();
 const { user } = useUser();
 const realtime = useRealtime();
-const logs = ref<LogEntryResponse[]>([]);
+const logsQuery = useServerLogsQuery();
+const logs = logsQuery.items;
 let logAfter = 0;
 let unsubscribeLogs: (() => void) | undefined;
 const logLevels = ["trace", "debug", "info", "warn", "error", "fatal"];
@@ -52,20 +55,10 @@ const disconnecting = ref(false);
 const logError = ref("");
 
 async function refreshLogs() {
-  try {
-    const result = await fetchLogs(
-      address.value ?? "",
-      token.value ?? "",
-      logAfter,
-    );
-    logError.value = "";
-    if (result.items.length) {
-      logAfter = result.items[result.items.length - 1]?.id ?? logAfter;
-      logs.value = [...result.items].reverse().concat(logs.value).slice(0, 500);
-    }
-  } catch {
-    // The log view tolerates transient polling failures.
-  }
+  logError.value = "";
+  await logsQuery.refresh();
+  const newest = logs.value[0];
+  if (newest && newest.id > logAfter) logAfter = newest.id;
 }
 
 function logTime(value: string): string {
@@ -107,6 +100,7 @@ async function confirmDisconnect() {
   address.value = null;
   token.value = null;
   user.value = null;
+  await Promise.all([clearAllPeridotQueries(), clearAllOfflineTracks()]);
   try {
     if (currentAddress && currentToken) {
       await revokeSession(currentAddress, currentToken);
@@ -129,7 +123,7 @@ onMounted(() => {
     if (message.type === "log.appended") {
       if (message.entry.id <= logAfter) return;
       logAfter = message.entry.id;
-      logs.value = [message.entry, ...logs.value].slice(0, 500);
+      logsQuery.append(message.entry);
     } else if (message.type === "resync.required") {
       void refreshLogs();
     }

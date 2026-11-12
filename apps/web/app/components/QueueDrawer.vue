@@ -137,7 +137,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", handleKeydown));
               <Button
                 variant="ghost"
                 size="icon-sm"
-                class="absolute inset-0 size-full rounded-md bg-background/70 opacity-0 transition-opacity hover:bg-background/70 hover:text-foreground dark:hover:bg-background/70 group-hover/track-artwork:opacity-100 group-focus-within/track-artwork:opacity-100"
+                class="absolute inset-0 size-full cursor-pointer rounded-md bg-background/70 opacity-0 transition-opacity hover:bg-background/70 hover:text-foreground dark:hover:bg-background/70 group-hover/track-artwork:opacity-100 group-focus-within/track-artwork:opacity-100"
                 :aria-label="
                   playing
                     ? t('player.pauseTitle', { title: active.title })
@@ -222,9 +222,9 @@ onBeforeUnmount(() => document.removeEventListener("keydown", handleKeydown));
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  class="absolute inset-0 size-full rounded-md bg-background/70 opacity-0 transition-opacity hover:bg-background/70 hover:text-foreground dark:hover:bg-background/70 group-hover/track-artwork:opacity-100 group-focus-within/track-artwork:opacity-100"
+                  class="absolute inset-0 size-full cursor-pointer rounded-md bg-background/70 opacity-0 transition-opacity hover:bg-background/70 hover:text-foreground dark:hover:bg-background/70 group-hover/track-artwork:opacity-100 group-focus-within/track-artwork:opacity-100"
                   :aria-label="t('queue.playFrom', { title: track.title })"
-                  @click.stop="play(track.id)"
+                  @click.stop="play(track)"
                 >
                   <Icon
                     :icon="icons.play"

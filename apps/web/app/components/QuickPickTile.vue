@@ -12,7 +12,7 @@ import { useServer } from "../composables/use-server";
 import { useSession } from "../composables/use-session";
 import { icons } from "../lib/icons";
 import { trackCoverUrl } from "../lib/library";
-import { loadCollectionTrackIds } from "../lib/catalog-collections";
+import { loadCollectionTracks } from "../lib/catalog-collections";
 
 const props = defineProps<{ item: ResolvedQuickPickItem }>();
 const { t } = useI18n();
@@ -62,9 +62,9 @@ watch(coverUrl, () => {
   coverFailed.value = false;
 });
 
-async function albumTrackIds(): Promise<string[]> {
+async function albumTracks() {
   if (!address.value || !token.value || props.item.kind !== "album") return [];
-  return loadCollectionTrackIds(address.value, token.value, {
+  return loadCollectionTracks(address.value, token.value, {
     albumId: props.item.album.id,
   });
 }
@@ -75,10 +75,10 @@ async function toggleItemPlayback() {
     return;
   }
   if (props.item.kind === "track") {
-    play(props.item.track.id);
+    play(props.item.track);
     return;
   }
-  playCollection(await albumTrackIds());
+  playCollection(await albumTracks());
 }
 </script>
 

@@ -1,5 +1,66 @@
 # Decisions
 
+## 2026-11-12: Cached query data takes precedence over refresh failures
+
+Persistent server-state queries use blocking loading only while no query data
+exists. Once TanStack Query has data, later fetches are background refreshes and
+must not replace the page with a loading or fatal error state. A failed refresh
+may update the underlying query status to `error` while retaining its data, so
+the UI derives blocking loading and visible errors from the presence of cached
+data rather than from `isPending`, `isFetching`, or `error` alone.
+
+Album and artist detail pages initialize their page state from the cached match
+query instead of setting a separate loading flag and forcing a refetch on every
+mount. Returning to a previously visited detail page therefore renders the
+known album or artist immediately. Cold IndexedDB restoration can still show a
+loading state until the asynchronous storage read completes.
+
+## 2026-11-12: Development serves generated PWA assets
+
+Nuxt PWA development serving is explicitly enabled. Without `devOptions`, the
+development server leaves both the manifest route and generated service worker
+request to the SPA fallback, which returns HTML that browsers cannot parse as a
+manifest or execute as a worker. Development now serves the same configured
+manifest as production, and the development service worker uses the temporary
+Nuxt build directory configured by the integration.
+
+Production remains generated only by the PWA build. This affects local
+development diagnostics and registration behavior, not the public API, offline
+cache data, or application state.
+
+## 2026-11-12: Client-rendered PWA owns offline browsing and media
+
+The web UI runs with Nuxt `ssr: false` while retaining the Nitro server for the
+SPA document and `/api/discovery/servers`. Nuxt continues to own file routing,
+layouts, i18n, shared component imports, and the deployment build. A generated
+PWA service worker precaches the client shell, local assets, and a navigation
+fallback, and caches signed track and artist artwork. API JSON is not placed in
+Workbox runtime caches because TanStack Query owns its lifecycle and
+invalidation.
+
+Authenticated GET-backed UI state uses TanStack Vue Query. Query keys always
+include the connected server and user ID but never the bearer token. The
+official per-query IndexedDB persister stores visited query data indefinitely
+and restores it when the Peridot request fails. Catalog and administrative
+mutation responses update or invalidate the affected query prefixes, while
+realtime catalog events invalidate catalog queries. Discovery, health,
+filesystem browsing, and metadata-candidate searches are intentionally not
+persisted.
+
+Offline audio is explicit rather than predictive. A visible cloud icon beside
+each track is the sole save action, separate from the normal file Download
+action. It stores the original audio and available artwork in app-owned Cache
+Storage under a server/user/track key and records metadata in IndexedDB. The
+player attempts cached audio only after a typed network failure; authentication
+and server rejections retain their normal behavior. Queue edits remain in the
+existing local snapshot and the latest queue is retried after reconnection.
+Other mutations are disabled while the server is unreachable.
+
+Completing logout, disconnecting, invalidating a session, or changing the
+server/user identity clears persisted queries, the saved-track manifest, and
+offline audio and artwork caches. Browser quotas and eviction remain external
+limits; Peridot applies no time-based expiry of its own.
+
 ## 2026-11-12: Catalog backfills defer until listen and yield between tracks
 
 A catalog projection-version change must not delay the development server from
@@ -57,16 +118,20 @@ that share album artwork receive the same browser URL and image-cache entry.
 The cover token remains scoped to that stored cover and cannot authorize audio
 or another cover. This supersedes the earlier per-track cover URL contract.
 
-## 2026-11-12: Player artwork changes without a cover transition
+## 2026-11-12: Player foreground updates immediately while its background fades
 
 The persistent player keys both its foreground artwork and decorative cover
-background by the resolved cover URL. A track-cover change therefore replaces
-the visible image element immediately instead of leaving the previous bitmap on
-screen while the new source loads or running a delayed crossfade.
+background by the resolved cover URL. A track-cover change replaces the visible
+square artwork immediately while the blurred decorative background waits 150 ms
+and then directly crossfades over three seconds. This keeps track metadata and
+the foreground cover responsive without making the atmospheric color treatment
+snap between songs.
 
-This supersedes the earlier three-second blurred-background crossfade. The
+The transition wraps only the decorative image, not the foreground artwork.
+Outgoing and incoming blurred covers overlap rather than passing through an
+empty frame, and standard Tailwind reduced-motion utilities remove the fade. The
 decorative blur, cover-derived color, gradients, fallback behavior, and semantic
-theme treatment remain unchanged; only the delayed visual update is removed.
+theme treatment remain unchanged.
 
 ## 2026-11-12: Track tables keep the main content as the only scroll owner
 

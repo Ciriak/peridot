@@ -61,8 +61,8 @@ test("the player exposes randomize and a persistent right-side queue drawer", as
   assert.match(drawer, /t\("queue\.nowPlaying"\)/);
   assert.match(
     drawer,
-    /queue\.nowPlaying[\s\S]*class="group\/track-artwork flex min-w-0 items-center gap-3"[\s\S]*<TrackArtwork[\s\S]*<Button[\s\S]*class="[^"]*absolute inset-0 size-full[^"]*bg-background\/70[^"]*hover:bg-background\/70[^"]*"[\s\S]*t\('player\.pauseTitle'[\s\S]*t\('player\.playTitle'[\s\S]*@click="togglePlayback"[\s\S]*class="size-5 text-foreground"[\s\S]*<\/TrackArtwork>/,
-    "The now-playing item matches the Quick pick overlay and icon color",
+    /queue\.nowPlaying[\s\S]*class="group\/track-artwork flex min-w-0 items-center gap-3"[\s\S]*<TrackArtwork[\s\S]*<Button[\s\S]*class="[^"]*absolute inset-0 size-full cursor-pointer[^"]*bg-background\/70[^"]*hover:bg-background\/70[^"]*"[\s\S]*t\('player\.pauseTitle'[\s\S]*t\('player\.playTitle'[\s\S]*@click="togglePlayback"[\s\S]*class="size-5 text-foreground"[\s\S]*<\/TrackArtwork>/,
+    "The now-playing cover control uses a pointer cursor and matches the Quick pick colors",
   );
   assert.match(drawer, /<Badge v-if="shuffleEnabled" variant="secondary">/);
   assert.match(drawer, /t\("queue\.randomized"\)/);
@@ -105,15 +105,15 @@ test("the player exposes randomize and a persistent right-side queue drawer", as
   );
   assert.match(
     drawer,
-    /v-for="track in sortableTracks"[\s\S]*class="group\/track-artwork flex cursor-grab items-center gap-2 rounded-md border p-2 active:cursor-grabbing"[\s\S]*<TrackArtwork[\s\S]*:track="track"[\s\S]*class="[^"]*absolute inset-0 size-full[^"]*bg-background\/70[^"]*hover:bg-background\/70[^"]*"[\s\S]*t\('queue\.playFrom'[\s\S]*@click\.stop="play\(track\.id\)"[\s\S]*class="size-5 text-foreground"/,
-    "Each upcoming queue item matches the Quick pick overlay and icon color",
+    /v-for="track in sortableTracks"[\s\S]*class="group\/track-artwork flex cursor-grab items-center gap-2 rounded-md border p-2 active:cursor-grabbing"[\s\S]*<TrackArtwork[\s\S]*:track="track"[\s\S]*class="[^"]*absolute inset-0 size-full cursor-pointer[^"]*bg-background\/70[^"]*hover:bg-background\/70[^"]*"[\s\S]*t\('queue\.playFrom'[\s\S]*@click\.stop="play\(track\)"[\s\S]*class="size-5 text-foreground"/,
+    "Each upcoming cover control uses a pointer cursor and matches the Quick pick colors",
   );
   assert.match(
     drawer,
     /size="icon"[\s\S]*t\('queue\.remove'[\s\S]*icons\.close[\s\S]*class="size-5"/,
     "The queue remove target uses the larger standard button and icon sizes",
   );
-  assert.match(drawer, /@click\.stop="play\(track\.id\)"/);
+  assert.match(drawer, /@click\.stop="play\(track\)"/);
 
   assert.match(player, /fetchQueue\(/);
   assert.match(player, /replaceQueue\(/);

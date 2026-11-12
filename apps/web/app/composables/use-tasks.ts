@@ -1,5 +1,5 @@
-import { useState } from "#imports";
-import type { TaskResponse } from "@peridot/contracts";
+import type { TaskListResponse, TaskResponse } from "@peridot/contracts";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
 import { computed } from "vue";
 import {
   listTasks,
@@ -7,10 +7,19 @@ import {
   rescanSource,
   startLibraryScan,
 } from "../lib/peridot-client";
-import { useServer } from "./use-server";
+import { persistQueryKey } from "../lib/query-persister";
+import { queryKeys } from "../lib/query-keys";
+import { useQueryScope } from "./use-query-scope";
+import { useServerConnection } from "./use-server-connection";
 import { useSession } from "./use-session";
 
 const ACTIVE_STATUSES = new Set(["queued", "running"]);
+const TASKS_QUERY_OPTIONS = { status: "all", limit: 50 } as const;
+const EMPTY_TASKS: TaskListResponse = {
+  items: [],
+  activeCount: 0,
+  queuedCount: 0,
+};
 
 function taskOrder(left: TaskResponse, right: TaskResponse): number {
   const rank = (task: TaskResponse) =>
@@ -22,14 +31,47 @@ function taskOrder(left: TaskResponse, right: TaskResponse): number {
   );
 }
 
-export function useTasks() {
-  const { address } = useServer();
-  const { token } = useSession();
-  const tasks = useState<TaskResponse[]>("tasks", () => []);
-  const loaded = useState("tasks-loaded", () => false);
-  const loading = useState("tasks-loading", () => false);
-  const starting = useState("tasks-starting", () => false);
+function taskList(items: TaskResponse[]): TaskListResponse {
+  const ordered = [...items].sort(taskOrder);
+  return {
+    items: ordered,
+    activeCount: ordered.filter((task) => ACTIVE_STATUSES.has(task.status))
+      .length,
+    queuedCount: ordered.filter((task) => task.status === "queued").length,
+  };
+}
 
+export function useTasks() {
+  const { scope } = useQueryScope();
+  const { token } = useSession();
+  const { status } = useServerConnection();
+  const queryClient = useQueryClient();
+  const queryKey = computed(() =>
+    scope.value ? queryKeys.tasks(scope.value, TASKS_QUERY_OPTIONS) : null,
+  );
+  const query = useQuery({
+    queryKey: computed(
+      () => queryKey.value ?? ["peridot", "unscoped", "tasks"],
+    ),
+    queryFn: () => {
+      if (!scope.value || !token.value) {
+        throw new Error("Peridot query scope is unavailable.");
+      }
+      return listTasks(
+        scope.value.serverAddress,
+        token.value,
+        TASKS_QUERY_OPTIONS,
+      );
+    },
+    enabled: computed(() => Boolean(scope.value && token.value)),
+    meta: { persist: true },
+  });
+  const taskListValue = computed(() => query.data.value ?? EMPTY_TASKS);
+  const tasks = computed(() => taskListValue.value.items);
+  const loaded = computed(() => query.data.value !== undefined);
+  const loading = computed(
+    () => query.isPending.value || query.isFetching.value,
+  );
   const activeTasks = computed(() =>
     tasks.value.filter((task) => ACTIVE_STATUSES.has(task.status)),
   );
@@ -44,16 +86,16 @@ export function useTasks() {
     () => activeTasks.value.filter((task) => task.status === "queued").length,
   );
 
-  function ordered(items: TaskResponse[]): TaskResponse[] {
-    return [...items].sort(taskOrder);
-  }
-
   function track(nextTask: TaskResponse): TaskResponse {
-    tasks.value = ordered([
+    if (!queryKey.value) return nextTask;
+    const current =
+      queryClient.getQueryData<TaskListResponse>(queryKey.value) ?? EMPTY_TASKS;
+    const next = taskList([
       nextTask,
-      ...tasks.value.filter((task) => task.id !== nextTask.id),
+      ...current.items.filter((task) => task.id !== nextTask.id),
     ]);
-    loaded.value = true;
+    queryClient.setQueryData(queryKey.value, next);
+    void persistQueryKey(queryKey.value);
     return nextTask;
   }
 
@@ -70,63 +112,54 @@ export function useTasks() {
   }
 
   async function refresh() {
-    if (!address.value || !token.value) return tasks.value;
-    const requestedAddress = address.value;
-    const requestedToken = token.value;
-    loading.value = true;
-    try {
-      const result = await listTasks(requestedAddress, requestedToken, {
-        status: "all",
-        limit: 50,
-      });
-      if (
-        requestedAddress !== address.value ||
-        requestedToken !== token.value
-      ) {
-        return tasks.value;
-      }
-      tasks.value = ordered(result.items);
-      loaded.value = true;
-      return tasks.value;
-    } finally {
-      loading.value = false;
-    }
+    if (!scope.value || !token.value) return tasks.value;
+    await query.refetch();
+    return tasks.value;
   }
+
+  const queueMutation = useMutation({
+    mutationFn: async (
+      action:
+        | { kind: "library" }
+        | { kind: "source"; sourceId: string }
+        | { kind: "metadata" },
+    ) => {
+      if (!scope.value || !token.value) {
+        throw new Error("Peridot query scope is unavailable.");
+      }
+      if (action.kind === "source") {
+        return rescanSource(
+          scope.value.serverAddress,
+          token.value,
+          action.sourceId,
+        );
+      }
+      if (action.kind === "metadata") {
+        return refreshMetadata(scope.value.serverAddress, token.value);
+      }
+      return startLibraryScan(scope.value.serverAddress, token.value);
+    },
+    onSuccess(task) {
+      track(task);
+    },
+  });
+  const starting = computed(
+    () => queueMutation.isPending.value || status.value === "lost",
+  );
 
   async function queueLibraryScan() {
     if (starting.value) return activeTask.value;
-    starting.value = true;
-    try {
-      return track(
-        await startLibraryScan(address.value ?? "", token.value ?? ""),
-      );
-    } finally {
-      starting.value = false;
-    }
+    return queueMutation.mutateAsync({ kind: "library" });
   }
 
   async function queueSourceScan(sourceId: string) {
     if (starting.value) return activeTask.value;
-    starting.value = true;
-    try {
-      return track(
-        await rescanSource(address.value ?? "", token.value ?? "", sourceId),
-      );
-    } finally {
-      starting.value = false;
-    }
+    return queueMutation.mutateAsync({ kind: "source", sourceId });
   }
 
   async function queueMetadataRefresh() {
     if (starting.value) return activeTask.value;
-    starting.value = true;
-    try {
-      return track(
-        await refreshMetadata(address.value ?? "", token.value ?? ""),
-      );
-    } finally {
-      starting.value = false;
-    }
+    return queueMutation.mutateAsync({ kind: "metadata" });
   }
 
   return {

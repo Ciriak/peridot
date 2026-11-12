@@ -1,12 +1,5 @@
 <script setup lang="ts">
-import {
-  computed,
-  definePageMeta,
-  onMounted,
-  ref,
-  useI18n,
-  watch,
-} from "#imports";
+import { computed, definePageMeta, onMounted, useI18n, watch } from "#imports";
 import {
   TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY,
   type TaskResponse,
@@ -18,13 +11,10 @@ import { ProgressCircle } from "@peridot/ui/components/ui/progress-circle";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { useServer } from "../../composables/use-server";
 import { useSession } from "../../composables/use-session";
+import { useTaskHistoryQuery } from "../../composables/use-admin-queries";
 import { useTasks } from "../../composables/use-tasks";
 import { useUser } from "../../composables/use-user";
 import { useLocalizedMessage } from "../../composables/use-localized-message";
-import {
-  isAuthenticationRedirectError,
-  listTasks,
-} from "../../lib/peridot-client";
 import {
   activeTaskPercent,
   isActiveTaskStatus,
@@ -35,7 +25,6 @@ import {
 
 definePageMeta({ layout: "settings" });
 
-const HISTORY_PAGE_SIZE = 50;
 const { t, d } = useI18n();
 const { translate } = useLocalizedMessage();
 
@@ -44,19 +33,15 @@ const { token } = useSession();
 const { user } = useUser();
 const { tasks, activeTasks, loading, loaded, refresh } = useTasks();
 const canManageTasks = computed(() => user.value?.role === "admin");
-const history = ref<TaskResponse[]>([]);
-const historyLoading = ref(false);
-const historyLoaded = ref(false);
-const historyHasMore = ref(false);
-const historyError = ref("");
+const historyQuery = useTaskHistoryQuery();
+const history = historyQuery.items;
+const historyLoading = historyQuery.loading;
+const historyLoaded = historyQuery.loaded;
+const historyHasMore = historyQuery.hasMore;
+const historyError = computed(() => historyQuery.error.value ?? "");
 const previousStatuses = new Map<string, TaskStatus>();
-let historyRequest = 0;
 
 const activeRows = computed(() => orderedActiveTasks(activeTasks.value));
-
-function currentScope(): string {
-  return `${address.value ?? ""}\u0000${token.value ?? ""}`;
-}
 
 function taskKindLabel(task: TaskResponse): string {
   if (task.kind === "library_scan") return t("settings.tasks.libraryScan");
@@ -111,75 +96,17 @@ function visibleDetails(task: TaskResponse) {
 }
 
 async function refreshHistory() {
-  if (!canManageTasks.value || !address.value || !token.value) return;
-  const requestedScope = currentScope();
-  const request = ++historyRequest;
-  historyLoading.value = true;
-  historyError.value = "";
-  try {
-    const result = await listTasks(address.value, token.value, {
-      status: "terminal",
-      limit: HISTORY_PAGE_SIZE,
-      offset: 0,
-    });
-    if (requestedScope !== currentScope() || request !== historyRequest) return;
-    history.value = result.items;
-    historyLoaded.value = true;
-    historyHasMore.value = result.items.length === HISTORY_PAGE_SIZE;
-  } catch (reason) {
-    if (requestedScope !== currentScope() || request !== historyRequest) return;
-    if (isAuthenticationRedirectError(reason)) return;
-    historyError.value = t("settings.tasks.historyError");
-    historyLoaded.value = true;
-  } finally {
-    if (request === historyRequest) historyLoading.value = false;
-  }
+  if (!canManageTasks.value) return;
+  await historyQuery.refresh();
 }
 
 async function loadMoreHistory() {
-  if (
-    !canManageTasks.value ||
-    historyLoading.value ||
-    !historyHasMore.value ||
-    !address.value ||
-    !token.value
-  ) {
-    return;
-  }
-  const requestedScope = currentScope();
-  const request = ++historyRequest;
-  historyLoading.value = true;
-  historyError.value = "";
-  try {
-    const result = await listTasks(address.value, token.value, {
-      status: "terminal",
-      limit: HISTORY_PAGE_SIZE,
-      offset: history.value.length,
-    });
-    if (requestedScope !== currentScope() || request !== historyRequest) return;
-    const existing = new Set(history.value.map((task) => task.id));
-    history.value = [
-      ...history.value,
-      ...result.items.filter((task) => !existing.has(task.id)),
-    ];
-    historyHasMore.value = result.items.length === HISTORY_PAGE_SIZE;
-  } catch (reason) {
-    if (requestedScope !== currentScope() || request !== historyRequest) return;
-    if (isAuthenticationRedirectError(reason)) return;
-    historyError.value = t("settings.tasks.olderHistoryError");
-  } finally {
-    if (request === historyRequest) historyLoading.value = false;
-  }
+  if (!canManageTasks.value) return;
+  await historyQuery.loadMore();
 }
 
 watch([address, token, user], () => {
   previousStatuses.clear();
-  history.value = [];
-  historyLoaded.value = false;
-  historyHasMore.value = false;
-  historyError.value = "";
-  historyRequest += 1;
-  if (canManageTasks.value && import.meta.client) void refreshHistory();
 });
 
 watch(tasks, (current) => {
