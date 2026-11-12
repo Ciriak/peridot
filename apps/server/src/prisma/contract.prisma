@@ -31,6 +31,8 @@ model Track {
   title                      String
   artist                     String
   artistCredits              String?
+  albumArtist                String?
+  albumArtistCredits         String?
   album                      String?
   discNumber                 Int?
   trackNumber                Int?
@@ -44,6 +46,8 @@ model Track {
   metadataTitle              String?
   metadataArtist             String?
   metadataArtistCredits      String?
+  metadataAlbumArtist        String?
+  metadataAlbumArtistCredits String?
   metadataAlbum              String?
   metadataDiscNumber         Int?
   metadataTrackNumber        Int?
@@ -132,15 +136,15 @@ model QueueState {
 model AlbumLike {
   id               String   @id @onCreate(cuid(2))
   userId           String
+  albumId          String
   title            String
   artist           String
-  normalizedTitle  String
-  normalizedArtist String
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt        DateTime @default(now())
 
-  @@unique([userId, normalizedArtist, normalizedTitle])
+  @@unique([userId, albumId])
   @@index([userId, createdAt])
+  @@index([albumId])
 }
 
 model ArtistLike {
@@ -228,6 +232,8 @@ model CatalogTrack {
   title            String
   artist           String
   artistCredits    String
+  albumArtist      String
+  albumArtistCredits String
   album            String?
   normalizedTitle  String
   normalizedArtist String
@@ -239,6 +245,8 @@ model CatalogTrack {
   available        Int
   coverId          String?
   albumId          String?
+  albumFolderKey   String
+  albumReleaseKey  String?
   updatedAt        DateTime @onCreate(now()) @onUpdate(now())
 
   @@index([normalizedArtist, normalizedAlbum, normalizedTitle, id], map: "ct_artist_album_title")
@@ -248,6 +256,7 @@ model CatalogTrack {
   @@index([durationMs, id], map: "ct_duration")
   @@index([available, id])
   @@index([albumId])
+  @@index([albumFolderKey, normalizedAlbum, id])
 }
 
 model CatalogAlbum {

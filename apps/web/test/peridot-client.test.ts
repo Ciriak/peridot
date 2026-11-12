@@ -542,6 +542,7 @@ test("like requests use the authenticated likes endpoint and expected targets", 
   });
   await deleteLike("http://127.0.0.1:17430", "session-token", {
     kind: "album",
+    albumId: "album-night-sessions",
     title: "Night Sessions",
     artist: "Elliot Lake",
   });
@@ -573,6 +574,7 @@ test("like requests use the authenticated likes endpoint and expected targets", 
   });
   assert.deepEqual(JSON.parse(String(requests[2]?.init?.body)), {
     kind: "album",
+    albumId: "album-night-sessions",
     title: "Night Sessions",
     artist: "Elliot Lake",
   });

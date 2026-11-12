@@ -10,6 +10,13 @@ function splitArtistCredit(value: string): string[] {
 export function normalizeArtistCredits(
   values: readonly (string | null | undefined)[],
 ): string[] {
+  const artists = normalizeOptionalArtistCredits(values);
+  return artists.length ? artists : ["Unknown Artist"];
+}
+
+export function normalizeOptionalArtistCredits(
+  values: readonly (string | null | undefined)[],
+): string[] {
   const artists: string[] = [];
   const seen = new Set<string>();
 
@@ -23,7 +30,7 @@ export function normalizeArtistCredits(
     }
   }
 
-  return artists.length ? artists : ["Unknown Artist"];
+  return artists;
 }
 
 export function serializeArtistCredits(artists: readonly string[]): string {
@@ -48,4 +55,24 @@ export function parseStoredArtistCredits(
     }
   }
   return normalizeArtistCredits([fallback]);
+}
+
+export function parseStoredOptionalArtistCredits(
+  stored: string | null,
+  fallback: string | null,
+): string[] {
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored) as unknown;
+      if (Array.isArray(parsed)) {
+        const artists = parsed.filter(
+          (artist): artist is string => typeof artist === "string",
+        );
+        if (artists.length) return normalizeOptionalArtistCredits(artists);
+      }
+    } catch {
+      // Legacy or hand-edited rows fall back to their display artist.
+    }
+  }
+  return normalizeOptionalArtistCredits([fallback]);
 }

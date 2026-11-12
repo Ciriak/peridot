@@ -5,11 +5,15 @@ import { onBeforeUnmount, onMounted, watch } from "vue";
 import { useCatalogRevision } from "../composables/use-catalog-query";
 import { useRealtime } from "../composables/use-realtime";
 import { useServer } from "../composables/use-server";
+import { useServerConnection } from "../composables/use-server-connection";
 import { useSession } from "../composables/use-session";
 import { useTasks } from "../composables/use-tasks";
+import { serverConnectionRestored } from "../lib/server-connection";
+import { notifyServerOnline } from "../lib/toasts";
 
 const route = useRoute();
 const { address } = useServer();
+const { status: connectionStatus } = useServerConnection();
 const { token } = useSession();
 const { refresh, upsert } = useTasks();
 const {
@@ -69,6 +73,10 @@ function start() {
 watch([address, token, () => route.path === "/onboarding"], () => {
   if (currentScope() === activeScope && unsubscribe) return;
   start();
+});
+watch(connectionStatus, (next, previous) => {
+  if (route.path === "/onboarding" || !address.value || !token.value) return;
+  if (serverConnectionRestored(previous, next)) notifyServerOnline();
 });
 
 onMounted(start);

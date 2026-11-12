@@ -505,7 +505,15 @@ test("scans automatically enrich album tracks with MusicBrainz provenance", asyn
     assert.equal(scan.metadataTotalCount, 2);
     assert.equal(scan.metadataMatchedCount, 2);
     assert.equal(scan.metadataUnmatchedCount, 0);
-    assert.equal((await context.database.orm.CatalogTrack.all()).length, 2);
+    const projectedTracks = await context.database.orm.CatalogTrack.all();
+    assert.equal(projectedTracks.length, 2);
+    assert.ok(
+      projectedTracks.every(
+        (track) =>
+          track.albumArtist === "Elliot Lake" &&
+          track.albumId === projectedTracks[0]?.albumId,
+      ),
+    );
 
     const tracks = await context.app.inject({
       method: "GET",
@@ -517,12 +525,14 @@ test("scans automatically enrich album tracks with MusicBrainz provenance", asyn
       items: Array<{
         title: string;
         album: string | null;
+        albumId: string | null;
         metadata: Record<string, unknown> | null;
       }>;
     }>().items;
     assert.equal(items.length, 2);
     for (const track of items) {
       assert.equal(track.album, "Night Sessions");
+      assert.equal(track.albumId, projectedTracks[0]?.albumId);
       assert.equal(track.metadata?.providerKind, "musicbrainz");
       assert.equal(track.metadata?.mode, "automatic");
       assert.match(String(track.metadata?.sourceUrl), /recording/);
@@ -673,6 +683,7 @@ test("Discogs credentials fall back after MusicBrainz and manual results merge p
         title: string;
         artist: string;
         artists: string[];
+        albumArtists: string[];
         album: string | null;
         discNumber: number | null;
         trackNumber: number | null;
@@ -702,6 +713,7 @@ test("Discogs credentials fall back after MusicBrainz and manual results merge p
         title: discogsCandidate.title,
         artist: discogsCandidate.artist,
         artists: discogsCandidate.artists,
+        albumArtists: discogsCandidate.albumArtists,
         album: discogsCandidate.album,
         discNumber: discogsCandidate.discNumber,
         trackNumber: discogsCandidate.trackNumber,
@@ -710,6 +722,15 @@ test("Discogs credentials fall back after MusicBrainz and manual results merge p
       },
     });
     assert.equal(applied.statusCode, 204);
+    assert.deepEqual(discogsCandidate.albumArtists, ["Elliot Lake"]);
+    assert.equal(
+      (
+        await context.database.orm.CatalogTrack.firstOrThrow({
+          id: track.id,
+        })
+      ).albumArtist,
+      "Elliot Lake",
+    );
     const manual = await context.app.inject({
       method: "GET",
       url: `/api/tracks/${track.id}`,
@@ -923,6 +944,7 @@ test("members can replace and revert a manual metadata match", async () => {
         title: candidate.title,
         artist: candidate.artist,
         artists: candidate.artists,
+        albumArtists: candidate.albumArtists,
         album: candidate.album,
         discNumber: candidate.discNumber,
         trackNumber: candidate.trackNumber,

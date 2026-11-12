@@ -4,7 +4,7 @@ import type {
   RecordTrackPlayResponse,
 } from "@peridot/contracts";
 import type { FastifyInstance } from "fastify";
-import { catalogAlbumId, type CatalogService } from "./catalog.js";
+import type { CatalogService } from "./catalog.js";
 import type { Database } from "./database.js";
 import { sendError } from "./http.js";
 import { message } from "./messages.js";
@@ -50,7 +50,40 @@ export async function registerQuickPickRoutes(
       })
         .include("track")
         .all();
-      const ranked = rankQuickPicks(events, new Date());
+      const eventTrackIds = [...new Set(events.map((event) => event.trackId))];
+      let projectionRows = eventTrackIds.length
+        ? await database.orm.CatalogTrack.where((track) =>
+            track.id.in(eventTrackIds),
+          ).all()
+        : [];
+      const projectedIds = new Set(projectionRows.map((track) => track.id));
+      const missingProjectionIds = eventTrackIds.filter(
+        (trackId) => !projectedIds.has(trackId),
+      );
+      for (const trackId of missingProjectionIds) {
+        await catalog.reindexTrack(trackId, "source");
+      }
+      if (missingProjectionIds.length) {
+        projectionRows = await database.orm.CatalogTrack.where((track) =>
+          track.id.in(eventTrackIds),
+        ).all();
+      }
+      const projectedTracks = new Map(
+        projectionRows.map((track) => [track.id, track]),
+      );
+      const enrichedEvents = events.map((event) => {
+        const projected = projectedTracks.get(event.trackId);
+        return {
+          ...event,
+          track: {
+            ...event.track,
+            album: projected?.album ?? event.track.album,
+            albumArtist: projected?.albumArtist || null,
+            albumId: projected?.albumId ?? null,
+          },
+        };
+      });
+      const ranked = rankQuickPicks(enrichedEvents, new Date());
       const trackIds = ranked.flatMap((item) =>
         item.kind === "track" ? [item.trackId] : [],
       );
@@ -60,17 +93,11 @@ export async function registerQuickPickRoutes(
         ).items.map((track) => [track.id, track]),
       );
       const albumTrackIds = new Map(
-        events.flatMap((event) => {
-          const title = (
-            event.track.metadataAlbum ?? event.track.album
-          )?.trim();
-          const artist = (
-            event.track.metadataArtist ?? event.track.artist
-          ).trim();
-          return title && artist
-            ? [[catalogAlbumId(artist, title), event.track.id] as const]
-            : [];
-        }),
+        enrichedEvents.flatMap((event) =>
+          event.track.albumId
+            ? [[event.track.albumId, event.track.id] as const]
+            : [],
+        ),
       );
       const items: QuickPickItemResponse[] = [];
       for (const item of ranked) {
@@ -79,14 +106,21 @@ export async function registerQuickPickRoutes(
           if (track) items.push({ ...item, track });
           continue;
         }
-        const albumId = catalogAlbumId(item.artist, item.title);
+        const { albumId } = item;
         let album = await catalog.album(albumId, request.authenticatedUser!.id);
         const representativeTrackId = albumTrackIds.get(albumId);
         if (!album && representativeTrackId) {
           await catalog.reindexTrack(representativeTrackId, "source");
           album = await catalog.album(albumId, request.authenticatedUser!.id);
         }
-        if (album) items.push({ ...item, album });
+        if (album) {
+          items.push({
+            ...item,
+            title: album.title,
+            artist: album.artist,
+            album,
+          });
+        }
       }
       return {
         items,

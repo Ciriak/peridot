@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import path from "node:path";
 import type {
   AlbumListResponse,
   AlbumSummaryResponse,
@@ -12,6 +13,10 @@ import type {
   TrackListResponse,
 } from "@peridot/contracts";
 import type { Database } from "./database.js";
+import {
+  parseStoredArtistCredits,
+  parseStoredOptionalArtistCredits,
+} from "./artist-credits.js";
 import { message } from "./messages.js";
 import type { PlaybackTokenService } from "./playback-tokens.js";
 import type { ArtistImageRow, ArtistMetadataRow } from "./prisma/models.js";
@@ -23,7 +28,7 @@ import {
 } from "./track-response.js";
 
 const CATALOG_STATE_ID = "catalog";
-const PROJECTION_VERSION = 2;
+const PROJECTION_VERSION = 3;
 const CHANGE_THROTTLE_MS = 2_000;
 const BACKFILL_BATCH_SIZE = 500;
 const DEFAULT_PAGE_SIZE = 100;
@@ -125,8 +130,47 @@ function stableId(prefix: string, value: string): string {
   return `${prefix}_${createHash("sha256").update(value).digest("hex").slice(0, 28)}`;
 }
 
-export function catalogAlbumId(artist: string, album: string): string {
-  return stableId("album", `${normalize(artist)}\u0000${normalize(album)}`);
+export interface CatalogAlbumIdentity {
+  album: string;
+  albumArtists: readonly string[];
+  albumReleaseKey: string | null;
+  albumFolderKey: string;
+}
+
+export function catalogAlbumFolderKey(
+  sourceId: string | null,
+  relativePath: string,
+): string {
+  return JSON.stringify([sourceId ?? "", path.dirname(relativePath)]);
+}
+
+export function catalogAlbumReleaseKey(
+  providerId: string | null,
+  externalReleaseId: string | null,
+): string | null {
+  return providerId && externalReleaseId
+    ? JSON.stringify(["release", providerId, externalReleaseId])
+    : null;
+}
+
+export function catalogAlbumId(identity: CatalogAlbumIdentity): string {
+  const album = normalize(identity.album);
+  if (identity.albumReleaseKey) {
+    return stableId("album", identity.albumReleaseKey);
+  }
+  const albumArtists = [
+    ...new Set(identity.albumArtists.map(normalize).filter(Boolean)),
+  ].sort();
+  if (albumArtists.length) {
+    return stableId(
+      "album",
+      `artists\u0000${albumArtists.join("\u0000")}\u0000${album}`,
+    );
+  }
+  return stableId(
+    "album",
+    `folder\u0000${identity.albumFolderKey}\u0000${album}`,
+  );
 }
 
 export function catalogArtistId(name: string): string {
@@ -145,6 +189,19 @@ function searchTerms(values: readonly (string | null | undefined)[]): string[] {
         ),
     ),
   ].slice(0, 64);
+}
+
+function uniqueArtistCredits(values: readonly string[]): string[] {
+  const artists: string[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    const artist = value.trim();
+    const key = normalize(artist);
+    if (!artist || seen.has(key)) continue;
+    seen.add(key);
+    artists.push(artist);
+  }
+  return artists;
 }
 
 function encodeCursor(
@@ -380,19 +437,45 @@ export class CatalogService {
     reason: CatalogChange["reason"] = "scan",
   ): Promise<void> {
     return this.serializeCatalog(() =>
-      this.reindexTrackUnlocked(trackId, reason),
+      this.reindexTrackUnlocked(trackId, reason, true),
     );
   }
 
   private async reindexTrackUnlocked(
     trackId: string,
     reason: CatalogChange["reason"],
+    propagateAlbumIdentity: boolean,
   ): Promise<void> {
     const track = await this.database.orm.Track.first({ id: trackId });
     if (!track) {
       await this.removeTrackUnlocked(trackId);
       return;
     }
+    const effective = effectiveTrackFields(track);
+    const album = effective.album?.trim() || null;
+    const normalizedAlbum = normalize(album ?? "");
+    const albumFolderKey = catalogAlbumFolderKey(
+      track.sourceId,
+      track.relativePath,
+    );
+    const albumReleaseKey = catalogAlbumReleaseKey(
+      track.metadataProviderId,
+      track.metadataExternalReleaseId,
+    );
+    const folderSiblings =
+      album && !albumReleaseKey
+        ? await this.database.orm.CatalogTrack.where({
+            albumFolderKey,
+            normalizedAlbum,
+          }).all()
+        : [];
+    const siblingReleaseKeys = [
+      ...new Set(
+        folderSiblings.flatMap((sibling) =>
+          sibling.albumReleaseKey ? [sibling.albumReleaseKey] : [],
+        ),
+      ),
+    ];
     const previous = await this.database.orm.CatalogTrack.first({
       id: trackId,
     });
@@ -413,6 +496,17 @@ export class CatalogService {
       if (previous.albumId) {
         await this.refreshAlbum(previous.albumId, trackId);
       }
+      if (
+        previous.albumReleaseKey &&
+        previous.albumReleaseKey !== albumReleaseKey
+      ) {
+        await this.reindexAlbumFallbackSiblings(
+          previous.albumFolderKey,
+          previous.normalizedAlbum,
+          previous.albumId,
+          reason,
+        );
+      }
       const previousTerms = await this.database.orm.CatalogSearchTerm.where({
         entityType: "track",
         entityId: trackId,
@@ -424,14 +518,24 @@ export class CatalogService {
       }
     }
 
-    const effective = effectiveTrackFields(track);
-    const album = effective.album?.trim() || null;
-    const albumId = album ? catalogAlbumId(effective.artist, album) : null;
+    const bridgedReleaseKey =
+      albumReleaseKey ??
+      (siblingReleaseKeys.length === 1 ? siblingReleaseKeys[0]! : null);
+    const albumId = album
+      ? catalogAlbumId({
+          album,
+          albumArtists: effective.albumArtists,
+          albumReleaseKey: bridgedReleaseKey,
+          albumFolderKey,
+        })
+      : null;
     const releaseYear = albumReleaseYear(track);
     const values = {
       title: effective.title,
       artist: effective.artist,
       artistCredits: JSON.stringify(effective.artists),
+      albumArtist: effective.albumArtists.join(", "),
+      albumArtistCredits: JSON.stringify(effective.albumArtists),
       album,
       normalizedTitle: normalize(effective.title),
       normalizedArtist: normalize(effective.artist),
@@ -443,6 +547,8 @@ export class CatalogService {
       available: track.available ? 1 : 0,
       coverId: track.coverId,
       albumId: track.available ? albumId : null,
+      albumFolderKey,
+      albumReleaseKey,
     };
 
     await this.database.orm.CatalogTrack.create({ id: trackId, ...values });
@@ -453,6 +559,7 @@ export class CatalogService {
         effective.artist,
         album,
         ...effective.artists,
+        ...effective.albumArtists,
       ]);
       for (const term of unavailableTerms) {
         await this.createSearchTerm("track", trackId, term);
@@ -490,9 +597,18 @@ export class CatalogService {
       effective.artist,
       album,
       ...effective.artists,
+      ...effective.albumArtists,
     ]);
     for (const term of trackTerms) {
       await this.createSearchTerm("track", trackId, term);
+    }
+    if (propagateAlbumIdentity && albumId && albumReleaseKey) {
+      await this.reindexBridgedAlbumSiblings(
+        albumFolderKey,
+        normalizedAlbum,
+        albumId,
+        reason,
+      );
     }
     this.markChanged(track.sourceId, reason);
   }
@@ -522,6 +638,14 @@ export class CatalogService {
     if (previous?.albumId) {
       await this.refreshAlbum(previous.albumId, trackId);
     }
+    if (previous?.albumReleaseKey) {
+      await this.reindexAlbumFallbackSiblings(
+        previous.albumFolderKey,
+        previous.normalizedAlbum,
+        previous.albumId,
+        "metadata",
+      );
+    }
     const terms = await this.database.orm.CatalogSearchTerm.where({
       entityType: "track",
       entityId: trackId,
@@ -534,6 +658,52 @@ export class CatalogService {
     await this.database.orm.CatalogTrack.where({
       id: trackId,
     }).deleteAndCount();
+  }
+
+  private async reindexBridgedAlbumSiblings(
+    albumFolderKey: string,
+    normalizedAlbum: string,
+    albumId: string,
+    reason: CatalogChange["reason"],
+  ): Promise<void> {
+    const siblings = await this.database.orm.CatalogTrack.where({
+      albumFolderKey,
+      normalizedAlbum,
+    }).all();
+    const releaseKeys = new Set(
+      siblings.flatMap((track) =>
+        track.albumReleaseKey ? [track.albumReleaseKey] : [],
+      ),
+    );
+    if (releaseKeys.size !== 1) return;
+    for (const sibling of siblings) {
+      if (
+        sibling.albumReleaseKey ||
+        sibling.albumId === albumId ||
+        !sibling.available
+      ) {
+        continue;
+      }
+      await this.reindexTrackUnlocked(sibling.id, reason, false);
+    }
+  }
+
+  private async reindexAlbumFallbackSiblings(
+    albumFolderKey: string,
+    normalizedAlbum: string,
+    previousAlbumId: string | null,
+    reason: CatalogChange["reason"],
+  ): Promise<void> {
+    if (!previousAlbumId) return;
+    const siblings = await this.database.orm.CatalogTrack.where({
+      albumFolderKey,
+      normalizedAlbum,
+      albumId: previousAlbumId,
+    }).all();
+    for (const sibling of siblings) {
+      if (sibling.albumReleaseKey || !sibling.available) continue;
+      await this.reindexTrackUnlocked(sibling.id, reason, false);
+    }
   }
 
   async markTrackChanged(trackId: string, reason: CatalogChange["reason"]) {
@@ -733,7 +903,17 @@ export class CatalogService {
       album.trackCount.gt(0),
     );
     if (options.artistId) {
-      query = query.where({ artistId: options.artistId });
+      const artistAlbums = await this.database.orm.CatalogArtistAlbum.where({
+        artistId: options.artistId,
+      })
+        .select("albumId")
+        .all();
+      if (!artistAlbums.length) {
+        return { items: [], nextCursor: null, catalogRevision: revision };
+      }
+      query = query.where((album) =>
+        album.id.in(artistAlbums.map((link) => link.albumId)),
+      );
     }
     if (filterIds) query = query.where((album) => album.id.in([...filterIds]));
     const directionValue = orderDirection(direction);
@@ -748,18 +928,11 @@ export class CatalogService {
       .limit(limit + 1)
       .all();
     const hasMore = rows.length > limit;
-    const likedKeys = await this.likedAlbumKeys(options.userId);
+    const likedIds = await this.likedAlbumIds(options.userId);
     return {
       items: rows
         .slice(0, limit)
-        .map((album) =>
-          this.toAlbumSummary(
-            album,
-            likedKeys.has(
-              `${normalize(album.artist)}\u0000${normalize(album.title)}`,
-            ),
-          ),
-        ),
+        .map((album) => this.toAlbumSummary(album, likedIds.has(album.id))),
       nextCursor: hasMore
         ? encodeCursor((cursor?.offset ?? 0) + limit, revision, signature)
         : null,
@@ -835,9 +1008,7 @@ export class CatalogService {
     if (!album || album.trackCount < 1) return null;
     return this.toAlbumSummary(
       album,
-      (await this.likedAlbumKeys(userId)).has(
-        `${normalize(album.artist)}\u0000${normalize(album.title)}`,
-      ),
+      (await this.likedAlbumIds(userId)).has(album.id),
     );
   }
 
@@ -889,17 +1060,28 @@ export class CatalogService {
 
   private async hydrateTracks(ids: readonly string[], userId: string) {
     if (!ids.length) return [];
-    const tracks = await this.database.orm.Track.where((track) =>
-      track.id.in([...ids]),
-    ).all();
-    const likedRows = await this.database.orm.TrackLike.where({ userId })
-      .where((like) => like.trackId.in([...ids]))
-      .all();
+    const [tracks, projected, likedRows] = await Promise.all([
+      this.database.orm.Track.where((track) => track.id.in([...ids])).all(),
+      this.database.orm.CatalogTrack.where((track) =>
+        track.id.in([...ids]),
+      ).all(),
+      this.database.orm.TrackLike.where({ userId })
+        .where((like) => like.trackId.in([...ids]))
+        .all(),
+    ]);
     const likedIds = new Set(likedRows.map((like) => like.trackId));
+    const albumIds = new Map(
+      projected.map((track) => [track.id, track.albumId]),
+    );
     const byId = new Map(
       tracks.map((track) => [
         track.id,
-        toTrackResponse(track, this.playbackTokens, likedIds.has(track.id)),
+        toTrackResponse(
+          track,
+          this.playbackTokens,
+          likedIds.has(track.id),
+          albumIds.get(track.id) ?? null,
+        ),
       ]),
     );
     return ids.flatMap((id) => {
@@ -1026,15 +1208,6 @@ export class CatalogService {
     );
   }
 
-  private async likedAlbumKeys(userId: string): Promise<Set<string>> {
-    const rows = await this.database.orm.AlbumLike.where({ userId }).all();
-    return new Set(
-      rows.map(
-        (row) => `${normalize(row.artist)}\u0000${normalize(row.title)}`,
-      ),
-    );
-  }
-
   private async likedArtistKeys(userId: string): Promise<Set<string>> {
     const rows = await this.database.orm.ArtistLike.where({ userId }).all();
     return new Set(rows.map((row) => normalize(row.name)));
@@ -1042,7 +1215,7 @@ export class CatalogService {
 
   private async likedAlbumIds(userId: string): Promise<Set<string>> {
     const rows = await this.database.orm.AlbumLike.where({ userId }).all();
-    return new Set(rows.map((row) => catalogAlbumId(row.artist, row.title)));
+    return new Set(rows.map((row) => row.albumId));
   }
 
   private async likedArtistIds(userId: string): Promise<Set<string>> {
@@ -1203,15 +1376,27 @@ export class CatalogService {
         track.releaseYear === null ? [] : [track.releaseYear],
       ),
     );
+    const explicitAlbumArtists = uniqueArtistCredits(
+      tracks.flatMap((track) =>
+        parseStoredOptionalArtistCredits(
+          track.albumArtistCredits,
+          track.albumArtist,
+        ),
+      ),
+    );
+    const albumArtists = explicitAlbumArtists.length
+      ? explicitAlbumArtists
+      : parseStoredArtistCredits(first.artistCredits, first.artist);
+    const albumArtist = albumArtists.join(", ");
     const values = {
       title: first.album ?? "Unknown Album",
-      artist: first.artist,
+      artist: albumArtist,
       normalizedTitle: normalize(first.album ?? "Unknown Album"),
-      normalizedArtist: normalize(first.artist),
-      artistId: catalogArtistId(first.artist),
+      normalizedArtist: normalize(albumArtist),
+      artistId: catalogArtistId(albumArtists[0] ?? first.artist),
       coverId: coverTrack.coverId,
       coverTrackId: coverTrack.coverId ? coverTrack.id : null,
-      artistCredits: first.artistCredits,
+      artistCredits: JSON.stringify(albumArtists),
       trackCount: tracks.length,
       durationMs: tracks.some((track) => track.durationMs !== null)
         ? tracks.reduce(

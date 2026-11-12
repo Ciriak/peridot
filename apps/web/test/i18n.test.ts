@@ -57,6 +57,10 @@ test("en-US messages interpolate and pluralize", () => {
     i18n.global.t("provider.musicbrainz.contact.placeholder"),
     "you@example.com",
   );
+  assert.equal(
+    i18n.global.t("player.scanLibrary"),
+    "Select a track to get started",
+  );
 });
 
 test("every en-US message compiles", () => {

@@ -14,6 +14,7 @@ test("successful likes map to target-specific confirmation toasts", () => {
   assert.deepEqual(
     likeSuccessToast({
       kind: "album",
+      albumId: "album-discovery",
       title: " Discovery ",
       artist: "Daft Punk",
     }),

@@ -5,6 +5,7 @@ import { or } from "@prisma/orm-sqlite/orm-client";
 import { parseFile } from "music-metadata";
 import {
   normalizeArtistCredits,
+  normalizeOptionalArtistCredits,
   serializeArtistCredits,
 } from "./artist-credits.js";
 import type { CatalogService } from "./catalog.js";
@@ -34,7 +35,7 @@ const AUDIO_MIME_TYPES = new Map([
 // SQLite has a single-writer model. Keep catalog mutations serialized so
 // concurrent file workers cannot fail a scan with SQLITE_BUSY.
 const SCAN_CONCURRENCY = 1;
-const CURRENT_METADATA_VERSION = 3;
+const CURRENT_METADATA_VERSION = 4;
 const MAX_COVER_BYTES = 5 * 1024 * 1024;
 const FOLDER_COVER_NAMES = new Set([
   "albumart.jpg",
@@ -330,6 +331,14 @@ export class LibraryScanner {
           : [metadata.common.artist],
       );
       const artist = artistCredits.join(", ");
+      const albumArtistCredits = normalizeOptionalArtistCredits(
+        metadata.common.albumartists?.length
+          ? metadata.common.albumartists
+          : [metadata.common.albumartist],
+      );
+      const albumArtist = albumArtistCredits.length
+        ? albumArtistCredits.join(", ")
+        : null;
       const album = metadata.common.album?.trim() || null;
       const discNumber = positiveInteger(metadata.common.disk.no);
       const trackNumber = positiveInteger(metadata.common.track.no);
@@ -344,6 +353,10 @@ export class LibraryScanner {
         title,
         artist,
         artistCredits: serializeArtistCredits(artistCredits),
+        albumArtist,
+        albumArtistCredits: albumArtistCredits.length
+          ? JSON.stringify(albumArtistCredits)
+          : null,
         album,
         discNumber,
         trackNumber,

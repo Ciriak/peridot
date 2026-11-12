@@ -18,6 +18,13 @@ export function topbarStatus(
   return "idle";
 }
 
+export function serverConnectionRestored(
+  previous: ServerConnectionStatus | undefined,
+  next: ServerConnectionStatus,
+): boolean {
+  return previous === "lost" && next === "connected";
+}
+
 export async function isPeridotServerReachable(
   serverAddress: string,
   options: { fetcher?: Fetcher; signal?: AbortSignal } = {},

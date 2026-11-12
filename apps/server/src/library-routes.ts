@@ -83,7 +83,15 @@ export async function registerLibraryRoutes(
           trackId: track.id,
         }),
       );
-      return toTrackResponse(track, playbackTokens, liked);
+      const projected = await database.orm.CatalogTrack.select("albumId").first(
+        { id: track.id },
+      );
+      return toTrackResponse(
+        track,
+        playbackTokens,
+        liked,
+        projected?.albumId ?? null,
+      );
     },
   );
 

@@ -42,7 +42,7 @@ const { active, playing, playCollection, togglePlayback } = useLibraryPlayer();
 const { status: serverStatus } = useServerConnection();
 const { tracksMatching } = useOfflineTracks();
 const {
-  likedAlbumKeys,
+  likedAlbumIds,
   loaded: likesLoaded,
   load: loadLikes,
   toggle: toggleLike,
@@ -55,6 +55,10 @@ const albumTitle = computed(() => {
 });
 const albumArtist = computed(() => {
   const value = route.query.artist;
+  return String(Array.isArray(value) ? (value[0] ?? "") : (value ?? ""));
+});
+const requestedAlbumId = computed(() => {
+  const value = route.query.id;
   return String(Array.isArray(value) ? (value[0] ?? "") : (value ?? ""));
 });
 const album = ref<AlbumSummaryResponse | null>(null);
@@ -90,11 +94,7 @@ const {
 const scrollToTrackId = computed(() => trackIdFromTitleHash(route.hash));
 const albumActive = computed(() => {
   const current = active.value;
-  return Boolean(
-    current &&
-    current.album === album.value?.title &&
-    current.artist === album.value?.artist,
-  );
+  return Boolean(current && album.value && current.albumId === album.value.id);
 });
 const coverFailed = ref(false);
 const coverUrl = computed(() =>
@@ -120,11 +120,7 @@ async function playWholeAlbum() {
   offlinePlaybackError.value = "";
   const playSavedTracks = async () => {
     const saved = await tracksMatching(
-      (track) =>
-        track.album?.trim().toLowerCase() ===
-          album.value?.title.trim().toLowerCase() &&
-        track.artist.trim().toLowerCase() ===
-          album.value?.artist.trim().toLowerCase(),
+      (track) => track.albumId === album.value?.id,
     );
     if (!saved.length) {
       offlinePlaybackError.value = t("error.offlineCollectionEmpty");
@@ -165,7 +161,7 @@ function setTrackSort(next: TrackSort | null) {
   trackSort.value = next ?? { field: "number", direction: "asc" };
 }
 
-watch([albumTitle, albumArtist, address, token], () => {
+watch([albumTitle, albumArtist, requestedAlbumId, address, token], () => {
   album.value = null;
   loadAlbum();
 });
@@ -173,11 +169,13 @@ watch(
   albumMatches,
   (matches) => {
     const nextAlbum =
+      matches.find((candidate) => candidate.id === requestedAlbumId.value) ??
       matches.find(
         (candidate) =>
           candidate.title.toLowerCase() === albumTitle.value.toLowerCase() &&
           candidate.artist.toLowerCase() === albumArtist.value.toLowerCase(),
-      ) ?? null;
+      ) ??
+      null;
     const changed = nextAlbum?.id !== album.value?.id;
     album.value = nextAlbum;
     if (nextAlbum && changed) void loadTracks();
@@ -281,15 +279,12 @@ onMounted(() => {
             />
           </Button>
           <LikeButton
-            :liked="
-              likedAlbumKeys.includes(
-                `${album.artist.toLowerCase()}\u0000${album.title.toLowerCase()}`,
-              ) || album.liked
-            "
+            :liked="likedAlbumIds.includes(album.id) || album.liked"
             :label="album.title"
             :pending="
               isLikePending({
                 kind: 'album',
+                albumId: album.id,
                 title: album.title,
                 artist: album.artist,
               })
@@ -298,6 +293,7 @@ onMounted(() => {
             @toggle="
               toggleLike({
                 kind: 'album',
+                albumId: album.id,
                 title: album.title,
                 artist: album.artist,
               })

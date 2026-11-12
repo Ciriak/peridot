@@ -20,7 +20,9 @@
     "db:validate": "pnpm --filter @peridot/server db:validate",
     "db:generate": "pnpm --filter @peridot/server db:generate",
     "db:update": "pnpm --filter @peridot/server db:update",
-    "db:reset": "pnpm --filter @peridot/server db:reset"
+    "db:reset": "pnpm --filter @peridot/server db:reset",
+    "desktop:dev": "pnpm --filter @peridot/desktop dev",
+    "desktop:build": "pnpm --filter @peridot/desktop package"
   },
   "devDependencies": {
     "@commitlint/cli": "21.2.4",

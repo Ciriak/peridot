@@ -16,6 +16,7 @@ const tracks: TrackResponse[] = [
     artist: "Elliot Lake",
     artists: ["Elliot Lake"],
     album: "Night Sessions",
+    albumId: "album-night-sessions",
     discNumber: 1,
     trackNumber: 1,
     durationMs: 180_000,
@@ -31,6 +32,7 @@ const tracks: TrackResponse[] = [
     artist: "Elliot Lake",
     artists: ["Elliot Lake"],
     album: "Night Sessions",
+    albumId: "album-night-sessions",
     discNumber: 1,
     trackNumber: 2,
     durationMs: 200_000,
@@ -52,7 +54,7 @@ test("quick pick responses preserve server-resolved track and album data", () =>
     },
     {
       kind: "album",
-      key: "album:elliot lake\u0000night sessions",
+      key: "album:album-night-sessions",
       title: "Night Sessions",
       artist: "Elliot Lake",
       album: {
@@ -119,8 +121,8 @@ test("quick pick order stays frozen while pointer and focus interactions overlap
   assert.deepEqual(list.items.value, ["third"]);
 });
 
-test("the sidebar renders cover-playback quick picks without library shortcuts", async () => {
-  const [layout, sidebar, tile, composer, client] = await Promise.all([
+test("the sidebar renders linked, context-aware quick picks", async () => {
+  const [layout, sidebar, tile, content, composer, client] = await Promise.all([
     readFile(new URL("../app/layouts/default.vue", import.meta.url), "utf8"),
     readFile(
       new URL("../app/components/SidebarQuickPicks.vue", import.meta.url),
@@ -128,6 +130,10 @@ test("the sidebar renders cover-playback quick picks without library shortcuts",
     ),
     readFile(
       new URL("../app/components/QuickPickTile.vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/components/QuickPickTileContent.vue", import.meta.url),
       "utf8",
     ),
     readFile(
@@ -151,12 +157,21 @@ test("the sidebar renders cover-playback quick picks without library shortcuts",
   assert.match(sidebar, /@pointerleave="endPointerInteraction"/);
   assert.match(sidebar, /@focusin="beginFocusInteraction"/);
   assert.match(sidebar, /@focusout="handleFocusOut"/);
+  assert.match(tile, /import TrackContextMenu/);
+  assert.match(tile, /import AlbumContextMenu/);
+  assert.match(
+    tile,
+    /<TrackContextMenu[\s\S]*:track="item\.track"[\s\S]*@play="toggleItemPlayback"/,
+  );
+  assert.match(tile, /<AlbumContextMenu v-else :album="item\.album">/);
+  assert.equal(tile.match(/<QuickPickTileContent/g)?.length, 2);
   assert.match(tile, /props\.item\.kind === "track"[\s\S]*?track\.coverUrl/);
-  assert.match(tile, /group\/quick-pick/);
-  assert.match(tile, /cursor-pointer/);
-  assert.match(tile, /group-hover\/quick-pick:opacity-100/);
-  assert.match(tile, /group-focus-visible\/quick-pick:opacity-100/);
-  assert.match(tile, /activeItem && playing \? icons\.pause : icons\.play/);
+  assert.match(content, /props\.coverUrl/);
+  assert.match(content, /group\/quick-pick/);
+  assert.match(content, /cursor-pointer/);
+  assert.match(content, /group-hover\/quick-pick:opacity-100/);
+  assert.match(content, /group-focus-within\/quick-pick:opacity-100/);
+  assert.match(content, /activeItem && playing \? icons\.pause : icons\.play/);
   assert.match(tile, /play\(props\.item\.track\)/);
   assert.match(tile, /playCollection\(await albumTracks\(\)\)/);
   assert.match(tile, /togglePlayback\(\)/);
@@ -170,18 +185,34 @@ test("the sidebar renders cover-playback quick picks without library shortcuts",
     /t\("quickPicks\.playAlbum", \{ title: title\.value \}\)/,
     "Album quick pick labels explain that playback starts from the first track",
   );
-  assert.match(tile, /quickPickArtistNames\(props\.item\)\.join\(", "\)/);
+  assert.match(
+    content,
+    /quickPickArtistNames\(props\.item\)/,
+    "Artist credits use the server-resolved credit list",
+  );
   assert.doesNotMatch(tile, /item\.kind === "track" \? "Track" : "Album"/);
-  assert.match(tile, /item\.kind === "track" \? icons\.music : icons\.library/);
-  assert.match(tile, /size-3 shrink-0 text-muted-foreground/);
-  assert.doesNotMatch(tile, /<NuxtLink/);
-  assert.equal(tile.match(/<Button\b/g)?.length, 1);
-  const buttonStart = tile.indexOf("<Button");
-  const buttonEnd = tile.indexOf("</Button>");
+  assert.match(
+    content,
+    /item\.kind === "track" \? icons\.music : icons\.library/,
+  );
+  assert.match(content, /size-3 shrink-0 text-muted-foreground/);
+  assert.match(
+    content,
+    /trackAlbumTitleRoute\(props\.item\.track\) \?\?[\s\S]*artistRoute\(\{ name: props\.item\.track\.artist \}\)[\s\S]*albumRoute\(props\.item\.album\)/,
+    "Track and album names link to their album details",
+  );
+  assert.match(
+    content,
+    /<NuxtLink[\s\S]*<Icon[\s\S]*\{\{ title \}\}/,
+    "The type icon is part of the name link",
+  );
+  assert.match(content, /<TrackArtistLinks :artists="artistNames" \/>/);
+  assert.equal(content.match(/<Button\b/g)?.length, 1);
+  const buttonStart = content.indexOf("<Button");
+  const buttonEnd = content.indexOf("</Button>");
   assert.ok(buttonStart >= 0 && buttonEnd > buttonStart);
-  assert.ok(tile.indexOf("<img") > buttonStart);
-  assert.ok(tile.indexOf("{{ title }}") > buttonStart);
-  assert.ok(tile.indexOf("{{ title }}") < buttonEnd);
+  assert.ok(content.indexOf("<img") > buttonStart);
+  assert.ok(content.indexOf("{{ title }}") > buttonEnd);
   assert.match(composer, /watch\(playHistoryVersion/);
   assert.match(composer, /fetchQuickPicks/);
   assert.match(

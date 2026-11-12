@@ -21,6 +21,7 @@ export interface TestContext {
 
 export interface TestContextOptions {
   logger?: boolean;
+  webOrigins?: string[];
   metadataFetch?: typeof fetch;
   metadataRequestIntervalMs?: number;
   discogsFetch?: typeof fetch;
@@ -67,7 +68,7 @@ export async function createTestContext(
     config: {
       databaseUrl,
       libraryRoot,
-      webOrigins: ["http://127.0.0.1:3000"],
+      webOrigins: options.webOrigins ?? ["http://127.0.0.1:3000"],
       ...(credentialEncryptionKey ? { credentialEncryptionKey } : {}),
     },
     database,
@@ -180,6 +181,7 @@ function id3Frame(id: string, payload: Buffer): Buffer {
 export function createTaggedMp3(tags: {
   title: string;
   artist: string;
+  albumArtist?: string;
   album: string;
   discNumber: number;
   trackNumber: number;
@@ -191,6 +193,7 @@ export function createTaggedMp3(tags: {
   const frameBuffers = [
     id3TextFrame("TIT2", tags.title),
     id3TextFrame("TPE1", tags.artist),
+    ...(tags.albumArtist ? [id3TextFrame("TPE2", tags.albumArtist)] : []),
     id3TextFrame("TALB", tags.album),
     id3TextFrame("TRCK", String(tags.trackNumber)),
     id3TextFrame("TPOS", String(tags.discNumber)),

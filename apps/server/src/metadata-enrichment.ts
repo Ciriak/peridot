@@ -10,7 +10,9 @@ import type {
 } from "@peridot/contracts";
 import {
   normalizeArtistCredits,
+  normalizeOptionalArtistCredits,
   parseStoredArtistCredits,
+  parseStoredOptionalArtistCredits,
   serializeArtistCredits,
 } from "./artist-credits.js";
 import type { CatalogService } from "./catalog.js";
@@ -90,6 +92,8 @@ function inputSignature(track: TrackRow): string {
         track.title,
         track.artist,
         track.artistCredits,
+        track.albumArtist,
+        track.albumArtistCredits,
         track.album,
         track.discNumber,
         track.trackNumber,
@@ -260,6 +264,12 @@ function matchData(
     metadataTitle: candidate.title,
     metadataArtist: candidate.artist,
     metadataArtistCredits: serializeArtistCredits(candidate.artists),
+    metadataAlbumArtist: candidate.albumArtists.length
+      ? candidate.albumArtists.join(", ")
+      : null,
+    metadataAlbumArtistCredits: candidate.albumArtists.length
+      ? JSON.stringify(candidate.albumArtists)
+      : null,
     metadataAlbum: candidate.album,
     metadataDiscNumber: candidate.discNumber,
     metadataTrackNumber: candidate.trackNumber,
@@ -292,6 +302,7 @@ function normalizeCandidate(
     ...candidate.artists,
     candidate.artist,
   ]);
+  const albumArtists = normalizeOptionalArtistCredits(candidate.albumArtists);
   return {
     ...candidate,
     externalTrackId: candidate.externalTrackId.trim(),
@@ -299,6 +310,7 @@ function normalizeCandidate(
     title: candidate.title.trim(),
     artist: candidate.artist.trim() || artists.join(", "),
     artists,
+    albumArtists,
     album: candidate.album?.trim() || null,
     discNumber:
       Number.isInteger(candidate.discNumber) && candidate.discNumber! > 0
@@ -982,6 +994,8 @@ export class MetadataEnrichment {
       metadataTitle: null,
       metadataArtist: null,
       metadataArtistCredits: null,
+      metadataAlbumArtist: null,
+      metadataAlbumArtistCredits: null,
       metadataAlbum: null,
       metadataDiscNumber: null,
       metadataTrackNumber: null,
@@ -1028,6 +1042,7 @@ export class MetadataEnrichment {
       typeof body.artist !== "string" ||
       !body.artist.trim() ||
       !Array.isArray(body.artists) ||
+      !Array.isArray(body.albumArtists) ||
       !Array.isArray(body.details)
     ) {
       throw new MetadataEnrichmentError(
@@ -1059,6 +1074,11 @@ export class MetadataEnrichment {
       ),
       body.artist,
     ]);
+    const albumArtists = normalizeOptionalArtistCredits(
+      body.albumArtists.filter(
+        (artist): artist is string => typeof artist === "string",
+      ),
+    );
     const externalReleaseId =
       typeof body.externalReleaseId === "string"
         ? body.externalReleaseId.trim() || null
@@ -1072,6 +1092,7 @@ export class MetadataEnrichment {
       title: body.title,
       artist: body.artist,
       artists,
+      albumArtists,
       album: typeof body.album === "string" ? body.album : null,
       discNumber: body.discNumber,
       trackNumber: body.trackNumber,
@@ -1338,5 +1359,12 @@ export function effectiveArtistCredits(track: TrackRow): string[] {
   return parseStoredArtistCredits(
     track.metadataArtistCredits,
     track.metadataArtist ?? track.artist,
+  );
+}
+
+export function effectiveAlbumArtistCredits(track: TrackRow): string[] {
+  return parseStoredOptionalArtistCredits(
+    track.metadataAlbumArtistCredits ?? track.albumArtistCredits,
+    track.metadataAlbumArtist ?? track.albumArtist,
   );
 }

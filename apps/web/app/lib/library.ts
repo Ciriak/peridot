@@ -1,7 +1,8 @@
-import type { TrackResponse } from "@peridot/contracts";
+import type { AlbumSummaryResponse, TrackResponse } from "@peridot/contracts";
 
 export interface AlbumGroup {
   key: string;
+  id?: string;
   title: string;
   artist: string;
   artists: string[];
@@ -54,10 +55,8 @@ export function artistLikeKey(name: string): string {
   return normalize(name);
 }
 
-export function albumLikeKey(
-  album: Pick<AlbumGroup, "title" | "artist">,
-): string {
-  return `${normalize(album.artist)}\u0000${normalize(album.title)}`;
+export function albumLikeKey(album: Pick<AlbumSummaryResponse, "id">): string {
+  return album.id;
 }
 
 const ARTIST_SEPARATOR = /(?:\s*[;,]\s*|\s+(?:feat\.?|ft\.?|featuring)\s+)/i;
@@ -322,7 +321,8 @@ export function groupAlbums(tracks: readonly TrackResponse[]): AlbumGroup[] {
     const title = track.album?.trim();
     const artist = track.artist.trim();
     if (!title || !artist) continue;
-    const key = albumLikeKey({ artist, title });
+    const key =
+      track.albumId ?? `${normalize(artist)}\u0000${normalize(title)}`;
     const existing = groups.get(key);
     if (existing) {
       existing.tracks.push(track);
@@ -331,6 +331,7 @@ export function groupAlbums(tracks: readonly TrackResponse[]): AlbumGroup[] {
     }
     groups.set(key, {
       key,
+      ...(track.albumId ? { id: track.albumId } : {}),
       title,
       artist,
       artists: trackArtistNames(track),
@@ -385,11 +386,16 @@ export function findAlbum(
   );
 }
 
-export function albumRoute(album: Pick<AlbumGroup, "title" | "artist">) {
+export function albumRoute(
+  album: Pick<AlbumGroup, "title" | "artist"> & { id?: string },
+) {
   return {
     name: "album-detail",
     params: { album: album.title },
-    query: { artist: album.artist },
+    query: {
+      artist: album.artist,
+      ...(album.id ? { id: album.id } : {}),
+    },
   };
 }
 
@@ -397,6 +403,7 @@ export function trackAlbumRoute(track: TrackResponse) {
   return albumRoute({
     title: track.album?.trim() ?? "",
     artist: track.artist.trim(),
+    ...(track.albumId ? { id: track.albumId } : {}),
   });
 }
 
@@ -494,6 +501,14 @@ export function resolvePlayerQueue(
     const track = tracksById.get(id);
     return track ? [track] : [];
   });
+}
+
+export function selectPlayerTrack(
+  tracks: readonly TrackResponse[],
+  activeTrackId: string | null,
+): TrackResponse | null {
+  if (!activeTrackId) return tracks[0] ?? null;
+  return tracks.find((track) => track.id === activeTrackId) ?? null;
 }
 
 export function mergePlayerQueueTracks(

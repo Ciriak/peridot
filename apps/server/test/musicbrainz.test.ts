@@ -90,6 +90,7 @@ test("MusicBrainz client uses the official origin, contact User-Agent, and reque
   assert.ok(delays[0]! > 0);
   assert.equal(matches.get("track-1")?.[0]?.externalTrackId, "recording-1");
   assert.equal(matches.get("track-1")?.[0]?.trackNumber, 1);
+  assert.deepEqual(matches.get("track-1")?.[0]?.albumArtists, ["Elliot Lake"]);
 });
 
 test("MusicBrainz client retries rate limits before succeeding", async () => {

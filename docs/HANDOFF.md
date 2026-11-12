@@ -2,6 +2,221 @@
 
 Last updated: 2026-11-12.
 
+## Tauri desktop prototype
+
+Added a runnable Tauri 2 desktop application in `apps/desktop`. The shell embeds
+the statically generated Nuxt client, uses Peridot branding and icons, opens a
+sized native window, and exposes only the Tauri core capability. Development
+starts the existing web and Fastify stack through the root `pnpm dev` workflow;
+production runs `nuxt generate` before embedding the client.
+
+The server defaults now accept Tauri's HTTP and custom-scheme webview origins for
+both CORS and realtime validation. The packaged client was exercised against an
+isolated local server: manual server selection succeeded and advanced to the
+first-administrator screen. The documented `pnpm desktop:dev` path also launched
+the native window with discovered local server access.
+
+Checks run:
+
+- `pnpm --filter @peridot/desktop test` (2 passing)
+- `pnpm --filter @peridot/desktop typecheck` (`cargo check`)
+- `pnpm --filter @peridot/web test` (145 passing)
+- `pnpm --filter @peridot/server test` (101 passing, including Tauri CORS)
+- `pnpm lint`
+- `pnpm format:check`
+- `pnpm typecheck`
+- `pnpm db:validate`
+- `pnpm build`
+- `pnpm desktop:build`
+- Production executable launch and manual onboarding API handshake
+- `pnpm desktop:dev` launch with the development web/API stack
+
+Known limits: embedded network discovery is unavailable because that endpoint
+belongs to the Nuxt server, so packaged-server discovery currently requires
+manual address entry. Fastify is not bundled as a sidecar yet. The webview cookie
+continues to hold the session instead of native secure credential storage.
+Installers, signing, publishing, and automatic updates are not implemented.
+Windows release verification was performed on this machine; macOS and Linux
+webview behavior has not been tested.
+
+This work remains uncommitted alongside existing unrelated changes. No commit,
+push, tag, publication, deployment, or installer was produced.
+
+## Release-first album identity
+
+Albums now group by canonical release identity instead of each track's artist
+combination. Provider release IDs take precedence; embedded album artists plus
+title are next; source folder plus title is the fallback. An unmatched track in
+a folder/title group with exactly one provider release joins that release, while
+ambiguous folders remain separate.
+
+MusicBrainz and Discogs release artists are stored as album artist overlays.
+Album cards use those release artists, while every track retains its own
+performer credits and artist links. Track responses now include `albumId`; album
+navigation, active playback state, offline collection playback, Quick picks,
+and album likes use that canonical ID. Search recents persist recent album IDs.
+
+The Prisma contract and generated artifacts include the new track, catalog
+projection, and album-like fields. The development database was intentionally
+reset, so accounts, sources, provider configuration, catalog data, likes, and
+queues must be recreated.
+
+Checks run:
+
+- `pnpm test` (101 server, 145 web, 13 UI, and 2 desktop tests passing)
+- `pnpm typecheck`
+- `pnpm db:reset`; after local state was recreated and rescanned, a direct
+  catalog check showed one `Random Access Memories` album containing all 13
+  scanned tracks with `Daft Punk` as the album artist
+- `pnpm db:validate`
+- `pnpm build` (PWA precached 92 entries; existing non-fatal Rolldown
+  `PLUGIN_TIMINGS` warning)
+- Targeted ESLint and Prettier checks for every changed source, test, and
+  documentation file
+- `git diff --check`
+
+Repository-wide lint and formatting now ignore Tauri's generated schema,
+capability, and target artifacts; both checks pass without exclusions at the
+command line. Authenticated browser visual QA and a fresh live-provider match
+were not run; the rebuilt local projection currently uses embedded album-artist
+tags for the reported album.
+
+No commit, push, tag, publication, or deployment was performed.
+
+## Neutral offline icon and reconnection toast
+
+The topbar connection warning now uses bundled `ooui:network-off`, rendered in
+the standard foreground color with a neutral tooltip. The existing pulse and
+accessible lost-connection explanation remain. When an authenticated session
+transitions from lost to connected, the shared toast region announces
+`Back online`; initial connections and onboarding discovery do not show it.
+
+Checks run:
+
+- `pnpm --filter @peridot/web test` (145 passing)
+- `pnpm --filter @peridot/web typecheck`
+- Targeted ESLint and Prettier checks for all changed web files
+- `pnpm --filter @peridot/web build` (92 PWA precache entries; existing
+  non-fatal Rolldown `PLUGIN_TIMINGS` warning)
+- `git diff --check`
+
+Known limits: browser visual QA was not run. The source regressions cover the
+exact bundled icon, absence of destructive color, lost-to-connected transition,
+authenticated-scope guard, and reconnection toast copy. Existing uncommitted
+work was preserved. No commit, push, tag, publication, or deployment was
+performed.
+
+Next: visually confirm the topbar warning and recovered toast by interrupting
+and restoring the connected server.
+
+## Empty-player subtitle
+
+The persistent player's no-track subtitle now reads `Select a track to get
+started` instead of prompting the user to scan the library. A locale regression
+assertion covers the exact copy.
+
+Checks run:
+
+- `pnpm --filter @peridot/web exec node --test test/i18n.test.ts` (5 passing)
+- Targeted ESLint and Prettier checks for the locale and test files
+- `git diff --check` for the changed app files
+
+The full web suite reached 140 passing and 4 failing tests. The failures are in
+pre-existing uncommitted changes to `library.test.ts` and
+`search-recents.test.ts`; the i18n tests pass. No commit, push, tag,
+publication, or deployment was performed.
+
+## Quick-pick links and context menus
+
+Quick-pick titles and artist credits are now links. A track title, including its
+type icon, links to the track's anchored row on its album detail page; an album
+quick pick links directly to its album detail page. Tracks without album
+metadata fall back to their primary artist page. The artist line uses the shared
+`TrackArtistLinks` component so every credited artist has an independent route.
+Artwork remains the playback control.
+
+Each quick-pick row now reuses the existing `TrackContextMenu` or
+`AlbumContextMenu`, sharing playback, queue, like, download, navigation,
+metadata, and collection actions with the rest of the app. The presentational
+row was extracted to `QuickPickTileContent.vue` so the same linked content is
+used under either context-menu wrapper.
+
+Checks run:
+
+- `pnpm --filter @peridot/web exec node --test test/quick-picks.test.ts`
+  (3 passing)
+- `pnpm --filter @peridot/web test` (144 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm lint`
+- `pnpm format:check`
+- `pnpm --filter @peridot/web build` (92 PWA precache entries; existing
+  non-fatal Rolldown `PLUGIN_TIMINGS` warning)
+- `git diff --check`
+
+Known limits: authenticated browser visual and pointer/keyboard context-menu QA
+was not run. The source-level regression covers both menu wrappers, linked
+track and album names, the icon/name link boundary, artist links, and artwork
+playback. Server and schema checks were skipped because only web presentation
+and interaction code changed. Existing uncommitted work was preserved. No
+commit, push, tag, publication, or deployment was performed.
+
+Next: confirm the track-name anchor and both quick-pick context menus in an
+authenticated browser at desktop and mobile widths.
+
+## Player loading ray
+
+The fixed player now shows a primary-colored ray along its top edge while audio
+is being prepared or buffered. It traverses left-to-right and then reverses,
+continuing until the shared player `loading` state clears. Reduced-motion users
+see a static primary line. The previous seek-slider pulse was removed while
+keeping its taller hit target and `aria-busy` announcement.
+
+Checks run:
+
+- `pnpm --filter @peridot/web test` (144 passing)
+- `pnpm --filter @peridot/web typecheck`
+- Targeted ESLint and Prettier checks for the player layout, regression test,
+  and documentation
+- `pnpm --filter @peridot/web build` (94 PWA precache entries)
+- `git diff --check`
+
+Known limits: an authenticated buffering track was not available for live
+browser timing QA. The regression test covers the conditional ray, primary
+color, reversible transform state, and reduced-motion fallback. Existing
+uncommitted player metadata work was preserved. No commit, push, tag,
+publication, or deployment was performed.
+
+## Player metadata switches without an unresolved frame
+
+Playback now passes already-loaded track objects into the player for track
+rows, queue rows, Quick picks, and whole-album/artist collections. The player
+seeds those details before it changes the active queue ID, so the title,
+credits, artwork, and duration switch directly to the selected track instead of
+waiting for a second queue-detail resolution. Collection loaders now return
+their track responses rather than discarding them after extracting IDs.
+
+The active-track selector also no longer falls back to the first resolved queue
+row when a different active ID is still pending. That prevents another track's
+metadata from being displayed as a temporary substitute.
+
+Checks run:
+
+- `pnpm --filter @peridot/web test` (144 passing)
+- `pnpm --filter @peridot/web typecheck`
+- Targeted ESLint and Prettier checks for all changed app and test files
+- `pnpm --filter @peridot/web build` (94 PWA precache entries; existing
+  non-fatal Rolldown `PLUGIN_TIMINGS` warning)
+- `git diff --check`
+
+Known limits: browser visual/timing QA was not run because no authenticated
+browser session was available. Server and schema checks were skipped because
+only browser playback and presentation state changed. Repository state changed
+concurrently: the main playback changes were committed as `e1ab80c` and a
+targeted lint correction followed in `f907533`, with both present on
+`origin/dev`. This agent did not create, push, tag, publish, or deploy a commit.
+The active-track selector extraction and these documentation updates remain
+uncommitted; unrelated work was preserved.
+
 ## Cache-first query presentation
 
 Cached TanStack data now renders immediately instead of being hidden by

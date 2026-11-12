@@ -1,18 +1,15 @@
 <script setup lang="ts">
 import { useI18n } from "#imports";
-import {
-  quickPickArtistNames,
-  type ResolvedQuickPickItem,
-} from "../lib/quick-picks";
-import { Icon } from "@iconify/vue/offline";
-import { Button } from "@peridot/ui/components/ui/button";
-import { computed, ref, watch } from "vue";
+import { type ResolvedQuickPickItem } from "../lib/quick-picks";
+import { computed } from "vue";
 import { useLibraryPlayer } from "../composables/use-library-player";
 import { useServer } from "../composables/use-server";
 import { useSession } from "../composables/use-session";
-import { icons } from "../lib/icons";
 import { trackCoverUrl } from "../lib/library";
 import { loadCollectionTracks } from "../lib/catalog-collections";
+import AlbumContextMenu from "./AlbumContextMenu.vue";
+import QuickPickTileContent from "./QuickPickTileContent.vue";
+import TrackContextMenu from "./TrackContextMenu.vue";
 
 const props = defineProps<{ item: ResolvedQuickPickItem }>();
 const { t } = useI18n();
@@ -20,7 +17,6 @@ const { address } = useServer();
 const { token } = useSession();
 const { active, playing, loading, play, playCollection, togglePlayback } =
   useLibraryPlayer();
-const coverFailed = ref(false);
 const coverUrl = computed(() =>
   trackCoverUrl(
     address.value ?? "",
@@ -32,17 +28,12 @@ const coverUrl = computed(() =>
 const title = computed(() =>
   props.item.kind === "track" ? props.item.track.title : props.item.album.title,
 );
-const artistLabel = computed(() => quickPickArtistNames(props.item).join(", "));
-const typeIcon = computed(() =>
-  props.item.kind === "track" ? icons.music : icons.library,
-);
 const activeItem = computed(() => {
   const activeTrackId = active.value?.id;
   if (!activeTrackId) return false;
   return props.item.kind === "track"
     ? activeTrackId === props.item.track.id
-    : active.value?.album === props.item.album.title &&
-        active.value.artist === props.item.album.artist;
+    : active.value?.albumId === props.item.album.id;
 });
 const playLabel = computed(() => {
   if (activeItem.value) {
@@ -56,10 +47,6 @@ const playLabel = computed(() => {
   return props.item.kind === "album"
     ? t("quickPicks.playAlbum", { title: title.value })
     : t("quickPicks.playTrack", { title: title.value });
-});
-
-watch(coverUrl, () => {
-  coverFailed.value = false;
 });
 
 async function albumTracks() {
@@ -83,56 +70,30 @@ async function toggleItemPlayback() {
 </script>
 
 <template>
-  <Button
-    variant="ghost"
-    class="group/quick-pick h-auto w-full min-w-0 cursor-pointer justify-start gap-2 px-0 py-0 text-left"
-    :aria-label="playLabel"
-    :aria-busy="activeItem && loading"
-    @click="toggleItemPlayback"
+  <TrackContextMenu
+    v-if="item.kind === 'track'"
+    :track="item.track"
+    @play="toggleItemPlayback"
   >
-    <span class="relative size-10 shrink-0 overflow-hidden rounded-md">
-      <img
-        v-if="coverUrl && !coverFailed"
-        :src="coverUrl"
-        alt=""
-        loading="lazy"
-        decoding="async"
-        class="size-full object-cover"
-        @error="coverFailed = true"
-      />
-      <Icon
-        v-else
-        :icon="icons.music"
-        aria-hidden="true"
-        class="size-5 text-muted-foreground"
-      />
-      <span
-        aria-hidden="true"
-        class="absolute inset-0 flex items-center justify-center bg-background/70 opacity-0 transition-opacity group-hover/quick-pick:opacity-100 group-focus-visible/quick-pick:opacity-100"
-      >
-        <Icon
-          :icon="activeItem && playing ? icons.pause : icons.play"
-          class="size-4 text-foreground"
-        />
-      </span>
-    </span>
-    <span class="min-w-0 flex-1">
-      <span class="flex min-w-0 items-center gap-1" :title="title">
-        <Icon
-          :icon="typeIcon"
-          aria-hidden="true"
-          class="size-3 shrink-0 text-muted-foreground"
-        />
-        <span class="truncate text-xs font-medium">
-          {{ title }}
-        </span>
-      </span>
-      <span
-        class="block truncate text-xs text-muted-foreground"
-        :title="artistLabel"
-      >
-        {{ artistLabel }}
-      </span>
-    </span>
-  </Button>
+    <QuickPickTileContent
+      :item="item"
+      :cover-url="coverUrl"
+      :active-item="activeItem"
+      :playing="playing"
+      :play-label="playLabel"
+      :busy="activeItem && loading"
+      @play="toggleItemPlayback"
+    />
+  </TrackContextMenu>
+  <AlbumContextMenu v-else :album="item.album">
+    <QuickPickTileContent
+      :item="item"
+      :cover-url="coverUrl"
+      :active-item="activeItem"
+      :playing="playing"
+      :play-label="playLabel"
+      :busy="activeItem && loading"
+      @play="toggleItemPlayback"
+    />
+  </AlbumContextMenu>
 </template>

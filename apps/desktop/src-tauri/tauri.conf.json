@@ -1,0 +1,41 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Peridot",
+  "version": "0.1.0",
+  "identifier": "app.peridot.desktop",
+  "build": {
+    "beforeDevCommand": "pnpm --dir ../.. dev",
+    "devUrl": "http://127.0.0.1:3000",
+    "beforeBuildCommand": "pnpm --dir ../web generate",
+    "frontendDist": "../../web/.output/public"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Peridot",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 900,
+        "minHeight": 600
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost http: https: ws: wss:; img-src 'self' asset: http: https: data: blob:; media-src 'self' blob: http: https:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Music",
+    "shortDescription": "Self-hosted music, in a native desktop window.",
+    "longDescription": "Peridot is a self-hosted and local-first music platform. This desktop shell shares the official Peridot web client and connects to a user-controlled Peridot server.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}

@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "nuxt dev --host 127.0.0.1",
     "build": "nuxt build",
+    "generate": "nuxt generate",
     "typecheck": "nuxt typecheck",
     "postinstall": "nuxt prepare",
     "test": "node --test test/*.test.ts"
@@ -14,6 +15,7 @@
     "@iconify-icons/akar-icons": "^2.0.0",
     "@iconify-icons/at-icons": "2.0.3",
     "@iconify-icons/basil": "^2.0.0",
+    "@iconify-icons/ooui": "^2.0.4",
     "@iconify-icons/simple-icons": "2.0.9",
     "@iconify/vue": "^5.0.5",
     "@nuxtjs/i18n": "10.6.0",

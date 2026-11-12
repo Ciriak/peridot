@@ -43,14 +43,22 @@ async function listLikes(
   return response.json<LikeListResponse>();
 }
 
+async function catalogAlbum(
+  context: Awaited<ReturnType<typeof createTestContext>>,
+) {
+  return context.database.orm.CatalogAlbum.firstOrThrow();
+}
+
 test("likes persist for tracks, albums, and artists with normalized identities", async () => {
   const context = await createTestContext();
   try {
     const track = await createCatalogTrack(context);
+    const album = await catalogAlbum(context);
     const targets = [
       { kind: "track", trackId: track.id },
       {
         kind: "album",
+        albumId: album.id,
         title: " Night Sessions ",
         artist: " Elliot Lake ",
       },
@@ -74,6 +82,7 @@ test("likes persist for tracks, albums, and artists with normalized identities",
       headers: context.authorization,
       payload: {
         kind: "album",
+        albumId: album.id,
         title: "night sessions",
         artist: "ELLIOT LAKE",
       },
@@ -127,6 +136,7 @@ test("likes persist for tracks, albums, and artists with normalized identities",
     for (const target of [
       {
         kind: "album",
+        albumId: album.id,
         title: "Night Sessions",
         artist: "Elliot Lake",
       },
@@ -233,8 +243,12 @@ test("like validation rejects invalid targets and unknown tracks", async () => {
       {},
       { kind: "unknown" },
       { kind: "artist", name: " " },
-      { kind: "album", title: "Album" },
-      { kind: "album", title: "x".repeat(513), artist: "Artist" },
+      {
+        kind: "album",
+        albumId: "album_1",
+        title: "x".repeat(513),
+        artist: "Artist",
+      },
     ]) {
       const response = await context.app.inject({
         method: "POST",
@@ -245,6 +259,20 @@ test("like validation rejects invalid targets and unknown tracks", async () => {
       assert.equal(response.statusCode, 400);
       assert.equal(response.json().error.code, "invalid_like");
     }
+
+    const missingAlbum = await context.app.inject({
+      method: "POST",
+      url: "/api/likes",
+      headers: context.authorization,
+      payload: {
+        kind: "album",
+        albumId: "album_missing",
+        title: "Album",
+        artist: "Artist",
+      },
+    });
+    assert.equal(missingAlbum.statusCode, 404);
+    assert.equal(missingAlbum.json().error.code, "album_not_found");
 
     for (const method of ["POST", "DELETE"] as const) {
       const response = await context.app.inject({
@@ -265,6 +293,7 @@ test("deleting a track or user removes their likes", async () => {
   const context = await createTestContext();
   try {
     const track = await createCatalogTrack(context);
+    const album = await catalogAlbum(context);
     await context.database.orm.TrackLike.create({
       userId: (await context.database.orm.User.firstOrThrow()).id,
       trackId: track.id,
@@ -284,7 +313,12 @@ test("deleting a track or user removes their likes", async () => {
       method: "POST",
       url: "/api/likes",
       headers: member,
-      payload: { kind: "album", title: "Album", artist: "Artist" },
+      payload: {
+        kind: "album",
+        albumId: album.id,
+        title: album.title,
+        artist: album.artist,
+      },
     });
     await context.app.inject({
       method: "POST",

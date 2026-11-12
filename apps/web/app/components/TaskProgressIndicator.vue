@@ -50,11 +50,11 @@ const progressLabel = computed(() => {
     <TooltipRoot>
       <TooltipTrigger as-child>
         <Icon
-          :icon="icons.cloudOff"
+          :icon="icons.networkOff"
           role="img"
           tabindex="0"
           :aria-label="t('components.taskProgress.connectionLost')"
-          class="size-4 text-destructive motion-safe:animate-pulse focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          class="size-4 text-foreground motion-safe:animate-pulse focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         />
       </TooltipTrigger>
       <TooltipPortal>
@@ -62,9 +62,9 @@ const progressLabel = computed(() => {
           side="bottom"
           align="end"
           :side-offset="6"
-          class="z-50 w-64 rounded-md border border-destructive/60 bg-popover p-3 text-popover-foreground shadow-md"
+          class="z-50 w-64 rounded-md border bg-popover p-3 text-popover-foreground shadow-md"
         >
-          <p class="text-sm font-semibold text-destructive">
+          <p class="text-sm font-semibold">
             {{ t("components.taskProgress.connectionLost") }}
           </p>
           <p class="mt-1 text-xs text-muted-foreground">

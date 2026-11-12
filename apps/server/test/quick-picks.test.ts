@@ -22,6 +22,8 @@ function track(
   return {
     artist: "Artist",
     album: "Album",
+    albumArtist: null,
+    albumId: `album-${overrides.id}`,
     metadataArtist: null,
     metadataAlbum: null,
     available: 1,
@@ -89,8 +91,16 @@ test("decayed play scores halve every seven days", () => {
 
 test("ranking combines track and album scores with stable ties", () => {
   const now = new Date("2026-11-11T12:00:00.000Z");
-  const first = track({ id: "first", album: "Shared" });
-  const second = track({ id: "second", album: "Shared" });
+  const first = track({
+    id: "first",
+    album: "Shared",
+    albumId: "album-shared",
+  });
+  const second = track({
+    id: "second",
+    album: "Shared",
+    albumId: "album-shared",
+  });
   const third = track({ id: "third", album: "Other" });
   const ranked = rankQuickPicks(
     [
@@ -105,9 +115,9 @@ test("ranking combines track and album scores with stable ties", () => {
   assert.deepEqual(
     ranked.map((item) => item.key),
     [
-      "album:artist\u0000shared",
+      "album:album-shared",
       "track:first",
-      "album:artist\u0000other",
+      "album:album-third",
       "track:third",
       "track:second",
     ],
@@ -138,6 +148,8 @@ test("album rankings use metadata identity and omit unavailable tracks", () => {
           album: "File Album",
           metadataArtist: "Matched Artist",
           metadataAlbum: "Matched Album",
+          albumArtist: "Matched Artist",
+          albumId: "album-matched",
         }),
       ),
       event(
@@ -148,6 +160,8 @@ test("album rankings use metadata identity and omit unavailable tracks", () => {
           album: "File Album",
           metadataArtist: "Matched Artist",
           metadataAlbum: "Matched Album",
+          albumArtist: "Matched Artist",
+          albumId: "album-matched",
         }),
       ),
       event(now, track({ id: "unavailable", available: 0 })),
@@ -157,7 +171,8 @@ test("album rankings use metadata identity and omit unavailable tracks", () => {
 
   assert.deepEqual(ranked[0], {
     kind: "album",
-    key: "album:matched artist\u0000matched album",
+    key: "album:album-matched",
+    albumId: "album-matched",
     title: "Matched Album",
     artist: "Matched Artist",
   });

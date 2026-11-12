@@ -6,6 +6,7 @@ import {
   haveSameTrackReferences,
   mergePlayerQueueTracks,
   resolvePlayerQueue,
+  selectPlayerTrack,
   trackDownloadFileName,
 } from "../lib/library";
 import {
@@ -131,14 +132,9 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
   const resolvedQueueTracks = computed(() =>
     resolvePlayerQueue(queueTracks.value, queueTrackIds.value),
   );
-  const active = computed(() => {
-    if (!activeTrackId.value) return resolvedQueueTracks.value[0] ?? null;
-    return (
-      resolvedQueueTracks.value.find(
-        (track) => track.id === activeTrackId.value,
-      ) ?? null
-    );
-  });
+  const active = computed(() =>
+    selectPlayerTrack(resolvedQueueTracks.value, activeTrackId.value),
+  );
   const currentTrackId = computed(() => active.value?.id ?? null);
   const upcomingTracks = computed(() =>
     resolvedQueueTracks.value.filter(

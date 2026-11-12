@@ -43,7 +43,7 @@ const recentAlbumsQuery = useQuery({
     scope.value
       ? queryKeys.albums(scope.value, {
           query: `__peridot_recent_albums__:${recents.value
-            .map((album) => `${album.artist}\u0000${album.title}`)
+            .map((album) => album.albumId)
             .join("|")}`,
         })
       : ["peridot", "unscoped", "recent-albums"],
@@ -56,11 +56,7 @@ const recentAlbumsQuery = useQuery({
         query: `${recent.title} ${recent.artist}`,
         limit: 20,
       });
-      const match = page.items.find(
-        (album) =>
-          album.title.toLowerCase() === recent.title.toLowerCase() &&
-          album.artist.toLowerCase() === recent.artist.toLowerCase(),
-      );
+      const match = page.items.find((album) => album.id === recent.albumId);
       if (match) items.push(match);
     }
     return items;
@@ -119,7 +115,7 @@ const resultFilters: { value: ResultFilter; labelKey: string }[] = [
 ];
 
 function openAlbum(album: AlbumSummaryResponse) {
-  remember({ title: album.title, artist: album.artist });
+  remember({ albumId: album.id, title: album.title, artist: album.artist });
 }
 
 function setTrackSort(next: TrackSort | null) {

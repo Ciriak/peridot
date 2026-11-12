@@ -2,6 +2,12 @@ import { realpath, stat } from "node:fs/promises";
 
 export const DEFAULT_SERVER_PORT = 17430;
 
+export const DESKTOP_WEB_ORIGINS = [
+  "http://tauri.localhost",
+  "https://tauri.localhost",
+  "tauri://localhost",
+] as const;
+
 export interface ServerConfig {
   databaseUrl: string;
   libraryRoot: string;
@@ -38,7 +44,11 @@ export async function loadServerConfig(
       .filter(Boolean) ?? [];
   const webOrigins = configuredOrigins.length
     ? configuredOrigins.map(normalizeOrigin)
-    : ["http://127.0.0.1:3000", "http://localhost:3000"];
+    : [
+        "http://127.0.0.1:3000",
+        "http://localhost:3000",
+        ...DESKTOP_WEB_ORIGINS,
+      ];
 
   const credentialEncryptionKey =
     environment.PERIDOT_CREDENTIAL_KEY?.trim() || undefined;
@@ -52,6 +62,8 @@ export async function loadServerConfig(
 }
 
 function normalizeOrigin(value: string): string {
+  if (value === "tauri://localhost") return value;
+
   let origin: URL;
   try {
     origin = new URL(value);

@@ -299,6 +299,9 @@ function releaseCandidate(
     ...artistNames(track.artists),
     ...release.artists.map((artist) => artist.name),
   ]);
+  const albumArtists = normalizeArtistCredits(
+    release.artists.map((artist) => artist.name),
+  );
   if (!artists.length) return null;
   const position = track.position?.trim() || null;
   const discTrack = position?.match(/^(\d+)[-.](\d+)$/);
@@ -315,6 +318,7 @@ function releaseCandidate(
     title: track.title,
     artist: artists.join(", "),
     artists,
+    albumArtists,
     album: release.title,
     discNumber: discTrack ? Number(discTrack[1]) : 1,
     trackNumber: discTrack

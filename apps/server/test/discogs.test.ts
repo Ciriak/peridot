@@ -86,6 +86,7 @@ test("Discogs validates identity, preserves details, caches releases, and spaces
   assert.equal(first.length, 2);
   assert.equal(second.length, 2);
   assert.equal(first[0]?.trackNumber, 1);
+  assert.deepEqual(first[0]?.albumArtists, ["Elliot Lake"]);
   assert.equal(
     first[0]?.details.find((detail) => detail.key === "trackPosition")?.value,
     "A1",

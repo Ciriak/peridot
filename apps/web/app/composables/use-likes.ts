@@ -8,7 +8,7 @@ import type {
 } from "@peridot/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
 import { computed, ref } from "vue";
-import { albumLikeKey, artistLikeKey } from "../lib/library";
+import { artistLikeKey } from "../lib/library";
 import { localizedError } from "../lib/messages.ts";
 import {
   createLike,
@@ -29,8 +29,7 @@ import { useSession } from "./use-session";
 
 export function likeTargetKey(target: LikeTarget): string {
   if (target.kind === "track") return `track:${target.trackId}`;
-  if (target.kind === "album")
-    return `album:${albumLikeKey({ title: target.title, artist: target.artist })}`;
+  if (target.kind === "album") return `album:${target.albumId}`;
   return `artist:${artistLikeKey(target.name)}`;
 }
 
@@ -73,11 +72,11 @@ function updateLikedTarget(
     };
   }
   if (target.kind === "album") {
-    const key = albumLikeKey(target);
+    const key = target.albumId;
     if (!liked) {
       return {
         ...current,
-        albums: current.albums.filter((entry) => albumLikeKey(entry) !== key),
+        albums: current.albums.filter((entry) => entry.albumId !== key),
       };
     }
     const albumItem =
@@ -86,7 +85,7 @@ function updateLikedTarget(
         : { ...target, likedAt: new Date().toISOString() };
     return {
       ...current,
-      albums: current.albums.some((entry) => albumLikeKey(entry) === key)
+      albums: current.albums.some((entry) => entry.albumId === key)
         ? current.albums
         : [...current.albums, albumItem],
     };
@@ -144,8 +143,8 @@ export function useLikes() {
   const likedTrackIds = computed(() =>
     trackItems.value.map((item) => item.trackId),
   );
-  const likedAlbumKeys = computed(() =>
-    albumItems.value.map((item) => albumLikeKey(item)),
+  const likedAlbumIds = computed(() =>
+    albumItems.value.map((item) => item.albumId),
   );
   const likedArtistKeys = computed(() =>
     artistItems.value.map((item) => artistLikeKey(item.name)),
@@ -168,9 +167,7 @@ export function useLikes() {
     if (target.kind === "track")
       return likedTrackIds.value.includes(target.trackId);
     if (target.kind === "album")
-      return likedAlbumKeys.value.includes(
-        albumLikeKey({ title: target.title, artist: target.artist }),
-      );
+      return likedAlbumIds.value.includes(target.albumId);
     return likedArtistKeys.value.includes(artistLikeKey(target.name));
   }
 
@@ -287,7 +284,7 @@ export function useLikes() {
     albumItems,
     artistItems,
     likedTrackIds,
-    likedAlbumKeys,
+    likedAlbumIds,
     likedArtistKeys,
     loading,
     loaded,

@@ -5,6 +5,8 @@ export interface PlayedTrackInfo {
   id: string;
   artist: string;
   album: string | null;
+  albumArtist: string | null;
+  albumId: string | null;
   metadataArtist: string | null;
   metadataAlbum: string | null;
   available: number | boolean;
@@ -30,6 +32,7 @@ export type RankedQuickPick =
   | {
       kind: "album";
       key: string;
+      albumId: string;
       title: string;
       artist: string;
     };
@@ -85,15 +88,19 @@ export function rankQuickPicks(
     }
 
     const title = (event.track.metadataAlbum ?? event.track.album)?.trim();
-    const artist = (event.track.metadataArtist ?? event.track.artist).trim();
-    if (!title || !artist) continue;
-    const key = `${artist.toLowerCase()}\u0000${title.toLowerCase()}`;
-    const album = albums.get(key);
+    const artist = (
+      event.track.albumArtist?.trim() ||
+      event.track.metadataArtist ||
+      event.track.artist
+    ).trim();
+    const albumId = event.track.albumId;
+    if (!title || !artist || !albumId) continue;
+    const album = albums.get(albumId);
     if (album) {
       album.score += score;
       album.lastPlayedAt = Math.max(album.lastPlayedAt, playedAt);
     } else {
-      albums.set(key, {
+      albums.set(albumId, {
         score,
         lastPlayedAt: playedAt,
         title,
@@ -110,13 +117,14 @@ export function rankQuickPicks(
       item: { kind: "track", key: `track:${trackId}`, trackId },
     });
   }
-  for (const [albumKey, album] of albums) {
+  for (const [albumId, album] of albums) {
     ranked.push({
       score: album.score,
       lastPlayedAt: album.lastPlayedAt,
       item: {
         kind: "album",
-        key: `album:${albumKey}`,
+        key: `album:${albumId}`,
+        albumId,
         title: album.title,
         artist: album.artist,
       },

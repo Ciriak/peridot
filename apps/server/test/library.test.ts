@@ -85,6 +85,7 @@ test("scans catalog supported regular files, reconcile availability, and persist
       artist: "Unknown Artist",
       artists: ["Unknown Artist"],
       album: null,
+      albumId: null,
       discNumber: null,
       trackNumber: null,
       durationMs: 100,
@@ -140,6 +141,7 @@ test("scans track, disc, and album tags and backfills legacy metadata once", asy
       createTaggedMp3({
         title: "Opening",
         artist: "Elliot Lake; Óra",
+        albumArtist: "Elliot Lake",
         album: "Night Sessions",
         discNumber: 2,
         trackNumber: 5,
@@ -155,10 +157,15 @@ test("scans track, disc, and album tags and backfills legacy metadata once", asy
       JSON.stringify(["Elliot Lake", "Óra"]),
     );
     assert.equal(firstTrack.album, "Night Sessions");
+    assert.equal(firstTrack.albumArtist, "Elliot Lake");
+    assert.equal(
+      firstTrack.albumArtistCredits,
+      JSON.stringify(["Elliot Lake"]),
+    );
     assert.equal(firstTrack.mimeType, "audio/mpeg");
     assert.equal(firstTrack.discNumber, 2);
     assert.equal(firstTrack.trackNumber, 5);
-    assert.equal(firstTrack.metadataVersion, 3);
+    assert.equal(firstTrack.metadataVersion, 4);
 
     await context.database.orm.Track.where({ id: firstTrack.id }).update({
       metadataVersion: 0,
@@ -172,7 +179,7 @@ test("scans track, disc, and album tags and backfills legacy metadata once", asy
     });
     assert.equal(backfilledTrack.discNumber, 2);
     assert.equal(backfilledTrack.trackNumber, 5);
-    assert.equal(backfilledTrack.metadataVersion, 3);
+    assert.equal(backfilledTrack.metadataVersion, 4);
 
     const unchangedScan = await startScan(context);
     assert.equal(unchangedScan.unchangedCount, 1);

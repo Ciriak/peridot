@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   isPeridotServerReachable,
+  serverConnectionRestored,
   topbarStatus,
 } from "../app/lib/server-connection.ts";
 import { sourceMutationToast } from "../app/lib/source-toast.ts";
@@ -88,6 +89,14 @@ test("a lost server connection replaces task progress in the topbar", () => {
   assert.equal(topbarStatus("unknown", false), "idle");
 });
 
+test("only a lost connection becoming healthy is treated as back online", () => {
+  assert.equal(serverConnectionRestored("lost", "connected"), true);
+  assert.equal(serverConnectionRestored("unknown", "connected"), false);
+  assert.equal(serverConnectionRestored("connected", "connected"), false);
+  assert.equal(serverConnectionRestored("lost", "unknown"), false);
+  assert.equal(serverConnectionRestored(undefined, "connected"), false);
+});
+
 test("task and log updates use the shared realtime subscription", async () => {
   const app = await readFile(
     new URL("../app/app.vue", import.meta.url),
@@ -134,6 +143,13 @@ test("task and log updates use the shared realtime subscription", async () => {
   assert.match(list, /toastViewportClass\(route\.meta\.layout\)/);
   assert.match(list, /<ToastRoot/);
   assert.match(notifications, /useRealtime/);
+  assert.match(notifications, /useServerConnection/);
+  assert.match(notifications, /serverConnectionRestored\(previous, next\)/);
+  assert.match(notifications, /notifyServerOnline\(\)/);
+  assert.match(
+    notifications,
+    /route\.path === "\/onboarding" \|\| !address\.value \|\| !token\.value/,
+  );
   assert.match(notifications, /subscribe\(\["tasks", "catalog"\]/);
   assert.doesNotMatch(
     notifications,
@@ -147,6 +163,9 @@ test("task and log updates use the shared realtime subscription", async () => {
     toasts,
     /TaskResponse|taskToast|notifyTasks|notifyTaskStatusFailure|clearTaskToast|TASK_TOAST_ID|SERVER_CONNECTION_TOAST_ID|notifyServerConnectionLost|clearServerConnectionLost/,
   );
+  assert.match(toasts, /export function notifyServerOnline/);
+  assert.match(toasts, /message\("toast\.serverOnlineTitle"\)/);
+  assert.match(toasts, /message\("toast\.serverOnline"\)/);
   assert.doesNotMatch(
     list,
     /Work in progress|PeridotSpinner|kind === 'progress'/,

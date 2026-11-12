@@ -29,10 +29,13 @@ servers on port 17430; selecting a
 discovered server advances onboarding. The routed library view reads cataloged
 tracks from the authenticated catalog API and refreshes after completed library
 or metadata tasks.
-The Albums view derives groups from available track tags, keeps same-named
-albums by different artists separate, and opens a detail page with disc/track
-ordering, album playback actions, and an available provider release year beside
-the total duration. Album artwork is read from embedded
+The Albums view derives release-first groups from available track and provider
+metadata. Provider release identity takes precedence, followed by embedded album
+artists and title, then the containing source folder and title. Track performer
+combinations do not create separate albums, while same-named releases with
+different identities remain separate. Album cards open a detail page with
+disc/track ordering, album playback actions, and an available provider release
+year beside the total duration. Album artwork is read from embedded
 front-cover tags or same-folder `cover`, `folder`, `front`, or `albumart` images.
 Tracks without album tags remain in the Library view and are omitted from
 Albums. The Artists view groups every tagged performer in the catalog, including
@@ -84,11 +87,14 @@ The sidebar's up-to-eight-item `Quick pick` list mixes tracks and albums using
 the signed-in user's successful playback starts, with one item per line. Each
 start is retained as a timestamped event and receives exponential time decay
 with a seven-day half-life; album scores sum the decayed scores of their tracks.
-Each complete row is the play control, with a small type icon before the title
-and the artist names beneath it. The visible order stays fixed while the pointer
-or keyboard focus is inside the list, then adopts the latest order after the
-interaction ends. Tracks use their album cover. Playlist entries remain deferred
-until playlists are implemented.
+Artwork is the play control. The small type icon and title form one link to the
+track's album row, its primary artist page when it has no album, or the album
+detail page, while every artist credit links to its artist page. Right-clicking
+or long-pressing a row opens the same track or album context menu used elsewhere
+in the app. The visible order stays fixed while the pointer or keyboard focus is
+inside the list, then adopts the latest order after the interaction ends. Tracks
+use their album cover. Playlist entries remain deferred until playlists are
+implemented.
 
 ```sh
 pnpm format:check
@@ -134,6 +140,29 @@ Browser quotas and eviction still apply. Service-worker registration and offline
 playback require one successful online load first, and direct offline routes are
 limited to the cached SPA shell and query pages that were previously visited.
 
+## Desktop prototype
+
+`apps/desktop` contains a Tauri 2 desktop shell that embeds the statically
+generated Nuxt client. It requires Rust 1.90 or newer and the Tauri platform
+prerequisites for the target operating system.
+
+Launch the complete development stack and native window:
+
+```sh
+pnpm desktop:dev
+```
+
+Build a release executable without creating an installer:
+
+```sh
+pnpm desktop:build
+```
+
+The executable is written under `apps/desktop/src-tauri/target/release/` and
+still connects to a separately running Peridot server. Installer bundling,
+code signing, automatic updates, native secure credential storage, and an
+embedded server are not included in this prototype.
+
 ## Windows package-manager setup
 
 If PowerShell cannot find pnpm, enable Corepack's pnpm shim in your existing
@@ -153,7 +182,7 @@ under Program Files. Turbo and nested scripts need pnpm itself on PATH.
 
 - `apps/web`: Nuxt 4 SPA/PWA application and TanStack Query cache.
 - `apps/server`: authenticated Fastify catalog/task/audio API and Prisma 8 SQLite storage.
-- `apps/desktop`: documented future desktop shell.
+- `apps/desktop`: Tauri 2 desktop shell sharing the generated web client.
 - `packages/contracts`: shared API types.
 - `packages/ui`: shared brand tokens and reusable Button, Input, Badge, Slider, Gradient, ProgressCircle, PeridotSpinner, and classic Spinner components.
 - `packages/player`: shared playback state contract; the web app owns the browser audio adapter.
@@ -208,9 +237,9 @@ Settings → Admin → Tasks, which lists active work and paginated terminal his
 The same indicator remains visible in the fullscreen Settings header for
 administrators.
 When the server health monitor reports a lost connection, the same topbar slot
-replaces the progress circle with a pulsing destructive-color cloud-off icon
-and an accessible explanation for every signed-in user. Administrator task
-progress returns after a healthy probe.
+replaces the progress circle with a pulsing `ooui:network-off` icon in the
+standard foreground color and an accessible explanation for every signed-in
+user. Administrator task progress returns after a healthy probe.
 The Settings sidebar has a persistent Log out action at its bottom. Logout
 first asks for confirmation, then attempts to revoke the current session, keeps
 the selected server for sign-in, and returns to the current Settings page after
@@ -220,7 +249,8 @@ sits above the fixed player in the main shell and against the bottom edge in
 playerless fullscreen layouts. It reports source and provider changes, likes,
 download failures, and queue operations. Task activity is shown only through the
 administrator topbar and Tasks settings view, while connection loss is indicated
-by the topbar cloud-off warning without a toast.
+by the topbar network-off warning without a toast. When the connection recovers,
+an authenticated session receives a `Back online` toast.
 The web shell opens one authenticated realtime connection for task, catalog, and
 administrator log events. Task progress is coalesced, catalog changes carry only
 a revision marker, and HTTP remains the recovery source after a connection gap.
@@ -234,9 +264,10 @@ See apps/server/.env.example for variables required by built server startup.
 Environment files are not loaded automatically. The development command supplies
 the local defaults described in Quick start. `DATABASE_URL` selects the local SQLite file,
 `MUSIC_LIBRARY_PATH` seeds the first local music source, and
-`PERIDOT_WEB_ORIGINS` lists browser origins allowed to call the API. Its defaults
-support the local web development server; add the exact web origin when accessing
-Peridot from another device.
+`PERIDOT_WEB_ORIGINS` lists web and desktop origins allowed to call the API. Its
+defaults support the local web development server and Tauri's HTTP and custom
+scheme webview origins; add the exact web origin when accessing Peridot from
+another device.
 Discogs metadata uses an administrator-provided personal access token. Set
 `PERIDOT_CREDENTIAL_KEY` to a base64-encoded 32-byte key before adding Discogs;
 Peridot uses it to encrypt provider credentials at rest. Keep the key backed up
@@ -266,8 +297,11 @@ task. Provider candidates are merged for correction, and matched artist names,
 portrait provenance, and cached image content are stored locally. Artist image
 downloads accept only bounded HTTPS JPEG, PNG, or WebP responses from approved
 Discogs hosts.
-Each containing folder is treated as an album: the folder name supplies the
-release title when tracks have no album tag, or when their tags disagree.
+Each containing folder can supply an album fallback title when tracks have no
+album tag or their tags disagree. Album identity uses provider release IDs
+first, then album artists and title, and finally source folder and title.
+Unmatched tracks join the unique release found in the same folder and album
+title group; ambiguous folders remain separate.
 The Metadata page also has a Refresh metadata action that queues automatic
 matching without rescanning audio files and a confirmed Reset metadata action
 that removes all automatic and manual track matches so tracks use their original
@@ -330,8 +364,9 @@ revisions, and administrator-only logs; catalog events never include track rows.
 Authenticated clients list the current
 user's favorites with `GET /api/likes`; `POST /api/likes` and
 `DELETE /api/likes` accept an independent track, album, or artist target. Track
-likes use catalog IDs, while album and artist likes match trimmed,
-case-insensitive metadata identities. `GET /api/queue` returns the current
+likes use catalog IDs, album likes use canonical catalog album IDs, and artist
+likes match trimmed, case-insensitive metadata identities. `GET /api/queue`
+returns the current
 user's source-order track IDs, active track, and remaining randomized pool;
 `PUT /api/queue` atomically replaces that snapshot. Duplicate IDs, an active
 track outside the queue, and random-pool entries outside the non-active queue
@@ -444,5 +479,6 @@ When no readable album image is available, the music-note placeholder remains.
 UI icons use Iconify's offline Vue component with individually bundled icon
 data. UI icons are Basil, with `basil:play-solid` for play,
 `akar-icons:drag-vertical` for queue drag handles, and the owner-requested
-`at-icons:waveform` for the current-track indicator.
+`at-icons:waveform` for the current-track indicator and `ooui:network-off` for
+the topbar connection warning.
 Icons render on the server and need no runtime icon API or network access.

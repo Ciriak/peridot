@@ -18,6 +18,7 @@ import type {
 
 const MAX_LIKE_LABEL_LENGTH = 512;
 const MAX_TRACK_ID_LENGTH = 200;
+const MAX_ALBUM_ID_LENGTH = 200;
 
 function normalize(value: string): string {
   return value.trim().toLowerCase();
@@ -47,11 +48,14 @@ function parseLikeTarget(body: unknown): LikeTarget | null {
   }
   if (
     value.kind === "album" &&
+    validTrackId(value.albumId) &&
+    String(value.albumId).trim().length <= MAX_ALBUM_ID_LENGTH &&
     validLabel(value.title) &&
     validLabel(value.artist)
   ) {
     return {
       kind: "album",
+      albumId: String(value.albumId).trim(),
       title: value.title.trim(),
       artist: value.artist.trim(),
     };
@@ -71,6 +75,7 @@ function trackLikeResponse(like: TrackLikeRow): TrackLikeResponse {
 
 function albumLikeResponse(like: AlbumLikeRow): AlbumLikeResponse {
   return {
+    albumId: like.albumId,
     title: like.title,
     artist: like.artist,
     likedAt: like.createdAt.toISOString(),
@@ -151,20 +156,28 @@ export async function registerLikeRoutes(
     }
 
     if (target.kind === "album") {
-      const normalizedArtist = normalize(target.artist);
-      const normalizedTitle = normalize(target.title);
+      const album = await database.orm.CatalogAlbum.first({
+        id: target.albumId,
+      });
+      if (!album || album.trackCount < 1) {
+        return sendError(
+          reply,
+          404,
+          "album_not_found",
+          "Album not found",
+          message("api.message.albumNotFound"),
+        );
+      }
       const like =
         (await database.orm.AlbumLike.where({
           userId,
-          normalizedArtist,
-          normalizedTitle,
+          albumId: album.id,
         }).first()) ??
         (await database.orm.AlbumLike.create({
           userId,
-          title: target.title,
-          artist: target.artist,
-          normalizedTitle,
-          normalizedArtist,
+          albumId: album.id,
+          title: album.title,
+          artist: album.artist,
         }));
       const response: LikeResponse = {
         kind: "album",
@@ -224,8 +237,7 @@ export async function registerLikeRoutes(
     } else if (target.kind === "album") {
       await database.orm.AlbumLike.where({
         userId,
-        normalizedArtist: normalize(target.artist),
-        normalizedTitle: normalize(target.title),
+        albumId: target.albumId,
       }).deleteAndCount();
     } else {
       await database.orm.ArtistLike.where({

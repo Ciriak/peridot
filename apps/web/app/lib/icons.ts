@@ -32,6 +32,7 @@ import check from "@iconify-icons/basil/check-outline";
 import cloudOff from "@iconify-icons/basil/cloud-off-outline";
 import cloudCheck from "@iconify-icons/basil/cloud-check-outline";
 import cloudDownload from "@iconify-icons/basil/cloud-download-outline";
+import networkOff from "@iconify-icons/ooui/network-off";
 import logout from "@iconify-icons/basil/logout-outline";
 import trash from "@iconify-icons/basil/trash-outline";
 import download from "@iconify-icons/basil/download-outline";
@@ -81,6 +82,7 @@ export const icons = {
   cloudOff,
   cloudCheck,
   cloudDownload,
+  networkOff,
   logout,
   trash,
   download,

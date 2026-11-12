@@ -1,0 +1,17 @@
+{
+  "name": "@peridot/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tauri dev",
+    "package": "tauri build --no-bundle",
+    "bundle": "tauri build",
+    "typecheck": "cargo check --manifest-path src-tauri/Cargo.toml",
+    "test": "node --test test/*.test.ts"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.12.4"
+  },
+  "license": "Apache-2.0"
+}

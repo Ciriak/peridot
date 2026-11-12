@@ -67,6 +67,7 @@ export interface TrackResponse {
   artist: string;
   artists: string[];
   album: string | null;
+  albumId: string | null;
   discNumber: number | null;
   trackNumber: number | null;
   durationMs: number | null;
@@ -227,6 +228,7 @@ export interface TrackLikeResponse {
 }
 
 export interface AlbumLikeResponse {
+  albumId: string;
   title: string;
   artist: string;
   likedAt: string;
@@ -245,7 +247,7 @@ export interface LikeListResponse {
 
 export type LikeTarget =
   | { kind: "track"; trackId: string }
-  | { kind: "album"; title: string; artist: string }
+  | { kind: "album"; albumId: string; title: string; artist: string }
   | { kind: "artist"; name: string };
 
 export type LikeResponse =
@@ -432,6 +434,7 @@ export interface MetadataCandidateResponse {
   title: string;
   artist: string;
   artists: string[];
+  albumArtists: string[];
   album: string | null;
   discNumber: number | null;
   trackNumber: number | null;
@@ -452,6 +455,7 @@ export interface ApplyTrackMetadataRequest {
   title: string;
   artist: string;
   artists: string[];
+  albumArtists: string[];
   album: string | null;
   discNumber: number | null;
   trackNumber: number | null;

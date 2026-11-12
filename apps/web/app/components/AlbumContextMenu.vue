@@ -39,6 +39,7 @@ const {
 } = useLikes();
 const target = computed<LikeTarget>(() => ({
   kind: "album",
+  albumId: props.album.id,
   title: props.album.title,
   artist: props.album.artist,
 }));
@@ -47,11 +48,7 @@ async function playAlbum() {
   if (!address.value || !token.value) return;
   const playSaved = async () => {
     const saved = await tracksMatching(
-      (track) =>
-        track.album?.trim().toLowerCase() ===
-          props.album.title.trim().toLowerCase() &&
-        track.artist.trim().toLowerCase() ===
-          props.album.artist.trim().toLowerCase(),
+      (track) => track.albumId === props.album.id,
     );
     if (saved.length) playCollection(saved);
   };

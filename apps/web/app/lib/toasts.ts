@@ -234,6 +234,16 @@ export function notifyLikeSucceeded(target: LikeTarget) {
   addToast(content);
 }
 
+export function notifyServerOnline() {
+  addToast({
+    titleMessage: message("toast.serverOnlineTitle"),
+    descriptionMessage: message("toast.serverOnline"),
+    status: "success",
+    duration: 5000,
+    kind: "success",
+  });
+}
+
 export function notifyAddedToQueue(trackTitle: string) {
   addToast({
     titleMessage: message("toast.addedToQueueTitle"),

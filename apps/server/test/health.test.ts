@@ -3,7 +3,11 @@ import assert from "node:assert/strict";
 import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { DEFAULT_SERVER_PORT, loadServerConfig } from "../src/config.js";
+import {
+  DEFAULT_SERVER_PORT,
+  DESKTOP_WEB_ORIGINS,
+  loadServerConfig,
+} from "../src/config.js";
 import { prepareDevelopmentEnvironment } from "../src/dev-config.js";
 import { createTestContext } from "./helpers.js";
 
@@ -30,6 +34,15 @@ test("server configuration validates storage and browser origins", async () => {
   await mkdir(libraryRoot);
   try {
     await assert.rejects(loadServerConfig({}), /DATABASE_URL is required/);
+    const defaults = await loadServerConfig({
+      DATABASE_URL: "file:test.db",
+      MUSIC_LIBRARY_PATH: libraryRoot,
+    });
+    assert.deepEqual(defaults.webOrigins, [
+      "http://127.0.0.1:3000",
+      "http://localhost:3000",
+      ...DESKTOP_WEB_ORIGINS,
+    ]);
     await assert.rejects(
       loadServerConfig({
         DATABASE_URL: "file:test.db",
@@ -45,8 +58,38 @@ test("server configuration validates storage and browser origins", async () => {
     });
     assert.equal(config.libraryRoot, await realpath(libraryRoot));
     assert.deepEqual(config.webOrigins, ["https://music.example.com"]);
+
+    const desktop = await loadServerConfig({
+      DATABASE_URL: "file:test.db",
+      MUSIC_LIBRARY_PATH: libraryRoot,
+      PERIDOT_WEB_ORIGINS: "tauri://localhost",
+    });
+    assert.deepEqual(desktop.webOrigins, ["tauri://localhost"]);
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("Tauri desktop origins can call API routes", async () => {
+  const context = await createTestContext({
+    webOrigins: ["http://tauri.localhost"],
+  });
+  try {
+    const response = await context.app.inject({
+      method: "OPTIONS",
+      url: "/api/auth/status",
+      headers: {
+        origin: "http://tauri.localhost",
+        "access-control-request-method": "GET",
+      },
+    });
+    assert.equal(response.statusCode, 204);
+    assert.equal(
+      response.headers["access-control-allow-origin"],
+      "http://tauri.localhost",
+    );
+  } finally {
+    await context.close();
   }
 });
 

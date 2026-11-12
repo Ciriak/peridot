@@ -37,6 +37,7 @@ const optimizedDependencies = [
   "@iconify-icons/basil/stack-outline",
   "@iconify-icons/basil/user-outline",
   "@iconify-icons/basil/volume-up-outline",
+  "@iconify-icons/ooui/network-off",
   "@iconify-icons/simple-icons/discogs",
   "@iconify-icons/simple-icons/musicbrainz",
   "@iconify/vue/offline",

@@ -161,6 +161,7 @@ async function chooseMetadata(candidate: MetadataCandidateResponse) {
     title: candidate.title,
     artist: candidate.artist,
     artists: candidate.artists,
+    albumArtists: candidate.albumArtists,
     album: candidate.album,
     discNumber: candidate.discNumber,
     trackNumber: candidate.trackNumber,

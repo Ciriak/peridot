@@ -1,5 +1,8 @@
 import type { TrackResponse } from "@peridot/contracts";
-import { effectiveArtistCredits } from "./metadata-enrichment.js";
+import {
+  effectiveAlbumArtistCredits,
+  effectiveArtistCredits,
+} from "./metadata-enrichment.js";
 import { parseStoredMetadataDetails } from "./metadata-details.js";
 import type { PlaybackTokenService } from "./playback-tokens.js";
 import type { TrackRow } from "./prisma/models.js";
@@ -9,6 +12,7 @@ export function effectiveTrackFields(track: TrackRow) {
     title: track.metadataTitle ?? track.title,
     artist: track.metadataArtist ?? track.artist,
     artists: effectiveArtistCredits(track),
+    albumArtists: effectiveAlbumArtistCredits(track),
     album: track.metadataAlbum ?? track.album,
     discNumber: track.metadataDiscNumber ?? track.discNumber,
     trackNumber: track.metadataTrackNumber ?? track.trackNumber,
@@ -39,6 +43,7 @@ export function toTrackResponse(
   track: TrackRow,
   playbackTokens: PlaybackTokenService,
   liked = false,
+  albumId: string | null = null,
 ): TrackResponse {
   const effective = effectiveTrackFields(track);
   const matched =
@@ -68,7 +73,14 @@ export function toTrackResponse(
   const coverUrl = toCoverUrl(track.coverId, playbackTokens);
   return {
     id: track.id,
-    ...effective,
+    title: effective.title,
+    artist: effective.artist,
+    artists: effective.artists,
+    album: effective.album,
+    discNumber: effective.discNumber,
+    trackNumber: effective.trackNumber,
+    durationMs: effective.durationMs,
+    albumId,
     mimeType: track.mimeType,
     available: Boolean(track.available),
     coverUrl,

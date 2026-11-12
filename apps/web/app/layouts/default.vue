@@ -6,7 +6,14 @@ import logoNop from "@peridot/ui/assets/brand/logo-nop.png";
 import { Button } from "@peridot/ui/components/ui/button";
 import { Input } from "@peridot/ui/components/ui/input";
 import { Slider } from "@peridot/ui/components/ui/slider";
-import { computed, nextTick, onMounted, ref, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from "vue";
 import LikeButton from "../components/LikeButton.vue";
 import QueueDrawer from "../components/QueueDrawer.vue";
 import SidebarQuickPicks from "../components/SidebarQuickPicks.vue";
@@ -31,6 +38,9 @@ const searchQuery = useState("search-query", () => "");
 const searchInput = ref<{ $el?: HTMLInputElement } | null>(null);
 const mobileNavigation = ref(false);
 const queueOpen = ref(false);
+const loadingRayAtRight = ref(false);
+let loadingRayFrame: number | undefined;
+let loadingRayTimeout: ReturnType<typeof setTimeout> | undefined;
 const { address } = useServer();
 const { token } = useSession();
 const { user } = useUser();
@@ -131,9 +141,52 @@ watch([address, token, () => user.value?.id], () => {
   void loadLikes();
 });
 
+function stopLoadingRay() {
+  if (loadingRayFrame !== undefined) {
+    cancelAnimationFrame(loadingRayFrame);
+    loadingRayFrame = undefined;
+  }
+  if (loadingRayTimeout !== undefined) {
+    clearTimeout(loadingRayTimeout);
+    loadingRayTimeout = undefined;
+  }
+  loadingRayAtRight.value = false;
+}
+
+function startLoadingRay() {
+  if (!import.meta.client) return;
+  stopLoadingRay();
+  void nextTick(() => {
+    loadingRayFrame = requestAnimationFrame(() => {
+      loadingRayFrame = undefined;
+      if (!loading.value) return;
+      loadingRayAtRight.value = true;
+      const advance = () => {
+        loadingRayTimeout = setTimeout(() => {
+          if (!loading.value) return;
+          loadingRayAtRight.value = !loadingRayAtRight.value;
+          advance();
+        }, 1500);
+      };
+      advance();
+    });
+  });
+}
+
+watch(
+  loading,
+  (isLoading) => {
+    if (isLoading) startLoadingRay();
+    else stopLoadingRay();
+  },
+  { immediate: true },
+);
+
 onMounted(() => {
   void loadLikes();
 });
+
+onBeforeUnmount(stopLoadingRay);
 </script>
 
 <template>
@@ -284,6 +337,17 @@ onMounted(() => {
       :aria-label="t('player.region')"
       class="fixed inset-x-0 bottom-0 z-30 isolate flex h-48 flex-col justify-center gap-3 overflow-hidden border-t bg-card px-4 text-card-foreground md:h-28 md:flex-row md:items-center md:gap-6 md:px-6"
     >
+      <div
+        v-if="loading"
+        aria-hidden="true"
+        class="pointer-events-none absolute inset-x-0 top-0 z-20 h-1 overflow-hidden"
+      >
+        <div class="hidden size-full bg-primary/40 motion-reduce:block" />
+        <div
+          class="block size-full bg-linear-to-r from-transparent via-primary to-transparent transition-transform duration-1000 ease-in-out motion-reduce:hidden"
+          :class="loadingRayAtRight ? 'translate-x-full' : '-translate-x-full'"
+        />
+      </div>
       <div
         aria-hidden="true"
         class="pointer-events-none absolute inset-y-0 left-0 -z-10 w-2/3 overflow-hidden md:w-1/2"
@@ -476,7 +540,7 @@ onMounted(() => {
             :step="1"
             :disabled="!active || durationSeconds <= 0"
             :aria-busy="loading"
-            :class="['min-h-11 flex-1', loading && 'motion-safe:animate-pulse']"
+            class="min-h-11 flex-1"
             :thumb-label="t('player.position')"
             @update:model-value="seek($event?.[0] ?? 0)"
           /><span>{{ clock(durationSeconds) }}</span>

@@ -115,8 +115,8 @@ test("the persistent player controls a native audio element", async () => {
   assert.match(layout, /@update:model-value="seek\(\$event\?\.\[0\] \?\? 0\)"/);
   assert.match(
     layout,
-    /<Slider\s+:model-value="\[elapsed\]"[\s\S]*?:aria-busy="loading"[\s\S]*?:class="\[\s*'min-h-11 flex-1',\s*loading && 'motion-safe:animate-pulse',?\s*\]"[\s\S]*?t\('player\.position'\)/,
-    "The playback progress uses a taller hit target and pulses while loading",
+    /<Slider\s+:model-value="\[elapsed\]"[\s\S]*?:aria-busy="loading"[\s\S]*?class="min-h-11 flex-1"[\s\S]*?t\('player\.position'\)/,
+    "The playback progress uses a taller hit target and exposes its loading state",
   );
   assert.match(
     layout,
@@ -139,8 +139,18 @@ test("the persistent player controls a native audio element", async () => {
   );
   assert.doesNotMatch(
     playerFooter,
-    /Preparing audio|v-if="loading"/,
+    /Preparing audio/,
     "The player never replaces the artist list with a preparing-audio label",
+  );
+  assert.match(
+    playerFooter,
+    /v-if="loading"[\s\S]*class="pointer-events-none absolute inset-x-0 top-0 z-20 h-1 overflow-hidden"[\s\S]*bg-primary\/40 motion-reduce:block[\s\S]*from-transparent via-primary to-transparent transition-transform duration-1000 ease-in-out motion-reduce:hidden[\s\S]*loadingRayAtRight \? 'translate-x-full' : '-translate-x-full'/,
+    "The player shows a primary ray that reverses across the bar while loading",
+  );
+  assert.doesNotMatch(
+    playerFooter,
+    /motion-safe:animate-pulse/,
+    "The player loading state does not pulse the seek control",
   );
   assert.match(
     playerFooter,
@@ -246,7 +256,7 @@ test("the player replaces known track metadata without an unresolved frame", asy
 
   assert.match(
     player,
-    /const active = computed\(\(\) => \{\s+if \(!activeTrackId\.value\) return resolvedQueueTracks\.value\[0\] \?\? null;\s+return \(\s+resolvedQueueTracks\.value\.find\([\s\S]*?\?\? null\s+\);\s+\}\);/,
+    /const active = computed\(\(\) =>\s+selectPlayerTrack\(resolvedQueueTracks\.value, activeTrackId\.value\),?\s+\);/,
     "A pending active-track detail never falls back to another queue track",
   );
   assert.match(

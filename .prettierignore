@@ -8,3 +8,5 @@ dist
 generated
 apps/server/src/prisma/contract.d.ts
 apps/server/src/prisma/contract.json
+apps/desktop/src-tauri/gen
+apps/desktop/src-tauri/target

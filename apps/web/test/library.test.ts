@@ -24,6 +24,7 @@ import {
   nextTrackSort,
   nextQueueTrackId,
   resolvePlayerQueue,
+  selectPlayerTrack,
   sortTracks,
   trackAlbumRoute,
   trackAlbumTitleRoute,
@@ -39,6 +40,7 @@ const tracks: TrackResponse[] = [
     artist: "Elliot Lake",
     artists: ["Elliot Lake"],
     album: "Night Sessions",
+    albumId: "album-night-sessions",
     discNumber: null,
     trackNumber: 2,
     durationMs: 284_000,
@@ -54,6 +56,7 @@ const tracks: TrackResponse[] = [
     artist: "Óra",
     artists: ["Óra"],
     album: null,
+    albumId: null,
     discNumber: null,
     trackNumber: null,
     durationMs: 3_661_000,
@@ -353,7 +356,7 @@ test("track cover URLs combine the connected server with the signed path", () =>
   assert.equal(trackCoverUrl("http://127.0.0.1:17430", null), null);
 });
 
-test("albums group by artist and title while ignoring letter case", () => {
+test("albums prefer canonical ids and fall back to artist and title", () => {
   const catalog: TrackResponse[] = [
     {
       ...tracks[0]!,
@@ -383,6 +386,7 @@ test("albums group by artist and title while ignoring letter case", () => {
       artist: "Someone Else",
       artists: ["Someone Else"],
       album: "Night Sessions",
+      albumId: null,
       trackNumber: null,
     },
     tracks[1]!,
@@ -441,15 +445,15 @@ test("albums expose only an unambiguous provider release year", () => {
   assert.equal(groupAlbums(catalog("not-a-year", null))[0]?.releaseYear, null);
 });
 
-test("like identities ignore surrounding whitespace and letter case", () => {
+test("album like identities use the canonical album id", () => {
   assert.equal(artistLikeKey("  Elliot Lake "), "elliot lake");
   assert.equal(
-    albumLikeKey({ title: " Night Sessions ", artist: " ELLIOT LAKE " }),
-    albumLikeKey({ title: "night sessions", artist: "elliot lake" }),
+    albumLikeKey({ id: "album-night-sessions" }),
+    albumLikeKey({ id: "album-night-sessions" }),
   );
   assert.notEqual(
-    albumLikeKey({ title: "Night Sessions", artist: "Elliot Lake" }),
-    albumLikeKey({ title: "Night Sessions", artist: "Someone Else" }),
+    albumLikeKey({ id: "album-original" }),
+    albumLikeKey({ id: "album-remaster" }),
   );
 });
 
@@ -688,7 +692,7 @@ test("album links encode title and artist without losing identity", () => {
   assert.deepEqual(albumRoute(album), {
     name: "album-detail",
     params: { album: "Night/Sessions & More" },
-    query: { artist: "Elliot Lake" },
+    query: { artist: "Elliot Lake", id: "album-night-sessions" },
   });
   assert.deepEqual(
     trackAlbumRoute({
@@ -699,7 +703,7 @@ test("album links encode title and artist without losing identity", () => {
     {
       name: "album-detail",
       params: { album: "Night/Sessions & More" },
-      query: { artist: "Elliot Lake" },
+      query: { artist: "Elliot Lake", id: "album-night-sessions" },
     },
   );
 });
@@ -722,7 +726,7 @@ test("player track titles link to their anchored album title", () => {
     {
       name: "album-detail",
       params: { album: "Night/Sessions & More" },
-      query: { artist: "Elliot Lake" },
+      query: { artist: "Elliot Lake", id: "album-night-sessions" },
       hash: "#track-title-track / one",
     },
   );
@@ -745,4 +749,10 @@ test("player queues preserve album order and reset to the catalog", () => {
   assert.equal(nextQueueTrackId(albumQueue, "track-1"), "track-2");
   assert.equal(nextQueueTrackId(albumQueue, "track-2", -1), "track-1");
   assert.equal(nextQueueTrackId([], null), null);
+});
+
+test("the player never substitutes another track while the active details load", () => {
+  assert.equal(selectPlayerTrack(tracks, null), tracks[0]);
+  assert.equal(selectPlayerTrack(tracks, "track-2"), tracks[1]);
+  assert.equal(selectPlayerTrack(tracks, "loading-track"), null);
 });

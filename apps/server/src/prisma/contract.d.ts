@@ -19,7 +19,7 @@ import type {
 } from '@prisma/orm-sqlite/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'a470080f0b4dbcbbb9a77482b5e123b615fe20b2387712d15eab71928c0834e8'>;
+  StorageHashBase<'37e0a361bc50d4102622504a1a5436ae25d8e8bc4ea08aed12d3a66154c5c0cf'>;
 export type ExecutionHash =
   ExecutionHashBase<'3874c46866d1115093e936c3d06a7fac34e15377a3d896762aea35a15b583c21'>;
 export type ProfileHash =
@@ -217,11 +217,10 @@ export type StorageColumnInputTypes = ColumnTypesFromStorage<
 
 export namespace Models {
   export type AlbumLike = {
+    albumId: FieldOutputTypes['__unbound__']['AlbumLike']['albumId'];
     artist: FieldOutputTypes['__unbound__']['AlbumLike']['artist'];
     createdAt: FieldOutputTypes['__unbound__']['AlbumLike']['createdAt'];
     id: FieldOutputTypes['__unbound__']['AlbumLike']['id'];
-    normalizedArtist: FieldOutputTypes['__unbound__']['AlbumLike']['normalizedArtist'];
-    normalizedTitle: FieldOutputTypes['__unbound__']['AlbumLike']['normalizedTitle'];
     title: FieldOutputTypes['__unbound__']['AlbumLike']['title'];
     userId: FieldOutputTypes['__unbound__']['AlbumLike']['userId'];
     user: User;
@@ -319,7 +318,11 @@ export namespace Models {
   };
   export type CatalogTrack = {
     album: FieldOutputTypes['__unbound__']['CatalogTrack']['album'];
+    albumArtist: FieldOutputTypes['__unbound__']['CatalogTrack']['albumArtist'];
+    albumArtistCredits: FieldOutputTypes['__unbound__']['CatalogTrack']['albumArtistCredits'];
+    albumFolderKey: FieldOutputTypes['__unbound__']['CatalogTrack']['albumFolderKey'];
     albumId: FieldOutputTypes['__unbound__']['CatalogTrack']['albumId'];
+    albumReleaseKey: FieldOutputTypes['__unbound__']['CatalogTrack']['albumReleaseKey'];
     artist: FieldOutputTypes['__unbound__']['CatalogTrack']['artist'];
     artistCredits: FieldOutputTypes['__unbound__']['CatalogTrack']['artistCredits'];
     available: FieldOutputTypes['__unbound__']['CatalogTrack']['available'];
@@ -424,6 +427,8 @@ export namespace Models {
   };
   export type Track = {
     album: FieldOutputTypes['__unbound__']['Track']['album'];
+    albumArtist: FieldOutputTypes['__unbound__']['Track']['albumArtist'];
+    albumArtistCredits: FieldOutputTypes['__unbound__']['Track']['albumArtistCredits'];
     artist: FieldOutputTypes['__unbound__']['Track']['artist'];
     artistCredits: FieldOutputTypes['__unbound__']['Track']['artistCredits'];
     available: FieldOutputTypes['__unbound__']['Track']['available'];
@@ -436,6 +441,8 @@ export namespace Models {
     id: FieldOutputTypes['__unbound__']['Track']['id'];
     lastSeenScanId: FieldOutputTypes['__unbound__']['Track']['lastSeenScanId'];
     metadataAlbum: FieldOutputTypes['__unbound__']['Track']['metadataAlbum'];
+    metadataAlbumArtist: FieldOutputTypes['__unbound__']['Track']['metadataAlbumArtist'];
+    metadataAlbumArtistCredits: FieldOutputTypes['__unbound__']['Track']['metadataAlbumArtistCredits'];
     metadataArtist: FieldOutputTypes['__unbound__']['Track']['metadataArtist'];
     metadataArtistCredits: FieldOutputTypes['__unbound__']['Track']['metadataArtistCredits'];
     metadataAttemptedSignature: FieldOutputTypes['__unbound__']['Track']['metadataAttemptedSignature'];
@@ -547,6 +554,12 @@ type ContractBase = Omit<
           readonly table: {
             readonly AlbumLike: {
               columns: {
+                readonly albumId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
                 readonly artist: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
@@ -566,18 +579,6 @@ type ContractBase = Omit<
                   readonly nullable: false;
                   readonly many: false;
                 };
-                readonly normalizedArtist: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly normalizedTitle: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
                 readonly title: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
@@ -592,10 +593,14 @@ type ContractBase = Omit<
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
-              uniques: readonly [
-                { readonly columns: readonly ['userId', 'normalizedArtist', 'normalizedTitle'] },
-              ];
+              uniques: readonly [{ readonly columns: readonly ['userId', 'albumId'] }];
               indexes: readonly [
+                {
+                  readonly name: 'AlbumLike_albumId_idx_921f6966';
+                  readonly prefix: 'AlbumLike_albumId_idx';
+                  readonly columns: readonly ['albumId'];
+                  readonly unique: false;
+                },
                 {
                   readonly name: 'AlbumLike_userId_createdAt_idx_f726f04a';
                   readonly prefix: 'AlbumLike_userId_createdAt_idx';
@@ -1202,7 +1207,31 @@ type ContractBase = Omit<
                   readonly nullable: true;
                   readonly many: false;
                 };
+                readonly albumArtist: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly albumArtistCredits: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly albumFolderKey: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
                 readonly albumId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly albumReleaseKey: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: true;
@@ -1296,6 +1325,12 @@ type ContractBase = Omit<
               primaryKey: { readonly columns: readonly ['id'] };
               uniques: readonly [];
               indexes: readonly [
+                {
+                  readonly name: 'CatalogTrack_albumFolderKey_normalizedAlbum_id_idx_7c2010bb';
+                  readonly prefix: 'CatalogTrack_albumFolderKey_normalizedAlbum_id_idx';
+                  readonly columns: readonly ['albumFolderKey', 'normalizedAlbum', 'id'];
+                  readonly unique: false;
+                },
                 {
                   readonly name: 'CatalogTrack_albumId_idx_921f6966';
                   readonly prefix: 'CatalogTrack_albumId_idx';
@@ -1942,6 +1977,18 @@ type ContractBase = Omit<
                   readonly nullable: true;
                   readonly many: false;
                 };
+                readonly albumArtist: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly albumArtistCredits: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
                 readonly artist: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
@@ -2014,6 +2061,18 @@ type ContractBase = Omit<
                   readonly many: false;
                 };
                 readonly metadataAlbum: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly metadataAlbumArtist: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly metadataAlbumArtistCredits: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: true;
@@ -2562,6 +2621,10 @@ type ContractBase = Omit<
         readonly models: {
           readonly AlbumLike: {
             readonly fields: {
+              readonly albumId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
               readonly artist: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
@@ -2571,14 +2634,6 @@ type ContractBase = Omit<
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
               };
               readonly id: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly normalizedArtist: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly normalizedTitle: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
@@ -2609,11 +2664,10 @@ type ContractBase = Omit<
               readonly table: 'AlbumLike';
               readonly namespaceId: '__unbound__';
               readonly fields: {
+                readonly albumId: { readonly column: 'albumId' };
                 readonly artist: { readonly column: 'artist' };
                 readonly createdAt: { readonly column: 'createdAt' };
                 readonly id: { readonly column: 'id' };
-                readonly normalizedArtist: { readonly column: 'normalizedArtist' };
-                readonly normalizedTitle: { readonly column: 'normalizedTitle' };
                 readonly title: { readonly column: 'title' };
                 readonly userId: { readonly column: 'userId' };
               };
@@ -3066,7 +3120,23 @@ type ContractBase = Omit<
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
+              readonly albumArtist: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly albumArtistCredits: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly albumFolderKey: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
               readonly albumId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly albumReleaseKey: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
@@ -3133,7 +3203,11 @@ type ContractBase = Omit<
               readonly namespaceId: '__unbound__';
               readonly fields: {
                 readonly album: { readonly column: 'album' };
+                readonly albumArtist: { readonly column: 'albumArtist' };
+                readonly albumArtistCredits: { readonly column: 'albumArtistCredits' };
+                readonly albumFolderKey: { readonly column: 'albumFolderKey' };
                 readonly albumId: { readonly column: 'albumId' };
+                readonly albumReleaseKey: { readonly column: 'albumReleaseKey' };
                 readonly artist: { readonly column: 'artist' };
                 readonly artistCredits: { readonly column: 'artistCredits' };
                 readonly available: { readonly column: 'available' };
@@ -3593,6 +3667,14 @@ type ContractBase = Omit<
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
+              readonly albumArtist: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly albumArtistCredits: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
               readonly artist: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
@@ -3638,6 +3720,14 @@ type ContractBase = Omit<
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
               readonly metadataAlbum: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly metadataAlbumArtist: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly metadataAlbumArtistCredits: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
@@ -3749,6 +3839,8 @@ type ContractBase = Omit<
               readonly namespaceId: '__unbound__';
               readonly fields: {
                 readonly album: { readonly column: 'album' };
+                readonly albumArtist: { readonly column: 'albumArtist' };
+                readonly albumArtistCredits: { readonly column: 'albumArtistCredits' };
                 readonly artist: { readonly column: 'artist' };
                 readonly artistCredits: { readonly column: 'artistCredits' };
                 readonly available: { readonly column: 'available' };
@@ -3761,6 +3853,10 @@ type ContractBase = Omit<
                 readonly id: { readonly column: 'id' };
                 readonly lastSeenScanId: { readonly column: 'lastSeenScanId' };
                 readonly metadataAlbum: { readonly column: 'metadataAlbum' };
+                readonly metadataAlbumArtist: { readonly column: 'metadataAlbumArtist' };
+                readonly metadataAlbumArtistCredits: {
+                  readonly column: 'metadataAlbumArtistCredits';
+                };
                 readonly metadataArtist: { readonly column: 'metadataArtist' };
                 readonly metadataArtistCredits: { readonly column: 'metadataArtistCredits' };
                 readonly metadataAttemptedSignature: {

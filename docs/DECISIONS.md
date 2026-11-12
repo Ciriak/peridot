@@ -1,5 +1,97 @@
 # Decisions
 
+## 2026-11-12: Desktop prototype uses Tauri around the shared Nuxt client
+
+The first desktop application is a Tauri 2 shell in `apps/desktop`. Development
+loads the normal Nuxt dev server, while production statically generates the
+existing client and embeds those assets in the native executable. This keeps one
+Vue UI and avoids creating a desktop-only presentation fork while the client is
+still changing quickly.
+
+The Fastify server remains a separate process and authority. The packaged shell
+connects to a user-selected server instead of loading that server's frontend code
+or embedding the API in the webview. The prototype exposes only Tauri's core
+capability; filesystem, shell, HTTP, credential, and plugin permissions are not
+granted to the desktop window.
+
+The server's default origin allowlist includes the exact Tauri webview origins on
+Windows, macOS, and Linux. These origins apply to both CORS and realtime socket
+validation. The packaged app therefore uses no web-security bypass and receives
+no broad cross-origin privilege.
+
+## 2026-11-12: Albums use release identity and separate album artists
+
+Album identity is independent from a track's performer credits. The catalog
+uses a provider release ID first, embedded album artists plus album title
+second, and source folder plus album title as the final fallback. If an
+unmatched track shares a folder and title group with exactly one provider
+release, it joins that release. Multiple release IDs in one folder are kept
+separate rather than guessed.
+
+Albums display release-level artists from MusicBrainz or Discogs, with embedded
+`albumartist`/`albumartists` tags as the local source and the existing track
+credit behavior only as a final display fallback. Track rows retain their full
+performer credits and artist links. Track responses expose the canonical
+`albumId`, and album navigation, offline collection playback, Quick picks, and
+album likes use that ID instead of comparing title and track artist.
+
+The catalog projection version is now 3 and the scanner metadata version is 4.
+This development reset intentionally does not preserve prior catalog, likes,
+queue, account, provider, or source data.
+
+## 2026-11-12: Connection recovery is announced with a success toast
+
+The topbar connection warning uses the owner-selected `ooui:network-off` icon
+with the standard foreground color. It keeps its reduced-motion-safe pulse and
+tooltip, but neither the icon nor the tooltip uses destructive red.
+
+The app-level notifications component watches server reachability only inside
+an authenticated, non-onboarding scope. A transition from `lost` to `connected`
+shows a five-second `Back online` success toast. Initial reachability checks,
+onboarding discovery, and connection loss itself do not create this toast.
+
+## 2026-11-12: Quick-pick rows link names and reuse item context menus
+
+Quick-pick names are navigation controls rather than labels. A track's type icon
+and title share one link to the track's anchored row on its album detail page,
+because the catalog has no standalone track-detail route. A track without album
+metadata links to its primary artist page instead. Album quick-pick titles link
+to album details, and every artist credit links to its derived artist page.
+Artwork remains the separate playback control.
+
+Each row is wrapped by the existing `TrackContextMenu` or
+`AlbumContextMenu` instead of defining a reduced quick-pick-only menu. This
+keeps playback, queue, favorite, download, navigation, and metadata actions
+consistent across the app.
+
+## 2026-11-12: Player loading uses a reversible primary ray
+
+The persistent player uses a full-width, decorative primary ray along its top
+edge to communicate preparation and buffering. The ray continuously crosses
+from left to right and back while `loading` is true, using standard Tailwind
+transform and transition utilities driven by the existing shared playback
+state. The seek slider retains `aria-busy` but no longer pulses, so transient
+buffering no longer makes the interactive timeline appear to flicker.
+
+Reduced-motion users receive a static primary line instead of the traversing
+ray. The animation is hidden from assistive technology because `loading` is
+already exposed by the play control and seek slider.
+
+## 2026-11-12: Playback carries known track metadata across the active-track change
+
+Playback entry points pass complete `TrackResponse` objects to the player when
+the catalog or queue already has them. The player merges those details into its
+resolved queue before changing the active queue ID. This keeps the foreground
+title, credits, artwork, and duration synchronous with the selected track and
+avoids a transient ID-only or previously active state while a second detail
+request completes.
+
+Whole-album and whole-artist collection loaders therefore return track responses
+instead of discarding the loaded metadata and returning IDs only. String track
+IDs remain accepted at the player boundary for older or partial callers, but
+the active-track selector returns no track rather than substituting the first
+resolved queue row when an explicitly active ID is not yet available.
+
 ## 2026-11-12: Cached query data takes precedence over refresh failures
 
 Persistent server-state queries use blocking loading only while no query data

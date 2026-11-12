@@ -19,6 +19,8 @@ export default defineConfig([
     "**/dist/**",
     "**/coverage/**",
     "**/generated/**",
+    "**/src-tauri/gen/**",
+    "**/src-tauri/target/**",
     "**/src/prisma/contract.d.ts",
   ]),
   js.configs.recommended,

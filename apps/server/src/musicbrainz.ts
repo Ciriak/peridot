@@ -95,6 +95,7 @@ function candidateFromRecording(
   if (!id || !title || !artists.length) return null;
   const release = asArray(recording.releases).map(asRecord).find(Boolean);
   const releaseId = text(release?.id) || null;
+  const albumArtists = artistCredits(release?.["artist-credit"]);
   return {
     providerId: provider.id,
     providerKind: provider.kind,
@@ -104,6 +105,7 @@ function candidateFromRecording(
     title,
     artist: artists.join(", "),
     artists,
+    albumArtists,
     album: text(release?.title).trim() || null,
     discNumber: null,
     trackNumber: null,
@@ -185,6 +187,7 @@ function recordingCandidateFromRelease(
   provider: MetadataProviderContext,
   releaseId: string,
   album: string,
+  albumArtists: string[],
   releaseTrack: ReleaseTrack,
 ): MetadataCandidateResponse | null {
   const base = candidateFromRecording(
@@ -202,6 +205,7 @@ function recordingCandidateFromRelease(
     ...base,
     externalReleaseId: releaseId,
     album,
+    albumArtists,
     discNumber: releaseTrack.discNumber,
     trackNumber: releaseTrack.trackNumber,
   };
@@ -385,7 +389,12 @@ export class MusicBrainzClient {
       { inc: "recordings+artist-credits" },
       signal,
     );
-    const album = text(asRecord(releaseResponse)?.title).trim() || first.album;
+    const releaseDetail = asRecord(releaseResponse);
+    const album = text(releaseDetail?.title).trim() || first.album;
+    const detailAlbumArtists = artistCredits(releaseDetail?.["artist-credit"]);
+    const albumArtists = detailAlbumArtists.length
+      ? detailAlbumArtists
+      : artistCredits(release?.["artist-credit"]);
     const tracks = releaseTracks(releaseResponse);
     for (const target of targets) {
       const releaseTrack = bestReleaseTrack(target, tracks);
@@ -394,6 +403,7 @@ export class MusicBrainzClient {
         provider,
         releaseId,
         album,
+        albumArtists,
         releaseTrack,
       );
       if (candidate) matches.set(target.id, [candidate]);

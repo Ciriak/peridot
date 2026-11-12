@@ -33,6 +33,7 @@ function track(
   title: string,
   artist: string,
   album: string,
+  albumId: string,
 ): TrackResponse {
   return {
     id,
@@ -40,6 +41,7 @@ function track(
     artist,
     artists: [artist],
     album,
+    albumId,
     discNumber: null,
     trackNumber: 1,
     durationMs: 180_000,
@@ -52,25 +54,37 @@ function track(
 
 test("recent albums move to the front, deduplicate, and remain bounded", () => {
   let recents = addRecentAlbum([], {
+    albumId: "album-night-sessions",
     title: "Night Sessions",
     artist: "Elliot Lake",
   });
   recents = addRecentAlbum(recents, {
+    albumId: "album-blue-hours",
     title: "Blue Hours",
     artist: "Elliot Lake",
   });
   recents = addRecentAlbum(recents, {
+    albumId: "album-night-sessions",
     title: " night sessions ",
     artist: "ELLIOT LAKE",
   });
 
   assert.deepEqual(recents, [
-    { title: "night sessions", artist: "ELLIOT LAKE" },
-    { title: "Blue Hours", artist: "Elliot Lake" },
+    {
+      albumId: "album-night-sessions",
+      title: "night sessions",
+      artist: "ELLIOT LAKE",
+    },
+    {
+      albumId: "album-blue-hours",
+      title: "Blue Hours",
+      artist: "Elliot Lake",
+    },
   ]);
 
   for (let index = 0; index < SEARCH_RECENTS_LIMIT + 3; index++) {
     recents = addRecentAlbum(recents, {
+      albumId: `album-${index}`,
       title: `Album ${index}`,
       artist: "Artist",
     });
@@ -83,20 +97,28 @@ test("recent albums persist only for their server and user scope", () => {
   const storage = createStorage();
   assert.equal(
     savePersistedSearchRecents(storage, scope, [
-      { title: "Night Sessions", artist: "Elliot Lake" },
+      {
+        albumId: "album-night-sessions",
+        title: "Night Sessions",
+        artist: "Elliot Lake",
+      },
     ]),
     true,
   );
 
   assert.deepEqual(readPersistedSearchRecents(storage, scope), [
-    { title: "Night Sessions", artist: "Elliot Lake" },
+    {
+      albumId: "album-night-sessions",
+      title: "Night Sessions",
+      artist: "Elliot Lake",
+    },
   ]);
   assert.deepEqual(
     readPersistedSearchRecents(storage, { ...scope, userId: "user-2" }),
     [],
   );
   assert.equal(
-    storage.getItem(searchRecentsStorageKey(scope))?.includes('"version":1'),
+    storage.getItem(searchRecentsStorageKey(scope))?.includes('"version":2'),
     true,
   );
 });
@@ -106,7 +128,7 @@ test("malformed recent album storage is ignored", () => {
   storage.setItem(
     searchRecentsStorageKey(scope),
     JSON.stringify({
-      version: 1,
+      version: 2,
       ...scope,
       items: [{ title: "Missing artist" }],
     }),
@@ -117,14 +139,38 @@ test("malformed recent album storage is ignored", () => {
 
 test("recent albums reconcile against the current catalog in saved order", () => {
   const albums = groupAlbums([
-    track("track-1", "Blue Hours", "Elliot Lake", "Night Sessions"),
-    track("track-2", "Last Train", "Elliot Lake", "Static Coast"),
+    track(
+      "track-1",
+      "Blue Hours",
+      "Elliot Lake",
+      "Night Sessions",
+      "album-night-sessions",
+    ),
+    track(
+      "track-2",
+      "Last Train",
+      "Elliot Lake",
+      "Static Coast",
+      "album-static-coast",
+    ),
   ]);
   const resolved = resolveRecentAlbums(
     [
-      { title: "Static Coast", artist: "Elliot Lake" },
-      { title: "Removed Album", artist: "Elliot Lake" },
-      { title: "night sessions", artist: "elliot lake" },
+      {
+        albumId: "album-static-coast",
+        title: "Static Coast",
+        artist: "Elliot Lake",
+      },
+      {
+        albumId: "album-removed",
+        title: "Removed Album",
+        artist: "Elliot Lake",
+      },
+      {
+        albumId: "album-night-sessions",
+        title: "night sessions",
+        artist: "elliot lake",
+      },
     ],
     albums,
   );

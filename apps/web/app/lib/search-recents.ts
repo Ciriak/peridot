@@ -1,10 +1,11 @@
 import type { AlbumGroup } from "./library";
 
-export const SEARCH_RECENTS_STORAGE_VERSION = 1;
+export const SEARCH_RECENTS_STORAGE_VERSION = 2;
 export const SEARCH_RECENTS_STORAGE_PREFIX = "peridot:search-recents";
 export const SEARCH_RECENTS_LIMIT = 8;
 
 export interface SearchRecentAlbum {
+  albumId: string;
   title: string;
   artist: string;
 }
@@ -27,15 +28,14 @@ interface StoredSearchRecents {
 }
 
 function searchAlbumKey(album: SearchRecentAlbum): string {
-  return `${album.artist.trim().toLowerCase()}\u0000${album.title
-    .trim()
-    .toLowerCase()}`;
+  return album.albumId.trim();
 }
 
 function normalizeAlbum(album: SearchRecentAlbum): SearchRecentAlbum | null {
+  const albumId = album.albumId.trim();
   const title = album.title.trim();
   const artist = album.artist.trim();
-  return title && artist ? { title, artist } : null;
+  return albumId && title && artist ? { albumId, title, artist } : null;
 }
 
 function normalizeRecentAlbums(
@@ -90,6 +90,7 @@ export function parsePersistedSearchRecents(
         (item) =>
           item !== null &&
           typeof item === "object" &&
+          typeof item.albumId === "string" &&
           typeof item.title === "string" &&
           typeof item.artist === "string",
       )
@@ -138,10 +139,10 @@ export function resolveRecentAlbums(
   albums: readonly AlbumGroup[],
 ): AlbumGroup[] {
   const albumsByKey = new Map(
-    albums.map((album) => [searchAlbumKey(album), album]),
+    albums.flatMap((album) => (album.id ? [[album.id, album] as const] : [])),
   );
   return normalizeRecentAlbums(recents).flatMap((recent) => {
-    const album = albumsByKey.get(searchAlbumKey(recent));
+    const album = albumsByKey.get(recent.albumId);
     return album ? [album] : [];
   });
 }

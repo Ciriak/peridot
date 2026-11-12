@@ -239,8 +239,9 @@ test("the topbar shares connection loss and exposes task progress to admins", as
     indicator,
     /v-else-if="canViewTaskProgress && status === 'task-progress'"/,
   );
-  assert.match(indicator, /:icon="icons\.cloudOff"/);
-  assert.match(indicator, /text-destructive/);
+  assert.match(indicator, /:icon="icons\.networkOff"/);
+  assert.match(indicator, /text-foreground/);
+  assert.doesNotMatch(indicator, /text-destructive|border-destructive/);
   assert.match(indicator, /motion-safe:animate-pulse/);
   assert.match(indicator, /t\('components\.taskProgress\.connectionLost'\)/);
   assert.match(indicator, /<TooltipTrigger as-child>/);

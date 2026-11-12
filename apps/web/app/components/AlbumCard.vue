@@ -3,7 +3,7 @@ import { useI18n } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import { Button } from "@peridot/ui/components/ui/button";
 import type { AlbumSummaryResponse } from "@peridot/contracts";
-import { albumLikeKey, albumRoute, trackCoverUrl } from "../lib/library";
+import { albumRoute, trackCoverUrl } from "../lib/library";
 import { icons } from "../lib/icons";
 import { computed, ref, watch } from "vue";
 import { useLikes } from "../composables/use-likes";
@@ -37,17 +37,13 @@ watch(coverUrl, () => {
   coverFailed.value = false;
 });
 const {
-  likedAlbumKeys,
+  likedAlbumIds,
   loaded: likesLoaded,
   toggle: toggleLike,
   isPending: isLikePending,
 } = useLikes();
 const albumActive = computed(() => {
-  const activeTrackId = active.value?.id;
-  return activeTrackId
-    ? active.value?.album === props.album.title &&
-        active.value.artist === props.album.artist
-    : false;
+  return active.value?.albumId === props.album.id;
 });
 async function toggleAlbumPlayback() {
   if (albumActive.value && playing.value) {
@@ -57,11 +53,7 @@ async function toggleAlbumPlayback() {
   if (!address.value || !token.value || !props.album.trackCount) return;
   const playSaved = async () => {
     const saved = await tracksMatching(
-      (track) =>
-        track.album?.trim().toLowerCase() ===
-          props.album.title.trim().toLowerCase() &&
-        track.artist.trim().toLowerCase() ===
-          props.album.artist.trim().toLowerCase(),
+      (track) => track.albumId === props.album.id,
     );
     if (saved.length) playCollection(saved);
   };
@@ -177,11 +169,12 @@ async function toggleAlbumPlayback() {
         class="absolute"
         :class="compact ? 'bottom-0 right-0' : 'bottom-1 right-1'"
         :compact="compact"
-        :liked="likedAlbumKeys.includes(albumLikeKey(album)) || album.liked"
+        :liked="likedAlbumIds.includes(album.id) || album.liked"
         :label="album.title"
         :pending="
           isLikePending({
             kind: 'album',
+            albumId: props.album.id,
             title: props.album.title,
             artist: props.album.artist,
           })
@@ -190,6 +183,7 @@ async function toggleAlbumPlayback() {
         @toggle="
           toggleLike({
             kind: 'album',
+            albumId: album.id,
             title: album.title,
             artist: album.artist,
           })

@@ -176,3 +176,217 @@ test("catalog projection backfill yields to event-loop work", async () => {
     await context.close();
   }
 });
+
+test("release identity groups varied track credits while preserving guest artists", async () => {
+  const context = await createTestContext();
+  const catalog = new CatalogService(
+    context.database,
+    new PlaybackTokenService(),
+  );
+  try {
+    await catalog.initialize();
+    const tracks = await Promise.all([
+      context.database.orm.Track.create({
+        title: "Opening",
+        artist: "Daft Punk",
+        album: "Random Access Memories",
+        metadataArtist: "Daft Punk, Nile Rodgers",
+        metadataArtistCredits: JSON.stringify(["Daft Punk", "Nile Rodgers"]),
+        metadataAlbumArtist: "Daft Punk",
+        metadataAlbumArtistCredits: JSON.stringify(["Daft Punk"]),
+        metadataProviderId: "provider-1",
+        metadataProviderKind: "musicbrainz",
+        metadataExternalTrackId: "track-1",
+        metadataExternalReleaseId: "release-1",
+        metadataMatchedAt: new Date(),
+        relativePath: "Random Access Memories/01 Opening.mp3",
+        mimeType: "audio/mpeg",
+        fileSizeBytes: 1n,
+        fileModifiedAt: new Date(0),
+        trackNumber: 1,
+      }),
+      context.database.orm.Track.create({
+        title: "Guests",
+        artist: "Daft Punk",
+        album: "Random Access Memories",
+        metadataArtist: "Daft Punk, Pharrell Williams, Nile Rodgers",
+        metadataArtistCredits: JSON.stringify([
+          "Daft Punk",
+          "Pharrell Williams",
+          "Nile Rodgers",
+        ]),
+        metadataAlbumArtist: "Daft Punk",
+        metadataAlbumArtistCredits: JSON.stringify(["Daft Punk"]),
+        metadataProviderId: "provider-1",
+        metadataProviderKind: "musicbrainz",
+        metadataExternalTrackId: "track-2",
+        metadataExternalReleaseId: "release-1",
+        metadataMatchedAt: new Date(),
+        relativePath: "Random Access Memories/02 Guests.mp3",
+        mimeType: "audio/mpeg",
+        fileSizeBytes: 1n,
+        fileModifiedAt: new Date(0),
+        trackNumber: 2,
+      }),
+      context.database.orm.Track.create({
+        title: "Unmatched",
+        artist: "Daft Punk, Panda Bear",
+        artistCredits: JSON.stringify(["Daft Punk", "Panda Bear"]),
+        album: "Random Access Memories",
+        relativePath: "Random Access Memories/03 Unmatched.mp3",
+        mimeType: "audio/mpeg",
+        fileSizeBytes: 1n,
+        fileModifiedAt: new Date(0),
+        trackNumber: 3,
+      }),
+    ]);
+
+    for (const track of tracks) {
+      await catalog.reindexTrack(track.id, "metadata");
+    }
+
+    const response = await catalog.listAlbums({
+      userId: (await context.database.orm.User.firstOrThrow()).id,
+    });
+    assert.equal(response.items.length, 1);
+    assert.equal(response.items[0]?.title, "Random Access Memories");
+    assert.equal(response.items[0]?.artist, "Daft Punk");
+    assert.deepEqual(response.items[0]?.artists, ["Daft Punk"]);
+    assert.equal(response.items[0]?.trackCount, 3);
+
+    const guest = await context.database.orm.CatalogArtist.firstOrThrow({
+      name: "Nile Rodgers",
+    });
+    const guestAlbums = await catalog.listAlbums({
+      userId: (await context.database.orm.User.firstOrThrow()).id,
+      artistId: guest.id,
+    });
+    assert.deepEqual(
+      guestAlbums.items.map((album) => album.id),
+      [response.items[0]!.id],
+    );
+
+    const albumTracks = await catalog.listTracks({
+      userId: (await context.database.orm.User.firstOrThrow()).id,
+      albumId: response.items[0]!.id,
+      sort: "track",
+      limit: 20,
+    });
+    assert.deepEqual(
+      albumTracks.items.map((track) => track.artists),
+      [
+        ["Daft Punk", "Nile Rodgers"],
+        ["Daft Punk", "Pharrell Williams", "Nile Rodgers"],
+        ["Daft Punk", "Panda Bear"],
+      ],
+    );
+    assert.ok(
+      albumTracks.items.every(
+        (track) => track.albumId === response.items[0]!.id,
+      ),
+    );
+  } finally {
+    await catalog.close();
+    await context.close();
+  }
+});
+
+test("album artists group a release across folders without collapsing ambiguous releases", async () => {
+  const context = await createTestContext();
+  const catalog = new CatalogService(
+    context.database,
+    new PlaybackTokenService(),
+  );
+  const base = {
+    album: "Shared Album",
+    mimeType: "audio/mpeg",
+    fileSizeBytes: 1n,
+    fileModifiedAt: new Date(0),
+  };
+  try {
+    await catalog.initialize();
+    const tracks = await Promise.all([
+      context.database.orm.Track.create({
+        ...base,
+        title: "First",
+        artist: "Album Artist, Guest One",
+        artistCredits: JSON.stringify(["Album Artist", "Guest One"]),
+        albumArtist: "Album Artist",
+        albumArtistCredits: JSON.stringify(["Album Artist"]),
+        relativePath: "Edition A/01 First.mp3",
+        trackNumber: 1,
+      }),
+      context.database.orm.Track.create({
+        ...base,
+        title: "Second",
+        artist: "Album Artist, Guest Two",
+        artistCredits: JSON.stringify(["Album Artist", "Guest Two"]),
+        albumArtist: "Album Artist",
+        albumArtistCredits: JSON.stringify(["Album Artist"]),
+        relativePath: "Edition B/01 Second.mp3",
+        trackNumber: 1,
+      }),
+      context.database.orm.Track.create({
+        ...base,
+        title: "Release One",
+        artist: "Album Artist",
+        metadataProviderId: "provider-1",
+        metadataProviderKind: "musicbrainz",
+        metadataExternalTrackId: "release-one-track",
+        metadataExternalReleaseId: "release-one",
+        metadataMatchedAt: new Date(),
+        relativePath: "Ambiguous/01 One.mp3",
+        trackNumber: 1,
+      }),
+      context.database.orm.Track.create({
+        ...base,
+        title: "Release Two",
+        artist: "Album Artist",
+        metadataProviderId: "provider-1",
+        metadataProviderKind: "musicbrainz",
+        metadataExternalTrackId: "release-two-track",
+        metadataExternalReleaseId: "release-two",
+        metadataMatchedAt: new Date(),
+        relativePath: "Ambiguous/02 Two.mp3",
+        trackNumber: 2,
+      }),
+      context.database.orm.Track.create({
+        ...base,
+        title: "Ambiguous Unmatched",
+        artist: "Album Artist, Guest Three",
+        artistCredits: JSON.stringify(["Album Artist", "Guest Three"]),
+        relativePath: "Ambiguous/03 Three.mp3",
+        trackNumber: 3,
+      }),
+    ]);
+
+    for (const track of tracks) {
+      await catalog.reindexTrack(track.id, "metadata");
+    }
+
+    const albums = (
+      await catalog.listAlbums({
+        userId: (await context.database.orm.User.firstOrThrow()).id,
+      })
+    ).items;
+    assert.equal(albums.length, 4);
+    assert.deepEqual(
+      albums
+        .map((album) => [album.artist, album.trackCount])
+        .sort(
+          (left, right) =>
+            String(left[0]).localeCompare(String(right[0])) ||
+            Number(right[1]) - Number(left[1]),
+        ),
+      [
+        ["Album Artist", 2],
+        ["Album Artist", 1],
+        ["Album Artist", 1],
+        ["Album Artist, Guest Three", 1],
+      ],
+    );
+  } finally {
+    await catalog.close();
+    await context.close();
+  }
+});
