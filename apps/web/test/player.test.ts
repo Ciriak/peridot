@@ -261,7 +261,7 @@ test("the player replaces known track metadata without an unresolved frame", asy
   );
   assert.match(
     trackTable,
-    /playCollection\(\s*props\.tracks,\s*trackId,?\s*\)/,
+    /playCollection\(props\.tracks, track\.id\)/,
     "Track-table playback forwards the loaded track objects",
   );
   assert.match(

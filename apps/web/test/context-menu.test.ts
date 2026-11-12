@@ -55,7 +55,7 @@ test("track rows expose a Reka context menu with playback, favorites, downloads,
   assert.match(trackTable, /@play="playFromList\(item\.data, true\)"/);
   assert.match(
     trackTable,
-    /playCollection\(\s*props\.tracks\.map\(\(track\) => track\.id\),\s*trackId,?\s*\)/,
+    /playCollection\(props\.tracks, track\.id\)/,
     "Playing a row queues the complete displayed track list",
   );
 
