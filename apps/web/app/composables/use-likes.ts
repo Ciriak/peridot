@@ -7,7 +7,12 @@ import type {
 } from "@peridot/contracts";
 import { computed } from "vue";
 import { albumLikeKey, artistLikeKey } from "../lib/library";
-import { createLike, deleteLike, listLikes } from "../lib/peridot-client";
+import {
+  createLike,
+  deleteLike,
+  isAuthenticationRedirectError,
+  listLikes,
+} from "../lib/peridot-client";
 import { notifyLikeFailed, notifyLikeSucceeded } from "../lib/toasts";
 import { useServer } from "./use-server";
 import { useSession } from "./use-session";
@@ -23,7 +28,8 @@ export function likeTargetKey(target: LikeTarget): string {
   return `artist:${artistLikeKey(target.name)}`;
 }
 
-function errorMessage(reason: unknown) {
+function errorMessage(reason: unknown): string | null {
+  if (isAuthenticationRedirectError(reason)) return null;
   return reason instanceof Error
     ? reason.message
     : "The server could not update your likes.";
@@ -240,6 +246,7 @@ export function useLikes() {
         setAlbumLiked(target, wasLiked, previousAlbum);
       else setArtistLiked(target, wasLiked, previousArtist);
       const message = errorMessage(reason);
+      if (!message) return;
       error.value = message;
       notifyLikeFailed(targetLabel(target), message);
     } finally {

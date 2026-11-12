@@ -13,7 +13,6 @@ import SidebarQuickPicks from "../components/SidebarQuickPicks.vue";
 import TaskProgressIndicator from "../components/TaskProgressIndicator.vue";
 import { useLikes } from "../composables/use-likes";
 import { useLibraryPlayer } from "../composables/use-library-player";
-import { useLibraryTracks } from "../composables/use-library-tracks";
 import { useServer } from "../composables/use-server";
 import { useSession } from "../composables/use-session";
 import { useUser } from "../composables/use-user";
@@ -40,7 +39,6 @@ const avatarSrc = computed(() =>
     ? logo
     : gravatarUrl(user.value.email),
 );
-const { tracks, load } = useLibraryTracks();
 const {
   likedTrackIds,
   loaded: likesLoaded,
@@ -86,11 +84,7 @@ const isNavigationActive = (target: string) =>
       currentPath.value.startsWith(`${target}/`);
 const clock = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
-const likedTrackCount = computed(
-  () =>
-    tracks.value.filter((track) => likedTrackIds.value.includes(track.id))
-      .length,
-);
+const likedTrackCount = computed(() => likedTrackIds.value.length);
 const currentTrackLikeTarget = computed(() =>
   currentTrackId.value
     ? ({ kind: "track", trackId: currentTrackId.value } as const)
@@ -133,7 +127,6 @@ watch([address, token, () => user.value?.id], () => {
 });
 
 onMounted(() => {
-  void load();
   void loadLikes();
 });
 </script>
@@ -250,7 +243,8 @@ onMounted(() => {
             <Button as-child variant="ghost" size="icon" class="rounded-full">
               <NuxtLink
                 to="/settings/account"
-                aria-label="Open account settings"
+                aria-label="Open profile settings"
+                class="group/avatar relative"
               >
                 <img
                   :src="avatarSrc"
@@ -258,6 +252,12 @@ onMounted(() => {
                   class="size-8 rounded-full object-cover"
                   @error="avatarFailed = true"
                 />
+                <span
+                  aria-hidden="true"
+                  class="absolute inset-0 flex items-center justify-center rounded-full bg-background/80 opacity-0 transition-opacity group-hover/avatar:opacity-100 group-focus-visible/avatar:opacity-100 motion-reduce:transition-none"
+                >
+                  <Icon :icon="icons.settings" class="size-5 text-foreground" />
+                </span>
               </NuxtLink>
             </Button>
           </div>
@@ -282,7 +282,6 @@ onMounted(() => {
       class="fixed inset-x-0 bottom-0 z-30 isolate flex h-48 flex-col justify-center gap-3 overflow-hidden border-t bg-card px-4 text-card-foreground md:h-28 md:flex-row md:items-center md:gap-6 md:px-6"
     >
       <div
-        v-if="currentCoverUrl && !coverFailed"
         aria-hidden="true"
         class="pointer-events-none absolute inset-y-0 left-0 -z-10 w-2/3 overflow-hidden md:w-1/2"
       >
@@ -296,6 +295,7 @@ onMounted(() => {
             leave-to-class="opacity-0"
           >
             <img
+              v-if="currentCoverUrl && !coverFailed"
               :key="currentCoverUrl"
               :src="currentCoverUrl"
               alt=""

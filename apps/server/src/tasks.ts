@@ -51,6 +51,8 @@ export type TaskExecutor = (
   tasks: TaskService,
 ) => Promise<TaskExecutionResult | void>;
 
+export type TaskChangePublisher = (task: TaskResponse) => void;
+
 export class TaskExecutionError extends Error {
   constructor(
     message: string,
@@ -138,6 +140,7 @@ export function toTaskResponse(task: TaskRow): TaskResponse {
     createdAt: task.createdAt.toISOString(),
     startedAt: task.startedAt?.toISOString() ?? null,
     completedAt: task.completedAt?.toISOString() ?? null,
+    updatedAt: task.updatedAt.toISOString(),
   };
 }
 
@@ -169,8 +172,15 @@ export class TaskService {
   private admissionTail: Promise<unknown> = Promise.resolve();
   private drainPromise: Promise<void> | null = null;
   private stopping = false;
+  private readonly eventTimers = new Map<
+    string,
+    ReturnType<typeof setTimeout>
+  >();
 
-  constructor(private readonly database: Database) {}
+  constructor(
+    private readonly database: Database,
+    private readonly publisher?: TaskChangePublisher,
+  ) {}
 
   registerExecutor(kind: TaskKind, executor: TaskExecutor): void {
     if (!isTaskKind(kind)) {
@@ -223,6 +233,7 @@ export class TaskService {
         forceRefresh,
       });
       this.kick();
+      this.publishTask(task.id, true);
       return task;
     });
   }
@@ -294,6 +305,7 @@ export class TaskService {
     await this.database.orm.Task.where({ id, status: "running" }).update(
       update,
     );
+    this.publishTask(id);
   }
 
   async complete(id: string, result: TaskExecutionResult = {}): Promise<void> {
@@ -326,6 +338,7 @@ export class TaskService {
       }
     }
     await this.database.orm.Task.where({ id }).update(update);
+    this.publishTask(id, true);
   }
 
   async fail(
@@ -338,6 +351,7 @@ export class TaskService {
       completedAt: new Date(),
       failureSummary: boundedText(message, MAX_FAILURE_SUMMARY_LENGTH),
     });
+    this.publishTask(id, true);
   }
 
   async prune(): Promise<void> {
@@ -365,8 +379,34 @@ export class TaskService {
 
   async close(): Promise<void> {
     this.stopping = true;
+    for (const timer of this.eventTimers.values()) clearTimeout(timer);
+    this.eventTimers.clear();
     await this.admissionTail;
     await this.drainPromise;
+  }
+
+  private publishTask(id: string, immediate = false) {
+    if (!this.publisher) return;
+    if (immediate) {
+      const timer = this.eventTimers.get(id);
+      if (timer) clearTimeout(timer);
+      this.eventTimers.delete(id);
+      void this.emitTask(id);
+      return;
+    }
+    if (this.eventTimers.has(id)) return;
+    const timer = setTimeout(() => {
+      this.eventTimers.delete(id);
+      void this.emitTask(id);
+    }, 250);
+    timer.unref?.();
+    this.eventTimers.set(id, timer);
+  }
+
+  private async emitTask(id: string) {
+    if (!this.publisher) return;
+    const task = await this.database.orm.Task.first({ id });
+    if (task) this.publisher(toTaskResponse(task));
   }
 
   private serializeAdmission<T>(operation: () => Promise<T>): Promise<T> {
@@ -454,6 +494,7 @@ export class TaskService {
         progressCompleted: null,
         progressTotal: null,
       });
+      this.publishTask(task.id, true);
       const running = await this.database.orm.Task.first({ id: task.id });
       if (!running || running.status !== "running") continue;
 

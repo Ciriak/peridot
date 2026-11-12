@@ -123,7 +123,7 @@ test("task labels distinguish queued, determinate, and indeterminate work", () =
   );
 });
 
-test("the topbar prioritizes lost connections and exposes active tasks through a focusable tooltip", async () => {
+test("the topbar shares connection loss and exposes task progress to admins", async () => {
   const [layout, indicator] = await Promise.all([
     readFile(new URL("../app/layouts/default.vue", import.meta.url), "utf8"),
     readFile(
@@ -135,12 +135,20 @@ test("the topbar prioritizes lost connections and exposes active tasks through a
   assert.match(layout, /<TaskProgressIndicator \/>/);
   assert.doesNotMatch(layout, /Fetching metadata/);
   assert.match(indicator, /useServerConnection/);
+  assert.match(indicator, /useUser/);
+  assert.match(
+    indicator,
+    /canViewTaskProgress = computed\(\(\) => user\.value\?\.role === "admin"\)/,
+  );
   assert.match(
     indicator,
     /topbarStatus\(connectionStatus\.value, hasActiveTasks\.value\)/,
   );
   assert.match(indicator, /v-if="status === 'connection-lost'"/);
-  assert.match(indicator, /v-else-if="status === 'task-progress'"/);
+  assert.match(
+    indicator,
+    /v-else-if="canViewTaskProgress && status === 'task-progress'"/,
+  );
   assert.match(indicator, /:icon="icons\.cloudOff"/);
   assert.match(indicator, /text-destructive/);
   assert.match(indicator, /motion-safe:animate-pulse/);

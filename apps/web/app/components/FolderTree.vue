@@ -7,7 +7,11 @@ import { TreeItem, TreeRoot } from "reka-ui";
 import { useServer } from "../composables/use-server";
 import { useSession } from "../composables/use-session";
 import { icons } from "../lib/icons";
-import { listDirectories, searchDirectories } from "../lib/peridot-client";
+import {
+  isAuthenticationRedirectError,
+  listDirectories,
+  searchDirectories,
+} from "../lib/peridot-client";
 
 interface FolderNode {
   name: string;
@@ -121,6 +125,7 @@ async function runSearch(
     searchTruncated.value = result.truncated;
   } catch (reason) {
     if (request !== searchRequest) return;
+    if (isAuthenticationRedirectError(reason)) return;
     searchError.value =
       reason instanceof Error ? reason.message : "Could not search folders.";
   } finally {

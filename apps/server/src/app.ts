@@ -1,7 +1,10 @@
 import Fastify, { LogController } from "fastify";
 import cors from "@fastify/cors";
+import websocket from "@fastify/websocket";
 import type { HealthResponse } from "@peridot/contracts";
 import { registerAuthRoutes, registerProtectedRoutes } from "./auth.js";
+import { CatalogService } from "./catalog.js";
+import { registerCatalogRoutes } from "./catalog-routes.js";
 import { loadServerConfig, type ServerConfig } from "./config.js";
 import { CredentialStore } from "./credential-store.js";
 import { createDatabase, type Database } from "./database.js";
@@ -26,6 +29,12 @@ import { TaskService } from "./tasks.js";
 import { ensureServerSettings } from "./server-settings.js";
 import { ensureDefaultSource } from "./sources.js";
 import { ServerLogBuffer } from "./server-log.js";
+import {
+  RealtimeHub,
+  redactRealtimeTicket,
+  registerRealtimeSocket,
+  registerRealtimeTicketRoute,
+} from "./realtime.js";
 
 export interface BuildAppOptions {
   config?: ServerConfig;
@@ -64,21 +73,26 @@ export async function buildApp(options: BuildAppOptions = {}) {
         }),
       ),
     );
+  const playbackTokens = new PlaybackTokenService();
+  const catalog = new CatalogService(database, playbackTokens);
+  const realtime = new RealtimeHub(database);
   const metadataEnrichment = new MetadataEnrichment(
     database,
     registry,
     credentials,
+    catalog,
   );
-  const tasks = new TaskService(database);
-  const scanner = new LibraryScanner(database, metadataEnrichment);
+  const tasks = new TaskService(database, (task) => realtime.publishTask(task));
+  const scanner = new LibraryScanner(database, metadataEnrichment, catalog);
   tasks.registerExecutor("library_scan", (task, taskService) =>
     scanner.runTask(task, taskService),
   );
   tasks.registerExecutor("metadata_fetch", (task, taskService) =>
     metadataEnrichment.runTask(task, taskService),
   );
-  const playbackTokens = new PlaybackTokenService();
   const logBuffer = options.logBuffer ?? new ServerLogBuffer();
+  logBuffer.onEntry((entry) => realtime.publishLog(entry));
+  catalog.setPublisher((change) => realtime.publishCatalog(change));
   const app = Fastify({
     logger:
       options.logger === false
@@ -86,11 +100,14 @@ export async function buildApp(options: BuildAppOptions = {}) {
         : { stream: logBuffer.stream, level: "debug" },
     logController: new LogController({ disableRequestLogging: true }),
   });
+  await app.register(websocket, {
+    options: { maxPayload: 16 * 1024 },
+  });
   app.addHook("onResponse", async (request, reply) => {
     const details = {
       req: {
         method: request.method,
-        url: redactPlaybackToken(request.url),
+        url: redactRealtimeTicket(redactPlaybackToken(request.url)),
       },
       res: reply,
       responseTime: reply.elapsedTime,
@@ -111,7 +128,9 @@ export async function buildApp(options: BuildAppOptions = {}) {
     status: "ok",
     service: "peridot",
   }));
+  await registerRealtimeSocket(app, realtime, config.webOrigins);
   await registerAuthRoutes(app, database);
+  await catalog.initialize();
   await ensureServerSettings(database, config.libraryRoot);
   await ensureDefaultSource(database, config.libraryRoot);
   await ensureDefaultMetadataProvider(database);
@@ -120,15 +139,17 @@ export async function buildApp(options: BuildAppOptions = {}) {
     app,
     database,
     async (protectedApp) => {
+      await registerRealtimeTicketRoute(protectedApp, realtime);
       await registerLibraryRoutes(
         protectedApp,
         database,
         tasks,
         playbackTokens,
       );
+      await registerCatalogRoutes(protectedApp, catalog);
       await registerTaskRoutes(protectedApp, tasks);
       await registerLikeRoutes(protectedApp, database);
-      await registerQuickPickRoutes(protectedApp, database);
+      await registerQuickPickRoutes(protectedApp, database, catalog);
       await registerQueueRoutes(protectedApp, database);
       await registerTrackMetadataRoutes(protectedApp, metadataEnrichment);
       await registerAdminRoutes(
@@ -139,14 +160,24 @@ export async function buildApp(options: BuildAppOptions = {}) {
         metadataEnrichment,
         registry,
         credentials,
+        (sessionIds) => {
+          for (const sessionId of sessionIds) {
+            realtime.disconnectSession(sessionId);
+          }
+        },
       );
     },
     (request) => playbackTokens.authorizeRequest(request.method, request.url),
+    (sessionId) => realtime.disconnectSession(sessionId),
   );
   app.addHook("onClose", async () => {
+    await catalog.close();
     metadataEnrichment.close();
     await tasks.close();
+    logBuffer.onEntry(null);
+    realtime.close();
     if (ownsDatabase) await database.close();
   });
+  void catalog.startBackfill();
   return app;
 }

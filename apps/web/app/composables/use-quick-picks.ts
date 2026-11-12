@@ -1,7 +1,10 @@
 import { useState } from "#imports";
 import type { QuickPickItemResponse } from "@peridot/contracts";
 import { onMounted, watch } from "vue";
-import { fetchQuickPicks } from "../lib/peridot-client";
+import {
+  fetchQuickPicks,
+  isAuthenticationRedirectError,
+} from "../lib/peridot-client";
 import { useServer } from "./use-server";
 import { useSession } from "./use-session";
 import { useUser } from "./use-user";
@@ -42,6 +45,7 @@ export function useQuickPicks() {
       items.value = (await fetchQuickPicks(serverAddress, sessionToken)).items;
       loaded.value = true;
     } catch (reason) {
+      if (isAuthenticationRedirectError(reason)) return;
       error.value =
         reason instanceof Error
           ? reason.message

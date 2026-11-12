@@ -234,13 +234,17 @@ test("play starts are authenticated, private, and persist across a restart", asy
       headers: context.authorization,
     });
     assert.equal(response.statusCode, 200);
-    assert.deepEqual(response.json<QuickPickListResponse>().items[0], {
-      kind: "album",
-      key: "album:play artist\u0000play album",
-      title: "Play Album",
-      artist: "Play Artist",
-    });
-    assert.equal(response.json<QuickPickListResponse>().items.length, 2);
+    const items = response.json<QuickPickListResponse>().items;
+    assert.equal(items[0]?.kind, "album");
+    assert.equal(
+      items[0]?.kind === "album" && items[0].album.title,
+      "Play Album",
+    );
+    assert.equal(
+      items[0]?.kind === "album" && items[0].album.artist,
+      "Play Artist",
+    );
+    assert.equal(items.length, 2);
   } finally {
     await restartedApp?.close();
     await context.close();

@@ -27,6 +27,7 @@ import {
   DropdownMenuTrigger,
 } from "reka-ui";
 import { useServer } from "../../composables/use-server";
+import { useRealtime } from "../../composables/use-realtime";
 import { useSession } from "../../composables/use-session";
 import { useUser } from "../../composables/use-user";
 import { icons } from "../../lib/icons";
@@ -37,9 +38,10 @@ definePageMeta({ layout: "settings" });
 const { address } = useServer();
 const { token } = useSession();
 const { user } = useUser();
+const realtime = useRealtime();
 const logs = ref<LogEntryResponse[]>([]);
 let logAfter = 0;
-let logTimer: ReturnType<typeof setInterval> | undefined;
+let unsubscribeLogs: (() => void) | undefined;
 const logLevels = ["trace", "debug", "info", "warn", "error", "fatal"];
 const activeLevels = ref<string[]>(["debug", "warn", "error", "fatal"]);
 const logSearch = ref("");
@@ -121,16 +123,24 @@ onMounted(() => {
     return;
   }
   void refreshLogs();
-  logTimer = setInterval(() => void refreshLogs(), 2000);
+  unsubscribeLogs = realtime.subscribe(["logs"], (message) => {
+    if (message.type === "log.appended") {
+      if (message.entry.id <= logAfter) return;
+      logAfter = message.entry.id;
+      logs.value = [message.entry, ...logs.value].slice(0, 500);
+    } else if (message.type === "resync.required") {
+      void refreshLogs();
+    }
+  });
 });
 onBeforeUnmount(() => {
-  if (logTimer) clearInterval(logTimer);
+  unsubscribeLogs?.();
 });
 </script>
 
 <template>
   <div class="space-y-2">
-    <h2 class="text-2xl font-semibold tracking-tight">Administration</h2>
+    <h2 class="text-2xl font-semibold tracking-tight">Server</h2>
     <p class="text-sm text-muted-foreground">
       Manage this server connection and inspect server activity.
     </p>

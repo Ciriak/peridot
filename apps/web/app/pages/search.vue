@@ -1,71 +1,128 @@
 <script setup lang="ts">
 import { useHead, useState } from "#imports";
 import { Icon } from "@iconify/vue/offline";
+import type { AlbumSummaryResponse } from "@peridot/contracts";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
+import { watchDebounced } from "@vueuse/core";
 import { computed, onMounted, ref, watch } from "vue";
 import AlbumCard from "../components/AlbumCard.vue";
 import TrackTable from "../components/TrackTable.vue";
-import { useLikes } from "../composables/use-likes";
-import { useLibraryTracks } from "../composables/use-library-tracks";
-import { useProgressiveReveal } from "../composables/use-progressive-reveal";
-import { useSearchRecents } from "../composables/use-search-recents";
-import { icons } from "../lib/icons";
 import {
-  filterAlbums,
-  filterTracks,
-  groupAlbums,
-  type AlbumGroup,
-} from "../lib/library";
-import { resolveRecentAlbums } from "../lib/search-recents";
+  useCatalogAlbumQuery,
+  useCatalogTrackQuery,
+} from "../composables/use-catalog-query";
+import { useLikes } from "../composables/use-likes";
+import { useSearchRecents } from "../composables/use-search-recents";
+import { useServer } from "../composables/use-server";
+import { useSession } from "../composables/use-session";
+import { icons } from "../lib/icons";
+import { listAlbums } from "../lib/peridot-client";
+import type { TrackSort } from "../lib/library";
 
 useHead({ title: "Search — Peridot" });
 
 type ResultFilter = "all" | "albums" | "tracks";
 
 const query = useState("search-query", () => "");
+const debouncedQuery = ref("");
 const resultFilter = ref<ResultFilter>("all");
-const { tracks, loading, error, load } = useLibraryTracks();
+const trackSort = ref<TrackSort>({ field: "title", direction: "asc" });
+const { address } = useServer();
+const { token } = useSession();
 const { load: loadLikes } = useLikes();
 const { recents, remember } = useSearchRecents();
+const recentAlbums = ref<AlbumSummaryResponse[]>([]);
 
-const albums = computed(() => groupAlbums(tracks.value));
-const searching = computed(() => query.value.trim().length > 0);
-const albumResults = computed(() => filterAlbums(albums.value, query.value));
-const trackResults = computed(() => filterTracks(tracks.value, query.value));
-const albumResultsForFilter = computed(() =>
-  resultFilter.value === "tracks" ? [] : albumResults.value,
+watchDebounced(
+  query,
+  (value) => {
+    debouncedQuery.value = value.trim();
+  },
+  { debounce: 250 },
 );
-const visibleTrackResults = computed(() =>
-  resultFilter.value === "albums" ? [] : trackResults.value,
-);
-const recentAlbums = computed(() =>
-  resolveRecentAlbums(recents.value, albums.value),
+
+const searching = computed(() => debouncedQuery.value.length > 0);
+const searchTerm = computed(() =>
+  searching.value ? debouncedQuery.value : "__peridot_no_search__",
 );
 const {
-  target: loadMoreTarget,
+  items: albumResults,
+  loading: albumsLoading,
+  loadingMore: albumsLoadingMore,
+  error: albumsError,
   hasMore: hasMoreAlbums,
-  visibleItems: visibleAlbumResults,
-  revealMore: revealMoreAlbums,
-} = useProgressiveReveal(albumResultsForFilter);
+  load: loadAlbums,
+  loadMore: loadMoreAlbums,
+} = useCatalogAlbumQuery(() => ({
+  query: searchTerm.value,
+  sort: "title",
+}));
+const {
+  tracks: trackResults,
+  loading: tracksLoading,
+  loadingMore: tracksLoadingMore,
+  error: tracksError,
+  hasMore: hasMoreTracks,
+  load: loadTracks,
+  loadMore: loadMoreTracks,
+} = useCatalogTrackQuery(() => ({
+  query: searchTerm.value,
+  sort: trackSort.value.field === "number" ? "track" : trackSort.value.field,
+  direction: trackSort.value.direction,
+}));
+
+const showAlbums = computed(() => resultFilter.value !== "tracks");
+const showTracks = computed(() => resultFilter.value !== "albums");
 const resultFilters: { value: ResultFilter; label: string }[] = [
   { value: "all", label: "All" },
   { value: "albums", label: "Albums" },
   { value: "tracks", label: "Tracks" },
 ];
 
-function openAlbum(album: AlbumGroup) {
+function openAlbum(album: AlbumSummaryResponse) {
   remember({ title: album.title, artist: album.artist });
+}
+
+function setTrackSort(next: TrackSort | null) {
+  trackSort.value = next ?? { field: "title", direction: "asc" };
+}
+
+async function loadRecentAlbums() {
+  if (!address.value || !token.value || !recents.value.length) {
+    recentAlbums.value = [];
+    return;
+  }
+  const items: AlbumSummaryResponse[] = [];
+  for (const recent of recents.value) {
+    const page = await listAlbums(address.value, token.value, {
+      query: `${recent.title} ${recent.artist}`,
+      limit: 20,
+    });
+    const match = page.items.find(
+      (album) =>
+        album.title.toLowerCase() === recent.title.toLowerCase() &&
+        album.artist.toLowerCase() === recent.artist.toLowerCase(),
+    );
+    if (match) items.push(match);
+  }
+  recentAlbums.value = items;
 }
 
 watch(searching, (active) => {
   if (!active) resultFilter.value = "all";
 });
+watch([recents, address, token], () => void loadRecentAlbums(), {
+  deep: true,
+});
 
 onMounted(() => {
-  void load();
+  debouncedQuery.value = query.value.trim();
+  void loadAlbums();
+  void loadTracks();
   void loadLikes();
+  void loadRecentAlbums();
 });
 </script>
 
@@ -95,20 +152,33 @@ onMounted(() => {
     </section>
 
     <div
-      v-if="loading && !tracks.length"
+      v-if="
+        (albumsLoading || tracksLoading) &&
+        searching &&
+        !albumResults.length &&
+        !trackResults.length
+      "
       role="status"
       class="flex items-center gap-3 rounded-lg border p-6 text-sm text-muted-foreground"
     >
       <PeridotSpinner label="Loading search results" />
-      Loading your library…
+      Searching your library…
     </div>
     <div
-      v-else-if="error"
+      v-else-if="albumsError || tracksError"
       role="alert"
       class="space-y-3 rounded-lg border p-6 text-sm"
     >
-      <p>{{ error }}</p>
-      <Button variant="outline" @click="load(true)">Try again</Button>
+      <p>{{ albumsError || tracksError }}</p>
+      <Button
+        variant="outline"
+        @click="
+          loadAlbums(true);
+          loadTracks(true);
+        "
+      >
+        Try again
+      </Button>
     </div>
 
     <section
@@ -131,7 +201,7 @@ onMounted(() => {
       >
         <AlbumCard
           v-for="album in recentAlbums"
-          :key="album.key"
+          :key="album.id"
           :album="album"
           compact
           @open="openAlbum(album)"
@@ -148,7 +218,7 @@ onMounted(() => {
 
     <template v-else>
       <section
-        v-if="resultFilter !== 'tracks'"
+        v-if="showAlbums"
         aria-labelledby="local-albums-heading"
         class="space-y-4"
       >
@@ -157,28 +227,35 @@ onMounted(() => {
             Local albums
           </h2>
           <Badge variant="secondary">
-            {{ albumResults.length }}
-            {{ albumResults.length === 1 ? "album" : "albums" }}
+            {{ albumResults.length }}{{ hasMoreAlbums ? "+" : "" }}
+            {{
+              albumResults.length === 1 && !hasMoreAlbums ? "album" : "albums"
+            }}
           </Badge>
         </div>
         <div
-          v-if="visibleAlbumResults.length"
+          v-if="albumResults.length"
           class="grid grid-cols-3 gap-1.5 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10"
         >
           <AlbumCard
-            v-for="album in visibleAlbumResults"
-            :key="album.key"
+            v-for="album in albumResults"
+            :key="album.id"
             :album="album"
             compact
             @open="openAlbum(album)"
           />
-          <div
-            v-if="hasMoreAlbums"
-            ref="loadMoreTarget"
-            class="col-span-full flex justify-center"
-          >
-            <Button type="button" variant="outline" @click="revealMoreAlbums">
-              Load more matching albums
+          <div v-if="hasMoreAlbums" class="col-span-full flex justify-center">
+            <Button
+              type="button"
+              variant="outline"
+              :disabled="albumsLoadingMore"
+              @click="loadMoreAlbums"
+            >
+              {{
+                albumsLoadingMore
+                  ? "Loading matching albums…"
+                  : "Load more matching albums"
+              }}
             </Button>
           </div>
         </div>
@@ -192,7 +269,7 @@ onMounted(() => {
       </section>
 
       <section
-        v-if="resultFilter !== 'albums'"
+        v-if="showTracks"
         aria-labelledby="local-tracks-heading"
         class="space-y-4"
       >
@@ -201,14 +278,21 @@ onMounted(() => {
             Local tracks
           </h2>
           <Badge variant="secondary">
-            {{ trackResults.length }}
-            {{ trackResults.length === 1 ? "track" : "tracks" }}
+            {{ trackResults.length }}{{ hasMoreTracks ? "+" : "" }}
+            {{
+              trackResults.length === 1 && !hasMoreTracks ? "track" : "tracks"
+            }}
           </Badge>
         </div>
         <TrackTable
-          v-if="visibleTrackResults.length"
-          :tracks="visibleTrackResults"
+          v-if="trackResults.length"
+          :tracks="trackResults"
           variant="library"
+          :sort="trackSort"
+          :has-more="hasMoreTracks"
+          :loading-more="tracksLoadingMore"
+          @sort-change="setTrackSort"
+          @load-more="loadMoreTracks"
         />
         <p
           v-else
@@ -219,12 +303,12 @@ onMounted(() => {
         </p>
       </section>
 
-      <section aria-labelledby="external-sources-heading" class="space-y-4">
+      <section aria-labelledby="external-sources-heading">
         <h2 id="external-sources-heading" class="text-lg font-semibold">
           External sources
         </h2>
         <div
-          class="flex items-start gap-3 rounded-lg border bg-muted/30 p-6 text-sm text-muted-foreground"
+          class="mt-4 flex items-start gap-3 rounded-lg border bg-muted/30 p-6 text-sm text-muted-foreground"
         >
           <Icon
             :icon="icons.cloudOff"

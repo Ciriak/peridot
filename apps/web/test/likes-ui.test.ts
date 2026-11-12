@@ -75,8 +75,8 @@ test("track, album, and artist likes share accessible persistent state wiring", 
     /group-(?:hover|active):text-primary/,
     "Like hover colors the button without reacting to card hover",
   );
-  assert.match(library, /useLikes\(\)/);
-  assert.match(library, /props\.favorites \? likedTrackIds\.value/);
+  assert.match(library, /useCatalogTrackQuery/);
+  assert.match(library, /props\.favorites \? \{ liked: true \}/);
   assert.match(layout, /loadLikes\(\)/);
   assert.match(layout, /likedTrackCount/);
   assert.match(layout, /<LikeButton/);

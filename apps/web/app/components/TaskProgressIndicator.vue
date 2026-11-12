@@ -11,6 +11,7 @@ import {
 import { computed } from "vue";
 import { useServerConnection } from "../composables/use-server-connection";
 import { useTasks } from "../composables/use-tasks";
+import { useUser } from "../composables/use-user";
 import { icons } from "../lib/icons";
 import { topbarStatus } from "../lib/server-connection";
 import {
@@ -22,6 +23,8 @@ import {
 
 const { activeTasks, hasActiveTasks } = useTasks();
 const { status: connectionStatus } = useServerConnection();
+const { user } = useUser();
+const canViewTaskProgress = computed(() => user.value?.role === "admin");
 const taskRows = computed(() => orderedActiveTasks(activeTasks.value));
 const overallProgress = computed(() => overallTaskProgress(taskRows.value));
 const status = computed(() =>
@@ -67,7 +70,10 @@ const progressLabel = computed(() => {
       </TooltipPortal>
     </TooltipRoot>
   </TooltipProvider>
-  <TooltipProvider v-else-if="status === 'task-progress'" :delay-duration="150">
+  <TooltipProvider
+    v-else-if="canViewTaskProgress && status === 'task-progress'"
+    :delay-duration="150"
+  >
     <TooltipRoot>
       <TooltipTrigger as-child>
         <NuxtLink

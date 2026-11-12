@@ -92,6 +92,7 @@ test("scans catalog supported regular files, reconcile availability, and persist
       available: true,
       coverUrl: null,
       metadata: null,
+      liked: false,
     });
     assert.doesNotMatch(
       listResponse.body,

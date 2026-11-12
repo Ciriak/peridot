@@ -144,12 +144,17 @@ test("the persistent player controls a native audio element", async () => {
   );
   assert.match(
     playerFooter,
-    /v-if="currentCoverUrl && !coverFailed"[\s\S]*absolute inset-y-0 left-0 -z-10 w-2\/3[\s\S]*<div class="absolute inset-0 opacity-40">[\s\S]*<img[\s\S]*:src="currentCoverUrl"[\s\S]*scale-125 object-cover object-left blur-3xl/,
-    "The current cover is cloned into a very blurred background anchored to the player's left side",
+    /<div\s+aria-hidden="true"\s+class="pointer-events-none absolute inset-y-0 left-0 -z-10 w-2\/3[\s\S]*<div class="absolute inset-0 opacity-40">[\s\S]*<Transition[\s\S]*<img\s+v-if="currentCoverUrl && !coverFailed"[\s\S]*:src="currentCoverUrl"[\s\S]*scale-125 object-cover object-left blur-3xl/,
+    "The decorative background stays mounted while its current cover is rendered",
+  );
+  assert.doesNotMatch(
+    playerFooter,
+    /<div\s+v-if="currentCoverUrl && !coverFailed"\s+aria-hidden="true"\s+class="pointer-events-none absolute inset-y-0 left-0/,
+    "Missing cover art fades out instead of abruptly removing the background layer",
   );
   assert.match(
     playerFooter,
-    /<Transition\s+enter-active-class="transition-opacity duration-3000 delay-150 ease-in-out motion-reduce:transition-none"[\s\S]*leave-active-class="transition-opacity duration-3000 delay-150 ease-in-out motion-reduce:transition-none"[\s\S]*<img\s+:key="currentCoverUrl"\s+:src="currentCoverUrl"/,
+    /<Transition\s+enter-active-class="transition-opacity duration-3000 delay-150 ease-in-out motion-reduce:transition-none"[\s\S]*leave-active-class="transition-opacity duration-3000 delay-150 ease-in-out motion-reduce:transition-none"[\s\S]*<img\s+v-if="currentCoverUrl && !coverFailed"\s+:key="currentCoverUrl"\s+:src="currentCoverUrl"/,
     "The blurred cover background waits briefly, then directly crossfades over three seconds",
   );
   assert.doesNotMatch(

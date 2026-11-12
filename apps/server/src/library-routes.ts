@@ -2,68 +2,12 @@ import path from "node:path";
 import { createReadStream } from "node:fs";
 import { realpath, stat } from "node:fs/promises";
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import type {
-  PlaybackTokenResponse,
-  TrackListResponse,
-  TrackResponse,
-} from "@peridot/contracts";
+import type { PlaybackTokenResponse } from "@peridot/contracts";
 import type { Database } from "./database.js";
 import { sendError } from "./http.js";
-import { effectiveArtistCredits } from "./metadata-enrichment.js";
-import { parseStoredMetadataDetails } from "./metadata-details.js";
-import type { TrackRow } from "./prisma/models.js";
 import type { PlaybackTokenService } from "./playback-tokens.js";
 import { queueLibraryScan, toTaskResponse, type TaskService } from "./tasks.js";
-
-function toTrackResponse(
-  track: TrackRow,
-  playbackTokens: PlaybackTokenService,
-): TrackResponse {
-  const artists = effectiveArtistCredits(track);
-  const title = track.metadataTitle ?? track.title;
-  const artist = track.metadataArtist ?? track.artist;
-  const matched =
-    track.metadataExternalTrackId &&
-    (track.metadataProviderKind === "musicbrainz" ||
-      track.metadataProviderKind === "discogs") &&
-    track.metadataMatchedAt
-      ? {
-          providerId: track.metadataProviderId!,
-          providerKind: track.metadataProviderKind as "musicbrainz" | "discogs",
-          providerName: track.metadataProviderName ?? "Metadata provider",
-          externalTrackId: track.metadataExternalTrackId,
-          externalReleaseId: track.metadataExternalReleaseId,
-          matchedAt: track.metadataMatchedAt.toISOString(),
-          mode:
-            track.metadataMode === "manual"
-              ? ("manual" as const)
-              : ("automatic" as const),
-          sourceUrl:
-            track.metadataSourceUrl ??
-            (track.metadataProviderKind === "musicbrainz"
-              ? `https://musicbrainz.org/recording/${encodeURIComponent(track.metadataExternalTrackId)}`
-              : "https://www.discogs.com/"),
-          details: parseStoredMetadataDetails(track.metadataDetails),
-        }
-      : null;
-  const coverUrl = track.coverId
-    ? `/api/tracks/${encodeURIComponent(track.id)}/cover?coverToken=${encodeURIComponent(playbackTokens.issueCover(track.id).token)}`
-    : null;
-  return {
-    id: track.id,
-    title,
-    artist,
-    artists,
-    album: track.metadataAlbum ?? track.album,
-    discNumber: track.metadataDiscNumber ?? track.discNumber,
-    trackNumber: track.metadataTrackNumber ?? track.trackNumber,
-    durationMs: track.durationMs,
-    mimeType: track.mimeType,
-    available: Boolean(track.available),
-    coverUrl,
-    metadata: matched,
-  };
-}
+import { toTrackResponse } from "./track-response.js";
 
 function isContained(root: string, candidate: string): boolean {
   const relative = path.relative(root, candidate);
@@ -120,45 +64,19 @@ export async function registerLibraryRoutes(
     return reply.code(202).send(toTaskResponse(task));
   });
 
-  app.get<{ Querystring: { availability?: string } }>(
-    "/api/tracks",
-    async (request, reply) => {
-      const availability = request.query.availability ?? "available";
-      if (!new Set(["available", "unavailable", "all"]).has(availability)) {
-        return sendError(
-          reply,
-          400,
-          "invalid_availability",
-          "availability must be available, unavailable, or all",
-        );
-      }
-      const tracks = await (
-        availability === "all"
-          ? database.orm.Track
-          : database.orm.Track.where({
-              available: availability === "available" ? 1 : 0,
-            })
-      )
-        .orderBy([
-          (track) => track.artist.asc(),
-          (track) => track.album.asc(),
-          (track) => track.title.asc(),
-        ])
-        .all();
-      const response: TrackListResponse = {
-        items: tracks.map((track) => toTrackResponse(track, playbackTokens)),
-      };
-      return response;
-    },
-  );
-
   app.get<{ Params: { id: string } }>(
     "/api/tracks/:id",
     async (request, reply) => {
       const track = await database.orm.Track.first({ id: request.params.id });
       if (!track)
         return sendError(reply, 404, "track_not_found", "Track not found");
-      return toTrackResponse(track, playbackTokens);
+      const liked = Boolean(
+        await database.orm.TrackLike.first({
+          userId: request.authenticatedUser!.id,
+          trackId: track.id,
+        }),
+      );
+      return toTrackResponse(track, playbackTokens, liked);
     },
   );
 

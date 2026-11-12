@@ -44,6 +44,7 @@ const tracks: TrackResponse[] = [
     available: true,
     coverUrl: null,
     metadata: null,
+    liked: false,
   },
   {
     id: "track-2",
@@ -58,6 +59,7 @@ const tracks: TrackResponse[] = [
     available: true,
     coverUrl: null,
     metadata: null,
+    liked: false,
   },
 ];
 
@@ -147,9 +149,11 @@ test("track-table sort icons appear only for the active direction", async () => 
     new URL("../app/components/TrackTable.vue", import.meta.url),
     "utf8",
   );
-  const activeIcons = table.match(/<Icon\s+v-if="sort\?\.field === '[^']+'"/g);
+  const activeIcons = table.match(
+    /<Icon\s+v-if="activeSort\.field === '[^']+'"/g,
+  );
   const directionIcons = table.match(
-    /sort\.direction === 'asc' \? icons\.caretUp : icons\.caretDown/g,
+    /activeSort\.direction === 'asc' \? icons\.caretUp : icons\.caretDown/g,
   );
 
   assert.equal(activeIcons?.length, 4);
@@ -165,7 +169,7 @@ test("shared track rows always show linked artists beneath the title", async () 
 
   assert.match(
     table,
-    /<p class="truncate text-xs text-muted-foreground">\s*<TrackArtistLinks :artists="trackArtistNames\(track\)" \/>/,
+    /<p class="truncate text-xs text-muted-foreground">\s*<TrackArtistLinks :artists="trackArtistNames\(item\.data\)" \/>/,
   );
   assert.doesNotMatch(table, />\s*Artist\s*<Icon/);
   assert.equal(table.match(/<TrackArtistLinks/g)?.length, 1);
@@ -185,27 +189,26 @@ test("shared track lists show cover artwork beside every title", async () => {
   );
   assert.match(
     table,
-    /<TrackArtwork[\s\S]*<Button[\s\S]*class="[^"]*absolute inset-0 size-full[^"]*bg-background\/70[^"]*hover:bg-background\/70[^"]*"[\s\S]*:aria-label="[\s\S]*@click="playFromList\(track\.id\)"[\s\S]*class="text-foreground"[\s\S]*<\/TrackArtwork>\s*<div class="min-w-0 flex-1">[\s\S]*\{\{ track\.title \}\}/,
+    /<TrackArtwork :track="item\.data"[\s\S]*class="[^"]*absolute inset-0 size-full[^"]*bg-background\/70[^"]*hover:bg-background\/70[^"]*"[\s\S]*@click="playFromList\(item\.data\.id\)"[\s\S]*class="text-foreground"[\s\S]*<\/TrackArtwork>\s*<div class="min-w-0 flex-1">[\s\S]*\{\{ item\.data\.title \}\}/,
     "The full-cover track control matches the Quick pick background and icon color",
   );
 });
 
-test("shared track tables lazily reveal page-flow rows without a nested scroll frame", async () => {
+test("shared track tables virtualize loaded rows with a load-more fallback", async () => {
   const table = await readFile(
     new URL("../app/components/TrackTable.vue", import.meta.url),
     "utf8",
   );
 
-  assert.doesNotMatch(table, /useVirtualList|containerProps|wrapperProps/);
-  assert.doesNotMatch(table, /max-h-svh/);
-  assert.match(table, /useProgressiveReveal\(sortedTracks\)/);
-  assert.match(table, /v-for="\(track, index\) in visibleTracks"/);
-  assert.match(table, /ref="loadMoreTarget"/);
-  assert.match(table, /@click="revealMore"/);
+  assert.match(table, /useVirtualList/);
+  assert.match(table, /containerProps/);
+  assert.match(table, /wrapperProps/);
+  assert.match(table, /v-for="item in list"/);
+  assert.match(table, /@click="emit\('load-more'\)"/);
   assert.match(table, /Load more tracks/);
   assert.match(table, /role="table"/);
-  assert.match(table, /:aria-rowcount="sortedTracks\.length \+ 1"/);
-  assert.match(table, /:aria-rowindex="index \+ 2"/);
+  assert.match(table, /:aria-rowcount="tracks\.length \+ 1"/);
+  assert.match(table, /:aria-rowindex="item\.index \+ 2"/);
 });
 
 test("unavailable track titles are dimmed without muting available titles", async () => {
@@ -216,7 +219,7 @@ test("unavailable track titles are dimmed without muting available titles", asyn
 
   assert.match(
     table,
-    /<span\s+:id="trackTitleAnchorId\(track\.id\)"\s+class="scroll-mt-4 truncate"\s+:class="\{ 'opacity-60': !track\.available \}"\s+>\{\{ track\.title \}\}<\/span/,
+    /<span\s+:id="trackTitleAnchorId\(item\.data\.id\)"\s+class="scroll-mt-4 truncate"\s+:class="\{ 'opacity-60': !item\.data\.available \}"\s+>\{\{ item\.data\.title \}\}<\/span/,
   );
 });
 

@@ -42,6 +42,7 @@ function describe(record: Record<string, unknown>): string {
 export class ServerLogBuffer {
   private entries: ServerLogEntry[] = [];
   private nextId = 1;
+  private entryListener: ((entry: ServerLogEntry) => void) | null = null;
   readonly stream: Writable;
 
   constructor() {
@@ -54,15 +55,12 @@ export class ServerLogBuffer {
           if (!trimmed) continue;
           try {
             const record = JSON.parse(trimmed) as Record<string, unknown>;
-            this.entries.push({
+            this.push({
               id: this.nextId++,
               time: new Date(Number(record.time) || Date.now()).toISOString(),
               level: levelName(record.level),
               message: describe(record),
             });
-            if (this.entries.length > MAX_ENTRIES) {
-              this.entries.splice(0, this.entries.length - MAX_ENTRIES);
-            }
           } catch {
             // Ignore non-JSON log lines.
           }
@@ -79,14 +77,23 @@ export class ServerLogBuffer {
       level,
       message,
     };
-    this.entries.push(entry);
-    if (this.entries.length > MAX_ENTRIES) {
-      this.entries.splice(0, this.entries.length - MAX_ENTRIES);
-    }
+    this.push(entry);
     return entry;
+  }
+
+  onEntry(listener: ((entry: ServerLogEntry) => void) | null) {
+    this.entryListener = listener;
   }
 
   list(afterId = 0): ServerLogEntry[] {
     return this.entries.filter((entry) => entry.id > afterId);
+  }
+
+  private push(entry: ServerLogEntry) {
+    this.entries.push(entry);
+    if (this.entries.length > MAX_ENTRIES) {
+      this.entries.splice(0, this.entries.length - MAX_ENTRIES);
+    }
+    this.entryListener?.(entry);
   }
 }

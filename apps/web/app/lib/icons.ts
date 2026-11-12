@@ -26,6 +26,8 @@ import filterIcon from "@iconify-icons/basil/filter-outline";
 import settings from "@iconify-icons/basil/settings-outline";
 import server from "@iconify-icons/basil/server-outline";
 import user from "@iconify-icons/basil/user-outline";
+import userPlus from "@iconify-icons/basil/user-plus-outline";
+import edit from "@iconify-icons/basil/edit-outline";
 import check from "@iconify-icons/basil/check-outline";
 import cloudOff from "@iconify-icons/basil/cloud-off-outline";
 import logout from "@iconify-icons/basil/logout-outline";
@@ -71,6 +73,8 @@ export const icons = {
   settings,
   server,
   user,
+  userPlus,
+  edit,
   check,
   cloudOff,
   logout,

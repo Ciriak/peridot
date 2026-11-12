@@ -6,34 +6,90 @@ async function readSource(relativePath: string): Promise<string> {
   return readFile(new URL(relativePath, import.meta.url), "utf8");
 }
 
-test("settings is a fullscreen routed area with administrator-only management categories", async () => {
+test("settings is a fullscreen routed area with a separate administrator group", async () => {
   const layout = await readSource("../app/layouts/settings.vue");
-  for (const category of [
-    "account",
-    "tasks",
-    "library",
-    "playback",
-    "plugins",
-    "sources",
-    "metadata",
-    "administration",
-  ]) {
+  const commonCategories = layout.slice(
+    layout.indexOf("const commonCategories"),
+    layout.indexOf("const adminCategories"),
+  );
+  const adminCategories = layout.slice(
+    layout.indexOf("const adminCategories"),
+    layout.indexOf("];", layout.indexOf("const adminCategories")) + 2,
+  );
+  for (const category of ["account", "library", "playback"]) {
     assert.match(layout, new RegExp(`to: "/settings/${category}"`));
   }
-  assert.match(layout, /user\.value\?\.role === "admin"/);
+  assert.match(commonCategories, /name: "Profile"/);
+  assert.doesNotMatch(commonCategories, /name: "Account"/);
+  for (const category of [
+    "plugins",
+    "tasks",
+    "users",
+    "sources",
+    "metadata",
+    "server",
+  ]) {
+    assert.match(adminCategories, new RegExp(`to: "/settings/${category}"`));
+  }
+  assert.match(adminCategories, /name: "User Management"/);
+  assert.doesNotMatch(commonCategories, /to: "\/settings\/tasks"/);
+  assert.doesNotMatch(commonCategories, /to: "\/settings\/plugins"/);
+  assert.match(layout, /user\?\.role === 'admin'/);
+  assert.match(layout, /aria-labelledby="admin-settings-heading"/);
+  assert.match(layout, /class="space-y-1 border-t border-sidebar-border pt-4"/);
+  assert.match(layout, />\s*Admin\s*</);
+  assert.doesNotMatch(layout, /name: "Administration"/);
   assert.match(layout, /import TaskProgressIndicator/);
   assert.match(layout, /<TaskProgressIndicator \/>/);
-  for (const page of ["tasks", "sources", "metadata", "administration"]) {
+  for (const page of [
+    "plugins",
+    "tasks",
+    "users",
+    "sources",
+    "metadata",
+    "server",
+  ]) {
     const source = await readSource(`../app/pages/settings/${page}.vue`);
     assert.match(source, /layout: "settings"/);
   }
 });
 
-test("/settings redirects to administration and /plugins redirects into settings", async () => {
+test("/settings redirects to account and /plugins redirects into settings", async () => {
   const index = await readSource("../app/pages/settings/index.vue");
-  assert.match(index, /navigateTo\("\/settings\/administration"/);
+  assert.match(index, /navigateTo\("\/settings\/account"/);
   const plugins = await readSource("../app/pages/plugins.vue");
   assert.match(plugins, /navigateTo\("\/settings\/plugins"/);
+});
+
+test("settings sidebar confirms before logout and retains the selected server", async () => {
+  const layout = await readSource("../app/layouts/settings.vue");
+  const logoutFooter = layout.slice(
+    layout.indexOf('<div class="shrink-0 border-t border-sidebar-border p-3">'),
+    layout.indexOf("</aside>"),
+  );
+  const logoutDialog = layout.slice(
+    layout.indexOf('<AlertDialogRoot v-model:open="logoutOpen">'),
+    layout.indexOf("</AlertDialogRoot>"),
+  );
+
+  assert.match(layout, /useServer/);
+  assert.match(layout, /useSession/);
+  assert.match(layout, /revokeSession/);
+  assert.match(layout, /token\.value = null/);
+  assert.match(layout, /user\.value = null/);
+  assert.doesNotMatch(layout, /address\.value = null/);
+  assert.match(layout, /query: \{ auth: "login", redirect: route\.fullPath \}/);
+  assert.match(logoutFooter, /:icon="icons\.logout"/);
+  assert.match(logoutFooter, /Logging out…/);
+  assert.match(logoutFooter, /Log out/);
+  assert.match(logoutFooter, /:disabled="loggingOut"/);
+  assert.match(logoutFooter, /@click="requestLogout"/);
+  assert.doesNotMatch(logoutFooter, /@click="confirmLogout"/);
+  assert.match(layout, /AlertDialogRoot/);
+  assert.match(logoutDialog, /Log out of Peridot\?/);
+  assert.match(logoutDialog, /Your current session will end\./);
+  assert.match(logoutDialog, /<AlertDialogCancel as-child>/);
+  assert.match(logoutDialog, /@click="confirmLogout"/);
 });
 
 test("the header places task progress before the account avatar", async () => {
@@ -66,7 +122,10 @@ test("the header places task progress before the account avatar", async () => {
     /<TaskProgressIndicator \/>[\s\S]*?to="\/settings\/account"/,
   );
   assert.match(header, /to="\/settings\/account"/);
-  assert.match(header, /aria-label="Open account settings"/);
+  assert.match(header, /aria-label="Open profile settings"/);
+  assert.match(header, /:icon="icons\.settings"/);
+  assert.match(header, /group-hover\/avatar:opacity-100/);
+  assert.match(header, /group-focus-visible\/avatar:opacity-100/);
   assert.match(layout, /gravatarUrl/);
   assert.match(layout, /@peridot\/ui\/assets\/brand\/logo\.svg/);
   assert.match(layout, /flex-1 justify-start text-lg font-semibold/);
@@ -81,7 +140,7 @@ test("the settings sidebar omits server details and its brand links back home", 
   assert.doesNotMatch(layout, /\{\{ label \}\}/);
   assert.doesNotMatch(layout, /Change server/);
   assert.doesNotMatch(layout, /Back to Peridot/);
-  assert.doesNotMatch(layout, /useServer/);
+  assert.doesNotMatch(layout, /Connected server/);
   assert.doesNotMatch(layout, /aria-label="Close settings"/);
   assert.doesNotMatch(layout, />peridot<\/NuxtLink>/);
   assert.match(layout, /aria-label="Back to home"/);
@@ -101,6 +160,10 @@ test("sources are managed on their own page with row action menus", async () => 
   assert.doesNotMatch(page, /handle: "\.drag-handle"/);
   assert.match(page, /filter: "a, button, input"/);
   assert.match(page, /class="flex cursor-grab items-center/);
+  assert.match(
+    page,
+    /class="cursor-grab rounded-md p-1 text-muted-foreground active:cursor-grabbing"\s*aria-label="Drag to reorder source"/,
+  );
   assert.match(page, /AlertDialogRoot/);
   assert.match(page, /DialogRoot/);
   assert.match(page, /<FolderTree/);
@@ -160,6 +223,10 @@ test("metadata providers have a dedicated sortable management page", async () =>
   assert.doesNotMatch(page, /handle: "\.drag-handle"/);
   assert.match(page, /draggable: "\.sortable-item"/);
   assert.match(page, /'sortable-item cursor-grab active:cursor-grabbing'/);
+  assert.match(
+    page,
+    /class="cursor-grab rounded-md p-1 text-muted-foreground active:cursor-grabbing"\s*aria-label="Drag to reorder metadata provider"/,
+  );
   assert.match(page, /configurationFields/);
   assert.match(page, /credentialField/);
   assert.match(page, /@peridot\/ui\/components\/ui\/switch/);
@@ -215,7 +282,7 @@ test("metadata providers have a dedicated sortable management page", async () =>
   assert.match(page, /resetMetadata/);
   assert.match(page, /Reset all track metadata/);
   assert.match(page, /notifyMetadataReset/);
-  assert.match(page, /reloadTracks/);
+  assert.match(page, /invalidateCatalog/);
   assert.match(page, /Reset all track metadata\?/);
   assert.match(page, /Peridot will display the original tags/);
   assert.match(page, /Providers and audio files are not changed/);
@@ -228,6 +295,14 @@ test("metadata providers have a dedicated sortable management page", async () =>
 
 test("tasks have a settings view for active work and paginated history", async () => {
   const page = await readSource("../app/pages/settings/tasks.vue");
+  assert.match(page, /useUser/);
+  assert.match(page, /canManageTasks/);
+  assert.match(page, /v-if="!canManageTasks"/);
+  assert.match(page, /Administrator access is required\./);
+  assert.match(
+    page,
+    /onMounted\(\(\) => \{\s+if \(!canManageTasks\.value\) return;/,
+  );
   assert.match(page, /useTasks/);
   assert.match(page, /orderedActiveTasks\(activeTasks\.value\)/);
   assert.match(page, /status: "terminal"/);
@@ -245,8 +320,53 @@ test("tasks have a settings view for active work and paginated history", async (
   assert.match(page, /taskTimeLabel\(task\)/);
 });
 
-test("administration no longer contains source or library status management", async () => {
-  const page = await readSource("../app/pages/settings/administration.vue");
+test("administrators can create, edit, promote, and delete managed accounts", async () => {
+  const page = await readSource("../app/pages/settings/users.vue");
+
+  assert.match(page, /layout: "settings"/);
+  assert.match(page, /listUsers/);
+  assert.match(page, /createManagedUser/);
+  assert.match(page, /updateManagedUser/);
+  assert.match(page, /deleteManagedUser/);
+  assert.match(page, /canManageUsers/);
+  assert.match(
+    page,
+    /Administrator access is required to manage user accounts\./,
+  );
+  assert.match(page, />User Management<\/h2>/);
+  assert.match(page, /id="user-accounts-heading"/);
+  assert.match(page, />\s*Add account\s*</);
+  assert.match(page, /v-for="account in users"/);
+  assert.match(page, /gravatarUrl\(account\.email, 80\)/);
+  assert.match(page, /:src="avatarSource\(account\)"/);
+  assert.match(page, /@error="markAvatarFailed\(account\)"/);
+  assert.match(page, /class="size-10 shrink-0 rounded-full object-cover"/);
+  assert.match(page, /roleLabel\(account\.role\)/);
+  assert.match(page, /account\.role === 'admin' \? 'default' : 'secondary'/);
+  assert.match(page, /@click="openEditDialog\(account\)"/);
+  assert.match(page, /@click="requestDelete\(account\)"/);
+  assert.match(page, /account\.id === user\?\.id/);
+  assert.match(page, /User accounts/);
+  assert.match(page, /Create accounts and control who can administer/);
+  assert.match(page, /Create a user or another administrator account\./);
+  assert.match(page, /@click="setRole\('member'\)"/);
+  assert.match(page, /@click="setRole\('admin'\)"/);
+  assert.match(page, /Your own administrator role cannot be changed here\./);
+  assert.match(page, /Leave blank to keep the current password\./);
+  assert.match(page, /managedPasswordPairValid\(/);
+  assert.match(page, /dialogMode === 'create' \|\| formPassword/);
+  assert.match(
+    page,
+    /id="managed-user-password-confirmation"[\s\S]*?required[\s\S]*?minlength="12"/,
+  );
+  assert.match(page, /managedPasswordConfirmationError/);
+  assert.match(page, /Delete \{\{ pendingDelete\?\.displayName \}\}\?/);
+  assert.match(page, /permanently deletes the account and its sessions/);
+  assert.match(page, /dialogMode === "create"[\s\S]*?"New password"/);
+});
+
+test("server settings no longer contain source or library status management", async () => {
+  const page = await readSource("../app/pages/settings/server.vue");
   assert.doesNotMatch(page, /Library status/);
   assert.doesNotMatch(page, /Rescan library/);
   assert.doesNotMatch(page, /listSources/);
@@ -257,8 +377,8 @@ test("administration no longer contains source or library status management", as
   assert.match(page, /Categories/);
 });
 
-test("administration confirms before disconnecting from the connected server", async () => {
-  const page = await readSource("../app/pages/settings/administration.vue");
+test("server settings confirm before disconnecting from the connected server", async () => {
+  const page = await readSource("../app/pages/settings/server.vue");
   const serverCard = page.slice(
     page.indexOf('<section aria-labelledby="server-heading"'),
     page.indexOf('<AlertDialogRoot v-model:open="disconnectOpen">'),
@@ -284,6 +404,28 @@ test("administration confirms before disconnecting from the connected server", a
   assert.match(page, /token\.value = null/);
   assert.match(page, /user\.value = null/);
   assert.match(page, /navigateTo\("\/onboarding", \{ replace: true \}\)/);
+});
+
+test("profile settings show email and update the editable display name", async () => {
+  const page = await readSource("../app/pages/settings/account.vue");
+
+  assert.match(page, />Profile<\/h2>/);
+  assert.match(page, /updateUserProfile/);
+  assert.match(
+    page,
+    /const displayName = ref\(user\.value\?\.displayName \?\? ""\)/,
+  );
+  assert.match(page, /id="account-email"/);
+  assert.match(page, /readonly/);
+  assert.match(page, /id="account-display-name"/);
+  assert.match(page, /autocomplete="nickname"/);
+  assert.match(page, /minlength="2"/);
+  assert.match(page, /maxlength="80"/);
+  assert.match(page, /user\.value = updated/);
+  assert.match(page, /Display name updated\./);
+  assert.match(page, /@submit\.prevent="saveProfile"/);
+  assert.match(page, /:disabled="saving \|\| !displayNameValid"/);
+  assert.doesNotMatch(page, /username|Username/);
 });
 
 test("the local-files picker includes accessible deep folder search", async () => {

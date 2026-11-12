@@ -1,17 +1,13 @@
 <script setup lang="ts">
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { computed } from "vue";
-import { useLibraryTracks } from "../composables/use-library-tracks";
 import { useInteractionFrozenList } from "../composables/use-interaction-frozen-list";
 import { useQuickPicks } from "../composables/use-quick-picks";
 import { resolveQuickPicks } from "../lib/quick-picks";
 import QuickPickTile from "./QuickPickTile.vue";
 
-const { tracks, loading: tracksLoading } = useLibraryTracks();
 const { items, loading, loaded, error } = useQuickPicks();
-const resolvedItems = computed(() =>
-  resolveQuickPicks(items.value, tracks.value),
-);
+const resolvedItems = computed(() => resolveQuickPicks(items.value));
 const {
   items: visibleItems,
   beginPointerInteraction,
@@ -43,7 +39,7 @@ function handleFocusOut(event: FocusEvent) {
       Quick pick
     </h2>
     <div
-      v-if="(loading || tracksLoading) && !visibleItems.length"
+      v-if="loading && !visibleItems.length"
       role="status"
       class="flex items-center gap-2 text-xs text-muted-foreground"
     >

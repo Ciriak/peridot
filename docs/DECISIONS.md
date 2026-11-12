@@ -1,5 +1,163 @@
 # Decisions
 
+## 2026-11-12: Administrators manage accounts through User Management
+
+The administrator Settings navigation includes a dedicated `User Management`
+page. Administrators can create members or other administrators, edit email and
+display-name identity, reset passwords, promote or demote roles, and delete
+accounts through administrator-only `/api/admin/users` CRUD routes.
+Every create or password-reset form requires the new password to be entered
+twice and disables submission until the entries match. Password confirmation is
+validated in the browser and is never sent to the server.
+
+Deletion uses the existing account relations to remove sessions and
+user-owned likes, queues, and playback history without changing the audio
+library. Authentication-affecting edits to another account revoke all of that
+account's sessions and disconnect its realtime sockets. An administrator cannot
+delete their own account, change their own role, or perform an edit that would
+leave the server without an administrator. These rules are enforced by the
+server as well as reflected in the UI.
+
+## 2026-11-12: Email is the sole login identifier
+
+User accounts now consist of a unique email address, a required display name,
+and a password. Users sign in only with their normalized email address and
+password; display names are presentation labels and never authenticate an
+account. This supersedes the earlier username-or-email sign-in decision.
+
+Display names preserve their capitalization, trim surrounding whitespace,
+collapse internal whitespace, and must contain 2–80 Unicode code points. A
+separate normalized display-name value enforces case-insensitive uniqueness, so
+`Ada Lovelace` and `ada lovelace` cannot both be used. Signed-in users can update
+their display name through `PUT /api/users/me`; their own email remains
+immutable through Profile. Administrators can change another account's email
+through User Management, where the new identity becomes that account's sign-in
+address.
+
+The breaking local schema replacement was completed by resetting the authorized
+development database. Local accounts, sessions, catalog data, queues, likes,
+sources, and settings were discarded, so a new administrator must be created.
+
+## 2026-11-12: First administrator confirms the password
+
+The first-administrator form asks for the password twice. The browser keeps the
+confirmation value client-side, reports a mismatch inline, and disables account
+creation until both entries match. The confirmation value is never included in
+the bootstrap request; the server continues to validate and hash the single
+password it receives.
+
+## 2026-11-12: Settings calls the account area Profile
+
+The common Settings navigation labels `/settings/account` as `Profile`, and the
+page heading and header-avatar accessible label use the same term. The route and
+profile API remain unchanged so existing redirects, bookmarks, and tests keep
+their established identifiers.
+
+## 2026-11-12: Settings logout preserves the selected server
+
+The Settings sidebar has a persistent Log out control below its scrollable
+categories. Activating it opens a confirmation dialog before any credentials are
+changed. Confirming revokes the current session when the server is reachable,
+clears the local session and user cookies, keeps the selected server address,
+and opens onboarding in sign-in mode with the current Settings path as the
+post-authentication destination.
+
+This is distinct from the administrator Server page's Disconnect action, which
+clears the server selection so another server can be chosen. Logout failures do
+not trap the user in the signed-in shell because local credentials are cleared
+before the server revocation request completes.
+
+## 2026-11-12: Administrator settings form a separate navigation group
+
+The Settings sidebar keeps Account, Library, and Playback as common categories.
+Administrators see a separately divided `Admin` group containing Plugins, Tasks,
+User Management, Sources, Metadata, and Server. The group and all six links are
+absent for non-administrators; server API authorization remains authoritative
+for the underlying operations.
+
+The former Administration category is removed. Its server connection and log
+content moves to `/settings/server`, while `/settings` now redirects to the
+non-administrator-safe Account category. Source and metadata management remain
+on their existing dedicated routes.
+
+Task progress is administrator-only UI. The topbar task spinner and fullscreen
+Settings task indicator render only for administrators, and direct access to
+`/settings/tasks` shows an access-required state to other users. The shared
+connection-loss warning remains visible because it is not task progress. Task
+HTTP routes retain their existing authenticated contract. This supersedes the
+earlier decision that exposed Tasks and task progress to every signed-in user.
+
+## 2026-11-12: Setup and expired sessions redirect without authentication alerts
+
+The shared authenticated browser client treats `428 setup_required` as an
+onboarding setup condition and `401 unauthorized` as a lost-session condition.
+Both clear stale browser identity, preserve the current full path, and replace
+the current route with onboarding. Setup opens `auth=setup`, which reconnects to
+the selected server and presents the required first-administrator form; expired
+sessions open `auth=login`.
+
+The client reports the redirect reason through one handler and rejects with a
+typed authentication-redirect error. User-facing catalog, player, settings, and
+action handlers ignore that error instead of rendering its server message as an
+alert or toast. The unauthenticated sign-in endpoint is excluded, so incorrect
+credentials remain an inline form error. This supersedes the earlier
+lost-authentication-only handling that recognized `401` but left setup-required
+responses in page error states.
+
+## 2026-11-12: Realtime events replace UI polling
+
+The authenticated web app uses one `/api/realtime` WebSocket for task lifecycle,
+catalog revision, and administrator log events. Browser WebSocket clients cannot
+send the existing bearer header, so `POST /api/realtime/ticket` issues a
+random, single-use, 30-second ticket bound to the current session. The upgrade
+requires an exact configured `Origin`, tickets and playback tokens are redacted
+from request logs, and session revocation closes matching sockets.
+
+Clients subscribe explicitly to `tasks`, `catalog`, or admin-only `logs`.
+Task events carry the complete safe `TaskResponse`, with progress coalesced to at
+most four updates per second and status transitions always emitted immediately.
+Catalog events carry only the revision, source, reason, and changed count; they
+never contain catalog rows. Server sequence numbers and a 512-event in-memory
+buffer permit short reconnect replay. A gap or slow-client overflow produces
+`resync.required`, after which HTTP pages/tasks remain the canonical recovery
+source. This intentionally avoids a durable event outbox in the single-process
+SQLite deployment.
+
+## 2026-11-12: Catalog reads use projections and cursor pages
+
+Catalog views no longer fetch every track. The server maintains derived indexed
+projections for effective track metadata, album summaries, artist summaries,
+artist/album membership, and normalized search terms. Track, album, and artist
+endpoints return bounded cursor pages and the current persisted catalog revision;
+the track endpoint accepts query, sort, availability, album, artist, and liked
+filters. Page cursors are revision-bound so a scan or metadata change invalidates
+them instead of allowing skipped/duplicated rows.
+
+Catalog mutations update projections as each changed track is indexed. Existing
+databases use an idempotent projection backfill, and mutations are serialized so
+backfill, scans, and metadata edits cannot race composite projection writes. The
+web app revalidates only loaded/active pages when revisions change, hydrates
+player queues through `POST /api/tracks/resolve`, and receives already-resolved
+quick picks instead of rebuilding them from the full library.
+
+The shared track table now uses VueUse `useVirtualList` over revision-bound loaded
+pages, with an explicit load-more fallback. This supersedes the earlier task/log
+polling and page-flow track-table decisions, and changes the public catalog API
+from an unpaged list to cursor pages without a compatibility route.
+
+## 2026-11-12: Lost authentication returns to sign-in
+
+Authenticated browser API calls detect a `401 unauthorized` response at the
+shared client boundary. The web app clears the stale session and profile cookies,
+then routes to the existing onboarding account step with `auth=login` and the
+current full path as the post-sign-in destination. This avoids stale library,
+player, task, and settings states continuing to retry with a revoked session.
+
+Only authenticated requests report lost authentication. A `401` from the
+unauthenticated sign-in endpoint remains an inline invalid-credentials error, and
+an intentional disconnect clears local credentials before revoking the session,
+so neither case starts the lost-session redirect.
+
 ## 2026-11-11: Successful downloads do not add a toast
 
 Downloading a track still creates the browser file through the authenticated
@@ -21,10 +179,12 @@ competing with track metadata or controls. A layer-local gradient fades the
 clone's right edge into the standard `card` semantic token, while a broader card
 gradient restores readability across the player.
 
-The clone is purely presentational: it is hidden from assistive technology,
-cannot intercept pointer input, and disappears with the foreground artwork when
-the track has no cover or the image fails to load. Standard Tailwind utilities
-and semantic theme tokens keep this within the owner's styling authority.
+The clone is purely presentational: it is hidden from assistive technology and
+cannot intercept pointer input. Its image disappears with the foreground
+artwork when the track has no cover or the image fails to load, but the
+decorative layer remains mounted so the outgoing blurred image can fade out
+instead of abruptly removing the background. Standard Tailwind utilities and
+semantic theme tokens keep this within the owner's styling authority.
 
 The decorative cover background waits 150 ms and then directly crossfades
 between different resolved cover URLs over three seconds. The outgoing and
@@ -116,7 +276,8 @@ Remove the separate icon-only Settings link from the main header. The account
 avatar already enters the full Settings area at `/settings/account`, and the
 Settings sidebar exposes every destination from there. Keeping a second adjacent
 settings control duplicates the same navigation and adds unnecessary header
-clutter.
+clutter. The avatar reveals a Basil settings cog on pointer hover and keyboard
+focus so this otherwise implicit settings entry becomes discoverable.
 
 Task progress remains immediately before the avatar. This supersedes the earlier
 decision that placed a separate Settings control beside the account avatar.

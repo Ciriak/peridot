@@ -28,36 +28,46 @@ declare module "fastify" {
 
 interface CredentialsBody {
   email?: unknown;
-  identifier?: unknown;
-  username?: unknown;
+  displayName?: unknown;
   password?: unknown;
 }
 
-function publicUser(user: {
+interface ProfileBody {
+  displayName?: unknown;
+}
+
+export function publicUser(user: {
   id: string;
   email: string;
-  username: string;
+  displayName: string;
   role: string;
 }): UserResponse {
   return {
     id: user.id,
     email: user.email,
-    username: user.username,
+    displayName: user.displayName,
     role: user.role === "admin" ? "admin" : "member",
   };
 }
 
-function normalizeUsername(value: unknown): string | null {
+export function normalizeDisplayName(
+  value: unknown,
+): { displayName: string; normalizedDisplayName: string } | null {
   if (typeof value !== "string") return null;
-  const username = value.trim().toLowerCase();
-  return /^[a-z0-9][a-z0-9._-]{2,31}$/.test(username) ? username : null;
+  const displayName = value.trim().replace(/\s+/gu, " ");
+  const length = Array.from(displayName).length;
+  if (length < 2 || length > 80) return null;
+  return {
+    displayName,
+    normalizedDisplayName: displayName.toLowerCase(),
+  };
 }
 
-function validPassword(value: unknown): value is string {
+export function validPassword(value: unknown): value is string {
   return typeof value === "string" && value.length >= 12 && value.length <= 256;
 }
 
-function normalizeEmail(value: unknown): string | null {
+export function normalizeEmail(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const email = value.trim().toLowerCase();
   return email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
@@ -65,7 +75,7 @@ function normalizeEmail(value: unknown): string | null {
     : null;
 }
 
-async function hashPassword(password: string): Promise<string> {
+export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16);
   const derived = (await scrypt(password, salt, 64)) as Buffer;
   return `scrypt:${salt.toString("base64url")}:${derived.toString("base64url")}`;
@@ -92,7 +102,7 @@ function tokenHash(token: string): string {
 
 async function createSession(
   database: Database,
-  user: { id: string; email: string; username: string; role: string },
+  user: { id: string; email: string; displayName: string; role: string },
 ): Promise<AuthSessionResponse> {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + SESSION_DURATION_MS);
@@ -121,14 +131,14 @@ export async function registerAuthRoutes(
     "/api/auth/bootstrap",
     async (request, reply) => {
       const email = normalizeEmail(request.body?.email);
-      const username = normalizeUsername(request.body?.username);
+      const displayName = normalizeDisplayName(request.body?.displayName);
       const password = request.body?.password;
-      if (!email || !username || !validPassword(password)) {
+      if (!email || !displayName || !validPassword(password)) {
         return sendError(
           reply,
           400,
           "invalid_admin_user",
-          "Use a valid email, a 3–32 character username, and a 12+ character password",
+          "Use a valid email, a 2–80 character display name, and a 12+ character password",
         );
       }
       if (
@@ -148,7 +158,7 @@ export async function registerAuthRoutes(
       try {
         const user = await database.orm.User.create({
           email,
-          username,
+          ...displayName,
           passwordHash: await hashPassword(password),
           role: "admin",
           bootstrapKey: BOOTSTRAP_KEY,
@@ -178,36 +188,23 @@ export async function registerAuthRoutes(
   app.post<{ Body: CredentialsBody }>(
     "/api/auth/sessions",
     async (request, reply) => {
-      const identifier = request.body?.identifier;
+      const email = normalizeEmail(request.body?.email);
       const password = request.body?.password;
-      if (typeof identifier !== "string" || typeof password !== "string") {
+      if (!email || typeof password !== "string") {
         return sendError(
           reply,
           401,
           "invalid_credentials",
-          "The username/email or password is incorrect",
+          "The email or password is incorrect",
         );
       }
-      const value = identifier.trim();
-      const username = value.includes("@") ? null : normalizeUsername(value);
-      const email = value.includes("@") ? normalizeEmail(value) : null;
-      if (!username && !email) {
-        return sendError(
-          reply,
-          401,
-          "invalid_credentials",
-          "The username/email or password is incorrect",
-        );
-      }
-      const user = username
-        ? await database.orm.User.first({ username })
-        : await database.orm.User.first({ email: email! });
+      const user = await database.orm.User.first({ email });
       if (!user || !(await verifyPassword(password, user.passwordHash))) {
         return sendError(
           reply,
           401,
           "invalid_credentials",
-          "The username/email or password is incorrect",
+          "The email or password is incorrect",
         );
       }
       return createSession(database, user);
@@ -220,6 +217,7 @@ export async function registerProtectedRoutes(
   database: Database,
   routes: (protectedApp: FastifyInstance) => Promise<void>,
   authorizeRequest?: (request: FastifyRequest) => boolean,
+  onSessionRevoked?: (sessionId: string) => void,
 ) {
   app.decorateRequest("authenticatedSessionId", null);
   app.decorateRequest("authenticatedUser", null);
@@ -271,10 +269,61 @@ export async function registerProtectedRoutes(
       "/api/users/me",
       async (request) => request.authenticatedUser,
     );
+    protectedApp.put<{ Body: ProfileBody }>(
+      "/api/users/me",
+      async (request, reply) => {
+        const displayName = normalizeDisplayName(request.body?.displayName);
+        if (!displayName) {
+          return sendError(
+            reply,
+            400,
+            "invalid_display_name",
+            "Use a display name between 2 and 80 characters",
+          );
+        }
+
+        const userId = request.authenticatedUser!.id;
+        const existing = await database.orm.User.first({
+          normalizedDisplayName: displayName.normalizedDisplayName,
+        });
+        if (existing && existing.id !== userId) {
+          return sendError(
+            reply,
+            409,
+            "display_name_taken",
+            "That display name is already in use",
+          );
+        }
+
+        try {
+          await database.orm.User.where({ id: userId }).update(displayName);
+        } catch (error) {
+          const conflict = await database.orm.User.first({
+            normalizedDisplayName: displayName.normalizedDisplayName,
+          });
+          if (conflict && conflict.id !== userId) {
+            return sendError(
+              reply,
+              409,
+              "display_name_taken",
+              "That display name is already in use",
+            );
+          }
+          throw error;
+        }
+
+        const updated = await database.orm.User.where({
+          id: userId,
+        }).firstOrThrow();
+        request.authenticatedUser = publicUser(updated);
+        return request.authenticatedUser;
+      },
+    );
     protectedApp.delete("/api/auth/session", async (request, reply) => {
       await database.orm.Session.where({
         id: request.authenticatedSessionId!,
       }).delete();
+      onSessionRevoked?.(request.authenticatedSessionId!);
       return reply.code(204).send();
     });
     await routes(protectedApp);

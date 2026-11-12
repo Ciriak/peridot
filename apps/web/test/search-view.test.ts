@@ -25,8 +25,9 @@ test("search uses one full-content route with recent and local results", async (
     "The search page does not render a duplicate search input",
   );
   assert.match(searchPage, /useState\("search-query"/);
-  assert.match(searchPage, /filterAlbums\(albums\.value, query\.value\)/);
-  assert.match(searchPage, /filterTracks\(tracks\.value, query\.value\)/);
+  assert.match(searchPage, /useCatalogAlbumQuery/);
+  assert.match(searchPage, /useCatalogTrackQuery/);
+  assert.match(searchPage, /query: searchTerm\.value/);
   assert.match(searchPage, /Recently searched/);
   assert.match(searchPage, /useSearchRecents\(\)/);
   assert.match(searchPage, /@open="openAlbum\(album\)"/);
@@ -50,8 +51,8 @@ test("result-type tags are accessible quick filters", async () => {
   assert.match(searchPage, /\{ value: "all", label: "All" \}/);
   assert.match(searchPage, /\{ value: "albums", label: "Albums" \}/);
   assert.match(searchPage, /\{ value: "tracks", label: "Tracks" \}/);
-  assert.match(searchPage, /resultFilter !== 'tracks'/);
-  assert.match(searchPage, /resultFilter !== 'albums'/);
+  assert.match(searchPage, /resultFilter\.value !== "tracks"/);
+  assert.match(searchPage, /resultFilter\.value !== "albums"/);
 });
 
 test("catalog pages no longer depend on the removed header query state", async () => {

@@ -8,16 +8,24 @@ import { Button } from "@peridot/ui/components/ui/button";
 import { computed, ref, watch } from "vue";
 import { useLibraryPlayer } from "../composables/use-library-player";
 import { useServer } from "../composables/use-server";
+import { useSession } from "../composables/use-session";
 import { icons } from "../lib/icons";
 import { trackCoverUrl } from "../lib/library";
+import { loadCollectionTrackIds } from "../lib/catalog-collections";
 
 const props = defineProps<{ item: ResolvedQuickPickItem }>();
 const { address } = useServer();
+const { token } = useSession();
 const { active, playing, loading, play, playCollection, togglePlayback } =
   useLibraryPlayer();
 const coverFailed = ref(false);
 const coverUrl = computed(() =>
-  trackCoverUrl(address.value ?? "", props.item.coverUrl),
+  trackCoverUrl(
+    address.value ?? "",
+    props.item.kind === "track"
+      ? props.item.track.coverUrl
+      : props.item.album.coverUrl,
+  ),
 );
 const title = computed(() =>
   props.item.kind === "track" ? props.item.track.title : props.item.album.title,
@@ -31,7 +39,8 @@ const activeItem = computed(() => {
   if (!activeTrackId) return false;
   return props.item.kind === "track"
     ? activeTrackId === props.item.track.id
-    : props.item.album.trackIds.includes(activeTrackId);
+    : active.value?.album === props.item.album.title &&
+        active.value.artist === props.item.album.artist;
 });
 const playLabel = computed(() => {
   const kind = props.item.kind === "track" ? "track" : "album";
@@ -50,7 +59,14 @@ watch(coverUrl, () => {
   coverFailed.value = false;
 });
 
-function toggleItemPlayback() {
+async function albumTrackIds(): Promise<string[]> {
+  if (!address.value || !token.value || props.item.kind !== "album") return [];
+  return loadCollectionTrackIds(address.value, token.value, {
+    albumId: props.item.album.id,
+  });
+}
+
+async function toggleItemPlayback() {
   if (activeItem.value && playing.value) {
     togglePlayback();
     return;
@@ -59,7 +75,7 @@ function toggleItemPlayback() {
     play(props.item.track.id);
     return;
   }
-  playCollection(props.item.album.trackIds);
+  playCollection(await albumTrackIds());
 }
 </script>
 

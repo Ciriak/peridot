@@ -293,7 +293,7 @@ test("deleting a track or user removes their likes", async () => {
       payload: { kind: "artist", name: "Artist" },
     });
     await context.database.orm.User.where({
-      username: "test-member",
+      displayName: "Test Member",
     }).delete();
     assert.equal(
       (

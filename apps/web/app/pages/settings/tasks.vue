@@ -8,7 +8,11 @@ import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { useServer } from "../../composables/use-server";
 import { useSession } from "../../composables/use-session";
 import { useTasks } from "../../composables/use-tasks";
-import { listTasks } from "../../lib/peridot-client";
+import { useUser } from "../../composables/use-user";
+import {
+  isAuthenticationRedirectError,
+  listTasks,
+} from "../../lib/peridot-client";
 import {
   activeTaskPercent,
   isActiveTaskStatus,
@@ -27,7 +31,9 @@ const taskDateFormatter = new Intl.DateTimeFormat("en-US", {
 
 const { address } = useServer();
 const { token } = useSession();
+const { user } = useUser();
 const { tasks, activeTasks, loading, loaded, refresh } = useTasks();
+const canManageTasks = computed(() => user.value?.role === "admin");
 const history = ref<TaskResponse[]>([]);
 const historyLoading = ref(false);
 const historyLoaded = ref(false);
@@ -84,7 +90,7 @@ function visibleDetails(task: TaskResponse) {
 }
 
 async function refreshHistory() {
-  if (!address.value || !token.value) return;
+  if (!canManageTasks.value || !address.value || !token.value) return;
   const requestedScope = currentScope();
   const request = ++historyRequest;
   historyLoading.value = true;
@@ -99,8 +105,9 @@ async function refreshHistory() {
     history.value = result.items;
     historyLoaded.value = true;
     historyHasMore.value = result.items.length === HISTORY_PAGE_SIZE;
-  } catch {
+  } catch (reason) {
     if (requestedScope !== currentScope() || request !== historyRequest) return;
+    if (isAuthenticationRedirectError(reason)) return;
     historyError.value = "Task history is unavailable.";
     historyLoaded.value = true;
   } finally {
@@ -110,6 +117,7 @@ async function refreshHistory() {
 
 async function loadMoreHistory() {
   if (
+    !canManageTasks.value ||
     historyLoading.value ||
     !historyHasMore.value ||
     !address.value ||
@@ -134,25 +142,27 @@ async function loadMoreHistory() {
       ...result.items.filter((task) => !existing.has(task.id)),
     ];
     historyHasMore.value = result.items.length === HISTORY_PAGE_SIZE;
-  } catch {
+  } catch (reason) {
     if (requestedScope !== currentScope() || request !== historyRequest) return;
+    if (isAuthenticationRedirectError(reason)) return;
     historyError.value = "Older task history could not be loaded.";
   } finally {
     if (request === historyRequest) historyLoading.value = false;
   }
 }
 
-watch([address, token], () => {
+watch([address, token, user], () => {
   previousStatuses.clear();
   history.value = [];
   historyLoaded.value = false;
   historyHasMore.value = false;
   historyError.value = "";
   historyRequest += 1;
-  if (import.meta.client) void refreshHistory();
+  if (canManageTasks.value && import.meta.client) void refreshHistory();
 });
 
 watch(tasks, (current) => {
+  if (!canManageTasks.value) return;
   let historyChanged = false;
   for (const task of current) {
     const previous = previousStatuses.get(task.id);
@@ -169,6 +179,7 @@ watch(tasks, (current) => {
 });
 
 onMounted(() => {
+  if (!canManageTasks.value) return;
   void refreshHistory();
   void refresh().catch(() => {
     // The shared task monitor retries transient status failures.
@@ -184,161 +195,173 @@ onMounted(() => {
     </p>
   </div>
 
-  <section aria-labelledby="active-tasks-heading" class="space-y-4">
-    <div class="flex items-center justify-between gap-4">
-      <h3 id="active-tasks-heading" class="text-lg font-semibold">
-        In progress
-      </h3>
-      <Badge variant="outline">{{ activeRows.length }}</Badge>
-    </div>
+  <section
+    v-if="!canManageTasks"
+    role="alert"
+    class="rounded-lg border bg-card p-6 text-sm text-card-foreground"
+  >
+    Administrator access is required.
+  </section>
 
-    <div
-      v-if="!loaded && loading && !activeRows.length"
-      role="status"
-      class="flex items-center gap-2 rounded-lg border bg-card p-4 text-sm text-card-foreground"
-    >
-      <PeridotSpinner class="size-5" />
-      Loading tasks
-    </div>
-    <div v-else-if="activeRows.length" class="space-y-3">
-      <article
-        v-for="task in activeRows"
-        :key="task.id"
-        class="rounded-lg border bg-card p-4 text-card-foreground"
+  <template v-else>
+    <section aria-labelledby="active-tasks-heading" class="space-y-4">
+      <div class="flex items-center justify-between gap-4">
+        <h3 id="active-tasks-heading" class="text-lg font-semibold">
+          In progress
+        </h3>
+        <Badge variant="outline">{{ activeRows.length }}</Badge>
+      </div>
+
+      <div
+        v-if="!loaded && loading && !activeRows.length"
+        role="status"
+        class="flex items-center gap-2 rounded-lg border bg-card p-4 text-sm text-card-foreground"
       >
-        <div class="flex items-start gap-4">
-          <ProgressCircle
-            size="sm"
-            :value="taskCircleProgress(task)"
-            :label="`Progress for ${task.title}`"
-            class="mt-0.5 size-6"
-          />
-          <div class="min-w-0 flex-1">
-            <div class="flex flex-wrap items-start justify-between gap-2">
-              <div class="min-w-0">
-                <h4 class="truncate text-sm font-semibold">{{ task.title }}</h4>
-                <p class="mt-1 text-xs text-muted-foreground">
-                  {{ taskKindLabel(task) }}
-                  <template v-if="task.source?.name">
-                    · {{ task.source.name }}
-                  </template>
-                </p>
+        <PeridotSpinner class="size-5" />
+        Loading tasks
+      </div>
+      <div v-else-if="activeRows.length" class="space-y-3">
+        <article
+          v-for="task in activeRows"
+          :key="task.id"
+          class="rounded-lg border bg-card p-4 text-card-foreground"
+        >
+          <div class="flex items-start gap-4">
+            <ProgressCircle
+              size="sm"
+              :value="taskCircleProgress(task)"
+              :label="`Progress for ${task.title}`"
+              class="mt-0.5 size-6"
+            />
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-start justify-between gap-2">
+                <div class="min-w-0">
+                  <h4 class="truncate text-sm font-semibold">
+                    {{ task.title }}
+                  </h4>
+                  <p class="mt-1 text-xs text-muted-foreground">
+                    {{ taskKindLabel(task) }}
+                    <template v-if="task.source?.name">
+                      · {{ task.source.name }}
+                    </template>
+                  </p>
+                </div>
+                <Badge variant="outline" :class="taskStatusClass(task.status)">
+                  {{ taskStatusLabel(task) }}
+                </Badge>
               </div>
-              <Badge variant="outline" :class="taskStatusClass(task.status)">
-                {{ taskStatusLabel(task) }}
-              </Badge>
-            </div>
-            <div
-              class="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"
-            >
-              <span class="font-medium text-foreground">
-                {{ taskProgressLabel(task) }}
-              </span>
-              <time :datetime="task.startedAt ?? task.createdAt">
-                {{ taskTimeLabel(task) }}
-              </time>
+              <div
+                class="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"
+              >
+                <span class="font-medium text-foreground">
+                  {{ taskProgressLabel(task) }}
+                </span>
+                <time :datetime="task.startedAt ?? task.createdAt">
+                  {{ taskTimeLabel(task) }}
+                </time>
+              </div>
             </div>
           </div>
-        </div>
-      </article>
-    </div>
-    <p
-      v-else
-      class="rounded-lg border bg-card p-4 text-sm text-muted-foreground"
-    >
-      No tasks are running or queued.
-    </p>
-  </section>
-
-  <section aria-labelledby="task-history-heading" class="space-y-4">
-    <h3 id="task-history-heading" class="text-lg font-semibold">History</h3>
-
-    <div
-      v-if="historyLoading && !history.length"
-      role="status"
-      class="flex items-center gap-2 rounded-lg border bg-card p-4 text-sm text-card-foreground"
-    >
-      <PeridotSpinner class="size-5" />
-      Loading task history
-    </div>
-    <div v-else-if="history.length" class="space-y-3">
-      <article
-        v-for="task in history"
-        :key="task.id"
-        class="rounded-lg border bg-card p-4 text-card-foreground"
+        </article>
+      </div>
+      <p
+        v-else
+        class="rounded-lg border bg-card p-4 text-sm text-muted-foreground"
       >
-        <div class="flex flex-wrap items-start justify-between gap-2">
-          <div class="min-w-0">
-            <h4 class="truncate text-sm font-semibold">{{ task.title }}</h4>
-            <p class="mt-1 text-xs text-muted-foreground">
-              {{ taskKindLabel(task) }}
-              <template v-if="task.source?.name">
-                · {{ task.source.name }}
-              </template>
-            </p>
-          </div>
-          <Badge variant="outline" :class="taskStatusClass(task.status)">
-            {{ taskStatusLabel(task) }}
-          </Badge>
-        </div>
+        No tasks are running or queued.
+      </p>
+    </section>
 
-        <p
-          v-if="task.failureSummary"
-          role="alert"
-          class="mt-3 text-sm text-destructive"
+    <section aria-labelledby="task-history-heading" class="space-y-4">
+      <h3 id="task-history-heading" class="text-lg font-semibold">History</h3>
+
+      <div
+        v-if="historyLoading && !history.length"
+        role="status"
+        class="flex items-center gap-2 rounded-lg border bg-card p-4 text-sm text-card-foreground"
+      >
+        <PeridotSpinner class="size-5" />
+        Loading task history
+      </div>
+      <div v-else-if="history.length" class="space-y-3">
+        <article
+          v-for="task in history"
+          :key="task.id"
+          class="rounded-lg border bg-card p-4 text-card-foreground"
         >
-          {{ task.failureSummary }}
-        </p>
-        <dl
-          v-if="visibleDetails(task).length"
-          class="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs"
-        >
-          <div
-            v-for="detail in visibleDetails(task)"
-            :key="detail.key"
-            class="flex gap-1"
+          <div class="flex flex-wrap items-start justify-between gap-2">
+            <div class="min-w-0">
+              <h4 class="truncate text-sm font-semibold">{{ task.title }}</h4>
+              <p class="mt-1 text-xs text-muted-foreground">
+                {{ taskKindLabel(task) }}
+                <template v-if="task.source?.name">
+                  · {{ task.source.name }}
+                </template>
+              </p>
+            </div>
+            <Badge variant="outline" :class="taskStatusClass(task.status)">
+              {{ taskStatusLabel(task) }}
+            </Badge>
+          </div>
+
+          <p
+            v-if="task.failureSummary"
+            role="alert"
+            class="mt-3 text-sm text-destructive"
           >
-            <dt class="text-muted-foreground">{{ detail.label }}:</dt>
-            <dd class="font-medium">{{ detail.value }}</dd>
-          </div>
-        </dl>
-        <time
-          :datetime="task.completedAt ?? task.createdAt"
-          class="mt-3 block text-xs text-muted-foreground"
-        >
-          {{ taskTimeLabel(task) }}
-        </time>
-      </article>
+            {{ task.failureSummary }}
+          </p>
+          <dl
+            v-if="visibleDetails(task).length"
+            class="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs"
+          >
+            <div
+              v-for="detail in visibleDetails(task)"
+              :key="detail.key"
+              class="flex gap-1"
+            >
+              <dt class="text-muted-foreground">{{ detail.label }}:</dt>
+              <dd class="font-medium">{{ detail.value }}</dd>
+            </div>
+          </dl>
+          <time
+            :datetime="task.completedAt ?? task.createdAt"
+            class="mt-3 block text-xs text-muted-foreground"
+          >
+            {{ taskTimeLabel(task) }}
+          </time>
+        </article>
 
-      <Button
-        v-if="historyHasMore"
-        type="button"
-        variant="outline"
-        :disabled="historyLoading"
-        @click="loadMoreHistory"
+        <Button
+          v-if="historyHasMore"
+          type="button"
+          variant="outline"
+          :disabled="historyLoading"
+          @click="loadMoreHistory"
+        >
+          {{ historyLoading ? "Loading older tasks…" : "Load older tasks" }}
+        </Button>
+      </div>
+      <p
+        v-else-if="historyError"
+        role="alert"
+        class="rounded-lg border bg-card p-4 text-sm text-destructive"
       >
-        {{ historyLoading ? "Loading older tasks…" : "Load older tasks" }}
-      </Button>
-    </div>
-    <p
-      v-else-if="historyError"
-      role="alert"
-      class="rounded-lg border bg-card p-4 text-sm text-destructive"
-    >
-      {{ historyError }}
-    </p>
-    <p
-      v-else-if="historyLoaded"
-      class="rounded-lg border bg-card p-4 text-sm text-muted-foreground"
-    >
-      No completed task history is available.
-    </p>
-    <p
-      v-if="historyError && history.length"
-      role="alert"
-      class="text-sm text-destructive"
-    >
-      {{ historyError }}
-    </p>
-  </section>
+        {{ historyError }}
+      </p>
+      <p
+        v-else-if="historyLoaded"
+        class="rounded-lg border bg-card p-4 text-sm text-muted-foreground"
+      >
+        No completed task history is available.
+      </p>
+      <p
+        v-if="historyError && history.length"
+        role="alert"
+        class="text-sm text-destructive"
+      >
+        {{ historyError }}
+      </p>
+    </section>
+  </template>
 </template>

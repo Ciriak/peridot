@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue/offline";
-import type { ArtistGroup } from "../lib/library";
-import { artistRoute } from "../lib/library";
+import type { ArtistSummaryResponse } from "@peridot/contracts";
+import { artistLikeKey, artistRoute } from "../lib/library";
 import { icons } from "../lib/icons";
 import { useLikes } from "../composables/use-likes";
 import ArtistContextMenu from "./ArtistContextMenu.vue";
 import LikeButton from "./LikeButton.vue";
 
-const props = defineProps<{ artist: ArtistGroup }>();
+const props = defineProps<{ artist: ArtistSummaryResponse }>();
 const {
   likedArtistKeys,
   loaded: likesLoaded,
@@ -37,13 +37,15 @@ const {
           <p class="text-xs text-muted-foreground">
             {{ artist.albumCount }}
             {{ artist.albumCount === 1 ? "album" : "albums" }} ·
-            {{ artist.tracks.length }}
-            {{ artist.tracks.length === 1 ? "track" : "tracks" }}
+            {{ artist.trackCount }}
+            {{ artist.trackCount === 1 ? "track" : "tracks" }}
           </p>
         </div>
       </NuxtLink>
       <LikeButton
-        :liked="likedArtistKeys.includes(artist.key)"
+        :liked="
+          likedArtistKeys.includes(artistLikeKey(artist.name)) || artist.liked
+        "
         :label="artist.name"
         :pending="isLikePending({ kind: 'artist', name: props.artist.name })"
         :disabled="!likesLoaded"

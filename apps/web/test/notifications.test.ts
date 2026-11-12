@@ -82,7 +82,7 @@ test("a lost server connection replaces task progress in the topbar", () => {
   assert.equal(topbarStatus("unknown", false), "idle");
 });
 
-test("task polling is silent while the toast region handles other notices", async () => {
+test("task and log updates use the shared realtime subscription", async () => {
   const app = await readFile(
     new URL("../app/app.vue", import.meta.url),
     "utf8",
@@ -115,8 +115,8 @@ test("task polling is silent while the toast region handles other notices", asyn
     new URL("../app/pages/settings/metadata.vue", import.meta.url),
     "utf8",
   );
-  const administration = await readFile(
-    new URL("../app/pages/settings/administration.vue", import.meta.url),
+  const serverSettings = await readFile(
+    new URL("../app/pages/settings/server.vue", import.meta.url),
     "utf8",
   );
 
@@ -127,15 +127,12 @@ test("task polling is silent while the toast region handles other notices", asyn
   assert.match(list, /<ToastViewport/);
   assert.match(list, /toastViewportClass\(route\.meta\.layout\)/);
   assert.match(list, /<ToastRoot/);
-  assert.match(notifications, /isPeridotServerReachable/);
-  assert.match(notifications, /useServerConnection/);
-  assert.match(notifications, /connectionState\.value = "lost"/);
+  assert.match(notifications, /useRealtime/);
+  assert.match(notifications, /subscribe\(\["tasks", "catalog"\]/);
   assert.doesNotMatch(
     notifications,
     /appToastManager|notifyServerConnectionLost|clearServerConnectionLost|SERVER_CONNECTION_TOAST_ID/,
   );
-  assert.match(notifications, /isActiveTaskStatus/);
-  assert.match(notifications, /reloadLibrary/);
   assert.doesNotMatch(
     notifications,
     /notifyTasks|notifyTaskStatusFailure|clearTaskToast|task-toast/,
@@ -148,9 +145,9 @@ test("task polling is silent while the toast region handles other notices", asyn
     list,
     /Work in progress|PeridotSpinner|kind === 'progress'/,
   );
-  assert.match(notifications, /ACTIVE_TASK_POLL_DELAY = 500/);
-  assert.match(notifications, /IDLE_TASK_POLL_DELAY = 5000/);
-  assert.match(notifications, /requestedScope !== taskScope/);
+  assert.doesNotMatch(notifications, /setTimeout|setInterval/);
+  assert.match(serverSettings, /subscribe\(\["logs"\]/);
+  assert.doesNotMatch(serverSettings, /setInterval/);
   assert.match(connection, /useState<ServerConnectionStatus>/);
   assert.match(connection, /"server-connection-status"/);
   assert.match(sources, /useTasks/);
@@ -158,5 +155,5 @@ test("task polling is silent while the toast region handles other notices", asyn
   assert.match(sources, /queueSourceScan/);
   assert.match(metadata, /queueMetadataRefresh/);
   assert.match(metadata, /hasActiveTasks/);
-  assert.doesNotMatch(administration, /useTasks/);
+  assert.doesNotMatch(serverSettings, /useTasks/);
 });

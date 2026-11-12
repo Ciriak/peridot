@@ -1,14 +1,15 @@
 // use prisma-8
 
 model User {
-  id           String   @id @onCreate(cuid(2))
-  email        String   @unique
-  username     String   @unique
-  passwordHash String
-  role         String
-  bootstrapKey String?  @unique
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @onCreate(now()) @onUpdate(now())
+  id                    String   @id @onCreate(cuid(2))
+  email                 String   @unique
+  displayName           String
+  normalizedDisplayName String   @unique
+  passwordHash          String
+  role                  String
+  bootstrapKey          String?  @unique
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @onCreate(now()) @onUpdate(now())
 
   @@index([role])
 }
@@ -170,6 +171,7 @@ model Task {
   createdAt         DateTime  @default(now())
   startedAt         DateTime?
   completedAt       DateTime?
+  updatedAt         DateTime  @onCreate(now()) @onUpdate(now())
 
   @@index([status, createdAt])
   @@index([kind, status])
@@ -210,4 +212,99 @@ model MetadataProvider {
   updatedAt            DateTime @onCreate(now()) @onUpdate(now())
 
   @@index([position])
+}
+
+model CatalogState {
+  id                String   @id
+  revision          Int      @default(0)
+  projectionVersion Int      @default(0)
+  updatedAt         DateTime @onCreate(now()) @onUpdate(now())
+}
+
+model CatalogTrack {
+  id               String   @id
+  title            String
+  artist           String
+  artistCredits    String
+  album            String?
+  normalizedTitle  String
+  normalizedArtist String
+  normalizedAlbum  String
+  durationMs       Int?
+  discNumber       Int?
+  trackNumber      Int?
+  releaseYear      Int?
+  available        Int
+  coverId          String?
+  albumId          String?
+  updatedAt        DateTime @onCreate(now()) @onUpdate(now())
+
+  @@index([normalizedArtist, normalizedAlbum, normalizedTitle, id], map: "ct_artist_album_title")
+  @@index([normalizedArtist, normalizedTitle, id], map: "ct_artist_title")
+  @@index([normalizedAlbum, normalizedTitle, id], map: "ct_album_title")
+  @@index([normalizedTitle, id], map: "ct_title")
+  @@index([durationMs, id], map: "ct_duration")
+  @@index([available, id])
+  @@index([albumId])
+}
+
+model CatalogAlbum {
+  id               String   @id
+  title            String
+  artist           String
+  normalizedTitle  String
+  normalizedArtist String
+  artistId         String?
+  coverId          String?
+  coverTrackId     String?
+  artistCredits    String?
+  trackCount       Int      @default(0)
+  durationMs       Int?
+  releaseYear      Int?
+  updatedAt        DateTime @onCreate(now()) @onUpdate(now())
+
+  @@index([normalizedTitle, normalizedArtist, id], map: "ca_title_artist")
+  @@index([normalizedArtist, normalizedTitle, id], map: "ca_artist_title")
+  @@index([artistId, id])
+}
+
+model CatalogArtist {
+  id               String   @id
+  name             String
+  normalizedName   String
+  trackCount       Int      @default(0)
+  albumCount       Int      @default(0)
+  durationMs       Int?
+  updatedAt        DateTime @onCreate(now()) @onUpdate(now())
+
+  @@index([normalizedName, id])
+}
+
+model CatalogTrackArtist {
+  id       String @id @onCreate(cuid(2))
+  trackId  String
+  artistId String
+
+  @@unique([trackId, artistId])
+  @@index([artistId, trackId])
+}
+
+model CatalogArtistAlbum {
+  id         String @id @onCreate(cuid(2))
+  artistId String
+  albumId  String
+  trackCount Int @default(0)
+
+  @@unique([artistId, albumId])
+  @@index([albumId, artistId])
+}
+
+model CatalogSearchTerm {
+  id         String @id @onCreate(cuid(2))
+  entityType String
+  entityId   String
+  term       String
+
+  @@unique([entityType, entityId, term])
+  @@index([entityType, term, entityId])
 }

@@ -225,7 +225,7 @@ test("deleting a track or user removes their queue items", async () => {
 
     const member = await createMemberSession(context);
     const memberUser = await context.database.orm.User.firstOrThrow({
-      username: "test-member",
+      displayName: "Test Member",
     });
     await context.database.orm.QueueItem.create({
       userId: memberUser.id,

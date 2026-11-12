@@ -85,7 +85,7 @@ export async function createTestContext(
     url: "/api/auth/bootstrap",
     payload: {
       email: "admin@example.com",
-      username: "test-admin",
+      displayName: "Test Admin",
       password: "test-password-with-12-characters",
     },
   });
@@ -114,7 +114,8 @@ export async function createMemberSession(
 ): Promise<{ authorization: string }> {
   const user = await context.database.orm.User.create({
     email: "member@example.com",
-    username: "test-member",
+    displayName: "Test Member",
+    normalizedDisplayName: "test member",
     passwordHash: "unused",
     role: "member",
   });

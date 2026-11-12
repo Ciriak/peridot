@@ -8,8 +8,30 @@ export type UserRole = "admin" | "member";
 export interface UserResponse {
   id: string;
   email: string;
-  username: string;
+  displayName: string;
   role: UserRole;
+}
+
+export interface UpdateUserProfileRequest {
+  displayName: string;
+}
+
+export interface UserListResponse {
+  items: UserResponse[];
+}
+
+export interface CreateUserRequest {
+  email: string;
+  displayName: string;
+  password: string;
+  role: UserRole;
+}
+
+export interface UpdateUserRequest {
+  email?: string;
+  displayName?: string;
+  password?: string;
+  role?: UserRole;
 }
 
 export interface AuthStatusResponse {
@@ -44,10 +66,61 @@ export interface TrackResponse {
   available: boolean;
   coverUrl: string | null;
   metadata: TrackMetadataResponse | null;
+  liked: boolean;
 }
 
-export interface TrackListResponse {
+export type CatalogSortField =
+  "title" | "artist" | "album" | "duration" | "track";
+
+export type CatalogSortDirection = "asc" | "desc";
+
+export interface CursorPageResponse<T> {
+  items: T[];
+  nextCursor: string | null;
+  catalogRevision: number;
+}
+
+export type TrackListResponse = CursorPageResponse<TrackResponse>;
+
+export interface ResolveTracksRequest {
+  ids: string[];
+}
+
+export interface ResolveTracksResponse {
   items: TrackResponse[];
+}
+
+export interface AlbumSummaryResponse {
+  id: string;
+  title: string;
+  artist: string;
+  artists: string[];
+  coverUrl: string | null;
+  trackCount: number;
+  durationMs: number | null;
+  releaseYear: number | null;
+  liked: boolean;
+}
+
+export interface AlbumListResponse {
+  items: AlbumSummaryResponse[];
+  nextCursor: string | null;
+  catalogRevision: number;
+}
+
+export interface ArtistSummaryResponse {
+  id: string;
+  name: string;
+  albumCount: number;
+  trackCount: number;
+  durationMs: number | null;
+  liked: boolean;
+}
+
+export interface ArtistListResponse {
+  items: ArtistSummaryResponse[];
+  nextCursor: string | null;
+  catalogRevision: number;
 }
 
 export interface PlaybackTokenResponse {
@@ -64,6 +137,7 @@ export interface QuickPickTrackResponse {
   kind: "track";
   key: string;
   trackId: string;
+  track: TrackResponse;
 }
 
 export interface QuickPickAlbumResponse {
@@ -71,6 +145,7 @@ export interface QuickPickAlbumResponse {
   key: string;
   title: string;
   artist: string;
+  album: AlbumSummaryResponse;
 }
 
 export type QuickPickItemResponse =
@@ -167,6 +242,7 @@ export interface TaskResponse {
   createdAt: string;
   startedAt: string | null;
   completedAt: string | null;
+  updatedAt: string;
 }
 
 export interface TaskListResponse {
@@ -360,3 +436,71 @@ export interface LogEntryResponse {
 export interface LogListResponse {
   items: LogEntryResponse[];
 }
+
+export type RealtimeTopic = "tasks" | "catalog" | "logs";
+
+export interface RealtimeTicketResponse {
+  ticket: string;
+  expiresAt: string;
+}
+
+export interface RealtimeSubscribeRequest {
+  type: "subscribe";
+  topics: RealtimeTopic[];
+  after?: number | null;
+}
+
+export interface RealtimeHelloMessage {
+  type: "hello";
+  protocolVersion: 1;
+  sequence: number;
+}
+
+export interface RealtimeSubscribedMessage {
+  type: "subscribed";
+  topics: RealtimeTopic[];
+}
+
+export interface RealtimeResyncRequiredMessage {
+  type: "resync.required";
+  currentSequence: number;
+}
+
+export interface RealtimeErrorMessage {
+  type: "error";
+  code: "invalid_message" | "forbidden_topic" | "internal_error";
+  message: string;
+}
+
+export interface RealtimeTaskUpdatedEvent {
+  type: "task.updated";
+  eventId: number;
+  occurredAt: string;
+  task: TaskResponse;
+}
+
+export interface RealtimeCatalogChangedEvent {
+  type: "catalog.changed";
+  eventId: number;
+  occurredAt: string;
+  revision: number;
+  sourceId: string | null;
+  reason: "scan" | "metadata" | "reset" | "source";
+  changedCount: number;
+}
+
+export interface RealtimeLogAppendedEvent {
+  type: "log.appended";
+  eventId: number;
+  occurredAt: string;
+  entry: LogEntryResponse;
+}
+
+export type RealtimeServerMessage =
+  | RealtimeHelloMessage
+  | RealtimeSubscribedMessage
+  | RealtimeResyncRequiredMessage
+  | RealtimeErrorMessage
+  | RealtimeTaskUpdatedEvent
+  | RealtimeCatalogChangedEvent
+  | RealtimeLogAppendedEvent;

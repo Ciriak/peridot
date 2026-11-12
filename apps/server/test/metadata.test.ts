@@ -414,12 +414,14 @@ test("scans automatically enrich album tracks with MusicBrainz provenance", asyn
     assert.equal(scan.metadataTotalCount, 2);
     assert.equal(scan.metadataMatchedCount, 2);
     assert.equal(scan.metadataUnmatchedCount, 0);
+    assert.equal((await context.database.orm.CatalogTrack.all()).length, 2);
 
     const tracks = await context.app.inject({
       method: "GET",
       url: "/api/tracks",
       headers: context.authorization,
     });
+    assert.equal(tracks.statusCode, 200, tracks.body);
     const items = tracks.json<{
       items: Array<{
         title: string;

@@ -30,13 +30,14 @@ import {
 import { computed, ref } from "vue";
 import { useLikes } from "../composables/use-likes";
 import { useLibraryPlayer } from "../composables/use-library-player";
-import { useLibraryTracks } from "../composables/use-library-tracks";
+import { useCatalogRevision } from "../composables/use-catalog-query";
 import { useServer } from "../composables/use-server";
 import { useSession } from "../composables/use-session";
 import { icons } from "../lib/icons";
 import { artistRoute, trackAlbumRoute, trackArtistNames } from "../lib/library";
 import {
   applyTrackMetadata,
+  isAuthenticationRedirectError,
   listMetadataCandidates,
   revertTrackMetadata,
 } from "../lib/peridot-client";
@@ -50,7 +51,7 @@ import {
 const props = defineProps<{ track: TrackResponse }>();
 const emit = defineEmits<{ play: [] }>();
 const { addToQueue, downloadTrack, queueLoaded } = useLibraryPlayer();
-const { reload: reloadLibraryTracks } = useLibraryTracks();
+const { invalidate: invalidateCatalog } = useCatalogRevision();
 const { address } = useServer();
 const { token } = useSession();
 const {
@@ -114,6 +115,7 @@ async function searchMetadata() {
     candidates.value = result.items;
   } catch (reason) {
     candidates.value = [];
+    if (isAuthenticationRedirectError(reason)) return;
     metadataError.value =
       reason instanceof Error
         ? reason.message
@@ -148,8 +150,9 @@ async function chooseMetadata(candidate: MetadataCandidateResponse) {
     );
     metadataOpen.value = false;
     notifyMetadataMatched(props.track.title);
-    await reloadLibraryTracks();
+    invalidateCatalog();
   } catch (reason) {
+    if (isAuthenticationRedirectError(reason)) return;
     metadataError.value =
       reason instanceof Error
         ? reason.message
@@ -168,8 +171,9 @@ async function revertMetadata() {
       props.track.id,
     );
     notifyMetadataReverted(props.track.title);
-    await reloadLibraryTracks();
+    invalidateCatalog();
   } catch (reason) {
+    if (isAuthenticationRedirectError(reason)) return;
     notifyMetadataUpdateFailed(
       props.track.title,
       reason instanceof Error

@@ -8,8 +8,8 @@ test("home presents catalog suggestions with the shared album-card grid", async 
     readFile(new URL("../app/pages/albums/index.vue", import.meta.url), "utf8"),
   ]);
 
-  assert.match(homePage, /groupAlbums\(tracks\.value\)/);
-  assert.match(homePage, /const albums = computed\(\(\) => groupAlbums/);
+  assert.match(homePage, /useCatalogAlbumQuery/);
+  assert.match(homePage, /items: albums/);
   assert.match(homePage, /<AlbumCard/);
   assert.match(homePage, /:album="album"/);
   assert.match(homePage, /void loadLikes\(\)/);

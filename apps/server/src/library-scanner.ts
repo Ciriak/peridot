@@ -7,6 +7,7 @@ import {
   normalizeArtistCredits,
   serializeArtistCredits,
 } from "./artist-credits.js";
+import type { CatalogService } from "./catalog.js";
 import type { Database } from "./database.js";
 import type { MetadataEnrichment } from "./metadata-enrichment.js";
 import type { TaskRow, TrackRow } from "./prisma/models.js";
@@ -133,6 +134,7 @@ export class LibraryScanner {
   constructor(
     private readonly database: Database,
     private readonly metadataEnrichment?: MetadataEnrichment,
+    private readonly catalog?: CatalogService,
   ) {}
 
   async runTask(
@@ -229,11 +231,17 @@ export class LibraryScanner {
           sourceId: requestedSource.id,
         });
       }
-      const unavailableCount = await trackQuery
+      const unavailableTracks = await trackQuery
         .where((track) =>
           or(track.lastSeenScanId.isNull(), track.lastSeenScanId.neq(task.id)),
         )
-        .updateAndCount({ available: 0 });
+        .all();
+      for (const track of unavailableTracks) {
+        await this.database.orm.Track.where({ id: track.id }).update({
+          available: 0,
+        });
+        await this.catalog?.reindexTrack(track.id, "scan");
+      }
 
       if (this.metadataEnrichment) {
         await queueMetadataFetch(tasks, {
@@ -246,6 +254,7 @@ export class LibraryScanner {
           parentTaskId: task.id,
         });
       }
+      await this.catalog?.flushChanges();
       return {
         details: scanDetails({
           source: requestedSource?.name ?? "All sources",
@@ -253,7 +262,7 @@ export class LibraryScanner {
           created: counts.createdCount,
           updated: counts.updatedCount,
           unchanged: counts.unchangedCount,
-          unavailable: unavailableCount,
+          unavailable: unavailableTracks.length,
           errors: counts.errorCount,
         }),
       };
@@ -281,10 +290,14 @@ export class LibraryScanner {
         existing.metadataVersion >= CURRENT_METADATA_VERSION;
 
       if (existing && unchanged) {
+        const wasUnavailable = !existing.available;
         await this.database.orm.Track.where({ id: existing.id }).update({
           available: 1,
           lastSeenScanId: scanId,
         });
+        if (wasUnavailable) {
+          await this.catalog?.reindexTrack(existing.id, "scan");
+        }
         counts.unchangedCount += 1;
         return;
       }
@@ -334,13 +347,15 @@ export class LibraryScanner {
         await this.database.orm.Track.where({ id: existing.id }).update(
           trackData,
         );
+        await this.catalog?.reindexTrack(existing.id, "scan");
         counts.updatedCount += 1;
       } else {
-        await this.database.orm.Track.create({
+        const created = await this.database.orm.Track.create({
           ...trackData,
           relativePath: file.relativePath,
           sourceId: file.sourceId,
         });
+        await this.catalog?.reindexTrack(created.id, "scan");
         counts.createdCount += 1;
       }
     } catch {
@@ -353,6 +368,7 @@ export class LibraryScanner {
             available: 1,
             lastSeenScanId: scanId,
           });
+          await this.catalog?.reindexTrack(existing.id, "scan");
         } catch {
           // The file remains counted as an error if even the fallback write
           // cannot acquire SQLite's write lock.

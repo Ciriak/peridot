@@ -35,11 +35,23 @@ test("an empty server requires one administrator and closes bootstrap afterward"
       url: "/api/auth/bootstrap",
       payload: {
         email: "not-an-email",
-        username: "owner",
+        displayName: "Owner",
         password: "a-secure-local-password",
       },
     });
     assert.equal(invalid.statusCode, 400);
+    assert.equal(await countUsers(context), 0);
+
+    const shortDisplayName = await context.app.inject({
+      method: "POST",
+      url: "/api/auth/bootstrap",
+      payload: {
+        email: "owner@example.com",
+        displayName: " x ",
+        password: "a-secure-local-password",
+      },
+    });
+    assert.equal(shortDisplayName.statusCode, 400);
     assert.equal(await countUsers(context), 0);
 
     const created = await context.app.inject({
@@ -47,13 +59,14 @@ test("an empty server requires one administrator and closes bootstrap afterward"
       url: "/api/auth/bootstrap",
       payload: {
         email: "Owner@Example.com",
-        username: " Owner ",
+        displayName: " Owner ",
         password: "a-secure-local-password",
       },
     });
     assert.equal(created.statusCode, 201);
     assert.equal(created.json().user.email, "owner@example.com");
-    assert.equal(created.json().user.username, "owner");
+    assert.equal(created.json().user.displayName, "Owner");
+    assert.equal("username" in created.json().user, false);
     assert.equal(created.json().user.role, "admin");
     assert.ok(created.json().token);
     assert.equal(
@@ -62,9 +75,10 @@ test("an empty server requires one administrator and closes bootstrap afterward"
     );
 
     const stored = await context.database.orm.User.where({
-      username: "owner",
+      normalizedDisplayName: "owner",
     }).firstOrThrow();
     assert.equal(stored.email, "owner@example.com");
+    assert.equal(stored.displayName, "Owner");
     assert.notEqual(stored.passwordHash, "a-secure-local-password");
     assert.equal(stored.role, "admin");
 
@@ -81,7 +95,7 @@ test("an empty server requires one administrator and closes bootstrap afterward"
       url: "/api/auth/bootstrap",
       payload: {
         email: "another@example.com",
-        username: "another-owner",
+        displayName: "Another Owner",
         password: "another-secure-password",
       },
     });
@@ -92,39 +106,40 @@ test("an empty server requires one administrator and closes bootstrap afterward"
   }
 });
 
-test("users can sign in with a username or email, inspect their account, and revoke their session", async () => {
+test("users can only sign in with email and can inspect and revoke their session", async () => {
   const context = await createTestContext();
   try {
     const rejected = await context.app.inject({
       method: "POST",
       url: "/api/auth/sessions",
-      payload: { identifier: "test-admin", password: "incorrect-password" },
+      payload: { email: "admin@example.com", password: "incorrect-password" },
     });
     assert.equal(rejected.statusCode, 401);
 
-    const byUsername = await context.app.inject({
+    const byDisplayName = await context.app.inject({
       method: "POST",
       url: "/api/auth/sessions",
       payload: {
-        identifier: "TEST-ADMIN",
+        displayName: "Test Admin",
         password: "test-password-with-12-characters",
       },
     });
-    assert.equal(byUsername.statusCode, 200);
+    assert.equal(byDisplayName.statusCode, 401);
+    assert.equal(byDisplayName.json().error.code, "invalid_credentials");
 
     const byEmail = await context.app.inject({
       method: "POST",
       url: "/api/auth/sessions",
       payload: {
-        identifier: "Admin@Example.com",
+        email: "Admin@Example.com",
         password: "test-password-with-12-characters",
       },
     });
     assert.equal(byEmail.statusCode, 200);
     assert.equal(byEmail.json().user.email, "admin@example.com");
-    assert.equal(byEmail.json().user.username, "test-admin");
+    assert.equal(byEmail.json().user.displayName, "Test Admin");
 
-    const token = byUsername.json<{ token: string }>().token;
+    const token = byEmail.json<{ token: string }>().token;
     const authorization = { authorization: `Bearer ${token}` };
     const me = await context.app.inject({
       method: "GET",
@@ -132,7 +147,7 @@ test("users can sign in with a username or email, inspect their account, and rev
       headers: authorization,
     });
     assert.equal(me.statusCode, 200);
-    assert.deepEqual(me.json(), byUsername.json().user);
+    assert.deepEqual(me.json(), byEmail.json().user);
 
     assert.equal(
       (
@@ -154,6 +169,88 @@ test("users can sign in with a username or email, inspect their account, and rev
       ).statusCode,
       401,
     );
+  } finally {
+    await context.close();
+  }
+});
+
+test("users can update their unique display name without ending their session", async () => {
+  const context = await createTestContext();
+  try {
+    await context.database.orm.User.create({
+      email: "member@example.com",
+      displayName: "Alice",
+      normalizedDisplayName: "alice",
+      passwordHash: "unused",
+      role: "member",
+    });
+
+    const invalid = await context.app.inject({
+      method: "PUT",
+      url: "/api/users/me",
+      headers: context.authorization,
+      payload: { displayName: " x " },
+    });
+    assert.equal(invalid.statusCode, 400);
+    assert.equal(invalid.json().error.code, "invalid_display_name");
+
+    const duplicate = await context.app.inject({
+      method: "PUT",
+      url: "/api/users/me",
+      headers: context.authorization,
+      payload: { displayName: "  ALICE  " },
+    });
+    assert.equal(duplicate.statusCode, 409);
+    assert.equal(duplicate.json().error.code, "display_name_taken");
+
+    const updated = await context.app.inject({
+      method: "PUT",
+      url: "/api/users/me",
+      headers: context.authorization,
+      payload: { displayName: "  Test   Admin  " },
+    });
+    assert.equal(updated.statusCode, 200);
+    assert.equal(updated.json().displayName, "Test Admin");
+    assert.equal(updated.json().email, "admin@example.com");
+
+    const me = await context.app.inject({
+      method: "GET",
+      url: "/api/users/me",
+      headers: context.authorization,
+    });
+    assert.equal(me.statusCode, 200);
+    assert.deepEqual(me.json(), updated.json());
+
+    const minimum = await context.app.inject({
+      method: "PUT",
+      url: "/api/users/me",
+      headers: context.authorization,
+      payload: { displayName: "Ab" },
+    });
+    assert.equal(minimum.statusCode, 200);
+
+    const maximum = await context.app.inject({
+      method: "PUT",
+      url: "/api/users/me",
+      headers: context.authorization,
+      payload: { displayName: "x".repeat(80) },
+    });
+    assert.equal(maximum.statusCode, 200);
+
+    const tooLong = await context.app.inject({
+      method: "PUT",
+      url: "/api/users/me",
+      headers: context.authorization,
+      payload: { displayName: "x".repeat(81) },
+    });
+    assert.equal(tooLong.statusCode, 400);
+
+    const unauthenticated = await context.app.inject({
+      method: "PUT",
+      url: "/api/users/me",
+      payload: { displayName: "Anonymous" },
+    });
+    assert.equal(unauthenticated.statusCode, 401);
   } finally {
     await context.close();
   }

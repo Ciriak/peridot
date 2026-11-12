@@ -1,11 +1,14 @@
 import type {
   ApiErrorResponse,
   ApplyTrackMetadataRequest,
+  AlbumListResponse,
+  ArtistListResponse,
   AuthSessionResponse,
   AuthStatusResponse,
   CreateMetadataProviderRequest,
   CreateSourceRequest,
   CreateSourceResponse,
+  CreateUserRequest,
   DirectoryListResponse,
   DirectorySearchResponse,
   LikeListResponse,
@@ -17,6 +20,8 @@ import type {
   MetadataProviderListResponse,
   MetadataProviderResponse,
   QuickPickListResponse,
+  RealtimeTicketResponse,
+  ResolveTracksResponse,
   PlaybackTokenResponse,
   QueueResponse,
   RecordTrackPlayResponse,
@@ -27,17 +32,21 @@ import type {
   TaskListResponse,
   TaskResponse,
   TrackListResponse,
+  UpdateUserProfileRequest,
   UpdateMetadataProviderRequest,
+  UpdateUserRequest,
+  UserListResponse,
+  UserResponse,
 } from "@peridot/contracts";
 
 export interface AdministratorCredentials {
   email: string;
-  username: string;
+  displayName: string;
   password: string;
 }
 
 export interface SignInCredentials {
-  identifier: string;
+  email: string;
   password: string;
 }
 
@@ -51,10 +60,42 @@ export interface DiscoveryResponse {
   scannedSubnets: string[];
 }
 
+export type AuthenticationRedirectReason = "login" | "setup";
+
+export class AuthenticationRedirectError extends Error {
+  readonly reason: AuthenticationRedirectReason;
+
+  constructor(message: string, reason: AuthenticationRedirectReason) {
+    super(message);
+    this.name = "AuthenticationRedirectError";
+    this.reason = reason;
+  }
+}
+
+let authenticationRedirectHandler:
+  ((reason: AuthenticationRedirectReason) => void) | null = null;
+
+export function setAuthenticationRedirectHandler(
+  handler: ((reason: AuthenticationRedirectReason) => void) | null,
+) {
+  authenticationRedirectHandler = handler;
+}
+
+export function reportAuthenticationRedirect(
+  reason: AuthenticationRedirectReason,
+) {
+  authenticationRedirectHandler?.(reason);
+}
+
+export function isAuthenticationRedirectError(reason: unknown): boolean {
+  return reason instanceof AuthenticationRedirectError;
+}
+
 async function requestJson<T>(
   serverAddress: string,
   path: string,
   init?: RequestInit,
+  options: { reportAuthenticationRedirect?: boolean } = {},
 ): Promise<T> {
   let response: Response;
   try {
@@ -73,6 +114,21 @@ async function requestJson<T>(
     const body = (await response
       .json()
       .catch(() => null)) as ApiErrorResponse | null;
+    const redirectReason =
+      options.reportAuthenticationRedirect &&
+      (response.status === 401 ||
+        (response.status === 428 && body?.error.code === "setup_required"))
+        ? response.status === 428
+          ? "setup"
+          : "login"
+        : null;
+    if (redirectReason) {
+      reportAuthenticationRedirect(redirectReason);
+      throw new AuthenticationRedirectError(
+        body?.error.message ?? "Authentication is required.",
+        redirectReason,
+      );
+    }
     throw new Error(
       body?.error.message ?? "The Peridot server rejected the request.",
     );
@@ -87,10 +143,17 @@ function authenticatedRequestJson<T>(
   token: string,
   init?: RequestInit,
 ): Promise<T> {
-  return requestJson<T>(serverAddress, path, {
-    ...init,
-    headers: { Authorization: `Bearer ${token}`, ...init?.headers },
-  });
+  return requestJson<T>(
+    serverAddress,
+    path,
+    {
+      ...init,
+      headers: { Authorization: `Bearer ${token}`, ...init?.headers },
+    },
+    {
+      reportAuthenticationRedirect: true,
+    },
+  );
 }
 
 export function fetchAuthStatus(serverAddress: string) {
@@ -133,12 +196,82 @@ export function createUserSession(
   });
 }
 
+export function updateUserProfile(
+  serverAddress: string,
+  token: string,
+  profile: UpdateUserProfileRequest,
+) {
+  return authenticatedRequestJson<UserResponse>(
+    serverAddress,
+    "/api/users/me",
+    token,
+    { method: "PUT", body: JSON.stringify(profile) },
+  );
+}
+
+export function listUsers(serverAddress: string, token: string) {
+  return authenticatedRequestJson<UserListResponse>(
+    serverAddress,
+    "/api/admin/users",
+    token,
+  );
+}
+
+export function createManagedUser(
+  serverAddress: string,
+  token: string,
+  user: CreateUserRequest,
+) {
+  return authenticatedRequestJson<UserResponse>(
+    serverAddress,
+    "/api/admin/users",
+    token,
+    { method: "POST", body: JSON.stringify(user) },
+  );
+}
+
+export function updateManagedUser(
+  serverAddress: string,
+  token: string,
+  userId: string,
+  update: UpdateUserRequest,
+) {
+  return authenticatedRequestJson<UserResponse>(
+    serverAddress,
+    `/api/admin/users/${encodeURIComponent(userId)}`,
+    token,
+    { method: "PUT", body: JSON.stringify(update) },
+  );
+}
+
+export function deleteManagedUser(
+  serverAddress: string,
+  token: string,
+  userId: string,
+) {
+  return authenticatedRequestJson<void>(
+    serverAddress,
+    `/api/admin/users/${encodeURIComponent(userId)}`,
+    token,
+    { method: "DELETE" },
+  );
+}
+
 export function revokeSession(serverAddress: string, token: string) {
   return authenticatedRequestJson<void>(
     serverAddress,
     "/api/auth/session",
     token,
     { method: "DELETE" },
+  );
+}
+
+export function createRealtimeTicket(serverAddress: string, token: string) {
+  return authenticatedRequestJson<RealtimeTicketResponse>(
+    serverAddress,
+    "/api/realtime/ticket",
+    token,
+    { method: "POST" },
   );
 }
 
@@ -366,10 +499,115 @@ export function getTask(serverAddress: string, token: string, taskId: string) {
   );
 }
 
-export function listTracks(serverAddress: string, token: string) {
+export interface TrackListOptions {
+  cursor?: string | null;
+  limit?: number;
+  sort?: "title" | "artist" | "album" | "duration" | "track";
+  direction?: "asc" | "desc";
+  query?: string;
+  availability?: "available" | "unavailable" | "all";
+  albumId?: string;
+  artistId?: string;
+  liked?: boolean;
+}
+
+export function listTracks(
+  serverAddress: string,
+  token: string,
+  options: TrackListOptions = {},
+) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(options)) {
+    if (value === undefined || value === null || value === "") continue;
+    params.set(key, String(value));
+  }
+  const suffix = params.size ? `?${params.toString()}` : "";
   return authenticatedRequestJson<TrackListResponse>(
     serverAddress,
-    "/api/tracks",
+    `/api/tracks${suffix}`,
+    token,
+  );
+}
+
+export function resolveTracks(
+  serverAddress: string,
+  token: string,
+  ids: string[],
+) {
+  return authenticatedRequestJson<ResolveTracksResponse>(
+    serverAddress,
+    "/api/tracks/resolve",
+    token,
+    { method: "POST", body: JSON.stringify({ ids }) },
+  );
+}
+
+export interface CardListOptions {
+  cursor?: string | null;
+  limit?: number;
+  sort?: string;
+  direction?: "asc" | "desc";
+  query?: string;
+  liked?: boolean;
+  artistId?: string;
+}
+
+export function listAlbums(
+  serverAddress: string,
+  token: string,
+  options: CardListOptions = {},
+) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(options)) {
+    if (value === undefined || value === null || value === "") continue;
+    params.set(key, String(value));
+  }
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return authenticatedRequestJson<AlbumListResponse>(
+    serverAddress,
+    `/api/albums${suffix}`,
+    token,
+  );
+}
+
+export function fetchAlbum(
+  serverAddress: string,
+  token: string,
+  albumId: string,
+) {
+  return authenticatedRequestJson<AlbumListResponse["items"][number]>(
+    serverAddress,
+    `/api/albums/${encodeURIComponent(albumId)}`,
+    token,
+  );
+}
+
+export function listArtists(
+  serverAddress: string,
+  token: string,
+  options: CardListOptions = {},
+) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(options)) {
+    if (value === undefined || value === null || value === "") continue;
+    params.set(key, String(value));
+  }
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return authenticatedRequestJson<ArtistListResponse>(
+    serverAddress,
+    `/api/artists${suffix}`,
+    token,
+  );
+}
+
+export function fetchArtist(
+  serverAddress: string,
+  token: string,
+  artistId: string,
+) {
+  return authenticatedRequestJson<ArtistListResponse["items"][number]>(
+    serverAddress,
+    `/api/artists/${encodeURIComponent(artistId)}`,
     token,
   );
 }

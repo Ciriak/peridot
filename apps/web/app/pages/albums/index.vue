@@ -3,24 +3,24 @@ import { useHead } from "#imports";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
-import { computed, onMounted } from "vue";
+import { onMounted } from "vue";
 import AlbumCard from "../../components/AlbumCard.vue";
+import { useCatalogAlbumQuery } from "../../composables/use-catalog-query";
 import { useLikes } from "../../composables/use-likes";
-import { useLibraryTracks } from "../../composables/use-library-tracks";
-import { useProgressiveReveal } from "../../composables/use-progressive-reveal";
-import { groupAlbums } from "../../lib/library";
 
 useHead({ title: "Albums — Peridot" });
 
-const { tracks, loading, error, load } = useLibraryTracks();
-const { load: loadLikes } = useLikes();
-const albums = computed(() => groupAlbums(tracks.value));
 const {
-  target: loadMoreTarget,
+  items: albums,
+  loading,
+  loadingMore,
+  error,
+  loaded,
   hasMore,
-  visibleItems: visibleAlbums,
-  revealMore,
-} = useProgressiveReveal(albums);
+  load,
+  loadMore,
+} = useCatalogAlbumQuery();
+const { load: loadLikes } = useLikes();
 
 onMounted(() => {
   void load();
@@ -39,11 +39,11 @@ onMounted(() => {
     <div class="flex items-center justify-between gap-4">
       <h2 id="albums-heading" class="text-lg font-semibold">All albums</h2>
       <Badge variant="secondary">
-        {{ loading ? "Loading" : `${albums.length} albums` }}
+        {{ loading ? "Loading" : `${albums.length}${hasMore ? "+" : ""}` }}
       </Badge>
     </div>
     <div
-      v-if="loading && !tracks.length"
+      v-if="loading && !albums.length"
       role="status"
       class="flex items-center gap-3 rounded-lg border p-6 text-sm text-muted-foreground"
     >
@@ -63,18 +63,15 @@ onMounted(() => {
       class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
       :aria-busy="loading"
     >
-      <AlbumCard
-        v-for="album in visibleAlbums"
-        :key="album.key"
-        :album="album"
-      />
-      <div
-        v-if="hasMore"
-        ref="loadMoreTarget"
-        class="col-span-full flex justify-center"
-      >
-        <Button type="button" variant="outline" @click="revealMore">
-          Load more albums
+      <AlbumCard v-for="album in albums" :key="album.id" :album="album" />
+      <div v-if="hasMore" class="col-span-full flex justify-center">
+        <Button
+          type="button"
+          variant="outline"
+          :disabled="loadingMore"
+          @click="loadMore"
+        >
+          {{ loadingMore ? "Loading albums…" : "Load more albums" }}
         </Button>
       </div>
     </div>
@@ -83,13 +80,10 @@ onMounted(() => {
       role="status"
       class="rounded-lg border p-6 text-sm text-muted-foreground"
     >
-      <template v-if="tracks.length">
+      <template v-if="loaded">
         No albums found. Tracks need album tags before they can appear here.
       </template>
-      <template v-else>
-        No tracks in your library yet. Add a music source and run a scan from
-        Settings → Sources.
-      </template>
+      <template v-else> Loading your albums… </template>
     </p>
   </section>
 </template>

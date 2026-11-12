@@ -33,7 +33,7 @@ import {
   TooltipRoot,
   TooltipTrigger,
 } from "reka-ui";
-import { useLibraryTracks } from "../../composables/use-library-tracks";
+import { useCatalogRevision } from "../../composables/use-catalog-query";
 import { useServer } from "../../composables/use-server";
 import { useSession } from "../../composables/use-session";
 import { useTasks } from "../../composables/use-tasks";
@@ -42,6 +42,7 @@ import { icons } from "../../lib/icons";
 import { metadataProviderNeedsConfiguration } from "../../lib/metadata-provider-config";
 import {
   createMetadataProvider,
+  isAuthenticationRedirectError,
   listMetadataProviderDefinitions,
   listMetadataProviders,
   reorderMetadataProviders,
@@ -60,7 +61,7 @@ const { token } = useSession();
 const { user } = useUser();
 const allowed = computed(() => user.value?.role === "admin");
 const { hasActiveTasks, queueMetadataRefresh } = useTasks();
-const { reload: reloadTracks } = useLibraryTracks();
+const { invalidate: invalidateCatalog } = useCatalogRevision();
 
 const providers = ref<MetadataProviderResponse[]>([]);
 const definitions = ref<MetadataProviderDefinitionResponse[]>([]);
@@ -132,6 +133,7 @@ async function loadProviders() {
     definitions.value = definitionResult.items;
     syncProviderRows();
   } catch (reason) {
+    if (isAuthenticationRedirectError(reason)) return;
     pageError.value =
       reason instanceof Error
         ? reason.message
@@ -251,6 +253,7 @@ async function saveProvider() {
     }
     closeFormDialog();
   } catch (reason) {
+    if (isAuthenticationRedirectError(reason)) return;
     formError.value =
       reason instanceof Error
         ? reason.message
@@ -288,6 +291,7 @@ async function persistOrder() {
       ),
     );
   } catch (reason) {
+    if (isAuthenticationRedirectError(reason)) return;
     pageError.value =
       reason instanceof Error
         ? reason.message
@@ -300,6 +304,7 @@ async function refreshProviderMetadata() {
   try {
     await queueMetadataRefresh();
   } catch (reason) {
+    if (isAuthenticationRedirectError(reason)) return;
     pageError.value =
       reason instanceof Error ? reason.message : "Could not refresh metadata.";
   }
@@ -318,8 +323,9 @@ async function confirmReset() {
     const result = await resetMetadata(address.value ?? "", token.value ?? "");
     resetOpen.value = false;
     notifyMetadataReset(result.resetCount);
-    await reloadTracks();
+    invalidateCatalog();
   } catch (reason) {
+    if (isAuthenticationRedirectError(reason)) return;
     pageError.value =
       reason instanceof Error
         ? reason.message
@@ -390,7 +396,7 @@ onMounted(() => void loadProviders());
             <button
               v-if="row.provider"
               type="button"
-              class="rounded-md p-1 text-muted-foreground"
+              class="cursor-grab rounded-md p-1 text-muted-foreground active:cursor-grabbing"
               aria-label="Drag to reorder metadata provider"
             >
               <Icon :icon="icons.drag" aria-hidden="true" class="size-4" />

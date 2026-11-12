@@ -57,6 +57,18 @@ export function useTasks() {
     return nextTask;
   }
 
+  function upsert(nextTask: TaskResponse): TaskResponse {
+    const existing = tasks.value.find((task) => task.id === nextTask.id);
+    if (
+      existing &&
+      new Date(existing.updatedAt).getTime() >
+        new Date(nextTask.updatedAt).getTime()
+    ) {
+      return existing;
+    }
+    return track(nextTask);
+  }
+
   async function refresh() {
     if (!address.value || !token.value) return tasks.value;
     const requestedAddress = address.value;
@@ -128,6 +140,7 @@ export function useTasks() {
     queuedCount,
     refresh,
     track,
+    upsert,
     queueLibraryScan,
     queueSourceScan,
     queueMetadataRefresh,

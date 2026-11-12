@@ -76,6 +76,11 @@ test("the player exposes randomize and a persistent right-side queue drawer", as
   );
   assert.match(
     drawer,
+    /class="cursor-grab rounded-md p-1 text-muted-foreground active:cursor-grabbing"/,
+    "Each queue drag handle shows grab and grabbing cursors",
+  );
+  assert.match(
+    drawer,
     /onEnd: \(\{ oldIndex, newIndex \}\) => \{[\s\S]*sortableTracks\.value = next;[\s\S]*reorderQueue\(next\.map/,
   );
   assert.doesNotMatch(drawer, /data-reka-swipe-ignore/);

@@ -3,24 +3,24 @@ import { useHead } from "#imports";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
-import { computed, onMounted } from "vue";
+import { onMounted } from "vue";
 import ArtistCard from "../../components/ArtistCard.vue";
+import { useCatalogArtistQuery } from "../../composables/use-catalog-query";
 import { useLikes } from "../../composables/use-likes";
-import { useLibraryTracks } from "../../composables/use-library-tracks";
-import { useProgressiveReveal } from "../../composables/use-progressive-reveal";
-import { groupArtists } from "../../lib/library";
 
 useHead({ title: "Artists — Peridot" });
 
-const { tracks, loading, error, load } = useLibraryTracks();
-const { load: loadLikes } = useLikes();
-const artists = computed(() => groupArtists(tracks.value));
 const {
-  target: loadMoreTarget,
+  items: artists,
+  loading,
+  loadingMore,
+  error,
+  loaded,
   hasMore,
-  visibleItems: visibleArtists,
-  revealMore,
-} = useProgressiveReveal(artists);
+  load,
+  loadMore,
+} = useCatalogArtistQuery();
+const { load: loadLikes } = useLikes();
 
 onMounted(() => {
   void load();
@@ -39,11 +39,11 @@ onMounted(() => {
     <div class="flex items-center justify-between gap-4">
       <h2 id="artists-heading" class="text-lg font-semibold">All artists</h2>
       <Badge variant="secondary">
-        {{ loading ? "Loading" : `${artists.length} artists` }}
+        {{ loading ? "Loading" : `${artists.length}${hasMore ? "+" : ""}` }}
       </Badge>
     </div>
     <div
-      v-if="loading && !tracks.length"
+      v-if="loading && !artists.length"
       role="status"
       class="flex items-center gap-3 rounded-lg border p-6 text-sm text-muted-foreground"
     >
@@ -63,18 +63,15 @@ onMounted(() => {
       class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
       :aria-busy="loading"
     >
-      <ArtistCard
-        v-for="artist in visibleArtists"
-        :key="artist.key"
-        :artist="artist"
-      />
-      <div
-        v-if="hasMore"
-        ref="loadMoreTarget"
-        class="col-span-full flex justify-center"
-      >
-        <Button type="button" variant="outline" @click="revealMore">
-          Load more artists
+      <ArtistCard v-for="artist in artists" :key="artist.id" :artist="artist" />
+      <div v-if="hasMore" class="col-span-full flex justify-center">
+        <Button
+          type="button"
+          variant="outline"
+          :disabled="loadingMore"
+          @click="loadMore"
+        >
+          {{ loadingMore ? "Loading artists…" : "Load more artists" }}
         </Button>
       </div>
     </div>
@@ -83,13 +80,10 @@ onMounted(() => {
       role="status"
       class="rounded-lg border p-6 text-sm text-muted-foreground"
     >
-      <template v-if="tracks.length">
+      <template v-if="loaded">
         No artists found in your current library.
       </template>
-      <template v-else>
-        No tracks in your library yet. Add a music source and run a scan from
-        Settings → Sources.
-      </template>
+      <template v-else> Loading your artists… </template>
     </p>
   </section>
 </template>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { LikeTarget } from "@peridot/contracts";
+import type { AlbumSummaryResponse, LikeTarget } from "@peridot/contracts";
 import { Icon } from "@iconify/vue/offline";
 import {
   ContextMenu,
@@ -13,11 +13,16 @@ import { computed } from "vue";
 import { useLikes } from "../composables/use-likes";
 import { useLibraryPlayer } from "../composables/use-library-player";
 import { icons } from "../lib/icons";
-import { albumRoute, type AlbumGroup } from "../lib/library";
+import { albumRoute } from "../lib/library";
+import { loadCollectionTrackIds } from "../lib/catalog-collections";
+import { useServer } from "../composables/use-server";
+import { useSession } from "../composables/use-session";
 
 const props = defineProps<{
-  album: Pick<AlbumGroup, "title" | "artist" | "trackIds">;
+  album: AlbumSummaryResponse;
 }>();
+const { address } = useServer();
+const { token } = useSession();
 const { playCollection } = useLibraryPlayer();
 const {
   loaded: likesLoaded,
@@ -30,6 +35,15 @@ const target = computed<LikeTarget>(() => ({
   title: props.album.title,
   artist: props.album.artist,
 }));
+
+async function playAlbum() {
+  if (!address.value || !token.value) return;
+  playCollection(
+    await loadCollectionTrackIds(address.value, token.value, {
+      albumId: props.album.id,
+    }),
+  );
+}
 </script>
 
 <template>
@@ -42,10 +56,7 @@ const target = computed<LikeTarget>(() => ({
         {{ album.title }}
       </ContextMenuLabel>
       <ContextMenuSeparator />
-      <ContextMenuItem
-        :disabled="!album.trackIds.length"
-        @select="playCollection(album.trackIds)"
-      >
+      <ContextMenuItem :disabled="!album.trackCount" @select="playAlbum">
         <Icon :icon="icons.play" aria-hidden="true" />
         Play album
       </ContextMenuItem>

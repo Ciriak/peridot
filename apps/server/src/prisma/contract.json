@@ -12,6 +12,34 @@
       "model": "ArtistLike",
       "namespace": "__unbound__"
     },
+    "CatalogAlbum": {
+      "model": "CatalogAlbum",
+      "namespace": "__unbound__"
+    },
+    "CatalogArtist": {
+      "model": "CatalogArtist",
+      "namespace": "__unbound__"
+    },
+    "CatalogArtistAlbum": {
+      "model": "CatalogArtistAlbum",
+      "namespace": "__unbound__"
+    },
+    "CatalogSearchTerm": {
+      "model": "CatalogSearchTerm",
+      "namespace": "__unbound__"
+    },
+    "CatalogState": {
+      "model": "CatalogState",
+      "namespace": "__unbound__"
+    },
+    "CatalogTrack": {
+      "model": "CatalogTrack",
+      "namespace": "__unbound__"
+    },
+    "CatalogTrackArtist": {
+      "model": "CatalogTrackArtist",
+      "namespace": "__unbound__"
+    },
     "MetadataProvider": {
       "model": "MetadataProvider",
       "namespace": "__unbound__"
@@ -239,6 +267,593 @@
               },
               "namespaceId": "__unbound__",
               "table": "ArtistLike"
+            }
+          },
+          "CatalogAlbum": {
+            "fields": {
+              "artist": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "artistCredits": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "artistId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "coverId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "coverTrackId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "durationMs": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "normalizedArtist": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "normalizedTitle": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "releaseYear": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
+              "title": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "trackCount": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
+              "updatedAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "artist": {
+                  "column": "artist"
+                },
+                "artistCredits": {
+                  "column": "artistCredits"
+                },
+                "artistId": {
+                  "column": "artistId"
+                },
+                "coverId": {
+                  "column": "coverId"
+                },
+                "coverTrackId": {
+                  "column": "coverTrackId"
+                },
+                "durationMs": {
+                  "column": "durationMs"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "normalizedArtist": {
+                  "column": "normalizedArtist"
+                },
+                "normalizedTitle": {
+                  "column": "normalizedTitle"
+                },
+                "releaseYear": {
+                  "column": "releaseYear"
+                },
+                "title": {
+                  "column": "title"
+                },
+                "trackCount": {
+                  "column": "trackCount"
+                },
+                "updatedAt": {
+                  "column": "updatedAt"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "CatalogAlbum"
+            }
+          },
+          "CatalogArtist": {
+            "fields": {
+              "albumCount": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
+              "durationMs": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "name": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "normalizedName": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "trackCount": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
+              "updatedAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "albumCount": {
+                  "column": "albumCount"
+                },
+                "durationMs": {
+                  "column": "durationMs"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "name": {
+                  "column": "name"
+                },
+                "normalizedName": {
+                  "column": "normalizedName"
+                },
+                "trackCount": {
+                  "column": "trackCount"
+                },
+                "updatedAt": {
+                  "column": "updatedAt"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "CatalogArtist"
+            }
+          },
+          "CatalogArtistAlbum": {
+            "fields": {
+              "albumId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "artistId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "trackCount": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "albumId": {
+                  "column": "albumId"
+                },
+                "artistId": {
+                  "column": "artistId"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "trackCount": {
+                  "column": "trackCount"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "CatalogArtistAlbum"
+            }
+          },
+          "CatalogSearchTerm": {
+            "fields": {
+              "entityId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "entityType": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "term": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "entityId": {
+                  "column": "entityId"
+                },
+                "entityType": {
+                  "column": "entityType"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "term": {
+                  "column": "term"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "CatalogSearchTerm"
+            }
+          },
+          "CatalogState": {
+            "fields": {
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "projectionVersion": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
+              "revision": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
+              "updatedAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "projectionVersion": {
+                  "column": "projectionVersion"
+                },
+                "revision": {
+                  "column": "revision"
+                },
+                "updatedAt": {
+                  "column": "updatedAt"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "CatalogState"
+            }
+          },
+          "CatalogTrack": {
+            "fields": {
+              "album": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "albumId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "artist": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "artistCredits": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "available": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
+              "coverId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "discNumber": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
+              "durationMs": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "normalizedAlbum": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "normalizedArtist": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "normalizedTitle": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "releaseYear": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
+              "title": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "trackNumber": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
+              "updatedAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "album": {
+                  "column": "album"
+                },
+                "albumId": {
+                  "column": "albumId"
+                },
+                "artist": {
+                  "column": "artist"
+                },
+                "artistCredits": {
+                  "column": "artistCredits"
+                },
+                "available": {
+                  "column": "available"
+                },
+                "coverId": {
+                  "column": "coverId"
+                },
+                "discNumber": {
+                  "column": "discNumber"
+                },
+                "durationMs": {
+                  "column": "durationMs"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "normalizedAlbum": {
+                  "column": "normalizedAlbum"
+                },
+                "normalizedArtist": {
+                  "column": "normalizedArtist"
+                },
+                "normalizedTitle": {
+                  "column": "normalizedTitle"
+                },
+                "releaseYear": {
+                  "column": "releaseYear"
+                },
+                "title": {
+                  "column": "title"
+                },
+                "trackNumber": {
+                  "column": "trackNumber"
+                },
+                "updatedAt": {
+                  "column": "updatedAt"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "CatalogTrack"
+            }
+          },
+          "CatalogTrackArtist": {
+            "fields": {
+              "artistId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "trackId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "artistId": {
+                  "column": "artistId"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "trackId": {
+                  "column": "trackId"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "CatalogTrackArtist"
             }
           },
           "MetadataProvider": {
@@ -856,6 +1471,13 @@
                   "codecId": "sqlite/text@1",
                   "kind": "scalar"
                 }
+              },
+              "updatedAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                }
               }
             },
             "relations": {},
@@ -905,6 +1527,9 @@
                 },
                 "title": {
                   "column": "title"
+                },
+                "updatedAt": {
+                  "column": "updatedAt"
                 }
               },
               "namespaceId": "__unbound__",
@@ -1534,6 +2159,13 @@
                   "kind": "scalar"
                 }
               },
+              "displayName": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
               "email": {
                 "nullable": false,
                 "type": {
@@ -1542,6 +2174,13 @@
                 }
               },
               "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "normalizedDisplayName": {
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/text@1",
@@ -1568,13 +2207,6 @@
                   "codecId": "sqlite/datetime@1",
                   "kind": "scalar"
                 }
-              },
-              "username": {
-                "nullable": false,
-                "type": {
-                  "codecId": "sqlite/text@1",
-                  "kind": "scalar"
-                }
               }
             },
             "relations": {},
@@ -1586,11 +2218,17 @@
                 "createdAt": {
                   "column": "createdAt"
                 },
+                "displayName": {
+                  "column": "displayName"
+                },
                 "email": {
                   "column": "email"
                 },
                 "id": {
                   "column": "id"
+                },
+                "normalizedDisplayName": {
+                  "column": "normalizedDisplayName"
                 },
                 "passwordHash": {
                   "column": "passwordHash"
@@ -1600,9 +2238,6 @@
                 },
                 "updatedAt": {
                   "column": "updatedAt"
-                },
-                "username": {
-                  "column": "username"
                 }
               },
               "namespaceId": "__unbound__",
@@ -1799,6 +2434,522 @@
                   "columns": [
                     "userId",
                     "normalizedName"
+                  ]
+                }
+              ]
+            },
+            "CatalogAlbum": {
+              "columns": {
+                "artist": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "artistCredits": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "artistId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "coverId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "coverTrackId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "durationMs": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "nullable": true
+                },
+                "id": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "normalizedArtist": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "normalizedTitle": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "releaseYear": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "nullable": true
+                },
+                "title": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "trackCount": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "default": {
+                    "kind": "literal",
+                    "value": "0"
+                  },
+                  "nullable": false
+                },
+                "updatedAt": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/datetime",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [
+                {
+                  "columns": [
+                    "artistId",
+                    "id"
+                  ],
+                  "name": "CatalogAlbum_artistId_id_idx_55808dc9",
+                  "prefix": "CatalogAlbum_artistId_id_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "normalizedArtist",
+                    "normalizedTitle",
+                    "id"
+                  ],
+                  "name": "ca_artist_title",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "normalizedTitle",
+                    "normalizedArtist",
+                    "id"
+                  ],
+                  "name": "ca_title_artist",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "CatalogArtist": {
+              "columns": {
+                "albumCount": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "default": {
+                    "kind": "literal",
+                    "value": "0"
+                  },
+                  "nullable": false
+                },
+                "durationMs": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "nullable": true
+                },
+                "id": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "name": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "normalizedName": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "trackCount": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "default": {
+                    "kind": "literal",
+                    "value": "0"
+                  },
+                  "nullable": false
+                },
+                "updatedAt": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/datetime",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [
+                {
+                  "columns": [
+                    "normalizedName",
+                    "id"
+                  ],
+                  "name": "CatalogArtist_normalizedName_id_idx_e200f226",
+                  "prefix": "CatalogArtist_normalizedName_id_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "CatalogArtistAlbum": {
+              "columns": {
+                "albumId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "artistId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "trackCount": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "default": {
+                    "kind": "literal",
+                    "value": "0"
+                  },
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [
+                {
+                  "columns": [
+                    "albumId",
+                    "artistId"
+                  ],
+                  "name": "CatalogArtistAlbum_albumId_artistId_idx_78ce0132",
+                  "prefix": "CatalogArtistAlbum_albumId_artistId_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": [
+                {
+                  "columns": [
+                    "artistId",
+                    "albumId"
+                  ]
+                }
+              ]
+            },
+            "CatalogSearchTerm": {
+              "columns": {
+                "entityId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "entityType": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "term": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [
+                {
+                  "columns": [
+                    "entityType",
+                    "term",
+                    "entityId"
+                  ],
+                  "name": "CatalogSearchTerm_entityType_term_entityId_idx_1f85769d",
+                  "prefix": "CatalogSearchTerm_entityType_term_entityId_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": [
+                {
+                  "columns": [
+                    "entityType",
+                    "entityId",
+                    "term"
+                  ]
+                }
+              ]
+            },
+            "CatalogState": {
+              "columns": {
+                "id": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "projectionVersion": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "default": {
+                    "kind": "literal",
+                    "value": "0"
+                  },
+                  "nullable": false
+                },
+                "revision": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "default": {
+                    "kind": "literal",
+                    "value": "0"
+                  },
+                  "nullable": false
+                },
+                "updatedAt": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/datetime",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "CatalogTrack": {
+              "columns": {
+                "album": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "albumId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "artist": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "artistCredits": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "available": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "nullable": false
+                },
+                "coverId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "discNumber": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "nullable": true
+                },
+                "durationMs": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "nullable": true
+                },
+                "id": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "normalizedAlbum": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "normalizedArtist": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "normalizedTitle": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "releaseYear": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "nullable": true
+                },
+                "title": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "trackNumber": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "nullable": true
+                },
+                "updatedAt": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/datetime",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [
+                {
+                  "columns": [
+                    "albumId"
+                  ],
+                  "name": "CatalogTrack_albumId_idx_921f6966",
+                  "prefix": "CatalogTrack_albumId_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "available",
+                    "id"
+                  ],
+                  "name": "CatalogTrack_available_id_idx_2e938ac3",
+                  "prefix": "CatalogTrack_available_id_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "normalizedAlbum",
+                    "normalizedTitle",
+                    "id"
+                  ],
+                  "name": "ct_album_title",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "normalizedArtist",
+                    "normalizedAlbum",
+                    "normalizedTitle",
+                    "id"
+                  ],
+                  "name": "ct_artist_album_title",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "normalizedArtist",
+                    "normalizedTitle",
+                    "id"
+                  ],
+                  "name": "ct_artist_title",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "durationMs",
+                    "id"
+                  ],
+                  "name": "ct_duration",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "normalizedTitle",
+                    "id"
+                  ],
+                  "name": "ct_title",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
+            "CatalogTrackArtist": {
+              "columns": {
+                "artistId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "trackId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [
+                {
+                  "columns": [
+                    "artistId",
+                    "trackId"
+                  ],
+                  "name": "CatalogTrackArtist_artistId_trackId_idx_c6931953",
+                  "prefix": "CatalogTrackArtist_artistId_trackId_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": [
+                {
+                  "columns": [
+                    "trackId",
+                    "artistId"
                   ]
                 }
               ]
@@ -2382,6 +3533,11 @@
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
                   "nullable": false
+                },
+                "updatedAt": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/datetime",
+                  "nullable": false
                 }
               },
               "foreignKeys": [],
@@ -2947,12 +4103,22 @@
                   },
                   "nullable": false
                 },
+                "displayName": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
                 "email": {
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
                   "nullable": false
                 },
                 "id": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "normalizedDisplayName": {
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
                   "nullable": false
@@ -2970,11 +4136,6 @@
                 "updatedAt": {
                   "codecId": "sqlite/datetime@1",
                   "dataType": "sqlite/datetime",
-                  "nullable": false
-                },
-                "username": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
                   "nullable": false
                 }
               },
@@ -3002,7 +4163,7 @@
                 },
                 {
                   "columns": [
-                    "username"
+                    "normalizedDisplayName"
                   ]
                 },
                 {
@@ -3017,10 +4178,10 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "ef2695cd1e8e734e1b52913f67e3ec61a956f8be5dcf97751c89b07220e31beb"
+    "storageHash": "59eec150ce3bdbe97a43c3778ceb69f533094ec19bd310f5ed5cd98c405aa5a4"
   },
   "execution": {
-    "executionHash": "e6918dabc44861f95d5371170588aab9304df0a025af5fc53222131df7d620c7",
+    "executionHash": "5f4f0b1abd901c278bc6dbaa0c73b5748292f9229ce79b1879fc9568c54bbc1d",
     "mutations": {
       "defaults": [
         {
@@ -3041,6 +4202,99 @@
           },
           "ref": {
             "entry": "ArtistLike",
+            "field": "id",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "onUpdate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "CatalogAlbum",
+            "field": "updatedAt",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "onUpdate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "CatalogArtist",
+            "field": "updatedAt",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "cuid2",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "CatalogArtistAlbum",
+            "field": "id",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "cuid2",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "CatalogSearchTerm",
+            "field": "id",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "onUpdate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "CatalogState",
+            "field": "updatedAt",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "onUpdate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "CatalogTrack",
+            "field": "updatedAt",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "cuid2",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "CatalogTrackArtist",
             "field": "id",
             "namespace": "__unbound__"
           }
@@ -3146,6 +4400,21 @@
           "ref": {
             "entry": "Task",
             "field": "id",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "onUpdate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "Task",
+            "field": "updatedAt",
             "namespace": "__unbound__"
           }
         },

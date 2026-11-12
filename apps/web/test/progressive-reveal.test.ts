@@ -68,7 +68,7 @@ test("progressive reveal resets when the filtered source changes", () => {
   );
 });
 
-test("catalog pages progressively reveal album and artist cards", async () => {
+test("catalog pages load bounded cursor pages", async () => {
   const [home, albums, artists, artistDetail, search] = await Promise.all(
     [
       "../app/pages/index.vue",
@@ -80,13 +80,11 @@ test("catalog pages progressively reveal album and artist cards", async () => {
   );
 
   for (const page of [home, albums, artists, artistDetail, search]) {
-    assert.match(page, /useProgressiveReveal/);
-    assert.match(page, /ref="loadMoreTarget"/);
-    assert.match(page, /@click="revealMore/);
+    assert.match(page, /useCatalog(?:Album|Artist|Track)Query/);
   }
-  assert.doesNotMatch(home, /v-for="album in albums"/);
-  assert.doesNotMatch(albums, /v-for="album in albums"/);
-  assert.doesNotMatch(artists, /v-for="artist in artists"/);
-  assert.doesNotMatch(artistDetail, /v-for="album in albums"/);
-  assert.match(search, /v-for="album in visibleAlbumResults"/);
+  assert.match(home, /v-for="album in albums"/);
+  assert.match(albums, /v-for="album in albums"/);
+  assert.match(artists, /v-for="artist in artists"/);
+  assert.match(artistDetail, /v-for="album in albums"/);
+  assert.match(search, /v-for="album in albumResults"/);
 });

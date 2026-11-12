@@ -23,7 +23,7 @@ On first launch, the web app asks for the address of the user's Peridot server.
 It then creates the required first user with administrator privileges, or signs
 in when the server already has users. The server address and expiring session
 are kept in same-site browser cookies. The server can be changed from Settings
-→ Administration by disconnecting first. Server selection continuously probes
+→ Admin → Server by disconnecting first. Server selection continuously probes
 the typed address and scans the web host's private IPv4 networks for Peridot
 servers on port 17430; selecting a
 discovered server advances onboarding. The routed library view reads cataloged
@@ -145,25 +145,33 @@ out-of-range values. Its ring keeps rotating while the numeric value controls
 the determinate arc, and it becomes a reduced-motion-safe circular spinner when
 the value is omitted or invalid. It provides semantic color, size,
 accessible-label, optional percentage, custom center-content variants, and
-configurable stroke width defaulting to 6. The topbar task indicator uses it to
-show the average progress of every running or queued task, appears only while
-work is pending,
+configurable stroke width defaulting to 6. The administrator-only topbar task
+indicator uses it to show the average progress of every running or queued task,
+appears only while work is pending,
 shows indeterminate progress before a queued task starts, and reveals the
 current and queued tasks in a hover/focus tooltip. Clicking the circle opens
-Settings → Tasks, which lists active work and paginated terminal history. The
-same indicator remains visible in the fullscreen Settings header.
+Settings → Admin → Tasks, which lists active work and paginated terminal history.
+The same indicator remains visible in the fullscreen Settings header for
+administrators.
 When the server health monitor reports a lost connection, the same topbar slot
 replaces the progress circle with a pulsing destructive-color cloud-off icon
-and an accessible explanation. The task progress returns after a healthy probe.
+and an accessible explanation for every signed-in user. Administrator task
+progress returns after a healthy probe.
+The Settings sidebar has a persistent Log out action at its bottom. Logout
+first asks for confirmation, then attempts to revoke the current session, keeps
+the selected server for sign-in, and returns to the current Settings page after
+authentication.
 The web shell mounts one app-level Reka UI toast region in the bottom-right. It
 sits above the fixed player in the main shell and against the bottom edge in
 playerless fullscreen layouts. It reports source and provider changes, likes,
-download failures, and queue operations. Task activity is shown only through the topbar
-and Tasks settings view, while connection loss is indicated by the topbar
-cloud-off warning without a toast.
-The same monitor follows the authenticated task list. It polls every 500 ms
-while tasks are queued or running and less frequently when idle, so activity
-started by another client also becomes visible.
+download failures, and queue operations. Task activity is shown only through the
+administrator topbar and Tasks settings view, while connection loss is indicated
+by the topbar cloud-off warning without a toast.
+The web shell opens one authenticated realtime connection for task, catalog, and
+administrator log events. Task progress is coalesced, catalog changes carry only
+a revision marker, and HTTP remains the recovery source after a connection gap.
+The connection uses a short-lived single-use ticket, reconnects with bounded
+backoff, and checks public health only while the socket is unavailable.
 
 ## Configuration
 
@@ -180,8 +188,8 @@ Discogs metadata uses an administrator-provided personal access token. Set
 Peridot uses it to encrypt provider credentials at rest. Keep the key backed up
 separately from the database. MusicBrainz-only installations do not require it.
 Administrators can manage where the server gets raw audio files from
-Settings → Sources. Each source is a local folder, an external URL, or a future
-integration such as Spotify or YouTube Music. Local folder sources seed from
+Settings → Admin → Sources. Each source is a local folder, an external URL, or
+a future integration such as Spotify or YouTube Music. Local folder sources seed from
 `MUSIC_LIBRARY_PATH` on first launch and are used by library scans; URL and
 integration sources are stored but not indexed yet. Adding a local folder source
 queues its source-scoped library scan automatically. A successful scan queues a
@@ -191,7 +199,7 @@ The local-folder picker supports case-insensitive deep folder search without
 requiring folders to be expanded first.
 
 Administrators can configure ordered metadata providers from
-Settings → Metadata. MusicBrainz requires a contact email or URL for its
+Settings → Admin → Metadata. MusicBrainz requires a contact email or URL for its
 User-Agent and is enabled automatically for the first administrator. Discogs
 uses a personal access token validated against the user's Discogs account.
 Peridot stores tokens encrypted and never returns them to browser code.
@@ -229,15 +237,35 @@ pnpm db:reset
 
 The web onboarding checks `GET /api/auth/status`. An empty server permits exactly
 one `POST /api/auth/bootstrap`, which creates the first user — with an email
-address, username, and password — as an administrator. Existing users sign in
-with their username or email address and password through
-`POST /api/auth/sessions`. Passwords are stored as salted scrypt hashes and
-opaque sessions expire after 30 days.
+address, display name, and password — as an administrator. Email is the sole
+sign-in identifier, and every account must have a unique, case-insensitive
+display name of 2–80 characters. Existing users sign in with their email address
+and password through `POST /api/auth/sessions`. Signed-in users can update their
+display name through `PUT /api/users/me`; administrators can manage every
+account from Settings → Admin → User Management. They can create members or
+administrators and edit display names, email addresses, passwords, and roles
+through `GET/POST /api/admin/users` and
+`PUT/DELETE /api/admin/users/:id`. Administrators cannot delete their own
+account, change their own role, remove the final administrator, or leave the
+server without an administrator. Credential or role changes revoke the affected
+user's sessions, and deleting an account removes its sessions and user-owned
+library state. Passwords are stored as salted scrypt hashes and opaque sessions
+expire after 30 days. If an authenticated browser request loses its session, the
+web app clears the stale local session and returns to sign-in with its original
+destination preserved.
 Except for health and these setup/sign-in routes, server routes require the
 returned session as `Authorization: Bearer <token>`.
 Queue a scan with `POST /api/library/scans`, list tasks with `GET /api/tasks`,
-read one with `GET /api/tasks/:id`, list tracks with `GET /api/tracks`, and
-stream a track with `GET /api/tracks/:id/audio`. Authenticated clients list the current
+read one with `GET /api/tasks/:id`, page tracks and summaries with
+`GET /api/tracks`, `GET /api/albums`, and `GET /api/artists`, and stream a track
+with `GET /api/tracks/:id/audio`. Catalog pages default to 100 tracks or 50
+album/artist summaries, with `cursor`, `query`, sort, availability, and
+authenticated like filters. `POST /api/tracks/resolve` hydrates at most 500
+queue track IDs in requested order.
+`POST /api/realtime/ticket` issues a 30-second single-use ticket for the
+authenticated `/api/realtime` WebSocket. Subscriptions cover tasks, catalog
+revisions, and administrator-only logs; catalog events never include track rows.
+Authenticated clients list the current
 user's favorites with `GET /api/likes`; `POST /api/likes` and
 `DELETE /api/likes` accept an independent track, album, or artist target. Track
 likes use catalog IDs, while album and artist likes match trimmed,
@@ -257,13 +285,15 @@ and FLAC files are cataloged; originals are
 streamed without transcoding. Catalog responses include nullable disc and track
 numbers used for album ordering. A metadata-version marker makes the next scan
 backfill those fields once for catalog rows created before the columns existed,
-including files whose contents have not changed. The web shell polls the shared
-task list globally for the topbar and Tasks settings view and checks the public
-health endpoint every ten seconds while connected.
+including files whose contents have not changed. The web shell receives shared
+task events for the administrator topbar and Tasks settings view. The server
+maintains indexed catalog projections and returns bounded cursor pages so the
+browser never downloads the complete catalog.
 Successful browser playback starts are recorded with
 `POST /api/tracks/:id/plays`. The authenticated per-user mixed ranking is
 available from `GET /api/quick-picks`; the server returns up to eight ordered track
-and album identities after applying seven-day exponential decay.
+and album entries with their current catalog summaries after applying seven-day
+exponential decay.
 Album covers are deduplicated by content hash in the local SQLite database and
 served through short-lived, track-scoped cover URLs so browser image requests do
 not expose the user session. Tracks without readable embedded or folder artwork

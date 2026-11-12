@@ -1,6 +1,326 @@
 # Handoff
 
-Last updated: 2026-11-11.
+Last updated: 2026-11-12.
+
+## Administrator user management
+
+Administrators now have a `User Management` category under Settings → Admin.
+The page lists local accounts with role and current-user indicators, supports
+member or administrator creation, edits display name, email, password, and role,
+and deletes accounts after confirmation. Each row shows the account's Gravatar
+with the brand-logo fallback used by the topbar. The current account can edit
+its own identity but cannot change its role or delete itself. New account
+passwords and password resets require matching confirmation before the form can
+submit.
+
+The server exposes authenticated administrator-only `GET/POST /api/admin/users`
+and `PUT/DELETE /api/admin/users/:id`. It validates unique normalized email and
+display names, hashes new passwords, prevents removal of the final
+administrator, revokes affected sessions and realtime connections on
+authentication or role changes, and relies on the existing account relations to
+remove user-owned state on deletion.
+
+Behavioral coverage verifies administrator-only access, member and administrator
+creation, identity and password edits, role promotion, session revocation, old
+credential rejection, deletion, self-deletion prevention, and self-role
+immutability. Verification passed: 88 server tests, 128 web tests, 13 shared UI
+tests, full lint/format checks, full typecheck, Prisma schema validation, the
+production build, and `git diff --check`. Browser visual QA was not run.
+
+All changes remain uncommitted on `dev` alongside the pre-existing catalog and
+realtime work. No commit, push, tag, publication, or deployment was performed.
+Next: open Settings → Admin → User Management as an administrator and verify
+member/administrator creation, edit/delete dialogs, and self-action restrictions
+at desktop and mobile widths.
+
+## Settings account tab renamed to Profile
+
+The common Settings navigation now labels `/settings/account` as `Profile`. The
+page heading and header-avatar accessible label use the same term, while the
+existing route and profile API remain unchanged for bookmark and redirect
+compatibility. Regression assertions require the visible Profile label and
+reject the former Account navigation label.
+
+Verification passed: the focused Settings tests (12 passing), all 124 web tests,
+web typecheck, targeted ESLint, full formatting, the production web build, and
+`git diff --check`. Server, schema, and browser visual checks were skipped
+because this change only affects labels and existing client navigation.
+
+## Email-only identity, editable display names, and password confirmation
+
+Authentication now uses email as the sole login identifier. User records store
+a required display name plus a normalized display-name value that enforces
+case-insensitive uniqueness. Display names preserve capitalization, trim and
+collapse whitespace, and must contain 2–80 Unicode code points. Existing users
+sign in with normalized email and password, and signed-in users can update their
+display name from Account settings while email remains read-only.
+
+First-administrator creation now asks for the password twice. The form reports
+an inline mismatch, blocks submission until both entries match, and sends only
+the single confirmed password to the server. Sign-in continues to show only
+email and password.
+
+The new account contract changed the local SQLite schema. The authorized
+development database was reset and recreated; all previous local accounts,
+sessions, catalog data, queues, likes, sources, and settings were discarded. The
+development server was restarted after the reset and now requires creation of a
+new first administrator.
+
+Behavioral coverage includes email-only sign-in, rejected display-name
+authentication, email normalization, display-name boundaries and uniqueness,
+profile edits, session continuity, administrator request shapes, Account
+cookie updates, and password-confirmation visibility and mismatch blocking.
+Verification passed: 86 server tests, 124 web tests, 13 shared UI tests, full
+typecheck, lint, formatting, Prisma schema validation, the production build, and
+`git diff --check`. Browser visual QA was attempted but Computer Use stopped
+because it could not determine the active browser URL confidently enough to
+continue safely.
+
+All changes remain uncommitted on `dev` alongside the pre-existing catalog and
+realtime work. No commit, push, tag, publication, or deployment was performed.
+Next: open the onboarding flow with the empty database, create the first
+administrator using matching passwords, sign out, verify email-only sign-in, and
+edit the display name from Account settings.
+
+## Plugins navigation moved under Admin
+
+The Settings sidebar now places Plugins inside the administrator-only `Admin`
+group, immediately before Tasks. Account, Library, and Playback remain the
+common categories, so non-administrators no longer see a Plugins menu entry.
+The `/settings/plugins` route and its page content are unchanged.
+
+Regression assertions now require Plugins in the administrator category list,
+exclude it from the common list, and keep its page on the Settings layout.
+Verification passed: the focused settings tests (11 passing), all 121 web
+tests, web typecheck, targeted ESLint and Prettier checks, the production web
+build, and `git diff --check`. Server tests and schema validation were skipped
+because no server, API, storage, or schema contract changed. Browser visual QA
+was not run.
+
+Changes remain uncommitted on `dev` alongside the pre-existing working-tree
+edits; no commit, push, tag, publication, or deployment was performed. Next:
+verify in the browser that administrator sessions show Plugins inside Admin and
+member sessions do not show the menu entry.
+
+## Settings sidebar logout
+
+The Settings sidebar now has a persistent Log out button at its bottom, outside
+the scrollable category list. Activating it opens a confirmation dialog before
+any credentials are changed. Confirming revokes the current session when
+possible, clears the local session and user cookies, retains the selected
+server, and opens onboarding in sign-in mode with the current Settings path
+preserved as the return destination. The button shows a disabled `Logging out…`
+state while the request is pending.
+
+This remains separate from the administrator Server page's Disconnect action,
+which also clears the selected server. Regression assertions cover the
+confirmation gate, session revocation, local credential clearing, server-address
+preservation, sign-in redirect parameters, and the fixed footer control.
+
+Verification passed: focused settings/task/styling tests (19 passing), all 121
+web tests, web typecheck, targeted ESLint and Prettier checks, the production web
+build, and `git diff --check`. Server tests and schema validation were skipped
+because no server, API, storage, or schema contract changed. Browser visual QA
+was not run.
+
+Changes remain uncommitted on `dev` alongside the pre-existing working-tree
+edits; no commit, push, tag, publication, or deployment was performed.
+
+## Administrator settings grouped under Server
+
+The Settings sidebar now keeps Account, Library, Playback, and Plugins in the
+common list and presents Tasks, Sources, Metadata, and Server in a separately
+divided `Admin` group visible only to administrators. The former Administration
+category is removed; its connected-server and server-log content now lives at
+`/settings/server`. `/settings` redirects to Account so the shared settings entry
+works for every signed-in role.
+
+The topbar task spinner is now administrator-only, including in the fullscreen
+Settings header. Non-administrators still receive the separate connection-loss
+warning because it communicates server reachability rather than task activity.
+Direct access to `/settings/tasks` now renders an access-required state and skips
+task history/loading requests for non-administrators.
+
+Regression assertions cover the admin-only group condition, Tasks placement,
+separation styling, new route, removed Administration category, `/settings`
+redirect, task-page access state, and task-spinner role gate. The existing server
+settings access message and API authorization remain in place.
+
+Verification passed: focused settings/task/realtime/notification/styling tests (25
+passing), all 120 web tests, web typecheck, targeted ESLint and Prettier checks,
+the production web build, and `git diff --check`. Server tests and schema
+validation were skipped because no server, API, storage, or schema contract
+changed. Browser visual QA was not run.
+
+Changes remain uncommitted on `dev` alongside the pre-existing working-tree
+edits; no commit, push, tag, publication, or deployment was performed. Next:
+verify at desktop and mobile widths that an administrator sees the separated
+Admin group and a non-administrator sees only the common categories.
+
+## Sortable grip cursors
+
+Library sources, metadata providers, and upcoming queue items now show the
+`grab` cursor over their grip controls and switch to `grabbing` while the grip
+is pressed. This keeps the drag affordance visible when the pointer is directly
+over the handle instead of only on the surrounding sortable row. The change uses
+standard Tailwind cursor utilities and does not alter which part of each row is
+draggable.
+
+Regression assertions cover the grip cursor classes on all three sortable
+surfaces. Verification passed: the focused settings and queue tests (12
+passing), all 120 web tests, web typecheck, targeted ESLint and Prettier checks,
+the production web build, and `git diff --check`. The build reported the existing
+non-fatal Rolldown `PLUGIN_TIMINGS` warning. Server tests, schema validation, and
+browser visual QA were skipped because no server, API, storage, or schema
+contract changed.
+
+Changes remain uncommitted on `dev` alongside the pre-existing working-tree
+edits; no commit, push, tag, publication, or deployment was performed. Next:
+confirm the cursor changes while hovering and dragging each grip at desktop and
+mobile widths.
+
+## Avatar reveals settings affordance
+
+The topbar account avatar now shows a Basil settings cog when its link is
+hovered or receives keyboard focus. The cog is an overlay on the existing avatar
+link at `/settings/account`, so the header still has one settings destination
+and the task-progress/connection indicator remains immediately before it. The
+overlay uses semantic theme utilities, respects reduced-motion preferences, and
+disappears while preserving the avatar when the link is not active.
+
+The header regression now requires the cog and both hover/focus reveal states.
+Verification passed: all 120 web tests, web typecheck, targeted ESLint and
+Prettier checks, the production web build, and `git diff --check`. The build
+reported the existing non-fatal Rolldown `PLUGIN_TIMINGS` warning. Server tests
+and schema validation were skipped because no server, API, or storage contract
+changed. Browser visual QA was not run.
+
+Changes remain uncommitted on `dev` alongside the pre-existing working-tree
+edits; no commit, push, tag, publication, or deployment was performed. Next:
+confirm the avatar-to-cog transition on pointer hover and keyboard focus at
+desktop and mobile widths.
+
+## Setup and session loss redirect to onboarding
+
+Authenticated browser requests now treat both `401 unauthorized` and
+`428 setup_required` as navigation conditions instead of page errors. A `401`
+clears the stale session and user cookies and opens
+`/onboarding?auth=login`, while `428 setup_required` opens
+`/onboarding?auth=setup` with the original destination preserved. The setup
+route automatically reconnects to the existing server address and advances to
+the first-administrator account form, so “Create the first administrator
+account before using Peridot” is not rendered as an alert.
+
+Catalog, likes, quick-pick, player, album/artist, folder-search, metadata
+context-menu, and administrator views suppress the typed redirect error from
+their local alerts and toasts while navigation is pending. Invalid credentials
+submitted on the existing sign-in form remain an inline error because that
+request is not part of the authenticated-session redirect path.
+
+Verification passed: the focused client and onboarding tests (15 passing), all
+120 web tests, web typecheck, targeted ESLint and Prettier checks, the production
+web build, and `git diff --check`. Server tests and schema validation were
+skipped because no server, API, or storage contract changed. Browser visual QA
+was not run. Next: start with an empty server or revoke an active session, then
+confirm onboarding opens without an authentication alert, creates the first
+administrator (or signs in), and returns to the original page.
+
+Changes remain uncommitted on `dev` alongside the pre-existing catalog/realtime
+work; no commit, push, tag, publication, or deployment was performed.
+
+## Realtime events and paged catalog
+
+The task and administration-log polls are replaced by one authenticated
+`/api/realtime` WebSocket. `POST /api/realtime/ticket` issues a 30-second,
+single-use ticket bound to the current session because browser sockets cannot
+send the normal bearer header. Upgrades require an exact configured web origin.
+Subscriptions cover task lifecycle, admin-only logs, and compact catalog
+revision events. The hub keeps the latest 512 events for reconnects and sends
+`resync.required` after a gap or slow-client overflow. Session revocation closes
+matching sockets.
+
+Task events carry complete safe `TaskResponse` values; progress is coalesced to
+at most four updates per second and status transitions are immediate. Catalog
+events contain only revision, source, reason, and changed count, with no track
+rows. The web client uses bounded reconnect backoff, updates task state with
+monotonic `updatedAt` ordering, subscribes administrator pages to logs on demand,
+and falls back to HTTP task/catalog snapshots after resync.
+
+Catalog APIs now use cursor pages instead of returning the complete collection.
+`GET /api/tracks`, `/api/albums`, and `/api/artists` support bounded pages,
+search/sort/filter options, and catalog revisions. `POST /api/tracks/resolve`
+hydrates queue IDs in bounded batches, and quick picks now contain server-resolved
+track or album summaries. The server maintains normalized track, album, artist,
+membership, and search projections, updates them during scans and metadata
+changes, and backfills existing databases idempotently. The shared track table
+uses VueUse `useVirtualList` with an explicit load-more fallback; library,
+album, artist, liked, search, quick-pick, and player queue views no longer rely
+on a full-catalog `useLibraryTracks` cache.
+
+The authorized development database reset was applied with `pnpm db:reset`.
+Local accounts, sessions, catalog, queue, likes, sources, and settings were
+discarded and the new contract/projection tables were created.
+
+Verification passed:
+
+- `pnpm lint`
+- `pnpm format:check`
+- `pnpm typecheck`
+- `pnpm test` — 85 server tests, 120 web tests, and 13 shared UI tests passed
+- `pnpm db:validate`
+- `pnpm build`
+- `git diff --check`
+
+The build emitted non-fatal Rolldown `PLUGIN_TIMINGS` performance warnings, and
+Prisma emitted its existing outdated-agent-skills notice. Browser visual QA was
+not run. Known limits are the intentional single-process/in-memory realtime
+replay model, no durable event outbox, no live queue/like synchronization, and
+no plugin-originated socket events. All changes remain uncommitted on `dev`;
+no commit, push, tag, publication, or deployment was performed.
+
+Next: start `pnpm dev`, recreate the local administrator after the reset, add a
+music source, and verify desktop/mobile virtual scrolling, live task progress,
+admin log streaming, reconnect/resync, and catalog refresh during and after a
+large scan.
+
+## Missing-cover player background fade
+
+Selecting a track without cover art now fades the previous decorative player
+background out over the existing three-second crossfade instead of removing it
+abruptly. The decorative layer remains mounted while its child image is
+conditional, allowing Vue's leave transition to run when the resolved cover URL
+becomes empty. Foreground artwork still switches immediately to the semantic
+music-note placeholder.
+
+The player regression test now covers the mounted decorative layer and the
+conditional image. The existing styling constraints are unchanged: the fix uses
+only standard Tailwind utilities and semantic theme tokens.
+
+Verification passed: all 117 web tests, web typecheck, targeted ESLint and
+Prettier checks, the production web build, and `git diff --check`. Server tests,
+schema validation, and browser visual QA were skipped because no server,
+storage, or schema contract changed and the transition behavior is covered by
+the player regression test.
+
+## Lost authentication redirects to sign-in
+
+Authenticated web API requests now report `401 unauthorized` responses through
+one client-level handler. The handler clears the stale session and user cookies,
+opens the existing onboarding account step directly with `auth=login`, and
+preserves the current full path for the post-sign-in redirect. Concurrent
+requests cannot begin multiple redirects, and incorrect credentials entered on
+the sign-in form remain an inline error rather than a lost-session redirect.
+
+Verification passed: the focused authentication/client and onboarding tests
+(14 passing), all 117 web tests, web typecheck, targeted ESLint and Prettier
+checks, the production web build, and `git diff --check`. Server tests and schema
+validation were skipped because no server, API, or storage contract changed.
+Browser visual QA was not run. Next: revoke or expire an active session in a
+running app and confirm the account sign-in step opens without a server-selection
+flash, then sign in and return to the original page.
+
+Changes remain uncommitted on `dev`; no commit, push, tag, publication, or
+deployment was performed.
 
 ## Successful download toast removed
 

@@ -201,7 +201,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", handleKeydown));
             >
               <span
                 aria-hidden="true"
-                class="rounded-md p-1 text-muted-foreground"
+                class="cursor-grab rounded-md p-1 text-muted-foreground active:cursor-grabbing"
               >
                 <Icon :icon="icons.drag" aria-hidden="true" class="size-4" />
               </span>

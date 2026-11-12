@@ -52,10 +52,10 @@ test("track rows expose a Reka context menu with playback, favorites, downloads,
   assert.match(menu, /candidate\.details/);
 
   assert.match(trackTable, /<TrackContextMenu/);
-  assert.match(trackTable, /@play="playFromList\(track\.id, true\)"/);
+  assert.match(trackTable, /@play="playFromList\(item\.data\.id, true\)"/);
   assert.match(
     trackTable,
-    /playCollection\(\s*sortedTracks\.value\.map\(\(track\) => track\.id\),\s*trackId,?\s*\)/,
+    /playCollection\(\s*props\.tracks\.map\(\(track\) => track\.id\),\s*trackId,?\s*\)/,
     "Playing a row queues the complete displayed track list",
   );
 
@@ -97,16 +97,16 @@ test("album and artist cards expose collection-aware context menus", async () =>
     assert.match(menu, /<ContextMenuTrigger as-child>/);
     assert.match(menu, /useLikes\(\)/);
     assert.match(menu, /useLibraryPlayer\(\)/);
-    assert.match(menu, /playCollection\(/);
+    assert.match(menu, /loadCollectionTrackIds\(/);
   }
 
-  assert.match(albumMenu, /playCollection\(album\.trackIds\)/);
+  assert.match(albumMenu, /albumId: props\.album\.id/);
   assert.match(albumMenu, /Like album/);
   assert.match(albumMenu, /Unlike album/);
   assert.match(albumMenu, /albumRoute\(album\)/);
   assert.match(albumMenu, /Open album/);
 
-  assert.match(artistMenu, /playCollection\(artist\.trackIds\)/);
+  assert.match(artistMenu, /artistId: props\.artist\.id/);
   assert.match(artistMenu, /Like artist/);
   assert.match(artistMenu, /Unlike artist/);
   assert.match(artistMenu, /artistRoute\(artist\)/);

@@ -4,11 +4,14 @@ import {
   createAdministrator,
   createLike,
   createMetadataProvider,
+  createManagedUser,
   createPlaybackToken,
+  createRealtimeTicket,
   createSource,
   createUserSession,
   deleteSource,
   deleteLike,
+  deleteManagedUser,
   discoverLocalServers,
   fetchAuthStatus,
   fetchQueue,
@@ -17,12 +20,14 @@ import {
   fetchServerSettings,
   getTask,
   applyTrackMetadata,
+  isAuthenticationRedirectError,
   listDirectories,
   listLikes,
   listMetadataCandidates,
   listMetadataProviderDefinitions,
   listMetadataProviders,
   listSources,
+  listUsers,
   listTasks,
   listTracks,
   reorderSources,
@@ -35,7 +40,10 @@ import {
   revertTrackMetadata,
   revokeSession,
   searchDirectories,
+  setAuthenticationRedirectHandler,
   updateMetadataProvider,
+  updateManagedUser,
+  updateUserProfile,
   startLibraryScan,
   trackAudioUrl,
 } from "../app/lib/peridot-client.ts";
@@ -58,8 +66,35 @@ function queuedTask(
     createdAt: "2026-11-11T10:00:00.000Z",
     startedAt: null,
     completedAt: null,
+    updatedAt: "2026-11-11T10:00:00.000Z",
   };
 }
+
+test("realtime tickets use authenticated POST requests", async (context) => {
+  const originalFetch = globalThis.fetch;
+  context.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  let request: RequestInit | undefined;
+  globalThis.fetch = async (_input, init) => {
+    request = init;
+    return Response.json({
+      ticket: "single-use-ticket",
+      expiresAt: "2026-11-11T10:00:30.000Z",
+    });
+  };
+
+  const result = await createRealtimeTicket(
+    "http://127.0.0.1:17430",
+    "session-token",
+  );
+  assert.equal(result.ticket, "single-use-ticket");
+  assert.equal(request?.method, "POST");
+  assert.equal(
+    new Headers(request?.headers).get("Authorization"),
+    "Bearer session-token",
+  );
+});
 
 test("metadata provider, source scan, and correction calls use authenticated endpoints", async (context) => {
   const originalFetch = globalThis.fetch;
@@ -533,7 +568,7 @@ test("onboarding reads setup status and creates the first administrator", async 
             user: {
               id: "user-1",
               email: body.email,
-              username: body.username,
+              displayName: body.displayName,
               role: "admin",
             },
           }
@@ -547,12 +582,18 @@ test("onboarding reads setup status and creates the first administrator", async 
   });
   const session = await createAdministrator("http://127.0.0.1:17430", {
     email: "owner@example.com",
-    username: "owner",
+    displayName: "Owner",
     password: "a-secure-local-password",
   });
   assert.equal(session.user.role, "admin");
+  assert.equal(session.user.displayName, "Owner");
   assert.equal(requests[0]?.input, "http://127.0.0.1:17430/api/auth/status");
   assert.equal(requests[1]?.input, "http://127.0.0.1:17430/api/auth/bootstrap");
+  assert.deepEqual(JSON.parse(String(requests[1]?.init?.body)), {
+    email: "owner@example.com",
+    displayName: "Owner",
+    password: "a-secure-local-password",
+  });
 });
 
 test("sign-in surfaces safe API errors and unreachable servers", async (context) => {
@@ -567,7 +608,7 @@ test("sign-in surfaces safe API errors and unreachable servers", async (context)
     );
   await assert.rejects(
     createUserSession("http://127.0.0.1:17430", {
-      identifier: "owner",
+      email: "owner@example.com",
       password: "wrong-password",
     }),
     /Incorrect login/,
@@ -580,6 +621,199 @@ test("sign-in surfaces safe API errors and unreachable servers", async (context)
     fetchAuthStatus("http://127.0.0.1:17430"),
     /Could not reach this Peridot server/,
   );
+});
+
+test("authenticated requests route to sign-in or setup without treating sign-in failures as redirects", async (context) => {
+  const originalFetch = globalThis.fetch;
+  context.after(() => {
+    globalThis.fetch = originalFetch;
+    setAuthenticationRedirectHandler(null);
+  });
+  const redirectReasons: string[] = [];
+  setAuthenticationRedirectHandler((reason) => {
+    redirectReasons.push(reason);
+  });
+
+  globalThis.fetch = async () =>
+    Response.json(
+      {
+        error: {
+          code: "unauthorized",
+          message: "Valid user authentication is required",
+        },
+      },
+      { status: 401 },
+    );
+  await assert.rejects(
+    listTracks("http://127.0.0.1:17430", "expired-session"),
+    (reason) =>
+      isAuthenticationRedirectError(reason) &&
+      reason instanceof Error &&
+      /Valid user authentication is required/.test(reason.message),
+  );
+  assert.deepEqual(redirectReasons, ["login"]);
+
+  globalThis.fetch = async () =>
+    Response.json(
+      {
+        error: {
+          code: "setup_required",
+          message:
+            "Create the first administrator account before using Peridot",
+        },
+      },
+      { status: 428 },
+    );
+  await assert.rejects(
+    listTracks("http://127.0.0.1:17430", "stale-session"),
+    (reason) =>
+      isAuthenticationRedirectError(reason) &&
+      reason instanceof Error &&
+      /Create the first administrator account/.test(reason.message),
+  );
+  assert.deepEqual(redirectReasons, ["login", "setup"]);
+
+  globalThis.fetch = async () =>
+    Response.json(
+      {
+        error: {
+          code: "unauthorized",
+          message: "Valid user authentication is required",
+        },
+      },
+      { status: 401 },
+    );
+  await assert.rejects(
+    createUserSession("http://127.0.0.1:17430", {
+      email: "owner@example.com",
+      password: "wrong-password",
+    }),
+    /Valid user authentication is required/,
+  );
+  assert.deepEqual(redirectReasons, ["login", "setup"]);
+});
+
+test("profile updates send and return the display name", async (context) => {
+  const originalFetch = globalThis.fetch;
+  context.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  let request: RequestInit | undefined;
+  globalThis.fetch = async (input, init) => {
+    assert.equal(String(input), "http://127.0.0.1:17430/api/users/me");
+    request = init;
+    return Response.json({
+      id: "user-1",
+      email: "owner@example.com",
+      displayName: "New Name",
+      role: "admin",
+    });
+  };
+
+  const updated = await updateUserProfile(
+    "http://127.0.0.1:17430",
+    "session-token",
+    { displayName: "New Name" },
+  );
+  assert.equal(updated.displayName, "New Name");
+  assert.equal(request?.method, "PUT");
+  assert.equal(
+    new Headers(request?.headers).get("Authorization"),
+    "Bearer session-token",
+  );
+  assert.deepEqual(JSON.parse(String(request?.body)), {
+    displayName: "New Name",
+  });
+});
+
+test("administrator user management calls use authenticated CRUD endpoints", async (context) => {
+  const originalFetch = globalThis.fetch;
+  context.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  const requests: Array<{ input: string; init?: RequestInit }> = [];
+  const account = {
+    id: "user/one",
+    email: "member@example.com",
+    displayName: "Library Member",
+    role: "member",
+  };
+  globalThis.fetch = async (input, init) => {
+    requests.push({ input: String(input), init });
+    if (init?.method === "DELETE") return new Response(null, { status: 204 });
+    if (init?.method === "POST") return Response.json(account, { status: 201 });
+    if (init?.method === "PUT") {
+      return Response.json({
+        ...account,
+        displayName: "Updated Member",
+        role: "admin",
+      });
+    }
+    return Response.json({ items: [account] });
+  };
+  const server = "http://127.0.0.1:17430";
+
+  assert.deepEqual(await listUsers(server, "session-token"), {
+    items: [account],
+  });
+  assert.equal(
+    (
+      await createManagedUser(server, "session-token", {
+        email: "new@example.com",
+        displayName: "New Member",
+        password: "managed-user-password",
+        role: "member",
+      })
+    ).id,
+    "user/one",
+  );
+  const updated = await updateManagedUser(server, "session-token", "user/one", {
+    displayName: "Updated Member",
+    role: "admin",
+  });
+  assert.equal(updated.role, "admin");
+  await deleteManagedUser(server, "session-token", "user/one");
+
+  assert.deepEqual(
+    requests.map(({ input, init }) => ({
+      input,
+      method: init?.method,
+    })),
+    [
+      {
+        input: "http://127.0.0.1:17430/api/admin/users",
+        method: undefined,
+      },
+      {
+        input: "http://127.0.0.1:17430/api/admin/users",
+        method: "POST",
+      },
+      {
+        input: "http://127.0.0.1:17430/api/admin/users/user%2Fone",
+        method: "PUT",
+      },
+      {
+        input: "http://127.0.0.1:17430/api/admin/users/user%2Fone",
+        method: "DELETE",
+      },
+    ],
+  );
+  assert.deepEqual(JSON.parse(String(requests[1]?.init?.body)), {
+    email: "new@example.com",
+    displayName: "New Member",
+    password: "managed-user-password",
+    role: "member",
+  });
+  assert.deepEqual(JSON.parse(String(requests[2]?.init?.body)), {
+    displayName: "Updated Member",
+    role: "admin",
+  });
+  for (const { init } of requests) {
+    assert.equal(
+      new Headers(init?.headers).get("Authorization"),
+      "Bearer session-token",
+    );
+  }
 });
 
 test("local discovery reads the same-origin discovery endpoint", async (context) => {

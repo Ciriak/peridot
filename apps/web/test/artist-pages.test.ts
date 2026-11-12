@@ -18,8 +18,8 @@ test("artists have list and detail routes with artist-scoped content", async () 
     ),
   ]);
 
-  assert.match(listPage, /groupArtists\(tracks\.value\)/);
-  assert.match(listPage, /const artists = computed\(\(\) => groupArtists/);
+  assert.match(listPage, /useCatalogArtistQuery/);
+  assert.match(listPage, /items: artists/);
   assert.doesNotMatch(listPage, /library-search/);
   assert.match(listPage, /<ArtistCard/);
   assert.match(listPage, /:artist="artist"/);
@@ -27,9 +27,10 @@ test("artists have list and detail routes with artist-scoped content", async () 
   assert.match(artistCard, /useLikes\(\)/);
   assert.match(artistCard, /<LikeButton/);
   assert.match(listPage, /No artists found/);
-  assert.match(detailPage, /findArtist\(/);
+  assert.match(detailPage, /listArtists\(/);
   assert.match(detailPage, /route\.params\.artist/);
-  assert.match(detailPage, /groupAlbums\(artist\.value\.tracks\)/);
+  assert.match(detailPage, /useCatalogAlbumQuery/);
+  assert.match(detailPage, /artistId: artist\.value\?\.id/);
   assert.match(detailPage, /<AlbumCard/);
   assert.match(detailPage, /:album="album"/);
   assert.match(detailPage, /playCollection\(/);
@@ -68,11 +69,11 @@ test("artist names link from navigation and track lists", async () => {
   assert.match(albumDetail, /<TrackArtistLinks :artists="album\.artists" \/>/);
   assert.match(
     trackTable,
-    /<TrackArtistLinks :artists="trackArtistNames\(track\)" \/>/,
+    /<TrackArtistLinks :artists="trackArtistNames\(item\.data\)" \/>/,
   );
   assert.match(
     trackTable,
-    /:to="trackAlbumRoute\(track\)"/,
+    /:to="trackAlbumRoute\(item\.data\)"/,
     "Artist-page track lists link their album names",
   );
   assert.match(libraryScreen, /variant="library"/);

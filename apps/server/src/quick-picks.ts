@@ -1,5 +1,3 @@
-import type { QuickPickItemResponse } from "@peridot/contracts";
-
 export const QUICK_PICK_LIMIT = 8;
 const QUICK_PICK_HALF_LIFE_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -20,8 +18,21 @@ export interface PlayedTrackEvent {
 interface RankedItem {
   score: number;
   lastPlayedAt: number;
-  item: QuickPickItemResponse;
+  item: RankedQuickPick;
 }
+
+export type RankedQuickPick =
+  | {
+      kind: "track";
+      key: string;
+      trackId: string;
+    }
+  | {
+      kind: "album";
+      key: string;
+      title: string;
+      artist: string;
+    };
 
 function compareText(left: string, right: string): number {
   if (left < right) return -1;
@@ -42,7 +53,7 @@ export function rankQuickPicks(
   events: readonly PlayedTrackEvent[],
   now: Date,
   limit = QUICK_PICK_LIMIT,
-): QuickPickItemResponse[] {
+): RankedQuickPick[] {
   const tracks = new Map<
     string,
     { score: number; lastPlayedAt: number; track: PlayedTrackInfo }

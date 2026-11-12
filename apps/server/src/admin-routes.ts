@@ -1,5 +1,6 @@
 import path from "node:path";
 import type {
+  CreateUserRequest,
   CreateMetadataProviderRequest,
   CreateSourceRequest,
   CreateSourceResponse,
@@ -13,6 +14,8 @@ import type {
   ServerSettingsResponse,
   SourceListResponse,
   UpdateMetadataProviderRequest,
+  UpdateUserRequest,
+  UserListResponse,
 } from "@peridot/contracts";
 import type { FastifyInstance } from "fastify";
 import type { CredentialStore } from "./credential-store.js";
@@ -43,6 +46,13 @@ import {
   toTaskResponse,
   type TaskService,
 } from "./tasks.js";
+import {
+  createManagedUser,
+  deleteManagedUser,
+  listManagedUsers,
+  updateManagedUser,
+  UserManagementError,
+} from "./users.js";
 
 export async function registerAdminRoutes(
   app: FastifyInstance,
@@ -52,6 +62,7 @@ export async function registerAdminRoutes(
   metadataEnrichment: MetadataEnrichment,
   metadataRegistry: MetadataResolverRegistry,
   metadataCredentials: CredentialStore,
+  onSessionsRevoked?: (sessionIds: string[]) => void,
 ) {
   await app.register(async (admin) => {
     admin.addHook("onRequest", async (request, reply) => {
@@ -86,6 +97,67 @@ export async function registerAdminRoutes(
     admin.get("/api/admin/sources", async (): Promise<SourceListResponse> => ({
       items: await listSources(database),
     }));
+
+    admin.get("/api/admin/users", async (): Promise<UserListResponse> => ({
+      items: await listManagedUsers(database),
+    }));
+
+    admin.post<{ Body: CreateUserRequest }>(
+      "/api/admin/users",
+      async (request, reply) => {
+        try {
+          return reply
+            .code(201)
+            .send(await createManagedUser(database, request.body));
+        } catch (error) {
+          if (error instanceof UserManagementError) {
+            return reply.code(error.statusCode).send(error.toResponse());
+          }
+          throw error;
+        }
+      },
+    );
+
+    admin.put<{ Params: { id: string }; Body: UpdateUserRequest }>(
+      "/api/admin/users/:id",
+      async (request, reply) => {
+        try {
+          const result = await updateManagedUser(
+            database,
+            request.authenticatedUser!,
+            request.params.id,
+            request.body,
+          );
+          onSessionsRevoked?.(result.revokedSessionIds);
+          return result.user;
+        } catch (error) {
+          if (error instanceof UserManagementError) {
+            return reply.code(error.statusCode).send(error.toResponse());
+          }
+          throw error;
+        }
+      },
+    );
+
+    admin.delete<{ Params: { id: string } }>(
+      "/api/admin/users/:id",
+      async (request, reply) => {
+        try {
+          const sessionIds = await deleteManagedUser(
+            database,
+            request.authenticatedUser!,
+            request.params.id,
+          );
+          onSessionsRevoked?.(sessionIds);
+          return reply.code(204).send();
+        } catch (error) {
+          if (error instanceof UserManagementError) {
+            return reply.code(error.statusCode).send(error.toResponse());
+          }
+          throw error;
+        }
+      },
+    );
 
     admin.get<{ Querystring: { after?: string } }>(
       "/api/admin/logs",

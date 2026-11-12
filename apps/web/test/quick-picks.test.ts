@@ -23,6 +23,7 @@ const tracks: TrackResponse[] = [
     available: true,
     coverUrl: "/api/tracks/track-a/cover",
     metadata: null,
+    liked: false,
   },
   {
     id: "track-b",
@@ -37,29 +38,36 @@ const tracks: TrackResponse[] = [
     available: true,
     coverUrl: null,
     metadata: null,
+    liked: false,
   },
 ];
 
-test("quick pick responses resolve against current tracks and album groups", () => {
-  const resolved = resolveQuickPicks(
-    [
-      { kind: "track", key: "track:track-b", trackId: "track-b" },
-      {
-        kind: "album",
-        key: "album:elliot lake\u0000night sessions",
+test("quick pick responses preserve server-resolved track and album data", () => {
+  const resolved = resolveQuickPicks([
+    {
+      kind: "track",
+      key: "track:track-b",
+      trackId: "track-b",
+      track: tracks[1]!,
+    },
+    {
+      kind: "album",
+      key: "album:elliot lake\u0000night sessions",
+      title: "Night Sessions",
+      artist: "Elliot Lake",
+      album: {
+        id: "album-night-sessions",
         title: "Night Sessions",
         artist: "Elliot Lake",
+        artists: ["Elliot Lake"],
+        coverUrl: "/api/tracks/track-a/cover",
+        trackCount: 2,
+        durationMs: 380_000,
+        releaseYear: null,
+        liked: false,
       },
-      { kind: "track", key: "track:missing", trackId: "missing" },
-      {
-        kind: "album",
-        key: "album:missing",
-        title: "Missing",
-        artist: "Nobody",
-      },
-    ],
-    tracks,
-  );
+    },
+  ]);
 
   assert.deepEqual(
     resolved.map((item) => item.kind),
@@ -70,13 +78,12 @@ test("quick pick responses resolve against current tracks and album groups", () 
     "Closing",
   );
   assert.equal(
-    resolved[0]?.coverUrl,
-    "/api/tracks/track-a/cover",
-    "Tracks use the grouped album's cover with the track cover as fallback",
+    resolved[0]?.kind === "track" ? resolved[0].track.coverUrl : null,
+    null,
   );
   assert.deepEqual(
-    resolved[1]?.kind === "album" ? resolved[1].album.trackIds : [],
-    ["track-a", "track-b"],
+    resolved[1]?.kind === "album" ? resolved[1].album.trackCount : 0,
+    2,
   );
   assert.deepEqual(resolved[0] ? quickPickArtistNames(resolved[0]) : [], [
     "Elliot Lake",
@@ -89,7 +96,7 @@ test("quick pick responses resolve against current tracks and album groups", () 
       kind: "track",
       key: "track:collaboration",
       track: { ...tracks[0]!, artists: ["Elliot Lake", "Óra"] },
-      coverUrl: null,
+      trackId: "collaboration",
     }),
     ["Elliot Lake", "Óra"],
   );
@@ -138,24 +145,24 @@ test("the sidebar renders cover-playback quick picks without library shortcuts",
   assert.match(sidebar, /flex flex-col gap-2/);
   assert.doesNotMatch(sidebar, /grid-cols-2/);
   assert.match(sidebar, /Play something to see your quick picks here\./);
-  assert.match(sidebar, /resolveQuickPicks\(items\.value, tracks\.value\)/);
+  assert.match(sidebar, /resolveQuickPicks\(items\.value\)/);
   assert.match(sidebar, /useInteractionFrozenList\(resolvedItems\)/);
   assert.match(sidebar, /@pointerenter="beginPointerInteraction"/);
   assert.match(sidebar, /@pointerleave="endPointerInteraction"/);
   assert.match(sidebar, /@focusin="beginFocusInteraction"/);
   assert.match(sidebar, /@focusout="handleFocusOut"/);
-  assert.match(tile, /props\.item\.kind === "track"[\s\S]*?coverUrl/);
+  assert.match(tile, /props\.item\.kind === "track"[\s\S]*?track\.coverUrl/);
   assert.match(tile, /group\/quick-pick/);
   assert.match(tile, /cursor-pointer/);
   assert.match(tile, /group-hover\/quick-pick:opacity-100/);
   assert.match(tile, /group-focus-visible\/quick-pick:opacity-100/);
   assert.match(tile, /activeItem && playing \? icons\.pause : icons\.play/);
   assert.match(tile, /play\(props\.item\.track\.id\)/);
-  assert.match(tile, /playCollection\(props\.item\.album\.trackIds\)/);
+  assert.match(tile, /playCollection\(await albumTrackIds\(\)\)/);
   assert.match(tile, /togglePlayback\(\)/);
   assert.match(
     tile,
-    /function toggleItemPlayback\(\) \{\s+if \(activeItem\.value && playing\.value\) \{\s+togglePlayback\(\);\s+return;\s+\}/,
+    /async function toggleItemPlayback\(\) \{\s+if \(activeItem\.value && playing\.value\) \{\s+togglePlayback\(\);\s+return;\s+\}/,
     "An album quick pick pauses while playing but restarts the album otherwise",
   );
   assert.match(

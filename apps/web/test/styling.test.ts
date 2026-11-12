@@ -36,9 +36,10 @@ test("app layout respects the owner's Tailwind and shadcn styling authority", as
     "../app/pages/settings/playback.vue",
     "../app/pages/settings/plugins.vue",
     "../app/pages/settings/tasks.vue",
+    "../app/pages/settings/users.vue",
     "../app/pages/settings/sources.vue",
     "../app/pages/settings/metadata.vue",
-    "../app/pages/settings/administration.vue",
+    "../app/pages/settings/server.vue",
     "../../../packages/ui/src/components/ui/progress-circle/ProgressCircle.vue",
     "../../../packages/ui/src/components/ui/spinner/PeridotSpinner.vue",
   ];

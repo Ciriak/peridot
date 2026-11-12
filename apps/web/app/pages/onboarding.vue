@@ -6,7 +6,14 @@ import { Button } from "@peridot/ui/components/ui/button";
 import { Gradient } from "@peridot/ui/components/ui/gradient";
 import { Input } from "@peridot/ui/components/ui/input";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from "vue";
 import { useServer } from "../composables/use-server";
 import { useSession } from "../composables/use-session";
 import { useUser } from "../composables/use-user";
@@ -31,13 +38,24 @@ const { token } = useSession();
 const { user } = useUser();
 const serverAddress = ref(address.value ?? DEFAULT_SERVER_ADDRESS);
 const selectedAddress = ref("");
-const step = ref<"server" | "account">("server");
+const opensAccountStep =
+  (route.query.auth === "login" || route.query.auth === "setup") &&
+  Boolean(address.value);
+const step = ref<"server" | "account">(opensAccountStep ? "account" : "server");
 const requiresAdminUser = ref(false);
 const email = ref("");
-const username = ref("");
+const displayName = ref("");
 const password = ref("");
+const confirmPassword = ref("");
 const error = ref("");
 const loading = ref(false);
+const confirmationError = computed(() =>
+  requiresAdminUser.value &&
+  confirmPassword.value.length > 0 &&
+  password.value !== confirmPassword.value
+    ? "Passwords do not match."
+    : "",
+);
 const addressScanState = ref<"idle" | "checking" | "found" | "not-found">(
   "idle",
 );
@@ -116,7 +134,12 @@ async function selectDiscoveredServer(server: DiscoveredServer) {
   await connectToServer();
 }
 
-onMounted(() => void scanLocalNetwork());
+onMounted(() => {
+  if (opensAccountStep) {
+    void connectToServer();
+  }
+  void scanLocalNetwork();
+});
 onBeforeUnmount(() => {
   if (addressScanTimer) clearTimeout(addressScanTimer);
   if (networkScanTimer) clearTimeout(networkScanTimer);
@@ -133,6 +156,7 @@ async function connectToServer() {
     step.value = "account";
     if (networkScanTimer) clearTimeout(networkScanTimer);
   } catch (reason) {
+    step.value = "server";
     error.value =
       reason instanceof Error
         ? reason.message
@@ -144,16 +168,20 @@ async function connectToServer() {
 
 async function finishOnboarding() {
   error.value = "";
+  if (requiresAdminUser.value && password.value !== confirmPassword.value) {
+    error.value = "Passwords do not match.";
+    return;
+  }
   loading.value = true;
   try {
     const session = requiresAdminUser.value
       ? await createAdministrator(selectedAddress.value, {
           email: email.value,
-          username: username.value,
+          displayName: displayName.value,
           password: password.value,
         })
       : await createUserSession(selectedAddress.value, {
-          identifier: username.value,
+          email: email.value,
           password: password.value,
         });
     configure(selectedAddress.value);
@@ -173,7 +201,9 @@ async function finishOnboarding() {
 function changeServer() {
   error.value = "";
   email.value = "";
+  displayName.value = "";
   password.value = "";
+  confirmPassword.value = "";
   user.value = null;
   step.value = "server";
   void scanLocalNetwork();
@@ -306,7 +336,7 @@ function changeServer() {
         </p>
       </div>
       <form v-else class="space-y-4" @submit.prevent="finishOnboarding">
-        <div v-if="requiresAdminUser" class="space-y-2">
+        <div class="space-y-2">
           <label for="email" class="text-sm font-medium">Email</label>
           <Input
             id="email"
@@ -317,25 +347,22 @@ function changeServer() {
             maxlength="254"
           />
         </div>
-        <div class="space-y-2">
-          <label for="username" class="text-sm font-medium">{{
-            requiresAdminUser ? "Username" : "Username or email"
-          }}</label>
+        <div v-if="requiresAdminUser" class="space-y-2">
+          <label for="display-name" class="text-sm font-medium">
+            Display name
+          </label>
           <Input
-            id="username"
-            v-model="username"
-            autocomplete="username"
+            id="display-name"
+            v-model="displayName"
+            autocomplete="nickname"
             required
-            :minlength="requiresAdminUser ? 3 : undefined"
-            :maxlength="requiresAdminUser ? 32 : 254"
-            :aria-describedby="requiresAdminUser ? 'username-help' : undefined"
+            minlength="2"
+            maxlength="80"
+            aria-describedby="display-name-help"
           />
-          <p
-            v-if="requiresAdminUser"
-            id="username-help"
-            class="text-xs text-muted-foreground"
-          >
-            Use 3–32 letters, numbers, dots, underscores, or hyphens.
+          <p id="display-name-help" class="text-xs text-muted-foreground">
+            Use 2–80 characters. This name is visible to other people who use
+            this server.
           </p>
         </div>
         <div class="space-y-2">
@@ -355,6 +382,42 @@ function changeServer() {
           <p v-if="requiresAdminUser" class="text-xs text-muted-foreground">
             Use at least 12 characters.
           </p>
+        </div>
+        <div v-if="requiresAdminUser" class="space-y-2">
+          <label for="confirm-password" class="text-sm font-medium">
+            Confirm password
+          </label>
+          <Input
+            id="confirm-password"
+            v-model="confirmPassword"
+            type="password"
+            autocomplete="new-password"
+            required
+            minlength="12"
+            :aria-invalid="Boolean(confirmationError)"
+            :aria-describedby="
+              confirmationError
+                ? 'confirm-password-error'
+                : 'confirm-password-help'
+            "
+          />
+          <p
+            v-if="confirmationError"
+            id="confirm-password-error"
+            role="alert"
+            class="text-sm text-destructive"
+          >
+            {{ confirmationError }}
+          </p>
+          <p
+            v-else
+            id="confirm-password-help"
+            class="text-xs text-muted-foreground"
+          >
+            Enter the same password again.
+          </p>
+        </div>
+        <div>
           <p
             v-if="error"
             id="account-error"
@@ -373,7 +436,11 @@ function changeServer() {
           >
             Back
           </Button>
-          <Button type="submit" class="flex-1" :disabled="loading">
+          <Button
+            type="submit"
+            class="flex-1"
+            :disabled="loading || Boolean(confirmationError)"
+          >
             {{
               loading
                 ? "Please wait…"

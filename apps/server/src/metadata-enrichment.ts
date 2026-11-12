@@ -10,6 +10,7 @@ import {
   parseStoredArtistCredits,
   serializeArtistCredits,
 } from "./artist-credits.js";
+import type { CatalogService } from "./catalog.js";
 import type { CredentialStore } from "./credential-store.js";
 import type { Database } from "./database.js";
 import {
@@ -203,6 +204,7 @@ export class MetadataEnrichment {
     private readonly database: Database,
     private readonly registry: MetadataResolverRegistry,
     private readonly credentials: CredentialStore,
+    private readonly catalog?: CatalogService,
   ) {}
 
   close(): void {
@@ -316,6 +318,7 @@ export class MetadataEnrichment {
           ...matchData(candidate, "automatic"),
           metadataAttemptedSignature: inputSignature(track),
         });
+        await this.catalog?.reindexTrack(track.id, "metadata");
         matchedCount += 1;
         processedCount += 1;
         await recordProgress();
@@ -387,6 +390,7 @@ export class MetadataEnrichment {
         }
       }
 
+      await this.catalog?.flushChanges();
       return {
         details: metadataDetails({
           source: task.sourceName ?? "All sources",
@@ -471,7 +475,7 @@ export class MetadataEnrichment {
   }
 
   async resetAll(): Promise<number> {
-    return this.database.orm.Track.where((track) =>
+    const count = await this.database.orm.Track.where((track) =>
       track.id.isNotNull(),
     ).updateAndCount({
       metadataMode: "file",
@@ -491,6 +495,8 @@ export class MetadataEnrichment {
       metadataMatchedAt: null,
       metadataAttemptedSignature: null,
     });
+    await this.catalog?.rebuildAll("reset");
+    return count;
   }
 
   async apply(trackId: string, body: ApplyTrackMetadataRequest): Promise<void> {
@@ -572,6 +578,8 @@ export class MetadataEnrichment {
       ...matchData(candidate, "manual"),
       metadataAttemptedSignature: inputSignature(track),
     });
+    await this.catalog?.reindexTrack(track.id, "metadata");
+    await this.catalog?.flushChanges();
   }
 
   async revert(trackId: string): Promise<boolean> {
@@ -595,6 +603,8 @@ export class MetadataEnrichment {
       metadataMatchedAt: null,
       metadataAttemptedSignature: inputSignature(track),
     });
+    await this.catalog?.reindexTrack(track.id, "metadata");
+    await this.catalog?.flushChanges();
     return true;
   }
 }

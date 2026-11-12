@@ -1,31 +1,37 @@
 <script setup lang="ts">
 import { definePageMeta, useHead, useRoute } from "#imports";
 import { Icon } from "@iconify/vue/offline";
+import type { AlbumSummaryResponse } from "@peridot/contracts";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { computed, onMounted, ref, watch } from "vue";
 import LikeButton from "../../components/LikeButton.vue";
-import TrackTable from "../../components/TrackTable.vue";
 import TrackArtistLinks from "../../components/TrackArtistLinks.vue";
+import TrackTable from "../../components/TrackTable.vue";
+import { useCatalogTrackQuery } from "../../composables/use-catalog-query";
 import { useLikes } from "../../composables/use-likes";
 import { useLibraryPlayer } from "../../composables/use-library-player";
-import { useLibraryTracks } from "../../composables/use-library-tracks";
 import { useServer } from "../../composables/use-server";
+import { useSession } from "../../composables/use-session";
+import { loadCollectionTrackIds } from "../../lib/catalog-collections";
 import { icons } from "../../lib/icons";
 import {
-  findAlbum,
   formatTrackDuration,
-  groupAlbums,
   trackCoverUrl,
   trackIdFromTitleHash,
+  type TrackSort,
 } from "../../lib/library";
+import {
+  isAuthenticationRedirectError,
+  listAlbums,
+} from "../../lib/peridot-client";
 
 definePageMeta({ name: "album-detail" });
 
 const route = useRoute();
 const { address } = useServer();
-const { tracks, loading, error, load } = useLibraryTracks();
+const { token } = useSession();
 const { active, playing, playCollection, togglePlayback } = useLibraryPlayer();
 const {
   likedAlbumKeys,
@@ -43,15 +49,33 @@ const albumArtist = computed(() => {
   const value = route.query.artist;
   return String(Array.isArray(value) ? (value[0] ?? "") : (value ?? ""));
 });
-const album = computed(() =>
-  findAlbum(groupAlbums(tracks.value), albumTitle.value, albumArtist.value),
-);
+const album = ref<AlbumSummaryResponse | null>(null);
+const albumLoading = ref(true);
+const albumError = ref("");
+const trackSort = ref<TrackSort>({ field: "number", direction: "asc" });
+const {
+  tracks,
+  loading: tracksLoading,
+  loadingMore: tracksLoadingMore,
+  error: tracksError,
+  loaded: tracksLoaded,
+  hasMore,
+  load: loadTracks,
+  loadMore: loadMoreTracks,
+} = useCatalogTrackQuery(() => ({
+  albumId: album.value?.id ?? "__peridot_missing_album__",
+  sort: trackSort.value.field === "number" ? "track" : trackSort.value.field,
+  direction: trackSort.value.direction,
+}));
+
 const scrollToTrackId = computed(() => trackIdFromTitleHash(route.hash));
 const albumActive = computed(() => {
-  const activeTrackId = active.value?.id;
-  return album.value && activeTrackId
-    ? album.value.trackIds.includes(activeTrackId)
-    : false;
+  const current = active.value;
+  return Boolean(
+    current &&
+    current.album === album.value?.title &&
+    current.artist === album.value?.artist,
+  );
 });
 const coverFailed = ref(false);
 const coverUrl = computed(() =>
@@ -66,9 +90,37 @@ useHead(() => ({
     : "Album — Peridot",
 }));
 
-function playWholeAlbum() {
-  const currentAlbum = album.value;
-  if (currentAlbum?.trackIds.length) playCollection(currentAlbum.trackIds);
+async function loadAlbum() {
+  if (!address.value || !token.value) return;
+  albumLoading.value = true;
+  albumError.value = "";
+  try {
+    const page = await listAlbums(address.value, token.value, {
+      query: `${albumTitle.value} ${albumArtist.value}`,
+      limit: 20,
+    });
+    album.value =
+      page.items.find(
+        (candidate) =>
+          candidate.title.toLowerCase() === albumTitle.value.toLowerCase() &&
+          candidate.artist.toLowerCase() === albumArtist.value.toLowerCase(),
+      ) ?? null;
+    if (album.value) await loadTracks(true);
+  } catch (reason) {
+    if (isAuthenticationRedirectError(reason)) return;
+    albumError.value = "This album could not be loaded.";
+  } finally {
+    albumLoading.value = false;
+  }
+}
+
+async function playWholeAlbum() {
+  if (!address.value || !token.value || !album.value) return;
+  playCollection(
+    await loadCollectionTrackIds(address.value, token.value, {
+      albumId: album.value.id,
+    }),
+  );
 }
 
 function toggleAlbumPlayback() {
@@ -76,11 +128,19 @@ function toggleAlbumPlayback() {
     togglePlayback();
     return;
   }
-  playWholeAlbum();
+  void playWholeAlbum();
 }
 
+function setTrackSort(next: TrackSort | null) {
+  trackSort.value = next ?? { field: "number", direction: "asc" };
+}
+
+watch([albumTitle, albumArtist, address, token], () => {
+  album.value = null;
+  void loadAlbum();
+});
 onMounted(() => {
-  void load();
+  void loadAlbum();
   void loadLikes();
 });
 </script>
@@ -96,7 +156,7 @@ onMounted(() => {
   </div>
 
   <div
-    v-if="loading && !tracks.length"
+    v-if="albumLoading"
     role="status"
     class="flex items-center gap-3 rounded-lg border p-6 text-sm text-muted-foreground"
   >
@@ -104,12 +164,12 @@ onMounted(() => {
     Loading this album…
   </div>
   <div
-    v-else-if="error"
+    v-else-if="albumError || tracksError"
     role="alert"
     class="space-y-3 rounded-lg border p-6 text-sm"
   >
-    <p>{{ error }}</p>
-    <Button variant="outline" @click="load(true)">Try again</Button>
+    <p>{{ albumError || tracksError }}</p>
+    <Button variant="outline" @click="loadAlbum">Try again</Button>
   </div>
   <template v-else-if="album">
     <section
@@ -145,7 +205,7 @@ onMounted(() => {
           <Button
             size="icon-lg"
             class="rounded-full"
-            :disabled="!album.tracks.length"
+            :disabled="!album.trackCount"
             :aria-label="
               albumActive && playing
                 ? `Pause ${album.title} by ${album.artist}`
@@ -160,7 +220,11 @@ onMounted(() => {
             />
           </Button>
           <LikeButton
-            :liked="likedAlbumKeys.includes(album.key)"
+            :liked="
+              likedAlbumKeys.includes(
+                `${album.artist.toLowerCase()}\u0000${album.title.toLowerCase()}`,
+              ) || album.liked
+            "
             :label="album.title"
             :pending="
               isLikePending({
@@ -179,8 +243,8 @@ onMounted(() => {
             "
           />
           <Badge variant="secondary">
-            {{ album.tracks.length }}
-            {{ album.tracks.length === 1 ? "track" : "tracks" }}
+            {{ album.trackCount }}
+            {{ album.trackCount === 1 ? "track" : "tracks" }}
           </Badge>
           <span class="text-sm text-muted-foreground">
             <template v-if="album.releaseYear">
@@ -195,14 +259,27 @@ onMounted(() => {
 
     <section aria-labelledby="album-tracks-heading" class="space-y-4">
       <h2 id="album-tracks-heading" class="text-lg font-semibold">Tracks</h2>
+      <div
+        v-if="tracksLoading && !tracks.length"
+        role="status"
+        class="flex items-center gap-2 text-sm text-muted-foreground"
+      >
+        <PeridotSpinner class="size-4" />
+        Loading tracks
+      </div>
       <TrackTable
-        v-if="album.tracks.length"
-        :tracks="album.tracks"
+        v-else-if="tracks.length"
+        :tracks="tracks"
         variant="album"
         :scroll-to-track-id="scrollToTrackId"
+        :sort="trackSort"
+        :has-more="hasMore"
+        :loading-more="tracksLoadingMore"
+        @sort-change="setTrackSort"
+        @load-more="loadMoreTracks"
       />
       <p
-        v-else
+        v-else-if="tracksLoaded"
         role="status"
         class="rounded-lg border p-6 text-sm text-muted-foreground"
       >

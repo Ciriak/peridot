@@ -38,6 +38,7 @@ import { icons } from "../../lib/icons";
 import {
   createSource,
   deleteSource,
+  isAuthenticationRedirectError,
   listSources,
   reorderSources,
 } from "../../lib/peridot-client";
@@ -108,6 +109,7 @@ async function loadSources() {
     const result = await listSources(address.value ?? "", token.value ?? "");
     sources.value = result.items;
   } catch (reason) {
+    if (isAuthenticationRedirectError(reason)) return;
     pageError.value =
       reason instanceof Error
         ? reason.message
@@ -177,6 +179,7 @@ async function addSource() {
       }
     }
   } catch (reason) {
+    if (isAuthenticationRedirectError(reason)) return;
     addError.value =
       reason instanceof Error ? reason.message : "Could not add the source.";
   } finally {
@@ -190,6 +193,7 @@ async function rescan(source: SourceResponse) {
   try {
     await queueSourceScan(source.id);
   } catch (reason) {
+    if (isAuthenticationRedirectError(reason)) return;
     pageError.value =
       reason instanceof Error
         ? reason.message
@@ -202,6 +206,7 @@ async function rescanAll() {
   try {
     await queueLibraryScan();
   } catch (reason) {
+    if (isAuthenticationRedirectError(reason)) return;
     pageError.value =
       reason instanceof Error
         ? reason.message
@@ -228,6 +233,7 @@ async function confirmRemove() {
     pendingDelete.value = null;
     await loadSources();
   } catch (reason) {
+    if (isAuthenticationRedirectError(reason)) return;
     pageError.value =
       reason instanceof Error ? reason.message : "Could not remove the source.";
   }
@@ -241,6 +247,7 @@ async function persistOrder() {
       sources.value.map((source) => source.id),
     );
   } catch (reason) {
+    if (isAuthenticationRedirectError(reason)) return;
     pageError.value =
       reason instanceof Error
         ? reason.message
@@ -296,7 +303,7 @@ onMounted(() => void loadSources());
         >
           <button
             type="button"
-            class="rounded-md p-1 text-muted-foreground"
+            class="cursor-grab rounded-md p-1 text-muted-foreground active:cursor-grabbing"
             aria-label="Drag to reorder source"
           >
             <Icon :icon="icons.drag" aria-hidden="true" class="size-4" />

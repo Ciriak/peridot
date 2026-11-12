@@ -1,23 +1,26 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue/offline";
 import { Button } from "@peridot/ui/components/ui/button";
-import type { AlbumGroup } from "../lib/library";
-import { albumRoute, trackCoverUrl } from "../lib/library";
+import type { AlbumSummaryResponse } from "@peridot/contracts";
+import { albumLikeKey, albumRoute, trackCoverUrl } from "../lib/library";
 import { icons } from "../lib/icons";
 import { computed, ref, watch } from "vue";
 import { useLikes } from "../composables/use-likes";
 import { useLibraryPlayer } from "../composables/use-library-player";
 import { useServer } from "../composables/use-server";
+import { useSession } from "../composables/use-session";
+import { loadCollectionTrackIds } from "../lib/catalog-collections";
 import AlbumContextMenu from "./AlbumContextMenu.vue";
 import LikeButton from "./LikeButton.vue";
 import TrackArtistLinks from "./TrackArtistLinks.vue";
 
 const props = withDefaults(
-  defineProps<{ album: AlbumGroup; compact?: boolean }>(),
+  defineProps<{ album: AlbumSummaryResponse; compact?: boolean }>(),
   { compact: false },
 );
 const emit = defineEmits<{ open: [] }>();
 const { address } = useServer();
+const { token } = useSession();
 const { active, playing, playCollection, togglePlayback } = useLibraryPlayer();
 const coverFailed = ref(false);
 const coverUrl = computed(() =>
@@ -34,14 +37,22 @@ const {
 } = useLikes();
 const albumActive = computed(() => {
   const activeTrackId = active.value?.id;
-  return activeTrackId ? props.album.trackIds.includes(activeTrackId) : false;
+  return activeTrackId
+    ? active.value?.album === props.album.title &&
+        active.value.artist === props.album.artist
+    : false;
 });
-function toggleAlbumPlayback() {
+async function toggleAlbumPlayback() {
   if (albumActive.value && playing.value) {
     togglePlayback();
     return;
   }
-  if (props.album.trackIds.length) playCollection(props.album.trackIds);
+  if (!address.value || !token.value || !props.album.trackCount) return;
+  playCollection(
+    await loadCollectionTrackIds(address.value, token.value, {
+      albumId: props.album.id,
+    }),
+  );
 }
 </script>
 
@@ -84,7 +95,7 @@ function toggleAlbumPlayback() {
             :size="compact ? 'icon-sm' : 'icon'"
             class="pointer-events-none absolute z-10 cursor-pointer rounded-full opacity-0 shadow-md transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
             :class="compact ? 'bottom-1 right-1' : 'bottom-2 right-2'"
-            :disabled="!album.trackIds.length"
+            :disabled="!album.trackCount"
             :aria-label="
               albumActive && playing
                 ? `Pause ${album.title} by ${album.artist}`
@@ -115,8 +126,8 @@ function toggleAlbumPlayback() {
           </NuxtLink>
           <p class="truncate text-xs text-muted-foreground">
             <TrackArtistLinks :artists="album.artists" /> ·
-            {{ album.tracks.length }}
-            {{ album.tracks.length === 1 ? "track" : "tracks" }}
+            {{ album.trackCount }}
+            {{ album.trackCount === 1 ? "track" : "tracks" }}
           </p>
         </div>
       </div>
@@ -124,7 +135,7 @@ function toggleAlbumPlayback() {
         class="absolute"
         :class="compact ? 'bottom-0 right-0' : 'bottom-1 right-1'"
         :compact="compact"
-        :liked="likedAlbumKeys.includes(album.key)"
+        :liked="likedAlbumKeys.includes(albumLikeKey(album)) || album.liked"
         :label="album.title"
         :pending="
           isLikePending({

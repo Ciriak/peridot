@@ -2,31 +2,32 @@
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
-import { computed, onMounted } from "vue";
+import { computed, onMounted, ref } from "vue";
 import TrackTable from "./TrackTable.vue";
+import { useCatalogTrackQuery } from "../composables/use-catalog-query";
 import { useLikes } from "../composables/use-likes";
-import { useLibraryTracks } from "../composables/use-library-tracks";
-import { filterTracks } from "../lib/library";
+import type { TrackSort } from "../lib/library";
 
 const props = withDefaults(
   defineProps<{ title: string; home?: boolean; favorites?: boolean }>(),
   { home: false, favorites: false },
 );
-const { tracks, loading, error, load } = useLibraryTracks();
-const {
-  likedTrackIds,
-  loading: likesLoading,
-  loaded: likesLoaded,
-  error: likesError,
-  load: loadLikes,
-} = useLikes();
-const visible = computed(() =>
-  filterTracks(
-    tracks.value,
-    "",
-    props.favorites ? likedTrackIds.value : undefined,
-  ),
-);
+const sort = ref<TrackSort | null>({ field: "title", direction: "asc" });
+const queryOptions = computed(() => ({
+  sort:
+    sort.value?.field === "number"
+      ? ("track" as const)
+      : (sort.value?.field ?? "title"),
+  direction: sort.value?.direction ?? ("asc" as const),
+  ...(props.favorites ? { liked: true } : {}),
+}));
+const { tracks, loading, loadingMore, error, loaded, hasMore, load, loadMore } =
+  useCatalogTrackQuery(() => queryOptions.value);
+const { load: loadLikes } = useLikes();
+
+function setSort(next: TrackSort | null) {
+  sort.value = next ?? { field: "title", direction: "asc" };
+}
 
 onMounted(() => {
   void load();
@@ -48,7 +49,9 @@ onMounted(() => {
         ><NuxtLink to="/library">View library</NuxtLink></Button
       >
       <Badge v-else variant="secondary">
-        {{ loading ? "Loading" : `${visible.length} tracks` }}
+        {{
+          loading ? "Loading" : `${tracks.length}${hasMore ? "+" : ""} tracks`
+        }}
       </Badge>
     </div>
     <div
@@ -67,35 +70,27 @@ onMounted(() => {
       <p>{{ error }}</p>
       <Button variant="outline" @click="load(true)">Try again</Button>
     </div>
-    <div
-      v-else-if="favorites && likesLoading && !likesLoaded"
-      role="status"
-      class="flex items-center gap-3 rounded-lg border p-6 text-sm text-muted-foreground"
-    >
-      <PeridotSpinner label="Loading liked songs" />
-      Loading your liked songs…
-    </div>
-    <div
-      v-else-if="favorites && likesError"
-      role="alert"
-      class="space-y-3 rounded-lg border p-6 text-sm"
-    >
-      <p>{{ likesError }}</p>
-      <Button variant="outline" @click="loadLikes(true)">Try again</Button>
-    </div>
-    <div v-else-if="visible.length" :aria-busy="loading">
-      <TrackTable :tracks="visible" variant="library" />
-    </div>
+    <TrackTable
+      v-else-if="tracks.length"
+      :tracks="tracks"
+      variant="library"
+      :sort="sort ?? undefined"
+      :has-more="hasMore"
+      :loading-more="loadingMore"
+      @sort-change="setSort"
+      @load-more="loadMore"
+    />
     <p
       v-else
       role="status"
       class="rounded-lg border p-6 text-sm text-muted-foreground"
     >
       <template v-if="favorites"> You have not liked any tracks yet. </template>
-      <template v-else>
+      <template v-else-if="loaded">
         No tracks in your library yet. Add a music source and run a scan from
         Settings → Sources.
       </template>
+      <template v-else> Loading your library… </template>
     </p>
   </section>
 </template>
