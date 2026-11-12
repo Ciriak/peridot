@@ -3,6 +3,7 @@ import { test } from "node:test";
 import type { MetadataCandidateResponse } from "@peridot/contracts";
 import {
   type AutomaticMatchResult,
+  type ArtistMetadataProviderCandidate,
   type MetadataResolver,
   MetadataResolverRegistry,
 } from "../src/metadata-resolver.js";
@@ -34,6 +35,14 @@ class TestResolver implements MetadataResolver {
 
   async findCandidates(): Promise<MetadataCandidateResponse[]> {
     return [];
+  }
+
+  async findArtistCandidates(): Promise<ArtistMetadataProviderCandidate[]> {
+    return [];
+  }
+
+  async resolveArtistCandidate(): Promise<ArtistMetadataProviderCandidate | null> {
+    return null;
   }
 
   automaticMatch(): AutomaticMatchResult {

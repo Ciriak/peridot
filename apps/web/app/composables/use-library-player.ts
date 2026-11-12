@@ -1,7 +1,12 @@
 import { useI18n, useState } from "#imports";
 import type { TrackResponse } from "@peridot/contracts";
 import { computed, onMounted, onUnmounted, watch } from "vue";
-import { resolvePlayerQueue, trackDownloadFileName } from "../lib/library";
+import {
+  haveSameTrackReferences,
+  mergePlayerQueueTracks,
+  resolvePlayerQueue,
+  trackDownloadFileName,
+} from "../lib/library";
 import {
   addTrackAfterActive,
   advanceShuffle,
@@ -96,7 +101,6 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     "player-queue-tracks",
     () => [],
   );
-  const queueDetailsVersion = useState("player-queue-details-version", () => 0);
   const repeatCycleTrackIds = useState<string[]>(
     "player-repeat-cycle-track-ids",
     () => [],
@@ -139,7 +143,8 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     return `${address.value ?? ""}|${user.value?.id ?? ""}`;
   }
 
-  async function hydrateQueueTracks() {
+  async function hydrateQueueTracks(force = false) {
+    const version = ++queueHydrationVersion;
     if (
       !import.meta.client ||
       !address.value ||
@@ -149,17 +154,21 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
       queueTracks.value = [];
       return;
     }
-    const version = ++queueHydrationVersion;
+    const requestedIds = [...new Set(queueTrackIds.value)];
+    const existingIds = new Set(queueTracks.value.map((track) => track.id));
+    const missingIds = force
+      ? requestedIds
+      : requestedIds.filter((trackId) => !existingIds.has(trackId));
+    if (!missingIds.length) return;
     const serverAddress = address.value;
     const sessionToken = token.value;
-    const ids = [...queueTrackIds.value];
     try {
       const items: TrackResponse[] = [];
-      for (let index = 0; index < ids.length; index += 200) {
+      for (let index = 0; index < missingIds.length; index += 200) {
         const result = await resolveTracks(
           serverAddress,
           sessionToken,
-          ids.slice(index, index + 200),
+          missingIds.slice(index, index + 200),
         );
         items.push(...result.items);
       }
@@ -170,12 +179,16 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
       ) {
         return;
       }
-      queueTracks.value = items;
-      queueDetailsVersion.value += 1;
-    } catch {
-      if (version === queueHydrationVersion) {
-        queueTracks.value = [];
+      const resolved = mergePlayerQueueTracks(
+        queueTracks.value,
+        items,
+        requestedIds,
+      );
+      if (!haveSameTrackReferences(resolved, queueTracks.value)) {
+        queueTracks.value = resolved;
       }
+    } catch {
+      // Keep already-resolved queue rows visible when a refresh fails.
     }
   }
 
@@ -676,11 +689,9 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     }
   }
 
-  watch(
-    [address, token, queueTrackIds, catalogRevision],
-    () => void hydrateQueueTracks(),
-    { deep: true },
-  );
+  watch([address, token], () => void hydrateQueueTracks());
+  watch(queueTrackIds, () => void hydrateQueueTracks());
+  watch(catalogRevision, () => void hydrateQueueTracks(true));
 
   if (options.audio) {
     watch([address, token, () => user.value?.id], () => {

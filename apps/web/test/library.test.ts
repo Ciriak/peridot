@@ -19,6 +19,8 @@ import {
   formatTrackNumber,
   groupAlbums,
   groupArtists,
+  haveSameTrackReferences,
+  mergePlayerQueueTracks,
   nextTrackSort,
   nextQueueTrackId,
   resolvePlayerQueue,
@@ -201,10 +203,11 @@ test("shared track tables keep the main content as the only scroll owner", async
     ),
   );
 
-  assert.match(table, /v-for="item in rows"/);
+  assert.match(table, /const TRACK_BATCH_SIZE = 30/);
+  assert.match(table, /v-for="item in visibleRows"/);
   assert.match(table, /useIntersectionObserver/);
   assert.match(table, /ref="loadMoreTarget"/);
-  assert.match(table, /@click="emit\('load-more'\)"/);
+  assert.match(table, /@click="loadMoreRows"/);
   assert.match(table, /trackTable\.loadMore/);
   assert.match(table, /role="table"/);
   assert.match(table, /:aria-rowcount="tracks\.length \+ 1"/);
@@ -215,6 +218,32 @@ test("shared track tables keep the main content as the only scroll owner", async
     layout,
     /id="main-content"[\s\S]*?class="[^"]*overflow-y-auto/,
     "The main content remains the full-screen track-list scroll owner",
+  );
+});
+
+test("player queue details are merged without refetching known tracks", () => {
+  const current = [tracks[0]!];
+  const incoming = [
+    { ...tracks[0]!, title: "Refreshed Blue Hours" },
+    tracks[1]!,
+  ];
+  const merged = mergePlayerQueueTracks(current, incoming, [
+    "track-2",
+    "track-1",
+  ]);
+
+  assert.deepEqual(
+    merged.map((track) => track.id),
+    ["track-2", "track-1"],
+  );
+  assert.equal(merged[1], incoming[0]);
+  assert.equal(
+    haveSameTrackReferences([tracks[0]!, tracks[1]!], merged),
+    false,
+  );
+  assert.equal(
+    haveSameTrackReferences([tracks[0]!, tracks[1]!], [tracks[0]!, tracks[1]!]),
+    true,
   );
 });
 
@@ -530,6 +559,16 @@ test("artist links preserve names that need URL encoding", () => {
     name: "artist-detail",
     params: { artist: "AC/DC & Friends" },
   });
+  assert.deepEqual(
+    artistRoute({
+      name: "AC/DC",
+      localName: "AC/DC & Friends",
+    }),
+    {
+      name: "artist-detail",
+      params: { artist: "AC/DC & Friends" },
+    },
+  );
 });
 
 test("tracks with multiple artists appear in every credited artist group", () => {

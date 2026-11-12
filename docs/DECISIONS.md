@@ -1,5 +1,62 @@
 # Decisions
 
+## 2026-11-12: Catalog backfills defer until listen and yield between tracks
+
+A catalog projection-version change must not delay the development server from
+accepting requests. The server schedules its automatic projection backfill from
+Fastify's `onListen` hook, after listening begins, and cancels a not-yet-started
+backfill during `onClose`. Shutdown still awaits an in-flight backfill through
+the catalog service.
+
+The backfill also yields to a macrotask after reindexing each track. SQLite
+promise continuations can otherwise keep refilling Node's microtask queues, so
+the startup promise and incoming HTTP requests do not resume until the complete
+projection rebuild has finished. The same yield applies to full projection
+rebuilds used by metadata reset. A regression test requires pending event-loop
+work to run before the backfill completes.
+
+## 2026-11-12: Artist profiles preserve local identity while using provider names
+
+Artist metadata is a profile overlay on the derived catalog artist rather than a
+replacement for the file-tag identity. The file-tag name remains the artist ID
+input, route parameter, like key, and stable fallback. A provider match instead
+publishes a separate display name so canonical provider spelling and manual
+correction do not break existing links or favorites.
+
+Automatic artist matching runs after track matching in the existing
+`metadata_fetch` task. The first exact unique provider match supplies the display
+name, while provider traversal continues until an exact Discogs match supplies a
+portrait. MusicBrainz-only installations therefore receive canonical names with
+the existing placeholder image. Manual matches from any enabled provider replace
+the complete profile, and restoring returns to the file-tag name and placeholder.
+
+Artist portraits are downloaded into content-addressed SQLite rows and served
+through short-lived artist-scoped URLs, matching the track-cover privacy model.
+Only HTTPS JPEG, PNG, or WebP responses from Discogs hosts within the size limit
+are accepted. Browser code never receives provider credentials or remote image
+URLs, and resetting metadata removes cached portraits.
+
+## 2026-11-12: Playback avoids queue-wide refreshes and repeat cover downloads
+
+The shared track table initially mounts 30 rows and reveals further 30-row
+batches as the main page approaches the end of the mounted list. Server cursor
+pagination still bounds the loaded track pages, and the table never creates a
+nested scroll viewport. This keeps a playback-state update from reconciling all
+100 tracks in a default page and postpones artwork work for rows farther down
+the page.
+
+Queue hydration resolves only track IDs that are not already present in the
+player's resolved queue details. Reordering, starting a track already in the
+queue, and other queue mutations that reference known tracks preserve existing
+track objects instead of fetching and replacing the complete queue. A catalog
+revision still forces a full detail refresh so metadata changes propagate.
+
+Artwork URLs are canonical per deduplicated cover ID rather than per track.
+Signed cover tokens are reused for their four-hour validity window, so tracks
+that share album artwork receive the same browser URL and image-cache entry.
+The cover token remains scoped to that stored cover and cannot authorize audio
+or another cover. This supersedes the earlier per-track cover URL contract.
+
 ## 2026-11-12: Player artwork changes without a cover transition
 
 The persistent player keys both its foreground artwork and decorative cover
@@ -21,8 +78,9 @@ owner, so the track list, headings, album cards, and other page content move
 together behind the fixed player.
 
 This restores the owner requirement that a screen inside the main frame never
-has two scrollbars. Server pagination continues to bound the number of rows
-mounted at once, so page-flow rendering remains suitable for large libraries.
+has two scrollbars. Server pagination bounds loaded data, while 30-row
+progressive batches bound the number of currently mounted rows so page-flow
+rendering remains responsive for large libraries.
 
 ## 2026-11-12: Metadata provider activity uses a bounded task detail
 

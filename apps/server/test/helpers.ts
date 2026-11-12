@@ -241,10 +241,10 @@ function taskResult(scan: TaskResponse, metadata: TaskResponse | null) {
     unavailableCount: taskDetailNumber(scan, "files.unavailable"),
     metadataStatus: metadata?.status ?? "skipped",
     metadataTotalCount: metadata
-      ? taskDetailNumber(metadata, "progress.total")
+      ? taskDetailNumber(metadata, "metadata.tracks")
       : 0,
     metadataProcessedCount: metadata
-      ? taskDetailNumber(metadata, "progress.completed")
+      ? taskDetailNumber(metadata, "metadata.tracks.processed")
       : 0,
     metadataMatchedCount: metadata
       ? taskDetailNumber(metadata, "metadata.matched")

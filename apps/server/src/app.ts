@@ -81,6 +81,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
     registry,
     credentials,
     catalog,
+    options.discogsFetch ?? fetch,
   );
   const tasks = new TaskService(database, (task) => realtime.publishTask(task));
   const scanner = new LibraryScanner(database, metadataEnrichment, catalog);
@@ -99,6 +100,13 @@ export async function buildApp(options: BuildAppOptions = {}) {
         ? false
         : { stream: logBuffer.stream, level: "debug" },
     logController: new LogController({ disableRequestLogging: true }),
+  });
+  let backfillImmediate: ReturnType<typeof setImmediate> | undefined;
+  app.addHook("onListen", async () => {
+    backfillImmediate = setImmediate(() => {
+      backfillImmediate = undefined;
+      void catalog.startBackfill();
+    });
   });
   await app.register(websocket, {
     options: { maxPayload: 16 * 1024 },
@@ -171,6 +179,10 @@ export async function buildApp(options: BuildAppOptions = {}) {
     (sessionId) => realtime.disconnectSession(sessionId),
   );
   app.addHook("onClose", async () => {
+    if (backfillImmediate) {
+      clearImmediate(backfillImmediate);
+      backfillImmediate = undefined;
+    }
     await catalog.close();
     metadataEnrichment.close();
     await tasks.close();
@@ -178,6 +190,5 @@ export async function buildApp(options: BuildAppOptions = {}) {
     realtime.close();
     if (ownsDatabase) await database.close();
   });
-  void catalog.startBackfill();
   return app;
 }

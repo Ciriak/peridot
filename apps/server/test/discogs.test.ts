@@ -136,3 +136,55 @@ test("Discogs retries rate-limit responses and rejects invalid tokens", async ()
   });
   await assert.rejects(() => rejected.identity("bad-token"), /rejected/);
 });
+
+test("Discogs finds artist profiles and exposes a safe portrait URL", async () => {
+  const requests: URL[] = [];
+  const image = "https://i.discogs.com/artist-primary.jpg";
+  const client = new DiscogsClient({
+    requestIntervalMs: 0,
+    fetch: async (input) => {
+      const url = new URL(String(input));
+      requests.push(url);
+      if (url.pathname.endsWith("/database/search")) {
+        assert.equal(url.searchParams.get("type"), "artist");
+        return Response.json({ results: [{ id: 501 }] });
+      }
+      if (url.pathname.endsWith("/artists/501")) {
+        return Response.json({
+          id: 501,
+          name: "Elliot Lake",
+          images: [
+            {
+              type: "primary",
+              uri: image,
+              uri150: "http://insecure.example/image.jpg",
+            },
+          ],
+        });
+      }
+      return new Response("not found", { status: 404 });
+    },
+  });
+
+  const candidates = await client.findArtistCandidates(
+    provider,
+    "discogs-secret-token",
+    "Elliot Lake",
+  );
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0]?.externalArtistId, "501");
+  assert.equal(candidates[0]?.portraitAvailable, true);
+  assert.equal(candidates[0]?.imageUrl, image);
+  assert.equal(candidates[0]?.sourceUrl, "https://www.discogs.com/artist/501");
+
+  const resolved = await client.resolveArtistCandidate(
+    provider,
+    "discogs-secret-token",
+    "501",
+  );
+  assert.equal(resolved?.name, "Elliot Lake");
+  assert.equal(
+    requests.filter((url) => url.pathname === "/artists/501").length,
+    1,
+  );
+});

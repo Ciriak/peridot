@@ -2,6 +2,117 @@
 
 Last updated: 2026-11-12.
 
+## Development server startup during catalog backfills
+
+`npm run dev` now starts Fastify immediately even when the local catalog needs a
+projection rebuild. The previous startup scheduled the backfill inside
+`buildApp()`; SQLite work continuously refilled Node's microtask queues, delaying
+`app.listen()` and making the server appear not to start. The backfill now starts
+from Fastify's `onListen` hook and yields to the event loop after each reindexed
+track. Pending scheduled work is cancelled on close, while an already running
+backfill is still awaited.
+
+Added a catalog regression test that verifies pending macrotask work runs before
+the projection backfill completes. Verification passed:
+
+- `pnpm --filter @peridot/server test` (98 passing)
+- `pnpm --filter @peridot/server typecheck`
+- `pnpm --filter @peridot/server build`
+- Targeted ESLint and Prettier checks for the changed server files and test
+- `npm run dev`; web returned 200 on `127.0.0.1:3000` and
+  `GET /api/health` returned 200 on `127.0.0.1:17430` while the existing
+  `apps/server/peridot.db` projection backfill was active
+- `git diff --check`
+
+All changes remain uncommitted on `dev` alongside the existing artist-metadata
+work. No commit, push, tag, publication, or deployment was performed. The local
+database's full 848-track projection rebuild should be allowed to finish before
+stopping the development server; an interrupted rebuild resumes on the next
+start.
+
+## Artist metadata profiles
+
+Artist pages now support automatic and manual provider-backed profiles with a
+canonical display name and a locally cached portrait. The file-tag name remains
+the stable local artist ID for routes, links, and likes. The catalog projection
+stores a separate display name, includes both names in search terms, and returns
+signed artist-image URLs.
+
+`metadata_fetch` now processes artists after tracks. MusicBrainz can supply
+canonical identity; Discogs supplies portraits when configured. The first exact
+provider match supplies the name, and provider traversal continues until an
+exact Discogs candidate supplies an image. Artist image downloads accept only
+bounded HTTPS JPEG, PNG, or WebP responses from Discogs hosts and are
+content-addressed in SQLite. Signed-in members can search merged artist
+candidates, apply a manual match, view its source, or restore local metadata from
+artist cards, detail headers, and collection context menus. Reset metadata now
+clears track and artist overrides and removes cached portraits.
+
+Checks run:
+
+- `pnpm format:check`
+- `pnpm lint`
+- `pnpm typecheck`
+- `pnpm test` (137 web, 97 server, and 13 UI tests passing)
+- `pnpm db:validate`
+- `pnpm build`
+- `pnpm db:update` against `apps/server/peridot.db`; Prisma reports no pending
+  migrations
+- `git diff --check`
+
+Known limits: portraits require the existing Discogs provider, so
+MusicBrainz-only installations receive canonical names with placeholders.
+Automatic matching performs provider lookups per distinct artist and can lengthen
+large background metadata tasks. Live provider responses and browser
+visual/pointer QA were not exercised. Existing uncommitted playback, catalog,
+and UI changes were preserved alongside this work. No commit, push, tag,
+publication, or deployment was performed.
+
+Next: visually verify portrait and alternate-name layouts at desktop and mobile
+widths, then run a real MusicBrainz plus Discogs matching pass against a curated
+library. The prior playback-regression note below predates this completed artist
+work.
+
+## Playback cover-loading regression
+
+Starting a track could make playback and the player feel unresponsive because
+queue hydration replaced every resolved queue item, and the shared track table
+kept reconciling the complete 100-row catalog page. Cover URLs were also issued
+per track with a fresh token, so tracks sharing one stored album image bypassed
+the browser cache and requested the same bitmap repeatedly.
+
+Queue hydration now resolves only missing track IDs and preserves existing
+track objects during ordinary queue changes; catalog revisions still trigger a
+full refresh. The shared track table keeps main-frame page-flow scrolling but
+initially mounts 30 rows and reveals 30-row batches near the end. Cover URLs now
+use a canonical `/api/covers/:coverId` route, and the server reuses signed cover
+tokens during their validity window. Tracks sharing deduplicated artwork now
+share the same browser-cache entry.
+
+Checks run:
+
+- `pnpm --filter @peridot/web test` (137 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Targeted server cover/token tests (passing)
+- Targeted ESLint and Prettier checks for changed files
+- `pnpm --filter @peridot/server test` (87 passing, 4 failing in pre-existing
+  uncommitted metadata/source work)
+- `git diff --check`
+
+Known limits: server typecheck is currently blocked by pre-existing uncommitted
+artist-metadata errors in `metadata-enrichment.ts` and `catalog.ts`. The
+supported server suite's four failures are also outside this fix: three
+metadata cases and one source-management case. Local server startup is blocked
+until the concurrent schema work is applied because the development database
+does not yet contain `CatalogArtist.displayName`. Browser visual and network QA
+could not run because the computer-use host rejected the local page URL. All
+work remains uncommitted on `dev` alongside the existing artist-metadata work;
+no commit, push, tag, publication, or deployment was performed. Next: after the
+concurrent metadata work is resolved and its schema is applied, exercise play,
+queue reorder, and queue open/close with browser network tools and confirm one
+request per distinct cover.
+
 ## Immediate player cover updates
 
 The persistent player now replaces both its foreground cover and blurred

@@ -119,9 +119,12 @@ export interface AlbumListResponse {
 export interface ArtistSummaryResponse {
   id: string;
   name: string;
+  localName: string;
   albumCount: number;
   trackCount: number;
   durationMs: number | null;
+  imageUrl: string | null;
+  metadata: ArtistMetadataResponse | null;
   liked: boolean;
 }
 
@@ -129,6 +132,47 @@ export interface ArtistListResponse {
   items: ArtistSummaryResponse[];
   nextCursor: string | null;
   catalogRevision: number;
+}
+
+export type ArtistMetadataMatchMode = "automatic" | "manual";
+
+export interface ArtistMetadataProvenanceResponse {
+  providerId: string;
+  providerKind: MetadataProviderKind;
+  providerName: string;
+  externalArtistId: string;
+  sourceUrl: string;
+}
+
+export interface ArtistMetadataResponse {
+  mode: ArtistMetadataMatchMode;
+  matchedAt: string;
+  name: ArtistMetadataProvenanceResponse;
+  portrait: ArtistMetadataProvenanceResponse | null;
+}
+
+export interface ArtistMetadataCandidateResponse {
+  providerId: string;
+  providerKind: MetadataProviderKind;
+  providerName: string;
+  externalArtistId: string;
+  name: string;
+  disambiguation: string | null;
+  score: number;
+  sourceUrl: string;
+  portraitAvailable: boolean;
+}
+
+export interface ArtistMetadataCandidateListResponse {
+  items: ArtistMetadataCandidateResponse[];
+}
+
+export interface ApplyArtistMetadataRequest {
+  providerId: string;
+  externalArtistId: string;
+  name: string;
+  sourceUrl: string;
+  portraitAvailable: boolean;
 }
 
 export interface PlaybackTokenResponse {
@@ -415,8 +459,9 @@ export interface ApplyTrackMetadataRequest {
   details: TrackMetadataDetail[];
 }
 
-export interface ResetTrackMetadataResponse {
-  resetCount: number;
+export interface ResetMetadataResponse {
+  trackCount: number;
+  artistCount: number;
 }
 
 export interface DirectoryEntryResponse {

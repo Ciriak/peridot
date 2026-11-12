@@ -4,6 +4,7 @@ import type {
 } from "@peridot/contracts";
 import { normalizeArtistCredits } from "./artist-credits.js";
 import {
+  type ArtistMetadataProviderCandidate,
   candidateIdentity,
   type AutomaticMatchResult,
   type MetadataProviderContext,
@@ -33,6 +34,7 @@ interface DiscogsIdentity {
 }
 
 interface DiscogsArtist {
+  id?: number | undefined;
   name?: string | undefined;
 }
 
@@ -63,6 +65,12 @@ interface DiscogsRelease {
   formats?: DiscogsFormat[] | undefined;
   artists: DiscogsArtist[];
   tracklist: DiscogsTrack[];
+}
+
+interface DiscogsArtistProfile {
+  id: number;
+  name: string;
+  imageUrl: string | null;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -147,6 +155,32 @@ function parseRelease(value: unknown): DiscogsRelease | null {
           .map((artist) => ({ name: text(artist.name) })),
       })),
   };
+}
+
+function parseArtistProfile(value: unknown): DiscogsArtistProfile | null {
+  const artist = asRecord(value);
+  const id = positiveInteger(artist?.id);
+  const name = text(artist?.name);
+  if (!artist || !id || !name) return null;
+  const images = asArray(artist.images)
+    .map(asRecord)
+    .filter((image): image is Record<string, unknown> => image !== null);
+  const primary =
+    images.find((image) => text(image.type).toLowerCase() === "primary") ??
+    images[0];
+  const candidateUrl = text(primary?.uri) || text(primary?.uri150);
+  let imageUrl: string | null = null;
+  if (candidateUrl) {
+    try {
+      const url = new URL(candidateUrl);
+      if (url.protocol === "https:" && !url.username && !url.password) {
+        imageUrl = url.toString();
+      }
+    } catch {
+      imageUrl = null;
+    }
+  }
+  return { id, name, imageUrl };
 }
 
 function parseDuration(value: string | undefined): number | null {
@@ -376,6 +410,7 @@ export class DiscogsClient {
     signal?: AbortSignal,
   ) => Promise<void>;
   private readonly releaseCache = new Map<number, DiscogsRelease>();
+  private readonly artistCache = new Map<number, DiscogsArtistProfile | null>();
   private nextRequestAt = 0;
 
   constructor(options: DiscogsClientOptions = {}) {
@@ -435,6 +470,96 @@ export class DiscogsClient {
       if (release) releases.push(release);
     }
     return releases;
+  }
+
+  async findArtistCandidates(
+    provider: MetadataProviderContext,
+    credential: string,
+    artistName: string,
+    query?: string,
+    signal?: AbortSignal,
+  ): Promise<ArtistMetadataProviderCandidate[]> {
+    const search = new URLSearchParams({
+      type: "artist",
+      q: query?.trim() || artistName,
+      per_page: String(SEARCH_LIMIT),
+    });
+    const body = asRecord(
+      await this.request(
+        credential,
+        "database/search",
+        Object.fromEntries(search),
+        signal,
+      ),
+    );
+    const ids = asArray(body?.results)
+      .map(asRecord)
+      .filter((result): result is Record<string, unknown> => result !== null)
+      .flatMap((result) => {
+        const id = positiveInteger(result.id);
+        return id ? [id] : [];
+      })
+      .slice(0, RELEASE_DETAIL_LIMIT);
+    const candidates: ArtistMetadataProviderCandidate[] = [];
+    for (const id of ids) {
+      const artist = await this.artist(credential, id, signal);
+      if (!artist) continue;
+      candidates.push({
+        providerId: provider.id,
+        providerKind: provider.kind,
+        providerName: provider.name,
+        externalArtistId: String(artist.id),
+        name: artist.name,
+        disambiguation: null,
+        score: 0,
+        sourceUrl: `https://www.discogs.com/artist/${encodeURIComponent(String(artist.id))}`,
+        portraitAvailable: Boolean(artist.imageUrl),
+        imageUrl: artist.imageUrl,
+      });
+    }
+    return candidates;
+  }
+
+  async resolveArtistCandidate(
+    provider: MetadataProviderContext,
+    credential: string,
+    externalArtistId: string,
+    signal?: AbortSignal,
+  ): Promise<ArtistMetadataProviderCandidate | null> {
+    const id = positiveInteger(externalArtistId);
+    if (!id) return null;
+    const artist = await this.artist(credential, id, signal);
+    return artist
+      ? {
+          providerId: provider.id,
+          providerKind: provider.kind,
+          providerName: provider.name,
+          externalArtistId: String(artist.id),
+          name: artist.name,
+          disambiguation: null,
+          score: 100,
+          sourceUrl: `https://www.discogs.com/artist/${id}`,
+          portraitAvailable: Boolean(artist.imageUrl),
+          imageUrl: artist.imageUrl,
+        }
+      : null;
+  }
+
+  private async artist(
+    credential: string,
+    id: number,
+    signal?: AbortSignal,
+  ): Promise<DiscogsArtistProfile | null> {
+    if (this.artistCache.has(id)) return this.artistCache.get(id) ?? null;
+    const artist = parseArtistProfile(
+      await this.request(credential, `artists/${id}`, {}, signal),
+    );
+    if (this.artistCache.size >= RELEASE_CACHE_LIMIT) {
+      const oldest = this.artistCache.keys().next().value as number | undefined;
+      if (oldest !== undefined) this.artistCache.delete(oldest);
+    }
+    this.artistCache.set(id, artist);
+    return artist;
   }
 
   private async release(
@@ -683,6 +808,50 @@ export class DiscogsResolver implements MetadataResolver {
     );
     return releases.flatMap((release, index) =>
       trackCandidates(provider, release, track, 100 - index),
+    );
+  }
+
+  async findArtistCandidates(
+    provider: MetadataProviderContext,
+    artistName: string,
+    query?: string,
+    signal?: AbortSignal,
+  ): Promise<ArtistMetadataProviderCandidate[]> {
+    if (!provider.credential) {
+      throw new MetadataResolverError(
+        "The Discogs access token is missing.",
+        409,
+        false,
+        message("api.message.discogsTokenRequired"),
+      );
+    }
+    return this.client.findArtistCandidates(
+      provider,
+      provider.credential,
+      artistName,
+      query,
+      signal,
+    );
+  }
+
+  async resolveArtistCandidate(
+    provider: MetadataProviderContext,
+    externalArtistId: string,
+    signal?: AbortSignal,
+  ): Promise<ArtistMetadataProviderCandidate | null> {
+    if (!provider.credential) {
+      throw new MetadataResolverError(
+        "The Discogs access token is missing.",
+        409,
+        false,
+        message("api.message.discogsTokenRequired"),
+      );
+    }
+    return this.client.resolveArtistCandidate(
+      provider,
+      provider.credential,
+      externalArtistId,
+      signal,
     );
   }
 

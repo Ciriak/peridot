@@ -164,4 +164,37 @@ export async function registerCatalogRoutes(
       return artist;
     },
   );
+
+  const sendArtistImage = async (
+    request: { params: { id: string } },
+    reply: Parameters<typeof sendError>[0],
+    head: boolean,
+  ) => {
+    const image = await catalog.artistImage(request.params.id);
+    if (!image) {
+      return sendError(
+        reply,
+        404,
+        "artist_image_not_found",
+        "Artist image not found",
+        message("api.message.artistImageNotFound"),
+      );
+    }
+    const data = Buffer.from(image.data);
+    reply
+      .header("Cache-Control", "private, max-age=14400")
+      .header("Content-Length", data.byteLength)
+      .header("Content-Type", image.mimeType);
+    return head ? reply.send() : reply.send(data);
+  };
+
+  app.get<{ Params: { id: string } }>(
+    "/api/artists/:id/image",
+    { exposeHeadRoute: false },
+    async (request, reply) => sendArtistImage(request, reply, false),
+  );
+  app.head<{ Params: { id: string } }>(
+    "/api/artists/:id/image",
+    async (request, reply) => sendArtistImage(request, reply, true),
+  );
 }

@@ -1031,7 +1031,7 @@ test("administrators can reset all track metadata to file tags", async () => {
       headers: context.authorization,
     });
     assert.equal(reset.statusCode, 200);
-    assert.deepEqual(reset.json(), { resetCount: 2 });
+    assert.deepEqual(reset.json(), { trackCount: 2, artistCount: 0 });
 
     const resetTracks = await context.database.orm.Track.orderBy((track) =>
       track.title.asc(),

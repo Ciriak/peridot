@@ -1,4 +1,5 @@
 import type {
+  ArtistMetadataCandidateResponse,
   MessageDescriptor,
   MetadataCandidateResponse,
   MetadataProviderDefinitionResponse,
@@ -23,6 +24,10 @@ export interface MetadataProviderContext {
   name: string;
   configuration: Record<string, string>;
   credential: string | null;
+}
+
+export interface ArtistMetadataProviderCandidate extends ArtistMetadataCandidateResponse {
+  imageUrl: string | null;
 }
 
 export type AutomaticMatchResult =
@@ -58,6 +63,19 @@ export interface MetadataResolver {
     track: MetadataTrackInput,
     candidates: readonly MetadataCandidateResponse[],
   ): AutomaticMatchResult;
+
+  findArtistCandidates(
+    provider: MetadataProviderContext,
+    artistName: string,
+    query?: string,
+    signal?: AbortSignal,
+  ): Promise<ArtistMetadataProviderCandidate[]>;
+
+  resolveArtistCandidate(
+    provider: MetadataProviderContext,
+    externalArtistId: string,
+    signal?: AbortSignal,
+  ): Promise<ArtistMetadataProviderCandidate | null>;
 
   sourceUrl(externalTrackId: string, externalReleaseId: string | null): string;
 }
@@ -125,6 +143,12 @@ export function candidateIdentity(
     candidate.externalTrackId,
     candidate.externalReleaseId ?? "",
   ].join("\u0000");
+}
+
+export function artistCandidateIdentity(
+  candidate: ArtistMetadataCandidateResponse,
+): string {
+  return [candidate.providerId, candidate.externalArtistId].join("\u0000");
 }
 
 export function candidateDetails(

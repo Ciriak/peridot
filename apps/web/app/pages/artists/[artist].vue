@@ -7,9 +7,12 @@ import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { computed, onMounted, ref, watch } from "vue";
 import AlbumCard from "../../components/AlbumCard.vue";
+import ArtistArtwork from "../../components/ArtistArtwork.vue";
+import ArtistContextMenu from "../../components/ArtistContextMenu.vue";
 import LikeButton from "../../components/LikeButton.vue";
 import TrackTable from "../../components/TrackTable.vue";
 import {
+  useCatalogRevision,
   useCatalogAlbumQuery,
   useCatalogTrackQuery,
 } from "../../composables/use-catalog-query";
@@ -36,6 +39,7 @@ const { t } = useI18n();
 const { address } = useServer();
 const { token } = useSession();
 const { playCollection } = useLibraryPlayer();
+const { revision: catalogRevision } = useCatalogRevision();
 const {
   likedArtistKeys,
   loaded: likesLoaded,
@@ -95,7 +99,7 @@ async function loadArtist() {
     artist.value =
       page.items.find(
         (candidate) =>
-          candidate.name.toLowerCase() === artistName.value.toLowerCase(),
+          candidate.localName.toLowerCase() === artistName.value.toLowerCase(),
       ) ?? null;
     if (artist.value) {
       await Promise.all([loadAlbums(true), loadTracks(true)]);
@@ -121,7 +125,7 @@ function setTrackSort(next: TrackSort | null) {
   trackSort.value = next ?? { field: "number", direction: "asc" };
 }
 
-watch([artistName, address, token], () => {
+watch([artistName, address, token, catalogRevision], () => {
   artist.value = null;
   void loadArtist();
 });
@@ -161,57 +165,70 @@ onMounted(() => {
     }}</Button>
   </div>
   <template v-else-if="artist">
-    <section
-      aria-labelledby="artist-heading"
-      class="flex flex-col gap-6 rounded-lg border bg-card p-6 text-card-foreground sm:flex-row sm:items-end"
-    >
-      <div
-        aria-hidden="true"
-        class="flex size-40 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground"
+    <ArtistContextMenu :artist="artist">
+      <section
+        aria-labelledby="artist-heading"
+        class="flex flex-col gap-6 rounded-lg border bg-card p-6 text-card-foreground sm:flex-row sm:items-end"
       >
-        <Icon :icon="icons.user" class="size-16" />
-      </div>
-      <div class="min-w-0 space-y-3">
-        <p
-          class="text-xs font-medium uppercase tracking-wide text-muted-foreground"
-        >
-          {{ t("page.artist.label") }}
-        </p>
-        <h1 id="artist-heading" class="text-3xl font-semibold tracking-tight">
-          {{ artist.name }}
-        </h1>
-        <div class="flex flex-wrap items-center gap-3">
-          <Button :disabled="!artist.trackCount" @click="playWholeArtist">
-            <Icon :icon="icons.play" aria-hidden="true" />{{
-              t("context.playArtist")
-            }}
-          </Button>
-          <LikeButton
-            :liked="
-              likedArtistKeys.includes(artistLikeKey(artist.name)) ||
-              artist.liked
-            "
-            :label="artist.name"
-            :pending="isLikePending({ kind: 'artist', name: artist.name })"
-            :disabled="!likesLoaded"
-            @toggle="toggleLike({ kind: 'artist', name: artist.name })"
-          />
-          <Badge variant="secondary">
-            {{
-              t("count.album", { count: artist.albumCount }, artist.albumCount)
-            }}
-          </Badge>
-          <Badge variant="secondary">
-            {{
-              t("count.track", { count: artist.trackCount }, artist.trackCount)
-            }}
-          </Badge>
-          <span class="text-sm text-muted-foreground">
-            {{ formatTrackDuration(artist.durationMs) }}
-          </span>
+        <ArtistArtwork :image-url="artist.imageUrl" size="lg" />
+        <div class="min-w-0 space-y-3">
+          <p
+            class="text-xs font-medium uppercase tracking-wide text-muted-foreground"
+          >
+            {{ t("page.artist.label") }}
+          </p>
+          <h1 id="artist-heading" class="text-3xl font-semibold tracking-tight">
+            {{ artist.name }}
+          </h1>
+          <p
+            v-if="artist.name !== artist.localName"
+            class="text-sm text-muted-foreground"
+          >
+            {{ t("page.artist.localName", { artist: artist.localName }) }}
+          </p>
+          <div class="flex flex-wrap items-center gap-3">
+            <Button :disabled="!artist.trackCount" @click="playWholeArtist">
+              <Icon :icon="icons.play" aria-hidden="true" />{{
+                t("context.playArtist")
+              }}
+            </Button>
+            <LikeButton
+              :liked="
+                likedArtistKeys.includes(artistLikeKey(artist.localName)) ||
+                artist.liked
+              "
+              :label="artist.name"
+              :pending="
+                isLikePending({ kind: 'artist', name: artist.localName })
+              "
+              :disabled="!likesLoaded"
+              @toggle="toggleLike({ kind: 'artist', name: artist.localName })"
+            />
+            <Badge variant="secondary">
+              {{
+                t(
+                  "count.album",
+                  { count: artist.albumCount },
+                  artist.albumCount,
+                )
+              }}
+            </Badge>
+            <Badge variant="secondary">
+              {{
+                t(
+                  "count.track",
+                  { count: artist.trackCount },
+                  artist.trackCount,
+                )
+              }}
+            </Badge>
+            <span class="text-sm text-muted-foreground">
+              {{ formatTrackDuration(artist.durationMs) }}
+            </span>
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </ArtistContextMenu>
 
     <section
       v-if="albums.length"

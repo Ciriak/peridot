@@ -8,8 +8,16 @@
       "model": "AlbumLike",
       "namespace": "__unbound__"
     },
+    "ArtistImage": {
+      "model": "ArtistImage",
+      "namespace": "__unbound__"
+    },
     "ArtistLike": {
       "model": "ArtistLike",
+      "namespace": "__unbound__"
+    },
+    "ArtistMetadata": {
+      "model": "ArtistMetadata",
       "namespace": "__unbound__"
     },
     "CatalogAlbum": {
@@ -191,6 +199,103 @@
               "table": "AlbumLike"
             }
           },
+          "ArtistImage": {
+            "fields": {
+              "createdAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                }
+              },
+              "data": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/blob@1",
+                  "kind": "scalar"
+                }
+              },
+              "hash": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "mimeType": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "sourceUrl": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "updatedAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "metadata": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "imageId"
+                  ]
+                },
+                "to": {
+                  "model": "ArtistMetadata",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "createdAt": {
+                  "column": "createdAt"
+                },
+                "data": {
+                  "column": "data"
+                },
+                "hash": {
+                  "column": "hash"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "mimeType": {
+                  "column": "mimeType"
+                },
+                "sourceUrl": {
+                  "column": "sourceUrl"
+                },
+                "updatedAt": {
+                  "column": "updatedAt"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "ArtistImage"
+            }
+          },
           "ArtistLike": {
             "fields": {
               "createdAt": {
@@ -267,6 +372,204 @@
               },
               "namespaceId": "__unbound__",
               "table": "ArtistLike"
+            }
+          },
+          "ArtistMetadata": {
+            "fields": {
+              "artistId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "attemptedSignature": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "displayName": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "externalArtistId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "imageExternalArtistId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "imageId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "imageProviderId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "imageProviderKind": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "imageProviderName": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "imageSourceUrl": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "matchedAt": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                }
+              },
+              "metadataMode": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "nameProviderId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "nameProviderKind": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "nameProviderName": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "nameSourceUrl": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "updatedAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "image": {
+                "cardinality": "N:1",
+                "nullable": true,
+                "on": {
+                  "localFields": [
+                    "imageId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "ArtistImage",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "artistId": {
+                  "column": "artistId"
+                },
+                "attemptedSignature": {
+                  "column": "attemptedSignature"
+                },
+                "displayName": {
+                  "column": "displayName"
+                },
+                "externalArtistId": {
+                  "column": "externalArtistId"
+                },
+                "imageExternalArtistId": {
+                  "column": "imageExternalArtistId"
+                },
+                "imageId": {
+                  "column": "imageId"
+                },
+                "imageProviderId": {
+                  "column": "imageProviderId"
+                },
+                "imageProviderKind": {
+                  "column": "imageProviderKind"
+                },
+                "imageProviderName": {
+                  "column": "imageProviderName"
+                },
+                "imageSourceUrl": {
+                  "column": "imageSourceUrl"
+                },
+                "matchedAt": {
+                  "column": "matchedAt"
+                },
+                "metadataMode": {
+                  "column": "metadataMode"
+                },
+                "nameProviderId": {
+                  "column": "nameProviderId"
+                },
+                "nameProviderKind": {
+                  "column": "nameProviderKind"
+                },
+                "nameProviderName": {
+                  "column": "nameProviderName"
+                },
+                "nameSourceUrl": {
+                  "column": "nameSourceUrl"
+                },
+                "updatedAt": {
+                  "column": "updatedAt"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "ArtistMetadata"
             }
           },
           "CatalogAlbum": {
@@ -419,6 +722,13 @@
                   "kind": "scalar"
                 }
               },
+              "displayName": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
               "durationMs": {
                 "nullable": true,
                 "type": {
@@ -434,6 +744,13 @@
                 }
               },
               "name": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "normalizedDisplayName": {
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/text@1",
@@ -468,6 +785,9 @@
                 "albumCount": {
                   "column": "albumCount"
                 },
+                "displayName": {
+                  "column": "displayName"
+                },
                 "durationMs": {
                   "column": "durationMs"
                 },
@@ -476,6 +796,9 @@
                 },
                 "name": {
                   "column": "name"
+                },
+                "normalizedDisplayName": {
+                  "column": "normalizedDisplayName"
                 },
                 "normalizedName": {
                   "column": "normalizedName"
@@ -2371,6 +2694,63 @@
                 }
               ]
             },
+            "ArtistImage": {
+              "columns": {
+                "createdAt": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/datetime",
+                  "default": {
+                    "expression": "now()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                },
+                "data": {
+                  "codecId": "sqlite/blob@1",
+                  "dataType": "sqlite/blob",
+                  "nullable": false
+                },
+                "hash": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "mimeType": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "sourceUrl": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "updatedAt": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/datetime",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": [
+                {
+                  "columns": [
+                    "hash"
+                  ]
+                }
+              ]
+            },
             "ArtistLike": {
               "columns": {
                 "createdAt": {
@@ -2457,6 +2837,137 @@
                   ]
                 }
               ]
+            },
+            "ArtistMetadata": {
+              "columns": {
+                "artistId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "attemptedSignature": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "displayName": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "externalArtistId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "imageExternalArtistId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "imageId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "imageProviderId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "imageProviderKind": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "imageProviderName": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "imageSourceUrl": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "matchedAt": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/datetime",
+                  "nullable": true
+                },
+                "metadataMode": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "default": {
+                    "kind": "literal",
+                    "value": "automatic"
+                  },
+                  "nullable": false
+                },
+                "nameProviderId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "nameProviderKind": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "nameProviderName": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "nameSourceUrl": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "updatedAt": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/datetime",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "name": "ArtistMetadata_imageId_idx_9d3c09ba"
+                  },
+                  "onDelete": "setNull",
+                  "source": {
+                    "columns": [
+                      "imageId"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "ArtistMetadata"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "ArtistImage"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "imageId"
+                  ],
+                  "name": "ArtistMetadata_imageId_idx_9d3c09ba",
+                  "prefix": "ArtistMetadata_imageId_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "artistId"
+                ]
+              },
+              "uniques": []
             },
             "CatalogAlbum": {
               "columns": {
@@ -2578,6 +3089,15 @@
                   },
                   "nullable": false
                 },
+                "displayName": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "default": {
+                    "kind": "literal",
+                    "value": ""
+                  },
+                  "nullable": false
+                },
                 "durationMs": {
                   "codecId": "sqlite/integer@1",
                   "dataType": "sqlite/integer",
@@ -2591,6 +3111,15 @@
                 "name": {
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "normalizedDisplayName": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "default": {
+                    "kind": "literal",
+                    "value": ""
+                  },
                   "nullable": false
                 },
                 "normalizedName": {
@@ -2615,6 +3144,15 @@
               },
               "foreignKeys": [],
               "indexes": [
+                {
+                  "columns": [
+                    "normalizedDisplayName",
+                    "id"
+                  ],
+                  "name": "CatalogArtist_normalizedDisplayName_id_idx_ffdab67f",
+                  "prefix": "CatalogArtist_normalizedDisplayName_id_idx",
+                  "unique": false
+                },
                 {
                   "columns": [
                     "normalizedName",
@@ -4208,10 +4746,10 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "2a4f0c3ca93b45757b7ced2f0620e5e0986015766abd44ff77c62a405a37a41d"
+    "storageHash": "a470080f0b4dbcbbb9a77482b5e123b615fe20b2387712d15eab71928c0834e8"
   },
   "execution": {
-    "executionHash": "5f4f0b1abd901c278bc6dbaa0c73b5748292f9229ce79b1879fc9568c54bbc1d",
+    "executionHash": "3874c46866d1115093e936c3d06a7fac34e15377a3d896762aea35a15b583c21",
     "mutations": {
       "defaults": [
         {
@@ -4231,8 +4769,49 @@
             "kind": "generator"
           },
           "ref": {
+            "entry": "ArtistImage",
+            "field": "id",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "onUpdate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "ArtistImage",
+            "field": "updatedAt",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "cuid2",
+            "kind": "generator"
+          },
+          "ref": {
             "entry": "ArtistLike",
             "field": "id",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "onUpdate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "ArtistMetadata",
+            "field": "updatedAt",
             "namespace": "__unbound__"
           }
         },

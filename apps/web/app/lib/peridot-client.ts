@@ -1,8 +1,10 @@
 import type {
   ApiErrorResponse,
+  ApplyArtistMetadataRequest,
   ApplyTrackMetadataRequest,
   AlbumListResponse,
   ArtistListResponse,
+  ArtistMetadataCandidateListResponse,
   AuthSessionResponse,
   AuthStatusResponse,
   CreateMetadataProviderRequest,
@@ -27,7 +29,7 @@ import type {
   QueueResponse,
   RecordTrackPlayResponse,
   ReplaceQueueRequest,
-  ResetTrackMetadataResponse,
+  ResetMetadataResponse,
   ServerSettingsResponse,
   SourceListResponse,
   TaskListResponse,
@@ -390,7 +392,7 @@ export function refreshMetadata(serverAddress: string, token: string) {
 }
 
 export function resetMetadata(serverAddress: string, token: string) {
-  return authenticatedRequestJson<ResetTrackMetadataResponse>(
+  return authenticatedRequestJson<ResetMetadataResponse>(
     serverAddress,
     "/api/admin/metadata/reset",
     token,
@@ -647,6 +649,49 @@ export function fetchArtist(
     serverAddress,
     `/api/artists/${encodeURIComponent(artistId)}`,
     token,
+  );
+}
+
+export function listArtistMetadataCandidates(
+  serverAddress: string,
+  token: string,
+  artistId: string,
+  query?: string,
+) {
+  const params = new URLSearchParams();
+  if (query?.trim()) params.set("query", query.trim());
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return authenticatedRequestJson<ArtistMetadataCandidateListResponse>(
+    serverAddress,
+    `/api/artists/${encodeURIComponent(artistId)}/metadata/candidates${suffix}`,
+    token,
+  );
+}
+
+export function applyArtistMetadata(
+  serverAddress: string,
+  token: string,
+  artistId: string,
+  metadata: ApplyArtistMetadataRequest,
+) {
+  return authenticatedRequestJson<null>(
+    serverAddress,
+    `/api/artists/${encodeURIComponent(artistId)}/metadata`,
+    token,
+    { method: "PUT", body: JSON.stringify(metadata) },
+  );
+}
+
+export function revertArtistMetadata(
+  serverAddress: string,
+  token: string,
+  artistId: string,
+) {
+  return authenticatedRequestJson<null>(
+    serverAddress,
+    `/api/artists/${encodeURIComponent(artistId)}/metadata`,
+    token,
+    { method: "DELETE" },
   );
 }
 

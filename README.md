@@ -41,7 +41,13 @@ cards, an all-tracks list, and artist playback actions. Artist names in the
 shared track list appear beneath each title and link to their derived artist
 pages, while visible album names link to their album details in every track-table
 variant. Artist credits in the fixed player and queue also link to their derived
-artist pages. The fixed
+artist pages. Matched artist profiles can replace the local file-tag name with a
+provider canonical name and fill the card and detail portrait from Discogs.
+Portraits are downloaded into the local database and served through short-lived
+artist-scoped image URLs; MusicBrainz-only installations retain the semantic
+artist placeholder. Manual artist matching accepts the same signed-in user
+correction and restore flow as track metadata while preserving the local name as
+the stable route and favorite identity. The fixed
 player streams available tracks from the authenticated server through a
 short-lived, track-scoped playback URL, with play/pause, seeking, volume,
 previous/next, persistent randomized playback, automatic advancement, and
@@ -224,6 +230,11 @@ Administrators can disable, re-enable, or edit a provider without deleting its
 stored configuration. After a library scan discovers new or changed tracks,
 Peridot resolves unmatched tracks in provider order in the background.
 Requests to each provider are rate-limited separately.
+Artist name and portrait matching runs after track matching in the same metadata
+task. Provider candidates are merged for correction, and matched artist names,
+portrait provenance, and cached image content are stored locally. Artist image
+downloads accept only bounded HTTPS JPEG, PNG, or WebP responses from approved
+Discogs hosts.
 Each containing folder is treated as an album: the folder name supplies the
 release title when tracks have no album tag, or when their tags disagree.
 The Metadata page also has a Refresh metadata action that queues automatic
@@ -237,7 +248,10 @@ Provider metadata is stored separately from local file tags, including
 provider-specific details such as Discogs release year, label, catalog number,
 country, format, and track position. Track context menus merge candidates from
 every enabled provider and let signed-in users choose another match or return
-to the original file metadata. Peridot never rewrites the audio files.
+to the original file metadata. Artist context menus provide the equivalent
+profile correction and local-metadata restore actions. Reset metadata clears
+track and artist matches and removes cached artist portraits. Peridot never
+rewrites the audio files.
 
 Synchronize an existing local database with the current Prisma 8 contract:
 
@@ -312,10 +326,11 @@ available from `GET /api/quick-picks`; the server returns up to eight ordered tr
 and album entries with their current catalog summaries after applying seven-day
 exponential decay.
 Album covers are deduplicated by content hash in the local SQLite database and
-served through short-lived, track-scoped cover URLs so browser image requests do
-not expose the user session. Tracks without readable embedded or folder artwork
-keep the semantic music-note placeholder in album cards, album details, and the
-player.
+served through short-lived signed URLs keyed by the deduplicated cover ID, so
+browser image requests do not expose the user session and tracks sharing
+artwork reuse one browser-cache entry. Tracks without readable embedded or
+folder artwork keep the semantic music-note placeholder in album cards, album
+details, and the player.
 Administrators can search local directories recursively with
 `GET /api/admin/filesystem/search?query=<term>`; results are bounded and do not
 follow symbolic links.
@@ -334,10 +349,14 @@ enabled-state updates.
 Disabled providers remain listed but are excluded from matching.
 `POST /api/admin/metadata/refresh` queues automatic metadata matching without a
 file scan, while
-`POST /api/admin/metadata/reset` clears every track override. Signed-in clients
-can list merged provider candidates for a track and apply or clear an override
-through `GET /api/tracks/:id/metadata/candidates` and
-`PUT/DELETE /api/tracks/:id/metadata`.
+`POST /api/admin/metadata/reset` clears every track and artist override and
+removes cached artist portraits. Signed-in clients can list merged provider
+candidates and apply or clear an override through
+`GET /api/tracks/:id/metadata/candidates` and
+`PUT/DELETE /api/tracks/:id/metadata`, and through the equivalent
+`GET /api/artists/:id/metadata/candidates` and
+`PUT/DELETE /api/artists/:id/metadata` routes. Cached portraits are served from
+short-lived artist-scoped `GET/HEAD /api/artists/:id/image` URLs.
 Task responses expose only safe titles, source display names, bounded labeled
 details, progress, and lifecycle timestamps. Source paths and provider
 credentials are never included. Core task kinds are `library_scan` and

@@ -7,6 +7,8 @@ import type {
   ArtistListResponse,
   TrackListResponse,
 } from "@peridot/contracts";
+import { CatalogService } from "../src/catalog.js";
+import { PlaybackTokenService } from "../src/playback-tokens.js";
 import { createTaggedMp3, createTestContext, startScan } from "./helpers.js";
 
 test("catalog endpoints page tracks, albums, artists, search, and likes", async () => {
@@ -131,6 +133,46 @@ test("catalog endpoints page tracks, albums, artists, search, and likes", async 
       [page.items[2]!.id, page.items[0]!.id],
     );
   } finally {
+    await context.close();
+  }
+});
+
+test("catalog projection backfill yields to event-loop work", async () => {
+  const context = await createTestContext();
+  const catalog = new CatalogService(
+    context.database,
+    new PlaybackTokenService(),
+  );
+  try {
+    await writeFile(
+      path.join(context.libraryRoot, "backfill.mp3"),
+      createTaggedMp3({
+        title: "Backfill Track",
+        artist: "Backfill Artist",
+        album: "Backfill Album",
+        discNumber: 1,
+        trackNumber: 1,
+      }),
+    );
+    const scan = await startScan(context);
+    assert.equal(scan.status, "completed");
+    await context.database.orm.CatalogState.where({ id: "catalog" }).update({
+      projectionVersion: 1,
+    });
+
+    let eventLoopYielded = false;
+    setImmediate(() => {
+      eventLoopYielded = true;
+    });
+    await catalog.startBackfill();
+
+    assert.equal(eventLoopYielded, true);
+    const state = await context.database.orm.CatalogState.first({
+      id: "catalog",
+    });
+    assert.ok((state?.projectionVersion ?? 0) > 1);
+  } finally {
+    await catalog.close();
     await context.close();
   }
 });

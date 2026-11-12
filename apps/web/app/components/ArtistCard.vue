@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { useI18n } from "#imports";
-import { Icon } from "@iconify/vue/offline";
 import type { ArtistSummaryResponse } from "@peridot/contracts";
 import { artistLikeKey, artistRoute } from "../lib/library";
-import { icons } from "../lib/icons";
 import { useLikes } from "../composables/use-likes";
+import ArtistArtwork from "./ArtistArtwork.vue";
 import ArtistContextMenu from "./ArtistContextMenu.vue";
 import LikeButton from "./LikeButton.vue";
 
@@ -28,14 +27,15 @@ const {
         class="flex min-w-0 flex-1 items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         :aria-label="t('card.openArtist', { artist: artist.name })"
       >
-        <div
-          aria-hidden="true"
-          class="flex size-16 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground group-hover:text-foreground"
-        >
-          <Icon :icon="icons.user" class="size-8" />
-        </div>
+        <ArtistArtwork :image-url="artist.imageUrl" />
         <div class="min-w-0">
           <h3 class="truncate text-sm font-medium">{{ artist.name }}</h3>
+          <p
+            v-if="artist.name !== artist.localName"
+            class="truncate text-xs text-muted-foreground"
+          >
+            {{ t("card.localArtistName", { artist: artist.localName }) }}
+          </p>
           <p class="text-xs text-muted-foreground">
             {{
               t("count.album", { count: artist.albumCount }, artist.albumCount)
@@ -49,12 +49,15 @@ const {
       </NuxtLink>
       <LikeButton
         :liked="
-          likedArtistKeys.includes(artistLikeKey(artist.name)) || artist.liked
+          likedArtistKeys.includes(artistLikeKey(artist.localName)) ||
+          artist.liked
         "
         :label="artist.name"
-        :pending="isLikePending({ kind: 'artist', name: props.artist.name })"
+        :pending="
+          isLikePending({ kind: 'artist', name: props.artist.localName })
+        "
         :disabled="!likesLoaded"
-        @toggle="toggleLike({ kind: 'artist', name: artist.name })"
+        @toggle="toggleLike({ kind: 'artist', name: artist.localName })"
       />
     </article>
   </ArtistContextMenu>

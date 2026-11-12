@@ -717,7 +717,16 @@ export function metadataDetails(
     errors: number;
   },
   activeProviderId: string | null = null,
+  artistCounts: {
+    total: number;
+    processed: number;
+    matched: number;
+    unmatched: number;
+    errors: number;
+  } | null = null,
 ): TaskDetailResponse[] {
+  const processed = counts.processed + (artistCounts?.processed ?? 0);
+  const total = counts.total + (artistCounts?.total ?? 0);
   const details: TaskDetailResponse[] = [
     {
       key: "source",
@@ -727,14 +736,26 @@ export function metadataDetails(
     },
     {
       key: "progress.total",
+      value: String(total),
+      labelMessage: message("task.detail.metadataItems"),
+      valueMessage: null,
+    },
+    {
+      key: "progress.completed",
+      value: String(processed),
+      labelMessage: message("task.detail.processed"),
+      valueMessage: null,
+    },
+    {
+      key: "metadata.tracks",
       value: String(counts.total),
       labelMessage: message("task.detail.tracks"),
       valueMessage: null,
     },
     {
-      key: "progress.completed",
+      key: "metadata.tracks.processed",
       value: String(counts.processed),
-      labelMessage: message("task.detail.processed"),
+      labelMessage: message("task.detail.tracksProcessed"),
       valueMessage: null,
     },
     {
@@ -756,6 +777,34 @@ export function metadataDetails(
       valueMessage: null,
     },
   ];
+  if (artistCounts) {
+    details.push(
+      {
+        key: "metadata.artists.total",
+        value: String(artistCounts.total),
+        labelMessage: message("task.detail.artists"),
+        valueMessage: null,
+      },
+      {
+        key: "metadata.artists.matched",
+        value: String(artistCounts.matched),
+        labelMessage: message("task.detail.artistsMatched"),
+        valueMessage: null,
+      },
+      {
+        key: "metadata.artists.unmatched",
+        value: String(artistCounts.unmatched),
+        labelMessage: message("task.detail.artistsUnmatched"),
+        valueMessage: null,
+      },
+      {
+        key: "metadata.artists.failed",
+        value: String(artistCounts.errors),
+        labelMessage: message("task.detail.artistsFailed"),
+        valueMessage: null,
+      },
+    );
+  }
   if (activeProviderId) {
     details.push({
       key: TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY,

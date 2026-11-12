@@ -331,7 +331,7 @@ async function confirmReset() {
   try {
     const result = await resetMetadata(address.value ?? "", token.value ?? "");
     resetOpen.value = false;
-    notifyMetadataReset(result.resetCount);
+    notifyMetadataReset(result.trackCount, result.artistCount);
     invalidateCatalog();
   } catch (reason) {
     if (isAuthenticationRedirectError(reason)) return;

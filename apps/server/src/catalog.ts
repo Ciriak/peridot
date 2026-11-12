@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type {
   AlbumListResponse,
   AlbumSummaryResponse,
+  ArtistMetadataResponse,
   ArtistListResponse,
   ArtistSummaryResponse,
   CatalogSortDirection,
@@ -13,14 +14,16 @@ import type {
 import type { Database } from "./database.js";
 import { message } from "./messages.js";
 import type { PlaybackTokenService } from "./playback-tokens.js";
+import type { ArtistImageRow, ArtistMetadataRow } from "./prisma/models.js";
 import {
   albumReleaseYear,
   effectiveTrackFields,
+  toCoverUrl,
   toTrackResponse,
 } from "./track-response.js";
 
 const CATALOG_STATE_ID = "catalog";
-const PROJECTION_VERSION = 1;
+const PROJECTION_VERSION = 2;
 const CHANGE_THROTTLE_MS = 2_000;
 const BACKFILL_BATCH_SIZE = 500;
 const DEFAULT_PAGE_SIZE = 100;
@@ -272,6 +275,10 @@ function finiteDuration(value: number | null): number {
   return value !== null && Number.isFinite(value) && value >= 0 ? value : 0;
 }
 
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
 export class CatalogService {
   private publisher: CatalogChangedPublisher | null = null;
   private pendingChangedCount = 0;
@@ -346,6 +353,7 @@ export class CatalogService {
       if (!tracks.length) break;
       for (const track of tracks) {
         await this.reindexTrack(track.id, reason);
+        await yieldToEventLoop();
       }
       offset += tracks.length;
       if (tracks.length < BACKFILL_BATCH_SIZE) break;
@@ -791,7 +799,7 @@ export class CatalogService {
     const directionValue = orderDirection(direction);
     const rows = await query
       .orderBy([
-        (artist) => artist.normalizedName[directionValue](),
+        (artist) => artist.normalizedDisplayName[directionValue](),
         (artist) => artist.id[directionValue](),
       ])
       .offset(cursor?.offset ?? 0)
@@ -799,11 +807,18 @@ export class CatalogService {
       .all();
     const hasMore = rows.length > limit;
     const likedKeys = await this.likedArtistKeys(options.userId);
+    const artistMetadata = await this.artistMetadataMap(
+      rows.slice(0, limit).map((artist) => artist.id),
+    );
     return {
       items: rows
         .slice(0, limit)
         .map((artist) =>
-          this.toArtistSummary(artist, likedKeys.has(normalize(artist.name))),
+          this.toArtistSummary(
+            artist,
+            likedKeys.has(normalize(artist.name)),
+            artistMetadata.get(artist.id) ?? null,
+          ),
         ),
       nextCursor: hasMore
         ? encodeCursor((cursor?.offset ?? 0) + limit, revision, signature)
@@ -835,7 +850,41 @@ export class CatalogService {
     return this.toArtistSummary(
       artist,
       (await this.likedArtistKeys(userId)).has(normalize(artist.name)),
+      await this.database.orm.ArtistMetadata.first({ artistId: id }),
     );
+  }
+
+  async refreshArtistMetadata(artistId: string): Promise<void> {
+    return this.serializeCatalog(async () => {
+      const artist = await this.database.orm.CatalogArtist.first({
+        id: artistId,
+      });
+      if (!artist) return;
+      const metadata = await this.database.orm.ArtistMetadata.first({
+        artistId,
+      });
+      const displayName =
+        metadata?.metadataMode !== "file" && metadata?.displayName.trim()
+          ? metadata.displayName
+          : artist.name;
+      await this.database.orm.CatalogArtist.where({ id: artistId }).update({
+        displayName,
+        normalizedDisplayName: normalize(displayName),
+      });
+      await this.replaceCardTerms("artist", artistId, [
+        artist.name,
+        displayName,
+      ]);
+      this.markChanged(null, "metadata");
+    });
+  }
+
+  async artistImage(artistId: string): Promise<ArtistImageRow | null> {
+    const metadata = await this.database.orm.ArtistMetadata.first({
+      artistId,
+    });
+    if (!metadata?.imageId) return null;
+    return this.database.orm.ArtistImage.first({ id: metadata.imageId });
   }
 
   private async hydrateTracks(ids: readonly string[], userId: string) {
@@ -966,7 +1015,11 @@ export class CatalogService {
     ).all();
     return new Set(
       rows.flatMap((artist) =>
-        terms.every((term) => artist.normalizedName.includes(term))
+        terms.every((term) =>
+          `${artist.normalizedName} ${artist.normalizedDisplayName}`.includes(
+            term,
+          ),
+        )
           ? [artist.id]
           : [],
       ),
@@ -1031,10 +1084,7 @@ export class CatalogService {
       title: album.title,
       artist: album.artist,
       artists,
-      coverUrl:
-        album.coverId && album.coverTrackId
-          ? `/api/tracks/${encodeURIComponent(album.coverTrackId)}/cover?coverToken=${encodeURIComponent(this.playbackTokens.issueCover(album.coverTrackId).token)}`
-          : null,
+      coverUrl: toCoverUrl(album.coverId, this.playbackTokens),
       trackCount: album.trackCount,
       durationMs: album.durationMs,
       releaseYear: album.releaseYear,
@@ -1046,19 +1096,88 @@ export class CatalogService {
     artist: {
       id: string;
       name: string;
+      displayName: string;
       trackCount: number;
       albumCount: number;
       durationMs: number | null;
     },
     liked: boolean,
+    metadata: ArtistMetadataRow | null,
   ): ArtistSummaryResponse {
+    const metadataResponse = this.toArtistMetadataResponse(metadata);
     return {
       id: artist.id,
-      name: artist.name,
+      name: metadataResponse ? artist.displayName : artist.name,
+      localName: artist.name,
       albumCount: artist.albumCount,
       trackCount: artist.trackCount,
       durationMs: artist.durationMs,
+      imageUrl:
+        metadata?.imageId && metadataResponse?.portrait
+          ? `/api/artists/${encodeURIComponent(artist.id)}/image?artistImageToken=${encodeURIComponent(this.playbackTokens.issueArtistImage(artist.id).token)}`
+          : null,
+      metadata: metadataResponse,
       liked,
+    };
+  }
+
+  private async artistMetadataMap(
+    artistIds: readonly string[],
+  ): Promise<Map<string, ArtistMetadataRow>> {
+    if (!artistIds.length) return new Map();
+    const rows = await this.database.orm.ArtistMetadata.where((metadata) =>
+      metadata.artistId.in([...artistIds]),
+    ).all();
+    return new Map(rows.map((row) => [row.artistId, row]));
+  }
+
+  private toArtistMetadataResponse(
+    metadata: ArtistMetadataRow | null,
+  ): ArtistMetadataResponse | null {
+    if (
+      !metadata ||
+      metadata.metadataMode === "file" ||
+      !metadata.nameProviderId ||
+      !metadata.nameProviderKind ||
+      !metadata.nameProviderName ||
+      !metadata.externalArtistId ||
+      !metadata.nameSourceUrl ||
+      !metadata.matchedAt ||
+      (metadata.nameProviderKind !== "musicbrainz" &&
+        metadata.nameProviderKind !== "discogs")
+    ) {
+      return null;
+    }
+    const providerKind = metadata.nameProviderKind;
+    let portrait: ArtistMetadataResponse["portrait"] = null;
+    if (
+      metadata.imageId &&
+      metadata.imageProviderId &&
+      (metadata.imageProviderKind === "musicbrainz" ||
+        metadata.imageProviderKind === "discogs") &&
+      metadata.imageProviderName &&
+      metadata.imageExternalArtistId &&
+      metadata.imageSourceUrl
+    ) {
+      portrait = {
+        providerId: metadata.imageProviderId,
+        providerKind: metadata.imageProviderKind,
+        providerName: metadata.imageProviderName,
+        externalArtistId: metadata.imageExternalArtistId,
+        sourceUrl: metadata.imageSourceUrl,
+      };
+    }
+    return {
+      mode: metadata.metadataMode === "manual" ? "manual" : "automatic",
+      matchedAt: metadata.matchedAt.toISOString(),
+      name: {
+        providerId: metadata.nameProviderId,
+        providerKind,
+        providerName: metadata.nameProviderName,
+        externalArtistId: metadata.externalArtistId,
+        sourceUrl: metadata.nameSourceUrl,
+      },
+      portrait,
     };
   }
 
@@ -1154,9 +1273,18 @@ export class CatalogService {
         }).update({ trackCount: albumLink.trackCount + 1 });
       }
     }
+    const metadata = await this.database.orm.ArtistMetadata.first({
+      artistId,
+    });
+    const displayName =
+      metadata?.metadataMode !== "file" && metadata?.displayName.trim()
+        ? metadata.displayName
+        : name;
     const values = {
       name,
       normalizedName: normalize(name),
+      displayName,
+      normalizedDisplayName: normalize(displayName),
       trackCount: (existing?.trackCount ?? 0) + 1,
       albumCount,
       durationMs:
@@ -1173,7 +1301,13 @@ export class CatalogService {
     } else {
       await this.database.orm.CatalogArtist.create({ id: artistId, ...values });
     }
-    await this.replaceCardTerms("artist", artistId, [name]);
+    await this.replaceCardTerms(
+      "artist",
+      artistId,
+      [name, displayName].filter((value): value is string =>
+        Boolean(value?.trim()),
+      ),
+    );
   }
 
   private async removeArtistContribution(
@@ -1330,6 +1464,7 @@ export class CatalogService {
       if (!tracks.length) break;
       for (const track of tracks) {
         await this.reindexTrack(track.id);
+        await yieldToEventLoop();
       }
       offset += tracks.length;
       if (tracks.length < BACKFILL_BATCH_SIZE) break;

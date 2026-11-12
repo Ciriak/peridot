@@ -4,6 +4,7 @@ import type {
 } from "@peridot/contracts";
 import { normalizeArtistCredits } from "./artist-credits.js";
 import {
+  type ArtistMetadataProviderCandidate,
   candidateIdentity,
   type AutomaticMatchResult,
   type MetadataProviderContext,
@@ -110,6 +111,28 @@ function candidateFromRecording(
     score: Number(recording.score ?? 0) || 0,
     sourceUrl: `https://musicbrainz.org/recording/${encodeURIComponent(id)}`,
     details: [],
+  };
+}
+
+function artistCandidateFromResponse(
+  provider: MetadataProviderContext,
+  value: unknown,
+): ArtistMetadataProviderCandidate | null {
+  const artist = asRecord(value);
+  const externalArtistId = text(artist?.id);
+  const name = text(artist?.name).trim();
+  if (!externalArtistId || !name) return null;
+  return {
+    providerId: provider.id,
+    providerKind: provider.kind,
+    providerName: provider.name,
+    externalArtistId,
+    name,
+    disambiguation: text(artist?.disambiguation).trim() || null,
+    score: Number(artist?.score ?? 0) || 0,
+    sourceUrl: `${MUSICBRAINZ_ORIGIN}/artist/${encodeURIComponent(externalArtistId)}`,
+    portraitAvailable: false,
+    imageUrl: null,
   };
 }
 
@@ -259,6 +282,48 @@ export class MusicBrainzClient {
     this.fetcher = options.fetch ?? fetch;
     this.requestIntervalMs = options.requestIntervalMs ?? 1_000;
     this.sleeper = options.sleep ?? wait;
+  }
+
+  async findArtistCandidates(
+    provider: MetadataProviderContext,
+    contact: string,
+    artistName: string,
+    query?: string,
+    signal?: AbortSignal,
+  ): Promise<ArtistMetadataProviderCandidate[]> {
+    const search = query?.trim()
+      ? query.trim()
+      : `artist:"${escapeLucene(artistName)}"`;
+    const response = await this.request(
+      contact,
+      "artist",
+      { query: search, limit: "10" },
+      signal,
+    );
+    return asArray(asRecord(response)?.artists)
+      .map((artist) => artistCandidateFromResponse(provider, artist))
+      .filter(
+        (candidate): candidate is ArtistMetadataProviderCandidate =>
+          candidate !== null,
+      )
+      .sort((left, right) => right.score - left.score);
+  }
+
+  async resolveArtistCandidate(
+    provider: MetadataProviderContext,
+    contact: string,
+    externalArtistId: string,
+    signal?: AbortSignal,
+  ): Promise<ArtistMetadataProviderCandidate | null> {
+    return artistCandidateFromResponse(
+      provider,
+      await this.request(
+        contact,
+        `artist/${encodeURIComponent(externalArtistId)}`,
+        {},
+        signal,
+      ),
+    );
   }
 
   async findCandidates(
@@ -586,6 +651,34 @@ export class MusicBrainzResolver implements MetadataResolver {
       this.contact(provider),
       track,
       query,
+      signal,
+    );
+  }
+
+  findArtistCandidates(
+    provider: MetadataProviderContext,
+    artistName: string,
+    query?: string,
+    signal?: AbortSignal,
+  ): Promise<ArtistMetadataProviderCandidate[]> {
+    return this.client.findArtistCandidates(
+      provider,
+      this.contact(provider),
+      artistName,
+      query,
+      signal,
+    );
+  }
+
+  resolveArtistCandidate(
+    provider: MetadataProviderContext,
+    externalArtistId: string,
+    signal?: AbortSignal,
+  ): Promise<ArtistMetadataProviderCandidate | null> {
+    return this.client.resolveArtistCandidate(
+      provider,
+      this.contact(provider),
+      externalArtistId,
       signal,
     );
   }

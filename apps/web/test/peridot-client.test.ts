@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  applyArtistMetadata,
   createAdministrator,
   createLike,
   createMetadataProvider,
@@ -23,6 +24,7 @@ import {
   isAuthenticationRedirectError,
   PeridotApiError,
   listDirectories,
+  listArtistMetadataCandidates,
   listLikes,
   listMetadataCandidates,
   listMetadataProviderDefinitions,
@@ -39,6 +41,7 @@ import {
   resetMetadata,
   rescanSource,
   revertTrackMetadata,
+  revertArtistMetadata,
   revokeSession,
   searchDirectories,
   setAuthenticationRedirectHandler,
@@ -128,7 +131,7 @@ test("metadata provider, source scan, and correction calls use authenticated end
       );
     }
     if (url.endsWith("/api/admin/metadata/reset")) {
-      return Response.json({ resetCount: 3 });
+      return Response.json({ trackCount: 3, artistCount: 2 });
     }
     if (url.includes("/metadata/candidates")) {
       return Response.json({ items: [] });
@@ -204,7 +207,8 @@ test("metadata provider, source scan, and correction calls use authenticated end
     "queued",
   );
   assert.deepEqual(await resetMetadata("http://127.0.0.1:17430", "s"), {
-    resetCount: 3,
+    trackCount: 3,
+    artistCount: 2,
   });
   const sourceScan = await rescanSource(
     "http://127.0.0.1:17430",
@@ -235,6 +239,23 @@ test("metadata provider, source scan, and correction calls use authenticated end
     details: [],
   });
   await revertTrackMetadata("http://127.0.0.1:17430", "s", "track/one");
+  assert.deepEqual(
+    await listArtistMetadataCandidates(
+      "http://127.0.0.1:17430",
+      "s",
+      "artist/one",
+      "canonical name",
+    ),
+    { items: [] },
+  );
+  await applyArtistMetadata("http://127.0.0.1:17430", "s", "artist/one", {
+    providerId: "provider-1",
+    externalArtistId: "artist-1",
+    name: "Canonical Name",
+    sourceUrl: "https://musicbrainz.org/artist/artist-1",
+    portraitAvailable: false,
+  });
+  await revertArtistMetadata("http://127.0.0.1:17430", "s", "artist/one");
 
   assert.deepEqual(
     requests.map(({ input, init }) => ({
@@ -286,6 +307,19 @@ test("metadata provider, source scan, and correction calls use authenticated end
       },
       {
         input: "http://127.0.0.1:17430/api/tracks/track%2Fone/metadata",
+        method: "DELETE",
+      },
+      {
+        input:
+          "http://127.0.0.1:17430/api/artists/artist%2Fone/metadata/candidates?query=canonical+name",
+        method: undefined,
+      },
+      {
+        input: "http://127.0.0.1:17430/api/artists/artist%2Fone/metadata",
+        method: "PUT",
+      },
+      {
+        input: "http://127.0.0.1:17430/api/artists/artist%2Fone/metadata",
         method: "DELETE",
       },
     ],

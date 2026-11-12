@@ -208,9 +208,10 @@ test("albums have list and detail routes with derived groups", async () => {
   );
   assert.match(
     trackTable,
-    /v-for="item in rows"/,
+    /v-for="item in visibleRows"/,
     "Table rows remain in the full-page scroll flow",
   );
+  assert.match(trackTable, /const TRACK_BATCH_SIZE = 30/);
 });
 
 test("albums are available in persistent navigation", async () => {

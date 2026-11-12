@@ -26,6 +26,15 @@ export function albumReleaseYear(track: TrackRow): number | null {
   return year >= 1000 && year <= 9999 ? year : null;
 }
 
+export function toCoverUrl(
+  coverId: string | null,
+  playbackTokens: PlaybackTokenService,
+): string | null {
+  return coverId
+    ? `/api/covers/${encodeURIComponent(coverId)}?coverToken=${encodeURIComponent(playbackTokens.issueCover(coverId).token)}`
+    : null;
+}
+
 export function toTrackResponse(
   track: TrackRow,
   playbackTokens: PlaybackTokenService,
@@ -56,9 +65,7 @@ export function toTrackResponse(
           details: parseStoredMetadataDetails(track.metadataDetails),
         }
       : null;
-  const coverUrl = track.coverId
-    ? `/api/tracks/${encodeURIComponent(track.id)}/cover?coverToken=${encodeURIComponent(playbackTokens.issueCover(track.id).token)}`
-    : null;
+  const coverUrl = toCoverUrl(track.coverId, playbackTokens);
   return {
     id: track.id,
     ...effective,

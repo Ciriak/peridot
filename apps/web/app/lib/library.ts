@@ -309,10 +309,10 @@ export function findArtist(
   );
 }
 
-export function artistRoute(artist: Pick<ArtistGroup, "name">) {
+export function artistRoute(artist: { name: string; localName?: string }) {
   return {
     name: "artist-detail",
-    params: { artist: artist.name },
+    params: { artist: artist.localName ?? artist.name },
   };
 }
 
@@ -494,6 +494,30 @@ export function resolvePlayerQueue(
     const track = tracksById.get(id);
     return track ? [track] : [];
   });
+}
+
+export function mergePlayerQueueTracks(
+  current: readonly TrackResponse[],
+  incoming: readonly TrackResponse[],
+  queueTrackIds: readonly string[],
+): TrackResponse[] {
+  const tracksById = new Map(
+    [...current, ...incoming].map((track) => [track.id, track]),
+  );
+  return [...new Set(queueTrackIds)].flatMap((id) => {
+    const track = tracksById.get(id);
+    return track ? [track] : [];
+  });
+}
+
+export function haveSameTrackReferences(
+  left: readonly TrackResponse[],
+  right: readonly TrackResponse[],
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((track, index) => track === right[index])
+  );
 }
 
 export function nextQueueTrackId(

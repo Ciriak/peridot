@@ -10,7 +10,7 @@ import type {
   MetadataProviderListResponse,
   ReorderMetadataProvidersRequest,
   ReorderSourcesRequest,
-  ResetTrackMetadataResponse,
+  ResetMetadataResponse,
   ServerSettingsResponse,
   SourceListResponse,
   UpdateMetadataProviderRequest,
@@ -387,8 +387,11 @@ export async function registerAdminRoutes(
           message("api.message.metadataResetInProgress"),
         );
       }
-      const response: ResetTrackMetadataResponse = {
-        resetCount: await metadataEnrichment.resetAll(),
+      const artistCount = await metadataEnrichment.resetAllArtists();
+      const trackCount = await metadataEnrichment.resetAll();
+      const response: ResetMetadataResponse = {
+        trackCount,
+        artistCount,
       };
       return response;
     });

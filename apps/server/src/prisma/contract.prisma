@@ -271,15 +271,52 @@ model CatalogAlbum {
 }
 
 model CatalogArtist {
-  id               String   @id
-  name             String
-  normalizedName   String
-  trackCount       Int      @default(0)
-  albumCount       Int      @default(0)
-  durationMs       Int?
-  updatedAt        DateTime @onCreate(now()) @onUpdate(now())
+  id                    String          @id
+  name                  String
+  normalizedName        String
+  displayName           String          @default("")
+  normalizedDisplayName String          @default("")
+  trackCount            Int             @default(0)
+  albumCount            Int             @default(0)
+  durationMs            Int?
+  updatedAt             DateTime        @onCreate(now()) @onUpdate(now())
 
   @@index([normalizedName, id])
+  @@index([normalizedDisplayName, id])
+}
+
+model ArtistImage {
+  id        String           @id @onCreate(cuid(2))
+  hash      String           @unique
+  mimeType  String
+  data      Bytes
+  sourceUrl String
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @onCreate(now()) @onUpdate(now())
+  metadata  ArtistMetadata[]
+}
+
+model ArtistMetadata {
+  artistId               String        @id
+  displayName            String
+  metadataMode           String        @default("automatic")
+  nameProviderId         String?
+  nameProviderKind       String?
+  nameProviderName       String?
+  externalArtistId       String?
+  nameSourceUrl          String?
+  imageId                String?
+  image                  ArtistImage?  @relation(fields: [imageId], references: [id], onDelete: SetNull)
+  imageProviderId        String?
+  imageProviderKind      String?
+  imageProviderName      String?
+  imageExternalArtistId  String?
+  imageSourceUrl         String?
+  matchedAt              DateTime?
+  attemptedSignature     String?
+  updatedAt              DateTime      @onCreate(now()) @onUpdate(now())
+
+  @@index([imageId])
 }
 
 model CatalogTrackArtist {

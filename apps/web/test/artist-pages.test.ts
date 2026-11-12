@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 test("artists have list and detail routes with artist-scoped content", async () => {
-  const [listPage, detailPage, artistCard] = await Promise.all([
+  const [listPage, detailPage, artistCard, artistArtwork] = await Promise.all([
     readFile(
       new URL("../app/pages/artists/index.vue", import.meta.url),
       "utf8",
@@ -16,6 +16,10 @@ test("artists have list and detail routes with artist-scoped content", async () 
       new URL("../app/components/ArtistCard.vue", import.meta.url),
       "utf8",
     ),
+    readFile(
+      new URL("../app/components/ArtistArtwork.vue", import.meta.url),
+      "utf8",
+    ),
   ]);
 
   assert.match(listPage, /useCatalogArtistQuery/);
@@ -24,6 +28,10 @@ test("artists have list and detail routes with artist-scoped content", async () 
   assert.match(listPage, /<ArtistCard/);
   assert.match(listPage, /:artist="artist"/);
   assert.match(artistCard, /:to="artistRoute\(artist\)"/);
+  assert.match(artistCard, /<ArtistArtwork :image-url="artist\.imageUrl"/);
+  assert.match(artistCard, /card\.localArtistName/);
+  assert.match(artistArtwork, /icons\.user/);
+  assert.match(artistArtwork, /object-cover/);
   assert.match(artistCard, /useLikes\(\)/);
   assert.match(artistCard, /<LikeButton/);
   assert.match(listPage, /t\("page\.artists\.empty"\)/);
@@ -37,6 +45,9 @@ test("artists have list and detail routes with artist-scoped content", async () 
   assert.match(detailPage, /t\("context\.playArtist"\)/);
   assert.match(detailPage, /<LikeButton/);
   assert.match(detailPage, /t\("page\.artist\.unavailable"\)/);
+  assert.match(detailPage, /<ArtistArtwork :image-url="artist\.imageUrl"/);
+  assert.match(detailPage, /page\.artist\.localName/);
+  assert.match(detailPage, /artist\.localName/);
   assert.match(
     detailPage,
     /<div class="mb-2">\s+<Button as-child variant="ghost" size="lg"/,

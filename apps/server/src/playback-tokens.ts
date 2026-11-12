@@ -1,13 +1,16 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 const PLAYBACK_TOKEN_DURATION_MS = 4 * 60 * 60 * 1000;
+const COVER_TOKEN_REUSE_MARGIN_MS = 60 * 1000;
 const AUDIO_ROUTE = /^\/api\/tracks\/([^/]+)\/audio$/;
-const COVER_ROUTE = /^\/api\/tracks\/([^/]+)\/cover$/;
+const COVER_ROUTE = /^\/api\/covers\/([^/]+)$/;
+const ARTIST_IMAGE_ROUTE = /^\/api\/artists\/([^/]+)\/image$/;
 
 interface PlaybackTokenPayload {
-  trackId: string;
+  targetId: string;
   expiresAt: number;
-  kind: "audio" | "cover";
+  kind: "audio" | "cover" | "artist-image";
+  artistId?: string;
 }
 
 function sign(secret: Buffer, value: string): Buffer {
@@ -25,12 +28,23 @@ export function redactPlaybackToken(requestUrl: string): string {
     url.searchParams.set("coverToken", "[redacted]");
     changed = true;
   }
+  if (url.searchParams.has("artistImageToken")) {
+    url.searchParams.set("artistImageToken", "[redacted]");
+    changed = true;
+  }
   if (!changed) return requestUrl;
   return `${url.pathname}${url.search}`;
 }
 
 export class PlaybackTokenService {
   readonly #secret: Buffer;
+  readonly #coverTokens = new Map<
+    string,
+    {
+      token: string;
+      expiresAt: Date;
+    }
+  >();
 
   constructor(secret: Buffer = randomBytes(32)) {
     this.#secret = secret;
@@ -40,19 +54,39 @@ export class PlaybackTokenService {
     return this.issueFor(trackId, "audio", now);
   }
 
-  issueCover(trackId: string, now = Date.now()) {
-    return this.issueFor(trackId, "cover", now);
+  issueCover(coverId: string, now = Date.now()) {
+    if (this.#coverTokens.size > 1_000) {
+      for (const [key, token] of this.#coverTokens) {
+        if (token.expiresAt.getTime() <= now + COVER_TOKEN_REUSE_MARGIN_MS) {
+          this.#coverTokens.delete(key);
+        }
+      }
+    }
+    const cached = this.#coverTokens.get(coverId);
+    if (
+      cached &&
+      cached.expiresAt.getTime() > now + COVER_TOKEN_REUSE_MARGIN_MS
+    ) {
+      return cached;
+    }
+    const issued = this.issueFor(coverId, "cover", now);
+    this.#coverTokens.set(coverId, issued);
+    return issued;
+  }
+
+  issueArtistImage(artistId: string, now = Date.now()) {
+    return this.issueFor(artistId, "artist-image", now);
   }
 
   private issueFor(
-    trackId: string,
+    targetId: string,
     kind: PlaybackTokenPayload["kind"],
     now: number,
   ) {
     const expiresAt = now + PLAYBACK_TOKEN_DURATION_MS;
     const payload = Buffer.from(
       JSON.stringify({
-        trackId,
+        targetId,
         expiresAt,
         kind,
       } satisfies PlaybackTokenPayload),
@@ -65,7 +99,7 @@ export class PlaybackTokenService {
 
   verify(
     token: string,
-    trackId: string,
+    targetId: string,
     kind: PlaybackTokenPayload["kind"],
     now = Date.now(),
   ): boolean {
@@ -86,7 +120,7 @@ export class PlaybackTokenService {
         Buffer.from(payload, "base64url").toString("utf8"),
       ) as Partial<PlaybackTokenPayload>;
       return (
-        parsed.trackId === trackId &&
+        parsed.targetId === targetId &&
         parsed.kind === kind &&
         typeof parsed.expiresAt === "number" &&
         parsed.expiresAt > now
@@ -105,15 +139,18 @@ export class PlaybackTokenService {
     const url = new URL(requestUrl, "http://peridot.local");
     const audioMatch = AUDIO_ROUTE.exec(url.pathname);
     const coverMatch = COVER_ROUTE.exec(url.pathname);
+    const artistImageMatch = ARTIST_IMAGE_ROUTE.exec(url.pathname);
     const token = audioMatch
       ? url.searchParams.get("playbackToken")
-      : url.searchParams.get("coverToken");
-    const match = audioMatch ?? coverMatch;
+      : coverMatch
+        ? url.searchParams.get("coverToken")
+        : url.searchParams.get("artistImageToken");
+    const match = audioMatch ?? coverMatch ?? artistImageMatch;
     if (!match?.[1] || !token) return false;
     return this.verify(
       token,
       decodeURIComponent(match[1]),
-      audioMatch ? "audio" : "cover",
+      audioMatch ? "audio" : coverMatch ? "cover" : "artist-image",
       now,
     );
   }

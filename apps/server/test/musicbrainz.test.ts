@@ -121,3 +121,61 @@ test("MusicBrainz client retries rate limits before succeeding", async () => {
   assert.deepEqual(items, []);
   assert.equal(attempts, 2);
 });
+
+test("MusicBrainz finds and resolves exact artist identities", async () => {
+  const requests: URL[] = [];
+  const client = new MusicBrainzClient({
+    requestIntervalMs: 0,
+    fetch: async (input) => {
+      const url = new URL(String(input));
+      requests.push(url);
+      if (url.pathname.endsWith("/ws/2/artist/artist-1")) {
+        return Response.json({
+          id: "artist-1",
+          name: "Elliot Lake",
+          disambiguation: "electronic musician",
+          score: 100,
+        });
+      }
+      return Response.json({
+        artists: [
+          {
+            id: "artist-1",
+            name: "Elliot Lake",
+            disambiguation: "electronic musician",
+            score: 100,
+          },
+          {
+            id: "artist-2",
+            name: "Elliot Lake",
+            disambiguation: "session group",
+            score: 95,
+          },
+        ],
+      });
+    },
+  });
+
+  const candidates = await client.findArtistCandidates(
+    provider,
+    "owner@example.com",
+    "Elliot Lake",
+  );
+  assert.equal(candidates.length, 2);
+  assert.equal(candidates[0]?.externalArtistId, "artist-1");
+  assert.equal(candidates[0]?.portraitAvailable, false);
+  assert.equal(candidates[0]?.imageUrl, null);
+  assert.equal(
+    candidates[0]?.sourceUrl,
+    "https://musicbrainz.org/artist/artist-1",
+  );
+
+  const resolved = await client.resolveArtistCandidate(
+    provider,
+    "owner@example.com",
+    "artist-1",
+  );
+  assert.equal(resolved?.name, "Elliot Lake");
+  assert.equal(resolved?.disambiguation, "electronic musician");
+  assert.equal(requests.at(-1)?.searchParams.get("fmt"), "json");
+});

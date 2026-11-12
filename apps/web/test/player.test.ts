@@ -56,6 +56,16 @@ test("the persistent player controls a native audio element", async () => {
   );
   assert.match(
     player,
+    /missingIds\.length[\s\S]*resolveTracks\(/,
+    "Normal playback resolves missing queue details instead of reloading the queue",
+  );
+  assert.match(
+    player,
+    /mergePlayerQueueTracks\(\s*queueTracks\.value,\s*items,\s*requestedIds,?\s*\)/,
+    "Queue hydration preserves already-resolved track objects",
+  );
+  assert.match(
+    player,
     /positionSeconds: elapsed\.value/,
     "The persisted snapshot includes playback progress",
   );

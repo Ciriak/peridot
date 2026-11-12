@@ -93,6 +93,18 @@ export function notifyMetadataMatched(trackTitle: string) {
   });
 }
 
+export function notifyArtistMetadataMatched(artistName: string) {
+  addToast({
+    titleMessage: message("toast.artistMetadataMatchedTitle"),
+    descriptionMessage: message("toast.artistMetadataMatched", {
+      artist: artistName,
+    }),
+    status: "success",
+    duration: 5000,
+    kind: "success",
+  });
+}
+
 export function notifyMetadataReverted(trackTitle: string) {
   addToast({
     titleMessage: message("toast.metadataRevertedTitle"),
@@ -105,13 +117,26 @@ export function notifyMetadataReverted(trackTitle: string) {
   });
 }
 
-export function notifyMetadataReset(resetCount: number) {
+export function notifyArtistMetadataReverted(artistName: string) {
+  addToast({
+    titleMessage: message("toast.artistMetadataRevertedTitle"),
+    descriptionMessage: message("toast.artistMetadataReverted", {
+      artist: artistName,
+    }),
+    status: "success",
+    duration: 5000,
+    kind: "success",
+  });
+}
+
+export function notifyMetadataReset(trackCount: number, artistCount: number) {
+  const count = trackCount + artistCount;
   addToast({
     titleMessage: message("toast.metadataResetTitle"),
     descriptionMessage: message(
       "toast.metadataReset",
-      { count: resetCount },
-      resetCount,
+      { count, trackCount, artistCount },
+      count,
     ),
     status: "success",
     duration: 5000,

@@ -51,6 +51,7 @@ test("embedded artwork is deduplicated and served through a signed URL", async (
     }>().items;
     assert.equal(items.length, 2);
     assert.ok(items.every((track) => Boolean(track.coverUrl)));
+    assert.equal(items[0]!.coverUrl, items[1]!.coverUrl);
 
     const cover = await context.app.inject({
       method: "GET",
@@ -62,7 +63,7 @@ test("embedded artwork is deduplicated and served through a signed URL", async (
 
     const unsigned = await context.app.inject({
       method: "GET",
-      url: `/api/tracks/${items[0]!.id}/cover`,
+      url: items[0]!.coverUrl!.split("?")[0]!,
     });
     assert.equal(unsigned.statusCode, 401);
 
@@ -73,7 +74,7 @@ test("embedded artwork is deduplicated and served through a signed URL", async (
     });
     const wrongToken = await context.app.inject({
       method: "GET",
-      url: `/api/tracks/${items[0]!.id}/cover?coverToken=${encodeURIComponent(playback.json().token)}`,
+      url: `${items[0]!.coverUrl!.split("?")[0]}?coverToken=${encodeURIComponent(playback.json().token)}`,
     });
     assert.equal(wrongToken.statusCode, 401);
   } finally {

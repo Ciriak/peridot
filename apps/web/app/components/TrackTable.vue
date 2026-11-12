@@ -52,14 +52,26 @@ const {
 const activeSort = computed(
   () => props.sort ?? defaultTrackSort(props.variant),
 );
+const TRACK_BATCH_SIZE = 30;
 const rows = computed(() =>
   props.tracks.map((data, index) => ({ data, index })),
 );
+const visibleCount = ref(TRACK_BATCH_SIZE);
+const visibleRows = computed(() => rows.value.slice(0, visibleCount.value));
+const hasHiddenRows = computed(() => visibleCount.value < rows.value.length);
 const loadMoreTarget = ref<HTMLElement | null>(null);
 useIntersectionObserver(
   loadMoreTarget,
   ([entry]) => {
-    if (entry?.isIntersecting && props.hasMore && !props.loadingMore) {
+    if (!entry?.isIntersecting) return;
+    if (hasHiddenRows.value) {
+      visibleCount.value = Math.min(
+        rows.value.length,
+        visibleCount.value + TRACK_BATCH_SIZE,
+      );
+      return;
+    }
+    if (props.hasMore && !props.loadingMore) {
       emit("load-more");
     }
   },
@@ -102,6 +114,17 @@ function isPlaying(track: TrackResponse): boolean {
   return isActive(track) && playing.value;
 }
 
+function loadMoreRows() {
+  if (hasHiddenRows.value) {
+    visibleCount.value = Math.min(
+      rows.value.length,
+      visibleCount.value + TRACK_BATCH_SIZE,
+    );
+    return;
+  }
+  emit("load-more");
+}
+
 function playFromList(trackId: string, restart = false) {
   if (!restart && currentTrackId.value === trackId) {
     play(trackId);
@@ -117,8 +140,9 @@ watch(
   [() => props.scrollToTrackId, () => props.tracks],
   async ([trackId]) => {
     if (!import.meta.client || !trackId) return;
-    const index = props.tracks.findIndex((track) => track.id === trackId);
+    const index = rows.value.findIndex((item) => item.data.id === trackId);
     if (index < 0) return;
+    visibleCount.value = Math.max(visibleCount.value, index + 1);
     await nextTick();
     document
       .getElementById(trackTitleAnchorId(trackId))
@@ -246,7 +270,7 @@ watch(
 
     <div role="rowgroup">
       <TrackContextMenu
-        v-for="item in rows"
+        v-for="item in visibleRows"
         :key="item.data.id"
         :track="item.data"
         @play="playFromList(item.data.id, true)"
@@ -344,7 +368,7 @@ watch(
         </div>
       </TrackContextMenu>
     </div>
-    <div v-if="hasMore" role="rowgroup">
+    <div v-if="hasHiddenRows || hasMore" role="rowgroup">
       <div
         ref="loadMoreTarget"
         role="row"
@@ -355,11 +379,11 @@ watch(
           <Button
             type="button"
             variant="outline"
-            :disabled="loadingMore"
-            @click="emit('load-more')"
+            :disabled="loadingMore && !hasHiddenRows"
+            @click="loadMoreRows"
           >
             {{
-              loadingMore
+              loadingMore && !hasHiddenRows
                 ? t("trackTable.loadingMore")
                 : t("trackTable.loadMore")
             }}

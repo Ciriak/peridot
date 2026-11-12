@@ -111,6 +111,11 @@ test("album and artist cards expose collection-aware context menus", async () =>
   assert.match(artistMenu, /context\.unlikeArtist/);
   assert.match(artistMenu, /artistRoute\(artist\)/);
   assert.match(artistMenu, /context\.openArtist/);
+  assert.match(artistMenu, /listArtistMetadataCandidates\(/);
+  assert.match(artistMenu, /applyArtistMetadata\(/);
+  assert.match(artistMenu, /revertArtistMetadata\(/);
+  assert.match(artistMenu, /context\.artistMetadataMatch/);
+  assert.match(artistMenu, /context\.artistPortraitAvailable/);
 
   assert.match(
     albumCard,

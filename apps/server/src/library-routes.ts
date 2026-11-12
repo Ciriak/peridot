@@ -116,22 +116,12 @@ export async function registerLibraryRoutes(
     reply: Parameters<typeof sendError>[0],
     head: boolean,
   ) {
-    const track = await database.orm.Track.select("coverId").first({
-      id: request.params.id,
-    });
-    if (!track?.coverId) {
-      return sendError(
-        reply,
-        404,
-        "cover_not_found",
-        "Cover not found",
-        message("api.message.coverNotFound"),
-      );
-    }
     const cover = await database.orm.TrackCover.select(
       "data",
       "mimeType",
-    ).first({ id: track.coverId });
+    ).first({
+      id: request.params.id,
+    });
     if (!cover) {
       return sendError(
         reply,
@@ -150,12 +140,12 @@ export async function registerLibraryRoutes(
   }
 
   app.get<{ Params: { id: string } }>(
-    "/api/tracks/:id/cover",
+    "/api/covers/:id",
     { exposeHeadRoute: false },
     async (request, reply) => sendCover(request, reply, false),
   );
   app.head<{ Params: { id: string } }>(
-    "/api/tracks/:id/cover",
+    "/api/covers/:id",
     async (request, reply) => sendCover(request, reply, true),
   );
 
