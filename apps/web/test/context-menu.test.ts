@@ -36,18 +36,18 @@ test("track rows expose a Reka context menu with playback, favorites, downloads,
   assert.match(menu, /useLikes\(\)/);
   assert.match(menu, /toggleLike\(\{ kind: 'track', trackId: track\.id \}\)/);
   assert.match(menu, /downloadTrack\(props\.track\.id\)/);
-  assert.match(menu, /Go to album/);
-  assert.match(menu, /Go to artist/);
-  assert.match(menu, /Go to artists/);
+  assert.match(menu, /context\.goToAlbum/);
+  assert.match(menu, /context\.goToArtist/);
+  assert.match(menu, /context\.goToArtists/);
   assert.match(menu, /v-for="artist in artists"/);
   assert.match(menu, /v-else-if="artists\.length > 1"/);
-  assert.match(menu, /Matched with \{\{ track\.metadata\.providerName \}\}/);
-  assert.match(menu, /Correct metadata match/);
-  assert.match(menu, /Use file metadata/);
+  assert.match(menu, /context\.matchedWith/);
+  assert.match(menu, /context\.metadataCorrect/);
+  assert.match(menu, /context\.metadataRestore/);
   assert.match(menu, /listMetadataCandidates/);
   assert.match(menu, /applyTrackMetadata/);
   assert.match(menu, /revertTrackMetadata/);
-  assert.match(menu, /Search metadata providers/);
+  assert.match(menu, /context\.metadataSearchLabel/);
   assert.match(menu, /externalTrackId/);
   assert.match(menu, /candidate\.details/);
 
@@ -101,16 +101,16 @@ test("album and artist cards expose collection-aware context menus", async () =>
   }
 
   assert.match(albumMenu, /albumId: props\.album\.id/);
-  assert.match(albumMenu, /Like album/);
-  assert.match(albumMenu, /Unlike album/);
+  assert.match(albumMenu, /context\.likeAlbum/);
+  assert.match(albumMenu, /context\.unlikeAlbum/);
   assert.match(albumMenu, /albumRoute\(album\)/);
-  assert.match(albumMenu, /Open album/);
+  assert.match(albumMenu, /context\.openAlbum/);
 
   assert.match(artistMenu, /artistId: props\.artist\.id/);
-  assert.match(artistMenu, /Like artist/);
-  assert.match(artistMenu, /Unlike artist/);
+  assert.match(artistMenu, /context\.likeArtist/);
+  assert.match(artistMenu, /context\.unlikeArtist/);
   assert.match(artistMenu, /artistRoute\(artist\)/);
-  assert.match(artistMenu, /Open artist/);
+  assert.match(artistMenu, /context\.openArtist/);
 
   assert.match(
     albumCard,

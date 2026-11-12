@@ -1,14 +1,17 @@
 <script setup lang="ts">
-import { definePageMeta } from "#imports";
+import { definePageMeta, useI18n } from "#imports";
 
 definePageMeta({ layout: "settings" });
+const { t } = useI18n();
 </script>
 
 <template>
   <div class="space-y-2">
-    <h2 class="text-2xl font-semibold tracking-tight">Library</h2>
+    <h2 class="text-2xl font-semibold tracking-tight">
+      {{ t("settings.library") }}
+    </h2>
     <p class="text-sm text-muted-foreground">
-      Library settings are not available yet.
+      {{ t("settings.placeholder.library") }}
     </p>
   </div>
 </template>

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import type {
   ApplyTrackMetadataRequest,
+  MessageDescriptor,
   MetadataCandidateResponse,
   TrackMetadataMatchMode,
 } from "@peridot/contracts";
@@ -30,6 +31,7 @@ import {
   type MetadataResolverRegistry,
   type MetadataTrackInput,
 } from "./metadata-resolver.js";
+import { message, normalizeMessageDescriptor } from "./messages.js";
 import type {
   MetadataProviderRow,
   TaskRow,
@@ -48,6 +50,7 @@ export class MetadataEnrichmentError extends Error {
   constructor(
     message: string,
     readonly statusCode = 400,
+    readonly messageDescriptor?: MessageDescriptor,
   ) {
     super(message);
     this.name = "MetadataEnrichmentError";
@@ -218,7 +221,11 @@ export class MetadataEnrichment {
     try {
       const providers = await orderedMetadataProviders(this.database);
       if (!providers.length) {
-        throw new TaskExecutionError("No metadata providers are enabled.");
+        throw new TaskExecutionError(
+          "No metadata providers are enabled.",
+          "failed",
+          message("api.message.metadataProvidersDisabled"),
+        );
       }
 
       const trackQuery = this.database.orm.Track.where({
@@ -294,19 +301,23 @@ export class MetadataEnrichment {
       let unmatchedCount = 0;
       let errorCount = 0;
       let failureSummary: string | null = null;
+      let activeProviderId: string | null = null;
       const recordProgress = async () => {
         await tasks.updateProgress(
           task.id,
           processedCount,
           targets.length,
-          metadataDetails({
-            source: task.sourceName ?? "All sources",
-            total: targets.length,
-            processed: processedCount,
-            matched: matchedCount,
-            unmatched: unmatchedCount,
-            errors: errorCount,
-          }),
+          metadataDetails(
+            {
+              source: task.sourceName ?? "All sources",
+              total: targets.length,
+              processed: processedCount,
+              matched: matchedCount,
+              unmatched: unmatchedCount,
+              errors: errorCount,
+            },
+            activeProviderId,
+          ),
         );
       };
 
@@ -344,6 +355,8 @@ export class MetadataEnrichment {
         let unresolved = [...group.tracks];
         for (const provider of providers) {
           if (!unresolved.length) break;
+          activeProviderId = provider.id;
+          await recordProgress();
           try {
             const resolver = this.registry.require(provider.kind);
             const context = await providerContext(
@@ -380,6 +393,8 @@ export class MetadataEnrichment {
                 ? error.message
                 : `${provider.name} metadata matching failed.`;
           }
+          activeProviderId = null;
+          await recordProgress();
         }
         for (const track of unresolved) {
           if (failureSummary) {
@@ -410,6 +425,11 @@ export class MetadataEnrichment {
           ? "Metadata matching was interrupted by server shutdown."
           : "Metadata matching could not be completed.",
         interrupted ? "interrupted" : "failed",
+        message(
+          interrupted
+            ? "api.message.metadataInterrupted"
+            : "api.message.metadataFailed",
+        ),
       );
     }
   }
@@ -420,18 +440,25 @@ export class MetadataEnrichment {
   ): Promise<MetadataCandidateResponse[]> {
     const track = await this.database.orm.Track.first({ id: trackId });
     if (!track || !track.available) {
-      throw new MetadataEnrichmentError("Available track not found", 404);
+      throw new MetadataEnrichmentError(
+        "Available track not found",
+        404,
+        message("api.message.metadataTrackUnavailable"),
+      );
     }
     const providers = await orderedMetadataProviders(this.database);
     if (!providers.length) {
       throw new MetadataEnrichmentError(
         "Enable a metadata provider before matching tracks.",
         409,
+        message("api.message.metadataNoProviderEnabled"),
       );
     }
     if (query && query.trim().length > 200) {
       throw new MetadataEnrichmentError(
         "Enter a search term up to 200 characters.",
+        400,
+        message("api.message.invalidSearch"),
       );
     }
     const items: MetadataCandidateResponse[] = [];
@@ -465,6 +492,10 @@ export class MetadataEnrichment {
             typeof firstError.statusCode === "number"
             ? firstError.statusCode
             : 502,
+          "messageDescriptor" in firstError
+            ? (normalizeMessageDescriptor(firstError.messageDescriptor) ??
+                message("api.message.providerUnavailable"))
+            : message("api.message.providerUnavailable"),
         );
       }
       throw firstError;
@@ -502,7 +533,11 @@ export class MetadataEnrichment {
   async apply(trackId: string, body: ApplyTrackMetadataRequest): Promise<void> {
     const track = await this.database.orm.Track.first({ id: trackId });
     if (!track) {
-      throw new MetadataEnrichmentError("Track not found", 404);
+      throw new MetadataEnrichmentError(
+        "Track not found",
+        404,
+        message("api.message.trackNotFound"),
+      );
     }
     const provider = await this.database.orm.MetadataProvider.first({
       id: body?.providerId ?? "",
@@ -512,6 +547,7 @@ export class MetadataEnrichment {
       throw new MetadataEnrichmentError(
         "The selected metadata provider is no longer available.",
         409,
+        message("api.message.metadataProviderNotFound"),
       );
     }
     if (
@@ -525,7 +561,11 @@ export class MetadataEnrichment {
       !Array.isArray(body.artists) ||
       !Array.isArray(body.details)
     ) {
-      throw new MetadataEnrichmentError("Choose a valid metadata match.");
+      throw new MetadataEnrichmentError(
+        "Choose a valid metadata match.",
+        400,
+        message("api.message.invalidMetadataMatch"),
+      );
     }
     let resolver: MetadataResolver;
     let context: MetadataProviderContext;
@@ -539,6 +579,9 @@ export class MetadataEnrichment {
       throw new MetadataEnrichmentError(
         error instanceof Error ? error.message : "Provider is unavailable.",
         409,
+        normalizeMessageDescriptor(
+          (error as { messageDescriptor?: unknown } | null)?.messageDescriptor,
+        ) ?? message("api.message.providerUnavailable"),
       );
     }
     const artists = normalizeArtistCredits([
@@ -572,7 +615,11 @@ export class MetadataEnrichment {
       details: body.details,
     });
     if (!validCandidate(candidate)) {
-      throw new MetadataEnrichmentError("Choose a valid metadata match.");
+      throw new MetadataEnrichmentError(
+        "Choose a valid metadata match.",
+        400,
+        message("api.message.invalidMetadataMatch"),
+      );
     }
     await this.database.orm.Track.where({ id: track.id }).update({
       ...matchData(candidate, "manual"),

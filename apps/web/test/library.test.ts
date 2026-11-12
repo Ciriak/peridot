@@ -194,21 +194,28 @@ test("shared track lists show cover artwork beside every title", async () => {
   );
 });
 
-test("shared track tables virtualize loaded rows with a load-more fallback", async () => {
-  const table = await readFile(
-    new URL("../app/components/TrackTable.vue", import.meta.url),
-    "utf8",
+test("shared track tables keep the main content as the only scroll owner", async () => {
+  const [table, layout] = await Promise.all(
+    ["../app/components/TrackTable.vue", "../app/layouts/default.vue"].map(
+      (path) => readFile(new URL(path, import.meta.url), "utf8"),
+    ),
   );
 
-  assert.match(table, /useVirtualList/);
-  assert.match(table, /containerProps/);
-  assert.match(table, /wrapperProps/);
-  assert.match(table, /v-for="item in list"/);
+  assert.match(table, /v-for="item in rows"/);
+  assert.match(table, /useIntersectionObserver/);
+  assert.match(table, /ref="loadMoreTarget"/);
   assert.match(table, /@click="emit\('load-more'\)"/);
-  assert.match(table, /Load more tracks/);
+  assert.match(table, /trackTable\.loadMore/);
   assert.match(table, /role="table"/);
   assert.match(table, /:aria-rowcount="tracks\.length \+ 1"/);
   assert.match(table, /:aria-rowindex="item\.index \+ 2"/);
+  assert.doesNotMatch(table, /useVirtualList|containerProps|wrapperProps/);
+  assert.doesNotMatch(table, /overflow-[xy]-(?:auto|scroll)|max-h-|h-96/);
+  assert.match(
+    layout,
+    /id="main-content"[\s\S]*?class="[^"]*overflow-y-auto/,
+    "The main content remains the full-screen track-list scroll owner",
+  );
 });
 
 test("unavailable track titles are dimmed without muting available titles", async () => {

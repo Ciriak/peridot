@@ -102,17 +102,14 @@ test("the persistent player controls a native audio element", async () => {
   assert.match(layout, /@update:model-value="seek\(\$event\?\.\[0\] \?\? 0\)"/);
   assert.match(
     layout,
-    /class="min-h-11 flex-1"[\s\S]*thumb-label="Playback position"/,
+    /class="min-h-11 flex-1"[\s\S]*t\('player\.position'\)/,
     "The playback progress uses a taller invisible hit target than its track",
   );
   assert.match(
     layout,
     /@update:model-value="setVolume\(\$event\?\.\[0\] \?\? 0\)"/,
   );
-  assert.match(
-    layout,
-    /:icon="icons\.volume"[\s\S]*thumb-label="Playback volume"/,
-  );
+  assert.match(layout, /:icon="icons\.volume"[\s\S]*t\('player\.volume'\)/);
   const playerFooter = layout.slice(
     layout.indexOf("<footer"),
     layout.indexOf("</footer>"),
@@ -144,7 +141,7 @@ test("the persistent player controls a native audio element", async () => {
   );
   assert.match(
     playerFooter,
-    /<div\s+aria-hidden="true"\s+class="pointer-events-none absolute inset-y-0 left-0 -z-10 w-2\/3[\s\S]*<div class="absolute inset-0 opacity-40">[\s\S]*<Transition[\s\S]*<img\s+v-if="currentCoverUrl && !coverFailed"[\s\S]*:src="currentCoverUrl"[\s\S]*scale-125 object-cover object-left blur-3xl/,
+    /<div\s+aria-hidden="true"\s+class="pointer-events-none absolute inset-y-0 left-0 -z-10 w-2\/3[\s\S]*<div class="absolute inset-0 opacity-40">[\s\S]*<img\s+v-if="currentCoverUrl && !coverFailed"[\s\S]*:src="currentCoverUrl"[\s\S]*scale-125 object-cover object-left blur-3xl/,
     "The decorative background stays mounted while its current cover is rendered",
   );
   assert.doesNotMatch(
@@ -152,15 +149,15 @@ test("the persistent player controls a native audio element", async () => {
     /<div\s+v-if="currentCoverUrl && !coverFailed"\s+aria-hidden="true"\s+class="pointer-events-none absolute inset-y-0 left-0/,
     "Missing cover art fades out instead of abruptly removing the background layer",
   );
-  assert.match(
-    playerFooter,
-    /<Transition\s+enter-active-class="transition-opacity duration-3000 delay-150 ease-in-out motion-reduce:transition-none"[\s\S]*leave-active-class="transition-opacity duration-3000 delay-150 ease-in-out motion-reduce:transition-none"[\s\S]*<img\s+v-if="currentCoverUrl && !coverFailed"\s+:key="currentCoverUrl"\s+:src="currentCoverUrl"/,
-    "The blurred cover background waits briefly, then directly crossfades over three seconds",
+  assert.equal(
+    playerFooter.match(/:key="currentCoverUrl"/g)?.length,
+    2,
+    "Both player cover layers remount immediately when the track cover changes",
   );
   assert.doesNotMatch(
     playerFooter,
-    /mode="out-in"/,
-    "The cover crossfade overlaps the outgoing and incoming artwork",
+    /<Transition|duration-3000|delay-150/,
+    "The player never delays a track cover behind a crossfade",
   );
   assert.match(
     playerFooter,

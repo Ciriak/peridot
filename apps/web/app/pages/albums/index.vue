@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useHead } from "#imports";
+import { useHead, useI18n } from "#imports";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
@@ -8,7 +8,8 @@ import AlbumCard from "../../components/AlbumCard.vue";
 import { useCatalogAlbumQuery } from "../../composables/use-catalog-query";
 import { useLikes } from "../../composables/use-likes";
 
-useHead({ title: "Albums — Peridot" });
+const { t } = useI18n();
+useHead({ title: t("page.albums.title") });
 
 const {
   items: albums,
@@ -30,16 +31,24 @@ onMounted(() => {
 
 <template>
   <div class="space-y-2">
-    <h1 class="text-2xl font-semibold tracking-tight">Albums</h1>
+    <h1 class="text-2xl font-semibold tracking-tight">
+      {{ t("navigation.albums") }}
+    </h1>
     <p class="text-sm text-muted-foreground">
-      Albums assembled from the tags in your music library.
+      {{ t("page.albums.description") }}
     </p>
   </div>
   <section aria-labelledby="albums-heading" class="space-y-4">
     <div class="flex items-center justify-between gap-4">
-      <h2 id="albums-heading" class="text-lg font-semibold">All albums</h2>
+      <h2 id="albums-heading" class="text-lg font-semibold">
+        {{ t("page.albums.all") }}
+      </h2>
       <Badge variant="secondary">
-        {{ loading ? "Loading" : `${albums.length}${hasMore ? "+" : ""}` }}
+        {{
+          loading
+            ? t("common.loading")
+            : `${albums.length}${hasMore ? "+" : ""}`
+        }}
       </Badge>
     </div>
     <div
@@ -47,8 +56,8 @@ onMounted(() => {
       role="status"
       class="flex items-center gap-3 rounded-lg border p-6 text-sm text-muted-foreground"
     >
-      <PeridotSpinner label="Loading albums" />
-      Loading your albums…
+      <PeridotSpinner :label="t('page.albums.loading')" />
+      {{ t("page.albums.loading") }}…
     </div>
     <div
       v-else-if="error"
@@ -56,7 +65,9 @@ onMounted(() => {
       class="space-y-3 rounded-lg border p-6 text-sm"
     >
       <p>{{ error }}</p>
-      <Button variant="outline" @click="load(true)">Try again</Button>
+      <Button variant="outline" @click="load(true)">{{
+        t("common.tryAgain")
+      }}</Button>
     </div>
     <div
       v-else-if="albums.length"
@@ -71,7 +82,11 @@ onMounted(() => {
           :disabled="loadingMore"
           @click="loadMore"
         >
-          {{ loadingMore ? "Loading albums…" : "Load more albums" }}
+          {{
+            loadingMore
+              ? t("page.albums.loadingMore")
+              : t("page.albums.loadMore")
+          }}
         </Button>
       </div>
     </div>
@@ -81,9 +96,9 @@ onMounted(() => {
       class="rounded-lg border p-6 text-sm text-muted-foreground"
     >
       <template v-if="loaded">
-        No albums found. Tracks need album tags before they can appear here.
+        {{ t("page.albums.empty") }}
       </template>
-      <template v-else> Loading your albums… </template>
+      <template v-else>{{ t("page.albums.loading") }}…</template>
     </p>
   </section>
 </template>

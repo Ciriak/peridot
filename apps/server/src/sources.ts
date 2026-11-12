@@ -4,10 +4,12 @@ import path from "node:path";
 import type {
   CreateSourceRequest,
   DirectorySearchResponse,
+  MessageDescriptor,
   SourceKind,
   SourceResponse,
 } from "@peridot/contracts";
 import type { Database } from "./database.js";
+import { message } from "./messages.js";
 import type { SourceRow } from "./prisma/models.js";
 
 const DIRECTORY_ENTRY_LIMIT = 100;
@@ -28,8 +30,11 @@ export interface DirectoryEntry {
 }
 
 export class SourceError extends Error {
-  constructor(message: string) {
-    super(message);
+  constructor(
+    fallbackMessage: string,
+    readonly messageDescriptor?: MessageDescriptor,
+  ) {
+    super(fallbackMessage);
     this.name = "SourceError";
   }
 }
@@ -78,7 +83,10 @@ export async function createSource(
   const value = (body ?? {}) as Partial<CreateSourceRequest>;
   const kind = value.kind;
   if (kind !== "path" && kind !== "url" && kind !== "integration") {
-    throw new SourceError("Choose a valid source type.");
+    throw new SourceError(
+      "Choose a valid source type.",
+      message("api.message.sourceInvalid"),
+    );
   }
   const name =
     typeof value.name === "string" && value.name.trim()
@@ -90,7 +98,10 @@ export async function createSource(
 
   if (kind === "path") {
     if (typeof value.path !== "string" || !value.path.trim()) {
-      throw new SourceError("Enter a folder for this source.");
+      throw new SourceError(
+        "Enter a folder for this source.",
+        message("api.message.sourceFolderRequired"),
+      );
     }
     const resolved = await resolveDirectory(value.path);
     const duplicate = await database.orm.Source.first({
@@ -98,7 +109,10 @@ export async function createSource(
       path: resolved,
     });
     if (duplicate) {
-      throw new SourceError("This folder is already a source.");
+      throw new SourceError(
+        "This folder is already a source.",
+        message("api.message.sourceFolderDuplicate"),
+      );
     }
     const source = await database.orm.Source.create({
       kind,
@@ -112,11 +126,17 @@ export async function createSource(
   if (kind === "url") {
     const url = normalizeSourceUrl(value.url);
     if (!url) {
-      throw new SourceError("Enter a valid HTTP or HTTPS URL.");
+      throw new SourceError(
+        "Enter a valid HTTP or HTTPS URL.",
+        message("api.message.sourceUrlInvalid"),
+      );
     }
     const duplicate = await database.orm.Source.first({ kind: "url", url });
     if (duplicate) {
-      throw new SourceError("This URL is already a source.");
+      throw new SourceError(
+        "This URL is already a source.",
+        message("api.message.sourceUrlDuplicate"),
+      );
     }
     const source = await database.orm.Source.create({
       kind,
@@ -132,14 +152,20 @@ export async function createSource(
       ? value.integration.trim().toLowerCase()
       : "";
   if (!integration) {
-    throw new SourceError("Choose an integration.");
+    throw new SourceError(
+      "Choose an integration.",
+      message("api.message.sourceIntegrationRequired"),
+    );
   }
   const duplicate = await database.orm.Source.first({
     kind: "integration",
     integration,
   });
   if (duplicate) {
-    throw new SourceError("This integration is already a source.");
+    throw new SourceError(
+      "This integration is already a source.",
+      message("api.message.sourceIntegrationDuplicate"),
+    );
   }
   const source = await database.orm.Source.create({
     kind,
@@ -155,12 +181,18 @@ async function resolveDirectory(value: string): Promise<string> {
     const resolved = await realpath(value.trim());
     const info = await stat(resolved);
     if (!info.isDirectory()) {
-      throw new SourceError("Choose an existing folder.");
+      throw new SourceError(
+        "Choose an existing folder.",
+        message("api.message.sourceFolderMissing"),
+      );
     }
     return resolved;
   } catch (error) {
     if (error instanceof SourceError) throw error;
-    throw new SourceError("Choose an existing folder.");
+    throw new SourceError(
+      "Choose an existing folder.",
+      message("api.message.sourceFolderMissing"),
+    );
   }
 }
 
@@ -194,7 +226,10 @@ export async function reorderSources(
   ids: unknown,
 ): Promise<SourceResponse[]> {
   if (!Array.isArray(ids) || ids.some((id) => typeof id !== "string")) {
-    throw new SourceError("Source order must be a list of source ids.");
+    throw new SourceError(
+      "Source order must be a list of source ids.",
+      message("api.message.sourceOrderInvalid"),
+    );
   }
   const existing = await database.orm.Source.select("id").all();
   const existingIds = new Set(existing.map((source) => source.id));
@@ -205,6 +240,7 @@ export async function reorderSources(
   ) {
     throw new SourceError(
       "Source order does not match the configured sources.",
+      message("api.message.sourceOrderMismatch"),
     );
   }
   await database.transaction(async (transaction) => {

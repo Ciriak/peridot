@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import type { ArtistSummaryResponse } from "@peridot/contracts";
 import { artistLikeKey, artistRoute } from "../lib/library";
@@ -8,6 +9,7 @@ import ArtistContextMenu from "./ArtistContextMenu.vue";
 import LikeButton from "./LikeButton.vue";
 
 const props = defineProps<{ artist: ArtistSummaryResponse }>();
+const { t } = useI18n();
 const {
   likedArtistKeys,
   loaded: likesLoaded,
@@ -24,7 +26,7 @@ const {
       <NuxtLink
         :to="artistRoute(artist)"
         class="flex min-w-0 flex-1 items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        :aria-label="`Open ${artist.name}`"
+        :aria-label="t('card.openArtist', { artist: artist.name })"
       >
         <div
           aria-hidden="true"
@@ -35,10 +37,13 @@ const {
         <div class="min-w-0">
           <h3 class="truncate text-sm font-medium">{{ artist.name }}</h3>
           <p class="text-xs text-muted-foreground">
-            {{ artist.albumCount }}
-            {{ artist.albumCount === 1 ? "album" : "albums" }} ·
-            {{ artist.trackCount }}
-            {{ artist.trackCount === 1 ? "track" : "tracks" }}
+            {{
+              t("count.album", { count: artist.albumCount }, artist.albumCount)
+            }}
+            ·
+            {{
+              t("count.track", { count: artist.trackCount }, artist.trackCount)
+            }}
           </p>
         </div>
       </NuxtLink>

@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { useHead } from "#imports";
+import { useHead, useI18n } from "#imports";
 import favicon from "@peridot/ui/assets/brand/favicon.png";
 import { useLibraryPlayer } from "./composables/use-library-player";
 import AppNotifications from "./components/AppNotifications.vue";
 import AppToaster from "./components/AppToaster.vue";
 
+const { t } = useI18n();
 useHead({
+  title: `${t("app.name")} — ${t("app.tagline")}`,
+  meta: [{ name: "description", content: t("app.description") }],
   link: [{ rel: "icon", type: "image/png", href: favicon }],
 });
 

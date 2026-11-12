@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { navigateTo, useRoute } from "#imports";
+import { navigateTo, useI18n, useRoute } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import { Button } from "@peridot/ui/components/ui/button";
 import {
@@ -21,6 +21,7 @@ import { icons } from "../lib/icons";
 import { revokeSession } from "../lib/peridot-client";
 
 const route = useRoute();
+const { t } = useI18n();
 const { address } = useServer();
 const { token } = useSession();
 const { user } = useUser();
@@ -28,17 +29,33 @@ const mobileNavigation = ref(false);
 const logoutOpen = ref(false);
 const loggingOut = ref(false);
 const commonCategories = [
-  { name: "Profile", to: "/settings/account", icon: icons.user },
-  { name: "Library", to: "/settings/library", icon: icons.library },
-  { name: "Playback", to: "/settings/playback", icon: icons.music },
+  { labelKey: "settings.profile", to: "/settings/account", icon: icons.user },
+  {
+    labelKey: "settings.library",
+    to: "/settings/library",
+    icon: icons.library,
+  },
+  {
+    labelKey: "settings.playback",
+    to: "/settings/playback",
+    icon: icons.music,
+  },
 ];
 const adminCategories = [
-  { name: "Plugins", to: "/settings/plugins", icon: icons.plugins },
-  { name: "Tasks", to: "/settings/tasks", icon: icons.restart },
-  { name: "User Management", to: "/settings/users", icon: icons.user },
-  { name: "Sources", to: "/settings/sources", icon: icons.folder },
-  { name: "Metadata", to: "/settings/metadata", icon: icons.plugins },
-  { name: "Server", to: "/settings/server", icon: icons.server },
+  {
+    labelKey: "settings.plugins",
+    to: "/settings/plugins",
+    icon: icons.plugins,
+  },
+  { labelKey: "settings.tasks", to: "/settings/tasks", icon: icons.restart },
+  { labelKey: "settings.users", to: "/settings/users", icon: icons.user },
+  { labelKey: "settings.sources", to: "/settings/sources", icon: icons.folder },
+  {
+    labelKey: "settings.metadata",
+    to: "/settings/metadata",
+    icon: icons.plugins,
+  },
+  { labelKey: "settings.server", to: "/settings/server", icon: icons.server },
 ];
 
 function requestLogout() {
@@ -80,12 +97,12 @@ watch(
 
 <template>
   <div class="flex h-dvh overflow-hidden bg-background text-foreground">
-    <a href="#settings-content" class="sr-only focus:not-sr-only focus:p-4"
-      >Skip to content</a
-    >
+    <a href="#settings-content" class="sr-only focus:not-sr-only focus:p-4">{{
+      t("navigation.skipToContent")
+    }}</a>
     <aside
       id="settings-sidebar"
-      aria-label="Settings navigation"
+      :aria-label="t('navigation.settingsNavigation')"
       :class="[
         'w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground',
         mobileNavigation
@@ -100,25 +117,25 @@ watch(
           as-child
           variant="ghost"
           class="flex-1 justify-start font-semibold"
-          ><NuxtLink to="/" aria-label="Back to home"
+          ><NuxtLink to="/" :aria-label="t('navigation.backHome')"
             ><Icon
               :icon="icons.arrowLeft"
               aria-hidden="true"
               class="size-5"
-            />Back</NuxtLink
+            />{{ t("common.back") }}</NuxtLink
           ></Button
         >
         <Button
           variant="ghost"
           size="icon-sm"
           class="md:hidden"
-          aria-label="Close settings navigation"
+          :aria-label="t('navigation.closeSettings')"
           @click="mobileNavigation = false"
           ><Icon :icon="icons.close" aria-hidden="true"
         /></Button>
       </div>
       <nav
-        aria-label="Settings categories"
+        :aria-label="t('navigation.settingsCategories')"
         class="flex-1 space-y-4 overflow-y-auto p-3"
       >
         <div class="space-y-1">
@@ -138,7 +155,7 @@ watch(
               :aria-current="route.path === item.to ? 'page' : undefined"
             >
               <Icon :icon="item.icon" aria-hidden="true" class="size-5" />{{
-                item.name
+                t(item.labelKey)
               }}
             </NuxtLink>
           </Button>
@@ -153,7 +170,7 @@ watch(
             id="admin-settings-heading"
             class="px-3 pb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground"
           >
-            Admin
+            {{ t("navigation.admin") }}
           </h2>
           <Button
             v-for="item in adminCategories"
@@ -171,7 +188,7 @@ watch(
               :aria-current="route.path === item.to ? 'page' : undefined"
             >
               <Icon :icon="item.icon" aria-hidden="true" class="size-5" />{{
-                item.name
+                t(item.labelKey)
               }}
             </NuxtLink>
           </Button>
@@ -187,7 +204,7 @@ watch(
           @click="requestLogout"
         >
           <Icon :icon="icons.logout" aria-hidden="true" class="size-5" />
-          {{ loggingOut ? "Logging out…" : "Log out" }}
+          {{ loggingOut ? t("navigation.loggingOut") : t("navigation.logOut") }}
         </Button>
       </div>
     </aside>
@@ -199,18 +216,21 @@ watch(
           class="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-card p-6 text-card-foreground shadow-lg"
         >
           <AlertDialogTitle class="text-lg font-semibold">
-            Log out of Peridot?
+            {{ t("navigation.logOutTitle") }}
           </AlertDialogTitle>
           <AlertDialogDescription class="text-sm text-muted-foreground">
-            Your current session will end. You will return to sign in and can
-            come back to this Settings page afterward.
+            {{ t("navigation.logOutDescription") }}
           </AlertDialogDescription>
           <div class="mt-6 flex justify-end gap-3">
             <AlertDialogCancel as-child>
-              <Button type="button" variant="outline">Cancel</Button>
+              <Button type="button" variant="outline">{{
+                t("common.cancel")
+              }}</Button>
             </AlertDialogCancel>
             <AlertDialogAction as-child @click="confirmLogout">
-              <Button type="button" variant="destructive">Log out</Button>
+              <Button type="button" variant="destructive">{{
+                t("navigation.logOut")
+              }}</Button>
             </AlertDialogAction>
           </div>
         </AlertDialogContent>
@@ -225,13 +245,13 @@ watch(
           variant="outline"
           size="icon"
           class="md:hidden"
-          aria-label="Toggle settings navigation"
+          :aria-label="t('navigation.toggleSettings')"
           aria-controls="settings-sidebar"
           :aria-expanded="mobileNavigation"
           @click="mobileNavigation = !mobileNavigation"
           ><Icon :icon="icons.menu" aria-hidden="true"
         /></Button>
-        <h1 class="text-lg font-semibold">Settings</h1>
+        <h1 class="text-lg font-semibold">{{ t("settings.title") }}</h1>
         <div class="ml-auto flex items-center">
           <TaskProgressIndicator />
         </div>

@@ -15,8 +15,8 @@ test("the player exposes randomize and a persistent right-side queue drawer", as
     ),
   ]);
 
-  assert.match(layout, /shuffleEnabled\s*\?\s*'Disable randomized playback'/);
-  assert.match(layout, /'Enable randomized playback'/);
+  assert.match(layout, /shuffleEnabled[\s\S]*?t\('player\.disableShuffle'\)/);
+  assert.match(layout, /t\('player\.enableShuffle'\)/);
   assert.match(layout, /:aria-pressed="shuffleEnabled"/);
   assert.match(
     layout,
@@ -30,7 +30,7 @@ test("the player exposes randomize and a persistent right-side queue drawer", as
   assert.match(layout, /@click="toggleRandomization"/);
   assert.match(
     layout,
-    /:aria-label="queueOpen \? 'Close queue' : 'Open queue'"/,
+    /queueOpen \? t\('player\.closeQueue'\) : t\('player\.openQueue'\)/,
   );
   assert.match(layout, /:aria-expanded="queueOpen"/);
   assert.match(
@@ -43,7 +43,7 @@ test("the player exposes randomize and a persistent right-side queue drawer", as
   assert.match(layout, /@click="queueOpen = !queueOpen"/);
   assert.match(layout, /<QueueDrawer v-model:open="queueOpen" \/>/);
   assert.ok(
-    layout.indexOf('aria-label="Open queue"') < layout.indexOf('id="volume"'),
+    layout.indexOf("player.openQueue") < layout.indexOf('id="volume"'),
     "queue control appears before the volume control",
   );
 
@@ -58,15 +58,18 @@ test("the player exposes randomize and a persistent right-side queue drawer", as
   assert.doesNotMatch(drawer, /\bh-dvh\b/);
   assert.doesNotMatch(drawer, /\bpb-52\b|\bpb-32\b/);
   assert.match(layout, /fixed inset-x-0 bottom-0 z-30/);
-  assert.match(drawer, />\s*Now playing\s*</);
+  assert.match(drawer, /t\("queue\.nowPlaying"\)/);
   assert.match(
     drawer,
-    /Now playing[\s\S]*class="group\/track-artwork flex min-w-0 items-center gap-3"[\s\S]*<TrackArtwork[\s\S]*<Button[\s\S]*class="[^"]*absolute inset-0 size-full[^"]*bg-background\/70[^"]*hover:bg-background\/70[^"]*"[\s\S]*:aria-label="\s*playing \? `Pause \$\{active\.title\}` : `Play \$\{active\.title\}`\s*"[\s\S]*@click="togglePlayback"[\s\S]*class="size-5 text-foreground"[\s\S]*<\/TrackArtwork>/,
+    /queue\.nowPlaying[\s\S]*class="group\/track-artwork flex min-w-0 items-center gap-3"[\s\S]*<TrackArtwork[\s\S]*<Button[\s\S]*class="[^"]*absolute inset-0 size-full[^"]*bg-background\/70[^"]*hover:bg-background\/70[^"]*"[\s\S]*t\('player\.pauseTitle'[\s\S]*t\('player\.playTitle'[\s\S]*@click="togglePlayback"[\s\S]*class="size-5 text-foreground"[\s\S]*<\/TrackArtwork>/,
     "The now-playing item matches the Quick pick overlay and icon color",
   );
   assert.match(drawer, /<Badge v-if="shuffleEnabled" variant="secondary">/);
-  assert.match(drawer, /Randomized/);
-  assert.match(drawer, /shuffleEnabled \? "Queue order" : "Next in queue"/);
+  assert.match(drawer, /t\("queue\.randomized"\)/);
+  assert.match(
+    drawer,
+    /shuffleEnabled[\s\S]*t\("queue\.queueOrder"\)[\s\S]*t\("queue\.nextInQueue"\)/,
+  );
   assert.match(drawer, /useSortable\(queueList, sortableTracks/);
   assert.doesNotMatch(drawer, /handle: "\.queue-drag-handle"/);
   assert.match(drawer, /filter: "a, button, input"/);
@@ -97,17 +100,17 @@ test("the player exposes randomize and a persistent right-side queue drawer", as
   );
   assert.match(
     drawer,
-    /Now playing[\s\S]*<TrackArtwork[\s\S]*:track="active"[\s\S]*group-focus-within\/track-artwork:opacity-100/,
+    /queue\.nowPlaying[\s\S]*<TrackArtwork[\s\S]*:track="active"[\s\S]*group-focus-within\/track-artwork:opacity-100/,
     "The active track artwork reveals its play control on hover or focus",
   );
   assert.match(
     drawer,
-    /v-for="track in sortableTracks"[\s\S]*class="group\/track-artwork flex cursor-grab items-center gap-2 rounded-md border p-2 active:cursor-grabbing"[\s\S]*<TrackArtwork[\s\S]*:track="track"[\s\S]*class="[^"]*absolute inset-0 size-full[^"]*bg-background\/70[^"]*hover:bg-background\/70[^"]*"[\s\S]*:aria-label="`Play \$\{track\.title\} from queue`"[\s\S]*@click\.stop="play\(track\.id\)"[\s\S]*class="size-5 text-foreground"/,
+    /v-for="track in sortableTracks"[\s\S]*class="group\/track-artwork flex cursor-grab items-center gap-2 rounded-md border p-2 active:cursor-grabbing"[\s\S]*<TrackArtwork[\s\S]*:track="track"[\s\S]*class="[^"]*absolute inset-0 size-full[^"]*bg-background\/70[^"]*hover:bg-background\/70[^"]*"[\s\S]*t\('queue\.playFrom'[\s\S]*@click\.stop="play\(track\.id\)"[\s\S]*class="size-5 text-foreground"/,
     "Each upcoming queue item matches the Quick pick overlay and icon color",
   );
   assert.match(
     drawer,
-    /size="icon"[\s\S]*:aria-label="`Remove \$\{track\.title\} from queue`"[\s\S]*icons\.close[\s\S]*class="size-5"/,
+    /size="icon"[\s\S]*t\('queue\.remove'[\s\S]*icons\.close[\s\S]*class="size-5"/,
     "The queue remove target uses the larger standard button and icon sizes",
   );
   assert.match(drawer, /@click\.stop="play\(track\.id\)"/);
@@ -137,7 +140,7 @@ test("track context menus add a selected track as the next queue entry", async (
     new URL("../app/components/TrackContextMenu.vue", import.meta.url),
     "utf8",
   );
-  assert.match(menu, /Add to queue/);
+  assert.match(menu, /context\.addToQueue/);
   assert.match(menu, /addTrackNext|addToQueue\(props\.track\.id\)/);
   assert.doesNotMatch(menu, /currentTrackId === track\.id/);
   assert.match(menu, /!queueLoaded/);

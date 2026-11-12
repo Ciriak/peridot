@@ -1,4 +1,4 @@
-import { useState } from "#imports";
+import { useI18n, useState } from "#imports";
 import type {
   AlbumLikeResponse,
   ArtistLikeResponse,
@@ -14,6 +14,8 @@ import {
   listLikes,
 } from "../lib/peridot-client";
 import { notifyLikeFailed, notifyLikeSucceeded } from "../lib/toasts";
+import { localizedError } from "../lib/messages.ts";
+import { useLocalizedMessage } from "./use-localized-message";
 import { useServer } from "./use-server";
 import { useSession } from "./use-session";
 import { useUser } from "./use-user";
@@ -28,15 +30,8 @@ export function likeTargetKey(target: LikeTarget): string {
   return `artist:${artistLikeKey(target.name)}`;
 }
 
-function errorMessage(reason: unknown): string | null {
-  if (isAuthenticationRedirectError(reason)) return null;
-  return reason instanceof Error
-    ? reason.message
-    : "The server could not update your likes.";
-}
-
-function targetLabel(target: LikeTarget): string {
-  if (target.kind === "track") return "track";
+function targetLabel(target: LikeTarget, trackLabel: string): string {
+  if (target.kind === "track") return trackLabel;
   if (target.kind === "album") return target.title;
   return target.name;
 }
@@ -45,6 +40,12 @@ export function useLikes() {
   const { address } = useServer();
   const { token } = useSession();
   const { user } = useUser();
+  const { t } = useI18n();
+  const { errorMessage } = useLocalizedMessage();
+  const likesError = (reason: unknown) =>
+    isAuthenticationRedirectError(reason)
+      ? null
+      : errorMessage(reason, "error.likesUpdate");
   const trackItems = useState<TrackLikeResponse[]>(
     "like-track-items",
     () => [],
@@ -106,7 +107,7 @@ export function useLikes() {
       artistItems.value = response.artists;
       loaded.value = true;
     } catch (reason) {
-      error.value = errorMessage(reason);
+      error.value = likesError(reason);
     } finally {
       loading.value = false;
     }
@@ -226,7 +227,10 @@ export function useLikes() {
     const sessionToken = token.value;
     try {
       if (!serverAddress || !sessionToken) {
-        throw new Error("Connect to your Peridot server and try again.");
+        throw localizedError(
+          "error.connectServer",
+          "Connect to your Peridot server and try again.",
+        );
       }
       if (wasLiked) {
         await deleteLike(serverAddress, sessionToken, target);
@@ -245,10 +249,10 @@ export function useLikes() {
       else if (target.kind === "album")
         setAlbumLiked(target, wasLiked, previousAlbum);
       else setArtistLiked(target, wasLiked, previousArtist);
-      const message = errorMessage(reason);
+      const message = likesError(reason);
       if (!message) return;
       error.value = message;
-      notifyLikeFailed(targetLabel(target), message);
+      notifyLikeFailed(targetLabel(target, t("like.track")), message);
     } finally {
       pendingTargets.value = pendingTargets.value.filter(
         (entry) => entry !== key,

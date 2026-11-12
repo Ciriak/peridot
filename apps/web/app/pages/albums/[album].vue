@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { definePageMeta, useHead, useRoute } from "#imports";
+import { definePageMeta, useHead, useI18n, useRoute } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import type { AlbumSummaryResponse } from "@peridot/contracts";
 import { Badge } from "@peridot/ui/components/ui/badge";
@@ -30,6 +30,7 @@ import {
 definePageMeta({ name: "album-detail" });
 
 const route = useRoute();
+const { t } = useI18n();
 const { address } = useServer();
 const { token } = useSession();
 const { active, playing, playCollection, togglePlayback } = useLibraryPlayer();
@@ -86,8 +87,10 @@ watch(coverUrl, () => {
 });
 useHead(() => ({
   title: album.value
-    ? `${album.value.title} by ${album.value.artist} — Peridot`
-    : "Album — Peridot",
+    ? t("page.album.title", {
+        album: `${album.value.title} by ${album.value.artist}`,
+      })
+    : t("page.album.fallbackTitle"),
 }));
 
 async function loadAlbum() {
@@ -108,7 +111,7 @@ async function loadAlbum() {
     if (album.value) await loadTracks(true);
   } catch (reason) {
     if (isAuthenticationRedirectError(reason)) return;
-    albumError.value = "This album could not be loaded.";
+    albumError.value = t("page.album.loadError");
   } finally {
     albumLoading.value = false;
   }
@@ -149,8 +152,9 @@ onMounted(() => {
   <div class="mb-2">
     <Button as-child variant="ghost" size="lg"
       ><NuxtLink to="/albums"
-        ><Icon :icon="icons.arrowLeft" aria-hidden="true" />Back to
-        albums</NuxtLink
+        ><Icon :icon="icons.arrowLeft" aria-hidden="true" />{{
+          t("page.album.back")
+        }}</NuxtLink
       ></Button
     >
   </div>
@@ -160,8 +164,8 @@ onMounted(() => {
     role="status"
     class="flex items-center gap-3 rounded-lg border p-6 text-sm text-muted-foreground"
   >
-    <PeridotSpinner label="Loading album" />
-    Loading this album…
+    <PeridotSpinner :label="t('page.album.loading')" />
+    {{ t("page.album.loading") }}…
   </div>
   <div
     v-else-if="albumError || tracksError"
@@ -169,7 +173,9 @@ onMounted(() => {
     class="space-y-3 rounded-lg border p-6 text-sm"
   >
     <p>{{ albumError || tracksError }}</p>
-    <Button variant="outline" @click="loadAlbum">Try again</Button>
+    <Button variant="outline" @click="loadAlbum">{{
+      t("common.tryAgain")
+    }}</Button>
   </div>
   <template v-else-if="album">
     <section
@@ -193,7 +199,7 @@ onMounted(() => {
         <p
           class="text-xs font-medium uppercase tracking-wide text-muted-foreground"
         >
-          Album
+          {{ t("page.album.label") }}
         </p>
         <h1 id="album-heading" class="text-3xl font-semibold tracking-tight">
           {{ album.title }}
@@ -208,8 +214,14 @@ onMounted(() => {
             :disabled="!album.trackCount"
             :aria-label="
               albumActive && playing
-                ? `Pause ${album.title} by ${album.artist}`
-                : `Play ${album.title} by ${album.artist} from the first track`
+                ? t('card.pauseAlbum', {
+                    album: album.title,
+                    artist: album.artist,
+                  })
+                : t('card.playAlbum', {
+                    album: album.title,
+                    artist: album.artist,
+                  })
             "
             @click="toggleAlbumPlayback"
           >
@@ -243,8 +255,9 @@ onMounted(() => {
             "
           />
           <Badge variant="secondary">
-            {{ album.trackCount }}
-            {{ album.trackCount === 1 ? "track" : "tracks" }}
+            {{
+              t("count.track", { count: album.trackCount }, album.trackCount)
+            }}
           </Badge>
           <span class="text-sm text-muted-foreground">
             <template v-if="album.releaseYear">
@@ -258,14 +271,19 @@ onMounted(() => {
     </section>
 
     <section aria-labelledby="album-tracks-heading" class="space-y-4">
-      <h2 id="album-tracks-heading" class="text-lg font-semibold">Tracks</h2>
+      <h2 id="album-tracks-heading" class="text-lg font-semibold">
+        {{ t("components.tracks.label") }}
+      </h2>
       <div
         v-if="tracksLoading && !tracks.length"
         role="status"
         class="flex items-center gap-2 text-sm text-muted-foreground"
       >
-        <PeridotSpinner class="size-4" />
-        Loading tracks
+        <PeridotSpinner
+          :label="t('components.tracks.loading')"
+          class="size-4"
+        />
+        {{ t("components.tracks.loading") }}
       </div>
       <TrackTable
         v-else-if="tracks.length"
@@ -283,7 +301,7 @@ onMounted(() => {
         role="status"
         class="rounded-lg border p-6 text-sm text-muted-foreground"
       >
-        This album has no playable tracks.
+        {{ t("page.album.noTracks") }}
       </p>
     </section>
   </template>
@@ -292,9 +310,9 @@ onMounted(() => {
     role="status"
     class="space-y-4 rounded-lg border p-6 text-sm text-muted-foreground"
   >
-    <p>This album is not available in your current library.</p>
+    <p>{{ t("page.album.unavailable") }}</p>
     <Button as-child variant="outline"
-      ><NuxtLink to="/albums">Back to albums</NuxtLink></Button
+      ><NuxtLink to="/albums">{{ t("page.album.back") }}</NuxtLink></Button
     >
   </section>
 </template>

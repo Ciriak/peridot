@@ -10,15 +10,21 @@ import { toastViewportClass } from "../app/lib/toast-position.ts";
 
 test("source mutations map to concise success toasts", () => {
   assert.deepEqual(sourceMutationToast("added", " D:\\Music "), {
-    title: "Source added",
-    description: "D:\\Music is now available to the library.",
+    titleMessage: { key: "toast.sourceAddedTitle" },
+    descriptionMessage: {
+      key: "toast.sourceAdded",
+      params: { source: "D:\\Music" },
+    },
     status: "success",
     kind: "success",
     duration: 5000,
   });
   assert.deepEqual(sourceMutationToast("removed", "https://music.test"), {
-    title: "Source removed",
-    description: "https://music.test was removed from the library sources.",
+    titleMessage: { key: "toast.sourceRemovedTitle" },
+    descriptionMessage: {
+      key: "toast.sourceRemoved",
+      params: { source: "https://music.test" },
+    },
     status: "success",
     kind: "success",
     duration: 5000,

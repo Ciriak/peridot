@@ -1,5 +1,84 @@
 # Decisions
 
+## 2026-11-12: Player artwork changes without a cover transition
+
+The persistent player keys both its foreground artwork and decorative cover
+background by the resolved cover URL. A track-cover change therefore replaces
+the visible image element immediately instead of leaving the previous bitmap on
+screen while the new source loads or running a delayed crossfade.
+
+This supersedes the earlier three-second blurred-background crossfade. The
+decorative blur, cover-derived color, gradients, fallback behavior, and semantic
+theme treatment remain unchanged; only the delayed visual update is removed.
+
+## 2026-11-12: Track tables keep the main content as the only scroll owner
+
+The shared track table renders its loaded cursor pages in normal document flow.
+The button at the end of the table and an intersection sentinel request the next
+server page; neither the table nor a nested wrapper has its own vertical or
+horizontal scroll viewport. The main content region remains the only scrolling
+owner, so the track list, headings, album cards, and other page content move
+together behind the fixed player.
+
+This restores the owner requirement that a screen inside the main frame never
+has two scrollbars. Server pagination continues to bound the number of rows
+mounted at once, so page-flow rendering remains suitable for large libraries.
+
+## 2026-11-12: Metadata provider activity uses a bounded task detail
+
+Metadata matching publishes the ID of the provider currently being queried as
+the shared `metadata.activeProvider` task detail before each provider request,
+then clears it when that request finishes. This reuses the existing task
+progress update and realtime paths without adding persistence columns or
+provider-specific browser API calls. The detail contains only a local provider
+ID and is hidden from the general Tasks detail list.
+
+Provider rows use the detail to show a progress ring only while their own
+request is active. This is intentional during fallback sequences, where several
+enabled providers participate in one metadata task but only one is being queried
+at a time.
+
+## 2026-11-12: Progress values ease without masking reduced motion
+
+The shared progress circle animates `stroke-dashoffset` on the indicator arc
+when a finite value changes. The transition belongs to the arc itself because
+the parent SVG owns the continuous rotation and does not pass that transition
+to its children. Standard Tailwind motion utilities provide a 300 ms ease while
+the reduced-motion variant removes the value transition and the motion-safe
+variant suppresses rotation.
+
+The visual arc always renders at zero first. After the component mounts, its
+value is applied on the next animation frame so a newly displayed determinate
+spinner fills from empty instead of appearing at its current percentage.
+Returning to indeterminate progress resets the visual arc before any subsequent
+determinate state begins.
+
+This keeps frequent task-progress updates visually continuous without adding a
+component stylesheet or a hardcoded animation. The accessible numeric value
+still changes immediately. The progress ring, rather than the percentage text,
+owns the visual transition.
+
+## 2026-11-12: en-US localization uses structured client-owned messages
+
+The complete user-visible runtime is localized through Nuxt I18n with `en-US`
+as the only locale. The app uses the `no_prefix` strategy, disables browser
+locale detection, sets the document language explicitly, and does not expose a
+language selector or persist a locale preference. Existing URLs and the current
+English wording remain unchanged.
+
+The browser owns presentation copy. API errors, task titles/details/failures,
+metadata-provider definitions, provider details, and realtime errors carry
+stable message descriptors with optional interpolation parameters and plural
+counts. The server does not negotiate locales, and the public contracts do not
+carry duplicate English fallback strings. This project is still pre-release, so
+older task-response shapes are not preserved.
+
+Task title and failure descriptors are stored in nullable task columns so task
+history survives future locale additions without rewriting stored prose.
+Existing development task rows may be discarded; no compatibility migration is
+provided. Shared UI primitives remain locale-neutral and require callers to
+provide translated accessible labels.
+
 ## 2026-11-12: Administrators manage accounts through User Management
 
 The administrator Settings navigation includes a dedicated `User Management`

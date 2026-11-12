@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "#imports";
 import {
   quickPickArtistNames,
   type ResolvedQuickPickItem,
@@ -14,6 +15,7 @@ import { trackCoverUrl } from "../lib/library";
 import { loadCollectionTrackIds } from "../lib/catalog-collections";
 
 const props = defineProps<{ item: ResolvedQuickPickItem }>();
+const { t } = useI18n();
 const { address } = useServer();
 const { token } = useSession();
 const { active, playing, loading, play, playCollection, togglePlayback } =
@@ -43,16 +45,17 @@ const activeItem = computed(() => {
         active.value.artist === props.item.album.artist;
 });
 const playLabel = computed(() => {
-  const kind = props.item.kind === "track" ? "track" : "album";
   if (activeItem.value) {
-    if (playing.value) return `Pause ${kind} ${title.value}`;
+    if (playing.value) {
+      return t("quickPicks.pause", { title: title.value });
+    }
     return props.item.kind === "album"
-      ? `Play album ${title.value} from the first track`
-      : `Resume track ${title.value}`;
+      ? t("quickPicks.playAlbum", { title: title.value })
+      : t("quickPicks.resume", { title: title.value });
   }
   return props.item.kind === "album"
-    ? `Play album ${title.value} from the first track`
-    : `Play track ${title.value}`;
+    ? t("quickPicks.playAlbum", { title: title.value })
+    : t("quickPicks.playTrack", { title: title.value });
 });
 
 watch(coverUrl, () => {

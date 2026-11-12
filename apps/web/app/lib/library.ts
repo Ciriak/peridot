@@ -97,7 +97,7 @@ function compareText(left: string, right: string): number {
   return 0;
 }
 
-const sortText = new Intl.Collator("en", {
+const sortText = new Intl.Collator("en-US", {
   numeric: true,
   sensitivity: "base",
 });
@@ -238,9 +238,7 @@ function albumReleaseYear(tracks: readonly TrackResponse[]): number | null {
   const years = new Set<number>();
   for (const track of tracks) {
     const detail = track.metadata?.details.find(
-      (item) =>
-        item.key.trim().toLowerCase() === "year" ||
-        item.label.trim().toLowerCase() === "year",
+      (item) => item.key.trim().toLowerCase() === "year",
     );
     const value = detail?.value.trim() ?? "";
     if (!/^\d{4}$/.test(value)) continue;

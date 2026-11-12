@@ -31,7 +31,7 @@ test("protected library routes require a valid user session", async () => {
       assert.deepEqual(response.json(), {
         error: {
           code: "unauthorized",
-          message: "Valid user authentication is required",
+          messageDescriptor: { key: "api.message.unauthorized" },
         },
       });
     }
@@ -215,7 +215,7 @@ test("repeated scans of multiple existing tracks complete without SQLite content
     for (let index = 0; index < 3; index++) {
       const repeatScan = await startScan(context);
       assert.equal(repeatScan.status, "completed");
-      assert.equal(repeatScan.failureSummary, null);
+      assert.equal(repeatScan.failureMessage, null);
       assert.equal(repeatScan.unchangedCount, 4);
       assert.equal(repeatScan.errorCount, 0);
     }

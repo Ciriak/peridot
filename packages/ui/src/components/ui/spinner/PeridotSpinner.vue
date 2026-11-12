@@ -4,13 +4,10 @@ import logo from "../../../assets/brand/logo.svg";
 import spinner from "../../../assets/brand/spinner.svg";
 import { cn } from "cn";
 
-const props = withDefaults(
-  defineProps<{
-    label?: string;
-    class?: HTMLAttributes["class"];
-  }>(),
-  { label: "Loading" },
-);
+const props = defineProps<{
+  label: string;
+  class?: HTMLAttributes["class"];
+}>();
 </script>
 
 <template>

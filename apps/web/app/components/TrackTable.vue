@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import { useI18n } from "#imports";
 import type { TrackResponse } from "@peridot/contracts";
 import { Icon } from "@iconify/vue/offline";
 import { Button } from "@peridot/ui/components/ui/button";
-import { useEventListener, useVirtualList } from "@vueuse/core";
-import { computed, nextTick, watch } from "vue";
+import { useIntersectionObserver } from "@vueuse/core";
+import { computed, nextTick, ref, watch } from "vue";
 import LikeButton from "./LikeButton.vue";
 import TrackArtwork from "./TrackArtwork.vue";
 import TrackArtistLinks from "./TrackArtistLinks.vue";
@@ -33,6 +34,7 @@ const props = defineProps<{
   hasMore?: boolean;
   loadingMore?: boolean;
 }>();
+const { t } = useI18n();
 const emit = defineEmits<{
   "sort-change": [sort: TrackSort | null];
   "load-more": [];
@@ -50,22 +52,19 @@ const {
 const activeSort = computed(
   () => props.sort ?? defaultTrackSort(props.variant),
 );
-const { list, containerProps, wrapperProps } = useVirtualList(
-  computed(() => [...props.tracks]),
-  { itemHeight: 56, overscan: 12 },
+const rows = computed(() =>
+  props.tracks.map((data, index) => ({ data, index })),
 );
-useEventListener(containerProps.ref, "scroll", () => {
-  const element = containerProps.ref.value;
-  if (
-    !element ||
-    props.loadingMore ||
-    !props.hasMore ||
-    element.scrollHeight - element.scrollTop - element.clientHeight > 200
-  ) {
-    return;
-  }
-  emit("load-more");
-});
+const loadMoreTarget = ref<HTMLElement | null>(null);
+useIntersectionObserver(
+  loadMoreTarget,
+  ([entry]) => {
+    if (entry?.isIntersecting && props.hasMore && !props.loadingMore) {
+      emit("load-more");
+    }
+  },
+  { rootMargin: "300px 0px", threshold: 0 },
+);
 
 function toggleSort(field: TrackSortField) {
   emit("sort-change", nextTrackSort(activeSort.value, field));
@@ -76,12 +75,23 @@ function ariaSort(field: TrackSortField): "ascending" | "descending" | "none" {
   return activeSort.value.direction === "asc" ? "ascending" : "descending";
 }
 
-function sortLabel(label: string, field: TrackSortField): string {
-  if (activeSort.value.field !== field) return `Sort by ${label} ascending`;
-  if (activeSort.value.direction === "asc") {
-    return `Sort by ${label} descending`;
+function sortLabel(field: TrackSortField): string {
+  const label = t(
+    field === "number"
+      ? "trackTable.trackNumber"
+      : field === "title"
+        ? "trackTable.title"
+        : field === "album"
+          ? "trackTable.album"
+          : "trackTable.duration",
+  );
+  if (activeSort.value.field !== field) {
+    return t("trackTable.sortAscending", { label });
   }
-  return `Reset ${label} sorting to default`;
+  if (activeSort.value.direction === "asc") {
+    return t("trackTable.sortDescending", { label });
+  }
+  return t("trackTable.resetSort", { label });
 }
 
 function isActive(track: TrackResponse): boolean {
@@ -122,8 +132,8 @@ watch(
   <div
     role="table"
     :aria-rowcount="tracks.length + 1"
-    aria-label="Tracks"
-    class="overflow-x-auto rounded-lg border text-sm"
+    :aria-label="t('trackTable.label')"
+    class="rounded-lg border text-sm"
   >
     <div role="rowgroup">
       <div
@@ -141,7 +151,7 @@ watch(
             type="button"
             class="ml-auto inline-flex items-center gap-1 rounded-md transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             :class="activeSort.field === 'number' && 'text-foreground'"
-            :aria-label="sortLabel('track number', 'number')"
+            :aria-label="sortLabel('number')"
             @click="toggleSort('number')"
           >
             #
@@ -164,10 +174,10 @@ watch(
             type="button"
             class="inline-flex items-center gap-1 rounded-md transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             :class="activeSort.field === 'title' && 'text-foreground'"
-            :aria-label="sortLabel('title', 'title')"
+            :aria-label="sortLabel('title')"
             @click="toggleSort('title')"
           >
-            Title
+            {{ t("trackTable.title") }}
             <Icon
               v-if="activeSort.field === 'title'"
               :icon="
@@ -188,10 +198,10 @@ watch(
             type="button"
             class="inline-flex items-center gap-1 rounded-md transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             :class="activeSort.field === 'album' && 'text-foreground'"
-            :aria-label="sortLabel('album', 'album')"
+            :aria-label="sortLabel('album')"
             @click="toggleSort('album')"
           >
-            Album
+            {{ t("trackTable.album") }}
             <Icon
               v-if="activeSort.field === 'album'"
               :icon="
@@ -211,10 +221,10 @@ watch(
             type="button"
             class="ml-auto inline-flex items-center gap-1 rounded-md transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             :class="activeSort.field === 'duration' && 'text-foreground'"
-            :aria-label="sortLabel('duration', 'duration')"
+            :aria-label="sortLabel('duration')"
             @click="toggleSort('duration')"
           >
-            Duration
+            {{ t("trackTable.duration") }}
             <Icon
               v-if="activeSort.field === 'duration'"
               :icon="
@@ -229,117 +239,114 @@ watch(
           role="columnheader"
           class="w-14 shrink-0 p-3 text-right font-medium"
         >
-          <span class="sr-only">Favorite</span>
+          <span class="sr-only">{{ t("trackTable.favorite") }}</span>
         </div>
       </div>
     </div>
 
-    <div v-bind="containerProps" role="rowgroup" class="h-96 overflow-y-auto">
-      <div v-bind="wrapperProps" class="min-w-full">
-        <TrackContextMenu
-          v-for="item in list"
-          :key="item.data.id"
-          :track="item.data"
-          @play="playFromList(item.data.id, true)"
+    <div role="rowgroup">
+      <TrackContextMenu
+        v-for="item in rows"
+        :key="item.data.id"
+        :track="item.data"
+        @play="playFromList(item.data.id, true)"
+      >
+        <div
+          role="row"
+          :aria-rowindex="item.index + 2"
+          class="group/track-artwork flex h-14 min-w-full select-none items-center whitespace-nowrap border-b hover:bg-muted/50"
+          :class="{
+            'border-0': item.index === tracks.length - 1,
+          }"
+          @dblclick.prevent="playFromList(item.data.id)"
         >
           <div
-            role="row"
-            :aria-rowindex="item.index + 2"
-            class="group/track-artwork flex h-14 min-w-full select-none items-center whitespace-nowrap border-b hover:bg-muted/50"
-            :class="{
-              'border-0': item.index === tracks.length - 1,
-            }"
-            @dblclick.prevent="playFromList(item.data.id)"
+            v-if="variant !== 'library'"
+            role="cell"
+            class="flex w-16 shrink-0 justify-end p-3 tabular-nums text-muted-foreground"
           >
-            <div
-              v-if="variant !== 'library'"
-              role="cell"
-              class="flex w-16 shrink-0 justify-end p-3 tabular-nums text-muted-foreground"
-            >
-              {{ formatTrackNumber(item.data) }}
-            </div>
-            <div role="cell" class="flex min-w-0 flex-1 items-center gap-2 p-2">
-              <TrackArtwork :track="item.data" :server-address="address ?? ''">
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  class="absolute inset-0 size-full rounded-md bg-background/70 opacity-0 transition-opacity hover:bg-background/70 hover:text-foreground dark:hover:bg-background/70 group-hover/track-artwork:opacity-100 group-focus-within/track-artwork:opacity-100"
-                  :aria-label="
-                    isPlaying(item.data)
-                      ? `Pause ${item.data.title}`
-                      : `Play track ${item.data.title}`
-                  "
-                  @click="playFromList(item.data.id)"
-                  @dblclick.stop
-                >
-                  <Icon
-                    :icon="isPlaying(item.data) ? icons.pause : icons.play"
-                    aria-hidden="true"
-                    class="text-foreground"
-                  />
-                </Button>
-              </TrackArtwork>
-              <div class="min-w-0 flex-1">
-                <div class="flex min-w-0 items-center gap-2">
-                  <span
-                    :id="trackTitleAnchorId(item.data.id)"
-                    class="scroll-mt-4 truncate"
-                    :class="{ 'opacity-60': !item.data.available }"
-                    >{{ item.data.title }}</span
-                  >
-                  <Icon
-                    v-if="isActive(item.data)"
-                    :icon="icons.waveform"
-                    aria-hidden="true"
-                    class="size-4 shrink-0 text-primary"
-                  />
-                </div>
-                <p class="truncate text-xs text-muted-foreground">
-                  <TrackArtistLinks :artists="trackArtistNames(item.data)" />
-                </p>
-              </div>
-            </div>
-            <div
-              v-if="variant !== 'album'"
-              role="cell"
-              class="hidden w-56 shrink-0 truncate p-3 text-muted-foreground md:block"
-            >
-              <NuxtLink
-                v-if="item.data.album?.trim() && item.data.artist.trim()"
-                :to="trackAlbumRoute(item.data)"
-                class="block truncate rounded-sm hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            {{ formatTrackNumber(item.data) }}
+          </div>
+          <div role="cell" class="flex min-w-0 flex-1 items-center gap-2 p-2">
+            <TrackArtwork :track="item.data" :server-address="address ?? ''">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                class="absolute inset-0 size-full rounded-md bg-background/70 opacity-0 transition-opacity hover:bg-background/70 hover:text-foreground dark:hover:bg-background/70 group-hover/track-artwork:opacity-100 group-focus-within/track-artwork:opacity-100"
+                :aria-label="
+                  isPlaying(item.data)
+                    ? t('trackTable.pause', { title: item.data.title })
+                    : t('trackTable.play', { title: item.data.title })
+                "
+                @click="playFromList(item.data.id)"
                 @dblclick.stop
               >
-                {{ item.data.album?.trim() }}
-              </NuxtLink>
-              <template v-else>
-                {{ item.data.album?.trim() || "—" }}
-              </template>
-            </div>
-            <div
-              role="cell"
-              class="w-20 shrink-0 p-3 text-right tabular-nums text-muted-foreground"
-            >
-              {{ formatTrackDuration(item.data.durationMs) }}
-            </div>
-            <div role="cell" class="w-14 shrink-0 p-2 text-right">
-              <LikeButton
-                :liked="likedTrackIds.includes(item.data.id) || item.data.liked"
-                :label="item.data.title"
-                :pending="
-                  isLikePending({ kind: 'track', trackId: item.data.id })
-                "
-                :disabled="!likesLoaded"
-                @toggle="toggleLike({ kind: 'track', trackId: item.data.id })"
-                @dblclick.stop
-              />
+                <Icon
+                  :icon="isPlaying(item.data) ? icons.pause : icons.play"
+                  aria-hidden="true"
+                  class="text-foreground"
+                />
+              </Button>
+            </TrackArtwork>
+            <div class="min-w-0 flex-1">
+              <div class="flex min-w-0 items-center gap-2">
+                <span
+                  :id="trackTitleAnchorId(item.data.id)"
+                  class="scroll-mt-4 truncate"
+                  :class="{ 'opacity-60': !item.data.available }"
+                  >{{ item.data.title }}</span
+                >
+                <Icon
+                  v-if="isActive(item.data)"
+                  :icon="icons.waveform"
+                  aria-hidden="true"
+                  class="size-4 shrink-0 text-primary"
+                />
+              </div>
+              <p class="truncate text-xs text-muted-foreground">
+                <TrackArtistLinks :artists="trackArtistNames(item.data)" />
+              </p>
             </div>
           </div>
-        </TrackContextMenu>
-      </div>
+          <div
+            v-if="variant !== 'album'"
+            role="cell"
+            class="hidden w-56 shrink-0 truncate p-3 text-muted-foreground md:block"
+          >
+            <NuxtLink
+              v-if="item.data.album?.trim() && item.data.artist.trim()"
+              :to="trackAlbumRoute(item.data)"
+              class="block truncate rounded-sm hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              @dblclick.stop
+            >
+              {{ item.data.album?.trim() }}
+            </NuxtLink>
+            <template v-else>
+              {{ item.data.album?.trim() || "—" }}
+            </template>
+          </div>
+          <div
+            role="cell"
+            class="w-20 shrink-0 p-3 text-right tabular-nums text-muted-foreground"
+          >
+            {{ formatTrackDuration(item.data.durationMs) }}
+          </div>
+          <div role="cell" class="w-14 shrink-0 p-2 text-right">
+            <LikeButton
+              :liked="likedTrackIds.includes(item.data.id) || item.data.liked"
+              :label="item.data.title"
+              :pending="isLikePending({ kind: 'track', trackId: item.data.id })"
+              :disabled="!likesLoaded"
+              @toggle="toggleLike({ kind: 'track', trackId: item.data.id })"
+              @dblclick.stop
+            />
+          </div>
+        </div>
+      </TrackContextMenu>
     </div>
     <div v-if="hasMore" role="rowgroup">
       <div
+        ref="loadMoreTarget"
         role="row"
         :aria-rowindex="tracks.length + 2"
         class="flex min-w-full justify-center border-t p-3"
@@ -351,7 +358,11 @@ watch(
             :disabled="loadingMore"
             @click="emit('load-more')"
           >
-            {{ loadingMore ? "Loading tracks…" : "Load more tracks" }}
+            {{
+              loadingMore
+                ? t("trackTable.loadingMore")
+                : t("trackTable.loadMore")
+            }}
           </Button>
         </div>
       </div>

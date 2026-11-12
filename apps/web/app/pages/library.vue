@@ -1,3 +1,9 @@
+<script setup lang="ts">
+import { useI18n } from "#imports";
+
+const { t } = useI18n();
+</script>
+
 <template>
-  <LibraryScreen title="Library" />
+  <LibraryScreen :title="t('page.library.title')" />
 </template>

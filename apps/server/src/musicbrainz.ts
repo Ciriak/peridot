@@ -1,4 +1,7 @@
-import type { MetadataCandidateResponse } from "@peridot/contracts";
+import type {
+  MessageDescriptor,
+  MetadataCandidateResponse,
+} from "@peridot/contracts";
 import { normalizeArtistCredits } from "./artist-credits.js";
 import {
   candidateIdentity,
@@ -8,6 +11,7 @@ import {
   type MetadataTrackInput,
   MetadataResolverError,
 } from "./metadata-resolver.js";
+import { message } from "./messages.js";
 
 const MUSICBRAINZ_ORIGIN = "https://musicbrainz.org";
 const MUSICBRAINZ_API_ROOT = `${MUSICBRAINZ_ORIGIN}/ws/2/`;
@@ -26,6 +30,7 @@ export class MusicBrainzError extends Error {
   constructor(
     message: string,
     readonly retryable = true,
+    readonly messageDescriptor?: MessageDescriptor,
   ) {
     super(message);
     this.name = "MusicBrainzError";
@@ -385,7 +390,11 @@ export class MusicBrainzClient {
           await this.sleeper(1_000 * (attempt + 1), signal);
           continue;
         }
-        throw new MusicBrainzError("MusicBrainz could not be reached.");
+        throw new MusicBrainzError(
+          "MusicBrainz could not be reached.",
+          true,
+          message("api.message.musicbrainzUnavailable"),
+        );
       }
 
       if (response.status === 429 || response.status === 503) {
@@ -401,12 +410,19 @@ export class MusicBrainzClient {
         }
         throw new MusicBrainzError(
           "MusicBrainz is rate limiting requests. Try again later.",
+          true,
+          message("api.message.musicbrainzRateLimited"),
         );
       }
       if (!response.ok) {
         throw new MusicBrainzError(
           `MusicBrainz rejected the request (${response.status}).`,
           response.status >= 500,
+          message(
+            response.status >= 500
+              ? "api.message.musicbrainzTemporary"
+              : "api.message.musicbrainzFailed",
+          ),
         );
       }
 
@@ -436,7 +452,11 @@ export class MusicBrainzClient {
         );
       }
     }
-    throw new MusicBrainzError("MusicBrainz request failed.");
+    throw new MusicBrainzError(
+      "MusicBrainz request failed.",
+      true,
+      message("api.message.musicbrainzFailed"),
+    );
   }
 
   private async rateLimit(signal?: AbortSignal): Promise<void> {
@@ -452,6 +472,7 @@ function normalizedContact(value: unknown): string {
       "Enter a contact email or HTTP(S) URL for MusicBrainz.",
       400,
       false,
+      message("api.message.musicbrainzContactRequired"),
     );
   }
   const contact = value.trim();
@@ -460,6 +481,7 @@ function normalizedContact(value: unknown): string {
       "Enter a contact email or HTTP(S) URL for MusicBrainz.",
       400,
       false,
+      message("api.message.musicbrainzContactRequired"),
     );
   }
   for (const character of contact) {
@@ -469,6 +491,7 @@ function normalizedContact(value: unknown): string {
         "MusicBrainz contact details cannot contain control characters.",
         400,
         false,
+        message("api.message.musicbrainzContactInvalid"),
       );
     }
   }
@@ -491,6 +514,7 @@ function normalizedContact(value: unknown): string {
       "Enter a valid contact email or HTTP(S) URL for MusicBrainz.",
       400,
       false,
+      message("api.message.musicbrainzContactInvalid"),
     );
   }
 }
@@ -498,18 +522,18 @@ function normalizedContact(value: unknown): string {
 export class MusicBrainzResolver implements MetadataResolver {
   readonly definition = {
     kind: "musicbrainz" as const,
-    name: "MusicBrainz",
+    nameMessage: message("provider.musicbrainz.name"),
     description:
       "Match canonical recordings and releases using a contact User-Agent.",
+    descriptionMessage: message("provider.musicbrainz.description"),
     configurationFields: [
       {
         key: "contact",
-        label: "Contact email or URL",
+        labelMessage: message("provider.musicbrainz.contact.label"),
         type: "text" as const,
         required: true,
-        placeholder: "you@example.com",
-        helpText:
-          "MusicBrainz requires this contact in Peridot's request User-Agent.",
+        placeholderMessage: message("provider.musicbrainz.contact.placeholder"),
+        helpMessage: message("provider.musicbrainz.contact.help"),
       },
     ],
     credentialField: null,
@@ -532,6 +556,9 @@ export class MusicBrainzResolver implements MetadataResolver {
       "MusicBrainz does not require a credential.",
       400,
       false,
+      message("api.message.metadataProviderCredentialUnsupported", {
+        provider: "MusicBrainz",
+      }),
     );
   }
 
@@ -591,6 +618,7 @@ export class MusicBrainzResolver implements MetadataResolver {
         "MusicBrainz contact details are missing.",
         409,
         false,
+        message("api.message.musicbrainzContactRequired"),
       );
     }
     return value;

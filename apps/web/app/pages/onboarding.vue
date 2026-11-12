@@ -1,5 +1,11 @@
 <script setup lang="ts">
-import { definePageMeta, navigateTo, useHead, useRoute } from "#imports";
+import {
+  definePageMeta,
+  navigateTo,
+  useHead,
+  useI18n,
+  useRoute,
+} from "#imports";
 import logo from "@peridot/ui/assets/brand/logo.svg";
 import logoW from "@peridot/ui/assets/brand/logo-w.png";
 import { Button } from "@peridot/ui/components/ui/button";
@@ -17,6 +23,7 @@ import {
 import { useServer } from "../composables/use-server";
 import { useSession } from "../composables/use-session";
 import { useUser } from "../composables/use-user";
+import { useLocalizedMessage } from "../composables/use-localized-message";
 import {
   createAdministrator,
   createUserSession,
@@ -31,7 +38,9 @@ import {
 } from "../lib/server-address";
 
 definePageMeta({ layout: false });
-useHead({ title: "Set up Peridot" });
+const { t } = useI18n();
+const { errorMessage } = useLocalizedMessage();
+useHead({ title: t("onboarding.title") });
 const route = useRoute();
 const { address, configure } = useServer();
 const { token } = useSession();
@@ -53,7 +62,7 @@ const confirmationError = computed(() =>
   requiresAdminUser.value &&
   confirmPassword.value.length > 0 &&
   password.value !== confirmPassword.value
-    ? "Passwords do not match."
+    ? t("onboarding.passwordsMismatch")
     : "",
 );
 const addressScanState = ref<"idle" | "checking" | "found" | "not-found">(
@@ -157,10 +166,7 @@ async function connectToServer() {
     if (networkScanTimer) clearTimeout(networkScanTimer);
   } catch (reason) {
     step.value = "server";
-    error.value =
-      reason instanceof Error
-        ? reason.message
-        : "Could not connect to Peridot.";
+    error.value = errorMessage(reason, "onboarding.connectError");
   } finally {
     loading.value = false;
   }
@@ -169,7 +175,7 @@ async function connectToServer() {
 async function finishOnboarding() {
   error.value = "";
   if (requiresAdminUser.value && password.value !== confirmPassword.value) {
-    error.value = "Passwords do not match.";
+    error.value = t("onboarding.passwordsMismatch");
     return;
   }
   loading.value = true;
@@ -189,10 +195,7 @@ async function finishOnboarding() {
     user.value = session.user;
     await navigateTo(safeRedirectPath(route.query.redirect), { replace: true });
   } catch (reason) {
-    error.value =
-      reason instanceof Error
-        ? reason.message
-        : "Peridot could not complete account setup.";
+    error.value = errorMessage(reason, "onboarding.setupError");
   } finally {
     loading.value = false;
   }
@@ -221,39 +224,38 @@ function changeServer() {
       class="mx-auto w-full max-w-lg space-y-8 rounded-xl border bg-card p-6 text-card-foreground shadow-xl sm:p-10"
     >
       <div class="space-y-3 text-center">
-        <img :src="logo" alt="Peridot" class="mx-auto size-16" />
+        <img :src="logo" :alt="t('app.name')" class="mx-auto size-16" />
         <h1 id="onboarding-title" class="text-3xl font-semibold tracking-tight">
           {{
             step === "server"
-              ? "Your music starts at home."
+              ? t("onboarding.serverHeading")
               : requiresAdminUser
-                ? "Create your administrator."
-                : "Welcome back."
+                ? t("onboarding.adminHeading")
+                : t("onboarding.loginHeading")
           }}
         </h1>
         <p class="text-sm text-muted-foreground">
           {{
             step === "server"
-              ? "Connect to your self-hosted Peridot server."
+              ? t("onboarding.serverDescription")
               : requiresAdminUser
-                ? "This server has no users yet. Its first account is required and receives administrator privileges."
-                : "Sign in to continue to this Peridot server."
+                ? t("onboarding.adminDescription")
+                : t("onboarding.loginDescription")
           }}
         </p>
       </div>
       <div v-if="step === 'server'" class="space-y-4">
-        <section aria-label="Server discovery" class="space-y-3">
+        <section :aria-label="t('onboarding.discovery')" class="space-y-3">
           <div class="flex items-center gap-3">
-            <PeridotSpinner
-              label="Looking for a server on this network"
-              class="size-6"
-            />
+            <PeridotSpinner :label="t('onboarding.looking')" class="size-6" />
             <p aria-hidden="true" class="text-sm text-muted-foreground">
-              Looking for a server on this network
+              {{ t("onboarding.looking") }}
             </p>
           </div>
           <div v-if="discoveredServers.length" class="space-y-2">
-            <h2 class="text-sm font-medium">Servers found</h2>
+            <h2 class="text-sm font-medium">
+              {{ t("onboarding.foundServers") }}
+            </h2>
             <ul class="space-y-2">
               <li v-for="server in discoveredServers" :key="server.address">
                 <Button
@@ -277,7 +279,7 @@ function changeServer() {
             role="status"
             class="rounded-md border p-3 text-xs text-muted-foreground"
           >
-            Discovery unavailable.
+            {{ t("onboarding.discoveryUnavailable") }}
           </p>
         </section>
         <div class="border-t pt-4">
@@ -289,12 +291,12 @@ function changeServer() {
               aria-controls="manual-server-entry"
               @click="revealManualEntry"
             >
-              Enter the server address manually
+              {{ t("onboarding.manualEntry") }}
             </Button>
           </div>
           <div v-else id="manual-server-entry" class="space-y-2">
             <label for="server-address" class="text-sm font-medium">
-              Server URL
+              {{ t("onboarding.serverUrl") }}
             </label>
             <Input
               id="server-address"
@@ -318,10 +320,10 @@ function changeServer() {
             >
               {{
                 addressScanState === "checking"
-                  ? "Checking this address…"
+                  ? t("onboarding.checking")
                   : addressScanState === "found"
-                    ? "Peridot instance found."
-                    : "No server responded at this address."
+                    ? t("onboarding.found")
+                    : t("onboarding.notFound")
               }}
             </p>
           </div>
@@ -337,7 +339,9 @@ function changeServer() {
       </div>
       <form v-else class="space-y-4" @submit.prevent="finishOnboarding">
         <div class="space-y-2">
-          <label for="email" class="text-sm font-medium">Email</label>
+          <label for="email" class="text-sm font-medium">{{
+            t("onboarding.email")
+          }}</label>
           <Input
             id="email"
             v-model="email"
@@ -349,7 +353,7 @@ function changeServer() {
         </div>
         <div v-if="requiresAdminUser" class="space-y-2">
           <label for="display-name" class="text-sm font-medium">
-            Display name
+            {{ t("onboarding.displayName") }}
           </label>
           <Input
             id="display-name"
@@ -361,12 +365,13 @@ function changeServer() {
             aria-describedby="display-name-help"
           />
           <p id="display-name-help" class="text-xs text-muted-foreground">
-            Use 2–80 characters. This name is visible to other people who use
-            this server.
+            {{ t("onboarding.displayNameHelp") }}
           </p>
         </div>
         <div class="space-y-2">
-          <label for="password" class="text-sm font-medium">Password</label>
+          <label for="password" class="text-sm font-medium">{{
+            t("onboarding.password")
+          }}</label>
           <Input
             id="password"
             v-model="password"
@@ -380,12 +385,12 @@ function changeServer() {
             :aria-describedby="error ? 'account-error' : undefined"
           />
           <p v-if="requiresAdminUser" class="text-xs text-muted-foreground">
-            Use at least 12 characters.
+            {{ t("onboarding.passwordHelp") }}
           </p>
         </div>
         <div v-if="requiresAdminUser" class="space-y-2">
           <label for="confirm-password" class="text-sm font-medium">
-            Confirm password
+            {{ t("onboarding.confirmPassword") }}
           </label>
           <Input
             id="confirm-password"
@@ -414,7 +419,7 @@ function changeServer() {
             id="confirm-password-help"
             class="text-xs text-muted-foreground"
           >
-            Enter the same password again.
+            {{ t("onboarding.confirmPasswordHelp") }}
           </p>
         </div>
         <div>
@@ -434,7 +439,7 @@ function changeServer() {
             class="flex-1"
             @click="changeServer"
           >
-            Back
+            {{ t("onboarding.back") }}
           </Button>
           <Button
             type="submit"
@@ -443,10 +448,10 @@ function changeServer() {
           >
             {{
               loading
-                ? "Please wait…"
+                ? t("onboarding.pleaseWait")
                 : requiresAdminUser
-                  ? "Create administrator"
-                  : "Sign in"
+                  ? t("onboarding.createAdministrator")
+                  : t("onboarding.signIn")
             }}
           </Button>
         </div>

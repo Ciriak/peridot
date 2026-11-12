@@ -13,6 +13,7 @@ import type {
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { Database } from "./database.js";
 import { sendError } from "./http.js";
+import { message } from "./messages.js";
 import { ensureDefaultMetadataProvider } from "./metadata-providers.js";
 
 const scrypt = promisify(scryptCallback);
@@ -139,6 +140,7 @@ export async function registerAuthRoutes(
           400,
           "invalid_admin_user",
           "Use a valid email, a 2–80 character display name, and a 12+ character password",
+          message("api.message.invalidAdminUser"),
         );
       }
       if (
@@ -153,6 +155,7 @@ export async function registerAuthRoutes(
           409,
           "setup_complete",
           "The administrator account has already been created",
+          message("api.message.setupComplete"),
         );
       }
       try {
@@ -178,6 +181,7 @@ export async function registerAuthRoutes(
             409,
             "setup_complete",
             "The administrator account has already been created",
+            message("api.message.setupComplete"),
           );
         }
         throw error;
@@ -196,6 +200,7 @@ export async function registerAuthRoutes(
           401,
           "invalid_credentials",
           "The email or password is incorrect",
+          message("api.message.invalidCredentials"),
         );
       }
       const user = await database.orm.User.first({ email });
@@ -205,6 +210,7 @@ export async function registerAuthRoutes(
           401,
           "invalid_credentials",
           "The email or password is incorrect",
+          message("api.message.invalidCredentials"),
         );
       }
       return createSession(database, user);
@@ -249,6 +255,7 @@ export async function registerProtectedRoutes(
             428,
             "setup_required",
             "Create the first administrator account before using Peridot",
+            message("api.message.setupRequired"),
           );
         }
         if (session) {
@@ -259,6 +266,7 @@ export async function registerProtectedRoutes(
           401,
           "unauthorized",
           "Valid user authentication is required",
+          message("api.message.unauthorized"),
         );
       }
       request.authenticatedSessionId = session.id;
@@ -279,6 +287,7 @@ export async function registerProtectedRoutes(
             400,
             "invalid_display_name",
             "Use a display name between 2 and 80 characters",
+            message("api.message.invalidDisplayName"),
           );
         }
 
@@ -292,6 +301,7 @@ export async function registerProtectedRoutes(
             409,
             "display_name_taken",
             "That display name is already in use",
+            message("api.message.displayNameTaken"),
           );
         }
 
@@ -307,6 +317,7 @@ export async function registerProtectedRoutes(
               409,
               "display_name_taken",
               "That display name is already in use",
+              message("api.message.displayNameTaken"),
             );
           }
           throw error;

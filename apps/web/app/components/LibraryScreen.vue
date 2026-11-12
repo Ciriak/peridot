@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "#imports";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
@@ -12,6 +13,7 @@ const props = withDefaults(
   defineProps<{ title: string; home?: boolean; favorites?: boolean }>(),
   { home: false, favorites: false },
 );
+const { t } = useI18n();
 const sort = ref<TrackSort | null>({ field: "title", direction: "asc" });
 const queryOptions = computed(() => ({
   sort:
@@ -39,18 +41,24 @@ onMounted(() => {
   <div class="space-y-2">
     <h1 class="text-2xl font-semibold tracking-tight">{{ title }}</h1>
     <p class="text-sm text-muted-foreground">
-      Tracks cataloged from your configured music sources.
+      {{ t("components.library.description") }}
     </p>
   </div>
   <section aria-labelledby="tracks-heading" class="space-y-4">
     <div class="flex items-center justify-between gap-4">
-      <h2 id="tracks-heading" class="text-lg font-semibold">Tracks</h2>
+      <h2 id="tracks-heading" class="text-lg font-semibold">
+        {{ t("components.tracks.label") }}
+      </h2>
       <Button v-if="home" as-child variant="ghost" size="sm"
-        ><NuxtLink to="/library">View library</NuxtLink></Button
+        ><NuxtLink to="/library">{{
+          t("components.library.view")
+        }}</NuxtLink></Button
       >
       <Badge v-else variant="secondary">
         {{
-          loading ? "Loading" : `${tracks.length}${hasMore ? "+" : ""} tracks`
+          loading
+            ? t("common.loading")
+            : `${t("count.track", { count: tracks.length }, tracks.length)}${hasMore ? "+" : ""}`
         }}
       </Badge>
     </div>
@@ -59,8 +67,8 @@ onMounted(() => {
       role="status"
       class="flex items-center gap-3 rounded-lg border p-6 text-sm text-muted-foreground"
     >
-      <PeridotSpinner label="Loading library" />
-      Loading your library…
+      <PeridotSpinner :label="t('components.library.loading')" />
+      {{ t("components.library.loading") }}
     </div>
     <div
       v-else-if="error"
@@ -68,7 +76,9 @@ onMounted(() => {
       class="space-y-3 rounded-lg border p-6 text-sm"
     >
       <p>{{ error }}</p>
-      <Button variant="outline" @click="load(true)">Try again</Button>
+      <Button variant="outline" @click="load(true)">{{
+        t("common.tryAgain")
+      }}</Button>
     </div>
     <TrackTable
       v-else-if="tracks.length"
@@ -85,12 +95,13 @@ onMounted(() => {
       role="status"
       class="rounded-lg border p-6 text-sm text-muted-foreground"
     >
-      <template v-if="favorites"> You have not liked any tracks yet. </template>
-      <template v-else-if="loaded">
-        No tracks in your library yet. Add a music source and run a scan from
-        Settings → Sources.
+      <template v-if="favorites">
+        {{ t("components.library.noFavorites") }}
       </template>
-      <template v-else> Loading your library… </template>
+      <template v-else-if="loaded">
+        {{ t("components.library.empty") }}
+      </template>
+      <template v-else>{{ t("components.library.loading") }}</template>
     </p>
   </section>
 </template>

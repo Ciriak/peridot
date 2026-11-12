@@ -1,29 +1,44 @@
-import type { LikeTarget } from "@peridot/contracts";
+import type { LikeTarget, MessageDescriptor } from "@peridot/contracts";
 import { createToastManager } from "reka-ui";
 import { likeSuccessToast } from "./like-toast";
+import { message } from "./messages.ts";
 import { sourceMutationToast, type SourceMutation } from "./source-toast";
 
 export type AppToastKind = "success" | "error";
 
 export interface AppToastData {
   kind: AppToastKind;
+  titleMessage: MessageDescriptor;
+  descriptionMessage: MessageDescriptor;
 }
 
 export const appToastManager = createToastManager<AppToastData>();
+
+function addToast(content: {
+  titleMessage: MessageDescriptor;
+  descriptionMessage: MessageDescriptor;
+  status: "success" | "error";
+  duration: number;
+  kind: AppToastKind;
+}) {
+  appToastManager.add({
+    status: content.status,
+    duration: content.duration,
+    type: "foreground",
+    data: {
+      kind: content.kind,
+      titleMessage: content.titleMessage,
+      descriptionMessage: content.descriptionMessage,
+    },
+  });
+}
 
 export function notifySourceMutation(
   action: SourceMutation,
   sourceLabel?: string,
 ) {
   const content = sourceMutationToast(action, sourceLabel);
-  appToastManager.add({
-    title: content.title,
-    description: content.description,
-    status: content.status,
-    duration: content.duration,
-    type: "foreground",
-    data: { kind: content.kind },
-  });
+  addToast(content);
 }
 
 export function notifyMetadataProviderMutation(
@@ -31,133 +46,147 @@ export function notifyMetadataProviderMutation(
   providerName?: string,
 ) {
   const name = providerName?.trim() || "Metadata provider";
-  const content = {
+  const content: Record<
+    "added" | "disabled" | "enabled" | "updated",
+    { titleMessage: MessageDescriptor; descriptionMessage: MessageDescriptor }
+  > = {
     added: {
-      title: "Metadata provider added",
-      description: `${name} will be used for future library scans.`,
+      titleMessage: message("toast.providerAddedTitle"),
+      descriptionMessage: message("toast.providerAdded", { provider: name }),
     },
     disabled: {
-      title: "Metadata provider disabled",
-      description: `${name} will no longer be used for metadata matching.`,
+      titleMessage: message("toast.providerDisabledTitle"),
+      descriptionMessage: message("toast.providerDisabled", {
+        provider: name,
+      }),
     },
     enabled: {
-      title: "Metadata provider enabled",
-      description: `${name} will be used for future metadata matching.`,
+      titleMessage: message("toast.providerEnabledTitle"),
+      descriptionMessage: message("toast.providerEnabled", {
+        provider: name,
+      }),
     },
     updated: {
-      title: "Metadata provider updated",
-      description: `${name} connection details were saved.`,
+      titleMessage: message("toast.providerUpdatedTitle"),
+      descriptionMessage: message("toast.providerUpdated", {
+        provider: name,
+      }),
     },
-  }[action];
-  appToastManager.add({
-    title: content.title,
-    description: content.description,
+  };
+  addToast({
+    ...content[action],
     status: "success",
     duration: 5000,
-    type: "foreground",
-    data: { kind: "success" },
+    kind: "success",
   });
 }
 
 export function notifyMetadataMatched(trackTitle: string) {
-  appToastManager.add({
-    title: "Metadata updated",
-    description: `${trackTitle} now uses the selected metadata match.`,
+  addToast({
+    titleMessage: message("toast.metadataMatchedTitle"),
+    descriptionMessage: message("toast.metadataMatched", {
+      track: trackTitle,
+    }),
     status: "success",
     duration: 5000,
-    type: "foreground",
-    data: { kind: "success" },
+    kind: "success",
   });
 }
 
 export function notifyMetadataReverted(trackTitle: string) {
-  appToastManager.add({
-    title: "Using file metadata",
-    description: `${trackTitle} now uses its original file tags.`,
+  addToast({
+    titleMessage: message("toast.metadataRevertedTitle"),
+    descriptionMessage: message("toast.metadataReverted", {
+      track: trackTitle,
+    }),
     status: "success",
     duration: 5000,
-    type: "foreground",
-    data: { kind: "success" },
+    kind: "success",
   });
 }
 
 export function notifyMetadataReset(resetCount: number) {
-  appToastManager.add({
-    title: "Metadata reset",
-    description: `${resetCount} ${resetCount === 1 ? "track now uses" : "tracks now use"} their original file tags.`,
+  addToast({
+    titleMessage: message("toast.metadataResetTitle"),
+    descriptionMessage: message(
+      "toast.metadataReset",
+      { count: resetCount },
+      resetCount,
+    ),
     status: "success",
     duration: 5000,
-    type: "foreground",
-    data: { kind: "success" },
+    kind: "success",
   });
 }
 
 export function notifyMetadataUpdateFailed(
   trackTitle: string,
-  message: string,
+  detailMessage: string,
 ) {
-  appToastManager.add({
-    title: "Could not update metadata",
-    description: `${trackTitle} was not changed. ${message}`,
+  addToast({
+    titleMessage: message("toast.metadataUpdateFailedTitle"),
+    descriptionMessage: message("toast.metadataUpdateFailed", {
+      track: trackTitle,
+      message: detailMessage,
+    }),
     status: "error",
     duration: 8000,
-    type: "foreground",
-    data: { kind: "error" },
+    kind: "error",
   });
 }
 
-export function notifyTrackDownloadFailed(trackTitle: string, message: string) {
-  appToastManager.add({
-    title: "Download failed",
-    description: `${trackTitle} could not be downloaded. ${message}`,
+export function notifyTrackDownloadFailed(
+  trackTitle: string,
+  detailMessage: string,
+) {
+  addToast({
+    titleMessage: message("toast.downloadFailedTitle"),
+    descriptionMessage: message("toast.downloadFailed", {
+      track: trackTitle,
+      message: detailMessage,
+    }),
     status: "error",
     duration: 8000,
-    type: "foreground",
-    data: { kind: "error" },
+    kind: "error",
   });
 }
 
-export function notifyLikeFailed(target: string, message: string) {
-  appToastManager.add({
-    title: "Could not update favorite",
-    description: `${target} was not changed. ${message}`,
+export function notifyLikeFailed(target: string, detailMessage: string) {
+  addToast({
+    titleMessage: message("toast.likeFailedTitle"),
+    descriptionMessage: message("toast.likeFailed", {
+      target,
+      message: detailMessage,
+    }),
     status: "error",
     duration: 8000,
-    type: "foreground",
-    data: { kind: "error" },
+    kind: "error",
   });
 }
 
 export function notifyLikeSucceeded(target: LikeTarget) {
   const content = likeSuccessToast(target);
-  appToastManager.add({
-    title: content.title,
-    description: content.description,
-    status: content.status,
-    duration: content.duration,
-    type: "foreground",
-    data: { kind: content.kind },
-  });
+  addToast(content);
 }
 
 export function notifyAddedToQueue(trackTitle: string) {
-  appToastManager.add({
-    title: "Added to queue",
-    description: `${trackTitle} will play next.`,
+  addToast({
+    titleMessage: message("toast.addedToQueueTitle"),
+    descriptionMessage: message("toast.addedToQueue", { track: trackTitle }),
     status: "success",
     duration: 5000,
-    type: "foreground",
-    data: { kind: "success" },
+    kind: "success",
   });
 }
 
-export function notifyQueueSaveFailed(message: string) {
-  appToastManager.add({
-    title: "Could not save queue",
-    description: `Playback will continue, but the next queue change will retry. ${message}`,
+export function notifyQueueSaveFailed(detailMessage: string) {
+  addToast({
+    titleMessage: message("toast.queueSaveFailedTitle"),
+    descriptionMessage: message("toast.queueSaveFailed", {
+      message: detailMessage,
+    }),
     status: "error",
     duration: 8000,
-    type: "foreground",
-    data: { kind: "error" },
+    kind: "error",
   });
 }

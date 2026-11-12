@@ -1,6 +1,7 @@
 import type { TaskListResponse } from "@peridot/contracts";
 import type { FastifyInstance } from "fastify";
 import { sendError } from "./http.js";
+import { message } from "./messages.js";
 import { toTaskResponse, type TaskService } from "./tasks.js";
 
 const MAX_TASK_PAGE_SIZE = 100;
@@ -19,6 +20,7 @@ export async function registerTaskRoutes(
         400,
         "invalid_task_status",
         "status must be all, active, or terminal",
+        message("api.message.invalidTaskStatus"),
       );
     }
     const limit = Number(request.query.limit ?? 50);
@@ -35,6 +37,7 @@ export async function registerTaskRoutes(
         400,
         "invalid_task_page",
         `limit must be between 1 and ${MAX_TASK_PAGE_SIZE}, and offset must be non-negative`,
+        message("api.message.invalidTaskPage"),
       );
     }
     const result = await tasks.list(status as "all" | "active" | "terminal");
@@ -49,7 +52,13 @@ export async function registerTaskRoutes(
     async (request, reply) => {
       const task = await tasks.get(request.params.id);
       if (!task) {
-        return sendError(reply, 404, "task_not_found", "Task not found");
+        return sendError(
+          reply,
+          404,
+          "task_not_found",
+          "Task not found",
+          message("api.message.taskNotFound"),
+        );
       }
       return toTaskResponse(task);
     },

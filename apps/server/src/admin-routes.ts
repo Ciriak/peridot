@@ -21,6 +21,7 @@ import type { FastifyInstance } from "fastify";
 import type { CredentialStore } from "./credential-store.js";
 import type { Database } from "./database.js";
 import { sendError } from "./http.js";
+import { message } from "./messages.js";
 import type { MetadataEnrichment } from "./metadata-enrichment.js";
 import {
   createMetadataProvider,
@@ -72,6 +73,7 @@ export async function registerAdminRoutes(
           403,
           "admin_required",
           "Administrator access is required",
+          message("api.message.adminRequired"),
         );
       }
     });
@@ -190,7 +192,13 @@ export async function registerAdminRoutes(
           return reply.code(201).send(response);
         } catch (error) {
           if (error instanceof SourceError) {
-            return sendError(reply, 400, "invalid_source", error.message);
+            return sendError(
+              reply,
+              400,
+              "invalid_source",
+              error.message,
+              error.messageDescriptor,
+            );
           }
           throw error;
         }
@@ -206,7 +214,13 @@ export async function registerAdminRoutes(
           };
         } catch (error) {
           if (error instanceof SourceError) {
-            return sendError(reply, 400, "invalid_source", error.message);
+            return sendError(
+              reply,
+              400,
+              "invalid_source",
+              error.message,
+              error.messageDescriptor,
+            );
           }
           throw error;
         }
@@ -218,7 +232,13 @@ export async function registerAdminRoutes(
       async (request, reply) => {
         const removed = await deleteSource(database, request.params.id);
         if (!removed) {
-          return sendError(reply, 404, "source_not_found", "Source not found");
+          return sendError(
+            reply,
+            404,
+            "source_not_found",
+            "Source not found",
+            message("api.message.sourceNotFound"),
+          );
         }
         return reply.code(204).send();
       },
@@ -231,7 +251,13 @@ export async function registerAdminRoutes(
           id: request.params.id,
         });
         if (!source) {
-          return sendError(reply, 404, "source_not_found", "Source not found");
+          return sendError(
+            reply,
+            404,
+            "source_not_found",
+            "Source not found",
+            message("api.message.sourceNotFound"),
+          );
         }
         if (source.kind !== "path" || !source.path) {
           return sendError(
@@ -239,6 +265,7 @@ export async function registerAdminRoutes(
             400,
             "source_not_rescanable",
             "Only local folder sources can be rescanned.",
+            message("api.message.sourceNotRescanable"),
           );
         }
         const task = await queueLibraryScan(tasks, {
@@ -284,6 +311,7 @@ export async function registerAdminRoutes(
               error.statusCode,
               "invalid_metadata_provider",
               error.message,
+              error.messageDescriptor,
             );
           }
           throw error;
@@ -305,6 +333,7 @@ export async function registerAdminRoutes(
               400,
               "invalid_metadata_provider",
               error.message,
+              error.messageDescriptor,
             );
           }
           throw error;
@@ -330,6 +359,7 @@ export async function registerAdminRoutes(
             404,
             "metadata_provider_not_found",
             "Metadata provider not found",
+            message("api.message.metadataProviderNotFound"),
           );
         }
         return provider;
@@ -340,6 +370,7 @@ export async function registerAdminRoutes(
             error.statusCode,
             "invalid_metadata_provider",
             error.message,
+            error.messageDescriptor,
           );
         }
         throw error;
@@ -353,6 +384,7 @@ export async function registerAdminRoutes(
           409,
           "metadata_reset_in_progress",
           "Wait for the active library operation to finish.",
+          message("api.message.metadataResetInProgress"),
         );
       }
       const response: ResetTrackMetadataResponse = {
@@ -383,6 +415,7 @@ export async function registerAdminRoutes(
             400,
             "invalid_search",
             "Enter a search term up to 200 characters.",
+            message("api.message.invalidSearch"),
           );
         }
         const controller = new AbortController();

@@ -2,12 +2,17 @@ import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { test } from "node:test";
+import {
+  TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY,
+  type TaskResponse,
+} from "@peridot/contracts";
 import { buildApp } from "../src/app.js";
 import {
   createMemberSession,
   createTaggedMp3,
   createTestContext,
   startScan,
+  waitForTask,
   waitForScan,
 } from "./helpers.js";
 
@@ -21,7 +26,7 @@ function musicBrainzResponses(): typeof fetch {
   return async (input, init) => {
     const url = new URL(String(input));
     assert.equal(url.origin, "https://musicbrainz.org");
-    assert.equal(
+    assert.deepEqual(
       new Headers(init?.headers).get("User-Agent"),
       "Peridot/0.1.0 (admin@example.com)",
     );
@@ -200,10 +205,9 @@ test("administrators can manage ordered metadata providers", async () => {
     assert.equal(refresh.statusCode, 202);
     const skipped = await waitForScan(context, refresh.json().id);
     assert.equal(skipped.metadataStatus, "failed");
-    assert.equal(
-      skipped.metadataFailureSummary,
-      "No metadata providers are enabled.",
-    );
+    assert.deepEqual(skipped.metadataFailureMessage, {
+      key: "api.message.metadataProvidersDisabled",
+    });
 
     const enabled = await context.app.inject({
       method: "PUT",
@@ -273,7 +277,9 @@ test("Discogs token storage requires the credential encryption key", async () =>
       },
     });
     assert.equal(response.statusCode, 503);
-    assert.match(response.json().error.message, /PERIDOT_CREDENTIAL_KEY/);
+    assert.deepEqual(response.json().error.messageDescriptor, {
+      key: "api.message.credentialStoreError",
+    });
   } finally {
     await context.close();
   }
@@ -376,6 +382,91 @@ test("metadata provider mutations allow the configured web origin", async () => 
       );
     }
   } finally {
+    await context.close();
+  }
+});
+
+test("metadata tasks identify the provider while its request is in flight", async () => {
+  let providerRequestStarted!: () => void;
+  const requestStarted = new Promise<void>((resolve) => {
+    providerRequestStarted = resolve;
+  });
+  let releaseProviderRequest!: () => void;
+  const providerResponse = new Promise<void>((resolve) => {
+    releaseProviderRequest = resolve;
+  });
+  const metadataResponses = musicBrainzResponses();
+  const context = await createTestContext({
+    metadataFetch: async (input, init) => {
+      if (new URL(String(input)).pathname.endsWith("/ws/2/release")) {
+        providerRequestStarted();
+        await providerResponse;
+      }
+      return metadataResponses(input, init);
+    },
+    metadataRequestIntervalMs: 0,
+  });
+  const albumRoot = path.join(context.libraryRoot, "Night Sessions");
+  try {
+    await mkdir(albumRoot);
+    await writeFile(
+      path.join(albumRoot, "01 - Blue Hours.mp3"),
+      createTaggedMp3({
+        title: "Blue Hours",
+        artist: "Elliot Lake",
+        album: "Night Sessions",
+        discNumber: 1,
+        trackNumber: 1,
+      }),
+    );
+    const scan = await context.app.inject({
+      method: "POST",
+      url: "/api/library/scans",
+      headers: context.authorization,
+    });
+    assert.equal(scan.statusCode, 202);
+
+    await Promise.race([
+      requestStarted,
+      new Promise<never>((_, reject) => {
+        setTimeout(
+          () => reject(new Error("Metadata provider request did not start")),
+          5_000,
+        ).unref();
+      }),
+    ]);
+
+    const metadata = await context.database.orm.Task.firstOrThrow({
+      kind: "metadata_fetch",
+    });
+    const provider = await context.database.orm.MetadataProvider.firstOrThrow({
+      kind: "musicbrainz",
+    });
+    const active = await context.app.inject({
+      method: "GET",
+      url: `/api/tasks/${metadata.id}`,
+      headers: context.authorization,
+    });
+    const activeTask = active.json<TaskResponse>();
+    assert.equal(activeTask.status, "running");
+    assert.equal(
+      activeTask.details.find(
+        (detail) => detail.key === TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY,
+      )?.value,
+      provider.id,
+    );
+
+    releaseProviderRequest();
+    const completed = await waitForTask(context, metadata.id);
+    assert.equal(completed.status, "completed");
+    assert.equal(
+      completed.details.some(
+        (detail) => detail.key === TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY,
+      ),
+      false,
+    );
+  } finally {
+    releaseProviderRequest();
     await context.close();
   }
 });
@@ -586,7 +677,11 @@ test("Discogs credentials fall back after MusicBrainz and manual results merge p
         discNumber: number | null;
         trackNumber: number | null;
         sourceUrl: string;
-        details: Array<{ key: string; label: string; value: string }>;
+        details: Array<{
+          key: string;
+          value: string;
+          labelMessage: { key: string };
+        }>;
       }>;
     }>().items;
     assert.deepEqual(

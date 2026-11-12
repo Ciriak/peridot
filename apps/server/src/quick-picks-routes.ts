@@ -7,6 +7,7 @@ import type { FastifyInstance } from "fastify";
 import { catalogAlbumId, type CatalogService } from "./catalog.js";
 import type { Database } from "./database.js";
 import { sendError } from "./http.js";
+import { message } from "./messages.js";
 import { rankQuickPicks } from "./quick-picks.js";
 
 export async function registerQuickPickRoutes(
@@ -26,6 +27,7 @@ export async function registerQuickPickRoutes(
           404,
           "track_not_found",
           "Available track not found",
+          message("api.message.trackNotFound"),
         );
       }
       const event = await database.orm.TrackPlayEvent.create({

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, definePageMeta, onMounted, ref } from "#imports";
+import { computed, definePageMeta, onMounted, ref, useI18n } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import type {
   CreateMetadataProviderRequest,
@@ -10,6 +10,7 @@ import type {
 } from "@peridot/contracts";
 import { Button } from "@peridot/ui/components/ui/button";
 import { Input } from "@peridot/ui/components/ui/input";
+import { ProgressCircle } from "@peridot/ui/components/ui/progress-circle";
 import { Switch } from "@peridot/ui/components/ui/switch";
 import { useSortable } from "@vueuse/integrations/useSortable";
 import {
@@ -38,6 +39,7 @@ import { useServer } from "../../composables/use-server";
 import { useSession } from "../../composables/use-session";
 import { useTasks } from "../../composables/use-tasks";
 import { useUser } from "../../composables/use-user";
+import { useLocalizedMessage } from "../../composables/use-localized-message";
 import { icons } from "../../lib/icons";
 import { metadataProviderNeedsConfiguration } from "../../lib/metadata-provider-config";
 import {
@@ -50,17 +52,23 @@ import {
   updateMetadataProvider,
 } from "../../lib/peridot-client";
 import {
+  activeTaskForMetadataProvider,
+  activeTaskPercent,
+} from "../../lib/task-progress";
+import {
   notifyMetadataProviderMutation,
   notifyMetadataReset,
 } from "../../lib/toasts";
 
 definePageMeta({ layout: "settings" });
 
+const { t } = useI18n();
+const { translate, errorMessage } = useLocalizedMessage();
 const { address } = useServer();
 const { token } = useSession();
 const { user } = useUser();
 const allowed = computed(() => user.value?.role === "admin");
-const { hasActiveTasks, queueMetadataRefresh } = useTasks();
+const { hasActiveTasks, queueMetadataRefresh, tasks } = useTasks();
 const { invalidate: invalidateCatalog } = useCatalogRevision();
 
 const providers = ref<MetadataProviderResponse[]>([]);
@@ -134,10 +142,7 @@ async function loadProviders() {
     syncProviderRows();
   } catch (reason) {
     if (isAuthenticationRedirectError(reason)) return;
-    pageError.value =
-      reason instanceof Error
-        ? reason.message
-        : "Could not load metadata providers.";
+    pageError.value = errorMessage(reason, "settings.metadata.loadError");
   } finally {
     loading.value = false;
   }
@@ -254,18 +259,15 @@ async function saveProvider() {
     closeFormDialog();
   } catch (reason) {
     if (isAuthenticationRedirectError(reason)) return;
-    formError.value =
-      reason instanceof Error
-        ? reason.message
-        : "Could not save the metadata provider.";
+    formError.value = errorMessage(reason, "settings.metadata.saveError");
   } finally {
     saving.value = false;
   }
 }
 
 function providerStatusLabel(provider: MetadataProviderResponse | null) {
-  if (!provider) return "Not configured";
-  return provider.enabled ? "Active" : "Disabled";
+  if (!provider) return t("common.notConfigured");
+  return provider.enabled ? t("common.active") : t("common.disabled");
 }
 
 function providerStatusClass(provider: MetadataProviderResponse | null) {
@@ -281,6 +283,17 @@ function providerNeedsConfiguration(provider: MetadataProviderResponse) {
   return metadataProviderNeedsConfiguration(provider, definitions.value);
 }
 
+function providerTask(provider: MetadataProviderResponse | null) {
+  return provider
+    ? activeTaskForMetadataProvider(tasks.value, provider.id)
+    : null;
+}
+
+function providerProgress(provider: MetadataProviderResponse | null) {
+  const task = providerTask(provider);
+  return task ? activeTaskPercent(task) : null;
+}
+
 async function persistOrder() {
   try {
     await reorderMetadataProviders(
@@ -292,10 +305,7 @@ async function persistOrder() {
     );
   } catch (reason) {
     if (isAuthenticationRedirectError(reason)) return;
-    pageError.value =
-      reason instanceof Error
-        ? reason.message
-        : "Could not save the metadata provider order.";
+    pageError.value = errorMessage(reason, "settings.metadata.orderError");
   }
 }
 
@@ -305,8 +315,7 @@ async function refreshProviderMetadata() {
     await queueMetadataRefresh();
   } catch (reason) {
     if (isAuthenticationRedirectError(reason)) return;
-    pageError.value =
-      reason instanceof Error ? reason.message : "Could not refresh metadata.";
+    pageError.value = errorMessage(reason, "settings.metadata.refreshError");
   }
 }
 
@@ -326,10 +335,7 @@ async function confirmReset() {
     invalidateCatalog();
   } catch (reason) {
     if (isAuthenticationRedirectError(reason)) return;
-    pageError.value =
-      reason instanceof Error
-        ? reason.message
-        : "Could not reset track metadata.";
+    pageError.value = errorMessage(reason, "settings.metadata.resetError");
   } finally {
     resetting.value = false;
   }
@@ -340,9 +346,11 @@ onMounted(() => void loadProviders());
 
 <template>
   <div class="space-y-2">
-    <h2 class="text-2xl font-semibold tracking-tight">Metadata</h2>
+    <h2 class="text-2xl font-semibold tracking-tight">
+      {{ t("settings.metadata.title") }}
+    </h2>
     <p class="text-sm text-muted-foreground">
-      Match library tracks with metadata from services enabled below.
+      {{ t("settings.metadata.description") }}
     </p>
   </div>
 
@@ -351,7 +359,7 @@ onMounted(() => void loadProviders());
     role="alert"
     class="rounded-lg border bg-card p-6 text-sm text-card-foreground"
   >
-    Administrator access is required to manage metadata providers.
+    {{ t("settings.metadata.adminRequired") }}
   </section>
 
   <section
@@ -361,7 +369,7 @@ onMounted(() => void loadProviders());
   >
     <div class="flex items-center justify-between gap-4">
       <h3 id="metadata-providers-heading" class="text-lg font-semibold">
-        Metadata providers
+        {{ t("settings.metadata.providers") }}
       </h3>
       <div class="flex items-center gap-2">
         <Button
@@ -373,7 +381,11 @@ onMounted(() => void loadProviders());
           @click="refreshProviderMetadata"
         >
           <Icon :icon="icons.restart" aria-hidden="true" class="size-4" />
-          {{ hasActiveTasks ? "Processing…" : "Refresh metadata" }}
+          {{
+            hasActiveTasks
+              ? t("common.processing")
+              : t("settings.metadata.refresh")
+          }}
         </Button>
       </div>
     </div>
@@ -381,7 +393,9 @@ onMounted(() => void loadProviders());
       {{ pageError }}
     </p>
     <div class="rounded-lg border bg-card p-6 text-card-foreground">
-      <p v-if="loading" class="text-sm text-muted-foreground">Loading…</p>
+      <p v-if="loading" class="text-sm text-muted-foreground">
+        {{ t("common.loadingMore") }}
+      </p>
       <TooltipProvider v-else-if="providerRows.length">
         <ul ref="providerList" class="space-y-2">
           <li
@@ -397,7 +411,7 @@ onMounted(() => void loadProviders());
               v-if="row.provider"
               type="button"
               class="cursor-grab rounded-md p-1 text-muted-foreground active:cursor-grabbing"
-              aria-label="Drag to reorder metadata provider"
+              :aria-label="t('settings.metadata.drag')"
             >
               <Icon :icon="icons.drag" aria-hidden="true" class="size-4" />
             </button>
@@ -412,7 +426,7 @@ onMounted(() => void loadProviders());
                 class="block truncate text-sm font-medium"
                 :class="{ 'opacity-60': !row.provider }"
               >
-                {{ row.definition.name }}
+                {{ translate(row.definition.nameMessage) }}
               </span>
               <span
                 class="block truncate text-sm"
@@ -421,6 +435,17 @@ onMounted(() => void loadProviders());
                 {{ providerStatusLabel(row.provider) }}
               </span>
             </span>
+            <ProgressCircle
+              v-if="row.provider && providerTask(row.provider)"
+              size="sm"
+              :value="providerProgress(row.provider)"
+              :label="
+                t('settings.metadata.progress', {
+                  provider: row.provider.name,
+                })
+              "
+              class="size-5"
+            />
             <div class="flex flex-col items-center gap-1">
               <TooltipRoot
                 v-if="row.provider && providerNeedsConfiguration(row.provider)"
@@ -429,7 +454,7 @@ onMounted(() => void loadProviders());
                   <span
                     tabindex="0"
                     class="rounded-full bg-card p-0.5 text-destructive"
-                    aria-label="Configuration required"
+                    :aria-label="t('settings.metadata.configurationRequired')"
                   >
                     <Icon
                       :icon="icons.warning"
@@ -444,9 +469,11 @@ onMounted(() => void loadProviders());
                     :side-offset="6"
                     class="z-50 max-w-56 rounded-md border bg-popover px-3 py-1.5 text-xs text-popover-foreground shadow-md"
                   >
-                    Configure the required settings for
-                    {{ row.definition.name }}
-                    before using this provider.
+                    {{
+                      t("settings.metadata.configureBefore", {
+                        provider: translate(row.definition.nameMessage),
+                      })
+                    }}
                   </TooltipContent>
                 </TooltipPortal>
               </TooltipRoot>
@@ -454,7 +481,11 @@ onMounted(() => void loadProviders());
                 type="button"
                 variant="ghost"
                 size="icon-sm"
-                :aria-label="`Configure ${row.definition.name}`"
+                :aria-label="
+                  t('settings.metadata.configure', {
+                    provider: translate(row.definition.nameMessage),
+                  })
+                "
                 @click="openProviderDialog(row.definition)"
               >
                 <Icon
@@ -468,7 +499,7 @@ onMounted(() => void loadProviders());
         </ul>
       </TooltipProvider>
       <p v-else class="text-sm text-muted-foreground">
-        No metadata providers are available.
+        {{ t("settings.metadata.none") }}
       </p>
     </div>
   </section>
@@ -479,16 +510,17 @@ onMounted(() => void loadProviders());
     class="space-y-4"
   >
     <h3 id="track-metadata-reset-heading" class="text-lg font-semibold">
-      Track metadata
+      {{ t("settings.metadata.resetHeading") }}
     </h3>
     <div
       class="flex flex-col gap-4 rounded-lg border bg-card p-6 text-card-foreground sm:flex-row sm:items-center sm:justify-between"
     >
       <div class="space-y-1">
-        <p class="text-sm font-medium">Reset all track metadata</p>
+        <p class="text-sm font-medium">
+          {{ t("settings.metadata.resetTitle") }}
+        </p>
         <p class="text-sm text-muted-foreground">
-          Remove automatic and manual matches from every track and use the
-          original file tags again. Providers and audio files are not changed.
+          {{ t("settings.metadata.resetDescription") }}
         </p>
       </div>
       <Button
@@ -499,7 +531,7 @@ onMounted(() => void loadProviders());
         @click="requestReset"
       >
         <Icon :icon="icons.trash" aria-hidden="true" class="size-4" />
-        Reset metadata
+        {{ t("settings.metadata.resetAction") }}
       </Button>
     </div>
   </section>
@@ -513,35 +545,50 @@ onMounted(() => void loadProviders());
         <DialogTitle class="text-lg font-semibold">
           {{
             editingProvider
-              ? `Configure ${editingProvider.name}`
-              : `Set up ${selectedDefinition?.name ?? "metadata provider"}`
+              ? t("settings.metadata.configureTitle", {
+                  provider: editingProvider.name,
+                })
+              : t("settings.metadata.setupTitle", {
+                  provider: selectedDefinition
+                    ? translate(selectedDefinition.nameMessage)
+                    : t("common.metadataProvider"),
+                })
           }}
         </DialogTitle>
         <DialogDescription class="text-sm text-muted-foreground">
           {{
             editingProvider
-              ? "Manage this provider and its connection details."
-              : "Add the required details to start using this provider."
+              ? t("settings.metadata.configureDescription")
+              : t("settings.metadata.setupDescription")
           }}
         </DialogDescription>
 
         <div v-if="selectedDefinition" class="mt-4 space-y-4">
           <p class="text-sm text-muted-foreground">
-            {{ selectedDefinition.description }}
+            {{ translate(selectedDefinition.descriptionMessage) }}
           </p>
           <div
             v-if="editingProvider"
             class="flex items-center justify-between gap-4 rounded-md border p-3"
           >
             <div class="space-y-1">
-              <p class="text-sm font-medium">Provider enabled</p>
+              <p class="text-sm font-medium">
+                {{ t("settings.metadata.providerEnabled") }}
+              </p>
               <p class="text-sm text-muted-foreground">
-                Use this provider for automatic matching and manual search.
+                {{ t("settings.metadata.providerEnabledHelp") }}
               </p>
             </div>
             <Switch
               v-model="formEnabled"
-              :aria-label="`${formEnabled ? 'Disable' : 'Enable'} ${selectedDefinition.name}`"
+              :aria-label="
+                t(
+                  formEnabled
+                    ? 'settings.metadata.disableProvider'
+                    : 'settings.metadata.enableProvider',
+                  { provider: translate(selectedDefinition.nameMessage) },
+                )
+              "
             />
           </div>
           <div
@@ -550,16 +597,20 @@ onMounted(() => void loadProviders());
             class="space-y-2"
           >
             <label :for="`provider-${field.key}`" class="text-sm font-medium">
-              {{ field.label }}
+              {{ translate(field.labelMessage) }}
             </label>
             <Input
               :id="`provider-${field.key}`"
               v-model="formConfiguration[field.key]"
               :type="field.type"
-              :placeholder="field.placeholder ?? undefined"
+              :placeholder="
+                field.placeholderMessage
+                  ? translate(field.placeholderMessage)
+                  : undefined
+              "
             />
-            <p v-if="field.helpText" class="text-sm text-muted-foreground">
-              {{ field.helpText }}
+            <p v-if="field.helpMessage" class="text-sm text-muted-foreground">
+              {{ translate(field.helpMessage) }}
             </p>
           </div>
           <div v-if="selectedDefinition.credentialField" class="space-y-2">
@@ -567,7 +618,7 @@ onMounted(() => void loadProviders());
               :for="`provider-${selectedDefinition.credentialField.key}`"
               class="text-sm font-medium"
             >
-              {{ selectedDefinition.credentialField.label }}
+              {{ translate(selectedDefinition.credentialField.labelMessage) }}
             </label>
             <Input
               :id="`provider-${selectedDefinition.credentialField.key}`"
@@ -576,21 +627,28 @@ onMounted(() => void loadProviders());
               autocomplete="new-password"
               :placeholder="
                 editingProvider
-                  ? 'Leave blank to keep the current token'
-                  : (selectedDefinition.credentialField.placeholder ??
-                    undefined)
+                  ? t('settings.metadata.credentialKeep')
+                  : selectedDefinition.credentialField.placeholderMessage
+                    ? translate(
+                        selectedDefinition.credentialField.placeholderMessage,
+                      )
+                    : undefined
               "
             />
             <p class="text-sm text-muted-foreground">
               <template v-if="selectedDefinition.kind === 'discogs'">
-                Create a personal access token in your
+                {{
+                  t("settings.metadata.createToken", {
+                    provider: translate(selectedDefinition.nameMessage),
+                  })
+                }}
                 <a
                   href="https://www.discogs.com/settings/developers"
                   target="_blank"
                   rel="noopener noreferrer"
                   class="inline-flex items-center gap-1 underline underline-offset-4 hover:text-foreground"
                 >
-                  Discogs account settings
+                  {{ t("settings.metadata.discogsSettings") }}
                   <Icon
                     :icon="icons.externalLink"
                     aria-hidden="true"
@@ -599,7 +657,7 @@ onMounted(() => void loadProviders());
                 >.
               </template>
               <template v-else>
-                {{ selectedDefinition.credentialField.helpText }}
+                {{ translate(selectedDefinition.credentialField.helpMessage) }}
               </template>
             </p>
           </div>
@@ -609,7 +667,7 @@ onMounted(() => void loadProviders());
         </div>
         <div class="mt-6 flex justify-end gap-3">
           <Button type="button" variant="outline" @click="handleDialogBack">
-            Cancel
+            {{ t("common.cancel") }}
           </Button>
           <Button
             v-if="selectedDefinition"
@@ -619,10 +677,10 @@ onMounted(() => void loadProviders());
           >
             {{
               saving
-                ? "Saving…"
+                ? t("common.saving")
                 : editingProvider
-                  ? "Save changes"
-                  : "Enable provider"
+                  ? t("common.saveChanges")
+                  : t("settings.metadata.enableProviderAction")
             }}
           </Button>
         </div>
@@ -637,22 +695,25 @@ onMounted(() => void loadProviders());
         class="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-card p-6 text-card-foreground shadow-lg"
       >
         <AlertDialogTitle class="text-lg font-semibold">
-          Reset all track metadata?
+          {{ t("settings.metadata.resetConfirmTitle") }}
         </AlertDialogTitle>
         <AlertDialogDescription class="text-sm text-muted-foreground">
-          Automatic and manual matches will be discarded for every track.
-          Peridot will display the original tags stored in your audio files.
-          Your configured metadata providers and audio files will not be
-          changed.
+          {{ t("settings.metadata.resetConfirmDescription") }}
         </AlertDialogDescription>
         <div class="mt-6 flex justify-end gap-3">
           <AlertDialogCancel as-child>
-            <Button type="button" variant="outline">Cancel</Button>
+            <Button type="button" variant="outline">{{
+              t("common.cancel")
+            }}</Button>
           </AlertDialogCancel>
           <AlertDialogAction as-child @click="confirmReset">
             <Button type="button" variant="destructive" :disabled="resetting">
               <Icon :icon="icons.trash" aria-hidden="true" class="size-4" />
-              {{ resetting ? "Resetting…" : "Reset metadata" }}
+              {{
+                resetting
+                  ? t("common.resetting")
+                  : t("settings.metadata.resetAction")
+              }}
             </Button>
           </AlertDialogAction>
         </div>

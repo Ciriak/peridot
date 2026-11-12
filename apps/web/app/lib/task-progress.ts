@@ -1,4 +1,10 @@
-import type { TaskResponse, TaskStatus } from "@peridot/contracts";
+import {
+  TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY,
+  type MessageDescriptor,
+  type TaskResponse,
+  type TaskStatus,
+} from "@peridot/contracts";
+import { message } from "./messages.ts";
 
 const ACTIVE_STATUSES = new Set<TaskStatus>(["queued", "running"]);
 
@@ -24,6 +30,36 @@ export function orderedActiveTasks(
     });
 }
 
+export function activeTaskForSource(
+  tasks: readonly TaskResponse[],
+  sourceId: string,
+): TaskResponse | null {
+  return (
+    orderedActiveTasks(tasks).find((task) => task.source?.id === sourceId) ??
+    null
+  );
+}
+
+export function activeMetadataProviderId(task: TaskResponse): string | null {
+  if (task.kind !== "metadata_fetch" || task.status !== "running") return null;
+  return (
+    task.details.find(
+      (detail) => detail.key === TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY,
+    )?.value || null
+  );
+}
+
+export function activeTaskForMetadataProvider(
+  tasks: readonly TaskResponse[],
+  providerId: string,
+): TaskResponse | null {
+  return (
+    orderedActiveTasks(tasks).find(
+      (task) => activeMetadataProviderId(task) === providerId,
+    ) ?? null
+  );
+}
+
 export function activeTaskPercent(task: TaskResponse): number | null {
   if (task.status === "queued") return 0;
   if (task.status !== "running") return null;
@@ -32,6 +68,10 @@ export function activeTaskPercent(task: TaskResponse): number | null {
 
   const percent = (task.progress.completed / task.progress.total) * 100;
   return Math.min(100, Math.max(0, percent));
+}
+
+export function sourceTaskProgress(task: TaskResponse): number | null {
+  return task.status === "queued" ? null : activeTaskPercent(task);
 }
 
 export function overallTaskProgress(
@@ -50,27 +90,37 @@ export function overallTaskProgress(
   return total / active.length;
 }
 
-export function taskStatusLabel(task: TaskResponse): string {
+export function taskStatusMessage(task: TaskResponse): MessageDescriptor {
   switch (task.status) {
     case "running":
-      return "Running";
+      return message("settings.tasks.status.running");
     case "queued":
-      return "Queued";
+      return message("settings.tasks.status.queued");
     case "completed":
-      return "Completed";
+      return message("settings.tasks.status.completed");
     case "failed":
-      return "Failed";
+      return message("settings.tasks.status.failed");
     case "interrupted":
-      return "Interrupted";
+      return message("settings.tasks.status.interrupted");
   }
 }
 
-export function taskProgressLabel(task: TaskResponse): string {
-  if (task.status === "queued") return "Waiting to start";
-  const percent = activeTaskPercent(task);
-  if (percent === null) return "In progress";
-  if (task.progress.state === "determinate" && task.progress.total > 0) {
-    return `${Math.round(percent)}% (${task.progress.completed} of ${task.progress.total})`;
+export function taskProgressMessage(task: TaskResponse): MessageDescriptor {
+  if (task.status === "queued") {
+    return message("settings.tasks.progressWaiting");
   }
-  return `${Math.round(percent)}%`;
+  const percent = activeTaskPercent(task);
+  if (percent === null) {
+    return message("settings.tasks.progressIndeterminate");
+  }
+  if (task.progress.state === "determinate" && task.progress.total > 0) {
+    return message("settings.tasks.progress", {
+      percent: Math.round(percent),
+      completed: task.progress.completed,
+      total: task.progress.total,
+    });
+  }
+  return message("settings.tasks.percent", {
+    percent: Math.round(percent),
+  });
 }

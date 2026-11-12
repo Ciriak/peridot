@@ -56,7 +56,7 @@ test("albums have list and detail routes with derived groups", async () => {
   );
   assert.match(
     albumCard,
-    /Play \$\{album\.title\} by \$\{album\.artist\} from the first track/,
+    /t\('card\.playAlbum', \{\s+album: album\.title,\s+artist: album\.artist,\s+\}\)/,
     "The album card play label explains that playback starts from the first track",
   );
   assert.match(
@@ -80,7 +80,7 @@ test("albums have list and detail routes with derived groups", async () => {
     /<AlbumCard/,
     "The album detail cover does not use the shared card play control",
   );
-  assert.match(listPage, /No albums found/);
+  assert.match(listPage, /t\("page\.albums\.empty"\)/);
   assert.match(detailPage, /listAlbums\(/);
   assert.match(detailPage, /route\.query\.artist/);
   assert.match(detailPage, /playCollection\(/);
@@ -92,7 +92,7 @@ test("albums have list and detail routes with derived groups", async () => {
   );
   assert.match(
     detailPage,
-    /Play \$\{album\.title\} by \$\{album\.artist\} from the first track/,
+    /t\('card\.playAlbum', \{\s+album: album\.title,\s+artist: album\.artist,\s+\}\)/,
     "The album header play label explains that playback starts from the first track",
   );
   assert.match(
@@ -185,10 +185,7 @@ test("albums have list and detail routes with derived groups", async () => {
     /variant === 'library' &&\s*track\.album/,
     "Album links are not hidden from artist track lists",
   );
-  assert.match(
-    detailPage,
-    /This album is not available in your current library/,
-  );
+  assert.match(detailPage, /t\("page\.album\.unavailable"\)/);
   assert.match(
     detailPage,
     /<div class="mb-2">\s+<Button as-child variant="ghost" size="lg"/,
@@ -211,8 +208,8 @@ test("albums have list and detail routes with derived groups", async () => {
   );
   assert.match(
     trackTable,
-    /useVirtualList\(/,
-    "Table rows use the bounded virtual list",
+    /v-for="item in rows"/,
+    "Table rows remain in the full-page scroll flow",
   );
 });
 
@@ -221,7 +218,10 @@ test("albums are available in persistent navigation", async () => {
     readFile(new URL("../app/layouts/default.vue", import.meta.url), "utf8"),
     readFile(new URL("../app/app.vue", import.meta.url), "utf8"),
   ]);
-  assert.match(layout, /name: "Albums", to: "\/albums", icon: icons\.music/);
+  assert.match(
+    layout,
+    /labelKey: "navigation\.albums", to: "\/albums", icon: icons\.music/,
+  );
   assert.match(layout, /currentPath\.value\.startsWith\(`\$\{target\}\/`\)/);
   assert.match(layout, /useLibraryPlayer\(\)/);
   assert.match(layout, /trackAlbumTitleRoute\(active\.value\)/);

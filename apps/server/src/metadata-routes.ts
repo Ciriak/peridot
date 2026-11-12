@@ -4,6 +4,7 @@ import type {
 } from "@peridot/contracts";
 import type { FastifyInstance } from "fastify";
 import { sendError } from "./http.js";
+import { message } from "./messages.js";
 import {
   MetadataEnrichment,
   MetadataEnrichmentError,
@@ -32,6 +33,7 @@ export async function registerTrackMetadataRoutes(
           error.statusCode,
           "metadata_candidates_failed",
           error.message,
+          error.messageDescriptor,
         );
       }
       throw error;
@@ -52,6 +54,7 @@ export async function registerTrackMetadataRoutes(
           error.statusCode,
           "metadata_match_failed",
           error.message,
+          error.messageDescriptor,
         );
       }
       throw error;
@@ -63,7 +66,13 @@ export async function registerTrackMetadataRoutes(
     async (request, reply) => {
       const removed = await metadataEnrichment.revert(request.params.id);
       if (!removed) {
-        return sendError(reply, 404, "track_not_found", "Track not found");
+        return sendError(
+          reply,
+          404,
+          "track_not_found",
+          "Track not found",
+          message("api.message.trackNotFound"),
+        );
       }
       return reply.code(204).send();
     },

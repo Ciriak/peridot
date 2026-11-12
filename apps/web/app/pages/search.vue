@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useHead, useState } from "#imports";
+import { useHead, useI18n, useState } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import type { AlbumSummaryResponse } from "@peridot/contracts";
 import { Badge } from "@peridot/ui/components/ui/badge";
@@ -21,7 +21,8 @@ import { icons } from "../lib/icons";
 import { listAlbums } from "../lib/peridot-client";
 import type { TrackSort } from "../lib/library";
 
-useHead({ title: "Search — Peridot" });
+const { t } = useI18n();
+useHead({ title: t("page.search.title") });
 
 type ResultFilter = "all" | "albums" | "tracks";
 
@@ -75,10 +76,10 @@ const {
 
 const showAlbums = computed(() => resultFilter.value !== "tracks");
 const showTracks = computed(() => resultFilter.value !== "albums");
-const resultFilters: { value: ResultFilter; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "albums", label: "Albums" },
-  { value: "tracks", label: "Tracks" },
+const resultFilters: { value: ResultFilter; labelKey: string }[] = [
+  { value: "all", labelKey: "page.search.all" },
+  { value: "albums", labelKey: "page.search.albums" },
+  { value: "tracks", labelKey: "page.search.tracks" },
 ];
 
 function openAlbum(album: AlbumSummaryResponse) {
@@ -128,14 +129,14 @@ onMounted(() => {
 
 <template>
   <div class="min-h-full space-y-8">
-    <section aria-label="Search results" class="space-y-4">
+    <section :aria-label="t('page.search.results')" class="space-y-4">
       <div
         role="group"
-        aria-label="Quick filters"
+        :aria-label="t('page.search.filters')"
         class="flex flex-wrap items-center gap-2"
       >
         <span class="mr-1 text-xs font-medium text-muted-foreground">
-          Quick filters
+          {{ t("page.search.filters") }}
         </span>
         <Button
           v-for="filter in resultFilters"
@@ -146,7 +147,7 @@ onMounted(() => {
           :disabled="!searching"
           @click="resultFilter = filter.value"
         >
-          {{ filter.label }}
+          {{ t(filter.labelKey) }}
         </Button>
       </div>
     </section>
@@ -161,8 +162,8 @@ onMounted(() => {
       role="status"
       class="flex items-center gap-3 rounded-lg border p-6 text-sm text-muted-foreground"
     >
-      <PeridotSpinner label="Loading search results" />
-      Searching your library…
+      <PeridotSpinner :label="t('page.search.loading')" />
+      {{ t("page.search.searching") }}
     </div>
     <div
       v-else-if="albumsError || tracksError"
@@ -177,7 +178,7 @@ onMounted(() => {
           loadTracks(true);
         "
       >
-        Try again
+        {{ t("common.tryAgain") }}
       </Button>
     </div>
 
@@ -188,11 +189,16 @@ onMounted(() => {
     >
       <div class="flex items-center justify-between gap-4">
         <h2 id="recent-searches-heading" class="text-lg font-semibold">
-          Recently searched
+          {{ t("page.search.recent") }}
         </h2>
         <Badge variant="secondary">
-          {{ recentAlbums.length }}
-          {{ recentAlbums.length === 1 ? "album" : "albums" }}
+          {{
+            t(
+              "count.album",
+              { count: recentAlbums.length },
+              recentAlbums.length,
+            )
+          }}
         </Badge>
       </div>
       <div
@@ -212,7 +218,7 @@ onMounted(() => {
         role="status"
         class="rounded-lg border p-6 text-sm text-muted-foreground"
       >
-        Albums you open from search will appear here.
+        {{ t("page.search.noRecents") }}
       </p>
     </section>
 
@@ -224,12 +230,15 @@ onMounted(() => {
       >
         <div class="flex items-center justify-between gap-4">
           <h2 id="local-albums-heading" class="text-lg font-semibold">
-            Local albums
+            {{ t("page.search.localAlbums") }}
           </h2>
           <Badge variant="secondary">
-            {{ albumResults.length }}{{ hasMoreAlbums ? "+" : "" }}
             {{
-              albumResults.length === 1 && !hasMoreAlbums ? "album" : "albums"
+              `${t(
+                "count.album",
+                { count: albumResults.length },
+                albumResults.length,
+              )}${hasMoreAlbums ? "+" : ""}`
             }}
           </Badge>
         </div>
@@ -253,8 +262,8 @@ onMounted(() => {
             >
               {{
                 albumsLoadingMore
-                  ? "Loading matching albums…"
-                  : "Load more matching albums"
+                  ? t("page.search.loadingMoreAlbums")
+                  : t("page.search.loadMoreAlbums")
               }}
             </Button>
           </div>
@@ -264,7 +273,7 @@ onMounted(() => {
           role="status"
           class="rounded-lg border p-6 text-sm text-muted-foreground"
         >
-          No local albums match your search.
+          {{ t("page.search.noAlbums") }}
         </p>
       </section>
 
@@ -275,12 +284,15 @@ onMounted(() => {
       >
         <div class="flex items-center justify-between gap-4">
           <h2 id="local-tracks-heading" class="text-lg font-semibold">
-            Local tracks
+            {{ t("page.search.localTracks") }}
           </h2>
           <Badge variant="secondary">
-            {{ trackResults.length }}{{ hasMoreTracks ? "+" : "" }}
             {{
-              trackResults.length === 1 && !hasMoreTracks ? "track" : "tracks"
+              `${t(
+                "count.track",
+                { count: trackResults.length },
+                trackResults.length,
+              )}${hasMoreTracks ? "+" : ""}`
             }}
           </Badge>
         </div>
@@ -299,13 +311,13 @@ onMounted(() => {
           role="status"
           class="rounded-lg border p-6 text-sm text-muted-foreground"
         >
-          No local tracks match your search.
+          {{ t("page.search.noTracks") }}
         </p>
       </section>
 
       <section aria-labelledby="external-sources-heading">
         <h2 id="external-sources-heading" class="text-lg font-semibold">
-          External sources
+          {{ t("page.search.externalSources") }}
         </h2>
         <div
           class="mt-4 flex items-start gap-3 rounded-lg border bg-muted/30 p-6 text-sm text-muted-foreground"
@@ -317,11 +329,10 @@ onMounted(() => {
           />
           <div class="space-y-1">
             <p class="font-medium text-foreground">
-              External sources are not connected yet.
+              {{ t("page.search.externalTitle") }}
             </p>
             <p>
-              When a provider is available, its albums will appear here and can
-              be downloaded and played.
+              {{ t("page.search.externalDescription") }}
             </p>
           </div>
         </div>

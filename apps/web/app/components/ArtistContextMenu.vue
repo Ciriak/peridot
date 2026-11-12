@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "#imports";
 import type { ArtistSummaryResponse, LikeTarget } from "@peridot/contracts";
 import { Icon } from "@iconify/vue/offline";
 import {
@@ -21,6 +22,7 @@ import { useSession } from "../composables/use-session";
 const props = defineProps<{
   artist: ArtistSummaryResponse;
 }>();
+const { t } = useI18n();
 const { address } = useServer();
 const { token } = useSession();
 const { playCollection } = useLibraryPlayer();
@@ -57,7 +59,7 @@ async function playArtist() {
       <ContextMenuSeparator />
       <ContextMenuItem :disabled="!artist.trackCount" @select="playArtist">
         <Icon :icon="icons.play" aria-hidden="true" />
-        Play artist
+        {{ t("context.playArtist") }}
       </ContextMenuItem>
       <ContextMenuItem
         :disabled="!likesLoaded || isLikePending(target)"
@@ -67,12 +69,16 @@ async function playArtist() {
           :icon="isTargetLiked(target) ? icons.heartFilled : icons.heart"
           aria-hidden="true"
         />
-        {{ isTargetLiked(target) ? "Unlike artist" : "Like artist" }}
+        {{
+          isTargetLiked(target)
+            ? t("context.unlikeArtist")
+            : t("context.likeArtist")
+        }}
       </ContextMenuItem>
       <ContextMenuItem as-child>
         <NuxtLink :to="artistRoute(artist)">
           <Icon :icon="icons.user" aria-hidden="true" />
-          Open artist
+          {{ t("context.openArtist", { artist: artist.name }) }}
         </NuxtLink>
       </ContextMenuItem>
     </ContextMenuContent>

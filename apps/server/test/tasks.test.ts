@@ -2,13 +2,18 @@ import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import { test } from "node:test";
-import type { TaskResponse } from "@peridot/contracts";
+import {
+  TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY,
+  type TaskResponse,
+} from "@peridot/contracts";
 import { createMemberSession, createTestContext } from "./helpers.js";
 import {
+  metadataDetails,
   normalizeTaskDetails,
   TaskService,
   toTaskResponse,
 } from "../src/tasks.js";
+import { message } from "../src/messages.js";
 
 function delay(milliseconds = 10): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -125,9 +130,24 @@ test("task service runs FIFO, coalesces queued duplicates, and reports progress"
     determinateSeen();
     return {
       details: [
-        { key: "plugin.item", label: "Item", value: "one" },
-        { key: "progress.completed", label: "Processed", value: "1" },
-        { key: "progress.total", label: "Total", value: "2" },
+        {
+          key: "plugin.item",
+          value: "one",
+          labelMessage: message("task.detail.added"),
+          valueMessage: null,
+        },
+        {
+          key: "progress.completed",
+          value: "1",
+          labelMessage: message("task.detail.processed"),
+          valueMessage: null,
+        },
+        {
+          key: "progress.total",
+          value: "2",
+          labelMessage: message("task.detail.files"),
+          valueMessage: null,
+        },
       ],
     };
   });
@@ -261,8 +281,8 @@ test("queued child tasks do not run after an interrupted parent", async () => {
     await tasks.initialize();
     await waitForStatus(tasks, child.id, "interrupted");
     assert.equal(
-      (await tasks.get(child.id))?.failureSummary,
-      "The parent task did not complete successfully.",
+      (await tasks.get(child.id))?.failureMessage,
+      JSON.stringify(message("api.message.parentTaskFailed")),
     );
   } finally {
     await tasks.close();
@@ -274,12 +294,37 @@ test("plugin task details have fixed count and field bounds", () => {
   const details = normalizeTaskDetails(
     Array.from({ length: 20 }, (_, index) => ({
       key: `plugin.detail.${index}`,
-      label: `Label ${index}`,
       value: "x".repeat(400),
+      labelMessage: message("task.detail.added"),
+      valueMessage: null,
     })),
   );
   assert.equal(details.length, 16);
   assert.equal(details[0]?.value.length, 300);
+});
+
+test("metadata progress identifies the provider currently being fetched", () => {
+  const counts = {
+    source: "Music",
+    total: 4,
+    processed: 2,
+    matched: 1,
+    unmatched: 1,
+    errors: 0,
+  };
+  const active = metadataDetails(counts, "provider-1");
+  assert.equal(
+    active.find(
+      (detail) => detail.key === TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY,
+    )?.value,
+    "provider-1",
+  );
+  assert.equal(
+    metadataDetails(counts).some(
+      (detail) => detail.key === TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY,
+    ),
+    false,
+  );
 });
 
 test("plugin task details are bounded and source paths are not exposed", async () => {

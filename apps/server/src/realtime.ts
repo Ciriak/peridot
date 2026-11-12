@@ -14,6 +14,7 @@ import type {
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { WebSocket } from "ws";
 import type { Database } from "./database.js";
+import { message as descriptor } from "./messages.js";
 
 const TICKET_TTL_MS = 30_000;
 const EVENT_BUFFER_SIZE = 512;
@@ -215,7 +216,7 @@ export class RealtimeHub {
       return this.send(state, {
         type: "error",
         code: "invalid_message",
-        message: "Realtime messages must be valid JSON.",
+        messageDescriptor: descriptor("api.message.realtimeInvalidJson"),
       });
     }
     if (
@@ -228,7 +229,7 @@ export class RealtimeHub {
       return this.send(state, {
         type: "error",
         code: "invalid_message",
-        message: "Choose one or more supported realtime topics.",
+        messageDescriptor: descriptor("api.message.realtimeTopics"),
       });
     }
     const topics = [...new Set(message.topics)];
@@ -236,7 +237,7 @@ export class RealtimeHub {
       return this.send(state, {
         type: "error",
         code: "forbidden_topic",
-        message: "Administrator access is required for server logs.",
+        messageDescriptor: descriptor("api.message.realtimeLogsAdmin"),
       });
     }
     state.topics = new Set(topics);
@@ -247,7 +248,7 @@ export class RealtimeHub {
         return this.send(state, {
           type: "error",
           code: "invalid_message",
-          message: "after must be a non-negative event sequence.",
+          messageDescriptor: descriptor("api.message.realtimeSequence"),
         });
       }
       const oldest = this.events[0]?.eventId ?? this.sequence + 1;
@@ -331,7 +332,7 @@ export async function registerRealtimeTicketRoute(
       return reply.code(401).send({
         error: {
           code: "unauthorized",
-          message: "Valid user authentication is required",
+          messageDescriptor: descriptor("api.message.unauthorized"),
         },
       });
     }

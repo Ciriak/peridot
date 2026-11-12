@@ -2,6 +2,7 @@ import type { QueueResponse, ReplaceQueueRequest } from "@peridot/contracts";
 import type { FastifyInstance } from "fastify";
 import type { Database } from "./database.js";
 import { sendError } from "./http.js";
+import { message } from "./messages.js";
 
 const MAX_TRACK_ID_LENGTH = 200;
 
@@ -121,6 +122,7 @@ export async function registerQueueRoutes(
         400,
         "invalid_queue",
         "Queue state must reference unique catalog tracks with a valid active and random pool.",
+        message("api.message.invalidQueue"),
       );
     }
 
@@ -136,6 +138,7 @@ export async function registerQueueRoutes(
         400,
         "invalid_queue",
         "Queue contains a track that is not in the catalog.",
+        message("api.message.queueTrackMissing"),
       );
     }
 

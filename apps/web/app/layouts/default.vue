@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useRoute, useRouter, useState } from "#imports";
+import { useI18n, useRoute, useRouter, useState } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import logo from "@peridot/ui/assets/brand/logo.svg";
 import logoNop from "@peridot/ui/assets/brand/logo-nop.png";
@@ -26,6 +26,7 @@ import {
 
 const route = useRoute();
 const router = useRouter();
+const { t } = useI18n();
 const searchQuery = useState("search-query", () => "");
 const searchInput = ref<{ $el?: HTMLInputElement } | null>(null);
 const mobileNavigation = ref(false);
@@ -69,12 +70,16 @@ const {
   setVolume,
 } = useLibraryPlayer();
 const navigation = [
-  { name: "Home", to: "/", icon: icons.home },
-  { name: "Library", to: "/library", icon: icons.library },
-  { name: "Albums", to: "/albums", icon: icons.music },
-  { name: "Artists", to: "/artists", icon: icons.user },
-  { name: "Liked songs", to: "/liked", icon: icons.heart },
-  { name: "Playlists", to: "/playlists", icon: icons.playlist },
+  { labelKey: "navigation.home", to: "/", icon: icons.home },
+  { labelKey: "navigation.library", to: "/library", icon: icons.library },
+  { labelKey: "navigation.albums", to: "/albums", icon: icons.music },
+  { labelKey: "navigation.artists", to: "/artists", icon: icons.user },
+  { labelKey: "navigation.likedSongs", to: "/liked", icon: icons.heart },
+  {
+    labelKey: "navigation.playlists",
+    to: "/playlists",
+    icon: icons.playlist,
+  },
 ];
 const currentPath = computed(() => route.path);
 const isNavigationActive = (target: string) =>
@@ -135,13 +140,13 @@ onMounted(() => {
   <div
     class="flex h-dvh flex-col overflow-hidden bg-background text-foreground"
   >
-    <a href="#main-content" class="sr-only focus:not-sr-only focus:p-4"
-      >Skip to content</a
-    >
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:p-4">{{
+      t("navigation.skipToContent")
+    }}</a>
     <div class="flex min-h-0 flex-1 pb-48 md:pb-28">
       <aside
         id="sidebar"
-        aria-label="Sidebar"
+        :aria-label="t('navigation.sidebar')"
         :class="[
           'w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground',
           mobileNavigation
@@ -157,23 +162,21 @@ onMounted(() => {
             variant="ghost"
             class="flex-1 justify-start text-lg font-semibold"
             ><NuxtLink to="/"
-              ><img
-                :src="logoNop"
-                alt=""
-                class="size-6 p-0.5"
-              />Peridot</NuxtLink
+              ><img :src="logoNop" alt="" class="size-6 p-0.5" />{{
+                t("app.name")
+              }}</NuxtLink
             ></Button
           >
           <Button
             variant="ghost"
             size="icon-sm"
             class="md:hidden"
-            aria-label="Close navigation"
+            :aria-label="t('navigation.close')"
             @click="mobileNavigation = false"
             ><Icon :icon="icons.close" aria-hidden="true"
           /></Button>
         </div>
-        <nav aria-label="Main navigation" class="space-y-1 p-3">
+        <nav :aria-label="t('navigation.main')" class="space-y-1 p-3">
           <Button
             v-for="item in navigation"
             :key="item.to"
@@ -190,7 +193,7 @@ onMounted(() => {
               :aria-current="isNavigationActive(item.to) ? 'page' : undefined"
             >
               <Icon :icon="item.icon" aria-hidden="true" class="size-5" />{{
-                item.name
+                t(item.labelKey)
               }}
               <span
                 v-if="item.to === '/liked'"
@@ -215,7 +218,7 @@ onMounted(() => {
             variant="outline"
             size="icon"
             class="md:hidden"
-            aria-label="Toggle navigation"
+            :aria-label="t('navigation.toggle')"
             aria-controls="sidebar"
             :aria-expanded="mobileNavigation"
             @click="mobileNavigation = !mobileNavigation"
@@ -231,8 +234,8 @@ onMounted(() => {
               ref="searchInput"
               v-model="searchQuery"
               type="search"
-              aria-label="Search albums and tracks"
-              placeholder="Search albums and tracks"
+              :aria-label="t('navigation.searchPlaceholder')"
+              :placeholder="t('navigation.searchPlaceholder')"
               class="pl-9"
               @click="openSearch"
               @focus="openSearch"
@@ -243,7 +246,7 @@ onMounted(() => {
             <Button as-child variant="ghost" size="icon" class="rounded-full">
               <NuxtLink
                 to="/settings/account"
-                aria-label="Open profile settings"
+                :aria-label="t('navigation.profileSettings')"
                 class="group/avatar relative"
               >
                 <img
@@ -278,7 +281,7 @@ onMounted(() => {
     </div>
 
     <footer
-      aria-label="Music player"
+      :aria-label="t('player.region')"
       class="fixed inset-x-0 bottom-0 z-30 isolate flex h-48 flex-col justify-center gap-3 overflow-hidden border-t bg-card px-4 text-card-foreground md:h-28 md:flex-row md:items-center md:gap-6 md:px-6"
     >
       <div
@@ -286,22 +289,13 @@ onMounted(() => {
         class="pointer-events-none absolute inset-y-0 left-0 -z-10 w-2/3 overflow-hidden md:w-1/2"
       >
         <div class="absolute inset-0 opacity-40">
-          <Transition
-            enter-active-class="transition-opacity duration-3000 delay-150 ease-in-out motion-reduce:transition-none"
-            enter-from-class="opacity-0"
-            enter-to-class="opacity-100"
-            leave-active-class="transition-opacity duration-3000 delay-150 ease-in-out motion-reduce:transition-none"
-            leave-from-class="opacity-100"
-            leave-to-class="opacity-0"
-          >
-            <img
-              v-if="currentCoverUrl && !coverFailed"
-              :key="currentCoverUrl"
-              :src="currentCoverUrl"
-              alt=""
-              class="absolute inset-0 size-full scale-125 object-cover object-left blur-3xl"
-            />
-          </Transition>
+          <img
+            v-if="currentCoverUrl && !coverFailed"
+            :key="currentCoverUrl"
+            :src="currentCoverUrl"
+            alt=""
+            class="absolute inset-0 size-full scale-125 object-cover object-left blur-3xl"
+          />
         </div>
         <div
           aria-hidden="true"
@@ -319,6 +313,7 @@ onMounted(() => {
         >
           <img
             v-if="currentCoverUrl && !coverFailed"
+            :key="currentCoverUrl"
             :src="currentCoverUrl"
             alt=""
             class="size-full object-cover"
@@ -335,7 +330,7 @@ onMounted(() => {
             {{ active?.title }}
           </NuxtLink>
           <p v-else class="select-none truncate text-sm font-medium">
-            {{ active?.title ?? "No track selected" }}
+            {{ active?.title ?? t("player.noTrack") }}
           </p>
           <p
             v-if="error"
@@ -349,7 +344,7 @@ onMounted(() => {
               v-if="active"
               :artists="trackArtistNames(active)"
             />
-            <template v-else>Scan your library to get started</template>
+            <template v-else>{{ t("player.scanLibrary") }}</template>
           </p>
         </div>
         <LikeButton
@@ -358,7 +353,7 @@ onMounted(() => {
               ? likedTrackIds.includes(currentTrackLikeTarget.trackId)
               : false
           "
-          :label="active?.title ?? 'current track'"
+          :label="active?.title ?? t('player.currentTrack')"
           :pending="
             currentTrackLikeTarget
               ? isLikePending(currentTrackLikeTarget)
@@ -376,8 +371,8 @@ onMounted(() => {
             class="group"
             :aria-label="
               shuffleEnabled
-                ? 'Disable randomized playback'
-                : 'Enable randomized playback'
+                ? t('player.disableShuffle')
+                : t('player.enableShuffle')
             "
             :aria-pressed="shuffleEnabled"
             :disabled="!shuffleEnabled && (!active || queueTracks.length < 2)"
@@ -396,7 +391,7 @@ onMounted(() => {
             variant="ghost"
             size="icon-lg"
             class="group"
-            aria-label="Previous track"
+            :aria-label="t('player.previous')"
             :disabled="!active"
             @click="previous"
             ><Icon
@@ -408,7 +403,7 @@ onMounted(() => {
             size="icon-lg"
             class="size-12 translate-y-1 rounded-full"
             :disabled="!active"
-            :aria-label="playing ? 'Pause track' : 'Play track'"
+            :aria-label="playing ? t('player.pause') : t('player.play')"
             :aria-busy="loading"
             @click="togglePlayback"
             ><Icon
@@ -420,7 +415,7 @@ onMounted(() => {
             variant="ghost"
             size="icon-lg"
             class="group"
-            aria-label="Next track"
+            :aria-label="t('player.next')"
             :disabled="!canGoNext"
             @click="next()"
             ><Icon
@@ -434,10 +429,10 @@ onMounted(() => {
             class="group relative"
             :aria-label="
               repeatMode === 'off'
-                ? 'Enable repeat'
+                ? t('player.enableRepeat')
                 : repeatMode === 'all'
-                  ? 'Switch to repeat one'
-                  : 'Turn off repeat'
+                  ? t('player.repeatOne')
+                  : t('player.disableRepeat')
             "
             :aria-pressed="repeatMode !== 'off'"
             :disabled="!active"
@@ -472,7 +467,7 @@ onMounted(() => {
             :step="1"
             :disabled="!active || durationSeconds <= 0"
             class="min-h-11 flex-1"
-            thumb-label="Playback position"
+            :thumb-label="t('player.position')"
             @update:model-value="seek($event?.[0] ?? 0)"
           /><span>{{ clock(durationSeconds) }}</span>
         </div>
@@ -482,7 +477,9 @@ onMounted(() => {
           variant="ghost"
           size="icon-lg"
           class="group"
-          :aria-label="queueOpen ? 'Close queue' : 'Open queue'"
+          :aria-label="
+            queueOpen ? t('player.closeQueue') : t('player.openQueue')
+          "
           aria-controls="queue-drawer"
           :aria-expanded="queueOpen"
           data-queue-toggle
@@ -508,7 +505,7 @@ onMounted(() => {
             :max="100"
             :step="1"
             class="w-24"
-            thumb-label="Playback volume"
+            :thumb-label="t('player.volume')"
             @update:model-value="setVolume($event?.[0] ?? 0)"
           />
         </div>

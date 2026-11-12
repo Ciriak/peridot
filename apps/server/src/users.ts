@@ -1,5 +1,6 @@
 import type {
   CreateUserRequest,
+  MessageDescriptor,
   UpdateUserRequest,
   UserResponse,
   UserRole,
@@ -12,12 +13,14 @@ import {
   publicUser,
   validPassword,
 } from "./auth.js";
+import { message } from "./messages.js";
 
 export class UserManagementError extends Error {
   constructor(
     message: string,
     readonly statusCode: number,
     readonly code: string,
+    readonly messageDescriptor?: MessageDescriptor,
   ) {
     super(message);
     this.name = "UserManagementError";
@@ -27,7 +30,8 @@ export class UserManagementError extends Error {
     return {
       error: {
         code: this.code,
-        message: this.message,
+        messageDescriptor:
+          this.messageDescriptor ?? message("error.requestRejected"),
       },
     };
   }
@@ -37,8 +41,16 @@ function userRole(value: unknown): UserRole | null {
   return value === "admin" || value === "member" ? value : null;
 }
 
-function invalidUser(message: string): never {
-  throw new UserManagementError(message, 400, "invalid_user");
+function invalidUser(
+  fallbackMessage: string,
+  messageDescriptor: MessageDescriptor,
+): never {
+  throw new UserManagementError(
+    fallbackMessage,
+    400,
+    "invalid_user",
+    messageDescriptor,
+  );
 }
 
 async function ensureUniqueIdentity(
@@ -56,6 +68,7 @@ async function ensureUniqueIdentity(
       "That email address is already in use.",
       409,
       "email_taken",
+      message("api.message.emailTaken"),
     );
   }
   if (displayNameOwner && displayNameOwner.id !== excludedId) {
@@ -63,6 +76,7 @@ async function ensureUniqueIdentity(
       "That display name is already in use.",
       409,
       "display_name_taken",
+      message("api.message.displayNameTaken"),
     );
   }
 }
@@ -87,6 +101,7 @@ export async function createManagedUser(
   if (!email || !displayName || !role || !validPassword(value.password)) {
     return invalidUser(
       "Use a valid email, a 2–80 character display name, a member or administrator role, and a 12+ character password.",
+      message("api.message.invalidUser"),
     );
   }
   const passwordHash = await hashPassword(value.password);
@@ -124,13 +139,21 @@ export async function updateManagedUser(
     value.password === undefined &&
     value.role === undefined
   ) {
-    return invalidUser("Choose at least one account field to update.");
+    return invalidUser(
+      "Choose at least one account field to update.",
+      message("api.message.chooseAccountField"),
+    );
   }
 
   let email: string | undefined;
   if (value.email !== undefined) {
     const normalized = normalizeEmail(value.email);
-    if (!normalized) return invalidUser("Enter a valid email address.");
+    if (!normalized) {
+      return invalidUser(
+        "Enter a valid email address.",
+        message("api.message.invalidEmail"),
+      );
+    }
     email = normalized;
   }
   let displayName:
@@ -138,7 +161,10 @@ export async function updateManagedUser(
   if (value.displayName !== undefined) {
     const normalized = normalizeDisplayName(value.displayName);
     if (!normalized) {
-      return invalidUser("Use a display name between 2 and 80 characters.");
+      return invalidUser(
+        "Use a display name between 2 and 80 characters.",
+        message("api.message.invalidDisplayName"),
+      );
     }
     displayName = normalized;
   }
@@ -146,12 +172,18 @@ export async function updateManagedUser(
   if (value.role !== undefined) {
     const normalized = userRole(value.role);
     if (!normalized) {
-      return invalidUser("Choose the member or administrator role.");
+      return invalidUser(
+        "Choose the member or administrator role.",
+        message("api.message.invalidRole"),
+      );
     }
     role = normalized;
   }
   if (value.password !== undefined && !validPassword(value.password)) {
-    return invalidUser("Use a password between 12 and 256 characters.");
+    return invalidUser(
+      "Use a password between 12 and 256 characters.",
+      message("api.message.invalidPassword"),
+    );
   }
   const passwordHash =
     value.password === undefined
@@ -165,6 +197,7 @@ export async function updateManagedUser(
         "User account not found.",
         404,
         "user_not_found",
+        message("api.message.userNotFound"),
       );
     }
     if (target.id === actor.id && role !== undefined && role !== target.role) {
@@ -172,6 +205,7 @@ export async function updateManagedUser(
         "Your own administrator role cannot be changed here.",
         409,
         "own_role_immutable",
+        message("api.message.ownRoleImmutable"),
       );
     }
 
@@ -196,6 +230,7 @@ export async function updateManagedUser(
           "At least one administrator account is required.",
           409,
           "last_admin_required",
+          message("api.message.lastAdminRequired"),
         );
       }
     }
@@ -241,6 +276,7 @@ export async function deleteManagedUser(
       "You cannot delete your own account.",
       409,
       "own_account_delete_forbidden",
+      message("api.message.ownDeleteForbidden"),
     );
   }
 
@@ -251,6 +287,7 @@ export async function deleteManagedUser(
         "User account not found.",
         404,
         "user_not_found",
+        message("api.message.userNotFound"),
       );
     }
     if (target.role === "admin") {
@@ -262,6 +299,7 @@ export async function deleteManagedUser(
           "At least one administrator account is required.",
           409,
           "last_admin_required",
+          message("api.message.lastAdminRequired"),
         );
       }
     }

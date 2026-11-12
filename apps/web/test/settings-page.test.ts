@@ -19,8 +19,8 @@ test("settings is a fullscreen routed area with a separate administrator group",
   for (const category of ["account", "library", "playback"]) {
     assert.match(layout, new RegExp(`to: "/settings/${category}"`));
   }
-  assert.match(commonCategories, /name: "Profile"/);
-  assert.doesNotMatch(commonCategories, /name: "Account"/);
+  assert.match(commonCategories, /labelKey: "settings\.profile"/);
+  assert.doesNotMatch(commonCategories, /settings\.account"/);
   for (const category of [
     "plugins",
     "tasks",
@@ -31,13 +31,13 @@ test("settings is a fullscreen routed area with a separate administrator group",
   ]) {
     assert.match(adminCategories, new RegExp(`to: "/settings/${category}"`));
   }
-  assert.match(adminCategories, /name: "User Management"/);
+  assert.match(adminCategories, /labelKey: "settings\.users"/);
   assert.doesNotMatch(commonCategories, /to: "\/settings\/tasks"/);
   assert.doesNotMatch(commonCategories, /to: "\/settings\/plugins"/);
   assert.match(layout, /user\?\.role === 'admin'/);
   assert.match(layout, /aria-labelledby="admin-settings-heading"/);
   assert.match(layout, /class="space-y-1 border-t border-sidebar-border pt-4"/);
-  assert.match(layout, />\s*Admin\s*</);
+  assert.match(layout, /t\("navigation\.admin"\)/);
   assert.doesNotMatch(layout, /name: "Administration"/);
   assert.match(layout, /import TaskProgressIndicator/);
   assert.match(layout, /<TaskProgressIndicator \/>/);
@@ -80,14 +80,14 @@ test("settings sidebar confirms before logout and retains the selected server", 
   assert.doesNotMatch(layout, /address\.value = null/);
   assert.match(layout, /query: \{ auth: "login", redirect: route\.fullPath \}/);
   assert.match(logoutFooter, /:icon="icons\.logout"/);
-  assert.match(logoutFooter, /Logging out…/);
-  assert.match(logoutFooter, /Log out/);
+  assert.match(logoutFooter, /navigation\.loggingOut/);
+  assert.match(logoutFooter, /navigation\.logOut/);
   assert.match(logoutFooter, /:disabled="loggingOut"/);
   assert.match(logoutFooter, /@click="requestLogout"/);
   assert.doesNotMatch(logoutFooter, /@click="confirmLogout"/);
   assert.match(layout, /AlertDialogRoot/);
-  assert.match(logoutDialog, /Log out of Peridot\?/);
-  assert.match(logoutDialog, /Your current session will end\./);
+  assert.match(logoutDialog, /navigation\.logOutTitle/);
+  assert.match(logoutDialog, /navigation\.logOutDescription/);
   assert.match(logoutDialog, /<AlertDialogCancel as-child>/);
   assert.match(logoutDialog, /@click="confirmLogout"/);
 });
@@ -122,7 +122,7 @@ test("the header places task progress before the account avatar", async () => {
     /<TaskProgressIndicator \/>[\s\S]*?to="\/settings\/account"/,
   );
   assert.match(header, /to="\/settings\/account"/);
-  assert.match(header, /aria-label="Open profile settings"/);
+  assert.match(header, /t\('navigation\.profileSettings'\)/);
   assert.match(header, /:icon="icons\.settings"/);
   assert.match(header, /group-hover\/avatar:opacity-100/);
   assert.match(header, /group-focus-visible\/avatar:opacity-100/);
@@ -131,7 +131,7 @@ test("the header places task progress before the account avatar", async () => {
   assert.match(layout, /flex-1 justify-start text-lg font-semibold/);
   assert.match(
     layout,
-    /<img\s+:src="logoNop"\s+alt=""\s+class="size-6 p-0\.5"\s*\/>\s*Peridot/,
+    /<img\s+:src="logoNop"\s+alt=""\s+class="size-6 p-0\.5"\s*\/>\s*\{\{\s*t\("app\.name"\)\s*\}\}/,
   );
 });
 
@@ -143,11 +143,11 @@ test("the settings sidebar omits server details and its brand links back home", 
   assert.doesNotMatch(layout, /Connected server/);
   assert.doesNotMatch(layout, /aria-label="Close settings"/);
   assert.doesNotMatch(layout, />peridot<\/NuxtLink>/);
-  assert.match(layout, /aria-label="Back to home"/);
+  assert.match(layout, /t\('navigation\.backHome'\)/);
   assert.match(layout, /flex-1 justify-start font-semibold/);
   assert.match(layout, /<NuxtLink to="\/"/);
   assert.match(layout, /:icon="icons\.arrowLeft"/);
-  assert.match(layout, /Back\s*<\/NuxtLink/);
+  assert.match(layout, /t\("common\.back"\)/);
 });
 
 test("sources are managed on their own page with row action menus", async () => {
@@ -162,7 +162,7 @@ test("sources are managed on their own page with row action menus", async () => 
   assert.match(page, /class="flex cursor-grab items-center/);
   assert.match(
     page,
-    /class="cursor-grab rounded-md p-1 text-muted-foreground active:cursor-grabbing"\s*aria-label="Drag to reorder source"/,
+    /class="cursor-grab rounded-md p-1 text-muted-foreground active:cursor-grabbing"\s*:aria-label="t\('settings\.sources\.drag'\)"/,
   );
   assert.match(page, /AlertDialogRoot/);
   assert.match(page, /DialogRoot/);
@@ -176,11 +176,11 @@ test("sources are managed on their own page with row action menus", async () => 
   assert.doesNotMatch(page, /Badge variant="secondary">\{\{ source\.kind/);
   assert.match(
     page,
-    /<Icon :icon="icons\.folder" aria-hidden="true" class="size-5" \/>\s*Local files/,
+    /<Icon :icon="icons\.folder" aria-hidden="true" class="size-5" \/>\s*\{\{ t\("settings\.sources\.path"\) \}\}/,
   );
   assert.match(
     page,
-    /<Icon :icon="icons\.globe" aria-hidden="true" class="size-5" \/>\s*Remote URL/,
+    /<Icon :icon="icons\.globe" aria-hidden="true" class="size-5" \/>\s*\{\{ t\("settings\.sources\.url"\) \}\}/,
   );
   assert.match(
     page,
@@ -193,22 +193,31 @@ test("sources are managed on their own page with row action menus", async () => 
     /if \(source\.kind === "path"\)[\s\S]*?trackTask\(source\.task\)/,
   );
   assert.match(page, /await queueLibraryScan\(\)/);
-  assert.match(page, />\s*Rescan all\s*</);
+  assert.match(page, /settings\.sources\.rescanAll/);
   assert.match(page, /@click="rescanAll"/);
   assert.match(page, /DropdownMenuRoot/);
   assert.match(page, /DropdownMenuItem/);
   assert.match(
     page,
-    /<DropdownMenuItem[\s\S]*?class="flex cursor-pointer[\s\S]*?Rescan/,
+    /<DropdownMenuItem[\s\S]*?class="flex cursor-pointer[\s\S]*?settings\.sources\.rescan/,
   );
   assert.match(
     page,
-    /<DropdownMenuItem[\s\S]*?class="flex cursor-pointer[\s\S]*?Remove/,
+    /<DropdownMenuItem[\s\S]*?class="flex cursor-pointer[\s\S]*?common\.remove/,
   );
   assert.match(page, /data-disabled:cursor-default/);
   assert.match(page, /queueSourceScan/);
   assert.match(page, /:disabled="source\.kind !== 'path'"/);
-  assert.match(page, /Actions for/);
+  assert.match(page, /settings\.sources\.actions/);
+  assert.match(
+    page,
+    /import \{ ProgressCircle \} from "@peridot\/ui\/components\/ui\/progress-circle"/,
+  );
+  assert.match(page, /activeTaskForSource\(tasks\.value, source\.id\)/);
+  assert.match(page, /sourceTaskProgress\(task\)/);
+  assert.match(page, /v-if="sourceTask\(source\)"/);
+  assert.match(page, /:value="sourceProgress\(source\)"/);
+  assert.match(page, /settings\.sources\.progress/);
 });
 
 test("metadata providers have a dedicated sortable management page", async () => {
@@ -225,7 +234,7 @@ test("metadata providers have a dedicated sortable management page", async () =>
   assert.match(page, /'sortable-item cursor-grab active:cursor-grabbing'/);
   assert.match(
     page,
-    /class="cursor-grab rounded-md p-1 text-muted-foreground active:cursor-grabbing"\s*aria-label="Drag to reorder metadata provider"/,
+    /class="cursor-grab rounded-md p-1 text-muted-foreground active:cursor-grabbing"\s*:aria-label="t\('settings\.metadata\.drag'\)"/,
   );
   assert.match(page, /configurationFields/);
   assert.match(page, /credentialField/);
@@ -233,21 +242,32 @@ test("metadata providers have a dedicated sortable management page", async () =>
   assert.match(page, /providerRows/);
   assert.match(page, /syncProviderRows/);
   assert.match(page, /v-for="row in providerRows"/);
-  assert.match(page, /row\.definition\.name/);
-  assert.match(page, /Not configured/);
+  assert.match(page, /row\.definition\.nameMessage/);
+  assert.match(page, /common\.notConfigured/);
   assert.match(page, /providerStatusLabel/);
   assert.match(page, /providerStatusClass/);
   assert.match(page, /text-warning/);
   assert.match(page, /text-success/);
   assert.match(page, /'opacity-60': !row\.provider/);
   assert.match(page, /providerNeedsConfiguration/);
-  assert.match(page, /Configuration required/);
+  assert.match(page, /settings\.metadata\.configurationRequired/);
   assert.match(page, /TooltipRoot/);
   assert.match(page, /TooltipContent/);
   assert.match(page, /providerIcon\(row\.definition\.kind\)/);
-  assert.match(page, /:aria-label="`Configure \$\{row\.definition\.name\}`"/);
+  assert.match(page, /settings\.metadata\.configure/);
   assert.match(page, /v-model="formEnabled"/);
   assert.match(page, /enabled: formEnabled\.value/);
+  assert.match(
+    page,
+    /import \{ ProgressCircle \} from "@peridot\/ui\/components\/ui\/progress-circle"/,
+  );
+  assert.match(
+    page,
+    /activeTaskForMetadataProvider\(tasks\.value, provider\.id\)/,
+  );
+  assert.match(page, /v-if="row\.provider && providerTask\(row\.provider\)"/);
+  assert.match(page, /:value="providerProgress\(row\.provider\)"/);
+  assert.match(page, /settings\.metadata\.progress/);
   assert.doesNotMatch(page, />\s*Add provider\s*</);
   assert.doesNotMatch(page, /data-provider-option/);
   assert.doesNotMatch(page, /Coming soon/);
@@ -259,11 +279,11 @@ test("metadata providers have a dedicated sortable management page", async () =>
   assert.match(page, /rel="noopener noreferrer"/);
   assert.match(
     page,
-    /Discogs account settings\s*<Icon[\s\S]*?:icon="icons\.externalLink"[\s\S]*?<\/a\s*>/,
+    /settings\.metadata\.discogsSettings[\s\S]*?:icon="icons\.externalLink"[\s\S]*?<\/a\s*>/,
   );
-  assert.match(page, /Create a personal access token in your/);
+  assert.match(page, /settings\.metadata\.createToken/);
   assert.match(page, /:icon="icons\.externalLink"/);
-  assert.match(page, /selectedDefinition\.credentialField\.helpText/);
+  assert.match(page, /selectedDefinition\.credentialField\.helpMessage/);
   assert.match(
     icons,
     /import discogs from "@iconify-icons\/simple-icons\/discogs"/,
@@ -272,20 +292,22 @@ test("metadata providers have a dedicated sortable management page", async () =>
     icons,
     /import musicbrainz from "@iconify-icons\/simple-icons\/musicbrainz"/,
   );
-  assert.match(page, /Refresh metadata/);
+  assert.match(page, /settings\.metadata\.refresh/);
   assert.match(
     page,
     /:disabled="!activeProviders\.length \|\| hasActiveTasks"/,
   );
-  assert.match(page, /hasActiveTasks \? "Processing…" : "Refresh metadata"/);
+  assert.match(
+    page,
+    /hasActiveTasks[\s\S]*?common\.processing[\s\S]*?settings\.metadata\.refresh/,
+  );
   assert.match(page, /queueMetadataRefresh/);
   assert.match(page, /resetMetadata/);
-  assert.match(page, /Reset all track metadata/);
+  assert.match(page, /settings\.metadata\.resetTitle/);
   assert.match(page, /notifyMetadataReset/);
   assert.match(page, /invalidateCatalog/);
-  assert.match(page, /Reset all track metadata\?/);
-  assert.match(page, /Peridot will display the original tags/);
-  assert.match(page, /Providers and audio files are not changed/);
+  assert.match(page, /settings\.metadata\.resetConfirmTitle/);
+  assert.match(page, /settings\.metadata\.resetConfirmDescription/);
   assert.doesNotMatch(page, /Disable metadata provider\?/);
   assert.doesNotMatch(page, /Display name/);
   assert.doesNotMatch(page, /provider-name/);
@@ -298,7 +320,7 @@ test("tasks have a settings view for active work and paginated history", async (
   assert.match(page, /useUser/);
   assert.match(page, /canManageTasks/);
   assert.match(page, /v-if="!canManageTasks"/);
-  assert.match(page, /Administrator access is required\./);
+  assert.match(page, /settings\.tasks\.adminRequired/);
   assert.match(
     page,
     /onMounted\(\(\) => \{\s+if \(!canManageTasks\.value\) return;/,
@@ -308,13 +330,14 @@ test("tasks have a settings view for active work and paginated history", async (
   assert.match(page, /status: "terminal"/);
   assert.match(page, /limit: HISTORY_PAGE_SIZE/);
   assert.match(page, /offset: history\.value\.length/);
-  assert.match(page, /In progress/);
+  assert.match(page, /settings\.tasks\.inProgress/);
   assert.match(page, /<h3 id="task-history-heading"/);
-  assert.match(page, />\s*History\s*</);
-  assert.match(page, /taskProgressLabel\(task\)/);
-  assert.match(page, /taskStatusLabel\(task\)/);
-  assert.match(page, /task\.failureSummary/);
-  assert.match(page, /Load older tasks/);
+  assert.match(page, /settings\.tasks\.history/);
+  assert.match(page, /taskProgressMessage\(task\)/);
+  assert.match(page, /taskStatusMessage\(task\)/);
+  assert.match(page, /task\.failureMessage/);
+  assert.match(page, /TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY/);
+  assert.match(page, /settings\.tasks\.loadOlder/);
   assert.match(page, /@click="loadMoreHistory"/);
   assert.match(page, /visibleDetails\(task\)/);
   assert.match(page, /taskTimeLabel\(task\)/);
@@ -329,13 +352,10 @@ test("administrators can create, edit, promote, and delete managed accounts", as
   assert.match(page, /updateManagedUser/);
   assert.match(page, /deleteManagedUser/);
   assert.match(page, /canManageUsers/);
-  assert.match(
-    page,
-    /Administrator access is required to manage user accounts\./,
-  );
-  assert.match(page, />User Management<\/h2>/);
+  assert.match(page, /settings\.users\.adminRequired/);
+  assert.match(page, /settings\.users\.title/);
   assert.match(page, /id="user-accounts-heading"/);
-  assert.match(page, />\s*Add account\s*</);
+  assert.match(page, /settings\.users\.add/);
   assert.match(page, /v-for="account in users"/);
   assert.match(page, /gravatarUrl\(account\.email, 80\)/);
   assert.match(page, /:src="avatarSource\(account\)"/);
@@ -346,23 +366,23 @@ test("administrators can create, edit, promote, and delete managed accounts", as
   assert.match(page, /@click="openEditDialog\(account\)"/);
   assert.match(page, /@click="requestDelete\(account\)"/);
   assert.match(page, /account\.id === user\?\.id/);
-  assert.match(page, /User accounts/);
-  assert.match(page, /Create accounts and control who can administer/);
-  assert.match(page, /Create a user or another administrator account\./);
+  assert.match(page, /settings\.users\.accounts/);
+  assert.match(page, /settings\.users\.description/);
+  assert.match(page, /settings\.users\.addDescription/);
   assert.match(page, /@click="setRole\('member'\)"/);
   assert.match(page, /@click="setRole\('admin'\)"/);
-  assert.match(page, /Your own administrator role cannot be changed here\./);
-  assert.match(page, /Leave blank to keep the current password\./);
+  assert.match(page, /settings\.users\.ownRole/);
+  assert.match(page, /settings\.users\.passwordEditHelp/);
   assert.match(page, /managedPasswordPairValid\(/);
   assert.match(page, /dialogMode === 'create' \|\| formPassword/);
   assert.match(
     page,
     /id="managed-user-password-confirmation"[\s\S]*?required[\s\S]*?minlength="12"/,
   );
-  assert.match(page, /managedPasswordConfirmationError/);
-  assert.match(page, /Delete \{\{ pendingDelete\?\.displayName \}\}\?/);
-  assert.match(page, /permanently deletes the account and its sessions/);
-  assert.match(page, /dialogMode === "create"[\s\S]*?"New password"/);
+  assert.match(page, /managedPasswordConfirmationMismatch/);
+  assert.match(page, /settings\.users\.deleteTitle/);
+  assert.match(page, /settings\.users\.deleteDescription/);
+  assert.match(page, /settings\.users\.newPassword/);
 });
 
 test("server settings no longer contain source or library status management", async () => {
@@ -372,9 +392,9 @@ test("server settings no longer contain source or library status management", as
   assert.doesNotMatch(page, /listSources/);
   assert.doesNotMatch(page, /fetchServerSettings/);
   assert.match(page, /fetchLogs/);
-  assert.match(page, /Server log/);
-  assert.match(page, /Search server log/);
-  assert.match(page, /Categories/);
+  assert.match(page, /settings\.server\.log/);
+  assert.match(page, /settings\.server\.search/);
+  assert.match(page, /settings\.server\.categories/);
 });
 
 test("server settings confirm before disconnecting from the connected server", async () => {
@@ -396,8 +416,8 @@ test("server settings confirm before disconnecting from the connected server", a
   assert.match(serverCard, /:disabled="disconnecting"/);
   assert.match(serverCard, /@click="requestDisconnect"/);
   assert.doesNotMatch(serverCard, /@click="confirmDisconnect"/);
-  assert.match(disconnectDialog, /Disconnect from server\?/);
-  assert.match(disconnectDialog, /This signs you out of/);
+  assert.match(disconnectDialog, /settings\.server\.disconnectTitle/);
+  assert.match(disconnectDialog, /settings\.server\.disconnectDescription/);
   assert.match(disconnectDialog, /<AlertDialogCancel as-child>/);
   assert.match(disconnectDialog, /@click="confirmDisconnect"/);
   assert.match(page, /address\.value = null/);
@@ -409,7 +429,7 @@ test("server settings confirm before disconnecting from the connected server", a
 test("profile settings show email and update the editable display name", async () => {
   const page = await readSource("../app/pages/settings/account.vue");
 
-  assert.match(page, />Profile<\/h2>/);
+  assert.match(page, /settings\.account\.title/);
   assert.match(page, /updateUserProfile/);
   assert.match(
     page,
@@ -422,7 +442,7 @@ test("profile settings show email and update the editable display name", async (
   assert.match(page, /minlength="2"/);
   assert.match(page, /maxlength="80"/);
   assert.match(page, /user\.value = updated/);
-  assert.match(page, /Display name updated\./);
+  assert.match(page, /settings\.account\.updated/);
   assert.match(page, /@submit\.prevent="saveProfile"/);
   assert.match(page, /:disabled="saving \|\| !displayNameValid"/);
   assert.doesNotMatch(page, /username|Username/);
@@ -431,11 +451,10 @@ test("profile settings show email and update the editable display name", async (
 test("the local-files picker includes accessible deep folder search", async () => {
   const folderTree = await readSource("../app/components/FolderTree.vue");
   assert.match(folderTree, /v-model="searchQuery"/);
-  assert.match(folderTree, /aria-label="Search folders"/);
-  assert.match(folderTree, /placeholder="Search folders"/);
+  assert.match(folderTree, /t\('components\.folder\.search'\)/);
   assert.match(folderTree, /searchDirectories/);
-  assert.match(folderTree, /Searching all folders/);
+  assert.match(folderTree, /components\.folder\.searching/);
   assert.match(folderTree, /searchError/);
   assert.match(folderTree, /searchTruncated/);
-  assert.match(folderTree, /No folders match your search\./);
+  assert.match(folderTree, /components\.folder\.noMatches/);
 });

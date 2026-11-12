@@ -1,8 +1,8 @@
 import type { TrackMetadataDetail } from "@peridot/contracts";
+import { normalizeMessageDescriptor } from "./messages.js";
 
 const MAX_DETAILS = 12;
 const MAX_KEY_LENGTH = 64;
-const MAX_LABEL_LENGTH = 80;
 const MAX_VALUE_LENGTH = 300;
 
 function text(value: unknown, maximum: number): string {
@@ -20,11 +20,15 @@ export function normalizeMetadataDetails(
     if (!item || typeof item !== "object") continue;
     const record = item as Record<string, unknown>;
     const key = text(record.key, MAX_KEY_LENGTH);
-    const label = text(record.label, MAX_LABEL_LENGTH);
     const detailValue = text(record.value, MAX_VALUE_LENGTH);
-    if (!key || !label || !detailValue || keys.has(key)) continue;
+    const labelMessage = normalizeMessageDescriptor(record.labelMessage);
+    if (!key || !labelMessage || !detailValue || keys.has(key)) continue;
     keys.add(key);
-    details.push({ key, label, value: detailValue });
+    details.push({
+      key,
+      value: detailValue,
+      labelMessage,
+    });
     if (details.length === MAX_DETAILS) break;
   }
   return details;

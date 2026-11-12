@@ -15,6 +15,7 @@ import type {
   LikeResponse,
   LikeTarget,
   LogListResponse,
+  MessageDescriptor,
   MetadataCandidateListResponse,
   MetadataProviderDefinitionListResponse,
   MetadataProviderListResponse,
@@ -38,6 +39,7 @@ import type {
   UserListResponse,
   UserResponse,
 } from "@peridot/contracts";
+import { localizedError, message } from "./messages.ts";
 
 export interface AdministratorCredentials {
   email: string;
@@ -64,11 +66,36 @@ export type AuthenticationRedirectReason = "login" | "setup";
 
 export class AuthenticationRedirectError extends Error {
   readonly reason: AuthenticationRedirectReason;
+  readonly messageDescriptor: MessageDescriptor;
 
-  constructor(message: string, reason: AuthenticationRedirectReason) {
-    super(message);
+  constructor(
+    fallbackMessage: string,
+    reason: AuthenticationRedirectReason,
+    messageDescriptor: MessageDescriptor,
+  ) {
+    super(fallbackMessage);
     this.name = "AuthenticationRedirectError";
     this.reason = reason;
+    this.messageDescriptor = messageDescriptor;
+  }
+}
+
+export class PeridotApiError extends Error {
+  readonly statusCode: number;
+  readonly code: string;
+  readonly messageDescriptor: MessageDescriptor | null;
+
+  constructor(
+    fallbackMessage: string,
+    statusCode: number,
+    code: string,
+    messageDescriptor: MessageDescriptor | null,
+  ) {
+    super(fallbackMessage);
+    this.name = "PeridotApiError";
+    this.statusCode = statusCode;
+    this.code = code;
+    this.messageDescriptor = messageDescriptor;
   }
 }
 
@@ -108,7 +135,10 @@ async function requestJson<T>(
       headers,
     });
   } catch {
-    throw new Error("Could not reach this Peridot server.");
+    throw localizedError(
+      "error.apiUnavailable",
+      "Could not reach this Peridot server.",
+    );
   }
   if (!response.ok) {
     const body = (await response
@@ -125,12 +155,17 @@ async function requestJson<T>(
     if (redirectReason) {
       reportAuthenticationRedirect(redirectReason);
       throw new AuthenticationRedirectError(
-        body?.error.message ?? "Authentication is required.",
+        "Authentication is required.",
         redirectReason,
+        body?.error.messageDescriptor ??
+          message("error.authenticationRequired"),
       );
     }
-    throw new Error(
-      body?.error.message ?? "The Peridot server rejected the request.",
+    throw new PeridotApiError(
+      "The Peridot server rejected the request.",
+      response.status,
+      body?.error.code ?? "request_failed",
+      body?.error.messageDescriptor ?? null,
     );
   }
   if (response.status === 204) return undefined as T;
@@ -168,7 +203,10 @@ export async function discoverLocalServers(): Promise<DiscoveryResponse> {
     if (!response.ok) throw new Error();
     return (await response.json()) as DiscoveryResponse;
   } catch {
-    throw new Error("Local server discovery is unavailable.");
+    throw localizedError(
+      "error.discoveryUnavailable",
+      "Local server discovery is unavailable.",
+    );
   }
 }
 

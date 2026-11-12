@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  managedPasswordConfirmationError,
+  managedPasswordConfirmationMismatch,
   managedPasswordPairValid,
 } from "../app/lib/user-management.ts";
 
@@ -52,10 +52,10 @@ test("edited passwords require confirmation while blank keeps the current passwo
     true,
   );
   assert.equal(
-    managedPasswordConfirmationError(
+    managedPasswordConfirmationMismatch(
       "replacement-password",
       "replacement-passwrod",
     ),
-    "Passwords do not match.",
+    true,
   );
 });

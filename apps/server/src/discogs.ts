@@ -11,6 +11,7 @@ import {
   type MetadataTrackInput,
   MetadataResolverError,
 } from "./metadata-resolver.js";
+import { message } from "./messages.js";
 
 const DISCOGS_ORIGIN = "https://api.discogs.com";
 const DISCOGS_USER_AGENT = "Peridot/0.1.0";
@@ -178,20 +179,40 @@ function releaseDetails(release: DiscogsRelease): TrackMetadataDetail[] {
   ).join("; ");
   return [
     release.year
-      ? { key: "year", label: "Year", value: String(release.year) }
+      ? {
+          key: "year",
+          value: String(release.year),
+          labelMessage: message("metadata.detail.year"),
+        }
       : null,
-    label ? { key: "label", label: "Label", value: label } : null,
+    label
+      ? {
+          key: "label",
+          value: label,
+          labelMessage: message("metadata.detail.label"),
+        }
+      : null,
     catalogNumber
       ? {
           key: "catalogNumber",
-          label: "Catalog number",
           value: catalogNumber,
+          labelMessage: message("metadata.detail.catalogNumber"),
         }
       : null,
     release.country
-      ? { key: "country", label: "Country", value: release.country }
+      ? {
+          key: "country",
+          value: release.country,
+          labelMessage: message("metadata.detail.country"),
+        }
       : null,
-    format ? { key: "format", label: "Format", value: format } : null,
+    format
+      ? {
+          key: "format",
+          value: format,
+          labelMessage: message("metadata.detail.format"),
+        }
+      : null,
   ].filter((detail): detail is TrackMetadataDetail => detail !== null);
 }
 
@@ -276,8 +297,8 @@ function releaseCandidate(
         ? [
             {
               key: "trackPosition",
-              label: "Discogs position",
               value: position,
+              labelMessage: message("metadata.detail.discogsPosition"),
             },
           ]
         : []),
@@ -475,7 +496,12 @@ export class DiscogsClient {
           await this.sleeper(1_000 * (attempt + 1), signal);
           continue;
         }
-        throw new MetadataResolverError("Discogs could not be reached.", 502);
+        throw new MetadataResolverError(
+          "Discogs could not be reached.",
+          502,
+          true,
+          message("api.message.discogsUnavailable"),
+        );
       }
 
       if (response.status === 401 || response.status === 403) {
@@ -483,6 +509,7 @@ export class DiscogsClient {
           "Discogs rejected the access token.",
           400,
           false,
+          message("api.message.discogsTokenRejected"),
         );
       }
       if (response.status === 429 || response.status >= 500) {
@@ -501,6 +528,12 @@ export class DiscogsClient {
             ? "Discogs is rate limiting requests. Try again later."
             : "Discogs is temporarily unavailable.",
           502,
+          true,
+          message(
+            response.status === 429
+              ? "api.message.discogsRateLimited"
+              : "api.message.discogsTemporary",
+          ),
         );
       }
       if (!response.ok) {
@@ -508,6 +541,7 @@ export class DiscogsClient {
           `Discogs rejected the request (${response.status}).`,
           response.status >= 500 ? 502 : 400,
           response.status >= 500,
+          message("api.message.discogsFailed"),
         );
       }
 
@@ -540,7 +574,12 @@ export class DiscogsClient {
         );
       }
     }
-    throw new MetadataResolverError("Discogs request failed.");
+    throw new MetadataResolverError(
+      "Discogs request failed.",
+      502,
+      true,
+      message("api.message.discogsFailed"),
+    );
   }
 
   private async rateLimit(signal?: AbortSignal): Promise<void> {
@@ -553,18 +592,18 @@ export class DiscogsClient {
 export class DiscogsResolver implements MetadataResolver {
   readonly definition = {
     kind: "discogs" as const,
-    name: "Discogs",
+    nameMessage: message("provider.discogs.name"),
     description:
       "Match releases and edition details with a personal access token.",
+    descriptionMessage: message("provider.discogs.description"),
     configurationFields: [],
     credentialField: {
       key: "token",
-      label: "Personal access token",
+      labelMessage: message("provider.discogs.token.label"),
       type: "password" as const,
       required: true,
-      placeholder: "Discogs token",
-      helpText:
-        "Create a personal access token in your Discogs account settings.",
+      placeholderMessage: message("provider.discogs.token.placeholder"),
+      helpMessage: message("provider.discogs.token.help"),
     },
     supportsAutomaticMatching: true,
     supportsManualSearch: true,
@@ -630,6 +669,7 @@ export class DiscogsResolver implements MetadataResolver {
         "The Discogs access token is missing.",
         409,
         false,
+        message("api.message.discogsTokenRequired"),
       );
     }
     const releases = await this.client.searchReleases(

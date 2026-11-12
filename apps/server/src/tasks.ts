@@ -1,12 +1,20 @@
-import type {
-  TaskDetailResponse,
-  TaskKind,
-  TaskListResponse,
-  TaskProgressResponse,
-  TaskResponse,
-  TaskStatus,
+import {
+  TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY,
+  type MessageDescriptor,
+  type TaskDetailResponse,
+  type TaskKind,
+  type TaskListResponse,
+  type TaskProgressResponse,
+  type TaskResponse,
+  type TaskStatus,
 } from "@peridot/contracts";
 import type { Database } from "./database.js";
+import {
+  message,
+  normalizeMessageDescriptor,
+  parseStoredMessage,
+  serializeMessage,
+} from "./messages.js";
 import type { TaskRow } from "./prisma/models.js";
 
 export const ACTIVE_TASK_STATUSES: readonly TaskStatus[] = [
@@ -22,7 +30,6 @@ export const TERMINAL_TASK_STATUSES: readonly TaskStatus[] = [
 
 const MAX_DETAILS = 16;
 const MAX_DETAIL_KEY_LENGTH = 80;
-const MAX_DETAIL_LABEL_LENGTH = 120;
 const MAX_DETAIL_VALUE_LENGTH = 300;
 const MAX_TITLE_LENGTH = 160;
 const MAX_FAILURE_SUMMARY_LENGTH = 500;
@@ -34,6 +41,7 @@ const PLUGIN_TASK_KIND =
 export interface EnqueueTaskInput {
   kind: TaskKind;
   title: string;
+  titleMessage?: MessageDescriptor | null;
   parentTaskId?: string | null;
   sourceId?: string | null;
   sourceName?: string | null;
@@ -57,6 +65,7 @@ export class TaskExecutionError extends Error {
   constructor(
     message: string,
     readonly status: "failed" | "interrupted" = "failed",
+    readonly messageDescriptor?: MessageDescriptor,
   ) {
     super(message);
     this.name = "TaskExecutionError";
@@ -74,15 +83,24 @@ export function normalizeTaskDetails(
     if (
       !detail ||
       typeof detail.key !== "string" ||
-      typeof detail.label !== "string" ||
       typeof detail.value !== "string"
     ) {
       return [];
     }
     const key = boundedText(detail.key, MAX_DETAIL_KEY_LENGTH);
-    const label = boundedText(detail.label, MAX_DETAIL_LABEL_LENGTH);
     const value = boundedText(detail.value, MAX_DETAIL_VALUE_LENGTH);
-    return key && label ? [{ key, label, value }] : [];
+    const labelMessage = normalizeMessageDescriptor(detail.labelMessage);
+    const valueMessage = normalizeMessageDescriptor(detail.valueMessage);
+    return key && labelMessage
+      ? [
+          {
+            key,
+            value,
+            labelMessage,
+            valueMessage,
+          },
+        ]
+      : [];
   });
 }
 
@@ -122,11 +140,24 @@ function progressFor(task: TaskRow): TaskProgressResponse {
 }
 
 export function toTaskResponse(task: TaskRow): TaskResponse {
+  const titleMessage =
+    parseStoredMessage(task.titleMessage) ??
+    (task.kind === "library_scan"
+      ? task.sourceName
+        ? message("task.title.sourceScan", { source: task.sourceName })
+        : message("task.title.libraryScan")
+      : task.kind === "metadata_fetch"
+        ? task.sourceName
+          ? message("task.title.sourceMetadataMatch", {
+              source: task.sourceName,
+            })
+          : message("task.title.metadataMatch")
+        : message("task.title.plugin", { task: task.title }));
   return {
     id: task.id,
     kind: task.kind as TaskKind,
     status: task.status as TaskStatus,
-    title: task.title,
+    titleMessage,
     parentTaskId: task.parentTaskId,
     source: task.sourceName
       ? {
@@ -136,7 +167,15 @@ export function toTaskResponse(task: TaskRow): TaskResponse {
       : null,
     progress: progressFor(task),
     details: parseStoredDetails(task.details),
-    failureSummary: task.failureSummary,
+    failureMessage:
+      parseStoredMessage(task.failureMessage) ??
+      (task.failureSummary
+        ? message(
+            task.status === "interrupted"
+              ? "api.message.taskInterrupted"
+              : "api.message.taskFailedGeneric",
+          )
+        : null),
     createdAt: task.createdAt.toISOString(),
     startedAt: task.startedAt?.toISOString() ?? null,
     completedAt: task.completedAt?.toISOString() ?? null,
@@ -195,6 +234,7 @@ export class TaskService {
       status: "interrupted",
       completedAt: now,
       failureSummary: "The server stopped before this task completed.",
+      failureMessage: serializeMessage(message("api.message.taskInterrupted")),
     });
     await this.prune();
     this.kick();
@@ -224,6 +264,7 @@ export class TaskService {
         kind: input.kind,
         status: "queued",
         title,
+        titleMessage: serializeMessage(input.titleMessage),
         parentTaskId: input.parentTaskId ?? null,
         sourceId: normalizedSourceId,
         sourceName: input.sourceName
@@ -313,6 +354,7 @@ export class TaskService {
       status: string;
       completedAt: Date;
       failureSummary: string | null;
+      failureMessage?: string | null;
       details?: string;
       progressCompleted?: number | null;
       progressTotal?: number | null;
@@ -343,13 +385,15 @@ export class TaskService {
 
   async fail(
     id: string,
-    message: string,
+    failureSummary: string,
     status: "failed" | "interrupted" = "failed",
+    messageDescriptor?: MessageDescriptor,
   ): Promise<void> {
     await this.database.orm.Task.where({ id }).update({
       status,
       completedAt: new Date(),
-      failureSummary: boundedText(message, MAX_FAILURE_SUMMARY_LENGTH),
+      failureSummary: boundedText(failureSummary, MAX_FAILURE_SUMMARY_LENGTH),
+      failureMessage: serializeMessage(messageDescriptor),
     });
     this.publishTask(id, true);
   }
@@ -467,6 +511,8 @@ export class TaskService {
           await this.fail(
             candidate.id,
             "The parent task is no longer available.",
+            "failed",
+            message("api.message.parentTaskUnavailable"),
           );
           continue;
         }
@@ -475,6 +521,7 @@ export class TaskService {
             candidate.id,
             "The parent task did not complete successfully.",
             "interrupted",
+            message("api.message.parentTaskFailed"),
           );
           continue;
         }
@@ -503,6 +550,10 @@ export class TaskService {
         await this.fail(
           running.id,
           `No executor is available for ${running.kind}.`,
+          "failed",
+          message("api.message.taskNotFoundExecutor", {
+            task: running.kind,
+          }),
         );
         continue;
       }
@@ -522,8 +573,14 @@ export class TaskService {
               : new TaskExecutionError(
                   "The task could not be completed.",
                   "failed",
+                  message("api.message.taskFailedGeneric"),
                 );
-          await this.fail(running.id, failure.message, failure.status);
+          await this.fail(
+            running.id,
+            failure.message,
+            failure.status,
+            failure.messageDescriptor,
+          );
         }
       }
       await this.prune();
@@ -538,13 +595,17 @@ export function queueLibraryScan(
   return tasks.enqueue({
     kind: "library_scan",
     title: source ? `${source.name} scan` : "Library scan",
+    titleMessage: source
+      ? message("task.title.sourceScan", { source: source.name })
+      : message("task.title.libraryScan"),
     sourceId: source?.id ?? null,
     sourceName: source?.name ?? null,
     details: [
       {
         key: "source",
-        label: "Source",
         value: source?.name ?? "All sources",
+        labelMessage: message("task.detail.source"),
+        valueMessage: source ? null : message("common.allSources"),
       },
     ],
   });
@@ -563,6 +624,11 @@ export function queueMetadataFetch(
     title: options.source
       ? `${options.source.name} metadata matching`
       : "Library metadata matching",
+    titleMessage: options.source
+      ? message("task.title.sourceMetadataMatch", {
+          source: options.source.name,
+        })
+      : message("task.title.metadataMatch"),
     parentTaskId: options.parentTaskId ?? null,
     sourceId: options.source?.id ?? null,
     sourceName: options.source?.name ?? null,
@@ -570,8 +636,9 @@ export function queueMetadataFetch(
     details: [
       {
         key: "source",
-        label: "Source",
         value: options.source?.name ?? "All sources",
+        labelMessage: message("task.detail.source"),
+        valueMessage: options.source ? null : message("common.allSources"),
       },
     ],
   });
@@ -587,77 +654,115 @@ export function scanDetails(counts: {
   errors: number;
 }): TaskDetailResponse[] {
   return [
-    { key: "source", label: "Source", value: counts.source },
+    {
+      key: "source",
+      value: counts.source,
+      labelMessage: message("task.detail.source"),
+      valueMessage: null,
+    },
     {
       key: "progress.total",
-      label: "Files",
       value: String(counts.discovered),
+      labelMessage: message("task.detail.files"),
+      valueMessage: null,
     },
     {
       key: "progress.completed",
-      label: "Processed",
       value: String(
         counts.created + counts.updated + counts.unchanged + counts.errors,
       ),
+      labelMessage: message("task.detail.processed"),
+      valueMessage: null,
     },
-    { key: "files.created", label: "Added", value: String(counts.created) },
+    {
+      key: "files.created",
+      value: String(counts.created),
+      labelMessage: message("task.detail.added"),
+      valueMessage: null,
+    },
     {
       key: "files.updated",
-      label: "Updated",
       value: String(counts.updated),
+      labelMessage: message("task.detail.updated"),
+      valueMessage: null,
     },
     {
       key: "files.unchanged",
-      label: "Unchanged",
       value: String(counts.unchanged),
+      labelMessage: message("task.detail.unchanged"),
+      valueMessage: null,
     },
     {
       key: "files.unavailable",
-      label: "Unavailable",
       value: String(counts.unavailable),
+      labelMessage: message("task.detail.unavailable"),
+      valueMessage: null,
     },
     {
       key: "files.failed",
-      label: "Files with errors",
       value: String(counts.errors),
+      labelMessage: message("task.detail.filesFailed"),
+      valueMessage: null,
     },
   ];
 }
 
-export function metadataDetails(counts: {
-  source: string;
-  total: number;
-  processed: number;
-  matched: number;
-  unmatched: number;
-  errors: number;
-}): TaskDetailResponse[] {
-  return [
-    { key: "source", label: "Source", value: counts.source },
+export function metadataDetails(
+  counts: {
+    source: string;
+    total: number;
+    processed: number;
+    matched: number;
+    unmatched: number;
+    errors: number;
+  },
+  activeProviderId: string | null = null,
+): TaskDetailResponse[] {
+  const details: TaskDetailResponse[] = [
+    {
+      key: "source",
+      value: counts.source,
+      labelMessage: message("task.detail.source"),
+      valueMessage: null,
+    },
     {
       key: "progress.total",
-      label: "Tracks",
       value: String(counts.total),
+      labelMessage: message("task.detail.tracks"),
+      valueMessage: null,
     },
     {
       key: "progress.completed",
-      label: "Processed",
       value: String(counts.processed),
+      labelMessage: message("task.detail.processed"),
+      valueMessage: null,
     },
     {
       key: "metadata.matched",
-      label: "Matched",
       value: String(counts.matched),
+      labelMessage: message("task.detail.matched"),
+      valueMessage: null,
     },
     {
       key: "metadata.unmatched",
-      label: "Unmatched",
       value: String(counts.unmatched),
+      labelMessage: message("task.detail.unmatched"),
+      valueMessage: null,
     },
     {
       key: "metadata.failed",
-      label: "Tracks with errors",
       value: String(counts.errors),
+      labelMessage: message("task.detail.tracksFailed"),
+      valueMessage: null,
     },
   ];
+  if (activeProviderId) {
+    details.push({
+      key: TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY,
+      value: activeProviderId,
+      labelMessage: message("task.detail.provider"),
+      valueMessage: null,
+    });
+  }
+  return details;
 }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import { Button } from "@peridot/ui/components/ui/button";
 import type { AlbumSummaryResponse } from "@peridot/contracts";
@@ -19,6 +20,7 @@ const props = withDefaults(
   { compact: false },
 );
 const emit = defineEmits<{ open: [] }>();
+const { t } = useI18n();
 const { address } = useServer();
 const { token } = useSession();
 const { active, playing, playCollection, togglePlayback } = useLibraryPlayer();
@@ -67,7 +69,12 @@ async function toggleAlbumPlayback() {
           <NuxtLink
             :to="albumRoute(album)"
             class="block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            :aria-label="`Open ${album.title} by ${album.artist}`"
+            :aria-label="
+              t('card.openAlbum', {
+                album: album.title,
+                artist: album.artist,
+              })
+            "
             @click="emit('open')"
           >
             <div
@@ -98,8 +105,14 @@ async function toggleAlbumPlayback() {
             :disabled="!album.trackCount"
             :aria-label="
               albumActive && playing
-                ? `Pause ${album.title} by ${album.artist}`
-                : `Play ${album.title} by ${album.artist} from the first track`
+                ? t('card.pauseAlbum', {
+                    album: album.title,
+                    artist: album.artist,
+                  })
+                : t('card.playAlbum', {
+                    album: album.title,
+                    artist: album.artist,
+                  })
             "
             @click.prevent.stop="toggleAlbumPlayback"
           >
@@ -114,7 +127,12 @@ async function toggleAlbumPlayback() {
           <NuxtLink
             :to="albumRoute(album)"
             class="block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            :aria-label="`Open ${album.title} by ${album.artist}`"
+            :aria-label="
+              t('card.openAlbum', {
+                album: album.title,
+                artist: album.artist,
+              })
+            "
             @click="emit('open')"
           >
             <h3
@@ -126,8 +144,9 @@ async function toggleAlbumPlayback() {
           </NuxtLink>
           <p class="truncate text-xs text-muted-foreground">
             <TrackArtistLinks :artists="album.artists" /> ·
-            {{ album.trackCount }}
-            {{ album.trackCount === 1 ? "track" : "tracks" }}
+            {{
+              t("count.track", { count: album.trackCount }, album.trackCount)
+            }}
           </p>
         </div>
       </div>

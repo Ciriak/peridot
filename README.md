@@ -125,6 +125,22 @@ under Program Files. Turbo and nested scripts need pnpm itself on PATH.
 - `plugins`: planned official connectors and metadata providers.
 - `infra`: future self-hosted deployment assets.
 
+## Localization
+
+The web app uses Nuxt I18n with one fixed locale, `en-US`. Routes remain
+unprefixed, browser-language detection is disabled, and there is no language
+selector or stored locale preference yet. Runtime copy is defined in
+`apps/web/i18n/locales/en-US.json`; pages and components resolve it through
+`useI18n`, while reusable `@peridot/ui` components receive already-localized
+accessible labels from their callers.
+
+Server responses carry stable `MessageDescriptor` values for errors, tasks,
+provider definitions, and metadata details. The browser owns their presentation,
+and the shared contract intentionally contains no duplicate English fallback
+fields. Adding a future locale requires a new locale resource and locale entry
+plus translations for those descriptor keys; API payloads and stored task
+messages do not need locale-specific prose.
+
 ## UI components
 
 The preview uses shared shadcn-vue components from `@peridot/ui/components/ui/*`,
@@ -142,8 +158,9 @@ The separate classic Spinner follows shadcn-vue's animated LoaderIcon pattern an
 is available for future loading states; it is not rendered by the current app.
 The shared ProgressCircle accepts a finite `value` from 0 through 100 and clamps
 out-of-range values. Its ring keeps rotating while the numeric value controls
-the determinate arc, and it becomes a reduced-motion-safe circular spinner when
-the value is omitted or invalid. It provides semantic color, size,
+the determinate arc, which starts empty and transitions smoothly to the current
+value. It becomes a reduced-motion-safe circular spinner when the value is
+omitted or invalid. It provides semantic color, size,
 accessible-label, optional percentage, custom center-content variants, and
 configurable stroke width defaulting to 6. The administrator-only topbar task
 indicator uses it to show the average progress of every running or queued task,

@@ -6,6 +6,7 @@ import {
   onBeforeUnmount,
   onMounted,
   ref,
+  useI18n,
 } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import type { LogEntryResponse } from "@peridot/contracts";
@@ -35,6 +36,7 @@ import { fetchLogs, revokeSession } from "../../lib/peridot-client";
 
 definePageMeta({ layout: "settings" });
 
+const { t, d } = useI18n();
 const { address } = useServer();
 const { token } = useSession();
 const { user } = useUser();
@@ -67,7 +69,7 @@ async function refreshLogs() {
 }
 
 function logTime(value: string): string {
-  return new Date(value).toLocaleTimeString();
+  return d(new Date(value), "time");
 }
 
 function toggleLevel(level: string) {
@@ -119,7 +121,7 @@ async function confirmDisconnect() {
 
 onMounted(() => {
   if (user.value?.role !== "admin") {
-    logError.value = "Administrator access is required.";
+    logError.value = t("settings.tasks.adminRequired");
     return;
   }
   void refreshLogs();
@@ -140,9 +142,11 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="space-y-2">
-    <h2 class="text-2xl font-semibold tracking-tight">Server</h2>
+    <h2 class="text-2xl font-semibold tracking-tight">
+      {{ t("settings.server.title") }}
+    </h2>
     <p class="text-sm text-muted-foreground">
-      Manage this server connection and inspect server activity.
+      {{ t("settings.server.description") }}
     </p>
   </div>
 
@@ -151,19 +155,23 @@ onBeforeUnmount(() => {
     role="alert"
     class="rounded-lg border bg-card p-6 text-sm text-card-foreground"
   >
-    Administrator access is required.
+    {{ t("settings.tasks.adminRequired") }}
   </section>
 
   <template v-else>
     <section aria-labelledby="server-heading" class="space-y-4">
-      <h3 id="server-heading" class="text-lg font-semibold">Server</h3>
+      <h3 id="server-heading" class="text-lg font-semibold">
+        {{ t("settings.server.title") }}
+      </h3>
       <div
         class="flex flex-col gap-4 rounded-lg border bg-card p-6 text-card-foreground sm:flex-row sm:items-center sm:justify-between"
       >
         <div class="min-w-0">
-          <p class="text-sm text-muted-foreground">Connected server</p>
+          <p class="text-sm text-muted-foreground">
+            {{ t("settings.server.connected") }}
+          </p>
           <p class="mt-1 truncate text-sm font-medium">
-            {{ address ?? "Not connected" }}
+            {{ address ?? t("common.notConnected") }}
           </p>
         </div>
         <Button
@@ -174,7 +182,11 @@ onBeforeUnmount(() => {
           @click="requestDisconnect"
         >
           <Icon :icon="icons.logout" aria-hidden="true" class="size-4" />
-          {{ disconnecting ? "Disconnecting…" : "Disconnect" }}
+          {{
+            disconnecting
+              ? t("settings.server.disconnecting")
+              : t("settings.server.disconnect")
+          }}
         </Button>
       </div>
     </section>
@@ -186,18 +198,25 @@ onBeforeUnmount(() => {
           class="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-card p-6 text-card-foreground shadow-lg"
         >
           <AlertDialogTitle class="text-lg font-semibold">
-            Disconnect from server?
+            {{ t("settings.server.disconnectTitle") }}
           </AlertDialogTitle>
           <AlertDialogDescription class="text-sm text-muted-foreground">
-            This signs you out of {{ address ?? "this server" }} in this
-            browser. You will need to select the server and sign in again.
+            {{
+              t("settings.server.disconnectDescription", {
+                server: address ?? t("settings.server.title"),
+              })
+            }}
           </AlertDialogDescription>
           <div class="mt-6 flex justify-end gap-3">
             <AlertDialogCancel as-child>
-              <Button type="button" variant="outline">Cancel</Button>
+              <Button type="button" variant="outline">{{
+                t("common.cancel")
+              }}</Button>
             </AlertDialogCancel>
             <AlertDialogAction as-child @click="confirmDisconnect">
-              <Button type="button" variant="destructive">Disconnect</Button>
+              <Button type="button" variant="destructive">{{
+                t("settings.server.disconnect")
+              }}</Button>
             </AlertDialogAction>
           </div>
         </AlertDialogContent>
@@ -207,7 +226,7 @@ onBeforeUnmount(() => {
     <section aria-labelledby="server-log-heading" class="space-y-4">
       <div class="flex items-center justify-between gap-4">
         <h3 id="server-log-heading" class="text-lg font-semibold">
-          Server log
+          {{ t("settings.server.log") }}
         </h3>
         <DropdownMenuRoot>
           <DropdownMenuTrigger as-child>
@@ -217,7 +236,7 @@ onBeforeUnmount(() => {
                 aria-hidden="true"
                 class="size-4"
               />
-              Filters
+              {{ t("settings.server.filters") }}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuPortal>
@@ -227,7 +246,7 @@ onBeforeUnmount(() => {
               <DropdownMenuLabel
                 class="px-1 text-xs font-medium text-muted-foreground"
               >
-                Categories
+                {{ t("settings.server.categories") }}
               </DropdownMenuLabel>
               <div class="flex flex-wrap gap-1.5">
                 <Button
@@ -236,7 +255,7 @@ onBeforeUnmount(() => {
                   size="xs"
                   @click="clearLevels"
                 >
-                  All
+                  {{ t("common.all") }}
                 </Button>
                 <Button
                   v-for="level in logLevels"
@@ -255,13 +274,13 @@ onBeforeUnmount(() => {
               <DropdownMenuLabel
                 class="mt-2 px-1 text-xs font-medium text-muted-foreground"
               >
-                Search
+                {{ t("common.search") }}
               </DropdownMenuLabel>
               <Input
                 v-model="logSearch"
                 type="search"
-                aria-label="Search server log"
-                placeholder="Search log"
+                :aria-label="t('settings.server.search')"
+                :placeholder="t('settings.server.searchPlaceholder')"
                 class="w-full"
               />
             </DropdownMenuContent>
@@ -276,10 +295,10 @@ onBeforeUnmount(() => {
           class="h-64 space-y-1 overflow-y-auto rounded-md bg-muted/50 p-3 font-mono text-xs leading-6"
         >
           <p v-if="!logs.length" class="text-muted-foreground">
-            No log entries yet.
+            {{ t("settings.server.noLogs") }}
           </p>
           <p v-else-if="!visibleLogs.length" class="text-muted-foreground">
-            No matching log entries.
+            {{ t("settings.server.noMatches") }}
           </p>
           <p
             v-for="entry in visibleLogs"

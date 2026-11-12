@@ -5,6 +5,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { PlaybackTokenResponse } from "@peridot/contracts";
 import type { Database } from "./database.js";
 import { sendError } from "./http.js";
+import { message } from "./messages.js";
 import type { PlaybackTokenService } from "./playback-tokens.js";
 import { queueLibraryScan, toTaskResponse, type TaskService } from "./tasks.js";
 import { toTrackResponse } from "./track-response.js";
@@ -69,7 +70,13 @@ export async function registerLibraryRoutes(
     async (request, reply) => {
       const track = await database.orm.Track.first({ id: request.params.id });
       if (!track)
-        return sendError(reply, 404, "track_not_found", "Track not found");
+        return sendError(
+          reply,
+          404,
+          "track_not_found",
+          "Track not found",
+          message("api.message.trackNotFound"),
+        );
       const liked = Boolean(
         await database.orm.TrackLike.first({
           userId: request.authenticatedUser!.id,
@@ -92,6 +99,7 @@ export async function registerLibraryRoutes(
           404,
           "track_not_found",
           "Available track not found",
+          message("api.message.trackNotFound"),
         );
       }
       const issued = playbackTokens.issue(track.id);
@@ -112,14 +120,26 @@ export async function registerLibraryRoutes(
       id: request.params.id,
     });
     if (!track?.coverId) {
-      return sendError(reply, 404, "cover_not_found", "Cover not found");
+      return sendError(
+        reply,
+        404,
+        "cover_not_found",
+        "Cover not found",
+        message("api.message.coverNotFound"),
+      );
     }
     const cover = await database.orm.TrackCover.select(
       "data",
       "mimeType",
     ).first({ id: track.coverId });
     if (!cover) {
-      return sendError(reply, 404, "cover_not_found", "Cover not found");
+      return sendError(
+        reply,
+        404,
+        "cover_not_found",
+        "Cover not found",
+        message("api.message.coverNotFound"),
+      );
     }
     const data = Buffer.from(cover.data);
     reply
@@ -155,6 +175,7 @@ export async function registerLibraryRoutes(
         404,
         "track_not_found",
         "Available track not found",
+        message("api.message.trackNotFound"),
       );
     }
 
@@ -168,6 +189,7 @@ export async function registerLibraryRoutes(
         404,
         "track_not_found",
         "Available track not found",
+        message("api.message.trackNotFound"),
       );
     }
     const candidate = path.resolve(libraryRoot, track.relativePath);
@@ -177,6 +199,7 @@ export async function registerLibraryRoutes(
         404,
         "track_not_found",
         "Available track not found",
+        message("api.message.trackNotFound"),
       );
     }
 
@@ -196,6 +219,7 @@ export async function registerLibraryRoutes(
         404,
         "track_not_found",
         "Available track not found",
+        message("api.message.trackNotFound"),
       );
     }
 
@@ -213,6 +237,7 @@ export async function registerLibraryRoutes(
           416,
           "invalid_range",
           "Requested byte range is not satisfiable",
+          message("api.message.invalidRange"),
         );
       }
       const length = range.end - range.start + 1;

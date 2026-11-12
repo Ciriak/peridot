@@ -1,9 +1,11 @@
 import type {
+  MessageDescriptor,
   MetadataCandidateResponse,
   MetadataProviderDefinitionResponse,
   MetadataProviderKind,
   TrackMetadataDetail,
 } from "@peridot/contracts";
+import { message } from "./messages.js";
 
 export interface MetadataTrackInput {
   id: string;
@@ -60,11 +62,16 @@ export interface MetadataResolver {
   sourceUrl(externalTrackId: string, externalReleaseId: string | null): string;
 }
 
+export function metadataProviderName(kind: MetadataProviderKind): string {
+  return kind === "musicbrainz" ? "MusicBrainz" : "Discogs";
+}
+
 export class MetadataResolverError extends Error {
   constructor(
     message: string,
     readonly statusCode = 502,
     readonly retryable = true,
+    readonly messageDescriptor?: MessageDescriptor,
   ) {
     super(message);
     this.name = "MetadataResolverError";
@@ -97,6 +104,7 @@ export class MetadataResolverRegistry {
         `Metadata provider "${kind}" is not supported.`,
         400,
         false,
+        message("api.message.invalidMetadataProvider"),
       );
     }
     return resolver;

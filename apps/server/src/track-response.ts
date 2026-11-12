@@ -18,9 +18,7 @@ export function effectiveTrackFields(track: TrackRow) {
 
 export function albumReleaseYear(track: TrackRow): number | null {
   const detail = parseStoredMetadataDetails(track.metadataDetails).find(
-    (item) =>
-      item.key.trim().toLowerCase() === "year" ||
-      item.label.trim().toLowerCase() === "year",
+    (item) => item.key.trim().toLowerCase() === "year",
   );
   const value = detail?.value.trim() ?? "";
   if (!/^\d{4}$/.test(value)) return null;

@@ -1,20 +1,16 @@
 import type { LikeTarget } from "@peridot/contracts";
+import type { MessageDescriptor } from "@peridot/contracts";
+import { message } from "./messages.ts";
 
 export interface LikeToastContent {
-  title: string;
-  description: string;
+  titleMessage: MessageDescriptor;
+  descriptionMessage: MessageDescriptor;
   status: "success";
   kind: "success";
   duration: number;
 }
 
 export function likeSuccessToast(target: LikeTarget): LikeToastContent {
-  const kind =
-    target.kind === "track"
-      ? "Track"
-      : target.kind === "album"
-        ? "Album"
-        : "Artist";
   const label =
     target.kind === "album"
       ? target.title.trim()
@@ -23,10 +19,16 @@ export function likeSuccessToast(target: LikeTarget): LikeToastContent {
         : "";
 
   return {
-    title: `${kind} liked`,
-    description: label
-      ? `${label} was added to your likes.`
-      : "The track was added to your likes.",
+    titleMessage: message(
+      target.kind === "track"
+        ? "toast.trackLikedTitle"
+        : target.kind === "album"
+          ? "toast.albumLikedTitle"
+          : "toast.artistLikedTitle",
+    ),
+    descriptionMessage: label
+      ? message("toast.likedNamed", { target: label })
+      : message("toast.trackLiked"),
     status: "success",
     kind: "success",
     duration: 5000,

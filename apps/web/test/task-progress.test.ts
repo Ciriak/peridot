@@ -1,13 +1,19 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import type { TaskResponse } from "@peridot/contracts";
 import {
+  TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY,
+  type TaskResponse,
+} from "@peridot/contracts";
+import {
+  activeTaskForMetadataProvider,
+  activeTaskForSource,
   activeTaskPercent,
   orderedActiveTasks,
   overallTaskProgress,
-  taskProgressLabel,
-  taskStatusLabel,
+  sourceTaskProgress,
+  taskProgressMessage,
+  taskStatusMessage,
 } from "../app/lib/task-progress.ts";
 
 function task(overrides: Partial<TaskResponse> = {}): TaskResponse {
@@ -15,12 +21,12 @@ function task(overrides: Partial<TaskResponse> = {}): TaskResponse {
     id: "task-1",
     kind: "library_scan",
     status: "running",
-    title: "Library scan",
+    titleMessage: { key: "task.title.libraryScan" },
     parentTaskId: null,
     source: null,
     progress: { state: "determinate", completed: 8, total: 12 },
     details: [],
-    failureSummary: null,
+    failureMessage: null,
     createdAt: "2026-11-11T10:00:00.000Z",
     startedAt: "2026-11-11T10:00:01.000Z",
     completedAt: null,
@@ -55,6 +61,78 @@ test("active tasks put running work first and queued work in FIFO order", () => 
     ordered.map((item) => item.id),
     ["running", "queued-older", "queued-newer"],
   );
+});
+
+test("active source work prefers the running task for that source", () => {
+  const tasks = [
+    task({
+      id: "queued-source-a",
+      status: "queued",
+      source: { id: "source-a", name: "A" },
+      createdAt: "2026-11-11T10:00:00.000Z",
+    }),
+    task({
+      id: "running-source-b",
+      source: { id: "source-b", name: "B" },
+      createdAt: "2026-11-11T10:02:00.000Z",
+    }),
+    task({
+      id: "running-source-a",
+      source: { id: "source-a", name: "A" },
+      createdAt: "2026-11-11T10:03:00.000Z",
+    }),
+    task({
+      id: "completed-source-a",
+      status: "completed",
+      source: { id: "source-a", name: "A" },
+      createdAt: "2026-11-11T10:04:00.000Z",
+    }),
+  ];
+
+  assert.equal(activeTaskForSource(tasks, "source-a")?.id, "running-source-a");
+  assert.equal(activeTaskForSource(tasks, "source-b")?.id, "running-source-b");
+  assert.equal(activeTaskForSource(tasks, "missing"), null);
+});
+
+test("queued source work renders as indeterminate progress", () => {
+  assert.equal(sourceTaskProgress(task({ status: "queued" })), null);
+  assert.equal(sourceTaskProgress(task()), 66.66666666666666);
+});
+
+test("metadata progress is attached only to the provider being fetched", () => {
+  const providerDetails = [
+    {
+      key: TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY,
+      value: "provider-a",
+      labelMessage: { key: "task.detail.provider" },
+      valueMessage: null,
+    },
+  ];
+  const tasks = [
+    task({
+      id: "metadata-running",
+      kind: "metadata_fetch",
+      details: providerDetails,
+    }),
+    task({
+      id: "metadata-queued",
+      kind: "metadata_fetch",
+      status: "queued",
+      details: providerDetails,
+    }),
+    task({
+      id: "metadata-completed",
+      kind: "metadata_fetch",
+      status: "completed",
+      details: providerDetails,
+    }),
+  ];
+
+  assert.equal(
+    activeTaskForMetadataProvider(tasks, "provider-a")?.id,
+    "metadata-running",
+  );
+  assert.equal(activeTaskForMetadataProvider(tasks, "provider-b"), null);
 });
 
 test("overall progress averages the running percentage with queued tasks at zero", () => {
@@ -106,20 +184,32 @@ test("indeterminate running work makes overall progress indeterminate", () => {
 
 test("task labels distinguish queued, determinate, and indeterminate work", () => {
   assert.equal(
-    taskProgressLabel(task({ status: "queued" })),
-    "Waiting to start",
+    taskProgressMessage(task({ status: "queued" })).key,
+    "settings.tasks.progressWaiting",
   );
-  assert.equal(taskStatusLabel(task({ status: "completed" })), "Completed");
-  assert.equal(taskStatusLabel(task({ status: "failed" })), "Failed");
-  assert.equal(taskStatusLabel(task({ status: "interrupted" })), "Interrupted");
-  assert.equal(taskProgressLabel(task()), "67% (8 of 12)");
   assert.equal(
-    taskProgressLabel(
+    taskStatusMessage(task({ status: "completed" })).key,
+    "settings.tasks.status.completed",
+  );
+  assert.equal(
+    taskStatusMessage(task({ status: "failed" })).key,
+    "settings.tasks.status.failed",
+  );
+  assert.equal(
+    taskStatusMessage(task({ status: "interrupted" })).key,
+    "settings.tasks.status.interrupted",
+  );
+  assert.deepEqual(taskProgressMessage(task()), {
+    key: "settings.tasks.progress",
+    params: { percent: 67, completed: 8, total: 12 },
+  });
+  assert.deepEqual(
+    taskProgressMessage(
       task({
         progress: { state: "indeterminate", completed: null, total: null },
       }),
     ),
-    "In progress",
+    { key: "settings.tasks.progressIndeterminate" },
   );
 });
 
@@ -152,14 +242,14 @@ test("the topbar shares connection loss and exposes task progress to admins", as
   assert.match(indicator, /:icon="icons\.cloudOff"/);
   assert.match(indicator, /text-destructive/);
   assert.match(indicator, /motion-safe:animate-pulse/);
-  assert.match(indicator, /aria-label="Server connection lost"/);
+  assert.match(indicator, /t\('components\.taskProgress\.connectionLost'\)/);
   assert.match(indicator, /<TooltipTrigger as-child>/);
   assert.match(indicator, /<NuxtLink\s+to="\/settings\/tasks"/);
-  assert.match(indicator, /aria-label="Open task activity"/);
+  assert.match(indicator, /t\('components\.taskProgress\.open'\)/);
   assert.match(indicator, /:value="overallProgress"/);
   assert.match(indicator, /overallTaskProgress\(taskRows\.value\)/);
   assert.match(indicator, /orderedActiveTasks\(activeTasks\.value\)/);
-  assert.match(indicator, /taskStatusLabel\(task\)/);
-  assert.match(indicator, /taskProgressLabel\(task\)/);
+  assert.match(indicator, /taskStatusMessage\(task\)/);
+  assert.match(indicator, /taskProgressMessage\(task\)/);
   assert.match(indicator, /max-h-64[\s\S]*?overflow-y-auto/);
 });

@@ -15,7 +15,7 @@ test("server selection prioritizes discovery and reveals manual entry on demand"
   assert.match(source, /import \{ PeridotSpinner \}/);
   assert.match(
     source,
-    /label="Looking for a server on this network"/,
+    /:label="t\('onboarding\.looking'\)"/,
     "The shared spinner announces the active network search",
   );
   assert.doesNotMatch(source, /v-if="discoveryState === 'scanning'"/);
@@ -49,7 +49,7 @@ test("administrator setup collects a display name while sign-in is email-only", 
     "utf8",
   );
 
-  assert.match(source, /<label for="email"[^>]*>Email<\/label>/);
+  assert.match(source, /<label for="email"[\s\S]*?t\("onboarding\.email"\)/);
   assert.match(source, /<Input[\s\S]*?id="email"[\s\S]*?type="email"/);
   assert.match(source, /v-if="requiresAdminUser" class="space-y-2"/);
   assert.match(source, /id="display-name"/);
@@ -64,7 +64,7 @@ test("administrator setup collects a display name while sign-in is email-only", 
     source,
     /id="confirm-password"[\s\S]*?autocomplete="new-password"/,
   );
-  assert.match(source, /Passwords do not match\./);
+  assert.match(source, /t\("onboarding\.passwordsMismatch"\)/);
   assert.match(source, /:disabled="loading \|\| Boolean\(confirmationError\)"/);
   assert.match(
     source,

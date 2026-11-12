@@ -21,6 +21,7 @@ import {
   getTask,
   applyTrackMetadata,
   isAuthenticationRedirectError,
+  PeridotApiError,
   listDirectories,
   listLikes,
   listMetadataCandidates,
@@ -57,12 +58,14 @@ function queuedTask(
     id,
     kind,
     status: "queued",
-    title: source ? `${source.name} scan` : "Library metadata matching",
+    titleMessage: source
+      ? { key: "task.title.sourceScan", params: { source: source.name } }
+      : { key: "task.title.metadataMatch" },
     parentTaskId: null,
     source,
     progress: { state: "indeterminate", completed: null, total: null },
     details: [],
-    failureSummary: null,
+    failureMessage: null,
     createdAt: "2026-11-11T10:00:00.000Z",
     startedAt: null,
     completedAt: null,
@@ -603,7 +606,12 @@ test("sign-in surfaces safe API errors and unreachable servers", async (context)
   });
   globalThis.fetch = async () =>
     Response.json(
-      { error: { code: "invalid_credentials", message: "Incorrect login" } },
+      {
+        error: {
+          code: "invalid_credentials",
+          messageDescriptor: { key: "api.message.invalidCredentials" },
+        },
+      },
       { status: 401 },
     );
   await assert.rejects(
@@ -611,7 +619,10 @@ test("sign-in surfaces safe API errors and unreachable servers", async (context)
       email: "owner@example.com",
       password: "wrong-password",
     }),
-    /Incorrect login/,
+    (reason) =>
+      reason instanceof PeridotApiError &&
+      reason.code === "invalid_credentials" &&
+      reason.messageDescriptor?.key === "api.message.invalidCredentials",
   );
 
   globalThis.fetch = async () => {
@@ -639,7 +650,7 @@ test("authenticated requests route to sign-in or setup without treating sign-in 
       {
         error: {
           code: "unauthorized",
-          message: "Valid user authentication is required",
+          messageDescriptor: { key: "api.message.unauthorized" },
         },
       },
       { status: 401 },
@@ -649,7 +660,8 @@ test("authenticated requests route to sign-in or setup without treating sign-in 
     (reason) =>
       isAuthenticationRedirectError(reason) &&
       reason instanceof Error &&
-      /Valid user authentication is required/.test(reason.message),
+      "messageDescriptor" in reason &&
+      reason.messageDescriptor.key === "api.message.unauthorized",
   );
   assert.deepEqual(redirectReasons, ["login"]);
 
@@ -658,8 +670,7 @@ test("authenticated requests route to sign-in or setup without treating sign-in 
       {
         error: {
           code: "setup_required",
-          message:
-            "Create the first administrator account before using Peridot",
+          messageDescriptor: { key: "api.message.setupRequired" },
         },
       },
       { status: 428 },
@@ -669,7 +680,8 @@ test("authenticated requests route to sign-in or setup without treating sign-in 
     (reason) =>
       isAuthenticationRedirectError(reason) &&
       reason instanceof Error &&
-      /Create the first administrator account/.test(reason.message),
+      "messageDescriptor" in reason &&
+      reason.messageDescriptor.key === "api.message.setupRequired",
   );
   assert.deepEqual(redirectReasons, ["login", "setup"]);
 
@@ -678,7 +690,7 @@ test("authenticated requests route to sign-in or setup without treating sign-in 
       {
         error: {
           code: "unauthorized",
-          message: "Valid user authentication is required",
+          messageDescriptor: { key: "api.message.unauthorized" },
         },
       },
       { status: 401 },
@@ -688,7 +700,9 @@ test("authenticated requests route to sign-in or setup without treating sign-in 
       email: "owner@example.com",
       password: "wrong-password",
     }),
-    /Valid user authentication is required/,
+    (reason) =>
+      reason instanceof PeridotApiError &&
+      reason.messageDescriptor?.key === "api.message.unauthorized",
   );
   assert.deepEqual(redirectReasons, ["login", "setup"]);
 });

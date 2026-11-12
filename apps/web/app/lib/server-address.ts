@@ -1,8 +1,15 @@
+import { localizedError } from "./messages.ts";
+
 export const DEFAULT_SERVER_ADDRESS = "http://127.0.0.1:17430";
 
 export function normalizeServerAddress(value: string): string {
   const trimmed = value.trim();
-  if (!trimmed) throw new Error("Enter the address of your Peridot server.");
+  if (!trimmed) {
+    throw localizedError(
+      "error.serverAddressRequired",
+      "Enter the address of your Peridot server.",
+    );
+  }
   const candidate = /^[a-z][a-z\d+.-]*:\/\//i.test(trimmed)
     ? trimmed
     : `http://${trimmed}`;
@@ -10,13 +17,20 @@ export function normalizeServerAddress(value: string): string {
   try {
     url = new URL(candidate);
   } catch {
-    throw new Error("Enter a valid server address.");
+    throw localizedError(
+      "error.serverAddressInvalid",
+      "Enter a valid server address.",
+    );
   }
   if (!["http:", "https:"].includes(url.protocol) || !url.hostname) {
-    throw new Error("The server address must use HTTP or HTTPS.");
+    throw localizedError(
+      "error.serverAddressScheme",
+      "The server address must use HTTP or HTTPS.",
+    );
   }
   if (url.username || url.password || url.search || url.hash) {
-    throw new Error(
+    throw localizedError(
+      "error.serverAddressCredentials",
       "Use the server address without credentials or parameters.",
     );
   }

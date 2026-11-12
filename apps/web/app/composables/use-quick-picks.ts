@@ -8,11 +8,13 @@ import {
 import { useServer } from "./use-server";
 import { useSession } from "./use-session";
 import { useUser } from "./use-user";
+import { useLocalizedMessage } from "./use-localized-message";
 
 export function useQuickPicks() {
   const { address } = useServer();
   const { token } = useSession();
   const { user } = useUser();
+  const { errorMessage } = useLocalizedMessage();
   const items = useState<QuickPickItemResponse[]>(
     "quick-picks-items",
     () => [],
@@ -46,10 +48,7 @@ export function useQuickPicks() {
       loaded.value = true;
     } catch (reason) {
       if (isAuthenticationRedirectError(reason)) return;
-      error.value =
-        reason instanceof Error
-          ? reason.message
-          : "The server could not load your quick picks.";
+      error.value = errorMessage(reason, "error.quickPicksLoad");
     } finally {
       loading.value = false;
       if (queuedRefresh) {

@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import type { HTMLAttributes } from "vue";
 import type { ProgressCircleVariants } from ".";
+import { useRafFn } from "@vueuse/core";
 import { cn } from "cn";
-import { Comment, computed, useSlots } from "vue";
+import { Comment, computed, onMounted, ref, useSlots, watch } from "vue";
 import { progressCircleVariants } from ".";
 
 interface Props {
   class?: HTMLAttributes["class"];
-  label?: string;
+  label: string;
   showValue?: boolean;
   size?: ProgressCircleVariants["size"];
   stroke?: number;
@@ -43,13 +44,30 @@ const roundedValue = computed(() => Math.round(normalizedValue.value ?? 0));
 const normalizedStroke = computed(() =>
   Number.isFinite(props.stroke) && props.stroke >= 0 ? props.stroke : 6,
 );
-const accessibleLabel = computed(
-  () => props.label ?? (isIndeterminate.value ? "Loading" : "Progress"),
-);
+const accessibleLabel = computed(() => props.label);
 const dashArray = computed(() => (isIndeterminate.value ? "25 75" : "100"));
+const animatedValue = ref(0);
+let canAnimate = false;
+
 const dashOffset = computed(() =>
-  isIndeterminate.value ? 0 : 100 - (normalizedValue.value ?? 0),
+  isIndeterminate.value ? 0 : 100 - animatedValue.value,
 );
+
+watch(normalizedValue, (value) => {
+  if (canAnimate) {
+    animatedValue.value = value ?? 0;
+  }
+});
+
+const { resume: startInitialTransition } = useRafFn(
+  () => {
+    canAnimate = true;
+    animatedValue.value = normalizedValue.value ?? 0;
+  },
+  { immediate: false, once: true },
+);
+
+onMounted(startInitialTransition);
 
 const valueTextClasses = {
   sm: "text-xs",
@@ -79,7 +97,7 @@ const valueTextClass = computed(() => valueTextClasses[props.size ?? "md"]);
       aria-hidden="true"
       viewBox="0 0 36 36"
       :stroke-width="normalizedStroke"
-      class="size-full origin-center -rotate-90 motion-safe:animate-spin motion-safe:transition-all motion-safe:duration-300 motion-reduce:transition-none"
+      class="size-full origin-center -rotate-90 motion-safe:animate-spin"
     >
       <circle
         data-slot="progress-circle-track"
@@ -99,7 +117,7 @@ const valueTextClass = computed(() => valueTextClasses[props.size ?? "md"]);
         stroke-linecap="round"
         :stroke-dasharray="dashArray"
         :stroke-dashoffset="dashOffset"
-        class="fill-none"
+        class="fill-none motion-safe:transition-all motion-safe:duration-300 motion-reduce:transition-none"
       />
     </svg>
     <span

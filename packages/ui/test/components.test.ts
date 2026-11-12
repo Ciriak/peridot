@@ -97,14 +97,19 @@ test("PeridotSpinner uses the animated brand asset with an accessible reduced-mo
   assert.match(html, />Scanning for servers<\/span>/);
 });
 test("Spinner uses the classic shadcn animated loader icon", async () => {
-  const html = await render("Spinner", { class: "size-6" }, "", "spinner");
+  const html = await render(
+    "Spinner",
+    { class: "size-6", label: "Loading search results" },
+    "",
+    "spinner",
+  );
   assert.match(html, /<svg/);
   assert.match(html, /role="status"/);
-  assert.match(html, /aria-label="Loading"/);
+  assert.match(html, /aria-label="Loading search results"/);
   assert.match(html, /class="[^"]*size-6/);
   assert.match(html, /animate-spin/);
 });
-test("ProgressCircle renders determinate progress with semantic styles and accessibility", async () => {
+test("ProgressCircle starts its first rendered arc at zero while exposing current progress", async () => {
   const html = await render(
     "ProgressCircle",
     {
@@ -129,12 +134,19 @@ test("ProgressCircle renders determinate progress with semantic styles and acces
   assert.match(html, /aria-valuenow="42\.4"/);
   assert.match(html, /aria-valuetext="42%"/);
   assert.match(html, /stroke-dasharray="100"/);
-  assert.match(html, /stroke-dashoffset="57\.6"/);
+  assert.match(html, /stroke-dashoffset="100"/);
   assert.match(html, /stroke-width="6"/);
   assert.match(html, /class="[^"]*size-16/);
   assert.match(html, /class="[^"]*stroke-success/);
   assert.match(html, /class="[^"]*custom-progress/);
   assert.match(html, /motion-safe:animate-spin/);
+  const indicator =
+    html.match(
+      /<circle[^>]*data-slot="progress-circle-indicator"[^>]*>/,
+    )?.[0] ?? "";
+  assert.match(indicator, /motion-safe:transition-all/);
+  assert.match(indicator, /motion-safe:duration-300/);
+  assert.match(indicator, /motion-reduce:transition-none/);
   assert.match(html, /42%<!--\]-->/);
 });
 test("ProgressCircle accepts a configurable stroke width", async () => {
@@ -165,7 +177,7 @@ test("ProgressCircle clamps finite values and treats zero as determinate", async
     "progress-circle",
   );
   assert.match(aboveRange, /aria-valuenow="100"/);
-  assert.match(aboveRange, /stroke-dashoffset="0"/);
+  assert.match(aboveRange, /stroke-dashoffset="100"/);
 
   const belowRange = await render(
     "ProgressCircle",
@@ -180,12 +192,12 @@ test("ProgressCircle renders an indeterminate reduced-motion-safe spinner", asyn
   for (const value of [undefined, null, Number.NaN, Number.POSITIVE_INFINITY]) {
     const html = await render(
       "ProgressCircle",
-      { value, showValue: true },
+      { label: "Loading task progress", value, showValue: true },
       undefined,
       "progress-circle",
     );
     assert.match(html, /data-state="indeterminate"/);
-    assert.match(html, /aria-label="Loading"/);
+    assert.match(html, /aria-label="Loading task progress"/);
     assert.doesNotMatch(html, /aria-valuenow/);
     assert.doesNotMatch(html, /aria-valuetext/);
     assert.match(html, /stroke-dasharray="25 75"/);

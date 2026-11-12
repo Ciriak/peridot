@@ -2,6 +2,168 @@
 
 Last updated: 2026-11-12.
 
+## Immediate player cover updates
+
+The persistent player now replaces both its foreground cover and blurred
+background cover as soon as the resolved cover URL changes. Both image elements
+are keyed by that URL, and the previous 150 ms delay plus three-second crossfade
+has been removed. This prevents the outgoing artwork from visually lingering
+after a track change. The existing placeholder, cover-background gradients, and
+responsive sizing are unchanged.
+
+The player regression test now requires both cover layers to be URL-keyed and
+rejects the delayed transition utilities. Browser visual QA remains pending.
+All changes remain uncommitted on `dev` with the existing localization, catalog,
+realtime, and account work preserved; no commit, push, tag, publication, or
+deployment was performed.
+
+Checks run:
+
+- `pnpm --filter @peridot/web test` (136 passing)
+- `pnpm --filter @peridot/web typecheck`
+- Targeted ESLint and Prettier checks for the player and tests
+- `pnpm --filter @peridot/web build` (passed with the existing non-fatal
+  Rolldown `PLUGIN_TIMINGS` warning)
+- `git diff --check`
+
+Server tests and schema validation were skipped because this change only
+affects web player presentation. Browser visual QA remains pending: switch
+between tracks with distinct artwork and verify that both the square cover and
+blurred background change on the same render.
+
+## Main-frame track-list scrolling
+
+Restored page-flow scrolling for the shared track table. Loaded track pages now
+render in the main content region without a table-level maximum height or
+independent vertical scrollbar. The load-more intersection sentinel and visible
+button still request the next bounded server page.
+
+The library regression test now rejects virtualization container props and
+table-level `overflow`/maximum-height utilities, and verifies that
+`#main-content` remains the vertical scroll owner. This was a correction to the
+earlier virtual-list implementation, which violated the recorded decision that
+track tables must not create a second scrollbar beside the main screen.
+
+Checks run:
+
+- `pnpm --filter @peridot/web test`
+- Web typecheck
+- Targeted ESLint and Prettier checks for the component and tests
+- Production web build
+- `git diff --check`
+
+Known limits: browser visual QA was not run. All changes remain uncommitted on
+`dev` with the existing localization and catalog work; no commit, push, tag,
+publication, or deployment was performed. Next: visually confirm one full-page
+scrollbar at desktop and mobile widths and verify automatic and button-based
+loading of the next track page.
+
+## Per-item task progress
+
+Each library source row now shows the shared `ProgressCircle` while an active
+task belongs to that source. Running work supplies the determinate progress
+value; queued work renders the indeterminate ring. If more than one active task
+belongs to a source, the running task takes precedence, and other sources'
+tasks do not add a spinner to the row. The indicator uses the source's localized
+accessible label and existing semantic theme and standard Tailwind sizing.
+
+Metadata provider rows use the same progress ring while that provider is being
+queried. Metadata matching adds a bounded active-provider ID to task progress
+before each provider request and clears it when the request finishes. The page
+matches that ID to only the affected provider row, while the general Tasks view
+keeps the technical detail hidden. This avoids implying that every enabled
+provider is active during a fallback sequence.
+
+Behavioral coverage asserts source-specific active-task selection, running-over-
+queued priority, metadata-provider attribution before and after a blocked
+provider request, and the settings progress bindings.
+
+Checks run:
+
+- `pnpm --filter @peridot/server test` (90 passing)
+- `pnpm --filter @peridot/web test` (136 passing)
+- `pnpm --filter @peridot/contracts build`
+- Targeted ESLint and Prettier checks for the changed TypeScript, Vue, locale,
+  and test files
+- `pnpm typecheck`
+- `pnpm build` (completed with the existing non-fatal Rolldown
+  `PLUGIN_TIMINGS` warning)
+
+Known limits: browser visual QA was not run. All changes remain uncommitted on
+`dev` alongside the existing localization, catalog, realtime, and account work;
+no commit, push, tag, publication, or deployment was performed. Next: open
+Settings → Admin → Sources and Metadata while scans and provider fallbacks are
+active, then verify determinate progress, the queued source state, provider
+handoff, and reduced-motion behavior at desktop and mobile widths.
+
+## Smooth progress-circle value transitions
+
+The shared `ProgressCircle` now applies its 300 ms motion-safe transition to the
+determinate indicator arc. Previously the transition utility was on the parent
+SVG, which rotates continuously but does not animate its child's
+`stroke-dashoffset`, so task-progress updates changed abruptly. The visual arc
+now renders at zero first, applies the current value on the next animation frame
+after mount, and resets to zero whenever progress becomes indeterminate. A newly
+shown task spinner therefore fills from empty instead of appearing at its
+current percentage. The accessible and displayed percentage values remain
+immediate, while reduced motion disables both the value transition and rotation.
+
+Focused shared UI coverage asserts that the transition and reduced-motion
+utilities render on the progress indicator rather than its parent, and that the
+first server-rendered determinate arc remains at zero while accessibility
+exposes the actual value. This change preserves the existing component API and
+all uncommitted localization, catalog, realtime, and account work.
+
+Checks run:
+
+- `pnpm --filter @peridot/ui test` (13 passing)
+- Focused Prettier and ESLint checks for the component and its test
+- `pnpm typecheck`
+- `pnpm build` (passed with the existing non-fatal Rolldown
+  `PLUGIN_TIMINGS` warning)
+- `git diff --check`
+
+Known limits: browser visual QA was not run; the continuous task-progress
+indicator should receive a final live visual check. All changes remain
+uncommitted on `dev`; no commit, push, tag, publication, or deployment was
+performed. Next: verify the topbar task ring while live progress values update
+with normal and reduced-motion preferences.
+
+## en-US localization across the runtime
+
+Added Nuxt I18n with a fixed `en-US` runtime locale, unprefixed routes, disabled
+browser locale detection, explicit `<html lang="en-US">`, and no language
+selector or persisted preference. All web runtime copy, metadata, page titles,
+loading/empty/error states, notifications, and accessibility labels now resolve
+through `apps/web/i18n/locales/en-US.json`. Dates use named Vue I18n formats,
+and plural counts use locale resources.
+
+API errors, task titles/details/failures, provider definitions, provider details,
+and realtime errors now return structured `MessageDescriptor` values. The
+pre-release contracts no longer include duplicate English fallback properties.
+Task title and failure descriptors are stored in nullable task columns; old
+development task shapes are intentionally unsupported and require a local
+database update or reset. Shared UI spinners and progress indicators now require
+caller-supplied accessible labels instead of embedding English defaults.
+
+Behavioral coverage verifies the fixed locale/configuration, interpolation,
+plurals, all referenced message keys, date formats, task descriptor responses,
+typed client errors, toast descriptors, and updated UI accessibility labels.
+
+Checks run: `pnpm --filter @peridot/web test` (133 passing),
+`pnpm --filter @peridot/server test` (88 passing),
+`pnpm --filter @peridot/ui test` (13 passing),
+`pnpm install --frozen-lockfile`, `pnpm check`, `pnpm typecheck`, `pnpm test`,
+`pnpm db:validate`, `pnpm build`, and `git diff --check`. The built web server
+smoke-tested `/onboarding` with HTTP 200, `lang="en-US"`, localized page copy,
+and no locale-prefixed links; `/` continued redirecting to
+`/onboarding?redirect=/`. Development browser visual QA was not run.
+
+Changes remain uncommitted on `dev`; no commit, push, tag, publication, or
+deployment was performed. Next: visually review en-US typography and wrapping
+across desktop/mobile layouts, then add another locale resource when translation
+content is available.
+
 ## Administrator user management
 
 Administrators now have a `User Management` category under Settings → Admin.

@@ -28,13 +28,13 @@ test("search uses one full-content route with recent and local results", async (
   assert.match(searchPage, /useCatalogAlbumQuery/);
   assert.match(searchPage, /useCatalogTrackQuery/);
   assert.match(searchPage, /query: searchTerm\.value/);
-  assert.match(searchPage, /Recently searched/);
+  assert.match(searchPage, /page\.search\.recent/);
   assert.match(searchPage, /useSearchRecents\(\)/);
   assert.match(searchPage, /@open="openAlbum\(album\)"/);
   assert.match(searchPage, /:album="album"\s+compact/);
   assert.match(searchPage, /<TrackTable/);
-  assert.match(searchPage, /External sources/);
-  assert.match(searchPage, /External sources are not connected yet/);
+  assert.match(searchPage, /page\.search\.externalSources/);
+  assert.match(searchPage, /page\.search\.externalTitle/);
   assert.match(albumCard, /defineEmits<\{ open: \[\] \}>/);
 });
 
@@ -44,13 +44,19 @@ test("result-type tags are accessible quick filters", async () => {
     "utf8",
   );
 
-  assert.match(searchPage, /Quick filters/);
+  assert.match(searchPage, /page\.search\.filters/);
   assert.match(searchPage, /role="group"/);
-  assert.match(searchPage, /aria-label="Quick filters"/);
+  assert.match(searchPage, /:aria-label="t\('page\.search\.filters'\)"/);
   assert.match(searchPage, /aria-pressed="resultFilter === filter\.value"/);
-  assert.match(searchPage, /\{ value: "all", label: "All" \}/);
-  assert.match(searchPage, /\{ value: "albums", label: "Albums" \}/);
-  assert.match(searchPage, /\{ value: "tracks", label: "Tracks" \}/);
+  assert.match(searchPage, /\{ value: "all", labelKey: "page\.search\.all" \}/);
+  assert.match(
+    searchPage,
+    /\{ value: "albums", labelKey: "page\.search\.albums" \}/,
+  );
+  assert.match(
+    searchPage,
+    /\{ value: "tracks", labelKey: "page\.search\.tracks" \}/,
+  );
   assert.match(searchPage, /resultFilter\.value !== "tracks"/);
   assert.match(searchPage, /resultFilter\.value !== "albums"/);
 });

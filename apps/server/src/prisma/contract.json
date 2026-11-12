@@ -1388,6 +1388,13 @@
                   "kind": "scalar"
                 }
               },
+              "failureMessage": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
               "failureSummary": {
                 "nullable": true,
                 "type": {
@@ -1472,6 +1479,13 @@
                   "kind": "scalar"
                 }
               },
+              "titleMessage": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
               "updatedAt": {
                 "nullable": false,
                 "type": {
@@ -1491,6 +1505,9 @@
                 },
                 "details": {
                   "column": "details"
+                },
+                "failureMessage": {
+                  "column": "failureMessage"
                 },
                 "failureSummary": {
                   "column": "failureSummary"
@@ -1527,6 +1544,9 @@
                 },
                 "title": {
                   "column": "title"
+                },
+                "titleMessage": {
+                  "column": "titleMessage"
                 },
                 "updatedAt": {
                   "column": "updatedAt"
@@ -3470,6 +3490,11 @@
                   },
                   "nullable": false
                 },
+                "failureMessage": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
                 "failureSummary": {
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
@@ -3533,6 +3558,11 @@
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
                   "nullable": false
+                },
+                "titleMessage": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
                 },
                 "updatedAt": {
                   "codecId": "sqlite/datetime@1",
@@ -4178,7 +4208,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "59eec150ce3bdbe97a43c3778ceb69f533094ec19bd310f5ed5cd98c405aa5a4"
+    "storageHash": "2a4f0c3ca93b45757b7ced2f0620e5e0986015766abd44ff77c62a405a37a41d"
   },
   "execution": {
     "executionHash": "5f4f0b1abd901c278bc6dbaa0c73b5748292f9229ce79b1879fc9568c54bbc1d",

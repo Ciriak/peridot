@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, definePageMeta, onMounted, ref } from "#imports";
+import { computed, definePageMeta, onMounted, ref, useI18n } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import logo from "@peridot/ui/assets/brand/logo.svg";
 import type {
@@ -31,10 +31,11 @@ import {
 import { useServer } from "../../composables/use-server";
 import { useSession } from "../../composables/use-session";
 import { useUser } from "../../composables/use-user";
+import { useLocalizedMessage } from "../../composables/use-localized-message";
 import { icons } from "../../lib/icons";
 import { gravatarUrl } from "../../lib/gravatar";
 import {
-  managedPasswordConfirmationError,
+  managedPasswordConfirmationMismatch,
   managedPasswordPairValid,
 } from "../../lib/user-management";
 import {
@@ -47,6 +48,8 @@ import {
 
 definePageMeta({ layout: "settings" });
 
+const { t } = useI18n();
+const { errorMessage } = useLocalizedMessage();
 const { address } = useServer();
 const { token } = useSession();
 const { user } = useUser();
@@ -84,8 +87,8 @@ const passwordPairValid = computed(() =>
     passwordRequired.value,
   ),
 );
-const passwordConfirmationError = computed(() =>
-  managedPasswordConfirmationError(
+const passwordConfirmationMismatch = computed(() =>
+  managedPasswordConfirmationMismatch(
     formPassword.value,
     formPasswordConfirmation.value,
   ),
@@ -99,7 +102,7 @@ const formValid = computed(
 );
 
 function roleLabel(role: UserRole): string {
-  return role === "admin" ? "Administrator" : "User";
+  return role === "admin" ? t("common.administrator") : t("common.user");
 }
 
 function avatarKey(account: UserResponse): string {
@@ -167,10 +170,7 @@ async function loadUsers() {
     users.value = result.items;
   } catch (reason) {
     if (isAuthenticationRedirectError(reason)) return;
-    pageError.value =
-      reason instanceof Error
-        ? reason.message
-        : "Could not load user accounts.";
+    pageError.value = errorMessage(reason, "settings.users.loadError");
   } finally {
     loading.value = false;
   }
@@ -195,7 +195,9 @@ async function saveAccount() {
         token.value ?? "",
         account,
       );
-      pageNotice.value = `Created ${saved.displayName}.`;
+      pageNotice.value = t("settings.users.created", {
+        name: saved.displayName,
+      });
     } else if (editingUser.value) {
       const update: UpdateUserRequest = {
         email: formEmail.value,
@@ -210,7 +212,9 @@ async function saveAccount() {
         update,
       );
       if (saved.id === user.value?.id) user.value = saved;
-      pageNotice.value = `Updated ${saved.displayName}.`;
+      pageNotice.value = t("settings.users.updated", {
+        name: saved.displayName,
+      });
     } else {
       return;
     }
@@ -218,10 +222,7 @@ async function saveAccount() {
     await loadUsers();
   } catch (reason) {
     if (isAuthenticationRedirectError(reason)) return;
-    formError.value =
-      reason instanceof Error
-        ? reason.message
-        : "Peridot could not save this account.";
+    formError.value = errorMessage(reason, "settings.users.saveError");
   } finally {
     saving.value = false;
   }
@@ -247,14 +248,11 @@ async function confirmDelete() {
       pendingDelete.value.id,
     );
     pendingDelete.value = null;
-    pageNotice.value = `Deleted ${displayName}.`;
+    pageNotice.value = t("settings.users.deleted", { name: displayName });
     await loadUsers();
   } catch (reason) {
     if (isAuthenticationRedirectError(reason)) return;
-    pageError.value =
-      reason instanceof Error
-        ? reason.message
-        : "Peridot could not delete this account.";
+    pageError.value = errorMessage(reason, "settings.users.deleteError");
   } finally {
     deleting.value = false;
   }
@@ -265,9 +263,11 @@ onMounted(() => void loadUsers());
 
 <template>
   <div class="space-y-2">
-    <h2 class="text-2xl font-semibold tracking-tight">User Management</h2>
+    <h2 class="text-2xl font-semibold tracking-tight">
+      {{ t("settings.users.title") }}
+    </h2>
     <p class="text-sm text-muted-foreground">
-      Create accounts and control who can administer this Peridot server.
+      {{ t("settings.users.description") }}
     </p>
   </div>
 
@@ -276,20 +276,20 @@ onMounted(() => void loadUsers());
     role="alert"
     class="rounded-lg border bg-card p-6 text-sm text-card-foreground"
   >
-    Administrator access is required to manage user accounts.
+    {{ t("settings.users.adminRequired") }}
   </section>
 
   <section v-else aria-labelledby="user-accounts-heading" class="space-y-4">
     <div class="flex items-center justify-between gap-4">
       <div class="flex items-center gap-2">
         <h3 id="user-accounts-heading" class="text-lg font-semibold">
-          User accounts
+          {{ t("settings.users.accounts") }}
         </h3>
         <Badge variant="outline">{{ users.length }}</Badge>
       </div>
       <Button type="button" size="sm" @click="openCreateDialog">
         <Icon :icon="icons.userPlus" aria-hidden="true" class="size-4" />
-        Add account
+        {{ t("settings.users.add") }}
       </Button>
     </div>
 
@@ -306,8 +306,8 @@ onMounted(() => void loadUsers());
         role="status"
         class="flex items-center gap-2 p-6 text-sm text-muted-foreground"
       >
-        <PeridotSpinner class="size-5" />
-        Loading user accounts…
+        <PeridotSpinner :label="t('settings.users.loading')" class="size-5" />
+        {{ t("settings.users.loading") }}
       </div>
       <ul v-else-if="users.length" class="divide-y">
         <li
@@ -330,7 +330,7 @@ onMounted(() => void loadUsers());
                 {{ roleLabel(account.role) }}
               </Badge>
               <Badge v-if="account.id === user?.id" variant="outline">
-                You
+                {{ t("common.you") }}
               </Badge>
             </div>
             <p class="truncate text-sm text-muted-foreground">
@@ -342,7 +342,9 @@ onMounted(() => void loadUsers());
               type="button"
               variant="ghost"
               size="icon-sm"
-              :aria-label="`Edit ${account.displayName}`"
+              :aria-label="
+                t('settings.users.edit', { name: account.displayName })
+              "
               @click="openEditDialog(account)"
             >
               <Icon :icon="icons.edit" aria-hidden="true" class="size-4" />
@@ -353,10 +355,12 @@ onMounted(() => void loadUsers());
               size="icon-sm"
               class="text-destructive"
               :disabled="account.id === user?.id"
-              :aria-label="`Delete ${account.displayName}`"
+              :aria-label="
+                t('settings.users.delete', { name: account.displayName })
+              "
               :title="
                 account.id === user?.id
-                  ? 'You cannot delete your own account'
+                  ? t('settings.users.cannotDeleteSelf')
                   : undefined
               "
               @click="requestDelete(account)"
@@ -367,7 +371,7 @@ onMounted(() => void loadUsers());
         </li>
       </ul>
       <p v-else class="p-6 text-sm text-muted-foreground">
-        No user accounts found.
+        {{ t("settings.users.empty") }}
       </p>
     </div>
   </section>
@@ -381,20 +385,26 @@ onMounted(() => void loadUsers());
         <form class="space-y-5" @submit.prevent="saveAccount">
           <div class="space-y-1">
             <DialogTitle class="text-lg font-semibold">
-              {{ dialogMode === "create" ? "Add account" : "Edit account" }}
+              {{
+                dialogMode === "create"
+                  ? t("settings.users.addTitle")
+                  : t("settings.users.editTitle")
+              }}
             </DialogTitle>
             <DialogDescription class="text-sm text-muted-foreground">
               {{
                 dialogMode === "create"
-                  ? "Create a user or another administrator account."
-                  : `Update ${editingUser?.displayName ?? "this account"}.`
+                  ? t("settings.users.addDescription")
+                  : t("settings.users.editDescription", {
+                      name: editingUser?.displayName ?? "",
+                    })
               }}
             </DialogDescription>
           </div>
 
           <div class="space-y-2">
             <label for="managed-user-email" class="text-sm font-medium">
-              Email
+              {{ t("settings.account.email") }}
             </label>
             <Input
               id="managed-user-email"
@@ -408,7 +418,7 @@ onMounted(() => void loadUsers());
 
           <div class="space-y-2">
             <label for="managed-user-display-name" class="text-sm font-medium">
-              Display name
+              {{ t("settings.users.displayName") }}
             </label>
             <Input
               id="managed-user-display-name"
@@ -419,12 +429,14 @@ onMounted(() => void loadUsers());
               maxlength="80"
             />
             <p class="text-xs text-muted-foreground">
-              Use 2–80 characters. Display names are unique across this server.
+              {{ t("settings.users.displayNameHelp") }}
             </p>
           </div>
 
           <fieldset class="space-y-2">
-            <legend class="text-sm font-medium">Account type</legend>
+            <legend class="text-sm font-medium">
+              {{ t("settings.users.accountType") }}
+            </legend>
             <div v-if="!editingSelf" class="flex flex-wrap gap-2">
               <Button
                 type="button"
@@ -432,7 +444,7 @@ onMounted(() => void loadUsers());
                 :aria-pressed="formRole === 'member'"
                 @click="setRole('member')"
               >
-                User
+                {{ t("common.user") }}
               </Button>
               <Button
                 type="button"
@@ -440,17 +452,21 @@ onMounted(() => void loadUsers());
                 :aria-pressed="formRole === 'admin'"
                 @click="setRole('admin')"
               >
-                Administrator
+                {{ t("common.administrator") }}
               </Button>
             </div>
             <p v-else class="text-xs text-muted-foreground">
-              Your own administrator role cannot be changed here.
+              {{ t("settings.users.ownRole") }}
             </p>
           </fieldset>
 
           <div class="space-y-2">
             <label for="managed-user-password" class="text-sm font-medium">
-              {{ dialogMode === "create" ? "Password" : "New password" }}
+              {{
+                dialogMode === "create"
+                  ? t("settings.users.password")
+                  : t("settings.users.newPassword")
+              }}
             </label>
             <Input
               id="managed-user-password"
@@ -464,8 +480,8 @@ onMounted(() => void loadUsers());
             <p class="text-xs text-muted-foreground">
               {{
                 dialogMode === "create"
-                  ? "Use at least 12 characters."
-                  : "Leave blank to keep the current password. Otherwise, use at least 12 characters."
+                  ? t("settings.users.passwordHelp")
+                  : t("settings.users.passwordEditHelp")
               }}
             </p>
           </div>
@@ -475,7 +491,7 @@ onMounted(() => void loadUsers());
               for="managed-user-password-confirmation"
               class="text-sm font-medium"
             >
-              Confirm password
+              {{ t("settings.users.confirmPassword") }}
             </label>
             <Input
               id="managed-user-password-confirmation"
@@ -485,23 +501,23 @@ onMounted(() => void loadUsers());
               required
               minlength="12"
               maxlength="256"
-              :aria-invalid="Boolean(passwordConfirmationError)"
+              :aria-invalid="passwordConfirmationMismatch"
               :aria-describedby="
-                passwordConfirmationError
+                passwordConfirmationMismatch
                   ? 'managed-user-password-error'
                   : undefined
               "
             />
             <p
-              v-if="passwordConfirmationError"
+              v-if="passwordConfirmationMismatch"
               id="managed-user-password-error"
               role="alert"
               class="text-sm text-destructive"
             >
-              {{ passwordConfirmationError }}
+              {{ t("onboarding.passwordsMismatch") }}
             </p>
             <p v-else class="text-xs text-muted-foreground">
-              Enter the same password again.
+              {{ t("settings.users.confirmPasswordHelp") }}
             </p>
           </div>
 
@@ -516,7 +532,7 @@ onMounted(() => void loadUsers());
               :disabled="saving"
               @click="closeUserDialog"
             >
-              Cancel
+              {{ t("common.cancel") }}
             </Button>
             <Button
               type="submit"
@@ -525,10 +541,10 @@ onMounted(() => void loadUsers());
             >
               {{
                 saving
-                  ? "Saving…"
+                  ? t("common.saving")
                   : dialogMode === "create"
-                    ? "Create account"
-                    : "Save changes"
+                    ? t("common.createAccount")
+                    : t("common.saveChanges")
               }}
             </Button>
           </div>
@@ -544,16 +560,19 @@ onMounted(() => void loadUsers());
         class="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-card p-6 text-card-foreground shadow-lg"
       >
         <AlertDialogTitle class="text-lg font-semibold">
-          Delete {{ pendingDelete?.displayName }}?
+          {{
+            t("settings.users.deleteTitle", {
+              name: pendingDelete?.displayName ?? "",
+            })
+          }}
         </AlertDialogTitle>
         <AlertDialogDescription class="text-sm text-muted-foreground">
-          This permanently deletes the account and its sessions, likes, queue,
-          and playback history. Their audio library is not changed.
+          {{ t("settings.users.deleteDescription") }}
         </AlertDialogDescription>
         <div class="mt-6 flex justify-end gap-3">
           <AlertDialogCancel as-child>
             <Button type="button" variant="outline" :disabled="deleting">
-              Cancel
+              {{ t("common.cancel") }}
             </Button>
           </AlertDialogCancel>
           <AlertDialogAction as-child @click="confirmDelete">
@@ -563,7 +582,7 @@ onMounted(() => void loadUsers());
               :disabled="deleting"
               :aria-busy="deleting"
             >
-              {{ deleting ? "Deleting…" : "Delete account" }}
+              {{ deleting ? t("common.deleting") : t("common.deleteAccount") }}
             </Button>
           </AlertDialogAction>
         </div>

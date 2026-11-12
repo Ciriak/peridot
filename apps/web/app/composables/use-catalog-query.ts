@@ -15,6 +15,7 @@ import {
 } from "../lib/peridot-client";
 import { useServer } from "./use-server";
 import { useSession } from "./use-session";
+import { useLocalizedMessage } from "./use-localized-message";
 
 export function useCatalogRevision() {
   const revision = useState("catalog-revision", () => 0);
@@ -47,13 +48,6 @@ export function useCatalogRevision() {
   };
 }
 
-function errorMessage(reason: unknown): string | null {
-  if (isAuthenticationRedirectError(reason)) return null;
-  return reason instanceof Error
-    ? reason.message
-    : "The server could not load this catalog view.";
-}
-
 function stableOptions(options: object): string {
   return JSON.stringify(options);
 }
@@ -63,6 +57,11 @@ export function useCatalogTrackQuery(
 ) {
   const { address } = useServer();
   const { token } = useSession();
+  const { errorMessage } = useLocalizedMessage();
+  const catalogError = (reason: unknown) =>
+    isAuthenticationRedirectError(reason)
+      ? null
+      : errorMessage(reason, "error.catalogLoad");
   const { revision, resyncVersion, applyRevision } = useCatalogRevision();
   const tracks = ref<TrackResponse[]>([]);
   const loading = ref(false);
@@ -102,7 +101,7 @@ export function useCatalogTrackQuery(
       loaded.value = true;
     } catch (reason) {
       if (request !== requestVersion || requestedScope !== scope()) return;
-      error.value = errorMessage(reason);
+      error.value = catalogError(reason);
     } finally {
       if (request === requestVersion) loading.value = false;
     }
@@ -140,7 +139,7 @@ export function useCatalogTrackQuery(
       loaded.value = true;
     } catch (reason) {
       if (request !== requestVersion || requestedScope !== scope()) return;
-      error.value = errorMessage(reason);
+      error.value = catalogError(reason);
     } finally {
       if (request === requestVersion) loadingMore.value = false;
     }
@@ -188,6 +187,11 @@ function useCatalogCardQuery<T>(
 ) {
   const { address } = useServer();
   const { token } = useSession();
+  const { errorMessage } = useLocalizedMessage();
+  const catalogError = (reason: unknown) =>
+    isAuthenticationRedirectError(reason)
+      ? null
+      : errorMessage(reason, "error.catalogLoad");
   const { revision, resyncVersion, applyRevision } = useCatalogRevision();
   const items = shallowRef<T[]>([]);
   const loading = ref(false);
@@ -227,7 +231,7 @@ function useCatalogCardQuery<T>(
       loaded.value = true;
     } catch (reason) {
       if (request !== requestVersion || requestedScope !== scope()) return;
-      error.value = errorMessage(reason);
+      error.value = catalogError(reason);
     } finally {
       if (request === requestVersion) loading.value = false;
     }
@@ -264,7 +268,7 @@ function useCatalogCardQuery<T>(
       nextCursor.value = result.nextCursor;
     } catch (reason) {
       if (request !== requestVersion || requestedScope !== scope()) return;
-      error.value = errorMessage(reason);
+      error.value = catalogError(reason);
     } finally {
       if (request === requestVersion) loadingMore.value = false;
     }

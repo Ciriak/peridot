@@ -1,8 +1,11 @@
+import type { MessageDescriptor } from "@peridot/contracts";
+import { message } from "./messages.ts";
+
 export type SourceMutation = "added" | "removed";
 
 export interface SourceToastContent {
-  title: string;
-  description: string;
+  titleMessage: MessageDescriptor;
+  descriptionMessage: MessageDescriptor;
   status: "success";
   kind: "success";
   duration: number;
@@ -16,10 +19,10 @@ export function sourceMutationToast(
 
   if (action === "added") {
     return {
-      title: "Source added",
-      description: label
-        ? `${label} is now available to the library.`
-        : "The source is now available to the library.",
+      titleMessage: message("toast.sourceAddedTitle"),
+      descriptionMessage: label
+        ? message("toast.sourceAdded", { source: label })
+        : message("toast.sourceAddedGeneric"),
       status: "success",
       kind: "success",
       duration: 5000,
@@ -27,10 +30,10 @@ export function sourceMutationToast(
   }
 
   return {
-    title: "Source removed",
-    description: label
-      ? `${label} was removed from the library sources.`
-      : "The source was removed from the library sources.",
+    titleMessage: message("toast.sourceRemovedTitle"),
+    descriptionMessage: label
+      ? message("toast.sourceRemoved", { source: label })
+      : message("toast.sourceRemovedGeneric"),
     status: "success",
     kind: "success",
     duration: 5000,

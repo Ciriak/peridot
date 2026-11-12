@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "#imports";
 import type { AlbumSummaryResponse, LikeTarget } from "@peridot/contracts";
 import { Icon } from "@iconify/vue/offline";
 import {
@@ -21,6 +22,7 @@ import { useSession } from "../composables/use-session";
 const props = defineProps<{
   album: AlbumSummaryResponse;
 }>();
+const { t } = useI18n();
 const { address } = useServer();
 const { token } = useSession();
 const { playCollection } = useLibraryPlayer();
@@ -58,7 +60,7 @@ async function playAlbum() {
       <ContextMenuSeparator />
       <ContextMenuItem :disabled="!album.trackCount" @select="playAlbum">
         <Icon :icon="icons.play" aria-hidden="true" />
-        Play album
+        {{ t("context.playAlbum") }}
       </ContextMenuItem>
       <ContextMenuItem
         :disabled="!likesLoaded || isLikePending(target)"
@@ -68,12 +70,16 @@ async function playAlbum() {
           :icon="isTargetLiked(target) ? icons.heartFilled : icons.heart"
           aria-hidden="true"
         />
-        {{ isTargetLiked(target) ? "Unlike album" : "Like album" }}
+        {{
+          isTargetLiked(target)
+            ? t("context.unlikeAlbum")
+            : t("context.likeAlbum")
+        }}
       </ContextMenuItem>
       <ContextMenuItem as-child>
         <NuxtLink :to="albumRoute(album)">
           <Icon :icon="icons.music" aria-hidden="true" />
-          Open album
+          {{ t("context.openAlbum") }}
         </NuxtLink>
       </ContextMenuItem>
     </ContextMenuContent>

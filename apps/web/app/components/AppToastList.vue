@@ -11,16 +11,26 @@ import {
   useToastManager,
 } from "reka-ui";
 import { computed } from "vue";
+import { useLocalizedMessage } from "../composables/use-localized-message";
 import { icons } from "../lib/icons";
 import { toastViewportClass } from "../lib/toast-position";
 import type { AppToastData, AppToastKind } from "../lib/toasts";
 
 const route = useRoute();
+const { t, translate } = useLocalizedMessage();
 const viewportClass = computed(() => toastViewportClass(route.meta.layout));
 const { toasts } = useToastManager<AppToastData>();
 
 function iconFor(kind: AppToastKind | undefined) {
   return kind === "error" ? icons.cloudOff : icons.check;
+}
+
+function titleFor(toast: (typeof toasts.value)[number]) {
+  return translate(toast.data?.titleMessage);
+}
+
+function descriptionFor(toast: (typeof toasts.value)[number]) {
+  return translate(toast.data?.descriptionMessage);
 }
 </script>
 
@@ -52,15 +62,19 @@ function iconFor(kind: AppToastKind | undefined) {
             'text-sm font-semibold',
             toast.data?.kind === 'error' && 'text-destructive',
           ]"
-        />
-        <ToastDescription class="text-sm text-muted-foreground" />
+        >
+          {{ titleFor(toast) }}
+        </ToastTitle>
+        <ToastDescription class="text-sm text-muted-foreground">
+          {{ descriptionFor(toast) }}
+        </ToastDescription>
       </div>
       <ToastClose as-child>
         <Button
           type="button"
           variant="ghost"
           size="icon-sm"
-          aria-label="Dismiss notification"
+          :aria-label="t('toast.dismiss')"
         >
           <Icon :icon="icons.close" aria-hidden="true" />
         </Button>

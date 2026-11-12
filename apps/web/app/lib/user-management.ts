@@ -15,11 +15,9 @@ export function managedPasswordPairValid(
   );
 }
 
-export function managedPasswordConfirmationError(
+export function managedPasswordConfirmationMismatch(
   password: string,
   confirmation: string,
-): string {
-  return confirmation.length > 0 && password !== confirmation
-    ? "Passwords do not match."
-    : "";
+): boolean {
+  return confirmation.length > 0 && password !== confirmation;
 }

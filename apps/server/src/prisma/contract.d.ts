@@ -19,7 +19,7 @@ import type {
 } from '@prisma/orm-sqlite/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'59eec150ce3bdbe97a43c3778ceb69f533094ec19bd310f5ed5cd98c405aa5a4'>;
+  StorageHashBase<'2a4f0c3ca93b45757b7ced2f0620e5e0986015766abd44ff77c62a405a37a41d'>;
 export type ExecutionHash =
   ExecutionHashBase<'5f4f0b1abd901c278bc6dbaa0c73b5748292f9229ce79b1879fc9568c54bbc1d'>;
 export type ProfileHash =
@@ -371,6 +371,7 @@ export namespace Models {
     completedAt: FieldOutputTypes['__unbound__']['Task']['completedAt'];
     createdAt: FieldOutputTypes['__unbound__']['Task']['createdAt'];
     details: FieldOutputTypes['__unbound__']['Task']['details'];
+    failureMessage: FieldOutputTypes['__unbound__']['Task']['failureMessage'];
     failureSummary: FieldOutputTypes['__unbound__']['Task']['failureSummary'];
     forceRefresh: FieldOutputTypes['__unbound__']['Task']['forceRefresh'];
     id: FieldOutputTypes['__unbound__']['Task']['id'];
@@ -383,6 +384,7 @@ export namespace Models {
     startedAt: FieldOutputTypes['__unbound__']['Task']['startedAt'];
     status: FieldOutputTypes['__unbound__']['Task']['status'];
     title: FieldOutputTypes['__unbound__']['Task']['title'];
+    titleMessage: FieldOutputTypes['__unbound__']['Task']['titleMessage'];
     updatedAt: FieldOutputTypes['__unbound__']['Task']['updatedAt'];
     readonly [RelationKeys]?: never;
   };
@@ -1566,6 +1568,12 @@ type ContractBase = Omit<
                   };
                   readonly many: false;
                 };
+                readonly failureMessage: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
                 readonly failureSummary: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
@@ -1640,6 +1648,12 @@ type ContractBase = Omit<
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly titleMessage: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
                   readonly many: false;
                 };
                 readonly updatedAt: {
@@ -3054,6 +3068,10 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
+              readonly failureMessage: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
               readonly failureSummary: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
@@ -3102,6 +3120,10 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
+              readonly titleMessage: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
               readonly updatedAt: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
@@ -3115,6 +3137,7 @@ type ContractBase = Omit<
                 readonly completedAt: { readonly column: 'completedAt' };
                 readonly createdAt: { readonly column: 'createdAt' };
                 readonly details: { readonly column: 'details' };
+                readonly failureMessage: { readonly column: 'failureMessage' };
                 readonly failureSummary: { readonly column: 'failureSummary' };
                 readonly forceRefresh: { readonly column: 'forceRefresh' };
                 readonly id: { readonly column: 'id' };
@@ -3127,6 +3150,7 @@ type ContractBase = Omit<
                 readonly startedAt: { readonly column: 'startedAt' };
                 readonly status: { readonly column: 'status' };
                 readonly title: { readonly column: 'title' };
+                readonly titleMessage: { readonly column: 'titleMessage' };
                 readonly updatedAt: { readonly column: 'updatedAt' };
               };
             };

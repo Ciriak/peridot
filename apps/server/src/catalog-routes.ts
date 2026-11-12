@@ -8,6 +8,7 @@ import type {
 import type { FastifyInstance } from "fastify";
 import { CatalogError, type CatalogService } from "./catalog.js";
 import { sendError } from "./http.js";
+import { message } from "./messages.js";
 
 interface CursorQuery {
   cursor?: string;
@@ -37,6 +38,7 @@ function handleCatalogError(
       error.code === "stale_catalog_cursor" ? 409 : 400,
       error.code,
       error.message,
+      error.messageDescriptor,
     );
     return undefined;
   }
@@ -78,6 +80,7 @@ export async function registerCatalogRoutes(
           400,
           "invalid_catalog_query",
           "ids must contain at most 500 non-empty track IDs",
+          message("api.message.invalidTrackResolve"),
         );
       }
       try {
@@ -113,7 +116,13 @@ export async function registerCatalogRoutes(
         request.authenticatedUser!.id,
       );
       if (!album) {
-        return sendError(reply, 404, "album_not_found", "Album not found");
+        return sendError(
+          reply,
+          404,
+          "album_not_found",
+          "Album not found",
+          message("api.message.albumNotFound"),
+        );
       }
       return album;
     },
@@ -144,7 +153,13 @@ export async function registerCatalogRoutes(
         request.authenticatedUser!.id,
       );
       if (!artist) {
-        return sendError(reply, 404, "artist_not_found", "Artist not found");
+        return sendError(
+          reply,
+          404,
+          "artist_not_found",
+          "Artist not found",
+          message("api.message.artistNotFound"),
+        );
       }
       return artist;
     },

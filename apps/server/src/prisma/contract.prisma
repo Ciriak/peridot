@@ -160,6 +160,7 @@ model Task {
   kind              String
   status            String
   title             String
+  titleMessage      String?
   parentTaskId      String?
   sourceId          String?
   sourceName        String?
@@ -167,6 +168,7 @@ model Task {
   progressTotal     Int?
   details           String    @default("[]")
   failureSummary    String?
+  failureMessage    String?
   forceRefresh      Int       @default(0)
   createdAt         DateTime  @default(now())
   startedAt         DateTime?

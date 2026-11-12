@@ -10,6 +10,7 @@ import {
 import type { CatalogService } from "./catalog.js";
 import type { Database } from "./database.js";
 import type { MetadataEnrichment } from "./metadata-enrichment.js";
+import { message } from "./messages.js";
 import type { TaskRow, TrackRow } from "./prisma/models.js";
 import { getPathSources, type PathSource } from "./sources.js";
 import {
@@ -159,6 +160,8 @@ export class LibraryScanner {
         if (!source?.path) {
           throw new TaskExecutionError(
             "The selected music source is no longer available.",
+            "failed",
+            message("api.message.sourceUnavailable"),
           );
         }
         requestedSource = {
@@ -173,6 +176,8 @@ export class LibraryScanner {
       if (sources.length === 0) {
         throw new TaskExecutionError(
           "No music library sources are configured.",
+          "failed",
+          message("api.message.noSources"),
         );
       }
       const files: SourceFile[] = [];
@@ -268,7 +273,15 @@ export class LibraryScanner {
       };
     } catch (error) {
       if (error instanceof TaskExecutionError) throw error;
-      throw new TaskExecutionError(scanFailureSummary(error));
+      const databaseBusy =
+        error instanceof Error && /database is locked/i.test(error.message);
+      throw new TaskExecutionError(
+        scanFailureSummary(error),
+        "failed",
+        message(
+          databaseBusy ? "api.message.databaseBusy" : "api.message.scanFailed",
+        ),
+      );
     }
   }
 

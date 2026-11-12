@@ -141,10 +141,10 @@ test("the sidebar renders cover-playback quick picks without library shortcuts",
   assert.match(layout, /<SidebarQuickPicks \/>/);
   assert.doesNotMatch(layout, />Your library</);
   assert.doesNotMatch(layout, /libraryLoading \? "Loading…"/);
-  assert.match(sidebar, />\s*Quick pick\s*</);
+  assert.match(sidebar, /quickPicks\.title/);
   assert.match(sidebar, /flex flex-col gap-2/);
   assert.doesNotMatch(sidebar, /grid-cols-2/);
-  assert.match(sidebar, /Play something to see your quick picks here\./);
+  assert.match(sidebar, /quickPicks\.empty/);
   assert.match(sidebar, /resolveQuickPicks\(items\.value\)/);
   assert.match(sidebar, /useInteractionFrozenList\(resolvedItems\)/);
   assert.match(sidebar, /@pointerenter="beginPointerInteraction"/);
@@ -167,7 +167,7 @@ test("the sidebar renders cover-playback quick picks without library shortcuts",
   );
   assert.match(
     tile,
-    /Play album \$\{title\.value\} from the first track/,
+    /t\("quickPicks\.playAlbum", \{ title: title\.value \}\)/,
     "Album quick pick labels explain that playback starts from the first track",
   );
   assert.match(tile, /quickPickArtistNames\(props\.item\)\.join\(", "\)/);

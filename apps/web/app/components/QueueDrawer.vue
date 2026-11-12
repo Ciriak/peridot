@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import type { TrackResponse } from "@peridot/contracts";
 import { Badge } from "@peridot/ui/components/ui/badge";
@@ -13,6 +14,7 @@ import { icons } from "../lib/icons";
 import { trackArtistNames } from "../lib/library";
 
 const open = defineModel<boolean>("open", { required: true });
+const { t } = useI18n();
 const queueList = ref<HTMLElement | null>(null);
 const panel = ref<HTMLElement | null>(null);
 const sortableTracks = ref<TrackResponse[]>([]);
@@ -100,21 +102,23 @@ onBeforeUnmount(() => document.removeEventListener("keydown", handleKeydown));
         <div class="flex items-start justify-between gap-4">
           <div class="min-w-0">
             <div class="flex flex-wrap items-center gap-2">
-              <h2 id="queue-heading" class="text-lg font-semibold">Queue</h2>
+              <h2 id="queue-heading" class="text-lg font-semibold">
+                {{ t("queue.title") }}
+              </h2>
               <Badge v-if="shuffleEnabled" variant="secondary">
                 <Icon :icon="icons.shuffle" aria-hidden="true" />
-                Randomized
+                {{ t("queue.randomized") }}
               </Badge>
             </div>
             <p id="queue-description" class="text-sm text-muted-foreground">
-              Now playing and the saved queue order.
+              {{ t("queue.description") }}
             </p>
           </div>
           <Button
             type="button"
             variant="ghost"
             size="icon-sm"
-            aria-label="Close queue"
+            :aria-label="t('player.closeQueue')"
             @click="closeQueue"
           >
             <Icon :icon="icons.close" aria-hidden="true" class="size-5" />
@@ -123,7 +127,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", handleKeydown));
 
         <div class="mt-4 rounded-md border p-3">
           <p class="mb-2 text-xs font-medium text-muted-foreground">
-            Now playing
+            {{ t("queue.nowPlaying") }}
           </p>
           <div
             v-if="active"
@@ -135,7 +139,9 @@ onBeforeUnmount(() => document.removeEventListener("keydown", handleKeydown));
                 size="icon-sm"
                 class="absolute inset-0 size-full rounded-md bg-background/70 opacity-0 transition-opacity hover:bg-background/70 hover:text-foreground dark:hover:bg-background/70 group-hover/track-artwork:opacity-100 group-focus-within/track-artwork:opacity-100"
                 :aria-label="
-                  playing ? `Pause ${active.title}` : `Play ${active.title}`
+                  playing
+                    ? t('player.pauseTitle', { title: active.title })
+                    : t('player.playTitle', { title: active.title })
                 "
                 @click="togglePlayback"
               >
@@ -154,17 +160,24 @@ onBeforeUnmount(() => document.removeEventListener("keydown", handleKeydown));
             </div>
           </div>
           <p v-else class="text-sm text-muted-foreground">
-            Nothing is playing.
+            {{ t("queue.nothingPlaying") }}
           </p>
         </div>
 
         <div class="mt-4 flex items-center justify-between gap-4">
           <h3 id="queue-upcoming-heading" class="text-sm font-semibold">
-            {{ shuffleEnabled ? "Queue order" : "Next in queue" }}
+            {{
+              shuffleEnabled ? t("queue.queueOrder") : t("queue.nextInQueue")
+            }}
           </h3>
           <span class="text-xs text-muted-foreground">
-            {{ upcomingTracks.length }}
-            {{ upcomingTracks.length === 1 ? "track" : "tracks" }}
+            {{
+              t(
+                "count.track",
+                { count: upcomingTracks.length },
+                upcomingTracks.length,
+              )
+            }}
           </span>
         </div>
 
@@ -173,7 +186,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", handleKeydown));
           role="status"
           class="mt-3 text-sm text-muted-foreground"
         >
-          Loading queue…
+          {{ t("queue.loading") }}
         </p>
         <div
           v-else-if="queueError"
@@ -182,7 +195,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", handleKeydown));
         >
           <p>{{ queueError }}</p>
           <Button variant="outline" size="sm" @click="loadQueue(true)">
-            Try again
+            {{ t("common.tryAgain") }}
           </Button>
         </div>
         <div
@@ -210,7 +223,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", handleKeydown));
                   variant="ghost"
                   size="icon-sm"
                   class="absolute inset-0 size-full rounded-md bg-background/70 opacity-0 transition-opacity hover:bg-background/70 hover:text-foreground dark:hover:bg-background/70 group-hover/track-artwork:opacity-100 group-focus-within/track-artwork:opacity-100"
-                  :aria-label="`Play ${track.title} from queue`"
+                  :aria-label="t('queue.playFrom', { title: track.title })"
                   @click.stop="play(track.id)"
                 >
                   <Icon
@@ -229,7 +242,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", handleKeydown));
               <Button
                 variant="ghost"
                 size="icon"
-                :aria-label="`Remove ${track.title} from queue`"
+                :aria-label="t('queue.remove', { title: track.title })"
                 :disabled="track.id === currentTrackId"
                 @click="removeFromQueue(track.id)"
               >
@@ -239,7 +252,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", handleKeydown));
           </ol>
         </div>
         <p v-else class="mt-3 text-sm text-muted-foreground">
-          No tracks are waiting in the queue.
+          {{ t("queue.empty") }}
         </p>
       </aside>
     </template>

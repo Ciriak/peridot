@@ -1,3 +1,9 @@
+<script setup lang="ts">
+import { useI18n } from "#imports";
+
+const { t } = useI18n();
+</script>
+
 <template>
-  <LibraryScreen title="Liked songs" favorites />
+  <LibraryScreen :title="t('page.liked.title')" favorites />
 </template>

@@ -58,6 +58,25 @@ const optimizedDependencies = [
 export default defineNuxtConfig({
   compatibilityDate: "2026-11-10",
   devtools: { enabled: false },
+  modules: ["@nuxtjs/i18n"],
+  i18n: {
+    defaultLocale: "en-US",
+    strategy: "no_prefix",
+    locales: [
+      {
+        code: "en-US",
+        language: "en-US",
+        name: "English",
+        dir: "ltr",
+        file: "en-US.json",
+      },
+    ],
+    langDir: "locales",
+    detectBrowserLanguage: false,
+    experimental: {
+      typedOptionsAndMessages: "all",
+    },
+  },
   css: ["~/assets/css/tailwind.css"],
   vite: {
     plugins: [tailwindcss()],
@@ -65,11 +84,7 @@ export default defineNuxtConfig({
   },
   app: {
     head: {
-      htmlAttrs: { class: "dark" },
-      title: "Peridot — Your music. Your space.",
-      meta: [
-        { name: "description", content: "Your self-hosted music library." },
-      ],
+      htmlAttrs: { class: "dark", lang: "en-US" },
     },
   },
 });

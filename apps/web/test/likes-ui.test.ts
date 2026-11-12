@@ -5,8 +5,8 @@ import { likeSuccessToast } from "../app/lib/like-toast.ts";
 
 test("successful likes map to target-specific confirmation toasts", () => {
   assert.deepEqual(likeSuccessToast({ kind: "track", trackId: "track-1" }), {
-    title: "Track liked",
-    description: "The track was added to your likes.",
+    titleMessage: { key: "toast.trackLikedTitle" },
+    descriptionMessage: { key: "toast.trackLiked" },
     status: "success",
     kind: "success",
     duration: 5000,
@@ -18,16 +18,22 @@ test("successful likes map to target-specific confirmation toasts", () => {
       artist: "Daft Punk",
     }),
     {
-      title: "Album liked",
-      description: "Discovery was added to your likes.",
+      titleMessage: { key: "toast.albumLikedTitle" },
+      descriptionMessage: {
+        key: "toast.likedNamed",
+        params: { target: "Discovery" },
+      },
       status: "success",
       kind: "success",
       duration: 5000,
     },
   );
   assert.deepEqual(likeSuccessToast({ kind: "artist", name: " Daft Punk " }), {
-    title: "Artist liked",
-    description: "Daft Punk was added to your likes.",
+    titleMessage: { key: "toast.artistLikedTitle" },
+    descriptionMessage: {
+      key: "toast.likedNamed",
+      params: { target: "Daft Punk" },
+    },
     status: "success",
     kind: "success",
     duration: 5000,

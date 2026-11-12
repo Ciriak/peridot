@@ -1,12 +1,15 @@
 import type {
   CreateMetadataProviderRequest,
+  MessageDescriptor,
   MetadataProviderResponse,
   UpdateMetadataProviderRequest,
 } from "@peridot/contracts";
 import type { CredentialStore } from "./credential-store.js";
 import { CredentialStoreError } from "./credential-store.js";
 import type { Database } from "./database.js";
+import { message } from "./messages.js";
 import {
+  metadataProviderName,
   type MetadataProviderContext,
   type MetadataResolver,
   type MetadataResolverRegistry,
@@ -20,6 +23,7 @@ export class MetadataProviderError extends Error {
   constructor(
     message: string,
     readonly statusCode = 400,
+    readonly messageDescriptor?: MessageDescriptor,
   ) {
     super(message);
     this.name = "MetadataProviderError";
@@ -101,10 +105,18 @@ function normalizedCredential(value: unknown): string | null {
 
 function resolverError(error: unknown): MetadataProviderError {
   if (error instanceof MetadataResolverError) {
-    return new MetadataProviderError(error.message, error.statusCode);
+    return new MetadataProviderError(
+      error.message,
+      error.statusCode,
+      error.messageDescriptor,
+    );
   }
   if (error instanceof CredentialStoreError) {
-    return new MetadataProviderError(error.message, error.statusCode);
+    return new MetadataProviderError(
+      error.message,
+      error.statusCode,
+      message("api.message.credentialStoreError"),
+    );
   }
   throw error;
 }
@@ -143,7 +155,7 @@ export async function providerContext(
     : null;
   if (resolver.definition.credentialField?.required && !credential) {
     throw new MetadataResolverError(
-      `${resolver.definition.name} requires a credential.`,
+      `${metadataProviderName(resolver.definition.kind)} requires a credential.`,
       409,
       false,
     );
@@ -193,7 +205,11 @@ export async function createMetadataProvider(
 ): Promise<MetadataProviderResponse> {
   const value = (body ?? {}) as Partial<CreateMetadataProviderRequest>;
   if (typeof value.kind !== "string" || !value.kind.trim()) {
-    throw new MetadataProviderError("Choose a supported metadata provider.");
+    throw new MetadataProviderError(
+      "Choose a supported metadata provider.",
+      400,
+      message("api.message.invalidMetadataProvider"),
+    );
   }
   let resolver: MetadataResolver;
   try {
@@ -205,6 +221,8 @@ export async function createMetadataProvider(
   if (suppliedName.length > PROVIDER_NAME_LIMIT) {
     throw new MetadataProviderError(
       `Provider names must be ${PROVIDER_NAME_LIMIT} characters or fewer.`,
+      400,
+      message("api.message.metadataProviderNameTooLong"),
     );
   }
   const duplicate = await database.orm.MetadataProvider.first({
@@ -213,6 +231,8 @@ export async function createMetadataProvider(
   if (duplicate) {
     throw new MetadataProviderError(
       "This metadata provider is already configured.",
+      400,
+      message("api.message.metadataProviderExists"),
     );
   }
 
@@ -223,18 +243,26 @@ export async function createMetadataProvider(
     const credential = normalizedCredential(value.credential);
     if (resolver.definition.credentialField?.required && !credential) {
       throw new MetadataProviderError(
-        `${resolver.definition.name} requires a credential.`,
+        `${metadataProviderName(resolver.definition.kind)} requires a credential.`,
+        400,
+        message("api.message.metadataProviderCredentialRequired", {
+          provider: metadataProviderName(resolver.definition.kind),
+        }),
       );
     }
     if (!resolver.definition.credentialField && credential) {
       throw new MetadataProviderError(
-        `${resolver.definition.name} does not accept a credential.`,
+        `${metadataProviderName(resolver.definition.kind)} does not accept a credential.`,
+        400,
+        message("api.message.metadataProviderCredentialUnsupported", {
+          provider: metadataProviderName(resolver.definition.kind),
+        }),
       );
     }
     const context: MetadataProviderContext = {
       id: "pending",
       kind: resolver.definition.kind,
-      name: suppliedName || resolver.definition.name,
+      name: suppliedName || metadataProviderName(resolver.definition.kind),
       configuration,
       credential,
     };
@@ -252,7 +280,7 @@ export async function createMetadataProvider(
     );
     const provider = await database.orm.MetadataProvider.create({
       kind: resolver.definition.kind,
-      name: suppliedName || resolver.definition.name,
+      name: suppliedName || metadataProviderName(resolver.definition.kind),
       accountLabel,
       configuration: JSON.stringify(configuration),
       credentialCiphertext: encryptedCredential,
@@ -282,6 +310,8 @@ export async function updateMetadataProvider(
   ) {
     throw new MetadataProviderError(
       "Choose at least one metadata provider setting to update.",
+      400,
+      message("api.message.metadataProviderNoFields"),
     );
   }
   try {
@@ -299,7 +329,11 @@ export async function updateMetadataProvider(
     if (value.credential !== undefined && value.credential !== null) {
       if (!resolver.definition.credentialField) {
         throw new MetadataProviderError(
-          `${resolver.definition.name} does not accept a credential.`,
+          `${metadataProviderName(resolver.definition.kind)} does not accept a credential.`,
+          400,
+          message("api.message.metadataProviderCredentialUnsupported", {
+            provider: metadataProviderName(resolver.definition.kind),
+          }),
         );
       }
       const credential = normalizedCredential(value.credential);
@@ -321,12 +355,18 @@ export async function updateMetadataProvider(
       !credentialCiphertext
     ) {
       throw new MetadataProviderError(
-        `${resolver.definition.name} requires a credential.`,
+        `${metadataProviderName(resolver.definition.kind)} requires a credential.`,
+        400,
+        message("api.message.metadataProviderCredentialRequired", {
+          provider: metadataProviderName(resolver.definition.kind),
+        }),
       );
     }
     if (value.enabled !== undefined && typeof value.enabled !== "boolean") {
       throw new MetadataProviderError(
         "Metadata provider enabled state must be true or false.",
+        400,
+        message("api.message.metadataProviderEnabledInvalid"),
       );
     }
     await database.orm.MetadataProvider.where({ id }).update({
@@ -351,6 +391,8 @@ export async function reorderMetadataProviders(
   if (!Array.isArray(ids) || ids.some((id) => typeof id !== "string")) {
     throw new MetadataProviderError(
       "Provider order must be a list of provider ids.",
+      400,
+      message("api.message.metadataProviderOrderInvalid"),
     );
   }
   const providers = await database.orm.MetadataProvider.select("id").all();
@@ -362,6 +404,8 @@ export async function reorderMetadataProviders(
   ) {
     throw new MetadataProviderError(
       "Provider order does not match the configured providers.",
+      400,
+      message("api.message.metadataProviderOrderMismatch"),
     );
   }
   await database.transaction(async (transaction) => {

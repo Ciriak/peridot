@@ -10,8 +10,10 @@ import {
 class TestResolver implements MetadataResolver {
   readonly definition = {
     kind: "musicbrainz" as const,
-    name: "Test resolver",
-    description: "Used to verify registry extension points.",
+    nameMessage: { key: "provider.musicbrainz.name" },
+    descriptionMessage: {
+      key: "provider.musicbrainz.description",
+    },
     configurationFields: [],
     credentialField: null,
     supportsAutomaticMatching: true,

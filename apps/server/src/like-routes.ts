@@ -9,6 +9,7 @@ import type {
 import type { FastifyInstance } from "fastify";
 import type { Database } from "./database.js";
 import { sendError } from "./http.js";
+import { message } from "./messages.js";
 import type {
   AlbumLikeRow,
   ArtistLikeRow,
@@ -115,6 +116,7 @@ export async function registerLikeRoutes(
         400,
         "invalid_like",
         "Choose a valid track, album, or artist to like.",
+        message("api.message.invalidLikeTarget"),
       );
     }
     const userId = request.authenticatedUser!.id;
@@ -124,7 +126,13 @@ export async function registerLikeRoutes(
         id: target.trackId,
       });
       if (!track) {
-        return sendError(reply, 404, "track_not_found", "Track not found");
+        return sendError(
+          reply,
+          404,
+          "track_not_found",
+          "Track not found",
+          message("api.message.trackNotFound"),
+        );
       }
       const like =
         (await database.orm.TrackLike.where({
@@ -191,6 +199,7 @@ export async function registerLikeRoutes(
         400,
         "invalid_like",
         "Choose a valid track, album, or artist to unlike.",
+        message("api.message.invalidLikeTarget"),
       );
     }
     const userId = request.authenticatedUser!.id;
@@ -200,7 +209,13 @@ export async function registerLikeRoutes(
         id: target.trackId,
       });
       if (!track) {
-        return sendError(reply, 404, "track_not_found", "Track not found");
+        return sendError(
+          reply,
+          404,
+          "track_not_found",
+          "Track not found",
+          message("api.message.trackNotFound"),
+        );
       }
       await database.orm.TrackLike.where({
         userId,

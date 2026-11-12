@@ -26,7 +26,7 @@ test("artists have list and detail routes with artist-scoped content", async () 
   assert.match(artistCard, /:to="artistRoute\(artist\)"/);
   assert.match(artistCard, /useLikes\(\)/);
   assert.match(artistCard, /<LikeButton/);
-  assert.match(listPage, /No artists found/);
+  assert.match(listPage, /t\("page\.artists\.empty"\)/);
   assert.match(detailPage, /listArtists\(/);
   assert.match(detailPage, /route\.params\.artist/);
   assert.match(detailPage, /useCatalogAlbumQuery/);
@@ -34,12 +34,9 @@ test("artists have list and detail routes with artist-scoped content", async () 
   assert.match(detailPage, /<AlbumCard/);
   assert.match(detailPage, /:album="album"/);
   assert.match(detailPage, /playCollection\(/);
-  assert.match(detailPage, /Play artist/);
+  assert.match(detailPage, /t\("context\.playArtist"\)/);
   assert.match(detailPage, /<LikeButton/);
-  assert.match(
-    detailPage,
-    /This artist is not available in your current library/,
-  );
+  assert.match(detailPage, /t\("page\.artist\.unavailable"\)/);
   assert.match(
     detailPage,
     /<div class="mb-2">\s+<Button as-child variant="ghost" size="lg"/,
@@ -64,7 +61,10 @@ test("artist names link from navigation and track lists", async () => {
     ),
   ]);
 
-  assert.match(layout, /name: "Artists", to: "\/artists", icon: icons\.user/);
+  assert.match(
+    layout,
+    /labelKey: "navigation\.artists", to: "\/artists", icon: icons\.user/,
+  );
   assert.match(layout, /currentPath\.value\.startsWith\(`\$\{target\}\/`\)/);
   assert.match(albumDetail, /<TrackArtistLinks :artists="album\.artists" \/>/);
   assert.match(

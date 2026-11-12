@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useHead } from "#imports";
+import { useHead, useI18n } from "#imports";
 import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { onMounted } from "vue";
@@ -7,7 +7,8 @@ import AlbumCard from "../components/AlbumCard.vue";
 import { useCatalogAlbumQuery } from "../composables/use-catalog-query";
 import { useLikes } from "../composables/use-likes";
 
-useHead({ title: "Home — Peridot" });
+const { t } = useI18n();
+useHead({ title: t("page.home.title") });
 
 const {
   items: albums,
@@ -29,22 +30,24 @@ onMounted(() => {
 
 <template>
   <div class="space-y-2">
-    <h1 class="text-2xl font-semibold tracking-tight">Suggestions</h1>
+    <h1 class="text-2xl font-semibold tracking-tight">
+      {{ t("page.home.heading") }}
+    </h1>
     <p class="text-sm text-muted-foreground">
-      Albums from your library to put back in rotation.
+      {{ t("page.home.description") }}
     </p>
   </div>
   <section aria-labelledby="suggestions-heading" class="space-y-4">
     <h2 id="suggestions-heading" class="text-lg font-semibold">
-      Made from your library
+      {{ t("page.home.fromLibrary") }}
     </h2>
     <div
       v-if="loading && !albums.length"
       role="status"
       class="flex items-center gap-3 rounded-lg border p-6 text-sm text-muted-foreground"
     >
-      <PeridotSpinner label="Loading suggestions" />
-      Finding music for your home screen…
+      <PeridotSpinner :label="t('page.home.suggestionsLoading')" />
+      {{ t("page.home.loading") }}
     </div>
     <div
       v-else-if="error"
@@ -52,7 +55,9 @@ onMounted(() => {
       class="space-y-3 rounded-lg border p-6 text-sm"
     >
       <p>{{ error }}</p>
-      <Button variant="outline" @click="load(true)">Try again</Button>
+      <Button variant="outline" @click="load(true)">{{
+        t("common.tryAgain")
+      }}</Button>
     </div>
     <div
       v-else-if="albums.length"
@@ -67,7 +72,11 @@ onMounted(() => {
           :disabled="loadingMore"
           @click="loadMore"
         >
-          {{ loadingMore ? "Loading suggestions…" : "Load more suggestions" }}
+          {{
+            loadingMore
+              ? t("page.home.loadingMoreSuggestions")
+              : t("page.home.loadMoreSuggestions")
+          }}
         </Button>
       </div>
     </div>
@@ -77,10 +86,9 @@ onMounted(() => {
       class="rounded-lg border p-6 text-sm text-muted-foreground"
     >
       <template v-if="loaded">
-        No album suggestions found. Tracks need album tags before they can
-        appear here.
+        {{ t("page.home.empty") }}
       </template>
-      <template v-else> Loading your music library… </template>
+      <template v-else>{{ t("page.home.loading") }}</template>
     </p>
   </section>
 </template>

@@ -6,10 +6,12 @@ import type {
   ArtistSummaryResponse,
   CatalogSortDirection,
   CatalogSortField,
+  MessageDescriptor,
   ResolveTracksResponse,
   TrackListResponse,
 } from "@peridot/contracts";
 import type { Database } from "./database.js";
+import { message } from "./messages.js";
 import type { PlaybackTokenService } from "./playback-tokens.js";
 import {
   albumReleaseYear,
@@ -30,10 +32,46 @@ const MAX_QUERY_TERMS = 8;
 export class CatalogError extends Error {
   constructor(
     readonly code: "invalid_catalog_query" | "stale_catalog_cursor",
-    message: string,
+    fallbackMessage: string,
   ) {
-    super(message);
+    super(fallbackMessage);
     this.name = "CatalogError";
+  }
+
+  get messageDescriptor(): MessageDescriptor {
+    if (this.code === "stale_catalog_cursor") {
+      return message("api.message.staleCatalogCursor");
+    }
+    if (this.message === "Invalid catalog cursor") {
+      return message("api.message.invalidCatalogQuery");
+    }
+    if (this.message.startsWith("limit must be between 1 and ")) {
+      return message("api.message.invalidCatalogLimit", {
+        maximum: this.message.split("and ")[1] ?? "200",
+      });
+    }
+    if (this.message === "direction must be asc or desc") {
+      return message("api.message.invalidCatalogDirection");
+    }
+    if (this.message.startsWith("sort must be ")) {
+      return message("api.message.invalidTrackSort");
+    }
+    if (this.message === "album sort must be title or artist") {
+      return message("api.message.invalidAlbumSort");
+    }
+    if (this.message === "artist sort must be name") {
+      return message("api.message.invalidArtistSort");
+    }
+    if (this.message.startsWith("availability must be ")) {
+      return message("api.message.invalidAvailability");
+    }
+    if (this.message === "liked must be true or false") {
+      return message("api.message.invalidLikedFilter");
+    }
+    if (this.message === "At most 500 track IDs can be resolved at once") {
+      return message("api.message.invalidTrackResolve");
+    }
+    return message("api.message.invalidCatalogQuery");
   }
 }
 

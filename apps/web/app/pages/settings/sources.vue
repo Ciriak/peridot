@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, definePageMeta, onMounted, ref } from "#imports";
+import { computed, definePageMeta, onMounted, ref, useI18n } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import type {
   CreateSourceRequest,
@@ -8,6 +8,7 @@ import type {
 } from "@peridot/contracts";
 import { Button } from "@peridot/ui/components/ui/button";
 import { Input } from "@peridot/ui/components/ui/input";
+import { ProgressCircle } from "@peridot/ui/components/ui/progress-circle";
 import { useSortable } from "@vueuse/integrations/useSortable";
 import {
   AlertDialogAction,
@@ -34,6 +35,7 @@ import { useServer } from "../../composables/use-server";
 import { useSession } from "../../composables/use-session";
 import { useTasks } from "../../composables/use-tasks";
 import { useUser } from "../../composables/use-user";
+import { useLocalizedMessage } from "../../composables/use-localized-message";
 import { icons } from "../../lib/icons";
 import {
   createSource,
@@ -43,10 +45,16 @@ import {
   reorderSources,
 } from "../../lib/peridot-client";
 import { sourceFolderName } from "../../lib/source-label";
+import {
+  activeTaskForSource,
+  sourceTaskProgress,
+} from "../../lib/task-progress";
 import { notifySourceMutation } from "../../lib/toasts";
 
 definePageMeta({ layout: "settings" });
 
+const { t } = useI18n();
+const { errorMessage } = useLocalizedMessage();
 const { address } = useServer();
 const { token } = useSession();
 const { user } = useUser();
@@ -54,6 +62,7 @@ const {
   hasActiveTasks,
   queueLibraryScan,
   queueSourceScan,
+  tasks,
   track: trackTask,
 } = useTasks();
 const allowed = computed(() => user.value?.role === "admin");
@@ -93,9 +102,18 @@ function sourceKindIcon(kind: SourceKind) {
 }
 
 function sourceKindLabel(kind: SourceKind): string {
-  if (kind === "path") return "Local files";
-  if (kind === "url") return "Remote URL";
-  return "Integration";
+  if (kind === "path") return t("settings.sources.path");
+  if (kind === "url") return t("settings.sources.url");
+  return t("settings.sources.integration");
+}
+
+function sourceTask(source: SourceResponse) {
+  return activeTaskForSource(tasks.value, source.id);
+}
+
+function sourceProgress(source: SourceResponse): number | null {
+  const task = sourceTask(source);
+  return task ? sourceTaskProgress(task) : null;
 }
 
 async function loadSources() {
@@ -110,10 +128,7 @@ async function loadSources() {
     sources.value = result.items;
   } catch (reason) {
     if (isAuthenticationRedirectError(reason)) return;
-    pageError.value =
-      reason instanceof Error
-        ? reason.message
-        : "Could not load library sources.";
+    pageError.value = errorMessage(reason, "settings.sources.loadError");
   } finally {
     loading.value = false;
   }
@@ -174,14 +189,12 @@ async function addSource() {
       if (source.task) {
         trackTask(source.task);
       } else {
-        pageError.value =
-          "Source added, but no library scan could be queued. Rescan this source.";
+        pageError.value = t("settings.sources.noScan");
       }
     }
   } catch (reason) {
     if (isAuthenticationRedirectError(reason)) return;
-    addError.value =
-      reason instanceof Error ? reason.message : "Could not add the source.";
+    addError.value = errorMessage(reason, "settings.sources.addError");
   } finally {
     adding.value = false;
   }
@@ -194,10 +207,7 @@ async function rescan(source: SourceResponse) {
     await queueSourceScan(source.id);
   } catch (reason) {
     if (isAuthenticationRedirectError(reason)) return;
-    pageError.value =
-      reason instanceof Error
-        ? reason.message
-        : "Could not start the source scan.";
+    pageError.value = errorMessage(reason, "settings.sources.rescanError");
   }
 }
 
@@ -207,10 +217,7 @@ async function rescanAll() {
     await queueLibraryScan();
   } catch (reason) {
     if (isAuthenticationRedirectError(reason)) return;
-    pageError.value =
-      reason instanceof Error
-        ? reason.message
-        : "Could not start the library rescan.";
+    pageError.value = errorMessage(reason, "settings.sources.rescanAllError");
   }
 }
 
@@ -234,8 +241,7 @@ async function confirmRemove() {
     await loadSources();
   } catch (reason) {
     if (isAuthenticationRedirectError(reason)) return;
-    pageError.value =
-      reason instanceof Error ? reason.message : "Could not remove the source.";
+    pageError.value = errorMessage(reason, "settings.sources.removeError");
   }
 }
 
@@ -248,10 +254,7 @@ async function persistOrder() {
     );
   } catch (reason) {
     if (isAuthenticationRedirectError(reason)) return;
-    pageError.value =
-      reason instanceof Error
-        ? reason.message
-        : "Could not save the source order.";
+    pageError.value = errorMessage(reason, "settings.sources.orderError");
   }
 }
 
@@ -260,9 +263,11 @@ onMounted(() => void loadSources());
 
 <template>
   <div class="space-y-2">
-    <h2 class="text-2xl font-semibold tracking-tight">Sources</h2>
+    <h2 class="text-2xl font-semibold tracking-tight">
+      {{ t("settings.sources.title") }}
+    </h2>
     <p class="text-sm text-muted-foreground">
-      Configure where this Peridot server gets raw audio files.
+      {{ t("settings.sources.description") }}
     </p>
   </div>
 
@@ -271,21 +276,21 @@ onMounted(() => void loadSources());
     role="alert"
     class="rounded-lg border bg-card p-6 text-sm text-card-foreground"
   >
-    Administrator access is required to manage library sources.
+    {{ t("settings.sources.adminRequired") }}
   </section>
 
   <section v-else aria-labelledby="sources-heading" class="space-y-4">
     <div class="flex items-center justify-between gap-4">
       <h3 id="sources-heading" class="text-lg font-semibold">
-        Library sources
+        {{ t("settings.sources.heading") }}
       </h3>
       <div class="flex items-center gap-2">
         <Button type="button" variant="outline" size="sm" @click="rescanAll">
           <Icon :icon="icons.restart" aria-hidden="true" />
-          Rescan all
+          {{ t("settings.sources.rescanAll") }}
         </Button>
         <Button type="button" size="sm" @click="openAddDialog">
-          Add source
+          {{ t("settings.sources.add") }}
         </Button>
       </div>
     </div>
@@ -293,7 +298,9 @@ onMounted(() => void loadSources());
       {{ pageError }}
     </p>
     <div class="rounded-lg border bg-card p-6 text-card-foreground">
-      <p v-if="loading" class="text-sm text-muted-foreground">Loading…</p>
+      <p v-if="loading" class="text-sm text-muted-foreground">
+        {{ t("settings.sources.loading") }}
+      </p>
       <ul v-else-if="sources.length" ref="sourceList" class="space-y-2">
         <li
           v-for="source in sources"
@@ -304,7 +311,7 @@ onMounted(() => void loadSources());
           <button
             type="button"
             class="cursor-grab rounded-md p-1 text-muted-foreground active:cursor-grabbing"
-            aria-label="Drag to reorder source"
+            :aria-label="t('settings.sources.drag')"
           >
             <Icon :icon="icons.drag" aria-hidden="true" class="size-4" />
           </button>
@@ -331,13 +338,28 @@ onMounted(() => void loadSources());
           <span v-else class="min-w-0 flex-1 truncate text-sm">
             {{ sourceLabel(source) }}
           </span>
+          <ProgressCircle
+            v-if="sourceTask(source)"
+            size="sm"
+            :value="sourceProgress(source)"
+            :label="
+              t('settings.sources.progress', {
+                source: sourceFolderName(sourceLabel(source)),
+              })
+            "
+            class="size-5"
+          />
           <DropdownMenuRoot>
             <DropdownMenuTrigger as-child>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
-                :aria-label="`Actions for ${sourceFolderName(sourceLabel(source))}`"
+                :aria-label="
+                  t('settings.sources.actions', {
+                    source: sourceFolderName(sourceLabel(source)),
+                  })
+                "
               >
                 <span
                   aria-hidden="true"
@@ -363,7 +385,7 @@ onMounted(() => void loadSources());
                     aria-hidden="true"
                     class="size-4"
                   />
-                  Rescan
+                  {{ t("settings.sources.rescan") }}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   :disabled="hasActiveTasks"
@@ -371,14 +393,16 @@ onMounted(() => void loadSources());
                   @select="askRemove(source)"
                 >
                   <Icon :icon="icons.close" aria-hidden="true" class="size-4" />
-                  Remove
+                  {{ t("common.remove") }}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenuPortal>
           </DropdownMenuRoot>
         </li>
       </ul>
-      <p v-else class="text-sm text-muted-foreground">No sources configured.</p>
+      <p v-else class="text-sm text-muted-foreground">
+        {{ t("settings.sources.empty") }}
+      </p>
     </div>
   </section>
 
@@ -388,9 +412,11 @@ onMounted(() => void loadSources());
       <DialogContent
         class="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-card p-6 text-card-foreground shadow-lg"
       >
-        <DialogTitle class="text-lg font-semibold">Add source</DialogTitle>
+        <DialogTitle class="text-lg font-semibold">
+          {{ t("settings.sources.addTitle") }}
+        </DialogTitle>
         <DialogDescription class="text-sm text-muted-foreground">
-          Choose where Peridot reads raw audio files from.
+          {{ t("settings.sources.addDescription") }}
         </DialogDescription>
 
         <div v-if="!newKind" class="mt-4 grid gap-2">
@@ -401,7 +427,7 @@ onMounted(() => void loadSources());
             @click="chooseKind('path')"
           >
             <Icon :icon="icons.folder" aria-hidden="true" class="size-5" />
-            Local files
+            {{ t("settings.sources.path") }}
           </Button>
           <Button
             type="button"
@@ -410,7 +436,7 @@ onMounted(() => void loadSources());
             @click="chooseKind('url')"
           >
             <Icon :icon="icons.globe" aria-hidden="true" class="size-5" />
-            Remote URL
+            {{ t("settings.sources.url") }}
           </Button>
           <Button
             type="button"
@@ -419,24 +445,24 @@ onMounted(() => void loadSources());
             @click="chooseKind('integration')"
           >
             <Icon :icon="icons.plugins" aria-hidden="true" class="size-5" />
-            Integration
+            {{ t("settings.sources.integration") }}
           </Button>
         </div>
 
         <div v-else class="mt-4 space-y-4">
           <div v-if="newKind === 'path'" class="space-y-2">
             <label for="source-path" class="text-sm font-medium">
-              Folder on this server
+              {{ t("settings.sources.folder") }}
             </label>
             <FolderTree v-model="newPath" />
             <p class="text-sm text-muted-foreground">
-              {{ newPath || "No folder selected" }}
+              {{ newPath || t("settings.sources.noFolder") }}
             </p>
           </div>
 
           <div v-else-if="newKind === 'url'" class="space-y-2">
             <label for="source-url" class="text-sm font-medium">
-              External URL
+              {{ t("settings.sources.externalUrl") }}
             </label>
             <Input
               id="source-url"
@@ -447,7 +473,7 @@ onMounted(() => void loadSources());
           </div>
 
           <p v-else class="text-sm text-muted-foreground">
-            Spotify and YouTube Music integrations are not available yet.
+            {{ t("settings.sources.integrationsPending") }}
           </p>
 
           <p v-if="addError" role="alert" class="text-sm text-destructive">
@@ -457,7 +483,7 @@ onMounted(() => void loadSources());
 
         <div class="mt-6 flex justify-end gap-3">
           <Button type="button" variant="outline" @click="handleDialogBack">
-            {{ newKind ? "Back" : "Cancel" }}
+            {{ newKind ? t("common.back") : t("common.cancel") }}
           </Button>
           <Button
             v-if="newKind"
@@ -465,7 +491,7 @@ onMounted(() => void loadSources());
             :disabled="adding || !canAdd()"
             @click="addSource"
           >
-            {{ adding ? "Adding…" : "Add source" }}
+            {{ adding ? t("common.adding") : t("settings.sources.add") }}
           </Button>
         </div>
       </DialogContent>
@@ -479,17 +505,21 @@ onMounted(() => void loadSources());
         class="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-card p-6 text-card-foreground shadow-lg"
       >
         <AlertDialogTitle class="text-lg font-semibold">
-          Remove source?
+          {{ t("settings.sources.remove") }}
         </AlertDialogTitle>
         <AlertDialogDescription class="text-sm text-muted-foreground">
           {{ sourceLabel(pendingDelete) }}
         </AlertDialogDescription>
         <div class="mt-6 flex justify-end gap-3">
           <AlertDialogCancel as-child>
-            <Button type="button" variant="outline">Cancel</Button>
+            <Button type="button" variant="outline">{{
+              t("common.cancel")
+            }}</Button>
           </AlertDialogCancel>
           <AlertDialogAction as-child @click="confirmRemove">
-            <Button type="button" variant="destructive">Remove</Button>
+            <Button type="button" variant="destructive">{{
+              t("common.remove")
+            }}</Button>
           </AlertDialogAction>
         </div>
       </AlertDialogContent>

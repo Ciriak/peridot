@@ -1,4 +1,4 @@
-import { useState } from "#imports";
+import { useI18n, useState } from "#imports";
 import type { TrackResponse } from "@peridot/contracts";
 import { computed, onMounted, onUnmounted, watch } from "vue";
 import { resolvePlayerQueue, trackDownloadFileName } from "../lib/library";
@@ -42,6 +42,8 @@ import {
 import { useServer } from "./use-server";
 import { useSession } from "./use-session";
 import { useUser } from "./use-user";
+import { useLocalizedMessage } from "./use-localized-message";
+import { localizedError } from "../lib/messages.ts";
 
 let queueWriteTail = Promise.resolve();
 
@@ -56,6 +58,8 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
   const { address } = useServer();
   const { token } = useSession();
   const { user } = useUser();
+  const { t } = useI18n();
+  const { errorMessage } = useLocalizedMessage();
   const { revision: catalogRevision } = useCatalogRevision();
   const playing = useState("player-playing", () => false);
   const repeatMode = useState<RepeatMode>("player-repeat-mode", () => "off");
@@ -276,16 +280,15 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
           return;
         }
         if (!serverAddress || !sessionToken) {
-          throw new Error("Connect to your Peridot server and try again.");
+          throw localizedError(
+            "error.connectServer",
+            "Connect to your Peridot server and try again.",
+          );
         }
         await replaceQueue(serverAddress, sessionToken, body);
       })
       .catch((reason: unknown) => {
-        notifyQueueSaveFailed(
-          reason instanceof Error
-            ? reason.message
-            : "The server could not save the queue.",
-        );
+        notifyQueueSaveFailed(errorMessage(reason, "error.queueSave"));
       });
   }
 
@@ -362,10 +365,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
       mediaDuration.value = 0;
     } catch (reason) {
       if (isAuthenticationRedirectError(reason)) return;
-      queueError.value =
-        reason instanceof Error
-          ? reason.message
-          : "The server could not load your queue.";
+      queueError.value = errorMessage(reason, "error.queueLoad");
     } finally {
       if (queueAuthScope.value === scope) queueLoading.value = false;
     }
@@ -635,10 +635,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     const sessionToken = token.value;
     if (!trackId) return;
     if (!serverAddress || !sessionToken) {
-      notifyTrackDownloadFailed(
-        "Track",
-        "Connect to your Peridot server and try again.",
-      );
+      notifyTrackDownloadFailed(t("like.track"), t("error.connectServer"));
       return;
     }
 
@@ -656,7 +653,10 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
         trackAudioUrl(serverAddress, track.id, issued.token),
       );
       if (!response.ok) {
-        throw new Error("The server could not provide the audio file.");
+        throw localizedError(
+          "error.audioPrepare",
+          "The server could not provide the audio file.",
+        );
       }
       const objectUrl = URL.createObjectURL(await response.blob());
       const anchor = document.createElement("a");
@@ -670,10 +670,8 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
       if (isAuthenticationRedirectError(reason)) return;
       notifyTrackDownloadFailed(
         queueTracks.value.find((candidate) => candidate.id === trackId)
-          ?.title ?? "Track",
-        reason instanceof Error
-          ? reason.message
-          : "The audio file could not be prepared.",
+          ?.title ?? t("like.track"),
+        errorMessage(reason, "error.audioPrepare"),
       );
     }
   }
@@ -710,8 +708,8 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     let stopPositionWatch: (() => void) | undefined;
     let stopVolumeWatch: (() => void) | undefined;
 
-    const playbackError = (reason: unknown, fallback: string) =>
-      reason instanceof Error ? reason.message : fallback;
+    const playbackError = (reason: unknown, fallbackKey: string) =>
+      errorMessage(reason, fallbackKey);
 
     async function playLoadedTrack(trackId: string, attempt: number) {
       if (
@@ -754,8 +752,8 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
           reason instanceof DOMException && reason.name === "NotAllowedError";
         playing.value = false;
         error.value = blocked
-          ? "Your browser blocked playback. Press play to try again."
-          : "This track could not be played.";
+          ? t("error.playbackBlocked")
+          : t("error.audioUnavailable");
         if (!blocked) loadedTrackId = null;
       }
     }
@@ -765,7 +763,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
       const sessionToken = token.value;
       if (!serverAddress || !sessionToken) {
         playing.value = false;
-        error.value = "Connect to your Peridot server to play music.";
+        error.value = t("error.playServer");
         loading.value = false;
         loadingTrackId = null;
         return;
@@ -788,10 +786,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
         loadedTrackId = null;
         playing.value = false;
         if (isAuthenticationRedirectError(reason)) return;
-        error.value = playbackError(
-          reason,
-          "The track could not be prepared for playback.",
-        );
+        error.value = playbackError(reason, "error.audioPrepare");
       } finally {
         if (attempt === loadAttempt) {
           loading.value = false;
@@ -830,7 +825,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
         loadedTrackId = null;
         loading.value = false;
         playing.value = false;
-        error.value = "This audio file could not be decoded or played.";
+        error.value = t("error.audioDecode");
       };
 
       audio.addEventListener("timeupdate", updatePosition);

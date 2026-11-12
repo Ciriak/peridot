@@ -255,8 +255,8 @@ function taskResult(scan: TaskResponse, metadata: TaskResponse | null) {
     metadataErrorCount: metadata
       ? taskDetailNumber(metadata, "metadata.failed")
       : 0,
-    metadataFailureSummary: metadata?.failureSummary ?? null,
-    failureSummary: scan.failureSummary,
+    metadataFailureMessage: metadata?.failureMessage ?? null,
+    failureMessage: scan.failureMessage,
     createdAt: scan.createdAt,
     startedAt: scan.startedAt,
     completedAt: scan.completedAt,

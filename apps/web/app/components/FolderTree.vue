@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import { Input } from "@peridot/ui/components/ui/input";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
@@ -6,6 +7,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { TreeItem, TreeRoot } from "reka-ui";
 import { useServer } from "../composables/use-server";
 import { useSession } from "../composables/use-session";
+import { useLocalizedMessage } from "../composables/use-localized-message";
 import { icons } from "../lib/icons";
 import {
   isAuthenticationRedirectError,
@@ -25,6 +27,8 @@ const emit = defineEmits<{ (e: "update:modelValue", value: string): void }>();
 
 const { address } = useServer();
 const { token } = useSession();
+const { t } = useI18n();
+const { errorMessage } = useLocalizedMessage();
 
 const items = ref<FolderNode[]>([]);
 const childrenByPath = ref<Record<string, FolderNode[]>>({});
@@ -126,8 +130,7 @@ async function runSearch(
   } catch (reason) {
     if (request !== searchRequest) return;
     if (isAuthenticationRedirectError(reason)) return;
-    searchError.value =
-      reason instanceof Error ? reason.message : "Could not search folders.";
+    searchError.value = errorMessage(reason, "components.folder.searchError");
   } finally {
     if (request === searchRequest) {
       searching.value = false;
@@ -154,8 +157,8 @@ onBeforeUnmount(() => {
       <Input
         v-model="searchQuery"
         type="search"
-        aria-label="Search folders"
-        placeholder="Search folders"
+        :aria-label="t('components.folder.search')"
+        :placeholder="t('components.folder.search')"
         class="pl-9"
       />
     </div>
@@ -165,8 +168,11 @@ onBeforeUnmount(() => {
       role="status"
       class="flex items-center gap-2 text-sm text-muted-foreground"
     >
-      <PeridotSpinner label="Searching all folders" class="size-4" />
-      Searching all folders…
+      <PeridotSpinner
+        :label="t('components.folder.searching')"
+        class="size-4"
+      />
+      {{ t("components.folder.searching") }}…
     </p>
 
     <p v-else-if="searchError" role="alert" class="text-sm text-destructive">
@@ -177,14 +183,14 @@ onBeforeUnmount(() => {
       v-else-if="searchActive && !searchResults.length"
       class="text-sm text-muted-foreground"
     >
-      No folders match your search.
+      {{ t("components.folder.noMatches") }}
     </p>
 
     <p
       v-if="searchActive && searchTruncated"
       class="text-sm text-muted-foreground"
     >
-      Showing the first results. Try a more specific search.
+      {{ t("components.folder.truncated") }}
     </p>
 
     <TreeRoot

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "#imports";
 import type {
   ApplyTrackMetadataRequest,
   MetadataCandidateResponse,
@@ -31,6 +32,7 @@ import { computed, ref } from "vue";
 import { useLikes } from "../composables/use-likes";
 import { useLibraryPlayer } from "../composables/use-library-player";
 import { useCatalogRevision } from "../composables/use-catalog-query";
+import { useLocalizedMessage } from "../composables/use-localized-message";
 import { useServer } from "../composables/use-server";
 import { useSession } from "../composables/use-session";
 import { icons } from "../lib/icons";
@@ -50,6 +52,8 @@ import {
 
 const props = defineProps<{ track: TrackResponse }>();
 const emit = defineEmits<{ play: [] }>();
+const { t } = useI18n();
+const { translate, errorMessage } = useLocalizedMessage();
 const { addToQueue, downloadTrack, queueLoaded } = useLibraryPlayer();
 const { invalidate: invalidateCatalog } = useCatalogRevision();
 const { address } = useServer();
@@ -116,10 +120,10 @@ async function searchMetadata() {
   } catch (reason) {
     candidates.value = [];
     if (isAuthenticationRedirectError(reason)) return;
-    metadataError.value =
-      reason instanceof Error
-        ? reason.message
-        : "Could not search for metadata matches.";
+    metadataError.value = errorMessage(
+      reason,
+      "components.metadata.searchError",
+    );
   } finally {
     metadataLoading.value = false;
   }
@@ -153,10 +157,10 @@ async function chooseMetadata(candidate: MetadataCandidateResponse) {
     invalidateCatalog();
   } catch (reason) {
     if (isAuthenticationRedirectError(reason)) return;
-    metadataError.value =
-      reason instanceof Error
-        ? reason.message
-        : "Could not apply this metadata match.";
+    metadataError.value = errorMessage(
+      reason,
+      "components.metadata.applyError",
+    );
   } finally {
     applyingMetadataId.value = "";
   }
@@ -176,9 +180,7 @@ async function revertMetadata() {
     if (isAuthenticationRedirectError(reason)) return;
     notifyMetadataUpdateFailed(
       props.track.title,
-      reason instanceof Error
-        ? reason.message
-        : "Could not restore the file metadata.",
+      errorMessage(reason, "components.metadata.restoreError"),
     );
   } finally {
     revertingMetadata.value = false;
@@ -196,14 +198,14 @@ async function revertMetadata() {
       <ContextMenuSeparator />
       <ContextMenuItem @select="emit('play')">
         <Icon :icon="icons.play" aria-hidden="true" />
-        Play
+        {{ t("context.play") }}
       </ContextMenuItem>
       <ContextMenuItem
         :disabled="!queueLoaded || addingToQueue"
         @select="addNext"
       >
         <Icon :icon="icons.addToQueue" aria-hidden="true" />
-        {{ addingToQueue ? "Adding…" : "Add to queue" }}
+        {{ addingToQueue ? t("common.adding") : t("context.addToQueue") }}
       </ContextMenuItem>
       <ContextMenuItem
         :disabled="
@@ -217,33 +219,37 @@ async function revertMetadata() {
           "
           aria-hidden="true"
         />
-        {{ likedTrackIds.includes(track.id) ? "Unlike" : "Like" }}
+        {{
+          likedTrackIds.includes(track.id)
+            ? t("context.unlike")
+            : t("context.like")
+        }}
       </ContextMenuItem>
       <ContextMenuItem :disabled="downloading" @select="download">
         <Icon :icon="icons.download" aria-hidden="true" />
-        {{ downloading ? "Downloading…" : "Download" }}
+        {{ downloading ? t("common.downloading") : t("common.download") }}
       </ContextMenuItem>
       <ContextMenuSeparator />
       <ContextMenuItem v-if="albumRouteValue" as-child>
         <NuxtLink :to="albumRouteValue">
           <Icon :icon="icons.music" aria-hidden="true" />
-          Go to album
+          {{ t("context.goToAlbum") }}
         </NuxtLink>
       </ContextMenuItem>
       <ContextMenuItem v-else disabled>
         <Icon :icon="icons.music" aria-hidden="true" />
-        Go to album
+        {{ t("context.goToAlbum") }}
       </ContextMenuItem>
       <ContextMenuItem v-if="artists.length === 1" as-child>
         <NuxtLink :to="artistRoute({ name: artists[0]! })">
           <Icon :icon="icons.user" aria-hidden="true" />
-          Go to artist
+          {{ t("context.goToArtist") }}
         </NuxtLink>
       </ContextMenuItem>
       <ContextMenuSub v-else-if="artists.length > 1">
         <ContextMenuSubTrigger>
           <Icon :icon="icons.user" aria-hidden="true" />
-          Go to artists
+          {{ t("context.goToArtists") }}
           <Icon :icon="icons.caretRight" aria-hidden="true" class="ml-auto" />
         </ContextMenuSubTrigger>
         <ContextMenuSubContent>
@@ -257,11 +263,13 @@ async function revertMetadata() {
       </ContextMenuSub>
       <ContextMenuItem v-else disabled>
         <Icon :icon="icons.user" aria-hidden="true" />
-        Go to artist
+        {{ t("context.goToArtist") }}
       </ContextMenuItem>
       <ContextMenuSeparator />
       <ContextMenuLabel v-if="track.metadata" class="text-xs">
-        Matched with {{ track.metadata.providerName }}
+        {{
+          t("context.matchedWith", { provider: track.metadata.providerName })
+        }}
       </ContextMenuLabel>
       <ContextMenuLabel
         v-if="track.metadata?.details.length"
@@ -270,19 +278,25 @@ async function revertMetadata() {
         {{
           track.metadata.details
             .slice(0, 2)
-            .map((detail) => `${detail.label}: ${detail.value}`)
+            .map(
+              (detail) => `${translate(detail.labelMessage)}: ${detail.value}`,
+            )
             .join(" · ")
         }}
       </ContextMenuLabel>
       <ContextMenuItem v-if="track.metadata" as-child>
         <a :href="track.metadata.sourceUrl" target="_blank" rel="noreferrer">
           <Icon :icon="icons.plugins" aria-hidden="true" />
-          View metadata source
+          {{ t("context.viewMetadataSource") }}
         </a>
       </ContextMenuItem>
       <ContextMenuItem @select="openMetadataDialog">
         <Icon :icon="icons.search" aria-hidden="true" />
-        {{ track.metadata ? "Correct metadata match…" : "Match metadata…" }}
+        {{
+          track.metadata
+            ? t("context.metadataCorrect")
+            : t("context.metadataMatch")
+        }}
       </ContextMenuItem>
       <ContextMenuItem
         v-if="track.metadata"
@@ -290,7 +304,11 @@ async function revertMetadata() {
         @select="revertMetadata"
       >
         <Icon :icon="icons.restart" aria-hidden="true" />
-        {{ revertingMetadata ? "Restoring…" : "Use file metadata" }}
+        {{
+          revertingMetadata
+            ? t("context.metadataRestoring")
+            : t("context.metadataRestore")
+        }}
       </ContextMenuItem>
     </ContextMenuContent>
   </ContextMenu>
@@ -302,23 +320,22 @@ async function revertMetadata() {
         class="fixed left-1/2 top-1/2 z-50 max-h-svh w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border bg-card p-6 text-card-foreground shadow-lg"
       >
         <DialogTitle class="text-lg font-semibold">
-          Match metadata
+          {{ t("context.metadataDialogTitle") }}
         </DialogTitle>
         <DialogDescription class="mt-1 text-sm text-muted-foreground">
-          Search enabled metadata providers and choose the match for
-          {{ track.title }}.
+          {{ t("context.metadataDialogDescription", { track: track.title }) }}
         </DialogDescription>
         <form class="mt-4 flex gap-2" @submit.prevent="searchMetadata">
           <Input
             v-model="metadataQuery"
             type="search"
-            aria-label="Search metadata providers"
-            placeholder="Track or artist"
+            :aria-label="t('context.metadataSearchLabel')"
+            :placeholder="t('context.metadataSearchPlaceholder')"
             class="min-w-0 flex-1"
           />
           <Button type="submit" :disabled="metadataLoading">
             <Icon :icon="icons.search" aria-hidden="true" class="size-4" />
-            {{ metadataLoading ? "Searching…" : "Search" }}
+            {{ metadataLoading ? t("common.searching") : t("common.search") }}
           </Button>
         </form>
         <p
@@ -355,7 +372,10 @@ async function revertMetadata() {
               >
                 {{
                   candidate.details
-                    .map((detail) => `${detail.label}: ${detail.value}`)
+                    .map(
+                      (detail) =>
+                        `${translate(detail.labelMessage)}: ${detail.value}`,
+                    )
                     .join(" · ")
                 }}
               </p>
@@ -369,8 +389,8 @@ async function revertMetadata() {
             >
               {{
                 applyingMetadataId === candidate.externalTrackId
-                  ? "Applying…"
-                  : "Use match"
+                  ? t("context.metadataApplying")
+                  : t("context.metadataUse")
               }}
             </Button>
           </li>
@@ -379,11 +399,11 @@ async function revertMetadata() {
           v-else-if="!metadataLoading && !metadataError"
           class="mt-4 text-sm text-muted-foreground"
         >
-          No matching recordings were found.
+          {{ t("context.metadataNoCandidates") }}
         </p>
         <div class="mt-6 flex justify-end">
           <Button type="button" variant="outline" @click="metadataOpen = false">
-            Close
+            {{ t("common.close") }}
           </Button>
         </div>
       </DialogContent>

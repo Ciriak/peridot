@@ -4,6 +4,7 @@ import { LoaderIcon } from "@lucide/vue";
 import { cn } from "cn";
 
 const props = defineProps<{
+  label: string;
   class?: HTMLAttributes["class"];
 }>();
 </script>
@@ -11,7 +12,7 @@ const props = defineProps<{
 <template>
   <LoaderIcon
     role="status"
-    aria-label="Loading"
+    :aria-label="label"
     :class="cn('size-4 animate-spin', props.class)"
   />
 </template>

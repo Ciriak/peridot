@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useHead } from "#imports";
+import { useHead, useI18n } from "#imports";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
@@ -8,7 +8,8 @@ import ArtistCard from "../../components/ArtistCard.vue";
 import { useCatalogArtistQuery } from "../../composables/use-catalog-query";
 import { useLikes } from "../../composables/use-likes";
 
-useHead({ title: "Artists — Peridot" });
+const { t } = useI18n();
+useHead({ title: t("page.artists.title") });
 
 const {
   items: artists,
@@ -30,16 +31,24 @@ onMounted(() => {
 
 <template>
   <div class="space-y-2">
-    <h1 class="text-2xl font-semibold tracking-tight">Artists</h1>
+    <h1 class="text-2xl font-semibold tracking-tight">
+      {{ t("navigation.artists") }}
+    </h1>
     <p class="text-sm text-muted-foreground">
-      Artists assembled from the performers tagged in your music library.
+      {{ t("page.artists.description") }}
     </p>
   </div>
   <section aria-labelledby="artists-heading" class="space-y-4">
     <div class="flex items-center justify-between gap-4">
-      <h2 id="artists-heading" class="text-lg font-semibold">All artists</h2>
+      <h2 id="artists-heading" class="text-lg font-semibold">
+        {{ t("page.artists.all") }}
+      </h2>
       <Badge variant="secondary">
-        {{ loading ? "Loading" : `${artists.length}${hasMore ? "+" : ""}` }}
+        {{
+          loading
+            ? t("common.loading")
+            : `${artists.length}${hasMore ? "+" : ""}`
+        }}
       </Badge>
     </div>
     <div
@@ -47,8 +56,8 @@ onMounted(() => {
       role="status"
       class="flex items-center gap-3 rounded-lg border p-6 text-sm text-muted-foreground"
     >
-      <PeridotSpinner label="Loading artists" />
-      Loading your artists…
+      <PeridotSpinner :label="t('page.artists.loading')" />
+      {{ t("page.artists.loading") }}…
     </div>
     <div
       v-else-if="error"
@@ -56,7 +65,9 @@ onMounted(() => {
       class="space-y-3 rounded-lg border p-6 text-sm"
     >
       <p>{{ error }}</p>
-      <Button variant="outline" @click="load(true)">Try again</Button>
+      <Button variant="outline" @click="load(true)">{{
+        t("common.tryAgain")
+      }}</Button>
     </div>
     <div
       v-else-if="artists.length"
@@ -71,7 +82,11 @@ onMounted(() => {
           :disabled="loadingMore"
           @click="loadMore"
         >
-          {{ loadingMore ? "Loading artists…" : "Load more artists" }}
+          {{
+            loadingMore
+              ? t("page.artists.loadingMore")
+              : t("page.artists.loadMore")
+          }}
         </Button>
       </div>
     </div>
@@ -81,9 +96,9 @@ onMounted(() => {
       class="rounded-lg border p-6 text-sm text-muted-foreground"
     >
       <template v-if="loaded">
-        No artists found in your current library.
+        {{ t("page.artists.empty") }}
       </template>
-      <template v-else> Loading your artists… </template>
+      <template v-else>{{ t("page.artists.loading") }}…</template>
     </p>
   </section>
 </template>

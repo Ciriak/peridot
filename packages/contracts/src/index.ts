@@ -3,6 +3,14 @@ export interface HealthResponse {
   service: "peridot";
 }
 
+export type MessageParams = Record<string, string | number>;
+
+export interface MessageDescriptor {
+  key: string;
+  params?: MessageParams;
+  count?: number;
+}
+
 export type UserRole = "admin" | "member";
 
 export interface UserResponse {
@@ -206,6 +214,9 @@ export type TaskStatus =
 
 export type TaskKind = "library_scan" | "metadata_fetch" | `plugin:${string}`;
 
+export const TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY =
+  "metadata.activeProvider";
+
 export type TaskProgressResponse =
   | {
       state: "indeterminate";
@@ -220,8 +231,9 @@ export type TaskProgressResponse =
 
 export interface TaskDetailResponse {
   key: string;
-  label: string;
   value: string;
+  labelMessage: MessageDescriptor;
+  valueMessage: MessageDescriptor | null;
 }
 
 export interface TaskSourceResponse {
@@ -233,12 +245,12 @@ export interface TaskResponse {
   id: string;
   kind: TaskKind;
   status: TaskStatus;
-  title: string;
+  titleMessage: MessageDescriptor;
   parentTaskId: string | null;
   source: TaskSourceResponse | null;
   progress: TaskProgressResponse;
   details: TaskDetailResponse[];
-  failureSummary: string | null;
+  failureMessage: MessageDescriptor | null;
   createdAt: string;
   startedAt: string | null;
   completedAt: string | null;
@@ -254,7 +266,7 @@ export interface TaskListResponse {
 export interface ApiErrorResponse {
   error: {
     code: string;
-    message: string;
+    messageDescriptor: MessageDescriptor;
   };
 }
 
@@ -295,17 +307,17 @@ export type MetadataProviderFieldType = "text" | "url" | "password";
 
 export interface MetadataProviderFieldDefinition {
   key: string;
-  label: string;
+  labelMessage: MessageDescriptor;
   type: MetadataProviderFieldType;
   required: boolean;
-  placeholder: string | null;
-  helpText: string | null;
+  placeholderMessage: MessageDescriptor | null;
+  helpMessage: MessageDescriptor | null;
 }
 
 export interface MetadataProviderDefinitionResponse {
   kind: MetadataProviderKind;
-  name: string;
-  description: string;
+  nameMessage: MessageDescriptor;
+  descriptionMessage: MessageDescriptor;
   configurationFields: MetadataProviderFieldDefinition[];
   credentialField: MetadataProviderFieldDefinition | null;
   supportsAutomaticMatching: boolean;
@@ -363,8 +375,8 @@ export interface TrackMetadataResponse {
 
 export interface TrackMetadataDetail {
   key: string;
-  label: string;
   value: string;
+  labelMessage: MessageDescriptor;
 }
 
 export interface MetadataCandidateResponse {
@@ -469,7 +481,7 @@ export interface RealtimeResyncRequiredMessage {
 export interface RealtimeErrorMessage {
   type: "error";
   code: "invalid_message" | "forbidden_topic" | "internal_error";
-  message: string;
+  messageDescriptor: MessageDescriptor;
 }
 
 export interface RealtimeTaskUpdatedEvent {

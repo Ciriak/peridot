@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { definePageMeta } from "#imports";
+import { definePageMeta, useI18n } from "#imports";
 import { Button } from "@peridot/ui/components/ui/button";
 import { Input } from "@peridot/ui/components/ui/input";
 import { computed, ref, watch } from "vue";
 import { useServer } from "../../composables/use-server";
 import { useSession } from "../../composables/use-session";
 import { useUser } from "../../composables/use-user";
+import { useLocalizedMessage } from "../../composables/use-localized-message";
 import {
   isAuthenticationRedirectError,
   updateUserProfile,
@@ -13,6 +14,8 @@ import {
 
 definePageMeta({ layout: "settings" });
 
+const { t } = useI18n();
+const { errorMessage } = useLocalizedMessage();
 const { address } = useServer();
 const { token } = useSession();
 const { user } = useUser();
@@ -43,11 +46,11 @@ async function saveProfile() {
   error.value = "";
   saved.value = false;
   if (!displayNameValid.value) {
-    error.value = "Use a display name between 2 and 80 characters.";
+    error.value = t("settings.account.invalid");
     return;
   }
   if (!address.value || !token.value) {
-    error.value = "Connect to your Peridot server and sign in again.";
+    error.value = t("settings.account.disconnected");
     return;
   }
 
@@ -61,10 +64,7 @@ async function saveProfile() {
     saved.value = true;
   } catch (reason) {
     if (isAuthenticationRedirectError(reason)) return;
-    error.value =
-      reason instanceof Error
-        ? reason.message
-        : "Peridot could not update your profile.";
+    error.value = errorMessage(reason, "settings.account.saveError");
   } finally {
     saving.value = false;
   }
@@ -74,9 +74,11 @@ async function saveProfile() {
 <template>
   <div class="space-y-6">
     <div class="space-y-2">
-      <h2 class="text-2xl font-semibold tracking-tight">Profile</h2>
+      <h2 class="text-2xl font-semibold tracking-tight">
+        {{ t("settings.account.title") }}
+      </h2>
       <p class="text-sm text-muted-foreground">
-        Manage the profile shown to other people who use this server.
+        {{ t("settings.account.description") }}
       </p>
     </div>
 
@@ -85,7 +87,9 @@ async function saveProfile() {
       @submit.prevent="saveProfile"
     >
       <div class="space-y-2">
-        <label for="account-email" class="text-sm font-medium">Email</label>
+        <label for="account-email" class="text-sm font-medium">{{
+          t("settings.account.email")
+        }}</label>
         <Input
           id="account-email"
           :model-value="user?.email ?? ''"
@@ -94,13 +98,13 @@ async function saveProfile() {
           autocomplete="email"
         />
         <p class="text-xs text-muted-foreground">
-          Your email is your sign-in address and cannot be changed here.
+          {{ t("settings.account.emailHelp") }}
         </p>
       </div>
 
       <div class="space-y-2">
         <label for="account-display-name" class="text-sm font-medium">
-          Display name
+          {{ t("settings.account.displayName") }}
         </label>
         <Input
           id="account-display-name"
@@ -116,7 +120,7 @@ async function saveProfile() {
           "
         />
         <p id="account-display-name-help" class="text-xs text-muted-foreground">
-          Use 2–80 characters. Display names are unique across this server.
+          {{ t("settings.account.displayNameHelp") }}
         </p>
         <p
           v-if="error"
@@ -127,7 +131,7 @@ async function saveProfile() {
           {{ error }}
         </p>
         <p v-else-if="saved" role="status" class="text-sm text-success">
-          Display name updated.
+          {{ t("settings.account.updated") }}
         </p>
       </div>
 
@@ -136,7 +140,7 @@ async function saveProfile() {
         :disabled="saving || !displayNameValid"
         :aria-busy="saving"
       >
-        {{ saving ? "Saving…" : "Save changes" }}
+        {{ saving ? t("common.saving") : t("common.saveChanges") }}
       </Button>
     </form>
   </div>

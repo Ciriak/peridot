@@ -23,5 +23,5 @@ test("the web app uses the shared favicon and onboarding logo", async () => {
   assert.match(app, /@peridot\/ui\/assets\/brand\/favicon\.png/);
   assert.match(app, /rel: "icon", type: "image\/png"/);
   assert.match(onboarding, /@peridot\/ui\/assets\/brand\/logo\.svg/);
-  assert.match(onboarding, /<img :src="logo" alt="Peridot"/);
+  assert.match(onboarding, /<img :src="logo" :alt="t\('app\.name'\)"/);
 });
