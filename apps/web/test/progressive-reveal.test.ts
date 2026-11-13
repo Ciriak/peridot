@@ -82,12 +82,12 @@ test("catalog pages load bounded cursor pages", async () => {
   for (const page of [home, albums, artists, artistDetail, search]) {
     assert.match(page, /useCatalog(?:Album|Artist|Track)Query/);
   }
-  assert.match(home, /useCatalogTrackQuery/);
   assert.match(home, /useCatalogAlbumQuery/);
-  assert.match(home, /useCatalogArtistQuery/);
-  assert.match(home, /limit: HOME_PREVIEW_LIMIT/);
-  assert.match(home, /v-for="album in likedAlbumPreview"/);
-  assert.match(home, /v-for="artist in likedArtistPreview"/);
+  assert.match(home, /useCatalogTrackQuery/);
+  assert.match(home, /selectHomeAlbumSuggestions/);
+  assert.match(home, /selectHomeTrackSuggestions/);
+  assert.match(home, /v-for="album in suggestedAlbums"/);
+  assert.match(home, /:tracks="suggestedTracks"/);
   assert.match(albums, /v-for="album in albums"/);
   assert.match(artists, /v-for="artist in artists"/);
   assert.match(artistDetail, /v-for="album in albums"/);

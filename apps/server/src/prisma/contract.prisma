@@ -14,6 +14,54 @@ model User {
   @@index([role])
 }
 
+model Playlist {
+  id        String         @id @onCreate(cuid(2))
+  userId    String
+  name      String
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     PlaylistItem[]
+  likes     PlaylistLike[]
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @onCreate(now()) @onUpdate(now())
+
+  @@index([userId, updatedAt])
+}
+
+model PlaylistItem {
+  id               String    @id @onCreate(cuid(2))
+  playlistId       String
+  position         Int
+  identityKey      String
+  trackId          String?
+  externalProvider String?
+  externalTrackId  String?
+  snapshotTitle    String
+  snapshotArtist   String
+  snapshotAlbum    String?
+  snapshotDuration Int?
+  playlist         Playlist  @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  track            Track?    @relation(fields: [trackId], references: [id], onDelete: SetNull)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @onCreate(now()) @onUpdate(now())
+
+  @@unique([playlistId, identityKey])
+  @@index([playlistId, position])
+  @@index([trackId])
+}
+
+model PlaylistLike {
+  id         String   @id @onCreate(cuid(2))
+  userId     String
+  playlistId String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  playlist   Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, playlistId])
+  @@index([userId, createdAt])
+  @@index([playlistId])
+}
+
 model Session {
   id        String   @id @onCreate(cuid(2))
   tokenHash String   @unique
@@ -73,6 +121,7 @@ model Track {
   @@index([artist, album, title])
   @@index([sourceId])
   @@index([coverId])
+  @@index([metadataProviderKind, metadataExternalTrackId])
 }
 
 model TrackCover {

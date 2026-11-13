@@ -2,6 +2,100 @@
 
 Last updated: 2026-11-13.
 
+## Player metadata like and context menu
+
+The fixed player's like control now sits immediately to the right of the active
+track's artist links instead of in the transport row. The active title and
+artist block is now a trigger for the shared track context menu, so right-click
+or long-press exposes the same playback, queue, playlist, favorite, download,
+album/artist navigation, and metadata actions used by track lists.
+
+Checks run:
+
+- Focused player, context-menu, and styling tests (6 passing)
+- Full web test suite (178 passing)
+- Web typecheck
+- Targeted ESLint and Prettier checks
+- Production web build (96 PWA precache entries)
+- Live Tauri verification against `http://127.0.0.1:3000`: like placement,
+  right-click activation, and rendered context-menu actions
+- `git diff --check`
+
+Known limits: the live menu was exercised at the current desktop window size;
+compact/mobile visual QA was not repeated. Existing uncommitted playlist, like,
+offline, and contributor-guidance changes were preserved. No commit, push, tag,
+publication, or deployment was performed.
+
+## Home album and track suggestions
+
+Home no longer mirrors the user's liked collections. It now shows a bounded
+suggestion feed of up to ten albums and ten tracks, excluding liked records and
+prioritizing albums and tracks by artists the user has liked. The suggestion
+heading has no count badge or collection links. Artists are not rendered as
+suggestions, while the separate playlist preview remains on Home.
+
+Checks run:
+
+- Focused suggestions, homepage, progressive-loading, and playlist tests
+  (13 passing)
+- Full web test suite (177 passing)
+- Web typecheck
+- Targeted ESLint and Prettier checks
+- Production web build (96 PWA precache entries)
+- `git diff --check`
+
+Known limits: live browser visual QA was not run. The query uses the first 100
+album and track candidates, so an unusually large block of liked records can
+reduce the number of suggestions. Existing uncommitted playlist, likes,
+offline, and contributor-guidance changes were preserved. No commit, push, tag,
+publication, or deployment was performed.
+
+## Player like control beside repeat
+
+The fixed player's existing track like control now sits directly after the
+repeat control in the transport row instead of beside the active-track
+metadata. Its persisted liked state, pending state, accessible label, and
+authentication-aware disabled state are unchanged. A player regression asserts
+the control's position so it remains part of the transport group.
+
+Checks run:
+
+- Focused player tests (2 passing)
+- Full web test suite (175 passing)
+- Web typecheck
+- Targeted ESLint and Prettier checks
+- Production web build (97 PWA precache entries)
+- `git diff --check`
+
+Known limits: live browser visual QA was not run. Existing uncommitted playlist,
+likes, offline, and contributor-guidance changes were preserved. No commit,
+push, tag, publication, or deployment was performed.
+
+## Contributor guidance moved out of README
+
+The operational and contributor guidance previously contained in `README.md`
+was moved to `docs/DEVELOPMENT.md` without dropping its setup commands,
+architecture notes, configuration, API behavior, formatting rules, commit
+conventions, branch policy, or UI rules. `AGENTS.md` now requires agents to read
+that reference and to treat the README as user-facing documentation rather than
+the agent instruction layer.
+
+`README.md` is intentionally reduced to the project name, tagline, and product
+description so the owner can rewrite it. The duplicated license section in
+`AGENTS.md` was also removed.
+
+Checks run:
+
+- Prettier check for every changed Markdown file
+- Local Markdown link validation for every changed documentation file
+- `git diff --check`
+
+Known limits: documentation-only change; application code, dependencies, schema,
+tests, and builds were not changed. No commit, push, tag, publication, or
+deployment was performed.
+
+Next: rewrite `README.md` for the audience and structure requested by the owner.
+
 ## Home library overview
 
 The standalone Library page and sidebar item are removed. Home now acts as the

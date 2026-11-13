@@ -288,6 +288,98 @@ export function useOfflineTracks() {
     }
   }
 
+  async function savePlaylist(
+    playlistId: string,
+    tracks: TrackResponse[],
+  ): Promise<boolean> {
+    if (!scope.value || !token.value || isAlbumPending(playlistId)) {
+      return false;
+    }
+    if (tracks.some((track) => track.available && isPending(track.id))) {
+      return false;
+    }
+
+    const startedTrackIds: string[] = [];
+    pendingAlbumIds.value = [...pendingAlbumIds.value, playlistId];
+    error.value = null;
+    setAlbumProgress(playlistId, null);
+    try {
+      const result = await saveOfflineCollection(tracks, {
+        isSaved,
+        onProgress: (progress) => setAlbumProgress(playlistId, progress),
+        save: async (track, onCollectionProgress) => {
+          pendingTrackIds.value = [...pendingTrackIds.value, track.id];
+          startedTrackIds.push(track.id);
+          setTrackProgress(track.id, null);
+          await saveTrack(track, (progress) => {
+            setTrackProgress(track.id, progress);
+            onCollectionProgress?.(progress);
+          });
+        },
+      });
+      if (!result.total) {
+        error.value = t("error.offlinePlaylistEmpty");
+        return false;
+      }
+      if (result.failure) {
+        error.value = saveFailureMessage(result.failure.reason);
+        return false;
+      }
+      return true;
+    } finally {
+      const started = new Set(startedTrackIds);
+      pendingTrackIds.value = pendingTrackIds.value.filter(
+        (trackId) => !started.has(trackId),
+      );
+      for (const trackId of started) setTrackProgress(trackId, undefined);
+      pendingAlbumIds.value = pendingAlbumIds.value.filter(
+        (pendingId) => pendingId !== playlistId,
+      );
+      setAlbumProgress(playlistId, undefined);
+    }
+  }
+
+  async function removePlaylist(
+    playlistId: string,
+    trackIds: readonly string[],
+  ): Promise<boolean> {
+    if (!scope.value || isAlbumPending(playlistId)) return false;
+    const trackIdSet = new Set(trackIds);
+    const playlistTracks = savedTracks.value.filter((saved) =>
+      trackIdSet.has(saved.track.id),
+    );
+    if (playlistTracks.some((saved) => isPending(saved.track.id))) return false;
+
+    pendingAlbumIds.value = [...pendingAlbumIds.value, playlistId];
+    error.value = null;
+    try {
+      for (const saved of playlistTracks) {
+        pendingTrackIds.value = [...pendingTrackIds.value, saved.track.id];
+        try {
+          await removeTrackForOffline(scope.value, saved.track.id);
+          savedTracks.value = savedTracks.value.filter(
+            (candidate) => candidate.track.id !== saved.track.id,
+          );
+          playerSavedTrackIds.value = savedTracks.value.map(
+            (candidate) => candidate.track.id,
+          );
+        } finally {
+          pendingTrackIds.value = pendingTrackIds.value.filter(
+            (trackId) => trackId !== saved.track.id,
+          );
+        }
+      }
+      return true;
+    } catch (reason) {
+      error.value = errorMessage(reason, "error.offlineRemove");
+      return false;
+    } finally {
+      pendingAlbumIds.value = pendingAlbumIds.value.filter(
+        (pendingId) => pendingId !== playlistId,
+      );
+    }
+  }
+
   async function resolve(trackId: string): Promise<SavedOfflineTrack | null> {
     if (!scope.value) return null;
     const saved =
@@ -326,8 +418,10 @@ export function useOfflineTracks() {
     albumProgressFor,
     save,
     saveAlbum,
+    savePlaylist,
     remove,
     removeAlbum,
+    removePlaylist,
     resolve,
     tracksMatching,
   };

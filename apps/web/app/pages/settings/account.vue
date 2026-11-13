@@ -180,11 +180,13 @@ async function confirmLogout() {
       <Button
         type="button"
         variant="ghost"
+        size="sm"
+        class="text-muted-foreground"
         :disabled="loggingOut"
         :aria-busy="loggingOut"
         @click="requestLogout"
       >
-        <Icon :icon="icons.logout" aria-hidden="true" class="size-5" />
+        <Icon :icon="icons.logout" aria-hidden="true" class="size-4" />
         {{ loggingOut ? t("navigation.loggingOut") : t("navigation.logOut") }}
       </Button>
     </div>

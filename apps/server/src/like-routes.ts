@@ -4,6 +4,7 @@ import type {
   LikeListResponse,
   LikeResponse,
   LikeTarget,
+  PlaylistLikeResponse,
   TrackLikeResponse,
 } from "@peridot/contracts";
 import type { FastifyInstance } from "fastify";
@@ -13,6 +14,7 @@ import { message } from "./messages.js";
 import type {
   AlbumLikeRow,
   ArtistLikeRow,
+  PlaylistLikeRow,
   TrackLikeRow,
 } from "./prisma/models.js";
 
@@ -63,6 +65,17 @@ function parseLikeTarget(body: unknown): LikeTarget | null {
   if (value.kind === "artist" && validLabel(value.name)) {
     return { kind: "artist", name: value.name.trim() };
   }
+  if (
+    value.kind === "playlist" &&
+    validTrackId(value.playlistId) &&
+    validLabel(value.name)
+  ) {
+    return {
+      kind: "playlist",
+      playlistId: value.playlistId.trim(),
+      name: value.name.trim(),
+    };
+  }
   return null;
 }
 
@@ -89,13 +102,24 @@ function artistLikeResponse(like: ArtistLikeRow): ArtistLikeResponse {
   };
 }
 
+function playlistLikeResponse(
+  like: PlaylistLikeRow,
+  name: string,
+): PlaylistLikeResponse {
+  return {
+    playlistId: like.playlistId,
+    name,
+    likedAt: like.createdAt.toISOString(),
+  };
+}
+
 export async function registerLikeRoutes(
   app: FastifyInstance,
   database: Database,
 ) {
   app.get("/api/likes", async (request): Promise<LikeListResponse> => {
     const userId = request.authenticatedUser!.id;
-    const [tracks, albums, artists] = await Promise.all([
+    const [tracks, albums, artists, playlists] = await Promise.all([
       database.orm.TrackLike.where({ userId })
         .orderBy((like) => like.createdAt.desc())
         .all(),
@@ -105,11 +129,18 @@ export async function registerLikeRoutes(
       database.orm.ArtistLike.where({ userId })
         .orderBy((like) => like.createdAt.desc())
         .all(),
+      database.orm.PlaylistLike.where({ userId })
+        .include("playlist")
+        .orderBy((like) => like.createdAt.desc())
+        .all(),
     ]);
     return {
       tracks: tracks.map(trackLikeResponse),
       albums: albums.map(albumLikeResponse),
       artists: artists.map(artistLikeResponse),
+      playlists: playlists.map((like) =>
+        playlistLikeResponse(like, like.playlist.name),
+      ),
     };
   });
 
@@ -186,6 +217,36 @@ export async function registerLikeRoutes(
       return response;
     }
 
+    if (target.kind === "playlist") {
+      const playlist = await database.orm.Playlist.where({
+        id: target.playlistId,
+        userId,
+      }).first();
+      if (!playlist) {
+        return sendError(
+          reply,
+          404,
+          "playlist_not_found",
+          "Playlist not found",
+          message("api.message.playlistNotFound"),
+        );
+      }
+      const like =
+        (await database.orm.PlaylistLike.where({
+          userId,
+          playlistId: playlist.id,
+        }).first()) ??
+        (await database.orm.PlaylistLike.create({
+          userId,
+          playlistId: playlist.id,
+        }));
+      const response: LikeResponse = {
+        kind: "playlist",
+        ...playlistLikeResponse(like, playlist.name),
+      };
+      return response;
+    }
+
     const normalizedName = normalize(target.name);
     const like =
       (await database.orm.ArtistLike.where({
@@ -239,10 +300,15 @@ export async function registerLikeRoutes(
         userId,
         albumId: target.albumId,
       }).deleteAndCount();
-    } else {
+    } else if (target.kind === "artist") {
       await database.orm.ArtistLike.where({
         userId,
         normalizedName: normalize(target.name),
+      }).deleteAndCount();
+    } else {
+      await database.orm.PlaylistLike.where({
+        userId,
+        playlistId: target.playlistId,
       }).deleteAndCount();
     }
 

@@ -1,5 +1,9 @@
 import type { QueryKey } from "@tanstack/vue-query";
-import type { CardListOptions, TrackListOptions } from "./peridot-client";
+import type {
+  CardListOptions,
+  PlaylistListOptions,
+  TrackListOptions,
+} from "./peridot-client";
 
 export const PERIDOT_QUERY_ROOT = "peridot";
 
@@ -29,6 +33,15 @@ export const queryKeys = {
   },
   likes(scope: PeridotQueryScope) {
     return [...peridotScopeKey(scope), "likes"];
+  },
+  playlistsRoot(scope: PeridotQueryScope) {
+    return [...peridotScopeKey(scope), "playlists"];
+  },
+  playlists(scope: PeridotQueryScope, options: PlaylistListOptions = {}) {
+    return [...queryKeys.playlistsRoot(scope), { list: options }];
+  },
+  playlist(scope: PeridotQueryScope, playlistId: string) {
+    return [...queryKeys.playlistsRoot(scope), { detail: playlistId }];
   },
   quickPicks(scope: PeridotQueryScope) {
     return [...peridotScopeKey(scope), "quick-picks"];

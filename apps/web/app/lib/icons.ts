@@ -8,6 +8,7 @@ import playlist from "@iconify-icons/basil/rows-outline";
 import plugins from "@iconify-icons/basil/apps-outline";
 import close from "@iconify-icons/basil/cross-outline";
 import menu from "@iconify-icons/basil/menu-outline";
+import plus from "@iconify-icons/basil/plus-outline";
 import music from "@iconify-icons/basil/music-outline";
 import play from "@iconify-icons/basil/play-solid";
 import pause from "@iconify-icons/basil/pause-solid";
@@ -58,6 +59,7 @@ export const icons = {
   plugins,
   close,
   menu,
+  plus,
   music,
   play,
   pause,

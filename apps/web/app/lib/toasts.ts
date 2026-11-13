@@ -208,6 +208,22 @@ export function notifyOfflineAlbumFailed(
   });
 }
 
+export function notifyOfflinePlaylistFailed(
+  playlistTitle: string,
+  detailMessage: string,
+) {
+  addToast({
+    titleMessage: message("toast.playlistOfflineFailedTitle"),
+    descriptionMessage: message("toast.playlistOfflineFailed", {
+      playlist: playlistTitle,
+      message: detailMessage,
+    }),
+    status: "error",
+    duration: 8000,
+    kind: "error",
+  });
+}
+
 export function notifyLikeFailed(target: string, detailMessage: string) {
   addToast({
     titleMessage: message("toast.likeFailedTitle"),
@@ -240,6 +256,27 @@ export function notifyAddedToQueue(trackTitle: string) {
   addToast({
     titleMessage: message("toast.addedToQueueTitle"),
     descriptionMessage: message("toast.addedToQueue", { track: trackTitle }),
+    status: "success",
+    duration: 5000,
+    kind: "success",
+  });
+}
+
+export function notifyPlaylistTrackAdded(
+  playlistTitle: string,
+  trackTitle: string,
+  added: boolean,
+) {
+  addToast({
+    titleMessage: message(
+      added
+        ? "toast.playlistTrackAddedTitle"
+        : "toast.playlistTrackPresentTitle",
+    ),
+    descriptionMessage: message(
+      added ? "toast.playlistTrackAdded" : "toast.playlistTrackPresent",
+      { playlist: playlistTitle, track: trackTitle },
+    ),
     status: "success",
     duration: 5000,
     kind: "success",

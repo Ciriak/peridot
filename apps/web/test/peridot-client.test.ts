@@ -1,55 +1,63 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  addPlaylistItem,
   applyArtistMetadata,
+  applyTrackMetadata,
   createAdministrator,
   createLike,
-  createMetadataProvider,
   createManagedUser,
+  createMetadataProvider,
   createPlaybackToken,
+  createPlaylist,
   createRealtimeTicket,
   createSource,
   createUserSession,
-  deleteSource,
   deleteLike,
   deleteManagedUser,
+  deletePlaylist,
+  deleteSource,
   discoverLocalServers,
   fetchAuthStatus,
-  fetchQueue,
   fetchLogs,
+  fetchPlaylist,
+  fetchQueue,
   fetchQuickPicks,
   fetchServerSettings,
   getTask,
-  applyTrackMetadata,
   isAuthenticationRedirectError,
-  PeridotApiError,
-  listDirectories,
   listArtistMetadataCandidates,
+  listDirectories,
   listLikes,
   listMetadataCandidates,
   listMetadataProviderDefinitions,
   listMetadataProviders,
+  listPlaylists,
   listSources,
-  listUsers,
   listTasks,
   listTracks,
-  reorderSources,
-  reorderMetadataProviders,
-  replaceQueue,
-  refreshMetadata,
+  listUsers,
+  PeridotApiError,
   recordTrackPlay,
-  resetMetadata,
+  refreshMetadata,
+  removePlaylistItem,
+  reorderMetadataProviders,
+  reorderPlaylistItems,
+  reorderSources,
+  replaceQueue,
   rescanSource,
-  revertTrackMetadata,
+  resetMetadata,
   revertArtistMetadata,
+  revertTrackMetadata,
   revokeSession,
   searchDirectories,
   setAuthenticationRedirectHandler,
-  updateMetadataProvider,
-  updateManagedUser,
-  updateUserProfile,
   startLibraryScan,
   trackAudioUrl,
+  updateManagedUser,
+  updateMetadataProvider,
+  updatePlaylist,
+  updateUserProfile,
 } from "../app/lib/peridot-client.ts";
 
 function queuedTask(
@@ -528,13 +536,19 @@ test("like requests use the authenticated likes endpoint and expected targets", 
         likedAt: "2026-11-10T12:00:00.000Z",
       });
     }
-    return Response.json({ tracks: [], albums: [], artists: [] });
+    return Response.json({
+      tracks: [],
+      albums: [],
+      artists: [],
+      playlists: [],
+    });
   };
 
   assert.deepEqual(await listLikes("http://127.0.0.1:17430", "session-token"), {
     tracks: [],
     albums: [],
     artists: [],
+    playlists: [],
   });
   await createLike("http://127.0.0.1:17430", "session-token", {
     kind: "track",
@@ -586,6 +600,148 @@ test("like requests use the authenticated likes endpoint and expected targets", 
     new Headers(requests[2]?.init?.headers).get("Content-Type"),
     "application/json",
   );
+});
+
+test("playlist requests use authenticated owner-scoped endpoints and bodies", async (context) => {
+  const originalFetch = globalThis.fetch;
+  context.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  const requests: Array<{ input: string; init?: RequestInit }> = [];
+  const detail = {
+    id: "playlist-1",
+    name: "Road trip",
+    trackCount: 1,
+    availableTrackCount: 1,
+    durationMs: 120000,
+    coverUrls: [],
+    liked: false,
+    containsTrack: true,
+    createdAt: "2026-11-13T10:00:00.000Z",
+    updatedAt: "2026-11-13T10:00:00.000Z",
+    entries: [],
+  };
+  globalThis.fetch = async (input, init) => {
+    requests.push({ input: String(input), init });
+    if (init?.method === "DELETE") return new Response(null, { status: 204 });
+    if (
+      !init?.method &&
+      String(input).includes("/api/playlists?") &&
+      !String(input).includes("/api/playlists/")
+    ) {
+      return Response.json({
+        items: [detail],
+        totalCount: 1,
+        nextOffset: null,
+      });
+    }
+    if (init?.method === "POST" && String(input).endsWith("/api/playlists")) {
+      return Response.json(detail, { status: 201 });
+    }
+    if (init?.method === "POST") {
+      return Response.json({ added: true, playlist: detail }, { status: 201 });
+    }
+    return Response.json(detail);
+  };
+
+  await listPlaylists("http://127.0.0.1:17430", "session-token", {
+    limit: 20,
+    trackId: "track/one",
+  });
+  await createPlaylist("http://127.0.0.1:17430", "session-token", {
+    name: "Road trip",
+  });
+  await fetchPlaylist(
+    "http://127.0.0.1:17430",
+    "session-token",
+    "playlist/one",
+  );
+  await updatePlaylist(
+    "http://127.0.0.1:17430",
+    "session-token",
+    "playlist/one",
+    { name: "Night drive" },
+  );
+  await addPlaylistItem(
+    "http://127.0.0.1:17430",
+    "session-token",
+    "playlist/one",
+    { kind: "catalog", trackId: "track/one" },
+  );
+  await reorderPlaylistItems(
+    "http://127.0.0.1:17430",
+    "session-token",
+    "playlist/one",
+    { itemIds: ["item-2", "item-1"] },
+  );
+  await removePlaylistItem(
+    "http://127.0.0.1:17430",
+    "session-token",
+    "playlist/one",
+    "item/one",
+  );
+  await deletePlaylist(
+    "http://127.0.0.1:17430",
+    "session-token",
+    "playlist/one",
+  );
+
+  assert.deepEqual(
+    requests.map(({ input, init }) => ({ input, method: init?.method })),
+    [
+      {
+        input:
+          "http://127.0.0.1:17430/api/playlists?limit=20&trackId=track%2Fone",
+        method: undefined,
+      },
+      {
+        input: "http://127.0.0.1:17430/api/playlists",
+        method: "POST",
+      },
+      {
+        input: "http://127.0.0.1:17430/api/playlists/playlist%2Fone",
+        method: undefined,
+      },
+      {
+        input: "http://127.0.0.1:17430/api/playlists/playlist%2Fone",
+        method: "PATCH",
+      },
+      {
+        input: "http://127.0.0.1:17430/api/playlists/playlist%2Fone/items",
+        method: "POST",
+      },
+      {
+        input:
+          "http://127.0.0.1:17430/api/playlists/playlist%2Fone/items/order",
+        method: "PUT",
+      },
+      {
+        input:
+          "http://127.0.0.1:17430/api/playlists/playlist%2Fone/items/item%2Fone",
+        method: "DELETE",
+      },
+      {
+        input: "http://127.0.0.1:17430/api/playlists/playlist%2Fone",
+        method: "DELETE",
+      },
+    ],
+  );
+  for (const request of requests) {
+    assert.equal(
+      new Headers(request.init?.headers).get("Authorization"),
+      "Bearer session-token",
+    );
+  }
+  assert.deepEqual(JSON.parse(String(requests[3]?.init?.body)), {
+    name: "Night drive",
+  });
+  assert.deepEqual(JSON.parse(String(requests[4]?.init?.body)), {
+    kind: "catalog",
+    trackId: "track/one",
+  });
+  assert.deepEqual(JSON.parse(String(requests[5]?.init?.body)), {
+    itemIds: ["item-2", "item-1"],
+  });
 });
 
 test("onboarding reads setup status and creates the first administrator", async (context) => {

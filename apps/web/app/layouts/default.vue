@@ -19,6 +19,7 @@ import LikeButton from "../components/LikeButton.vue";
 import QueueDrawer from "../components/QueueDrawer.vue";
 import SidebarQuickPicks from "../components/SidebarQuickPicks.vue";
 import TaskProgressIndicator from "../components/TaskProgressIndicator.vue";
+import TrackContextMenu from "../components/TrackContextMenu.vue";
 import { useCachedArtwork } from "../composables/use-cached-artwork";
 import { useLikes } from "../composables/use-likes";
 import { useLibraryPlayer } from "../composables/use-library-player";
@@ -126,6 +127,10 @@ const currentTrackTitleRoute = computed(() =>
 function toggleCurrentTrackLike() {
   if (currentTrackId.value)
     void toggleLike({ kind: "track", trackId: currentTrackId.value });
+}
+
+function playActiveTrack() {
+  if (active.value && !playing.value) togglePlayback();
 }
 
 async function openSearch() {
@@ -441,47 +446,74 @@ onBeforeUnmount(stopLoadingRay);
           <Icon v-else :icon="icons.music" aria-hidden="true" class="size-8" />
         </div>
         <div class="min-w-0">
-          <NuxtLink
-            v-if="currentTrackTitleRoute"
-            :to="currentTrackTitleRoute"
-            class="block truncate rounded-sm text-sm font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            :class="!currentTrackPlayable && 'opacity-60'"
+          <TrackContextMenu
+            v-if="active"
+            :track="active"
+            @play="playActiveTrack"
           >
-            {{ active?.title }}
-          </NuxtLink>
-          <p v-else class="select-none truncate text-sm font-medium">
-            {{ active?.title ?? t("player.noTrack") }}
-          </p>
-          <p
-            v-if="error"
-            role="alert"
-            class="truncate text-xs text-destructive"
-          >
-            {{ error }}
-          </p>
-          <p v-else class="truncate text-xs text-muted-foreground">
-            <TrackArtistLinks
-              v-if="active"
-              :artists="trackArtistNames(active)"
-            />
-            <template v-else>{{ t("player.scanLibrary") }}</template>
-          </p>
+            <div class="min-w-0">
+              <NuxtLink
+                v-if="currentTrackTitleRoute"
+                :to="currentTrackTitleRoute"
+                class="block truncate rounded-sm text-sm font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                :class="!currentTrackPlayable && 'opacity-60'"
+              >
+                {{ active.title }}
+              </NuxtLink>
+              <p v-else class="select-none truncate text-sm font-medium">
+                {{ active.title }}
+              </p>
+              <div class="flex min-w-0 items-center gap-1">
+                <p
+                  v-if="error"
+                  role="alert"
+                  class="min-w-0 flex-1 truncate text-xs text-destructive"
+                >
+                  {{ error }}
+                </p>
+                <p
+                  v-else
+                  class="min-w-0 flex-1 truncate text-xs text-muted-foreground"
+                >
+                  <TrackArtistLinks :artists="trackArtistNames(active)" />
+                </p>
+                <LikeButton
+                  class="shrink-0"
+                  :liked="
+                    currentTrackLikeTarget
+                      ? likedTrackIds.includes(currentTrackLikeTarget.trackId)
+                      : false
+                  "
+                  :label="active.title"
+                  :pending="
+                    currentTrackLikeTarget
+                      ? isLikePending(currentTrackLikeTarget)
+                      : false
+                  "
+                  :disabled="!currentTrackId || !likesLoaded"
+                  @toggle="toggleCurrentTrackLike"
+                />
+              </div>
+            </div>
+          </TrackContextMenu>
+          <template v-else>
+            <p class="select-none truncate text-sm font-medium">
+              {{ t("player.noTrack") }}
+            </p>
+            <div class="flex min-w-0 items-center gap-1">
+              <p class="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                {{ t("player.scanLibrary") }}
+              </p>
+              <LikeButton
+                class="shrink-0"
+                :liked="false"
+                :label="t('player.currentTrack')"
+                disabled
+                @toggle="toggleCurrentTrackLike"
+              />
+            </div>
+          </template>
         </div>
-        <LikeButton
-          :liked="
-            currentTrackLikeTarget
-              ? likedTrackIds.includes(currentTrackLikeTarget.trackId)
-              : false
-          "
-          :label="active?.title ?? t('player.currentTrack')"
-          :pending="
-            currentTrackLikeTarget
-              ? isLikePending(currentTrackLikeTarget)
-              : false
-          "
-          :disabled="!currentTrackId || !likesLoaded"
-          @toggle="toggleCurrentTrackLike"
-        />
       </div>
       <div class="w-full space-y-1 md:max-w-lg md:flex-1">
         <div class="flex items-center justify-center gap-3">

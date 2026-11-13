@@ -120,6 +120,10 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     () => 0,
   );
   const queueHistory = useState<string[]>("player-queue-history", () => []);
+  const activePlaylistId = useState<string | null>(
+    "player-active-playlist-id",
+    () => null,
+  );
   const offlineSavedTrackIds = useState<string[]>(
     "player-offline-saved-track-ids",
     () => [],
@@ -579,6 +583,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
   }
 
   function play(track?: PlayerTrack, restart = false) {
+    activePlaylistId.value = null;
     const nextTrackId = track ? trackIdFor(track) : currentTrackId.value;
     if (!nextTrackId) return;
     if (!isOfflineTrackPlayable(nextTrackId)) return;
@@ -610,6 +615,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     tracks: readonly PlayerTrack[],
     startTrackId: string = tracks[0] ? trackIdFor(tracks[0]) : "",
   ) {
+    activePlaylistId.value = null;
     const playableTracks =
       serverStatus.value === "lost"
         ? tracks.filter((track) =>

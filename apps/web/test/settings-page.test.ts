@@ -114,6 +114,9 @@ test("settings shows app metadata and profile owns confirmed logout", async () =
   );
 
   assert.match(logoutControl, /:icon="icons\.logout"/);
+  assert.match(logoutControl, /size="sm"/);
+  assert.match(logoutControl, /class="text-muted-foreground"/);
+  assert.match(logoutControl, /class="size-4"/);
   assert.match(logoutControl, /navigation\.loggingOut/);
   assert.match(logoutControl, /navigation\.logOut/);
   assert.match(logoutControl, /:disabled="loggingOut"/);

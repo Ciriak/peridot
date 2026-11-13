@@ -1,4 +1,6 @@
 import type {
+  AddPlaylistItemRequest,
+  AddPlaylistItemResponse,
   ApiErrorResponse,
   ApplyArtistMetadataRequest,
   ApplyTrackMetadataRequest,
@@ -8,6 +10,7 @@ import type {
   AuthSessionResponse,
   AuthStatusResponse,
   CreateMetadataProviderRequest,
+  CreatePlaylistRequest,
   CreateSourceRequest,
   CreateSourceResponse,
   CreateUserRequest,
@@ -22,8 +25,11 @@ import type {
   MetadataProviderDefinitionListResponse,
   MetadataProviderListResponse,
   MetadataProviderResponse,
+  PlaylistDetailResponse,
+  PlaylistListResponse,
   QuickPickListResponse,
   RealtimeTicketResponse,
+  ReorderPlaylistItemsRequest,
   ResolveTracksResponse,
   PlaybackTokenResponse,
   QueueResponse,
@@ -35,6 +41,7 @@ import type {
   TaskListResponse,
   TaskResponse,
   TrackListResponse,
+  UpdatePlaylistRequest,
   UpdateUserProfileRequest,
   UpdateMetadataProviderRequest,
   UpdateUserRequest,
@@ -654,6 +661,125 @@ export function listArtists(
     serverAddress,
     `/api/artists${suffix}`,
     token,
+  );
+}
+
+export interface PlaylistListOptions {
+  limit?: number;
+  offset?: number;
+  trackId?: string;
+}
+
+export function listPlaylists(
+  serverAddress: string,
+  token: string,
+  options: PlaylistListOptions = {},
+) {
+  const params = new URLSearchParams();
+  if (options.limit !== undefined) params.set("limit", String(options.limit));
+  if (options.offset !== undefined) {
+    params.set("offset", String(options.offset));
+  }
+  if (options.trackId) params.set("trackId", options.trackId);
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return authenticatedRequestJson<PlaylistListResponse>(
+    serverAddress,
+    `/api/playlists${suffix}`,
+    token,
+  );
+}
+
+export function fetchPlaylist(
+  serverAddress: string,
+  token: string,
+  playlistId: string,
+) {
+  return authenticatedRequestJson<PlaylistDetailResponse>(
+    serverAddress,
+    `/api/playlists/${encodeURIComponent(playlistId)}`,
+    token,
+  );
+}
+
+export function createPlaylist(
+  serverAddress: string,
+  token: string,
+  request: CreatePlaylistRequest,
+) {
+  return authenticatedRequestJson<PlaylistDetailResponse>(
+    serverAddress,
+    "/api/playlists",
+    token,
+    { method: "POST", body: JSON.stringify(request) },
+  );
+}
+
+export function updatePlaylist(
+  serverAddress: string,
+  token: string,
+  playlistId: string,
+  request: UpdatePlaylistRequest,
+) {
+  return authenticatedRequestJson<PlaylistDetailResponse>(
+    serverAddress,
+    `/api/playlists/${encodeURIComponent(playlistId)}`,
+    token,
+    { method: "PATCH", body: JSON.stringify(request) },
+  );
+}
+
+export function deletePlaylist(
+  serverAddress: string,
+  token: string,
+  playlistId: string,
+) {
+  return authenticatedRequestJson<void>(
+    serverAddress,
+    `/api/playlists/${encodeURIComponent(playlistId)}`,
+    token,
+    { method: "DELETE" },
+  );
+}
+
+export function addPlaylistItem(
+  serverAddress: string,
+  token: string,
+  playlistId: string,
+  request: AddPlaylistItemRequest,
+) {
+  return authenticatedRequestJson<AddPlaylistItemResponse>(
+    serverAddress,
+    `/api/playlists/${encodeURIComponent(playlistId)}/items`,
+    token,
+    { method: "POST", body: JSON.stringify(request) },
+  );
+}
+
+export function removePlaylistItem(
+  serverAddress: string,
+  token: string,
+  playlistId: string,
+  itemId: string,
+) {
+  return authenticatedRequestJson<void>(
+    serverAddress,
+    `/api/playlists/${encodeURIComponent(playlistId)}/items/${encodeURIComponent(itemId)}`,
+    token,
+    { method: "DELETE" },
+  );
+}
+
+export function reorderPlaylistItems(
+  serverAddress: string,
+  token: string,
+  playlistId: string,
+  request: ReorderPlaylistItemsRequest,
+) {
+  return authenticatedRequestJson<PlaylistDetailResponse>(
+    serverAddress,
+    `/api/playlists/${encodeURIComponent(playlistId)}/items/order`,
+    token,
+    { method: "PUT", body: JSON.stringify(request) },
   );
 }
 

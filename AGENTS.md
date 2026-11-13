@@ -1,7 +1,9 @@
 # Working on Peridot
 
-Read README.md, docs/PROJECT.md, docs/DECISIONS.md, and docs/HANDOFF.md first.
-The project brief is tracked in this repository.
+Read `docs/PROJECT.md`, `docs/DEVELOPMENT.md`, `docs/DECISIONS.md`, and
+`docs/HANDOFF.md` first. The project brief and contributor guidance are tracked
+in this repository. Keep `README.md` user-facing rather than using it as the
+agent instruction layer.
 Inspect git status and recent commits before editing; preserve unrelated changes.
 
 ## Workflow
@@ -11,8 +13,10 @@ Inspect git status and recent commits before editing; preserve unrelated changes
 - dev is development, master is beta, and tags are releases. Target dev for work.
 - Do not push, tag, publish, or deploy without user authorization.
 - Use Node 24.15+ within major 24 and pnpm 11.25.0; commit pnpm-lock.yaml changes.
-- Use the scripts in README.md. Check formatting, types, tests, schema, and builds
-  for relevant changes; report actual results and any skipped verification.
+- Use the scripts defined in `package.json` and documented in
+  `docs/DEVELOPMENT.md`.
+  Check formatting, types, tests, schema, and builds for relevant changes;
+  report actual results and any skipped verification.
 - Add meaningful behavioral tests. Keep package boundaries explicit.
 
 ## Product constraints
@@ -27,12 +31,9 @@ Follow the brand and architecture recorded in docs/PROJECT.md.
 
 Update docs/HANDOFF.md before ending a milestone: completed work, checks run,
 known limits, uncommitted changes, and concrete next actions. Record durable
-choices with reasons in docs/DECISIONS.md. Keep README commands accurate. Never
-include credentials. The current user's instructions override these conventions.
-
-## License
-
-Peridot uses Apache-2.0. Preserve LICENSE and use Apache-2.0 in new package metadata.
+choices with reasons in `docs/DECISIONS.md`. Update `docs/DEVELOPMENT.md` when
+setup, scripts, configuration, or contributor conventions change. Never include
+credentials. The current user's instructions override these conventions.
 
 ## License
 

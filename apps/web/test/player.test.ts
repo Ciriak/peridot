@@ -102,7 +102,7 @@ test("the persistent player controls a native audio element", async () => {
   assert.match(layout, /<Icon v-else :icon="icons\.music"/);
   assert.match(
     layout,
-    /<TrackArtistLinks\s+v-if="active"\s+:artists="trackArtistNames\(active\)"\s+\/>/,
+    /<TrackArtistLinks :artists="trackArtistNames\(active\)" \/>/,
     "The active track's credited artists link from the persistent player",
   );
   assert.match(
@@ -226,6 +226,24 @@ test("the persistent player controls a native audio element", async () => {
     layout,
     /absolute right-1 top-1 text-xs font-semibold leading-none text-primary/,
     "The repeat-one marker floats at the icon's top-right",
+  );
+  const metadataControlIndex = playerFooter.indexOf("<TrackContextMenu");
+  const transportControlIndex = playerFooter.indexOf(
+    '<div class="w-full space-y-1',
+  );
+  const artistLinksIndex = playerFooter.indexOf("<TrackArtistLinks");
+  const likeControlIndex = playerFooter.indexOf("<LikeButton");
+  assert.ok(
+    metadataControlIndex >= 0 &&
+      artistLinksIndex > metadataControlIndex &&
+      likeControlIndex > artistLinksIndex &&
+      likeControlIndex < transportControlIndex,
+    "The track like control sits after the artist name in the player metadata",
+  );
+  assert.match(
+    playerFooter,
+    /<TrackContextMenu\s+v-if="active"\s+:track="active"\s+@play="playActiveTrack"\s*>/,
+    "The active player track metadata is a context-menu trigger",
   );
   assert.doesNotMatch(
     layout,

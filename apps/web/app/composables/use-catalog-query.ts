@@ -53,6 +53,9 @@ export function useCatalogRevision() {
     void queryClient.invalidateQueries({
       queryKey: [...peridotScopeKey(scope.value), "catalog"],
     });
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.playlistsRoot(scope.value),
+    });
   }
 
   function applyRevision(value: number) {

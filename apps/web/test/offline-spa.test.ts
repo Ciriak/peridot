@@ -126,7 +126,7 @@ test("cached query data remains renderable after a background failure", async ()
     },
   });
   const queryKey = queryKeys.likes(scope);
-  const cached = { tracks: [], albums: [], artists: [] };
+  const cached = { tracks: [], albums: [], artists: [], playlists: [] };
   const options = {
     queryKey,
     queryFn: async () => cached,
@@ -424,6 +424,7 @@ test("full catalog snapshots preserve every availability state", () => {
     ],
     albums: [],
     artists: [],
+    playlists: [],
     catalogRevision: 3,
     syncedAt: "2026-11-13T10:00:00.000Z",
   };

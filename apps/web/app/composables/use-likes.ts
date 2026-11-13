@@ -4,6 +4,7 @@ import type {
   ArtistLikeResponse,
   LikeListResponse,
   LikeTarget,
+  PlaylistLikeResponse,
   TrackLikeResponse,
 } from "@peridot/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
@@ -30,12 +31,14 @@ import { useSession } from "./use-session";
 export function likeTargetKey(target: LikeTarget): string {
   if (target.kind === "track") return `track:${target.trackId}`;
   if (target.kind === "album") return `album:${target.albumId}`;
+  if (target.kind === "playlist") return `playlist:${target.playlistId}`;
   return `artist:${artistLikeKey(target.name)}`;
 }
 
 function targetLabel(target: LikeTarget, trackLabel: string): string {
   if (target.kind === "track") return trackLabel;
   if (target.kind === "album") return target.title;
+  if (target.kind === "playlist") return target.name;
   return target.name;
 }
 
@@ -43,13 +46,18 @@ const EMPTY_LIKES: LikeListResponse = {
   tracks: [],
   albums: [],
   artists: [],
+  playlists: [],
 };
 
 function updateLikedTarget(
   current: LikeListResponse,
   target: LikeTarget,
   liked: boolean,
-  item?: TrackLikeResponse | AlbumLikeResponse | ArtistLikeResponse,
+  item?:
+    | TrackLikeResponse
+    | AlbumLikeResponse
+    | ArtistLikeResponse
+    | PlaylistLikeResponse,
 ): LikeListResponse {
   if (target.kind === "track") {
     if (!liked) {
@@ -88,6 +96,32 @@ function updateLikedTarget(
       albums: current.albums.some((entry) => entry.albumId === key)
         ? current.albums
         : [...current.albums, albumItem],
+    };
+  }
+  if (target.kind === "playlist") {
+    if (!liked) {
+      return {
+        ...current,
+        playlists: current.playlists.filter(
+          (entry) => entry.playlistId !== target.playlistId,
+        ),
+      };
+    }
+    const playlistItem =
+      item && "playlistId" in item
+        ? item
+        : {
+            playlistId: target.playlistId,
+            name: target.name,
+            likedAt: new Date().toISOString(),
+          };
+    return {
+      ...current,
+      playlists: current.playlists.some(
+        (entry) => entry.playlistId === target.playlistId,
+      )
+        ? current.playlists
+        : [...current.playlists, playlistItem as PlaylistLikeResponse],
     };
   }
   const key = artistLikeKey(target.name);
@@ -136,10 +170,20 @@ export function useLikes() {
     enabled: computed(() => Boolean(scope.value && token.value)),
     meta: { persist: true },
   });
-  const likes = computed(() => query.data.value ?? EMPTY_LIKES);
+  const likes = computed<LikeListResponse>(() => {
+    const data = query.data.value;
+    return data
+      ? {
+          ...EMPTY_LIKES,
+          ...data,
+          playlists: data.playlists ?? [],
+        }
+      : EMPTY_LIKES;
+  });
   const trackItems = computed(() => likes.value.tracks);
   const albumItems = computed(() => likes.value.albums);
   const artistItems = computed(() => likes.value.artists);
+  const playlistItems = computed(() => likes.value.playlists);
   const likedTrackIds = computed(() =>
     trackItems.value.map((item) => item.trackId),
   );
@@ -148,6 +192,9 @@ export function useLikes() {
   );
   const likedArtistKeys = computed(() =>
     artistItems.value.map((item) => artistLikeKey(item.name)),
+  );
+  const likedPlaylistIds = computed(() =>
+    playlistItems.value.map((item) => item.playlistId),
   );
   const loading = computed(
     () => query.isPending.value || query.isFetching.value,
@@ -168,6 +215,8 @@ export function useLikes() {
       return likedTrackIds.value.includes(target.trackId);
     if (target.kind === "album")
       return likedAlbumIds.value.includes(target.albumId);
+    if (target.kind === "playlist")
+      return likedPlaylistIds.value.includes(target.playlistId);
     return likedArtistKeys.value.includes(artistLikeKey(target.name));
   }
 
@@ -283,9 +332,11 @@ export function useLikes() {
     trackItems,
     albumItems,
     artistItems,
+    playlistItems,
     likedTrackIds,
     likedAlbumIds,
     likedArtistKeys,
+    likedPlaylistIds,
     loading,
     loaded,
     error,

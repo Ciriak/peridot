@@ -135,6 +135,80 @@ export interface ArtistListResponse {
   catalogRevision: number;
 }
 
+export interface PlaylistSummaryResponse {
+  id: string;
+  name: string;
+  trackCount: number;
+  availableTrackCount: number;
+  durationMs: number | null;
+  coverUrls: string[];
+  liked: boolean;
+  containsTrack: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PlaylistExternalTrackReference {
+  provider: string;
+  externalTrackId: string;
+  title: string;
+  artist: string;
+  album: string | null;
+  durationMs: number | null;
+}
+
+export interface PlaylistEntryResponse {
+  id: string;
+  position: number;
+  title: string;
+  artist: string;
+  artists: string[];
+  album: string | null;
+  durationMs: number | null;
+  coverUrl: string | null;
+  available: boolean;
+  liked: boolean;
+  track: TrackResponse | null;
+  external: PlaylistExternalTrackReference | null;
+}
+
+export interface PlaylistDetailResponse extends PlaylistSummaryResponse {
+  entries: PlaylistEntryResponse[];
+}
+
+export interface PlaylistListResponse {
+  items: PlaylistSummaryResponse[];
+  totalCount: number;
+  nextOffset: number | null;
+}
+
+export interface CreatePlaylistRequest {
+  name: string;
+}
+
+export interface UpdatePlaylistRequest {
+  name: string;
+}
+
+export type AddPlaylistItemRequest =
+  | {
+      kind: "catalog";
+      trackId: string;
+    }
+  | {
+      kind: "external";
+      reference: PlaylistExternalTrackReference;
+    };
+
+export interface AddPlaylistItemResponse {
+  added: boolean;
+  playlist: PlaylistDetailResponse;
+}
+
+export interface ReorderPlaylistItemsRequest {
+  itemIds: string[];
+}
+
 export type ArtistMetadataMatchMode = "automatic" | "manual";
 
 export interface ArtistMetadataProvenanceResponse {
@@ -239,21 +313,30 @@ export interface ArtistLikeResponse {
   likedAt: string;
 }
 
+export interface PlaylistLikeResponse {
+  playlistId: string;
+  name: string;
+  likedAt: string;
+}
+
 export interface LikeListResponse {
   tracks: TrackLikeResponse[];
   albums: AlbumLikeResponse[];
   artists: ArtistLikeResponse[];
+  playlists: PlaylistLikeResponse[];
 }
 
 export type LikeTarget =
   | { kind: "track"; trackId: string }
   | { kind: "album"; albumId: string; title: string; artist: string }
-  | { kind: "artist"; name: string };
+  | { kind: "artist"; name: string }
+  | { kind: "playlist"; playlistId: string; name: string };
 
 export type LikeResponse =
   | ({ kind: "track" } & TrackLikeResponse)
   | ({ kind: "album" } & AlbumLikeResponse)
-  | ({ kind: "artist" } & ArtistLikeResponse);
+  | ({ kind: "artist" } & ArtistLikeResponse)
+  | ({ kind: "playlist" } & PlaylistLikeResponse);
 
 export type TaskStatus =
   "queued" | "running" | "completed" | "failed" | "interrupted";

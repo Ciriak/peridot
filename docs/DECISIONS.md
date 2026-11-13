@@ -1,5 +1,79 @@
 # Decisions
 
+## 2026-11-13: Player metadata owns the track like action and context menu
+
+The fixed player's active title and credited artists are the trigger for the
+shared track context menu. This exposes the same playback, queue, playlist,
+favorite, download, navigation, and metadata actions as track lists without
+creating a player-specific menu.
+
+The player like control sits immediately to the right of the artist links
+rather than in the transport row. Selecting the menu's Play action starts a
+paused active track and leaves an already-playing track untouched, so the
+action remains semantically consistent with its label.
+
+## 2026-11-13: Home suggests albums and tracks
+
+Home is a discovery surface rather than a mirror of the user's liked
+collections. It presents up to ten album cards and ten track rows selected from
+the authenticated local catalog, while the focused Liked songs view and the
+Albums and Artists routes remain the complete collection views. Artists are not
+rendered as suggestions; artist preferences are used only to prioritize albums
+and tracks whose credits include an artist the user already likes.
+
+The browser loads at most 100 album summaries and 100 track summaries, excluding
+liked records from both sets. This keeps the query bounded for large libraries
+without downloading the complete catalog. If the first bounded candidates do not
+contain enough unliked records, Home may show fewer suggestions rather than
+expanding the page silently. Home intentionally has no suggestion-count badge or
+collection links beside its heading. The existing playlist preview remains
+separate.
+
+This supersedes the earlier home library-overview decision that showed liked
+songs, albums, and artists as separate previews.
+
+## 2026-11-13: Playlists are private, ordered, and resilient to missing tracks
+
+Each playlist belongs to exactly one authenticated profile. Only its owner can
+list, read, rename, delete, like, edit, or save it. Playlist names are trimmed
+and whitespace-collapsed but do not need to be unique, and playlists are ordered
+by their latest modification.
+
+Playlist entries are explicit ordered records rather than a track-ID array.
+Catalog-backed entries retain both the foreign key and a display snapshot.
+External playlist imports can add an unavailable entry through the API with a
+stable provider and external track ID, title, artist, optional album, and
+duration. The UI intentionally has no manual external-entry form yet. An
+external entry resolves only when exactly one catalog track has the same
+provider and external ID; title and artist matching never makes an import
+playable by guesswork. If a catalog track disappears, its entry remains visible
+from the snapshot and becomes unavailable.
+
+The generated playlist image is a live 3×3 Vue mosaic, not a persisted raster or
+a browser canvas blob. It uses the first nine distinct covers in playlist order,
+so reordering updates the image naturally. Missing positions use the shared
+music placeholder.
+
+Playlist offline saving reuses the per-track manifest. Every currently
+available catalog entry is downloaded sequentially, unavailable and unresolved
+entries stay visible but are skipped, and an interrupted save can resume
+without redownloading completed tracks. A playlist is considered saved when all
+of its currently available tracks are present. Playlist metadata remains
+available through the persisted query cache after a page has been visited.
+
+## 2026-11-13: Contributor guidance lives in agent documentation
+
+The operational, architecture, configuration, and UI guidance previously in
+`README.md` now lives in `docs/DEVELOPMENT.md`. `AGENTS.md` makes that document
+required reading and points agents to the scripts in `package.json`. The README
+is reserved for user-facing project documentation so it can be rewritten without
+removing instructions that agents must follow.
+
+The existing product brief, decision log, and handoff remain separate sources for
+requirements, implementation rationale, and current status. This keeps agent
+guidance explicit and discoverable without relying on README as an implicit
+instruction layer.
+
 ## 2026-11-13: Home is the library overview
 
 The standalone Library page and navigation section are removed. Home presents

@@ -11,6 +11,7 @@ import { createDatabase, type Database } from "./database.js";
 import { DiscogsClient, DiscogsResolver } from "./discogs.js";
 import { registerLibraryRoutes } from "./library-routes.js";
 import { registerLikeRoutes } from "./like-routes.js";
+import { registerPlaylistRoutes } from "./playlist-routes.js";
 import { LibraryScanner } from "./library-scanner.js";
 import { MetadataEnrichment } from "./metadata-enrichment.js";
 import { ensureDefaultMetadataProvider } from "./metadata-providers.js";
@@ -128,7 +129,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
   });
   await app.register(cors, {
     origin: config.webOrigins,
-    methods: ["GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"],
+    methods: ["GET", "HEAD", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Authorization", "Content-Type", "Range"],
     exposedHeaders: ["Accept-Ranges", "Content-Length", "Content-Range"],
   });
@@ -157,6 +158,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
       await registerCatalogRoutes(protectedApp, catalog);
       await registerTaskRoutes(protectedApp, tasks);
       await registerLikeRoutes(protectedApp, database);
+      await registerPlaylistRoutes(protectedApp, database, playbackTokens);
       await registerQuickPickRoutes(protectedApp, database, catalog);
       await registerQueueRoutes(protectedApp, database);
       await registerTrackMetadataRoutes(protectedApp, metadataEnrichment);

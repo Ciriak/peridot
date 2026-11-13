@@ -1,0 +1,350 @@
+<script setup lang="ts">
+import {
+  definePageMeta,
+  navigateTo,
+  useHead,
+  useI18n,
+  useRoute,
+  useState,
+} from "#imports";
+import type { PlaylistEntryResponse, TrackResponse } from "@peridot/contracts";
+import { Icon } from "@iconify/vue/offline";
+import { Badge } from "@peridot/ui/components/ui/badge";
+import { Button } from "@peridot/ui/components/ui/button";
+import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
+import { computed, onMounted, ref } from "vue";
+import AddTracksToPlaylistDialog from "../../components/AddTracksToPlaylistDialog.vue";
+import LikeButton from "../../components/LikeButton.vue";
+import PlaylistCover from "../../components/PlaylistCover.vue";
+import PlaylistDeleteDialog from "../../components/PlaylistDeleteDialog.vue";
+import PlaylistNameDialog from "../../components/PlaylistNameDialog.vue";
+import PlaylistOfflineButton from "../../components/PlaylistOfflineButton.vue";
+import PlaylistTrackList from "../../components/PlaylistTrackList.vue";
+import { useLikes } from "../../composables/use-likes";
+import { useLibraryPlayer } from "../../composables/use-library-player";
+import { useOfflineTracks } from "../../composables/use-offline-tracks";
+import {
+  usePlaylist,
+  usePlaylistActions,
+} from "../../composables/use-playlists";
+import { useServer } from "../../composables/use-server";
+import { useServerConnection } from "../../composables/use-server-connection";
+import { icons } from "../../lib/icons";
+import { formatTrackDuration, trackCoverUrl } from "../../lib/library";
+import { playlistPlayableTracks } from "../../lib/playlists";
+
+definePageMeta({ name: "playlist-detail" });
+
+const route = useRoute();
+const { t } = useI18n();
+const { address } = useServer();
+const { status } = useServerConnection();
+const { playing, playCollection, togglePlayback } = useLibraryPlayer();
+const { savedTracks } = useOfflineTracks();
+const actions = usePlaylistActions();
+const activePlaylistId = useState<string | null>(
+  "player-active-playlist-id",
+  () => null,
+);
+const playlistId = computed(() => String(route.params.playlist ?? ""));
+const { playlist, loading, error, load } = usePlaylist(playlistId);
+const {
+  loaded: likesLoaded,
+  toggle: toggleLike,
+  isPending: isLikePending,
+} = useLikes();
+const addOpen = ref(false);
+const renameOpen = ref(false);
+const deleteOpen = ref(false);
+const mutating = ref(false);
+const actionError = ref<string | null>(null);
+const coverUrls = computed(() =>
+  (playlist.value?.coverUrls ?? []).flatMap((url) => {
+    const resolved = trackCoverUrl(address.value ?? "", url);
+    return resolved ? [resolved] : [];
+  }),
+);
+const likeTarget = computed(() => ({
+  kind: "playlist" as const,
+  playlistId: playlist.value?.id ?? "",
+  name: playlist.value?.name ?? "",
+}));
+const savedIds = computed(
+  () => new Set(savedTracks.value.map((saved) => saved.track.id)),
+);
+const playableTracks = computed(() =>
+  playlistPlayableTracks(playlist.value?.entries ?? [], {
+    serverLost: status.value === "lost",
+    savedTrackIds: savedIds.value,
+  }),
+);
+const playlistActive = computed(() =>
+  Boolean(playlist.value && activePlaylistId.value === playlist.value.id),
+);
+useHead(() => ({
+  title: playlist.value
+    ? t("page.playlist.title", { playlist: playlist.value.name })
+    : t("page.playlist.fallbackTitle"),
+}));
+
+function playFrom(track: TrackResponse) {
+  if (!playlist.value || !playableTracks.value.length) return;
+  activePlaylistId.value = playlist.value.id;
+  playCollection(playableTracks.value, track.id);
+}
+
+function togglePlaylistPlayback() {
+  if (playlistActive.value && playing.value) {
+    togglePlayback();
+    return;
+  }
+  const first = playableTracks.value[0];
+  if (first) playFrom(first);
+}
+
+async function rename(name: string) {
+  if (!playlist.value) return;
+  mutating.value = true;
+  actionError.value = null;
+  try {
+    await actions.rename(playlist.value.id, name);
+    renameOpen.value = false;
+  } catch (reason) {
+    actionError.value = actions.messageFor(reason, "error.playlistUpdate");
+  } finally {
+    mutating.value = false;
+  }
+}
+
+async function removePlaylist() {
+  if (!playlist.value) return;
+  mutating.value = true;
+  actionError.value = null;
+  try {
+    await actions.remove(playlist.value.id);
+    deleteOpen.value = false;
+    await navigateTo("/playlists");
+  } catch (reason) {
+    actionError.value = actions.messageFor(reason, "error.playlistDelete");
+    deleteOpen.value = false;
+  } finally {
+    mutating.value = false;
+  }
+}
+
+async function removeEntry(entry: PlaylistEntryResponse) {
+  if (!playlist.value || status.value === "lost") return;
+  mutating.value = true;
+  actionError.value = null;
+  try {
+    await actions.removeItem(playlist.value.id, entry.id);
+  } catch (reason) {
+    actionError.value = actions.messageFor(reason, "error.playlistRemoveItem");
+  } finally {
+    mutating.value = false;
+  }
+}
+
+async function reorder(itemIds: string[]) {
+  if (!playlist.value || status.value === "lost") return;
+  mutating.value = true;
+  actionError.value = null;
+  try {
+    await actions.reorder(playlist.value.id, itemIds);
+  } catch (reason) {
+    actionError.value = actions.messageFor(reason, "error.playlistReorder");
+    await load(true);
+  } finally {
+    mutating.value = false;
+  }
+}
+
+onMounted(() => void load());
+</script>
+
+<template>
+  <div class="mb-2">
+    <Button as-child variant="ghost" size="lg">
+      <NuxtLink to="/playlists">
+        <Icon :icon="icons.arrowLeft" aria-hidden="true" />
+        {{ t("page.playlist.back") }}
+      </NuxtLink>
+    </Button>
+  </div>
+
+  <div
+    v-if="loading"
+    role="status"
+    class="flex items-center gap-3 rounded-lg border p-6 text-sm text-muted-foreground"
+  >
+    <PeridotSpinner :label="t('page.playlist.loading')" />
+    {{ t("page.playlist.loading") }}
+  </div>
+  <div
+    v-else-if="error"
+    role="alert"
+    class="space-y-3 rounded-lg border p-6 text-sm"
+  >
+    <p>{{ error }}</p>
+    <Button variant="outline" @click="load(true)">
+      {{ t("common.tryAgain") }}
+    </Button>
+  </div>
+  <template v-else-if="playlist">
+    <p v-if="actionError" role="alert" class="mb-4 text-sm text-destructive">
+      {{ actionError }}
+    </p>
+    <section
+      aria-labelledby="playlist-heading"
+      class="relative flex flex-col gap-6 rounded-lg border bg-card p-6 text-card-foreground sm:flex-row sm:items-end"
+    >
+      <PlaylistOfflineButton
+        :playlist="playlist"
+        class="absolute right-4 top-4"
+      />
+      <div class="w-40 shrink-0">
+        <PlaylistCover :cover-urls="coverUrls" />
+      </div>
+      <div class="min-w-0 space-y-3 pr-12">
+        <p
+          class="text-xs font-medium uppercase tracking-wide text-muted-foreground"
+        >
+          {{ t("page.playlist.label") }}
+        </p>
+        <h1 id="playlist-heading" class="text-3xl font-semibold tracking-tight">
+          {{ playlist.name }}
+        </h1>
+        <div class="flex flex-wrap items-center gap-3">
+          <Button
+            size="icon-lg"
+            class="rounded-full"
+            :disabled="!playableTracks.length"
+            :aria-label="
+              playlistActive && playing
+                ? t('playlistCard.pause', { playlist: playlist.name })
+                : t('playlistCard.play', { playlist: playlist.name })
+            "
+            @click="togglePlaylistPlayback"
+          >
+            <Icon
+              :icon="playlistActive && playing ? icons.pause : icons.play"
+              aria-hidden="true"
+              class="size-5"
+            />
+          </Button>
+          <LikeButton
+            :liked="playlist.liked"
+            :label="playlist.name"
+            :pending="isLikePending(likeTarget)"
+            :disabled="!likesLoaded || status === 'lost'"
+            @toggle="toggleLike(likeTarget)"
+          />
+          <Button
+            variant="ghost"
+            size="icon-lg"
+            :disabled="status === 'lost'"
+            :aria-label="t('page.playlist.rename')"
+            :title="t('page.playlist.rename')"
+            @click="renameOpen = true"
+          >
+            <Icon :icon="icons.edit" aria-hidden="true" class="size-5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-lg"
+            :disabled="status === 'lost'"
+            :aria-label="t('page.playlist.delete')"
+            :title="t('page.playlist.delete')"
+            @click="deleteOpen = true"
+          >
+            <Icon :icon="icons.trash" aria-hidden="true" class="size-5" />
+          </Button>
+          <Badge variant="secondary">
+            {{
+              t(
+                "count.track",
+                { count: playlist.trackCount },
+                playlist.trackCount,
+              )
+            }}
+          </Badge>
+          <Badge
+            v-if="playlist.availableTrackCount < playlist.trackCount"
+            variant="secondary"
+          >
+            {{
+              t("page.playlist.unavailableCount", {
+                count: playlist.trackCount - playlist.availableTrackCount,
+              })
+            }}
+          </Badge>
+          <span class="text-sm text-muted-foreground">
+            {{ formatTrackDuration(playlist.durationMs) }}
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="playlist-tracks-heading" class="space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <h2 id="playlist-tracks-heading" class="text-lg font-semibold">
+          {{ t("playlistTracks.heading") }}
+        </h2>
+        <Button
+          variant="outline"
+          :disabled="status === 'lost' || mutating"
+          @click="addOpen = true"
+        >
+          <Icon :icon="icons.plus" aria-hidden="true" class="size-4" />
+          {{ t("playlistTracks.add") }}
+        </Button>
+      </div>
+      <PlaylistTrackList
+        v-if="playlist.entries.length"
+        :entries="playlist.entries"
+        :editable="status !== 'lost' && !mutating"
+        @play="playFrom"
+        @remove="removeEntry"
+        @reorder="reorder"
+      />
+      <div
+        v-else
+        class="space-y-4 rounded-lg border bg-card p-6 text-card-foreground"
+      >
+        <p class="font-medium">{{ t("playlistTracks.emptyTitle") }}</p>
+        <p class="text-sm text-muted-foreground">
+          {{ t("playlistTracks.emptyDescription") }}
+        </p>
+        <Button :disabled="status === 'lost'" @click="addOpen = true">
+          {{ t("playlistTracks.add") }}
+        </Button>
+      </div>
+    </section>
+
+    <PlaylistNameDialog
+      v-model:open="renameOpen"
+      mode="rename"
+      :initial-name="playlist.name"
+      :pending="mutating"
+      :error="actionError"
+      @submit="rename"
+    />
+    <PlaylistDeleteDialog
+      v-model:open="deleteOpen"
+      :name="playlist.name"
+      :pending="mutating"
+      @confirm="removePlaylist"
+    />
+    <AddTracksToPlaylistDialog v-model:open="addOpen" :playlist="playlist" />
+  </template>
+  <section
+    v-else
+    role="status"
+    class="space-y-4 rounded-lg border p-6 text-sm text-muted-foreground"
+  >
+    <p>{{ t("page.playlist.unavailable") }}</p>
+    <Button as-child variant="outline">
+      <NuxtLink to="/playlists">{{ t("page.playlist.back") }}</NuxtLink>
+    </Button>
+  </section>
+</template>

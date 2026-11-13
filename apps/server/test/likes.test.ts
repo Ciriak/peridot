@@ -156,6 +156,7 @@ test("likes persist for tracks, albums, and artists with normalized identities",
       tracks: [],
       albums: [],
       artists: [],
+      playlists: [],
     });
   } finally {
     await context.close();

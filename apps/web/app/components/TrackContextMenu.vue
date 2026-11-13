@@ -55,6 +55,7 @@ import {
   notifyMetadataReverted,
   notifyMetadataUpdateFailed,
 } from "../lib/toasts";
+import AddTrackToPlaylistDialog from "./AddTrackToPlaylistDialog.vue";
 
 const props = defineProps<{ track: TrackResponse }>();
 const emit = defineEmits<{ play: [] }>();
@@ -83,6 +84,7 @@ const {
 } = useLikes();
 const downloading = ref(false);
 const addingToQueue = ref(false);
+const playlistOpen = ref(false);
 const metadataOpen = ref(false);
 const metadataQuery = ref("");
 const candidates = ref<MetadataCandidateResponse[]>([]);
@@ -239,6 +241,10 @@ async function revertMetadata() {
         <Icon :icon="icons.addToQueue" aria-hidden="true" />
         {{ addingToQueue ? t("common.adding") : t("context.addToQueue") }}
       </ContextMenuItem>
+      <ContextMenuItem :disabled="serverLost" @select="playlistOpen = true">
+        <Icon :icon="icons.plus" aria-hidden="true" />
+        {{ t("context.addToPlaylist") }}
+      </ContextMenuItem>
       <ContextMenuItem
         :disabled="
           !likesLoaded || isLikePending({ kind: 'track', trackId: track.id })
@@ -347,6 +353,8 @@ async function revertMetadata() {
       </ContextMenuItem>
     </ContextMenuContent>
   </ContextMenu>
+
+  <AddTrackToPlaylistDialog v-model:open="playlistOpen" :track="track" />
 
   <DialogRoot v-model:open="metadataOpen">
     <DialogPortal>

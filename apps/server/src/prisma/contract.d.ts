@@ -19,9 +19,9 @@ import type {
 } from '@prisma/orm-sqlite/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'37e0a361bc50d4102622504a1a5436ae25d8e8bc4ea08aed12d3a66154c5c0cf'>;
+  StorageHashBase<'7a0e132d0dc6c041b17a59c7efa3c278f165abda1451256b968d61e0b5d000c2'>;
 export type ExecutionHash =
-  ExecutionHashBase<'3874c46866d1115093e936c3d06a7fac34e15377a3d896762aea35a15b583c21'>;
+  ExecutionHashBase<'69abe59ddf12aaa78738519fa294ac279958f3b4caa4e85b2cb8fd0effde430a'>;
 export type ProfileHash =
   ProfileHashBase<'260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53'>;
 
@@ -358,6 +358,44 @@ export namespace Models {
     updatedAt: FieldOutputTypes['__unbound__']['MetadataProvider']['updatedAt'];
     readonly [RelationKeys]?: never;
   };
+  export type Playlist = {
+    createdAt: FieldOutputTypes['__unbound__']['Playlist']['createdAt'];
+    id: FieldOutputTypes['__unbound__']['Playlist']['id'];
+    name: FieldOutputTypes['__unbound__']['Playlist']['name'];
+    updatedAt: FieldOutputTypes['__unbound__']['Playlist']['updatedAt'];
+    userId: FieldOutputTypes['__unbound__']['Playlist']['userId'];
+    items: PlaylistItem[];
+    likes: PlaylistLike[];
+    user: User;
+    readonly [RelationKeys]?: 'items' | 'likes' | 'user';
+  };
+  export type PlaylistItem = {
+    createdAt: FieldOutputTypes['__unbound__']['PlaylistItem']['createdAt'];
+    externalProvider: FieldOutputTypes['__unbound__']['PlaylistItem']['externalProvider'];
+    externalTrackId: FieldOutputTypes['__unbound__']['PlaylistItem']['externalTrackId'];
+    id: FieldOutputTypes['__unbound__']['PlaylistItem']['id'];
+    identityKey: FieldOutputTypes['__unbound__']['PlaylistItem']['identityKey'];
+    playlistId: FieldOutputTypes['__unbound__']['PlaylistItem']['playlistId'];
+    position: FieldOutputTypes['__unbound__']['PlaylistItem']['position'];
+    snapshotAlbum: FieldOutputTypes['__unbound__']['PlaylistItem']['snapshotAlbum'];
+    snapshotArtist: FieldOutputTypes['__unbound__']['PlaylistItem']['snapshotArtist'];
+    snapshotDuration: FieldOutputTypes['__unbound__']['PlaylistItem']['snapshotDuration'];
+    snapshotTitle: FieldOutputTypes['__unbound__']['PlaylistItem']['snapshotTitle'];
+    trackId: FieldOutputTypes['__unbound__']['PlaylistItem']['trackId'];
+    updatedAt: FieldOutputTypes['__unbound__']['PlaylistItem']['updatedAt'];
+    playlist: Playlist;
+    track: Track | null;
+    readonly [RelationKeys]?: 'playlist' | 'track';
+  };
+  export type PlaylistLike = {
+    createdAt: FieldOutputTypes['__unbound__']['PlaylistLike']['createdAt'];
+    id: FieldOutputTypes['__unbound__']['PlaylistLike']['id'];
+    playlistId: FieldOutputTypes['__unbound__']['PlaylistLike']['playlistId'];
+    userId: FieldOutputTypes['__unbound__']['PlaylistLike']['userId'];
+    playlist: Playlist;
+    user: User;
+    readonly [RelationKeys]?: 'playlist' | 'user';
+  };
   export type QueueItem = {
     createdAt: FieldOutputTypes['__unbound__']['QueueItem']['createdAt'];
     position: FieldOutputTypes['__unbound__']['QueueItem']['position'];
@@ -521,6 +559,9 @@ export declare const models: {
   CatalogTrack: Models.CatalogTrack;
   CatalogTrackArtist: Models.CatalogTrackArtist;
   MetadataProvider: Models.MetadataProvider;
+  Playlist: Models.Playlist;
+  PlaylistItem: Models.PlaylistItem;
+  PlaylistLike: Models.PlaylistLike;
   QueueItem: Models.QueueItem;
   QueueState: Models.QueueState;
   ServerSetting: Models.ServerSetting;
@@ -1497,6 +1538,279 @@ type ContractBase = Omit<
               ];
               foreignKeys: readonly [];
             };
+            readonly Playlist: {
+              columns: {
+                readonly createdAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                  readonly many: false;
+                };
+                readonly id: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly name: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly updatedAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly userId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [
+                {
+                  readonly name: 'Playlist_userId_idx_a489d58a';
+                  readonly prefix: 'Playlist_userId_idx';
+                  readonly columns: readonly ['userId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'Playlist_userId_updatedAt_idx_42f5280d';
+                  readonly prefix: 'Playlist_userId_updatedAt_idx';
+                  readonly columns: readonly ['userId', 'updatedAt'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'Playlist';
+                    readonly columns: readonly ['userId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'User';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+              ];
+            };
+            readonly PlaylistItem: {
+              columns: {
+                readonly createdAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                  readonly many: false;
+                };
+                readonly externalProvider: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly externalTrackId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly id: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly identityKey: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly playlistId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly position: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly snapshotAlbum: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly snapshotArtist: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly snapshotDuration: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly snapshotTitle: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly trackId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly updatedAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [{ readonly columns: readonly ['playlistId', 'identityKey'] }];
+              indexes: readonly [
+                {
+                  readonly name: 'PlaylistItem_playlistId_idx_470a517f';
+                  readonly prefix: 'PlaylistItem_playlistId_idx';
+                  readonly columns: readonly ['playlistId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'PlaylistItem_playlistId_position_idx_b321fdb7';
+                  readonly prefix: 'PlaylistItem_playlistId_position_idx';
+                  readonly columns: readonly ['playlistId', 'position'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'PlaylistItem_trackId_idx_8b560769';
+                  readonly prefix: 'PlaylistItem_trackId_idx';
+                  readonly columns: readonly ['trackId'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'PlaylistItem';
+                    readonly columns: readonly ['playlistId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'Playlist';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+                {
+                  readonly source: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'PlaylistItem';
+                    readonly columns: readonly ['trackId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'Track';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+              ];
+            };
+            readonly PlaylistLike: {
+              columns: {
+                readonly createdAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                  readonly many: false;
+                };
+                readonly id: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly playlistId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly userId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [{ readonly columns: readonly ['userId', 'playlistId'] }];
+              indexes: readonly [
+                {
+                  readonly name: 'PlaylistLike_playlistId_idx_470a517f';
+                  readonly prefix: 'PlaylistLike_playlistId_idx';
+                  readonly columns: readonly ['playlistId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'PlaylistLike_userId_createdAt_idx_f726f04a';
+                  readonly prefix: 'PlaylistLike_userId_createdAt_idx';
+                  readonly columns: readonly ['userId', 'createdAt'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'PlaylistLike_userId_idx_a489d58a';
+                  readonly prefix: 'PlaylistLike_userId_idx';
+                  readonly columns: readonly ['userId'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'PlaylistLike';
+                    readonly columns: readonly ['userId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'User';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+                {
+                  readonly source: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'PlaylistLike';
+                    readonly columns: readonly ['playlistId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'Playlist';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+              ];
+            };
             readonly QueueItem: {
               columns: {
                 readonly createdAt: {
@@ -2241,6 +2555,12 @@ type ContractBase = Omit<
                   readonly unique: false;
                 },
                 {
+                  readonly name: 'Track_metadataProviderKind_metadataExternalTrackId_idx_9c545a1d';
+                  readonly prefix: 'Track_metadataProviderKind_metadataExternalTrackId_idx';
+                  readonly columns: readonly ['metadataProviderKind', 'metadataExternalTrackId'];
+                  readonly unique: false;
+                },
+                {
                   readonly name: 'Track_sourceId_idx_d92a2571';
                   readonly prefix: 'Track_sourceId_idx';
                   readonly columns: readonly ['sourceId'];
@@ -2581,6 +2901,18 @@ type ContractBase = Omit<
     readonly MetadataProvider: {
       readonly namespace: '__unbound__' & NamespaceId;
       readonly model: 'MetadataProvider';
+    };
+    readonly Playlist: {
+      readonly namespace: '__unbound__' & NamespaceId;
+      readonly model: 'Playlist';
+    };
+    readonly PlaylistItem: {
+      readonly namespace: '__unbound__' & NamespaceId;
+      readonly model: 'PlaylistItem';
+    };
+    readonly PlaylistLike: {
+      readonly namespace: '__unbound__' & NamespaceId;
+      readonly model: 'PlaylistLike';
     };
     readonly QueueItem: {
       readonly namespace: '__unbound__' & NamespaceId;
@@ -3309,6 +3641,234 @@ type ContractBase = Omit<
                 readonly name: { readonly column: 'name' };
                 readonly position: { readonly column: 'position' };
                 readonly updatedAt: { readonly column: 'updatedAt' };
+              };
+            };
+          };
+          readonly Playlist: {
+            readonly fields: {
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly name: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly updatedAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly userId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+            };
+            readonly relations: {
+              readonly items: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'PlaylistItem';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['playlistId'];
+                };
+              };
+              readonly likes: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'PlaylistLike';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['playlistId'];
+                };
+              };
+              readonly user: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'User';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['userId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'Playlist';
+              readonly namespaceId: '__unbound__';
+              readonly fields: {
+                readonly createdAt: { readonly column: 'createdAt' };
+                readonly id: { readonly column: 'id' };
+                readonly name: { readonly column: 'name' };
+                readonly updatedAt: { readonly column: 'updatedAt' };
+                readonly userId: { readonly column: 'userId' };
+              };
+            };
+          };
+          readonly PlaylistItem: {
+            readonly fields: {
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly externalProvider: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly externalTrackId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly identityKey: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly playlistId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly position: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly snapshotAlbum: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly snapshotArtist: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly snapshotDuration: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly snapshotTitle: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly trackId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly updatedAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+            };
+            readonly relations: {
+              readonly playlist: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'Playlist';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['playlistId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+              readonly track: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'Track';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: true;
+                readonly on: {
+                  readonly localFields: readonly ['trackId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'PlaylistItem';
+              readonly namespaceId: '__unbound__';
+              readonly fields: {
+                readonly createdAt: { readonly column: 'createdAt' };
+                readonly externalProvider: { readonly column: 'externalProvider' };
+                readonly externalTrackId: { readonly column: 'externalTrackId' };
+                readonly id: { readonly column: 'id' };
+                readonly identityKey: { readonly column: 'identityKey' };
+                readonly playlistId: { readonly column: 'playlistId' };
+                readonly position: { readonly column: 'position' };
+                readonly snapshotAlbum: { readonly column: 'snapshotAlbum' };
+                readonly snapshotArtist: { readonly column: 'snapshotArtist' };
+                readonly snapshotDuration: { readonly column: 'snapshotDuration' };
+                readonly snapshotTitle: { readonly column: 'snapshotTitle' };
+                readonly trackId: { readonly column: 'trackId' };
+                readonly updatedAt: { readonly column: 'updatedAt' };
+              };
+            };
+          };
+          readonly PlaylistLike: {
+            readonly fields: {
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly playlistId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly userId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+            };
+            readonly relations: {
+              readonly playlist: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'Playlist';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['playlistId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+              readonly user: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'User';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['userId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'PlaylistLike';
+              readonly namespaceId: '__unbound__';
+              readonly fields: {
+                readonly createdAt: { readonly column: 'createdAt' };
+                readonly id: { readonly column: 'id' };
+                readonly playlistId: { readonly column: 'playlistId' };
+                readonly userId: { readonly column: 'userId' };
               };
             };
           };
@@ -4227,6 +4787,48 @@ type ContractBase = Omit<
           readonly ref: {
             readonly entry: 'MetadataProvider';
             readonly field: 'updatedAt';
+            readonly namespace: '__unbound__';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'Playlist';
+            readonly field: 'id';
+            readonly namespace: '__unbound__';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly onUpdate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'Playlist';
+            readonly field: 'updatedAt';
+            readonly namespace: '__unbound__';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'PlaylistItem';
+            readonly field: 'id';
+            readonly namespace: '__unbound__';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly onUpdate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'PlaylistItem';
+            readonly field: 'updatedAt';
+            readonly namespace: '__unbound__';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'PlaylistLike';
+            readonly field: 'id';
             readonly namespace: '__unbound__';
           };
         },

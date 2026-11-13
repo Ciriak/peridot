@@ -33,6 +33,7 @@ const optimizedDependencies = [
   "@iconify-icons/basil/move-outline",
   "@iconify-icons/basil/music-outline",
   "@iconify-icons/basil/pause-solid",
+  "@iconify-icons/basil/plus-outline",
   "@iconify-icons/basil/play-solid",
   "@iconify-icons/basil/refresh-outline",
   "@iconify-icons/basil/rows-outline",
