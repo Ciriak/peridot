@@ -14,7 +14,9 @@ import type {
   SourceResponse,
 } from "@peridot/contracts";
 import { Button } from "@peridot/ui/components/ui/button";
+import { Input } from "@peridot/ui/components/ui/input";
 import { ProgressCircle } from "@peridot/ui/components/ui/progress-circle";
+import jellyfinIcon from "@peridot/ui/assets/jellyfin-icon.webp";
 import { useSortable } from "@vueuse/integrations/useSortable";
 import {
   AlertDialogAction,
@@ -60,7 +62,7 @@ import { notifySourceMutation } from "../../lib/toasts";
 
 definePageMeta({ layout: "settings" });
 
-const { t } = useI18n();
+const { t, d } = useI18n();
 const { errorMessage } = useLocalizedMessage();
 const { address } = useServer();
 const { token } = useSession();
@@ -82,8 +84,11 @@ const sourceList = ref<HTMLElement | null>(null);
 const loading = sourcesQuery.loading;
 const pageError = ref("");
 const addOpen = ref(false);
-const newKind = ref<Exclude<SourceKind, "url"> | null>(null);
+type SourceChoice = "path" | "jellyfin";
+const newKind = ref<SourceChoice | null>(null);
 const newPath = ref("");
+const newUrl = ref("");
+const newApiKey = ref("");
 const adding = ref(false);
 const addError = ref("");
 const removeOpen = ref(false);
@@ -101,7 +106,7 @@ function sourceLabel(source: SourceResponse | null): string {
   if (!source) return "";
   if (source.kind === "path") return source.path ?? "";
   if (source.kind === "url") return source.url ?? "";
-  return source.integration ?? "";
+  return source.name || source.url || source.integration || "";
 }
 
 function sourceKindIcon(kind: SourceKind) {
@@ -113,7 +118,11 @@ function sourceKindIcon(kind: SourceKind) {
 function sourceKindLabel(kind: SourceKind): string {
   if (kind === "path") return t("settings.sources.path");
   if (kind === "url") return t("settings.sources.url");
-  return t("settings.sources.integration");
+  return t("settings.sources.jellyfin");
+}
+
+function isJellyfin(source: SourceResponse): boolean {
+  return source.kind === "integration" && source.integration === "jellyfin";
 }
 
 function sourceTask(source: SourceResponse) {
@@ -123,6 +132,19 @@ function sourceTask(source: SourceResponse) {
 function sourceProgress(source: SourceResponse): number | null {
   const task = sourceTask(source);
   return task ? sourceTaskProgress(task) : null;
+}
+
+function sourceFileCount(source: SourceResponse): string {
+  const count = Number.isFinite(source.fileCount) ? source.fileCount : 0;
+  return t("count.file", { count }, count);
+}
+
+function sourceLastSync(source: SourceResponse): string {
+  return source.lastSyncedAt
+    ? t("settings.sources.lastSync", {
+        date: d(new Date(source.lastSyncedAt), "medium"),
+      })
+    : t("settings.sources.notSynced");
 }
 
 async function loadSources() {
@@ -146,10 +168,12 @@ function openAddDialog() {
   addError.value = "";
   newKind.value = null;
   newPath.value = "";
+  newUrl.value = "";
+  newApiKey.value = "";
   addOpen.value = true;
 }
 
-function chooseKind(kind: Exclude<SourceKind, "url">) {
+function chooseKind(kind: SourceChoice) {
   addError.value = "";
   newKind.value = kind;
 }
@@ -158,11 +182,16 @@ function closeAddDialog() {
   addOpen.value = false;
   newKind.value = null;
   newPath.value = "";
+  newUrl.value = "";
+  newApiKey.value = "";
 }
 
 function handleDialogBack() {
   if (newKind.value) {
     newKind.value = null;
+    newPath.value = "";
+    newUrl.value = "";
+    newApiKey.value = "";
     addError.value = "";
   } else {
     closeAddDialog();
@@ -171,6 +200,9 @@ function handleDialogBack() {
 
 function canAdd(): boolean {
   if (newKind.value === "path") return Boolean(newPath.value.trim());
+  if (newKind.value === "jellyfin") {
+    return Boolean(newUrl.value.trim() && newApiKey.value.trim());
+  }
   return false;
 }
 
@@ -178,8 +210,17 @@ async function addSource() {
   if (!newKind.value) return;
   adding.value = true;
   addError.value = "";
-  const body: CreateSourceRequest = { kind: newKind.value };
-  if (newKind.value === "path") body.path = newPath.value;
+  let body: CreateSourceRequest;
+  if (newKind.value === "path") {
+    body = { kind: "path", path: newPath.value };
+  } else {
+    body = {
+      kind: "integration",
+      integration: "jellyfin",
+      url: newUrl.value,
+      apiKey: newApiKey.value,
+    };
+  }
   try {
     const source = await createSource(
       address.value ?? "",
@@ -189,7 +230,10 @@ async function addSource() {
     closeAddDialog();
     notifySourceMutation("added", sourceLabel(source));
     await loadSources();
-    if (source.kind === "path") {
+    if (
+      source.kind === "path" ||
+      (source.kind === "integration" && source.integration === "jellyfin")
+    ) {
       if (source.task) {
         trackTask(source.task);
       } else {
@@ -205,7 +249,7 @@ async function addSource() {
 }
 
 async function rescan(source: SourceResponse) {
-  if (source.kind !== "path") return;
+  if (source.kind !== "path" && !isJellyfin(source)) return;
   pageError.value = "";
   try {
     await queueSourceScan(source.id);
@@ -336,23 +380,50 @@ onMounted(() => void loadSources());
             :title="sourceKindLabel(source.kind)"
             class="flex size-6 shrink-0 items-center justify-center text-muted-foreground"
           >
+            <img
+              v-if="isJellyfin(source)"
+              :src="jellyfinIcon"
+              alt=""
+              class="size-5 object-contain"
+            />
             <Icon
+              v-else
               :icon="sourceKindIcon(source.kind)"
               aria-hidden="true"
               class="size-5"
             />
           </span>
-          <span v-if="source.kind === 'path'" class="min-w-0 flex-1 text-sm">
-            <span class="block font-medium">{{
-              sourceFolderName(source.path ?? "")
-            }}</span>
-            <span class="block break-all text-xs text-muted-foreground">{{
-              source.path
-            }}</span>
-          </span>
-          <span v-else class="min-w-0 flex-1 truncate text-sm">
-            {{ sourceLabel(source) }}
-          </span>
+          <div class="min-w-0 flex-1 text-sm">
+            <template v-if="source.kind === 'path'">
+              <span class="block font-medium">{{
+                sourceFolderName(source.path ?? "")
+              }}</span>
+              <span class="block break-all text-xs text-muted-foreground">{{
+                source.path
+              }}</span>
+            </template>
+            <template v-else-if="isJellyfin(source)">
+              <span class="block font-medium">{{
+                source.name || "Jellyfin"
+              }}</span>
+              <span class="block truncate text-xs text-muted-foreground">{{
+                source.url
+              }}</span>
+            </template>
+            <span v-else class="block truncate">
+              {{ sourceLabel(source) }}
+            </span>
+            <span
+              class="mt-1 flex flex-wrap items-center gap-x-1 text-xs text-muted-foreground"
+            >
+              <span>{{ sourceFileCount(source) }}</span>
+              <span aria-hidden="true">·</span>
+              <time v-if="source.lastSyncedAt" :datetime="source.lastSyncedAt">
+                {{ sourceLastSync(source) }}
+              </time>
+              <span v-else>{{ sourceLastSync(source) }}</span>
+            </span>
+          </div>
           <ProgressCircle
             v-if="sourceTask(source)"
             size="sm"
@@ -391,7 +462,10 @@ onMounted(() => void loadSources());
                 class="z-50 w-44 rounded-lg border bg-popover p-1 text-popover-foreground shadow-lg"
               >
                 <DropdownMenuItem
-                  :disabled="source.kind !== 'path' || serverLost"
+                  :disabled="
+                    (source.kind !== 'path' && !isJellyfin(source)) ||
+                    serverLost
+                  "
                   class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none data-disabled:cursor-default data-disabled:opacity-50"
                   @select="rescan(source)"
                 >
@@ -448,10 +522,10 @@ onMounted(() => void loadSources());
             type="button"
             variant="outline"
             class="justify-start"
-            @click="chooseKind('integration')"
+            @click="chooseKind('jellyfin')"
           >
-            <Icon :icon="icons.plugins" aria-hidden="true" class="size-5" />
-            {{ t("settings.sources.integration") }}
+            <img :src="jellyfinIcon" alt="" class="size-5 object-contain" />
+            {{ t("settings.sources.jellyfin") }}
           </Button>
         </div>
 
@@ -466,9 +540,33 @@ onMounted(() => void loadSources());
             </p>
           </div>
 
-          <p v-else class="text-sm text-muted-foreground">
-            {{ t("settings.sources.integrationsPending") }}
-          </p>
+          <div v-else class="space-y-4">
+            <div class="space-y-2">
+              <label for="jellyfin-url" class="text-sm font-medium">
+                {{ t("settings.sources.jellyfinUrl") }}
+              </label>
+              <Input
+                id="jellyfin-url"
+                v-model="newUrl"
+                type="url"
+                :placeholder="t('settings.sources.jellyfinUrlPlaceholder')"
+              />
+            </div>
+            <div class="space-y-2">
+              <label for="jellyfin-api-key" class="text-sm font-medium">
+                {{ t("settings.sources.jellyfinApiKey") }}
+              </label>
+              <Input
+                id="jellyfin-api-key"
+                v-model="newApiKey"
+                type="password"
+                autocomplete="off"
+              />
+              <p class="text-sm text-muted-foreground">
+                {{ t("settings.sources.jellyfinApiKeyHelp") }}
+              </p>
+            </div>
+          </div>
 
           <p v-if="addError" role="alert" class="text-sm text-destructive">
             {{ addError }}

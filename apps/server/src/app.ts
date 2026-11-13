@@ -9,6 +9,7 @@ import { loadServerConfig, type ServerConfig } from "./config.js";
 import { CredentialStore } from "./credential-store.js";
 import { createDatabase, type Database } from "./database.js";
 import { DiscogsClient, DiscogsResolver } from "./discogs.js";
+import { JellyfinClient } from "./jellyfin.js";
 import { registerLibraryRoutes } from "./library-routes.js";
 import { registerLikeRoutes } from "./like-routes.js";
 import { registerPlaylistRoutes } from "./playlist-routes.js";
@@ -47,6 +48,8 @@ export interface BuildAppOptions {
   metadataRequestIntervalMs?: number;
   discogsFetch?: typeof fetch;
   discogsRequestIntervalMs?: number;
+  jellyfinFetch?: typeof fetch;
+  jellyfinRequestTimeoutMs?: number;
 }
 
 export async function buildApp(options: BuildAppOptions = {}) {
@@ -55,17 +58,27 @@ export async function buildApp(options: BuildAppOptions = {}) {
   const ownsDatabase = options.database === undefined;
   let credentials: CredentialStore;
   try {
-    const storedCredentialCiphertexts = (
+    const metadataProviderCredentials = (
       await database.orm.MetadataProvider.where((provider) =>
         provider.credentialCiphertext.isNotNull(),
       ).all()
     ).flatMap((provider) =>
       provider.credentialCiphertext ? [provider.credentialCiphertext] : [],
     );
+    const sourceCredentials = (
+      await database.orm.Source.where((source) =>
+        source.credentialCiphertext.isNotNull(),
+      ).all()
+    ).flatMap((source) =>
+      source.credentialCiphertext ? [source.credentialCiphertext] : [],
+    );
     credentials = await CredentialStore.fromConfig(
       config.credentialEncryptionKey,
       config.databaseUrl,
-      storedCredentialCiphertexts,
+      {
+        metadataProvider: metadataProviderCredentials,
+        source: sourceCredentials,
+      },
     );
   } catch (error) {
     if (ownsDatabase) await database.close();
@@ -93,6 +106,10 @@ export async function buildApp(options: BuildAppOptions = {}) {
       ),
     );
   const playbackTokens = new PlaybackTokenService();
+  const jellyfin = new JellyfinClient(
+    options.jellyfinFetch ?? fetch,
+    options.jellyfinRequestTimeoutMs,
+  );
   const catalog = new CatalogService(database, playbackTokens);
   const realtime = new RealtimeHub(database);
   const metadataEnrichment = new MetadataEnrichment(
@@ -103,7 +120,13 @@ export async function buildApp(options: BuildAppOptions = {}) {
     options.discogsFetch ?? fetch,
   );
   const tasks = new TaskService(database, (task) => realtime.publishTask(task));
-  const scanner = new LibraryScanner(database, metadataEnrichment, catalog);
+  const scanner = new LibraryScanner(
+    database,
+    metadataEnrichment,
+    catalog,
+    jellyfin,
+    credentials,
+  );
   tasks.registerExecutor("library_scan", (task, taskService) =>
     scanner.runTask(task, taskService),
   );
@@ -172,6 +195,8 @@ export async function buildApp(options: BuildAppOptions = {}) {
         database,
         tasks,
         playbackTokens,
+        jellyfin,
+        credentials,
       );
       await registerCatalogRoutes(protectedApp, catalog);
       await registerTaskRoutes(protectedApp, tasks);
@@ -194,6 +219,8 @@ export async function buildApp(options: BuildAppOptions = {}) {
           }
         },
         options.restartServer,
+        jellyfin,
+        catalog,
       );
     },
     (request) => playbackTokens.authorizeRequest(request.method, request.url),

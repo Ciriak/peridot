@@ -2,13 +2,14 @@ import { readdir, realpath, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import type {
-  CreateSourceRequest,
   DirectorySearchResponse,
   MessageDescriptor,
   SourceKind,
   SourceResponse,
 } from "@peridot/contracts";
+import type { CredentialStore } from "./credential-store.js";
 import type { Database } from "./database.js";
+import { JellyfinClient, JellyfinError } from "./jellyfin.js";
 import { message } from "./messages.js";
 import type { SourceRow } from "./prisma/models.js";
 
@@ -39,7 +40,11 @@ export class SourceError extends Error {
   }
 }
 
-function toSourceResponse(source: SourceRow): SourceResponse {
+function toSourceResponse(
+  source: SourceRow,
+  fileCount = 0,
+  lastSyncedAt: Date | null = source.lastSyncedAt,
+): SourceResponse {
   return {
     id: source.id,
     kind: source.kind as SourceKind,
@@ -47,6 +52,8 @@ function toSourceResponse(source: SourceRow): SourceResponse {
     path: source.path,
     url: source.url,
     integration: source.integration,
+    fileCount,
+    lastSyncedAt: lastSyncedAt?.toISOString() ?? null,
   };
 }
 
@@ -73,14 +80,46 @@ export async function listSources(
     (source) => source.position.asc(),
     (source) => source.createdAt.asc(),
   ]).all();
-  return sources.map(toSourceResponse);
+  return Promise.all(
+    sources.map(async (source) => {
+      const [tracks, lastCompletedScan] = await Promise.all([
+        database.orm.Track.where({
+          sourceId: source.id,
+          available: 1,
+        }).aggregate((aggregate) => ({ count: aggregate.count() })),
+        source.lastSyncedAt
+          ? Promise.resolve(null)
+          : database.orm.Task.where({
+              kind: "library_scan",
+              status: "completed",
+              sourceId: source.id,
+            })
+              .orderBy((task) => task.completedAt.desc())
+              .first(),
+      ]);
+      return toSourceResponse(
+        source,
+        tracks.count,
+        source.lastSyncedAt ?? lastCompletedScan?.completedAt ?? null,
+      );
+    }),
+  );
 }
 
 export async function createSource(
   database: Database,
   body: unknown,
+  jellyfin: JellyfinClient,
+  credentials: CredentialStore,
 ): Promise<SourceResponse> {
-  const value = (body ?? {}) as Partial<CreateSourceRequest>;
+  const value = (body ?? {}) as {
+    kind?: unknown;
+    name?: unknown;
+    path?: unknown;
+    url?: unknown;
+    integration?: unknown;
+    apiKey?: unknown;
+  };
   const kind = value.kind;
   if (kind !== "path" && kind !== "url" && kind !== "integration") {
     throw new SourceError(
@@ -103,7 +142,9 @@ export async function createSource(
         message("api.message.sourceFolderRequired"),
       );
     }
-    const resolved = await resolveDirectory(value.path);
+    const resolved = await resolveDirectory(
+      typeof value.path === "string" ? value.path : "",
+    );
     const duplicate = await database.orm.Source.first({
       kind: "path",
       path: resolved,
@@ -157,9 +198,30 @@ export async function createSource(
       message("api.message.sourceIntegrationRequired"),
     );
   }
+  if (integration !== "jellyfin") {
+    throw new SourceError(
+      "Choose a supported integration.",
+      message("api.message.sourceIntegrationRequired"),
+    );
+  }
+  const url = normalizeIntegrationUrl(value.url);
+  if (!url) {
+    throw new SourceError(
+      "Enter a valid Jellyfin server URL.",
+      message("api.message.jellyfinUrlInvalid"),
+    );
+  }
+  const apiKey = typeof value.apiKey === "string" ? value.apiKey.trim() : "";
+  if (!apiKey || apiKey.length > 1_024) {
+    throw new SourceError(
+      "Enter a Jellyfin API key.",
+      message("api.message.jellyfinApiKeyRequired"),
+    );
+  }
   const duplicate = await database.orm.Source.first({
     kind: "integration",
     integration,
+    url,
   });
   if (duplicate) {
     throw new SourceError(
@@ -167,10 +229,22 @@ export async function createSource(
       message("api.message.sourceIntegrationDuplicate"),
     );
   }
+  let serverName: string;
+  try {
+    const info = await jellyfin.validate(url, apiKey);
+    serverName = info.name;
+  } catch (error) {
+    if (error instanceof JellyfinError) {
+      throw new SourceError(error.message, error.messageDescriptor);
+    }
+    throw error;
+  }
   const source = await database.orm.Source.create({
     kind,
-    name,
+    name: name || serverName,
+    url,
     integration,
+    credentialCiphertext: credentials.encrypt(apiKey, "source"),
     position,
   });
   return toSourceResponse(source);
@@ -206,6 +280,28 @@ function normalizeSourceUrl(value: unknown): string | null {
   }
   if (!["http:", "https:"].includes(url.protocol) || !url.hostname) return null;
   if (url.username || url.password) return null;
+  return url.toString();
+}
+
+function normalizeIntegrationUrl(value: unknown): string | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  let url: URL;
+  try {
+    url = new URL(value.trim());
+  } catch {
+    return null;
+  }
+  if (
+    !["http:", "https:"].includes(url.protocol) ||
+    !url.hostname ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash
+  ) {
+    return null;
+  }
+  url.pathname = `${url.pathname.replace(/\/+$/, "")}/`;
   return url.toString();
 }
 

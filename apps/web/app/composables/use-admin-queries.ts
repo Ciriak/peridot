@@ -28,6 +28,7 @@ import {
 import { useLocalizedMessage } from "./use-localized-message";
 import { useQueryScope } from "./use-query-scope";
 import { useSession } from "./use-session";
+import { useUser } from "./use-user";
 
 function localizedQueryError(
   reason: unknown,
@@ -42,7 +43,11 @@ function localizedQueryError(
 export function useAdminSourcesQuery() {
   const { scope } = useQueryScope();
   const { token } = useSession();
+  const { user } = useUser();
   const { errorMessage } = useLocalizedMessage();
+  const enabled = computed(
+    () => Boolean(scope.value && token.value && user.value?.role === "admin"),
+  );
   const query = useQuery({
     queryKey: computed(() =>
       scope.value
@@ -55,7 +60,7 @@ export function useAdminSourcesQuery() {
       }
       return listSources(scope.value.serverAddress, token.value);
     },
-    enabled: computed(() => Boolean(scope.value && token.value)),
+    enabled,
     meta: { persist: true },
   });
   const items = computed(() => query.data.value?.items ?? []);

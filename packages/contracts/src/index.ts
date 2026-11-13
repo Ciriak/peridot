@@ -105,7 +105,7 @@ export interface AlbumSummaryResponse {
   artist: string;
   artists: string[];
   coverUrl: string | null;
-  trackCount: number;
+  fileCount: number;
   durationMs: number | null;
   releaseYear: number | null;
   liked: boolean;
@@ -408,6 +408,8 @@ export interface SourceResponse {
   path: string | null;
   url: string | null;
   integration: string | null;
+  trackCount: number;
+  lastSyncedAt: string | null;
 }
 
 export interface CreateSourceResponse extends SourceResponse {
@@ -418,13 +420,30 @@ export interface SourceListResponse {
   items: SourceResponse[];
 }
 
-export interface CreateSourceRequest {
-  kind: SourceKind;
+export interface CreatePathSourceRequest {
+  kind: "path";
   name?: string | null;
-  path?: string | null;
-  url?: string | null;
-  integration?: string | null;
+  path: string;
 }
+
+export interface CreateUrlSourceRequest {
+  kind: "url";
+  name?: string | null;
+  url: string;
+}
+
+export interface CreateJellyfinSourceRequest {
+  kind: "integration";
+  integration: "jellyfin";
+  name?: string | null;
+  url: string;
+  apiKey: string;
+}
+
+export type CreateSourceRequest =
+  | CreatePathSourceRequest
+  | CreateUrlSourceRequest
+  | CreateJellyfinSourceRequest;
 
 export interface ReorderSourcesRequest {
   ids: string[];

@@ -35,6 +35,8 @@ test("administrators can read server counts and the default source", async () =>
     assert.equal(items.length, 1);
     assert.equal(items[0]?.kind, "path");
     assert.equal(items[0]?.path, context.libraryRoot);
+    assert.equal(items[0]?.fileCount, 0);
+    assert.equal(items[0]?.lastSyncedAt, null);
   } finally {
     await context.close();
   }
@@ -85,6 +87,8 @@ test("administrators can add and remove path and url sources", async () => {
     const createdSource = created.json<{
       id: string;
       path: string;
+      fileCount: number;
+      lastSyncedAt: string | null;
       task: {
         id: string;
         kind: string;
@@ -93,6 +97,8 @@ test("administrators can add and remove path and url sources", async () => {
       };
     }>();
     assert.equal(createdSource.path, secondRoot);
+    assert.equal(createdSource.fileCount, 0);
+    assert.equal(createdSource.lastSyncedAt, null);
     assert.equal(createdSource.task.kind, "library_scan");
     assert.equal(createdSource.task.source.id, createdSource.id);
     assert.equal(createdSource.task.source.name, "second");
@@ -120,7 +126,19 @@ test("administrators can add and remove path and url sources", async () => {
       url: "/api/admin/sources",
       headers: context.authorization,
     });
-    assert.equal(list.json<{ items: unknown[] }>().items.length, 3);
+    const listedSources = list.json<{
+      items: Array<{
+        id: string;
+        fileCount: number;
+        lastSyncedAt: string | null;
+      }>;
+    }>().items;
+    assert.equal(listedSources.length, 3);
+    const scannedSource = listedSources.find(
+      (source) => source.id === createdSource.id,
+    );
+    assert.equal(scannedSource?.fileCount, 1);
+    assert.ok(scannedSource?.lastSyncedAt);
 
     const removed = await context.app.inject({
       method: "DELETE",

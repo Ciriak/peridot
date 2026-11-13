@@ -5,9 +5,22 @@ import { fileURLToPath } from "node:url";
 
 const CREDENTIAL_KEY_BYTES = 32;
 const ENVELOPE_VERSION = "v1";
-const AAD = Buffer.from("peridot-metadata-provider-credential:v1", "utf8");
 const PERIDOT_CREDENTIAL_KEY = "PERIDOT_CREDENTIAL_KEY";
 const LOCAL_KEY_FILE = "local credential encryption key file";
+const CREDENTIAL_AAD = {
+  "metadata-provider": Buffer.from(
+    "peridot-metadata-provider-credential:v1",
+    "utf8",
+  ),
+  source: Buffer.from("peridot-source-credential:v1", "utf8"),
+} as const;
+
+export type CredentialPurpose = keyof typeof CREDENTIAL_AAD;
+
+export interface StoredCredentialCiphertexts {
+  metadataProvider: readonly string[];
+  source: readonly string[];
+}
 
 export class CredentialStoreError extends Error {
   constructor(
@@ -128,19 +141,24 @@ export class CredentialStore {
   static async fromConfig(
     encodedKey: string | undefined,
     databaseUrl: string,
-    storedCredentials: readonly string[] = [],
+    storedCredentials: readonly string[] | StoredCredentialCiphertexts = [],
   ): Promise<CredentialStore> {
+    const groups: StoredCredentialCiphertexts = Array.isArray(storedCredentials)
+      ? { metadataProvider: storedCredentials, source: [] }
+      : (storedCredentials as StoredCredentialCiphertexts);
+    const storedCredentialCount =
+      groups.metadataProvider.length + groups.source.length;
     if (encodedKey) {
       const store = new CredentialStore(encodedKey);
       try {
-        store.validateStoredCredentials(storedCredentials);
+        store.validateStoredCredentials(groups);
       } catch {
         throw new CredentialStoreError(
-          "PERIDOT_CREDENTIAL_KEY cannot decrypt the existing metadata provider credentials.",
+          "PERIDOT_CREDENTIAL_KEY cannot decrypt the existing integration credentials.",
           503,
         );
       }
-      if (storedCredentials.length > 0) {
+      if (storedCredentialCount > 0) {
         await writeLocalKey(localCredentialKeyFile(databaseUrl), encodedKey);
       }
       return store;
@@ -149,14 +167,14 @@ export class CredentialStore {
     const keyFile = localCredentialKeyFile(databaseUrl);
     const localKey = await loadOrCreateLocalKey(
       keyFile,
-      storedCredentials.length === 0,
+      storedCredentialCount === 0,
     );
     const store = new CredentialStore(localKey, LOCAL_KEY_FILE);
     try {
-      store.validateStoredCredentials(storedCredentials);
+      store.validateStoredCredentials(groups);
     } catch {
       throw new CredentialStoreError(
-        "The local credential encryption key cannot decrypt the existing metadata provider credentials. Set PERIDOT_CREDENTIAL_KEY to the previous key and restart Peridot once to migrate it.",
+        "The local credential encryption key cannot decrypt the existing integration credentials. Set PERIDOT_CREDENTIAL_KEY to the previous key and restart Peridot once to migrate it.",
         503,
       );
     }
@@ -177,18 +195,24 @@ export class CredentialStore {
   }
 
   private validateStoredCredentials(
-    storedCredentials: readonly string[],
+    storedCredentials: StoredCredentialCiphertexts,
   ): void {
-    for (const ciphertext of storedCredentials) {
-      this.decrypt(ciphertext);
+    for (const ciphertext of storedCredentials.metadataProvider) {
+      this.decrypt(ciphertext, "metadata-provider");
+    }
+    for (const ciphertext of storedCredentials.source) {
+      this.decrypt(ciphertext, "source");
     }
   }
 
-  encrypt(value: string): string {
+  encrypt(
+    value: string,
+    purpose: CredentialPurpose = "metadata-provider",
+  ): string {
     this.ensureConfigured();
     const iv = randomBytes(12);
     const cipher = createCipheriv("aes-256-gcm", this.key!, iv);
-    cipher.setAAD(AAD);
+    cipher.setAAD(CREDENTIAL_AAD[purpose]);
     const ciphertext = Buffer.concat([
       cipher.update(value, "utf8"),
       cipher.final(),
@@ -202,7 +226,10 @@ export class CredentialStore {
     ].join(".");
   }
 
-  decrypt(value: string): string {
+  decrypt(
+    value: string,
+    purpose: CredentialPurpose = "metadata-provider",
+  ): string {
     if (!this.key) {
       throw new CredentialStoreError(
         "No credential encryption key is configured.",
@@ -228,7 +255,7 @@ export class CredentialStore {
         this.key,
         Buffer.from(encodedIv, "base64url"),
       );
-      decipher.setAAD(AAD);
+      decipher.setAAD(CREDENTIAL_AAD[purpose]);
       decipher.setAuthTag(Buffer.from(encodedTag, "base64url"));
       return Buffer.concat([
         decipher.update(Buffer.from(encodedCiphertext, "base64url")),

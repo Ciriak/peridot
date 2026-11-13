@@ -65,7 +65,15 @@ test("en-US messages interpolate and pluralize", () => {
     i18n.global.t("settings.sources.path"),
     "Server internal folder",
   );
+  assert.equal(i18n.global.t("settings.sources.jellyfin"), "Jellyfin instance");
+  assert.equal(i18n.global.t("count.file", { count: 1 }, 1), "1 file");
+  assert.equal(i18n.global.t("count.file", { count: 2 }, 2), "2 files");
+  assert.equal(
+    i18n.global.t("settings.sources.lastSync", { date: "Nov 13, 2026" }),
+    "Last sync Nov 13, 2026",
+  );
   assert.equal(i18n.global.te("settings.sources.externalUrl"), false);
+  assert.equal(i18n.global.te("settings.sources.integrationsPending"), false);
 });
 
 test("every en-US message compiles", () => {

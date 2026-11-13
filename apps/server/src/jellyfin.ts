@@ -1,0 +1,475 @@
+import type { MessageDescriptor } from "@peridot/contracts";
+import { message } from "./messages.js";
+
+const AUDIO_PAGE_SIZE = 500;
+const MAX_COVER_BYTES = 5 * 1024 * 1024;
+const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
+const AUDIO_TYPES = new Map<string, { extension: string; mimeType: string }>([
+  ["aac", { extension: "aac", mimeType: "audio/aac" }],
+  ["flac", { extension: "flac", mimeType: "audio/flac" }],
+  ["m4a", { extension: "m4a", mimeType: "audio/mp4" }],
+  ["mp3", { extension: "mp3", mimeType: "audio/mpeg" }],
+  ["mp4", { extension: "m4a", mimeType: "audio/mp4" }],
+  ["ogg", { extension: "ogg", mimeType: "audio/ogg" }],
+  ["opus", { extension: "opus", mimeType: "audio/ogg" }],
+  ["wav", { extension: "wav", mimeType: "audio/wav" }],
+]);
+const COVER_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+interface JellyfinNameId {
+  Name?: string | null;
+}
+
+interface JellyfinMediaSource {
+  Container?: string | null;
+  Size?: number | null;
+}
+
+interface JellyfinItem {
+  Id?: string | null;
+  Name?: string | null;
+  Etag?: string | null;
+  Container?: string | null;
+  RunTimeTicks?: number | null;
+  IndexNumber?: number | null;
+  ParentIndexNumber?: number | null;
+  DateCreated?: string | null;
+  Artists?: string[] | null;
+  ArtistItems?: JellyfinNameId[] | null;
+  Album?: string | null;
+  AlbumId?: string | null;
+  AlbumArtist?: string | null;
+  AlbumArtists?: JellyfinNameId[] | null;
+  AlbumPrimaryImageTag?: string | null;
+  ImageTags?: Record<string, string | null> | null;
+  MediaSources?: JellyfinMediaSource[] | null;
+}
+
+interface JellyfinItemsResponse {
+  Items?: JellyfinItem[] | null;
+  TotalRecordCount?: number | null;
+}
+
+interface JellyfinSystemInfo {
+  ServerName?: string | null;
+  ProductName?: string | null;
+  Id?: string | null;
+  Version?: string | null;
+}
+
+export interface JellyfinServerInfo {
+  name: string;
+  productName: string;
+  serverId: string | null;
+  version: string | null;
+}
+
+export interface JellyfinAudioItem {
+  externalId: string;
+  externalVersion: string;
+  title: string;
+  artists: string[];
+  albumArtist: string | null;
+  albumArtists: string[];
+  album: string | null;
+  albumId: string | null;
+  discNumber: number | null;
+  trackNumber: number | null;
+  durationMs: number | null;
+  fileSizeBytes: bigint;
+  fileModifiedAt: Date;
+  mimeType: string;
+  container: string;
+  coverItemId: string | null;
+  coverTag: string | null;
+}
+
+export interface JellyfinCover {
+  data: Buffer;
+  mimeType: string;
+}
+
+export type JellyfinErrorCode =
+  "invalid_url" | "invalid_credentials" | "unavailable" | "invalid_response";
+
+export class JellyfinError extends Error {
+  constructor(
+    messageText: string,
+    readonly code: JellyfinErrorCode,
+    readonly statusCode = 400,
+    readonly messageDescriptor?: MessageDescriptor,
+  ) {
+    super(messageText);
+    this.name = "JellyfinError";
+  }
+}
+
+function endpoint(baseUrl: string, pathname: string): URL {
+  return new URL(pathname, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
+}
+
+function authorization(apiKey: string): string {
+  return `MediaBrowser Token="${apiKey}"`;
+}
+
+function positiveInteger(value: number | null | undefined): number | null {
+  return value !== null &&
+    value !== undefined &&
+    Number.isInteger(value) &&
+    value > 0
+    ? value
+    : null;
+}
+
+function uniqueValues(
+  values: readonly (string | null | undefined)[],
+): string[] {
+  return [
+    ...new Set(
+      values
+        .map((value) => value?.trim())
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ];
+}
+
+function audioType(item: JellyfinItem): {
+  extension: string;
+  mimeType: string;
+  container: string;
+} | null {
+  const mediaContainer = item.MediaSources?.[0]?.Container;
+  const container =
+    (mediaContainer ?? item.Container ?? "")
+      .split(",")[0]
+      ?.trim()
+      .toLowerCase() ?? "";
+  const type = container ? AUDIO_TYPES.get(container) : null;
+  return type ? { ...type, container } : null;
+}
+
+function toAudioItem(item: JellyfinItem): {
+  value: JellyfinAudioItem | null;
+  unsupported: boolean;
+} {
+  if (!item.Id?.trim()) return { value: null, unsupported: false };
+  const type = audioType(item);
+  if (!type) return { value: null, unsupported: true };
+
+  const artists = uniqueValues(
+    item.Artists?.length
+      ? item.Artists
+      : (item.ArtistItems ?? []).map((artist) => artist.Name),
+  );
+  const albumArtists = uniqueValues(
+    (item.AlbumArtists ?? []).length
+      ? (item.AlbumArtists ?? []).map((artist) => artist.Name)
+      : [item.AlbumArtist],
+  );
+  const album = item.Album?.trim() || null;
+  const albumId = item.AlbumId?.trim() || null;
+  const primaryImageTag = item.ImageTags?.Primary?.trim() || null;
+  const albumCoverItemId =
+    album && albumId && item.AlbumPrimaryImageTag ? albumId : null;
+  const coverItemId = albumCoverItemId ?? (primaryImageTag ? item.Id : null);
+  const coverTag =
+    (coverItemId === albumId ? item.AlbumPrimaryImageTag : primaryImageTag) ??
+    null;
+  const dateCreated = item.DateCreated
+    ? new Date(item.DateCreated)
+    : new Date(0);
+  const fileModifiedAt = Number.isNaN(dateCreated.getTime())
+    ? new Date(0)
+    : dateCreated;
+  const durationMs =
+    item.RunTimeTicks && item.RunTimeTicks > 0
+      ? Math.round(item.RunTimeTicks / 10_000)
+      : null;
+  const size = item.MediaSources?.[0]?.Size;
+
+  return {
+    value: {
+      externalId: item.Id,
+      externalVersion:
+        item.Etag?.trim() ||
+        [
+          item.Id,
+          type.extension,
+          item.Name ?? "",
+          (item.Artists ?? []).join("|"),
+          item.Album ?? "",
+          item.RunTimeTicks ?? "",
+          coverTag ?? "",
+        ].join(":"),
+      title: item.Name?.trim() || "Unknown track",
+      artists,
+      albumArtist: albumArtists.join(", ") || null,
+      albumArtists,
+      album,
+      albumId,
+      discNumber: positiveInteger(item.ParentIndexNumber),
+      trackNumber: positiveInteger(item.IndexNumber),
+      durationMs,
+      fileSizeBytes:
+        size !== null &&
+        size !== undefined &&
+        Number.isFinite(size) &&
+        size >= 0
+          ? BigInt(Math.trunc(size))
+          : 0n,
+      fileModifiedAt,
+      mimeType: type.mimeType,
+      container: type.container,
+      coverItemId,
+      coverTag,
+    },
+    unsupported: false,
+  };
+}
+
+function jsonObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+export class JellyfinClient {
+  private readonly requestTimeoutMs: number;
+
+  constructor(
+    private readonly fetchImpl: typeof fetch = fetch,
+    requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
+  ) {
+    this.requestTimeoutMs = requestTimeoutMs;
+  }
+
+  async validate(baseUrl: string, apiKey: string): Promise<JellyfinServerInfo> {
+    const response = await this.request(
+      endpoint(baseUrl, "System/Info"),
+      apiKey,
+    );
+    if (response.status === 401 || response.status === 403) {
+      throw new JellyfinError(
+        "Jellyfin rejected the API key.",
+        "invalid_credentials",
+        400,
+        message("api.message.jellyfinInvalidCredentials"),
+      );
+    }
+    if (!response.ok) {
+      throw new JellyfinError(
+        "Jellyfin did not accept the connection.",
+        "unavailable",
+        502,
+        message("api.message.jellyfinUnavailable"),
+      );
+    }
+    let raw: unknown;
+    try {
+      raw = await response.json();
+    } catch {
+      throw new JellyfinError(
+        "Jellyfin returned an invalid server response.",
+        "invalid_response",
+        502,
+        message("api.message.jellyfinInvalidResponse"),
+      );
+    }
+    const value = jsonObject(raw) as JellyfinSystemInfo;
+    const name = value.ServerName?.trim();
+    if (!name) {
+      throw new JellyfinError(
+        "Jellyfin returned an invalid server response.",
+        "invalid_response",
+        502,
+        message("api.message.jellyfinInvalidResponse"),
+      );
+    }
+    return {
+      name,
+      productName: value.ProductName?.trim() || "Jellyfin",
+      serverId: value.Id?.trim() || null,
+      version: value.Version?.trim() || null,
+    };
+  }
+
+  async listAudio(
+    baseUrl: string,
+    apiKey: string,
+  ): Promise<{ items: JellyfinAudioItem[]; unsupportedCount: number }> {
+    const items: JellyfinAudioItem[] = [];
+    let unsupportedCount = 0;
+    let startIndex = 0;
+
+    while (true) {
+      const url = endpoint(baseUrl, "Items");
+      url.search = new URLSearchParams({
+        recursive: "true",
+        includeItemTypes: "Audio",
+        mediaTypes: "Audio",
+        fields: "MediaSources",
+        enableImages: "true",
+        enableTotalRecordCount: "true",
+        sortBy: "SortName",
+        startIndex: String(startIndex),
+        limit: String(AUDIO_PAGE_SIZE),
+      }).toString();
+      const response = await this.request(url, apiKey);
+      if (response.status === 401 || response.status === 403) {
+        throw new JellyfinError(
+          "Jellyfin rejected the API key.",
+          "invalid_credentials",
+          409,
+          message("api.message.jellyfinInvalidCredentials"),
+        );
+      }
+      if (!response.ok) {
+        throw new JellyfinError(
+          "Jellyfin could not list its audio library.",
+          "unavailable",
+          502,
+          message("api.message.jellyfinUnavailable"),
+        );
+      }
+      let raw: unknown;
+      try {
+        raw = await response.json();
+      } catch {
+        throw new JellyfinError(
+          "Jellyfin returned an invalid library response.",
+          "invalid_response",
+          502,
+          message("api.message.jellyfinInvalidResponse"),
+        );
+      }
+      const page = jsonObject(raw) as JellyfinItemsResponse;
+      const pageItems = Array.isArray(page.Items) ? page.Items : [];
+      for (const item of pageItems) {
+        const converted = toAudioItem(item);
+        if (converted.value) items.push(converted.value);
+        if (converted.unsupported) unsupportedCount += 1;
+      }
+      startIndex += pageItems.length;
+      const total =
+        typeof page.TotalRecordCount === "number" &&
+        Number.isFinite(page.TotalRecordCount)
+          ? page.TotalRecordCount
+          : null;
+      if (
+        pageItems.length === 0 ||
+        pageItems.length < AUDIO_PAGE_SIZE ||
+        (total !== null && startIndex >= total)
+      ) {
+        break;
+      }
+    }
+
+    return { items, unsupportedCount };
+  }
+
+  async cover(
+    baseUrl: string,
+    apiKey: string,
+    itemId: string,
+    tag: string | null,
+  ): Promise<JellyfinCover | null> {
+    const url = endpoint(
+      baseUrl,
+      `Items/${encodeURIComponent(itemId)}/Images/Primary`,
+    );
+    url.search = new URLSearchParams({
+      maxWidth: "600",
+      maxHeight: "600",
+      quality: "90",
+      ...(tag ? { tag } : {}),
+    }).toString();
+    const response = await this.request(url, apiKey, {
+      headers: { Accept: "*/*" },
+    });
+    if (!response.ok) return null;
+    const mimeType =
+      response.headers
+        .get("content-type")
+        ?.split(";")[0]
+        ?.trim()
+        .toLowerCase() ?? "";
+    const length = Number(response.headers.get("content-length") ?? "0");
+    if (
+      !COVER_TYPES.has(mimeType) ||
+      (Number.isFinite(length) && length > MAX_COVER_BYTES)
+    ) {
+      return null;
+    }
+    const data = Buffer.from(await response.arrayBuffer());
+    return data.length && data.length <= MAX_COVER_BYTES
+      ? { data, mimeType }
+      : null;
+  }
+
+  async audio(
+    baseUrl: string,
+    apiKey: string,
+    externalId: string,
+    container: string,
+    range?: string,
+    method: "GET" | "HEAD" = "GET",
+    signal?: AbortSignal,
+  ): Promise<Response> {
+    const url = endpoint(
+      baseUrl,
+      `Audio/${encodeURIComponent(externalId)}/stream`,
+    );
+    url.search = new URLSearchParams({
+      static: "true",
+      container,
+    }).toString();
+    const options: RequestInit = {
+      method,
+      headers: {
+        Accept: "*/*",
+        ...(range ? { Range: range } : {}),
+      },
+      ...(signal ? { signal } : {}),
+    };
+    return this.request(url, apiKey, options);
+  }
+
+  private async request(
+    url: URL,
+    apiKey: string,
+    options: RequestInit = {},
+  ): Promise<Response> {
+    const controller = new AbortController();
+    const abortFromCaller = () => controller.abort(options.signal?.reason);
+    if (options.signal?.aborted) abortFromCaller();
+    options.signal?.addEventListener("abort", abortFromCaller, { once: true });
+    const timer = setTimeout(
+      () => controller.abort(new Error("Jellyfin request timed out")),
+      this.requestTimeoutMs,
+    );
+    try {
+      const response = await this.fetchImpl(url, {
+        ...options,
+        headers: {
+          Accept: "application/json",
+          Authorization: authorization(apiKey),
+          "User-Agent": "Peridot/0.1",
+          ...options.headers,
+        },
+        signal: controller.signal,
+      });
+      return response;
+    } catch (error) {
+      if (error instanceof JellyfinError) throw error;
+      throw new JellyfinError(
+        "Jellyfin could not be reached.",
+        "unavailable",
+        502,
+        message("api.message.jellyfinUnavailable"),
+      );
+    } finally {
+      options.signal?.removeEventListener("abort", abortFromCaller);
+      clearTimeout(timer);
+    }
+  }
+}

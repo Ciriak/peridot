@@ -29,6 +29,8 @@ export interface TestContextOptions {
   metadataRequestIntervalMs?: number;
   discogsFetch?: typeof fetch;
   discogsRequestIntervalMs?: number;
+  jellyfinFetch?: typeof fetch;
+  jellyfinRequestTimeoutMs?: number;
   credentialEncryptionKey?: string;
 }
 
@@ -79,6 +81,10 @@ export async function createTestContext(
     metadataFetch,
     metadataRequestIntervalMs,
     discogsFetch,
+    ...(options.jellyfinFetch ? { jellyfinFetch: options.jellyfinFetch } : {}),
+    ...(options.jellyfinRequestTimeoutMs !== undefined
+      ? { jellyfinRequestTimeoutMs: options.jellyfinRequestTimeoutMs }
+      : {}),
     ...(options.discogsRequestIntervalMs !== undefined
       ? { discogsRequestIntervalMs: options.discogsRequestIntervalMs }
       : { discogsRequestIntervalMs: 0 }),

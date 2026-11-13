@@ -19,7 +19,7 @@ import type {
 } from '@prisma/orm-sqlite/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'7a0e132d0dc6c041b17a59c7efa3c278f165abda1451256b968d61e0b5d000c2'>;
+  StorageHashBase<'656d7b91bd7d44abdcb1e755e1408a191c518b6b63f0a5c6839893918b0f05cf'>;
 export type ExecutionHash =
   ExecutionHashBase<'69abe59ddf12aaa78738519fa294ac279958f3b4caa4e85b2cb8fd0effde430a'>;
 export type ProfileHash =
@@ -432,9 +432,11 @@ export namespace Models {
   };
   export type Source = {
     createdAt: FieldOutputTypes['__unbound__']['Source']['createdAt'];
+    credentialCiphertext: FieldOutputTypes['__unbound__']['Source']['credentialCiphertext'];
     id: FieldOutputTypes['__unbound__']['Source']['id'];
     integration: FieldOutputTypes['__unbound__']['Source']['integration'];
     kind: FieldOutputTypes['__unbound__']['Source']['kind'];
+    lastSyncedAt: FieldOutputTypes['__unbound__']['Source']['lastSyncedAt'];
     name: FieldOutputTypes['__unbound__']['Source']['name'];
     path: FieldOutputTypes['__unbound__']['Source']['path'];
     position: FieldOutputTypes['__unbound__']['Source']['position'];
@@ -474,6 +476,9 @@ export namespace Models {
     createdAt: FieldOutputTypes['__unbound__']['Track']['createdAt'];
     discNumber: FieldOutputTypes['__unbound__']['Track']['discNumber'];
     durationMs: FieldOutputTypes['__unbound__']['Track']['durationMs'];
+    externalContainer: FieldOutputTypes['__unbound__']['Track']['externalContainer'];
+    externalId: FieldOutputTypes['__unbound__']['Track']['externalId'];
+    externalVersion: FieldOutputTypes['__unbound__']['Track']['externalVersion'];
     fileModifiedAt: FieldOutputTypes['__unbound__']['Track']['fileModifiedAt'];
     fileSizeBytes: FieldOutputTypes['__unbound__']['Track']['fileSizeBytes'];
     id: FieldOutputTypes['__unbound__']['Track']['id'];
@@ -2068,6 +2073,12 @@ type ContractBase = Omit<
                   readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
                   readonly many: false;
                 };
+                readonly credentialCiphertext: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
                 readonly id: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
@@ -2084,6 +2095,12 @@ type ContractBase = Omit<
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly lastSyncedAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: true;
                   readonly many: false;
                 };
                 readonly name: {
@@ -2350,6 +2367,24 @@ type ContractBase = Omit<
                   readonly nullable: true;
                   readonly many: false;
                 };
+                readonly externalContainer: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly externalId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly externalVersion: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
                 readonly fileModifiedAt: {
                   readonly dataType: 'sqlite/datetime';
                   readonly codecId: 'sqlite/datetime@1';
@@ -2534,7 +2569,10 @@ type ContractBase = Omit<
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
-              uniques: readonly [{ readonly columns: readonly ['sourceId', 'relativePath'] }];
+              uniques: readonly [
+                { readonly columns: readonly ['sourceId', 'relativePath'] },
+                { readonly columns: readonly ['sourceId', 'externalId'] },
+              ];
               indexes: readonly [
                 {
                   readonly name: 'Track_artist_album_title_idx_bdb66ee1';
@@ -4070,6 +4108,10 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
               };
+              readonly credentialCiphertext: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
               readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
@@ -4081,6 +4123,10 @@ type ContractBase = Omit<
               readonly kind: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly lastSyncedAt: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
               };
               readonly name: {
                 readonly nullable: true;
@@ -4109,9 +4155,11 @@ type ContractBase = Omit<
               readonly namespaceId: '__unbound__';
               readonly fields: {
                 readonly createdAt: { readonly column: 'createdAt' };
+                readonly credentialCiphertext: { readonly column: 'credentialCiphertext' };
                 readonly id: { readonly column: 'id' };
                 readonly integration: { readonly column: 'integration' };
                 readonly kind: { readonly column: 'kind' };
+                readonly lastSyncedAt: { readonly column: 'lastSyncedAt' };
                 readonly name: { readonly column: 'name' };
                 readonly path: { readonly column: 'path' };
                 readonly position: { readonly column: 'position' };
@@ -4263,6 +4311,18 @@ type ContractBase = Omit<
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
               };
+              readonly externalContainer: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly externalId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly externalVersion: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
               readonly fileModifiedAt: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
@@ -4408,6 +4468,9 @@ type ContractBase = Omit<
                 readonly createdAt: { readonly column: 'createdAt' };
                 readonly discNumber: { readonly column: 'discNumber' };
                 readonly durationMs: { readonly column: 'durationMs' };
+                readonly externalContainer: { readonly column: 'externalContainer' };
+                readonly externalId: { readonly column: 'externalId' };
+                readonly externalVersion: { readonly column: 'externalVersion' };
                 readonly fileModifiedAt: { readonly column: 'fileModifiedAt' };
                 readonly fileSizeBytes: { readonly column: 'fileSizeBytes' };
                 readonly id: { readonly column: 'id' };

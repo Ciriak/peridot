@@ -41,6 +41,11 @@ test("settings is a fullscreen routed area with a separate administrator group",
   assert.doesNotMatch(layout, /name: "Administration"/);
   assert.match(layout, /import TaskProgressIndicator/);
   assert.match(layout, /<TaskProgressIndicator \/>/);
+  assert.match(layout, /useAdminSourcesQuery/);
+  assert.match(layout, /sourceFileCount/);
+  assert.match(layout, /item\.to === '\/settings\/sources'/);
+  assert.match(layout, /variant="secondary"/);
+  assert.match(layout, /d\(sourceFileCount, "integer"\)/);
   for (const page of [
     "plugins",
     "tasks",
@@ -213,6 +218,10 @@ test("sources are managed on their own page with row action menus", async () => 
   assert.match(page, /DialogRoot/);
   assert.match(page, /<FolderTree/);
   assert.match(page, /sourceFolderName\(source\.path \?\? ""\)/);
+  assert.match(page, /sourceFileCount\(source\)/);
+  assert.match(page, /settings\.sources\.lastSync/);
+  assert.match(page, /settings\.sources\.notSynced/);
+  assert.match(page, /:datetime="source\.lastSyncedAt"/);
   assert.match(page, /sourceKindIcon\(source\.kind\)/);
   assert.match(page, /sourceKindLabel\(source\.kind\)/);
   assert.match(page, /:title="sourceKindLabel\(source\.kind\)"/);
@@ -226,6 +235,16 @@ test("sources are managed on their own page with row action menus", async () => 
   assert.doesNotMatch(page, /chooseKind\('url'\)/);
   assert.doesNotMatch(page, /settings\.sources\.externalUrl/);
   assert.doesNotMatch(page, /id="source-url"/);
+  assert.doesNotMatch(page, /chooseKind\('integration'\)/);
+  assert.match(page, /@peridot\/ui\/assets\/jellyfin-icon\.webp/);
+  assert.match(page, /chooseKind\('jellyfin'\)/);
+  assert.match(page, /settings\.sources\.jellyfinUrl/);
+  assert.match(page, /settings\.sources\.jellyfinApiKey/);
+  assert.match(page, /id="jellyfin-url"/);
+  assert.match(page, /id="jellyfin-api-key"/);
+  assert.match(page, /integration: "jellyfin"/);
+  assert.match(page, /url: newUrl\.value/);
+  assert.match(page, /apiKey: newApiKey\.value/);
   assert.match(
     page,
     /if \(kind === "url"\) return t\("settings\.sources\.url"\)/,
@@ -255,7 +274,7 @@ test("sources are managed on their own page with row action menus", async () => 
   );
   assert.match(page, /data-disabled:cursor-default/);
   assert.match(page, /queueSourceScan/);
-  assert.match(page, /:disabled="source\.kind !== 'path' \|\| serverLost"/);
+  assert.match(page, /!isJellyfin\(source\)/);
   assert.match(page, /settings\.sources\.actions/);
   assert.match(
     page,

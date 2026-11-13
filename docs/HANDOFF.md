@@ -2,6 +2,47 @@
 
 Last updated: 2026-11-13.
 
+## Jellyfin audio sources
+
+Settings → Admin → Sources now offers `Jellyfin instance` beside the
+server-internal folder option. Administrators enter the Jellyfin server URL and
+an API key; Peridot validates the connection, stores the key encrypted, derives
+the source name from Jellyfin, and queues the first source scan. Multiple
+instances are supported, while duplicate normalized URLs are rejected.
+
+Jellyfin scans request only `Audio` items and import MP3, M4A/AAC, OGG/Opus,
+WAV, and FLAC originals. Item IDs and ETags update the local catalog without
+duplicates, album artwork is cached with the existing cover store, and removed
+remote items become unavailable without being deleted. Unsupported audio
+containers are skipped and reported in the scan error count. The existing
+automatic metadata task still runs after successful scans.
+
+The existing authenticated Peridot audio endpoint now proxies Jellyfin GET,
+HEAD, and byte-range requests using the server-side API key. Browser code and
+logs never receive the credential. Removing a Jellyfin source removes that
+instance's imported catalog rows while preserving playlist display snapshots.
+
+Checks run:
+
+- Server tests (118 passing), including credential encryption, multiple
+  instances, audio-only scans, artwork, ETag updates, deleted-item availability,
+  source removal, and proxied GET/HEAD/range playback
+- Web tests (187 passing) and shared UI tests (16 passing)
+- Full workspace type check
+- Workspace ESLint
+- Prisma contract validation and generation
+- Full workspace production build, including the bundled Jellyfin WebP asset
+  and a 107-entry web precache
+- Targeted Prettier checks
+- `git diff --check`
+
+Known limits: no live Jellyfin server was available for a real-instance smoke
+test, and browser visual QA of the new dialog was not run. The Jellyfin
+compatibility behavior is covered with mocked Jellyfin API responses. No
+commit, push, tag, publication, or deployment was performed. The root
+`pnpm format:check` still reports the pre-existing formatting issue in
+`README.md`; all changed files pass Prettier.
+
 ## Add-source dialog uses server-internal folders
 
 The administrator add-source dialog now labels the path source as

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { opendir, readdir, readFile, stat } from "node:fs/promises";
-import { or } from "@prisma/orm-sqlite/orm-client";
+import { and, or } from "@prisma/orm-sqlite/orm-client";
 import { parseFile } from "music-metadata";
 import {
   normalizeArtistCredits,
@@ -9,11 +9,16 @@ import {
   serializeArtistCredits,
 } from "./artist-credits.js";
 import type { CatalogService } from "./catalog.js";
+import type { CredentialStore } from "./credential-store.js";
 import type { Database } from "./database.js";
+import {
+  JellyfinClient,
+  JellyfinError,
+  type JellyfinAudioItem,
+} from "./jellyfin.js";
 import type { MetadataEnrichment } from "./metadata-enrichment.js";
 import { message } from "./messages.js";
-import type { TaskRow, TrackRow } from "./prisma/models.js";
-import { getPathSources, type PathSource } from "./sources.js";
+import type { SourceRow, TaskRow, TrackRow } from "./prisma/models.js";
 import {
   queueMetadataFetch,
   scanDetails,
@@ -69,6 +74,18 @@ interface DiscoveredFile {
 
 interface SourceFile extends DiscoveredFile {
   sourceId: string;
+}
+
+interface JellyfinSource {
+  id: string;
+  name: string;
+  url: string;
+  apiKey: string;
+}
+
+interface RemoteSourceItem {
+  source: JellyfinSource;
+  item: JellyfinAudioItem;
 }
 
 interface ScanCounts {
@@ -137,6 +154,8 @@ export class LibraryScanner {
     private readonly database: Database,
     private readonly metadataEnrichment?: MetadataEnrichment,
     private readonly catalog?: CatalogService,
+    private readonly jellyfin?: JellyfinClient,
+    private readonly credentials?: CredentialStore,
   ) {}
 
   async runTask(
@@ -152,28 +171,44 @@ export class LibraryScanner {
 
     try {
       this.folderCoverCache.clear();
-      let requestedSource: PathSource | undefined;
+      let requestedSource: SourceRow | undefined;
       if (task.sourceId) {
         const source = await this.database.orm.Source.first({
           id: task.sourceId,
-          kind: "path",
         });
-        if (!source?.path) {
+        if (
+          !source ||
+          (source.kind !== "path" &&
+            !(
+              source.kind === "integration" && source.integration === "jellyfin"
+            ))
+        ) {
           throw new TaskExecutionError(
             "The selected music source is no longer available.",
             "failed",
             message("api.message.sourceUnavailable"),
           );
         }
-        requestedSource = {
-          id: source.id,
-          name: source.name || task.sourceName || path.basename(source.path),
-          path: source.path,
-        };
+        requestedSource = source;
       }
+      const sourceQuery = this.database.orm.Source;
       const sources = requestedSource
         ? [requestedSource]
-        : await getPathSources(this.database);
+        : await sourceQuery
+            .where((source) =>
+              or(
+                source.kind.eq("path"),
+                and(
+                  source.kind.eq("integration"),
+                  source.integration.eq("jellyfin"),
+                ),
+              ),
+            )
+            .orderBy([
+              (source) => source.position.asc(),
+              (source) => source.createdAt.asc(),
+            ])
+            .all();
       if (sources.length === 0) {
         throw new TaskExecutionError(
           "No music library sources are configured.",
@@ -181,62 +216,130 @@ export class LibraryScanner {
           message("api.message.noSources"),
         );
       }
+      const sourceName =
+        requestedSource?.name ||
+        (requestedSource ? task.sourceName : null) ||
+        "All sources";
       const files: SourceFile[] = [];
+      const remoteItems: RemoteSourceItem[] = [];
+      let unsupportedCount = 0;
       for (const source of sources) {
-        for (const file of await discoverAudioFiles(source.path)) {
-          files.push({ ...file, sourceId: source.id });
+        if (source.kind === "path") {
+          if (!source.path) {
+            throw new TaskExecutionError(
+              "The selected music source is no longer available.",
+              "failed",
+              message("api.message.sourceUnavailable"),
+            );
+          }
+          for (const file of await discoverAudioFiles(source.path)) {
+            files.push({ ...file, sourceId: source.id });
+          }
+          continue;
+        }
+        if (
+          !this.jellyfin ||
+          !this.credentials ||
+          source.integration !== "jellyfin" ||
+          !source.url ||
+          !source.credentialCiphertext
+        ) {
+          throw new TaskExecutionError(
+            "The selected Jellyfin source is not fully configured.",
+            "failed",
+            message("api.message.sourceUnavailable"),
+          );
+        }
+        const apiKey = this.credentials.decrypt(
+          source.credentialCiphertext,
+          "source",
+        );
+        const remoteSource: JellyfinSource = {
+          id: source.id,
+          name:
+            source.name ||
+            task.sourceName ||
+            new URL(source.url).host ||
+            "Jellyfin",
+          url: source.url,
+          apiKey,
+        };
+        const remote = await this.jellyfin.listAudio(
+          remoteSource.url,
+          remoteSource.apiKey,
+        );
+        unsupportedCount += remote.unsupportedCount;
+        for (const item of remote.items) {
+          remoteItems.push({ source: remoteSource, item });
         }
       }
+      const discoveredCount =
+        files.length + remoteItems.length + unsupportedCount;
       await tasks.updateProgress(
         task.id,
         0,
-        files.length,
+        discoveredCount,
         scanDetails({
-          source: requestedSource?.name ?? "All sources",
-          discovered: files.length,
+          source: sourceName,
+          discovered: discoveredCount,
           created: 0,
           updated: 0,
           unchanged: 0,
           unavailable: 0,
-          errors: 0,
+          errors: unsupportedCount,
         }),
       );
 
       let nextFile = 0;
-      let processedFiles = 0;
+      let processedItems = unsupportedCount;
       const workers = Array.from(
         { length: Math.min(SCAN_CONCURRENCY, files.length) },
         async () => {
           while (nextFile < files.length) {
             const file = files[nextFile++];
             if (file) await this.processFile(file, task.id, counts);
-            processedFiles += 1;
+            processedItems += 1;
             await tasks.updateProgress(
               task.id,
-              processedFiles,
-              files.length,
+              processedItems,
+              discoveredCount,
               scanDetails({
-                source: requestedSource?.name ?? "All sources",
-                discovered: files.length,
+                source: sourceName,
+                discovered: discoveredCount,
                 created: counts.createdCount,
                 updated: counts.updatedCount,
                 unchanged: counts.unchangedCount,
                 unavailable: 0,
-                errors: counts.errorCount,
+                errors: counts.errorCount + unsupportedCount,
               }),
             );
           }
         },
       );
       await Promise.all(workers);
+      for (const remote of remoteItems) {
+        await this.processRemoteItem(remote, task.id, counts);
+        processedItems += 1;
+        await tasks.updateProgress(
+          task.id,
+          processedItems,
+          discoveredCount,
+          scanDetails({
+            source: sourceName,
+            discovered: discoveredCount,
+            created: counts.createdCount,
+            updated: counts.updatedCount,
+            unchanged: counts.unchangedCount,
+            unavailable: 0,
+            errors: counts.errorCount + unsupportedCount,
+          }),
+        );
+      }
       await this.removeUnusedCovers();
 
-      let trackQuery = this.database.orm.Track.where({ available: 1 });
-      if (requestedSource) {
-        trackQuery = trackQuery.where({
-          sourceId: requestedSource.id,
-        });
-      }
+      const trackQuery = this.database.orm.Track.where({ available: 1 }).where(
+        (track) => track.sourceId.in(sources.map((source) => source.id)),
+      );
       const unavailableTracks = await trackQuery
         .where((track) =>
           or(track.lastSeenScanId.isNull(), track.lastSeenScanId.neq(task.id)),
@@ -247,6 +350,12 @@ export class LibraryScanner {
           available: 0,
         });
         await this.catalog?.reindexTrack(track.id, "scan");
+      }
+      const syncedAt = new Date();
+      for (const source of sources) {
+        await this.database.orm.Source.where({ id: source.id }).update({
+          lastSyncedAt: syncedAt,
+        });
       }
 
       if (this.metadataEnrichment) {
@@ -263,17 +372,24 @@ export class LibraryScanner {
       await this.catalog?.flushChanges();
       return {
         details: scanDetails({
-          source: requestedSource?.name ?? "All sources",
-          discovered: files.length,
+          source: sourceName,
+          discovered: discoveredCount,
           created: counts.createdCount,
           updated: counts.updatedCount,
           unchanged: counts.unchangedCount,
           unavailable: unavailableTracks.length,
-          errors: counts.errorCount,
+          errors: counts.errorCount + unsupportedCount,
         }),
       };
     } catch (error) {
       if (error instanceof TaskExecutionError) throw error;
+      if (error instanceof JellyfinError) {
+        throw new TaskExecutionError(
+          error.message,
+          "failed",
+          error.messageDescriptor,
+        );
+      }
       const databaseBusy =
         error instanceof Error && /database is locked/i.test(error.message);
       throw new TaskExecutionError(
@@ -398,6 +514,112 @@ export class LibraryScanner {
         } catch {
           // The file remains counted as an error if even the fallback write
           // cannot acquire SQLite's write lock.
+        }
+      }
+    }
+  }
+
+  private async processRemoteItem(
+    remote: RemoteSourceItem,
+    scanId: string,
+    counts: ScanCounts,
+  ): Promise<void> {
+    const { source, item } = remote;
+    let existing: TrackRow | null = null;
+    try {
+      existing = await this.database.orm.Track.where({
+        sourceId: source.id,
+        externalId: item.externalId,
+      }).first();
+      const unchanged =
+        existing?.externalVersion === item.externalVersion &&
+        existing.metadataVersion >= CURRENT_METADATA_VERSION;
+      if (existing && unchanged) {
+        const wasUnavailable = !existing.available;
+        await this.database.orm.Track.where({ id: existing.id }).update({
+          available: 1,
+          lastSeenScanId: scanId,
+        });
+        if (wasUnavailable) {
+          await this.catalog?.reindexTrack(existing.id, "scan");
+        }
+        counts.unchangedCount += 1;
+        return;
+      }
+
+      let cover: CoverImage | null = null;
+      if (item.coverItemId && this.jellyfin) {
+        try {
+          cover = await this.jellyfin.cover(
+            source.url,
+            source.apiKey,
+            item.coverItemId,
+            item.coverTag,
+          );
+        } catch (error) {
+          if (error instanceof JellyfinError && error.code !== "unavailable") {
+            throw error;
+          }
+        }
+      }
+      const coverId = await this.storeCover(cover);
+      const artistCredits = normalizeArtistCredits(
+        item.artists.length ? item.artists : ["Unknown artist"],
+      );
+      const albumArtists = normalizeOptionalArtistCredits(item.albumArtists);
+      const relativePath = `jellyfin/${item.albumId ?? "unknown"}/${item.externalId}`;
+      const trackData = {
+        relativePath,
+        title: item.title,
+        artist: artistCredits.join(", "),
+        artistCredits: serializeArtistCredits(artistCredits),
+        albumArtist: albumArtists.length ? albumArtists.join(", ") : null,
+        albumArtistCredits: albumArtists.length
+          ? JSON.stringify(albumArtists)
+          : null,
+        album: item.album,
+        discNumber: item.discNumber,
+        trackNumber: item.trackNumber,
+        durationMs: item.durationMs,
+        coverId,
+        mimeType: item.mimeType,
+        fileSizeBytes: item.fileSizeBytes,
+        fileModifiedAt: item.fileModifiedAt,
+        externalId: item.externalId,
+        externalVersion: item.externalVersion,
+        externalContainer: item.container,
+        available: 1,
+        lastSeenScanId: scanId,
+        metadataVersion: CURRENT_METADATA_VERSION,
+      };
+      if (existing) {
+        await this.database.orm.Track.where({ id: existing.id }).update(
+          trackData,
+        );
+        await this.catalog?.reindexTrack(existing.id, "scan");
+        counts.updatedCount += 1;
+      } else {
+        const created = await this.database.orm.Track.create({
+          ...trackData,
+          sourceId: source.id,
+        });
+        await this.catalog?.reindexTrack(created.id, "scan");
+        counts.createdCount += 1;
+      }
+    } catch {
+      counts.errorCount += 1;
+      if (existing) {
+        try {
+          await this.database.orm.Track.where({ id: existing.id }).update({
+            fileSizeBytes: item.fileSizeBytes,
+            fileModifiedAt: item.fileModifiedAt,
+            externalVersion: item.externalVersion,
+            available: 1,
+            lastSeenScanId: scanId,
+          });
+          await this.catalog?.reindexTrack(existing.id, "scan");
+        } catch {
+          // Preserve the error count when the fallback write also fails.
         }
       }
     }

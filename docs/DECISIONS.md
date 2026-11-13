@@ -1,5 +1,25 @@
 # Decisions
 
+## 2026-11-13: Jellyfin is a live audio source behind the Peridot audio boundary
+
+The administrator add-source dialog offers `Jellyfin instance` directly rather
+than a generic integrations menu. A Jellyfin source uses the user's server URL
+and an administrator-generated API key. Peridot encrypts the key beside other
+source credentials and never returns it to browser code.
+
+Jellyfin playback is streamed from the user's instance through Peridot's
+authenticated audio endpoint. Range and HEAD requests are forwarded without
+transcoding, so the existing player and offline track cache continue to use one
+audio URL shape. Browser clients never receive a credential-bearing Jellyfin
+URL.
+
+Library scans request only Jellyfin `Audio` items across the instance and import
+the Peridot-supported MP3, M4A/AAC, OGG/Opus, WAV, and FLAC containers. Jellyfin
+item IDs and ETags provide stable updates. Remote disappearance marks a track
+unavailable, while a failed Jellyfin connection fails the scan without mass
+invalidation. Removing a Jellyfin source removes that instance's imported
+Tracks; playlist display snapshots remain.
+
 ## 2026-11-13: The add-source dialog offers server-internal folders
 
 The source choice formerly labeled `Local files` is now

@@ -1,19 +1,34 @@
 <script setup lang="ts">
 import { useI18n, useRoute, useRuntimeConfig } from "#imports";
 import { Icon } from "@iconify/vue/offline";
+import type { TaskStatus } from "@peridot/contracts";
+import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import TaskProgressIndicator from "../components/TaskProgressIndicator.vue";
+import { useAdminSourcesQuery } from "../composables/use-admin-queries";
+import { useTasks } from "../composables/use-tasks";
 import { useUser } from "../composables/use-user";
 import { icons } from "../lib/icons";
 
 const route = useRoute();
-const { t } = useI18n();
+const { t, d } = useI18n();
 const { user } = useUser();
+const { items: sources, loaded: sourcesLoaded, load: loadSources } =
+  useAdminSourcesQuery();
+const { tasks } = useTasks();
 const runtimeConfig = useRuntimeConfig();
 const appVersion = runtimeConfig.public.appVersion;
 const environment = runtimeConfig.public.environment;
 const mobileNavigation = ref(false);
+const previousLibraryTaskStatuses = new Map<string, TaskStatus>();
+const sourceFileCount = computed(() =>
+  sources.value.reduce(
+    (total, source) =>
+      total + (Number.isFinite(source.fileCount) ? source.fileCount : 0),
+    0,
+  ),
+);
 const commonCategories = [
   { labelKey: "settings.profile", to: "/settings/account", icon: icons.user },
   {
@@ -50,6 +65,19 @@ watch(
     mobileNavigation.value = false;
   },
 );
+
+watch(tasks, (current) => {
+  let completedLibraryScan = false;
+  for (const task of current) {
+    if (task.kind !== "library_scan") continue;
+    const previous = previousLibraryTaskStatuses.get(task.id);
+    if (previous !== task.status && task.status === "completed") {
+      completedLibraryScan = true;
+    }
+    previousLibraryTaskStatuses.set(task.id, task.status);
+  }
+  if (completedLibraryScan) void loadSources(true);
+});
 </script>
 
 <template>
@@ -147,6 +175,13 @@ watch(
               <Icon :icon="item.icon" aria-hidden="true" class="size-5" />{{
                 t(item.labelKey)
               }}
+              <Badge
+                v-if="item.to === '/settings/sources' && sourcesLoaded"
+                variant="secondary"
+                class="ml-auto"
+              >
+                {{ d(sourceFileCount, "integer") }}
+              </Badge>
             </NuxtLink>
           </Button>
         </section>

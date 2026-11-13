@@ -311,14 +311,23 @@ its Fastify runtime on the same host and port, interrupts running tasks, and
 resumes queued tasks. Sessions and persisted data are retained.
 Administrators can manage where the server gets raw audio files from
 Settings → Admin → Sources. The add-source dialog offers a folder inside the
-server or the future integration option such as Spotify or YouTube Music.
-Existing URL sources remain listed and removable for compatibility, but the
-dialog no longer offers URL creation. Folder sources seed from
-`MUSIC_LIBRARY_PATH` on first launch and are used by library scans; URL and
-integration sources are stored but not indexed yet. Adding a folder source
-queues its source-scoped library scan automatically. A successful scan queues a
-linked metadata-fetch task for the same source. Each folder source row has a
+server or a Jellyfin instance. Existing URL sources remain listed and removable
+for compatibility, but the dialog no longer offers URL creation. Folder sources
+seed from `MUSIC_LIBRARY_PATH` on first launch.
+Jellyfin sources use the instance's HTTP(S) base URL and an
+administrator-generated API key. The connection is validated before it is
+stored, and the API key is encrypted with the same local credential-key
+mechanism as metadata-provider credentials. Multiple Jellyfin instances with
+different URLs are supported. Adding a folder or Jellyfin source queues its
+source-scoped library scan automatically. A successful scan queues a linked
+metadata-fetch task for the same source. Each scannable source row has a
 three-dot action menu for a source-scoped rescan or confirmed removal.
+Jellyfin scans request only `Audio` items, page through the complete result set,
+import Peridot-supported original audio containers, and cache bounded album
+artwork. Item IDs and ETags provide stable identity and change detection. Static
+audio and byte-range requests are proxied through Peridot with the encrypted API
+key remaining server-side. Unsupported Jellyfin audio containers are skipped and
+reported in the scan error count.
 The local-folder picker supports case-insensitive deep folder search without
 requiring folders to be expanded first.
 
@@ -450,8 +459,10 @@ details, and the player.
 Administrators can search local directories recursively with
 `GET /api/admin/filesystem/search?query=<term>`; results are bounded and do not
 follow symbolic links.
-Creating a local source with `POST /api/admin/sources` returns the source plus
-its automatically queued scan task. Administrators can rescan one local source with
+Creating a folder or Jellyfin source with `POST /api/admin/sources` returns the
+source plus its automatically queued scan task. A Jellyfin create request uses
+`kind: "integration"`, `integration: "jellyfin"`, `url`, and the write-only
+`apiKey`. Administrators can rescan one scannable source with
 `POST /api/admin/sources/:id/scans`; a scoped scan only changes availability for
 tracks from that source and queues metadata matching for that source. Requests
 are queued behind active work, and equivalent requests that are still queued

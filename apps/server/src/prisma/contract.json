@@ -2004,6 +2004,13 @@
                   "kind": "scalar"
                 }
               },
+              "credentialCiphertext": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
               "id": {
                 "nullable": false,
                 "type": {
@@ -2022,6 +2029,13 @@
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "lastSyncedAt": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
                   "kind": "scalar"
                 }
               },
@@ -2067,6 +2081,9 @@
                 "createdAt": {
                   "column": "createdAt"
                 },
+                "credentialCiphertext": {
+                  "column": "credentialCiphertext"
+                },
                 "id": {
                   "column": "id"
                 },
@@ -2075,6 +2092,9 @@
                 },
                 "kind": {
                   "column": "kind"
+                },
+                "lastSyncedAt": {
+                  "column": "lastSyncedAt"
                 },
                 "name": {
                   "column": "name"
@@ -2359,6 +2379,27 @@
                   "kind": "scalar"
                 }
               },
+              "externalContainer": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "externalId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "externalVersion": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
               "fileModifiedAt": {
                 "nullable": false,
                 "type": {
@@ -2612,6 +2653,15 @@
                 },
                 "durationMs": {
                   "column": "durationMs"
+                },
+                "externalContainer": {
+                  "column": "externalContainer"
+                },
+                "externalId": {
+                  "column": "externalId"
+                },
+                "externalVersion": {
+                  "column": "externalVersion"
                 },
                 "fileModifiedAt": {
                   "column": "fileModifiedAt"
@@ -4757,6 +4807,11 @@
                   },
                   "nullable": false
                 },
+                "credentialCiphertext": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
                 "id": {
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
@@ -4771,6 +4826,11 @@
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
                   "nullable": false
+                },
+                "lastSyncedAt": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/datetime",
+                  "nullable": true
                 },
                 "name": {
                   "codecId": "sqlite/text@1",
@@ -5029,6 +5089,21 @@
                   "dataType": "sqlite/integer",
                   "nullable": true
                 },
+                "externalContainer": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "externalId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "externalVersion": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
                 "fileModifiedAt": {
                   "codecId": "sqlite/datetime@1",
                   "dataType": "sqlite/datetime",
@@ -5260,6 +5335,12 @@
                   "columns": [
                     "sourceId",
                     "relativePath"
+                  ]
+                },
+                {
+                  "columns": [
+                    "sourceId",
+                    "externalId"
                   ]
                 }
               ]
@@ -5600,7 +5681,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "7a0e132d0dc6c041b17a59c7efa3c278f165abda1451256b968d61e0b5d000c2"
+    "storageHash": "656d7b91bd7d44abdcb1e755e1408a191c518b6b63f0a5c6839893918b0f05cf"
   },
   "execution": {
     "executionHash": "69abe59ddf12aaa78738519fa294ac279958f3b4caa4e85b2cb8fd0effde430a",

@@ -109,6 +109,9 @@ model Track {
   metadataMatchedAt          DateTime?
   metadataAttemptedSignature String?
   coverId                    String?
+  externalId                 String?
+  externalVersion            String?
+  externalContainer          String?
   available                  Int        @default(1)
   lastSeenScanId             String?
   sourceId                   String?
@@ -117,6 +120,7 @@ model Track {
   updatedAt                  DateTime   @onCreate(now()) @onUpdate(now())
 
   @@unique([sourceId, relativePath])
+  @@unique([sourceId, externalId])
   @@index([available])
   @@index([artist, album, title])
   @@index([sourceId])
@@ -240,15 +244,17 @@ model ServerSetting {
 }
 
 model Source {
-  id          String   @id @onCreate(cuid(2))
-  kind        String
-  name        String?
-  path        String?
-  url         String?
-  integration String?
-  position    Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @onCreate(now()) @onUpdate(now())
+  id                   String   @id @onCreate(cuid(2))
+  kind                 String
+  name                 String?
+  path                 String?
+  url                  String?
+  integration          String?
+  credentialCiphertext String?
+  lastSyncedAt         DateTime?
+  position             Int      @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @onCreate(now()) @onUpdate(now())
 
   @@index([kind])
   @@index([position])

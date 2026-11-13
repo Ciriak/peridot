@@ -19,9 +19,11 @@ import type {
   UserListResponse,
 } from "@peridot/contracts";
 import type { FastifyInstance } from "fastify";
+import type { CatalogService } from "./catalog.js";
 import type { CredentialStore } from "./credential-store.js";
 import type { Database } from "./database.js";
 import { sendError } from "./http.js";
+import type { JellyfinClient } from "./jellyfin.js";
 import { message } from "./messages.js";
 import type { MetadataEnrichment } from "./metadata-enrichment.js";
 import {
@@ -66,6 +68,8 @@ export async function registerAdminRoutes(
   metadataCredentials: CredentialStore,
   onSessionsRevoked?: (sessionIds: string[]) => void,
   restartServer?: () => void,
+  jellyfin?: JellyfinClient,
+  catalog?: CatalogService,
 ) {
   await app.register(async (admin) => {
     admin.addHook("onRequest", async (request, reply) => {
@@ -198,12 +202,25 @@ export async function registerAdminRoutes(
       "/api/admin/sources",
       async (request, reply) => {
         try {
-          const source = await createSource(database, request.body);
+          if (!jellyfin) {
+            throw new Error("Jellyfin client is unavailable.");
+          }
+          const source = await createSource(
+            database,
+            request.body,
+            jellyfin,
+            metadataCredentials,
+          );
           const task =
-            source.kind === "path" && source.path
+            (source.kind === "path" && source.path) ||
+            (source.kind === "integration" && source.integration === "jellyfin")
               ? await queueLibraryScan(tasks, {
                   id: source.id,
-                  name: source.name || path.basename(source.path),
+                  name:
+                    source.name ||
+                    (source.path
+                      ? path.basename(source.path)
+                      : (source.url ?? "Jellyfin")),
                 })
               : null;
           const response: CreateSourceResponse = {
@@ -251,6 +268,33 @@ export async function registerAdminRoutes(
     admin.delete<{ Params: { id: string } }>(
       "/api/admin/sources/:id",
       async (request, reply) => {
+        const source = await database.orm.Source.first({
+          id: request.params.id,
+        });
+        if (!source) {
+          return sendError(
+            reply,
+            404,
+            "source_not_found",
+            "Source not found",
+            message("api.message.sourceNotFound"),
+          );
+        }
+        if (
+          source.kind === "integration" &&
+          source.integration === "jellyfin"
+        ) {
+          const tracks = await database.orm.Track.where({
+            sourceId: source.id,
+          })
+            .select("id")
+            .all();
+          for (const track of tracks) {
+            await database.orm.Track.where({ id: track.id }).delete();
+            await catalog?.removeTrack(track.id);
+          }
+          await catalog?.flushChanges();
+        }
         const removed = await deleteSource(database, request.params.id);
         if (!removed) {
           return sendError(
@@ -280,18 +324,30 @@ export async function registerAdminRoutes(
             message("api.message.sourceNotFound"),
           );
         }
-        if (source.kind !== "path" || !source.path) {
+        if (
+          (source.kind !== "path" || !source.path) &&
+          !(
+            source.kind === "integration" &&
+            source.integration === "jellyfin" &&
+            source.url &&
+            source.credentialCiphertext
+          )
+        ) {
           return sendError(
             reply,
             400,
             "source_not_rescanable",
-            "Only local folder sources can be rescanned.",
+            "Only configured folder and Jellyfin sources can be rescanned.",
             message("api.message.sourceNotRescanable"),
           );
         }
         const task = await queueLibraryScan(tasks, {
           id: source.id,
-          name: source.name || path.basename(source.path),
+          name:
+            source.name ||
+            (source.path
+              ? path.basename(source.path)
+              : (source.url ?? "Jellyfin")),
         });
         return reply.code(202).send(toTaskResponse(task));
       },
