@@ -1,5 +1,20 @@
 # Decisions
 
+## 2026-11-13: Whole-album offline saves reuse the per-track manifest
+
+An album is not stored as a separate offline bundle. The album action loads
+every cursor page for the release, then saves each available track that is not
+already present through the existing per-track audio, artwork, and manifest
+path. This keeps offline playback, eviction, partial saves, and scope cleanup
+consistent with individually saved tracks. Tracks are downloaded sequentially
+to avoid saturating the server or browser quota, and existing copies are skipped
+so an interrupted album save can resume by selecting the same action again.
+
+The album action also removes every saved track in the release once all summary
+tracks are cached. Individual track and whole-album saves intentionally produce
+no success toast; the icon and progress state provide immediate feedback, while
+failures retain their error notification.
+
 ## 2026-11-13: Sidebar brand mark is embedded in the offline application bundle
 
 The small sidebar logo is imported as an inline Vite asset. The service worker

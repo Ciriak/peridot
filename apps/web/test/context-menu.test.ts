@@ -108,6 +108,9 @@ test("album and artist cards expose collection-aware context menus", async () =>
   assert.match(albumMenu, /context\.unlikeAlbum/);
   assert.match(albumMenu, /albumRoute\(album\)/);
   assert.match(albumMenu, /context\.openAlbum/);
+  assert.match(albumMenu, /useOfflineAlbum\(\(\) => props\.album\)/);
+  assert.match(albumMenu, /@select="toggleAlbumOffline"/);
+  assert.match(albumMenu, /t\("albumOffline\.remove"\)/);
 
   assert.match(artistMenu, /artistId: props\.artist\.id/);
   assert.match(artistMenu, /context\.likeArtist/);
@@ -124,6 +127,11 @@ test("album and artist cards expose collection-aware context menus", async () =>
     albumCard,
     /<AlbumContextMenu[\s\S]*<article[\s\S]*<NuxtLink/,
     "The entire album card is the context-menu trigger",
+  );
+  assert.match(
+    albumCard,
+    /<AlbumOfflineButton[\s\S]*:album="album"[\s\S]*compact[\s\S]*overlay/,
+    "Album cards expose a dedicated whole-album offline action",
   );
   assert.match(
     artistCard,

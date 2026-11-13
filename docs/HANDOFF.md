@@ -2,6 +2,133 @@
 
 Last updated: 2026-11-13.
 
+## Whole-album offline saving
+
+Album cards now expose a compact cloud icon in their top-right corner, and album
+detail headers expose the same icon-only action in the header card's top-right
+corner. The album context menu provides the matching text action. Activating the
+control loads every paginated album track, saves each available track that is
+not already cached, and updates the shared saved-track manifest. The action
+shows determinate or indeterminate aggregate progress while it works. Once the
+whole album is saved, the same control removes all of its offline copies.
+
+Individual track and whole-album saves no longer emit success toasts. The icon
+and progress state provide completion feedback, while failures still produce
+the existing error reports.
+
+Checks run:
+
+- Focused album/context/offline tests (23 passing)
+- Full web suite (159 passing)
+- Web typecheck
+- Root ESLint
+- Production web build (94 PWA precache entries)
+- Targeted Prettier checks for every changed source, test, and locale file
+
+Known limits: the repository-wide format check currently reports an existing
+uncommitted formatting issue in `apps/web/app/layouts/default.vue`. An
+authenticated browser save and visual QA were not exercised. Existing offline
+work remains uncommitted and was preserved. No commit, push, tag, publication,
+or deployment was performed.
+
+## Separate offline IndexedDB databases
+
+Offline catalog snapshots and saved-track manifests now use separate IndexedDB
+databases. Both previously called `idb-keyval.createStore` with the same
+database name, allowing the first store to create the database while the second
+handle later failed with `One of the specified object stores was not found`.
+
+The catalog database is `peridot-web-offline-catalog-v1`; the saved-track
+manifest database is `peridot-web-offline-tracks-v1`. Per owner direction,
+legacy offline IndexedDB data is not migrated. The existing Cache Storage media
+cache remains unchanged and can be repopulated after saving tracks again.
+
+Checks run:
+
+- Focused offline tests (16 passing, including separate database regression)
+- Full web suite (156 passing)
+- Web typecheck
+- Targeted ESLint and Prettier checks
+- Production web build (94 PWA precache entries)
+
+Known limits: the browser error was not reproduced against the live IndexedDB
+because computer-use browser access was unavailable. Static regression coverage
+confirms the two stores no longer share a database. Existing uncommitted work
+was preserved. No commit, push, tag, publication, or deployment was performed.
+
+## Offline download progress and quiet removal
+
+Saving an offline track now streams the audio response through a byte counter
+and shows the shared determinate `ProgressCircle` in the track action while the
+download is active. When the server does not expose a usable content length, the
+same progress control uses its indeterminate state. Progress is shared through
+Nuxt state so the track action remains stable across component instances.
+
+Removing an offline copy no longer emits a success toast. Removal failures still
+report through the existing offline failure toast and localized message.
+
+Checks run:
+
+- Focused offline tests (15 passing, including determinate and indeterminate
+  progress plus removal-toast regressions)
+- Full web suite (155 passing)
+- Web typecheck
+- Targeted ESLint and Prettier checks
+- Production web build (94 PWA precache entries)
+
+Known limits: live authenticated browser download timing was not exercised
+because the computer-use browser access host was unavailable. The progress flow
+and Cache Storage payload are covered with streamed `Response` tests. Existing
+uncommitted work was preserved. No commit, push, tag, publication, or deployment
+was performed.
+
+## Offline player availability state
+
+Saved offline tracks now use one shared Nuxt state value across the fixed player,
+track lists, queue drawer, quick picks, album cards, and artist controls.
+Previously, each `useOfflineTracks()` caller held a separate local snapshot, so
+the player could remain disabled after another component successfully saved a
+track. The player composable now owns `currentTrackPlayable` and evaluates it
+with the shared saved-track ID set, using the same offline-aware availability
+rule as the other playback surfaces.
+
+Checks run:
+
+- Focused offline tests (12 passing, including shared player availability)
+- Full web suite (152 passing)
+- Web typecheck
+- Targeted ESLint and Prettier checks
+- Production web build (93 PWA precache entries)
+
+Known limits: live authenticated browser playback was not exercised because
+the computer-use browser access host was unavailable. Existing uncommitted work
+was preserved. No commit, push, tag, publication, or deployment was performed.
+
+## Offline save proxy snapshot
+
+Saving a track for offline playback now snapshots its metadata as plain data
+before writing the manifest to IndexedDB. TanStack Query exposes track responses
+as deeply reactive Vue proxies, which caused IndexedDB's structured clone to
+throw `DataCloneError` after the audio download completed. The snapshot keeps
+the existing track contract while making the manifest storage-compatible. If
+manifest persistence still fails, the newly cached audio is removed so a failed
+save does not leave an unreachable media cache entry.
+
+Checks run:
+
+- Focused offline tests (11 passing, including a reactive `DataCloneError`
+  regression)
+- Full web suite (151 passing)
+- Web typecheck
+- Targeted ESLint and Prettier checks
+- Production web build (93 PWA precache entries)
+
+Known limits: the save button was not exercised in an authenticated browser
+because the computer-use browser access host was unavailable. The regression
+reproduces the proxy failure and verifies that the persisted snapshot is
+structured-cloneable. Existing uncommitted work was preserved. No commit, push,
+tag, publication, or deployment was performed.
+
 ## Offline sidebar brand mark
 
 The sidebar logo is now embedded in the web application bundle instead of being

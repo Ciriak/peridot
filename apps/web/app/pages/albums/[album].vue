@@ -7,6 +7,7 @@ import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { computed, onMounted, ref, watch } from "vue";
 import LikeButton from "../../components/LikeButton.vue";
+import AlbumOfflineButton from "../../components/AlbumOfflineButton.vue";
 import TrackArtistLinks from "../../components/TrackArtistLinks.vue";
 import TrackTable from "../../components/TrackTable.vue";
 import {
@@ -235,8 +236,9 @@ onMounted(() => {
     </p>
     <section
       aria-labelledby="album-heading"
-      class="flex flex-col gap-6 rounded-lg border bg-card p-6 text-card-foreground sm:flex-row sm:items-end"
+      class="relative flex flex-col gap-6 rounded-lg border bg-card p-6 text-card-foreground sm:flex-row sm:items-end"
     >
+      <AlbumOfflineButton :album="album" class="absolute right-4 top-4" />
       <div
         aria-hidden="true"
         class="flex size-40 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted text-muted-foreground"
@@ -250,7 +252,7 @@ onMounted(() => {
         />
         <Icon v-else :icon="icons.music" class="size-16" />
       </div>
-      <div class="min-w-0 space-y-3">
+      <div class="min-w-0 space-y-3 pr-12">
         <p
           class="text-xs font-medium uppercase tracking-wide text-muted-foreground"
         >

@@ -10,9 +10,11 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@peridot/ui/components/ui/context-menu";
+import { ProgressCircle } from "@peridot/ui/components/ui/progress-circle";
 import { computed } from "vue";
 import { useLikes } from "../composables/use-likes";
 import { useLibraryPlayer } from "../composables/use-library-player";
+import { useOfflineAlbum } from "../composables/use-offline-album";
 import { useOfflineTracks } from "../composables/use-offline-tracks";
 import { icons } from "../lib/icons";
 import { albumRoute } from "../lib/library";
@@ -30,6 +32,13 @@ const { address } = useServer();
 const { token } = useSession();
 const { playCollection } = useLibraryPlayer();
 const { savedTracks, tracksMatching } = useOfflineTracks();
+const {
+  allSaved: albumSavedOffline,
+  pending: albumOfflinePending,
+  progress: albumOfflineProgress,
+  canToggle: canToggleAlbumOffline,
+  toggle: toggleAlbumOffline,
+} = useOfflineAlbum(() => props.album);
 const { status: serverStatus } = useServerConnection();
 const playable = computed(
   () =>
@@ -89,6 +98,29 @@ async function playAlbum() {
       <ContextMenuItem :disabled="!playable" @select="playAlbum">
         <Icon :icon="icons.play" aria-hidden="true" />
         {{ t("context.playAlbum") }}
+      </ContextMenuItem>
+      <ContextMenuItem
+        :disabled="!canToggleAlbumOffline"
+        @select="toggleAlbumOffline"
+      >
+        <ProgressCircle
+          v-if="albumOfflinePending"
+          :value="albumOfflineProgress ?? null"
+          :label="t('albumOffline.saving')"
+          size="sm"
+        />
+        <Icon
+          v-else
+          :icon="albumSavedOffline ? icons.cloudCheck : icons.cloudDownload"
+          aria-hidden="true"
+        />
+        {{
+          albumOfflinePending
+            ? t("albumOffline.saving")
+            : albumSavedOffline
+              ? t("albumOffline.remove")
+              : t("albumOffline.save")
+        }}
       </ContextMenuItem>
       <ContextMenuItem
         :disabled="!likesLoaded || isLikePending(target)"

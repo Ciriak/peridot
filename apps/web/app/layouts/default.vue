@@ -21,9 +21,7 @@ import TaskProgressIndicator from "../components/TaskProgressIndicator.vue";
 import { useCachedArtwork } from "../composables/use-cached-artwork";
 import { useLikes } from "../composables/use-likes";
 import { useLibraryPlayer } from "../composables/use-library-player";
-import { useOfflineTracks } from "../composables/use-offline-tracks";
 import { useServer } from "../composables/use-server";
-import { useServerConnection } from "../composables/use-server-connection";
 import { useSession } from "../composables/use-session";
 import { useUser } from "../composables/use-user";
 import { gravatarUrl } from "../lib/gravatar";
@@ -45,7 +43,6 @@ const loadingRayAtRight = ref(false);
 let loadingRayFrame: number | undefined;
 let loadingRayTimeout: ReturnType<typeof setTimeout> | undefined;
 const { address } = useServer();
-const { status: serverStatus } = useServerConnection();
 const { token } = useSession();
 const { user } = useUser();
 const avatarFailed = ref(false);
@@ -62,7 +59,6 @@ const {
   toggle: toggleLike,
   isPending: isLikePending,
 } = useLikes();
-const { savedTracks } = useOfflineTracks();
 const {
   playing,
   repeatMode,
@@ -74,6 +70,7 @@ const {
   active,
   queueTracks,
   shuffleEnabled,
+  currentTrackPlayable,
   canGoNext,
   durationSeconds,
   next,
@@ -110,12 +107,6 @@ const currentTrackLikeTarget = computed(() =>
     ? ({ kind: "track", trackId: currentTrackId.value } as const)
     : null,
 );
-const currentTrackPlayable = computed(() => {
-  if (!active.value) return false;
-  return serverStatus.value === "lost"
-    ? savedTracks.value.some((saved) => saved.track.id === active.value?.id)
-    : active.value.available;
-});
 const currentCoverUrl = computed(() =>
   trackCoverUrl(address.value ?? "", active.value?.coverUrl ?? null),
 );

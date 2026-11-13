@@ -3,7 +3,7 @@ import type {
   ArtistSummaryResponse,
   TrackResponse,
 } from "@peridot/contracts";
-import { createStore, clear, get, set } from "idb-keyval";
+import { clear, createStore, get, set } from "idb-keyval";
 import {
   listAlbums,
   listArtists,
@@ -15,7 +15,7 @@ import type { PeridotQueryScope } from "./query-keys";
 import { sortTracks, trackArtistNames } from "./library.ts";
 
 export const OFFLINE_CATALOG_VERSION = 1 as const;
-export const OFFLINE_DATABASE = "peridot-web-offline";
+export const OFFLINE_DATABASE = "peridot-web-offline-catalog-v1";
 const OFFLINE_CATALOG_STORE = "offline-catalog";
 const OFFLINE_CATALOG_KEY = "catalog-snapshot";
 const OFFLINE_PAGE_SIZE = 200;

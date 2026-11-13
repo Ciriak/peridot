@@ -3,6 +3,7 @@ import { useI18n } from "#imports";
 import type { TrackResponse } from "@peridot/contracts";
 import { Icon } from "@iconify/vue/offline";
 import { Button } from "@peridot/ui/components/ui/button";
+import { ProgressCircle } from "@peridot/ui/components/ui/progress-circle";
 import { useIntersectionObserver } from "@vueuse/core";
 import { computed, nextTick, ref, watch } from "vue";
 import LikeButton from "./LikeButton.vue";
@@ -15,11 +16,7 @@ import { useOfflineTracks } from "../composables/use-offline-tracks";
 import { useServer } from "../composables/use-server";
 import { useServerConnection } from "../composables/use-server-connection";
 import { icons } from "../lib/icons";
-import {
-  notifyOfflineTrackFailed,
-  notifyTrackOfflineCopyRemoved,
-  notifyTrackSavedOffline,
-} from "../lib/toasts";
+import { notifyOfflineTrackFailed } from "../lib/toasts";
 import {
   defaultTrackSort,
   formatTrackDuration,
@@ -63,6 +60,7 @@ const {
   error: offlineError,
   isSaved: isSavedOffline,
   isPending: isOfflinePending,
+  progressFor: offlineProgressFor,
   save: saveOffline,
   remove: removeOffline,
 } = useOfflineTracks();
@@ -168,9 +166,7 @@ function playFromList(track: TrackResponse, restart = false) {
 async function toggleOffline(track: TrackResponse) {
   if (isOfflinePending(track.id)) return;
   if (isSavedOffline(track.id)) {
-    if (await removeOffline(track.id)) {
-      notifyTrackOfflineCopyRemoved(track.title);
-    } else {
+    if (!(await removeOffline(track.id))) {
       notifyOfflineTrackFailed(
         track.title,
         offlineError.value ?? t("error.apiUnavailable"),
@@ -178,14 +174,21 @@ async function toggleOffline(track: TrackResponse) {
     }
     return;
   }
-  if (await saveOffline(track)) {
-    notifyTrackSavedOffline(track.title);
-  } else {
+  if (!(await saveOffline(track))) {
     notifyOfflineTrackFailed(
       track.title,
       offlineError.value ?? t("error.apiUnavailable"),
     );
   }
+}
+
+function offlineActionLabel(track: TrackResponse): string {
+  if (isOfflinePending(track.id) && !isSavedOffline(track.id)) {
+    return t("trackTable.savingOffline", { title: track.title });
+  }
+  return isSavedOffline(track.id)
+    ? t("trackTable.removeOffline", { title: track.title })
+    : t("trackTable.saveOffline", { title: track.title });
 }
 
 watch(
@@ -429,21 +432,23 @@ watch(
                   (!canSaveOffline || !item.data.available))
               "
               :aria-busy="isOfflinePending(item.data.id)"
-              :aria-label="
-                isSavedOffline(item.data.id)
-                  ? t('trackTable.removeOffline', { title: item.data.title })
-                  : t('trackTable.saveOffline', { title: item.data.title })
-              "
-              :title="
-                isSavedOffline(item.data.id)
-                  ? t('trackTable.removeOffline', { title: item.data.title })
-                  : t('trackTable.saveOffline', { title: item.data.title })
-              "
+              :aria-label="offlineActionLabel(item.data)"
+              :title="offlineActionLabel(item.data)"
               :aria-pressed="isSavedOffline(item.data.id)"
               @click="toggleOffline(item.data)"
               @dblclick.stop
             >
+              <ProgressCircle
+                v-if="
+                  isOfflinePending(item.data.id) &&
+                  !isSavedOffline(item.data.id)
+                "
+                :value="offlineProgressFor(item.data.id) ?? null"
+                :label="offlineActionLabel(item.data)"
+                size="sm"
+              />
               <Icon
+                v-else
                 :icon="
                   isSavedOffline(item.data.id)
                     ? icons.cloudCheck

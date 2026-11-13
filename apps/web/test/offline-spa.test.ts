@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import test from "node:test";
+import type { TrackResponse } from "@peridot/contracts";
 import { QueryClient, QueryObserver } from "@tanstack/vue-query";
 import {
   OFFLINE_AUDIO_CACHE,
+  OFFLINE_TRACK_DATABASE,
   offlineAudioCacheRequest,
   offlineTrackStorageKey,
+  prepareOfflineResponse,
+  snapshotTrackForOffline,
 } from "../app/lib/offline-audio.ts";
 import {
   OFFLINE_DATABASE,
@@ -16,12 +20,14 @@ import {
   OFFLINE_ARTWORK_CACHE,
   offlineArtworkCacheRequest,
 } from "../app/lib/offline-artwork.ts";
+import { saveOfflineCollection } from "../app/lib/offline-collection.ts";
 import { isTrackPlayable } from "../app/lib/offline-playback.ts";
 import { queryKeys } from "../app/lib/query-keys.ts";
 import {
   blockingQueryLoading,
   visibleQueryError,
 } from "../app/lib/query-view-state.ts";
+import { reactive } from "vue";
 
 const scope = {
   serverAddress: "http://127.0.0.1:17430",
@@ -105,7 +111,9 @@ test("query keys isolate server, user, resource, and list options", () => {
     scope.userId,
     "likes",
   ]);
-  assert.equal(OFFLINE_DATABASE, "peridot-web-offline");
+  assert.equal(OFFLINE_DATABASE, "peridot-web-offline-catalog-v1");
+  assert.equal(OFFLINE_TRACK_DATABASE, "peridot-web-offline-tracks-v1");
+  assert.notEqual(OFFLINE_DATABASE, OFFLINE_TRACK_DATABASE);
 });
 
 test("cached query data remains renderable after a background failure", async () => {
@@ -173,6 +181,192 @@ test("offline audio keys are stable and scoped without bearer credentials", () =
   );
   assert.equal(OFFLINE_AUDIO_CACHE, "peridot-offline-audio-v1");
   assert.equal(OFFLINE_ARTWORK_CACHE, "peridot-artwork-v2");
+});
+
+test("offline catalog and track manifests use separate IndexedDB databases", async () => {
+  const [catalog, audio] = await Promise.all([
+    readFile(new URL("../app/lib/offline-catalog.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/lib/offline-audio.ts", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(
+    catalog,
+    /createStore\(OFFLINE_DATABASE, OFFLINE_CATALOG_STORE\)/,
+  );
+  assert.match(
+    audio,
+    /createStore\(OFFLINE_TRACK_DATABASE, OFFLINE_TRACK_STORE\)/,
+  );
+});
+
+test("offline track metadata becomes plain data before IndexedDB storage", () => {
+  const track = reactive({
+    id: "track-1",
+    title: "Track",
+    artist: "Artist",
+    artists: ["Artist"],
+    album: "Album",
+    albumId: "album-1",
+    discNumber: 1,
+    trackNumber: 2,
+    durationMs: 180_000,
+    mimeType: "audio/mpeg",
+    available: true,
+    coverUrl: "/api/covers/cover-1",
+    metadata: { provider: { detail: { state: "matched" } } },
+    liked: true,
+  }) as unknown as TrackResponse;
+
+  assert.throws(() => structuredClone(track), { name: "DataCloneError" });
+  const snapshot = snapshotTrackForOffline(track);
+  assert.doesNotThrow(() => structuredClone(snapshot));
+  assert.deepEqual(snapshot, {
+    id: "track-1",
+    title: "Track",
+    artist: "Artist",
+    artists: ["Artist"],
+    album: "Album",
+    albumId: "album-1",
+    discNumber: 1,
+    trackNumber: 2,
+    durationMs: 180_000,
+    mimeType: "audio/mpeg",
+    available: true,
+    coverUrl: "/api/covers/cover-1",
+    metadata: { provider: { detail: { state: "matched" } } },
+    liked: true,
+  });
+});
+
+test("offline audio downloads report determinate cache progress", async () => {
+  const response = new Response(
+    new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(Uint8Array.of(1, 2));
+        controller.enqueue(Uint8Array.of(3, 4));
+        controller.close();
+      },
+    }),
+    {
+      headers: {
+        "content-length": "4",
+        "content-type": "audio/mpeg",
+      },
+    },
+  );
+  const progress: Array<number | null> = [];
+  const prepared = await prepareOfflineResponse(response, (value) =>
+    progress.push(value),
+  );
+
+  assert.equal(prepared.size, 4);
+  assert.equal(prepared.response.headers.get("content-type"), "audio/mpeg");
+  assert.deepEqual(
+    new Uint8Array(await prepared.response.arrayBuffer()),
+    Uint8Array.of(1, 2, 3, 4),
+  );
+  assert.deepEqual(progress.slice(0, 2), [0, 50]);
+  assert.equal(progress.at(-1), 100);
+});
+
+test("offline audio downloads use an indeterminate progress state without a length", async () => {
+  const response = new Response(Uint8Array.of(1, 2, 3, 4));
+  const progress: Array<number | null> = [];
+  const prepared = await prepareOfflineResponse(response, (value) =>
+    progress.push(value),
+  );
+
+  assert.equal(prepared.size, 4);
+  assert.equal(progress[0], null);
+  assert.equal(progress.at(-1), 100);
+});
+
+test("whole-album offline saves every available track with aggregate progress", async () => {
+  const track = (id: string, available = true): TrackResponse =>
+    ({
+      id,
+      title: id,
+      artist: "Artist",
+      artists: ["Artist"],
+      album: "Album",
+      albumId: "album-1",
+      discNumber: 1,
+      trackNumber: null,
+      durationMs: null,
+      mimeType: "audio/mpeg",
+      available,
+      coverUrl: null,
+      metadata: null,
+      liked: false,
+    }) as TrackResponse;
+  const saved = new Set(["already-saved"]);
+  const calls: string[] = [];
+  const progress: Array<number | null> = [];
+  const result = await saveOfflineCollection(
+    [
+      track("already-saved"),
+      track("first-missing"),
+      track("unavailable", false),
+      track("second-missing"),
+    ],
+    {
+      isSaved: (trackId) => saved.has(trackId),
+      save: async (item, onProgress) => {
+        calls.push(item.id);
+        onProgress?.(50);
+        saved.add(item.id);
+        onProgress?.(100);
+      },
+      onProgress: (value) => progress.push(value),
+    },
+  );
+
+  assert.deepEqual(calls, ["first-missing", "second-missing"]);
+  assert.deepEqual(result.savedTrackIds, [
+    "already-saved",
+    "first-missing",
+    "second-missing",
+  ]);
+  assert.equal(result.completed, 3);
+  assert.equal(result.total, 3);
+  assert.equal(result.failure, null);
+  assert.equal(progress[0], 33);
+  assert.equal(progress.at(-1), 100);
+});
+
+test("whole-album offline stops at a failed track without dropping saved copies", async () => {
+  const tracks = ["one", "two", "three"].map(
+    (id) =>
+      ({
+        id,
+        title: id,
+        artist: "Artist",
+        artists: ["Artist"],
+        album: "Album",
+        albumId: "album-1",
+        discNumber: 1,
+        trackNumber: null,
+        durationMs: null,
+        mimeType: "audio/mpeg",
+        available: true,
+        coverUrl: null,
+        metadata: null,
+        liked: false,
+      }) as TrackResponse,
+  );
+  const saved = new Set<string>();
+  const result = await saveOfflineCollection(tracks, {
+    isSaved: (trackId) => saved.has(trackId),
+    save: async (track) => {
+      if (track.id === "two") throw new Error("download failed");
+      saved.add(track.id);
+    },
+  });
+
+  assert.deepEqual(result.savedTrackIds, ["one"]);
+  assert.equal(result.completed, 1);
+  assert.equal(result.total, 3);
+  assert.equal(result.failure?.track.id, "two");
 });
 
 test("offline artwork keys ignore rotating signed query parameters", () => {
@@ -301,6 +495,112 @@ test("offline playback uses only saved copies while disconnected", () => {
   );
 });
 
+test("the fixed player shares saved-track availability across controls", async () => {
+  const [player, offlineTracks, layout] = await Promise.all([
+    readFile(
+      new URL("../app/composables/use-library-player.ts", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/composables/use-offline-tracks.ts", import.meta.url),
+      "utf8",
+    ),
+    readFile(new URL("../app/layouts/default.vue", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(
+    offlineTracks,
+    /const savedTracks = useState<SavedOfflineTrack\[\]>\(\s*"player-offline-saved-tracks"/,
+  );
+  assert.match(
+    player,
+    /const currentTrackPlayable = computed\(\(\) =>\s+active\.value\s+\? isTrackPlayable\(active\.value,[\s\S]*?savedTrackIds: offlineSavedTrackIdSet\.value/,
+  );
+  assert.match(layout, /currentTrackPlayable,\s+canGoNext,/);
+  assert.doesNotMatch(layout, /useOfflineTracks|serverStatus/);
+  assert.match(layout, /:disabled="!currentTrackPlayable"/);
+});
+
+test("offline saves show progress without success or removal toasts", async () => {
+  const [table, albumAction, toasts, locale] = await Promise.all([
+    readFile(
+      new URL("../app/components/TrackTable.vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/composables/use-offline-album.ts", import.meta.url),
+      "utf8",
+    ),
+    readFile(new URL("../app/lib/toasts.ts", import.meta.url), "utf8"),
+    readFile(new URL("../i18n/locales/en-US.json", import.meta.url), "utf8"),
+  ]);
+  const messages = JSON.parse(locale) as Record<string, string>;
+
+  assert.match(
+    table,
+    /<ProgressCircle[\s\S]*?:value="offlineProgressFor\(item\.data\.id\) \?\? null"/,
+  );
+  assert.match(
+    table,
+    /if \(!\(await removeOffline\(track\.id\)\)\) \{[\s\S]*?notifyOfflineTrackFailed/,
+  );
+  assert.match(
+    table,
+    /if \(!\(await saveOffline\(track\)\)\) \{[\s\S]*?notifyOfflineTrackFailed/,
+  );
+  assert.doesNotMatch(table, /notifyTrackSavedOffline/);
+  assert.doesNotMatch(table, /notifyTrackOfflineCopyRemoved/);
+  assert.doesNotMatch(albumAction, /notifyAlbumSavedOffline/);
+  assert.doesNotMatch(toasts, /toast\.offlineSaved/);
+  assert.doesNotMatch(toasts, /toast\.albumOfflineSaved/);
+  assert.doesNotMatch(toasts, /toast\.offlineRemoved/);
+  assert.equal(messages["toast.offlineSavedTitle"], undefined);
+  assert.equal(messages["toast.offlineSaved"], undefined);
+  assert.equal(messages["toast.albumOfflineSavedTitle"], undefined);
+  assert.equal(messages["toast.albumOfflineSaved"], undefined);
+  assert.equal(messages["toast.offlineRemovedTitle"], undefined);
+  assert.equal(messages["toast.offlineRemoved"], undefined);
+});
+
+test("album offline controls load and save the complete album collection", async () => {
+  const [button, action, card, detail, menu] = await Promise.all([
+    readFile(
+      new URL("../app/components/AlbumOfflineButton.vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/composables/use-offline-album.ts", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/components/AlbumCard.vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/pages/albums/[album].vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/components/AlbumContextMenu.vue", import.meta.url),
+      "utf8",
+    ),
+  ]);
+
+  assert.match(action, /loadCollectionTracks\(/);
+  assert.match(action, /albumId: currentAlbum\.id/);
+  assert.match(action, /saveAlbum\(currentAlbum\.id, tracks\)/);
+  assert.match(action, /removeAlbum\(currentAlbum\.id\)/);
+  assert.match(button, /<ProgressCircle/);
+  assert.match(button, /:aria-pressed="allSaved"/);
+  assert.doesNotMatch(button, /showLabel|visibleLabel|<span/);
+  assert.match(card, /<AlbumOfflineButton/);
+  assert.match(
+    detail,
+    /<AlbumOfflineButton\s+:album="album"\s+class="absolute right-4 top-4"/,
+  );
+  assert.match(menu, /@select="toggleAlbumOffline"/);
+});
+
 test("offline playback prefers saved audio and recovers stream failures", async () => {
   const [player, persister, table] = await Promise.all([
     readFile(
@@ -335,7 +635,7 @@ test("offline playback prefers saved audio and recovers stream failures", async 
   assert.match(table, /saveTrackForOffline|saveOffline/);
   assert.match(
     table,
-    /:title="[\s\S]*?trackTable\.removeOffline[\s\S]*?trackTable\.saveOffline/,
+    /:title="offlineActionLabel\(item\.data\)"/,
     "The offline save control has a native title tooltip",
   );
 });

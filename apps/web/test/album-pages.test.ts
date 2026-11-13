@@ -134,6 +134,11 @@ test("albums have list and detail routes with derived groups", async () => {
   assert.match(detailPage, /<LikeButton/);
   assert.match(
     detailPage,
+    /<AlbumOfflineButton\s+:album="album"\s+class="absolute right-4 top-4"\s+\/>/,
+    "Album details place an icon-only whole-album offline action at the top right",
+  );
+  assert.match(
+    detailPage,
     /<template v-if="album\.releaseYear"[\s\S]*\{\{ formatTrackDuration\(album\.durationMs\) \}\}/,
     "The album header shows an available release year beside total duration",
   );

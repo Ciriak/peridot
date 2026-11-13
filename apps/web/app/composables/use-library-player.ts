@@ -39,6 +39,7 @@ import {
 } from "../lib/peridot-client";
 import { offlineAudioBlob, readSavedOfflineTracks } from "../lib/offline-audio";
 import { readOfflineCatalog } from "../lib/offline-catalog";
+import { isTrackPlayable } from "../lib/offline-playback";
 import {
   notifyQueueSaveFailed,
   notifyTrackDownloadFailed,
@@ -148,6 +149,14 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
   );
   const offlineSavedTrackIdSet = computed(
     () => new Set(offlineSavedTrackIds.value),
+  );
+  const currentTrackPlayable = computed(() =>
+    active.value
+      ? isTrackPlayable(active.value, {
+          serverLost: serverStatus.value === "lost",
+          savedTrackIds: offlineSavedTrackIdSet.value,
+        })
+      : false,
   );
   const canGoNext = computed(() => {
     if (!currentTrackId.value) return false;
@@ -1253,6 +1262,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     active,
     queueTracks,
     upcomingTracks,
+    currentTrackPlayable,
     canGoNext,
     durationSeconds,
     loadQueue,
