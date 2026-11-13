@@ -570,6 +570,10 @@ export interface ServerSettingsResponse {
   availableTrackCount: number;
 }
 
+export interface RestartServerResponse {
+  status: "restarting";
+}
+
 export interface LogEntryResponse {
   id: number;
   time: string;

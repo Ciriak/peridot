@@ -4,6 +4,7 @@ import type { TrackResponse } from "@peridot/contracts";
 import { Icon } from "@iconify/vue/offline";
 import { Button } from "@peridot/ui/components/ui/button";
 import { ProgressCircle } from "@peridot/ui/components/ui/progress-circle";
+import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import { useIntersectionObserver } from "@vueuse/core";
 import { computed, nextTick, ref, watch } from "vue";
 import LikeButton from "./LikeButton.vue";
@@ -16,7 +17,10 @@ import { useOfflineTracks } from "../composables/use-offline-tracks";
 import { useServer } from "../composables/use-server";
 import { useServerConnection } from "../composables/use-server-connection";
 import { icons } from "../lib/icons";
-import { notifyOfflineTrackFailed } from "../lib/toasts";
+import {
+  notifyOfflineTrackFailed,
+  notifyOfflineTrackSaved,
+} from "../lib/toasts";
 import {
   defaultTrackSort,
   formatTrackDuration,
@@ -174,7 +178,9 @@ async function toggleOffline(track: TrackResponse) {
     }
     return;
   }
-  if (!(await saveOffline(track))) {
+  if (await saveOffline(track)) {
+    notifyOfflineTrackSaved(track.title);
+  } else {
     notifyOfflineTrackFailed(
       track.title,
       offlineError.value ?? t("error.apiUnavailable"),
@@ -380,11 +386,11 @@ watch(
             </TrackArtwork>
             <div class="min-w-0 flex-1">
               <div class="flex min-w-0 items-center gap-2">
-                <span
+                <ScrollingText
                   :id="trackTitleAnchorId(item.data.id)"
-                  class="scroll-mt-4 truncate"
+                  class="min-w-0 flex-1 scroll-mt-4"
                   :class="{ 'opacity-60': isUnavailable(item.data) }"
-                  >{{ item.data.title }}</span
+                  >{{ item.data.title }}</ScrollingText
                 >
                 <Icon
                   v-if="isActive(item.data)"
@@ -393,27 +399,31 @@ watch(
                   class="size-4 shrink-0 text-primary"
                 />
               </div>
-              <p class="truncate text-xs text-muted-foreground">
+              <ScrollingText class="w-full text-xs text-muted-foreground">
                 <TrackArtistLinks :artists="trackArtistNames(item.data)" />
-              </p>
+              </ScrollingText>
             </div>
           </div>
           <div
             v-if="variant !== 'album'"
             role="cell"
-            class="hidden w-56 shrink-0 truncate p-3 text-muted-foreground md:block"
+            class="hidden w-56 shrink-0 p-3 text-muted-foreground md:block"
           >
-            <NuxtLink
+            <ScrollingText
               v-if="item.data.album?.trim() && item.data.artist.trim()"
-              :to="trackAlbumRoute(item.data)"
-              class="block truncate rounded-sm hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              @dblclick.stop
+              class="w-full"
             >
-              {{ item.data.album?.trim() }}
-            </NuxtLink>
-            <template v-else>
+              <NuxtLink
+                :to="trackAlbumRoute(item.data)"
+                class="rounded-sm hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                @dblclick.stop
+              >
+                {{ item.data.album?.trim() }}
+              </NuxtLink>
+            </ScrollingText>
+            <ScrollingText v-else class="w-full">
               {{ item.data.album?.trim() || "—" }}
-            </template>
+            </ScrollingText>
           </div>
           <div
             role="cell"
@@ -465,7 +475,11 @@ watch(
           </div>
           <div role="cell" class="w-14 shrink-0 p-2 text-right">
             <LikeButton
-              :liked="likedTrackIds.includes(item.data.id) || item.data.liked"
+              :liked="
+                likesLoaded
+                  ? likedTrackIds.includes(item.data.id)
+                  : item.data.liked
+              "
               :label="item.data.title"
               :pending="isLikePending({ kind: 'track', trackId: item.data.id })"
               :disabled="!likesLoaded"

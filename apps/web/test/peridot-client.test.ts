@@ -41,6 +41,7 @@ import {
   recordTrackPlay,
   refreshMetadata,
   removePlaylistItem,
+  requestServerRestart,
   reorderMetadataProviders,
   reorderPlaylistItems,
   reorderSources,
@@ -822,7 +823,7 @@ test("sign-in surfaces safe API errors and unreachable servers", async (context)
   };
   await assert.rejects(
     fetchAuthStatus("http://127.0.0.1:17430"),
-    /Could not reach this Peridot server/,
+    /Could not reach this server/,
   );
 });
 
@@ -1081,6 +1082,9 @@ test("authenticated admin calls send the bearer token and expected bodies", asyn
         status: 202,
       });
     }
+    if (init?.method === "POST" && url.endsWith("/api/admin/server/restart")) {
+      return Response.json({ status: "restarting" }, { status: 202 });
+    }
     if (url.includes("/api/tasks/")) {
       return Response.json({
         ...queuedTask("scan-1", "library_scan", null),
@@ -1131,6 +1135,9 @@ test("authenticated admin calls send the bearer token and expected bodies", asyn
     trackCount: 2,
     availableTrackCount: 1,
   });
+  assert.deepEqual(await requestServerRestart("http://127.0.0.1:17430", "s"), {
+    status: "restarting",
+  });
   assert.deepEqual(await listSources("http://127.0.0.1:17430", "s"), {
     items: [],
   });
@@ -1174,6 +1181,7 @@ test("authenticated admin calls send the bearer token and expected bodies", asyn
     requests.map((request) => request.input),
     [
       "http://127.0.0.1:17430/api/admin/server",
+      "http://127.0.0.1:17430/api/admin/server/restart",
       "http://127.0.0.1:17430/api/admin/sources",
       "http://127.0.0.1:17430/api/admin/sources",
       "http://127.0.0.1:17430/api/admin/sources/order",
@@ -1190,23 +1198,24 @@ test("authenticated admin calls send the bearer token and expected bodies", asyn
     assert.equal(headers.get("Authorization"), "Bearer s");
   }
   assert.equal(
-    new Headers(requests[2]?.init?.headers).get("Content-Type"),
-    "application/json",
-  );
-  assert.equal(
     new Headers(requests[3]?.init?.headers).get("Content-Type"),
     "application/json",
   );
-  assert.equal(requests[2]?.init?.method, "POST");
-  assert.equal(requests[3]?.init?.method, "PUT");
-  assert.equal(requests[6]?.init?.method, "DELETE");
-  assert.equal(requests[7]?.init?.method, "DELETE");
   assert.equal(
-    new Headers(requests[6]?.init?.headers).get("Content-Type"),
+    new Headers(requests[4]?.init?.headers).get("Content-Type"),
+    "application/json",
+  );
+  assert.equal(requests[1]?.init?.method, "POST");
+  assert.equal(requests[3]?.init?.method, "POST");
+  assert.equal(requests[4]?.init?.method, "PUT");
+  assert.equal(requests[7]?.init?.method, "DELETE");
+  assert.equal(requests[8]?.init?.method, "DELETE");
+  assert.equal(
+    new Headers(requests[7]?.init?.headers).get("Content-Type"),
     null,
   );
   assert.equal(
-    new Headers(requests[7]?.init?.headers).get("Content-Type"),
+    new Headers(requests[8]?.init?.headers).get("Content-Type"),
     null,
   );
 });

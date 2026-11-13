@@ -11,6 +11,7 @@ import type {
   ReorderMetadataProvidersRequest,
   ReorderSourcesRequest,
   ResetMetadataResponse,
+  RestartServerResponse,
   ServerSettingsResponse,
   SourceListResponse,
   UpdateMetadataProviderRequest,
@@ -64,6 +65,7 @@ export async function registerAdminRoutes(
   metadataRegistry: MetadataResolverRegistry,
   metadataCredentials: CredentialStore,
   onSessionsRevoked?: (sessionIds: string[]) => void,
+  restartServer?: () => void,
 ) {
   await app.register(async (admin) => {
     admin.addHook("onRequest", async (request, reply) => {
@@ -93,6 +95,25 @@ export async function registerAdminRoutes(
           trackCount: trackCount.count,
           availableTrackCount: availableTrackCount.count,
         };
+      },
+    );
+
+    admin.post(
+      "/api/admin/server/restart",
+      async (_request, reply): Promise<RestartServerResponse | undefined> => {
+        if (!restartServer) {
+          sendError(
+            reply,
+            503,
+            "server_restart_unavailable",
+            "Server restart is unavailable in this runtime.",
+            message("api.message.serverRestartUnavailable"),
+          );
+          return undefined;
+        }
+        reply.code(202).send({ status: "restarting" });
+        restartServer();
+        return undefined;
       },
     );
 

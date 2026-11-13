@@ -3,6 +3,7 @@ import { useI18n } from "#imports";
 import type { TrackResponse } from "@peridot/contracts";
 import { Icon } from "@iconify/vue/offline";
 import { Button } from "@peridot/ui/components/ui/button";
+import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import {
   DialogContent,
@@ -137,7 +138,9 @@ async function createAndAdd(name: string) {
               @click="addTo(playlist.id, playlist.name)"
             >
               <Icon :icon="icons.playlist" aria-hidden="true" class="size-4" />
-              <span class="truncate">{{ playlist.name }}</span>
+              <ScrollingText class="min-w-0 flex-1">
+                {{ playlist.name }}
+              </ScrollingText>
               <span class="ml-auto text-xs text-muted-foreground">
                 {{
                   playlist.containsTrack

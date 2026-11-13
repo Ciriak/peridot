@@ -48,7 +48,7 @@ function track(
   };
 }
 
-test("home suggestions exclude liked albums and tracks", () => {
+test("home suggestions keep liked albums and tracks visible", () => {
   const likedArtistKeys = [
     artistLikeKey("Liked artist"),
     artistLikeKey("Other artist"),
@@ -59,7 +59,6 @@ test("home suggestions exclude liked albums and tracks", () => {
       album("explicitly-liked-album", "Other artist"),
       album("fresh-album", "Fresh artist"),
     ],
-    likedAlbumIds: ["explicitly-liked-album"],
     likedArtistKeys,
   });
   const tracks = selectHomeTrackSuggestions({
@@ -68,17 +67,16 @@ test("home suggestions exclude liked albums and tracks", () => {
       track("explicitly-liked-track", "Other artist"),
       track("fresh-track", "Fresh artist"),
     ],
-    likedTrackIds: ["explicitly-liked-track"],
     likedArtistKeys,
   });
 
   assert.deepEqual(
     albums.map((candidate) => candidate.id),
-    ["fresh-album"],
+    ["liked-album", "explicitly-liked-album", "fresh-album"],
   );
   assert.deepEqual(
     tracks.map((candidate) => candidate.id),
-    ["fresh-track"],
+    ["liked-track", "explicitly-liked-track", "fresh-track"],
   );
 });
 
@@ -95,7 +93,6 @@ test("home suggestions prioritize liked artists and stay bounded", () => {
         artists: ["Another favorite", "Favorite artist"],
       }),
     ],
-    likedAlbumIds: [],
     likedArtistKeys,
     limit: 2,
   });
@@ -107,7 +104,6 @@ test("home suggestions prioritize liked artists and stay bounded", () => {
         artists: ["Another favorite", "Favorite artist"],
       }),
     ],
-    likedTrackIds: [],
     likedArtistKeys,
     limit: 2,
   });

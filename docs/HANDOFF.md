@@ -2,6 +2,394 @@
 
 Last updated: 2026-11-13.
 
+## Toasts moved below the topbar
+
+The shared app-level toast region now opens at the top-right, below the 64px
+topbar, in both the main player shell and fullscreen settings layouts. Mobile
+keeps full-width side insets while desktop uses a bounded right-aligned stack.
+
+Checks run:
+
+- Focused notification placement test
+- Full web test suite (187 passing)
+- Web type check
+- Targeted ESLint and Prettier checks
+- Production web build (107 PWA precache entries)
+- `git diff --check`
+
+Known limits: live visual confirmation was not run. Existing uncommitted
+server, web, shared UI, and documentation changes were preserved. No commit,
+push, tag, publication, or deployment was performed.
+
+## Homepage keeps liked suggestions visible
+
+Homepage tracks and albums no longer disappear when their like state changes.
+The suggestion selectors no longer filter against the likes set, so selecting a
+heart updates the existing row or card in place. Liked artists still affect
+suggestion order, and the bounded candidate queries and complete collection
+routes are unchanged.
+
+Checks run:
+
+- Focused homepage and suggestion tests (5 passing)
+- Full web test suite (187 passing)
+- Web typecheck
+- Targeted ESLint and Prettier checks
+- Production web build (107 PWA precache entries)
+- `git diff --check`
+
+Known limits: existing uncommitted server, web, shared UI, and documentation
+changes were preserved. No commit, push, tag, publication, or deployment was
+performed.
+
+Next: perform visual confirmation that a liked homepage title remains in place
+during the next browser pass.
+
+## Liked titles offline library setting
+
+The previously empty Library settings page now has an enabled-by-default
+`Make my liked titles available offline` option with a bundled Basil
+cloud-download icon. The preference persists in browser storage separately for
+each server and user, and malformed values return to the enabled default.
+
+When the preference is on, the authenticated root client pages through the
+complete liked-track catalog, reuses the existing offline collection saver, and
+caches only available tracks that are not already present. Existing likes are
+backfilled after a connected load, and changes to the likes set trigger another
+synchronization so a newly liked track is saved automatically. Turning the
+option off stops further automatic saves and deliberately leaves existing
+offline copies in place, including copies that may have been requested manually.
+
+Checks run:
+
+- Focused Library setting and pagination tests (4 passing)
+- Full web test suite (187 passing)
+- Web typecheck
+- Targeted ESLint and Prettier checks
+- Production web build (107 PWA precache entries)
+
+Known limits: live browser visual QA did not run because Computer Use could not
+verify the active Brave URL and stopped the UI automation session. Automatic
+save failures are retried by a later connection, preference, or likes change
+rather than producing background failure toasts. Existing uncommitted server,
+web, shared UI, and documentation changes were preserved. No commit, push, tag,
+publication, or deployment was performed.
+
+Next: confirm the icon, text, switch alignment, and enabled default in Settings
+→ Library at desktop and mobile widths during the next available browser pass.
+
+## Confirmed server restart
+
+Administrators now have a confirmed `Restart server` action in
+Settings â†’ Admin â†’ Server. The authenticated endpoint returns `202` before
+closing the current Fastify runtime and building a fresh runtime on the same
+host and port. Sessions, catalog data, and settings persist in SQLite; running
+tasks become interrupted and queued tasks resume.
+
+The destructive Disconnect control is placed at the bottom-right of the page,
+while Restart remains a separate confirmed outline action in the server card.
+The restart button stays disabled and reads `Restarting` after the request is
+accepted until the realtime connection reports a loss and then reconnects. The
+existing connection monitor announces when the server is back online.
+Focused server tests cover administrator authorization, the accepted response,
+and runtimes without a restart hook. Web tests cover the API request,
+confirmation dialog, and destructive Disconnect treatment.
+
+Checks run:
+
+- Full server test suite (114 passing)
+- Full web test suite (187 passing)
+- Server and web typechecks
+- Web and server production builds
+- Workspace lint and targeted Prettier checks
+- `pnpm format:check` reports only the pre-existing unformatted `README.md`
+- Isolated live restart smoke test with a temporary database: accepted
+  `restarting` response, observed down/up cycle, same process and port, fresh
+  Fastify listen, and the original administrator session remained valid
+- `git diff --check`
+
+This work is uncommitted on `dev`; unrelated working-tree changes were
+preserved. No commit, push, tag, publication, or deployment was performed.
+
+Next: verify the live restart path against a running development server and
+confirm the disconnect/reconnect indicator in the browser.
+
+## Offline save success toasts
+
+Making a track or album available offline now shows a success toast after the
+save completes. The track message is shared by the track table and track
+context menu through the existing toast manager, while the album message is
+emitted from the shared album offline composable. Removing an offline copy
+remains silent, and save failures continue to use their existing error toasts.
+
+Checks run:
+
+- Focused notification, offline, and context-menu tests (28 passing)
+- Full web test suite (182 passing)
+- Web typecheck
+- Targeted ESLint and Prettier checks
+- `git diff --check`
+
+Known limits: live browser toast positioning and dismissal were not visually
+verified. Existing uncommitted changes were preserved. No commit, push, tag,
+publication, or deployment was performed.
+
+Next: confirm both toast variants appear above the player after completing an
+offline save during the next browser pass.
+
+## Liked songs live removal
+
+Removing a track like now removes that track from the Liked songs page
+immediately. The page filters its cached catalog results against the
+authoritative likes query, including the visible track count and empty state.
+Track-table like controls use the loaded likes cache instead of stale `liked`
+flags from an earlier catalog response, while preserving server state until the
+likes query is available. Successful like changes also invalidate cached track
+queries so newly liked tracks and later page visits reflect server membership.
+
+Checks run:
+
+- Focused likes and library tests (31 passing)
+- Full web test suite (181 passing)
+- Web typecheck
+- Targeted ESLint and Prettier checks
+- Production web build (96 PWA precache entries)
+
+Known limits: live browser visual QA was not run. Schema validation was skipped
+because no server, contract, or database code changed. Existing uncommitted
+changes were preserved. No commit, push, tag, publication, or deployment was
+performed.
+
+Next: confirm the row removal, count, empty state, and failed-request rollback
+during the next browser pass.
+
+## GitHub Actions quality pipeline
+
+Split CI into ordered quality stages. Pull requests, pushes to `dev` and
+`master`, and `v*` tag pushes run formatting, linting, schema validation, and
+type checking before tests. Web, server, and desktop builds start only after
+tests pass. Commit linting remains an independent pull-request check.
+
+The desktop job installs the Linux Tauri prerequisites and Rust toolchain, while
+the web and server jobs use filtered Turbo builds. Pull requests now run for all
+target branches, and superseded runs on the same ref are cancelled.
+
+Checks run:
+
+- Workflow Prettier and `git diff --check`
+- `pnpm lint`
+- `pnpm db:validate`
+- `pnpm typecheck`
+- `pnpm test`
+- Filtered web and server production builds
+- `pnpm desktop:build`, including the generated client and Windows executable
+
+`pnpm format:check` currently reports only the existing unformatted `README.md`
+edit, which was preserved. Local desktop verification required
+`NUXT_IGNORE_LOCK=1` because a development server was already using the web
+workspace; CI runners start without that lock. The workflow has not run on
+GitHub yet, so the Ubuntu Tauri dependency installation remains to be confirmed
+there. Changes are uncommitted, and no commit, push, tag, publication, or
+deployment was performed.
+
+Next: push the workflow and confirm all lint, test, web, server, and desktop jobs
+pass on a GitHub pull request or `dev` push.
+
+## Library landing headers
+
+Removed the descriptive subtitle beneath the page title on Liked songs,
+Playlists, Albums, and Artists. Their headings and page actions remain
+unchanged, and the unused English message keys were removed. A focused source
+regression test keeps the four titles while preventing those subtitles from
+returning.
+
+Checks run:
+
+- Full web test suite (181 passing)
+- Web typecheck
+- Targeted ESLint and Prettier checks
+- `git diff --check`
+
+Known limits: live browser visual QA was not run. Existing uncommitted web,
+server, shared UI, and documentation changes were preserved. No server, schema,
+dependency, or lockfile changes were made. No commit, push, tag, publication, or
+deployment was performed.
+
+Next: visually confirm the four landing-page headers at desktop and mobile
+widths during the next browser pass.
+
+## Product-neutral runtime copy
+
+Updated the `en-US` runtime messages to describe the action, state, or relevant
+server instead of making Peridot the grammatical subject. Examples include
+`Reconnected to your server.`, `Server found.`, `Could not update your
+profile.`, and simplified references such as `your server`. The onboarding
+heading is now `Get started`, and logout asks `Log out?`.
+
+The runtime product name remains in `app.name` and browser page titles. Matching
+fallback messages in the web client and server-address validation were updated
+so missing localization resources do not restore the old product-led wording.
+
+Checks run:
+
+- Focused localization, client, and address tests (25 passing)
+- Full web test suite (180 passing)
+- Web typecheck
+- Targeted ESLint and Prettier checks
+- Production web build (96 PWA precache entries)
+- `git diff --check`
+
+Known limits: live browser copy review was not run. Existing concurrent web,
+server, shared UI, and documentation changes were preserved. No server, schema,
+dependency, or lockfile changes were made. No commit, push, tag, publication, or
+deployment was performed.
+
+Next: review the revised copy in onboarding, connection recovery, and settings
+states during the next live browser pass.
+
+## Automatic local credential encryption key
+
+`PERIDOT_CREDENTIAL_KEY` is now optional for normal local installation. When it
+is unset, server startup creates a random 32-byte AES-256-GCM key beside the
+SQLite database as `<database path>.key`, with restrictive creation permissions
+where supported, and reuses that file across restarts. The key remains outside
+the database so a database-only copy or backup does not expose the provider
+token. The environment variable remains available as an explicit override for
+container deployments, secret managers, and migration between hosts. A working
+environment key is imported into the local key file when existing credentials
+need migration. Startup refuses to generate a replacement when stored
+credentials exist but neither available key can decrypt them.
+
+Credential creation no longer depends on a manual setup step. Tests cover key
+creation, reuse across store instances, environment-key migration, rejection of
+incompatible keys, invalid key file handling, and automatic Discogs token
+storage without an environment key. The local key must be retained with the
+deployment; replacing it after credentials have been encrypted makes their
+existing ciphertext unreadable.
+
+Checks run:
+
+- Server typecheck
+- Root ESLint on all changed server source and test files
+- Full server suite (112 passing)
+- Production server build
+- Prettier checks for changed source, tests, and documentation
+
+No schema or browser-code changes were made. Existing uncommitted web, shared UI,
+and documentation changes were preserved. No commit, push, tag, publication, or
+deployment was performed.
+
+## Catalog metadata overflow coverage
+
+Extended the shared `ScrollingText` behavior across all catalog metadata that
+can be clipped. Track and album titles, artist credits, playlist names, album
+cards, artist cards, track tables, queue rows, quick picks, playlist entries
+and pickers, detail headers, context-menu labels, and metadata correction
+results now scroll only when their content exceeds the available width.
+
+The player title and artist line remain always-on and pause during hover or
+keyboard focus. All other adopted surfaces use the default hover/focus
+activation so the interface does not move continuously. Links and context-menu
+triggers remain interactive through the single slotted content tree, and
+reduced-motion users retain static clipping. Settings, folder paths, task
+details, user-management records, and other non-catalog text were intentionally
+left unchanged.
+
+Checks run:
+
+- Focused catalog, player, card, queue, quick-pick, styling, and overflow tests
+  (43 passing)
+- Shared UI suite (16 passing)
+- Full web test suite (180 passing)
+- Web typecheck
+- Root ESLint
+- Targeted Prettier checks for all changed source and test files
+- Production web build (96 PWA precache entries)
+- Development server startup with web and health endpoints returning HTTP 200
+
+Known limits: live browser visual QA was not repeated because Computer Use
+could not verify the active browser URL in the prior session. Existing
+concurrent context-menu, offline, search-shortcut, playlist, and
+contributor-guidance changes were preserved. No server, schema, localization,
+README, package dependency, or lockfile changes were made. No commit, push,
+tag, publication, or deployment was performed.
+
+## Search shortcut malformed event guard
+
+The global search shortcut now ignores keydown input whose `key` value is not a
+string before attempting case normalization. This prevents the development
+runtime crash reported at `event.key.toLowerCase()` while preserving the
+Ctrl/Command + K behavior.
+
+Checks run:
+
+- Focused search-shortcut tests
+- Web typecheck
+- Targeted ESLint and Prettier checks
+
+Existing uncommitted player, scrolling-text, context-menu, offline, playlist,
+and contributor-guidance changes were preserved. No commit, push, publication,
+or deployment was performed.
+
+## Track context menu offline availability
+
+The shared track context menu now exposes `Make available offline` immediately
+above the browser Download action. It reuses the per-track offline manifest,
+shows determinate or indeterminate save progress, disables duplicate actions,
+and changes to `Remove offline copy` once the track is stored. Saving and
+removing remain available through the existing offline control in track rows,
+and failures use the same offline-save toast.
+
+Checks run:
+
+- Focused context-menu tests (2 passing)
+- Full web test suite (178 passing)
+- Web typecheck
+- Targeted ESLint and Prettier checks
+- Production web build (96 PWA precache entries)
+
+Known limits: live browser pointer and keyboard QA of the updated menu was not
+run. Existing uncommitted player, scrolling-text, playlist, like, offline, and
+contributor-guidance changes were preserved. No server, schema, dependency,
+README, or lockfile changes were made. No commit, push, tag, publication, or
+deployment was performed.
+
+## Initial player title overflow motion
+
+Added the shared `ScrollingText` component and initially applied it to the fixed
+player's active track title. Overflowing titles move at 30 px/s from their
+starting position to reveal the ending, hold for 1.5 seconds, return to the
+start, hold again, and repeat continuously. Hovering or focusing the title
+pauses at the current position; leaving resumes. Short titles remain static and
+unchanged.
+
+The component uses one slotted content tree, so title links and the existing
+track context-menu trigger remain interactive without duplicated markup.
+Viewport and content changes remeasure and restart the motion. Reduced motion
+keeps the previous static clipped presentation. The player gained a bounded
+metadata width for correct overflow measurement, and the shared UI entry is
+included in Nuxt's development dependency pre-bundling.
+
+Checks run:
+
+- Shared UI suite (16 passing)
+- Full web test suite (178 passing)
+- Web typecheck
+- Root ESLint
+- Targeted Prettier checks for every changed source and test file
+- Production web build (96 PWA precache entries)
+- Development server startup with web and health endpoints returning HTTP 200
+
+Known limits: live browser visual QA could not run because Computer Use could
+not verify the active browser URL as allowed and stopped the UI automation
+session. The final root `pnpm check` also reports the pre-existing README
+formatting warning; the changed files pass Prettier. No server, schema,
+localization, README, package dependency, or lockfile changes were made. No
+commit, push, tag, publication, or deployment was performed.
+
+This initial player-only scope was subsequently extended across catalog
+metadata as documented above.
+
 ## Player metadata like and context menu
 
 The fixed player's like control now sits immediately to the right of the active

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-test("track rows expose a Reka context menu with playback, favorites, downloads, and navigation", async () => {
+test("track rows expose a Reka context menu with playback, favorites, offline storage, downloads, and navigation", async () => {
   const [menu, trackTable, library, album, artist] = await Promise.all([
     readFile(
       new URL("../app/components/TrackContextMenu.vue", import.meta.url),
@@ -38,8 +38,15 @@ test("track rows expose a Reka context menu with playback, favorites, downloads,
   );
   assert.match(menu, /useLikes\(\)/);
   assert.match(menu, /toggleLike\(\{ kind: 'track', trackId: track\.id \}\)/);
+  assert.match(menu, /useOfflineTracks\(\)/);
+  assert.match(menu, /saveOffline\(props\.track\)/);
+  assert.match(menu, /removeOffline\(props\.track\.id\)/);
+  assert.match(menu, /notifyOfflineTrackSaved\(props\.track\.title\)/);
+  assert.match(menu, /context\.makeAvailableOffline/);
+  assert.match(menu, /context\.removeOfflineCopy/);
   assert.match(menu, /downloadTrack\(props\.track\.id\)/);
   assert.match(menu, /context\.goToAlbum/);
+  assert.match(menu, /<Icon :icon="icons\.album" aria-hidden="true" \/>/);
   assert.match(menu, /context\.goToArtist/);
   assert.match(menu, /context\.goToArtists/);
   assert.match(menu, /v-for="artist in artists"/);
@@ -53,6 +60,17 @@ test("track rows expose a Reka context menu with playback, favorites, downloads,
   assert.match(menu, /context\.metadataSearchLabel/);
   assert.match(menu, /externalTrackId/);
   assert.match(menu, /candidate\.details/);
+
+  const offlineActionIndex = menu.indexOf('@select="toggleOffline"');
+  const downloadActionIndex = menu.indexOf('@select="download"');
+  assert.ok(
+    offlineActionIndex > -1,
+    "The track context menu exposes an offline-storage action",
+  );
+  assert.ok(
+    downloadActionIndex > offlineActionIndex,
+    "Make available offline appears above the browser download action",
+  );
 
   assert.match(trackTable, /<TrackContextMenu/);
   assert.match(trackTable, /@play="playFromList\(item\.data, true\)"/);
@@ -108,6 +126,10 @@ test("album and artist cards expose collection-aware context menus", async () =>
   assert.match(albumMenu, /context\.unlikeAlbum/);
   assert.match(albumMenu, /albumRoute\(album\)/);
   assert.match(albumMenu, /context\.openAlbum/);
+  assert.match(
+    albumMenu,
+    /<NuxtLink :to="albumRoute\(album\)">\s+<Icon :icon="icons\.album"/,
+  );
   assert.match(albumMenu, /useOfflineAlbum\(\(\) => props\.album\)/);
   assert.match(albumMenu, /@select="toggleAlbumOffline"/);
   assert.match(albumMenu, /t\("albumOffline\.remove"\)/);

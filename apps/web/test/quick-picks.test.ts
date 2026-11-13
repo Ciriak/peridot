@@ -193,7 +193,11 @@ test("the sidebar renders linked, context-aware quick picks", async () => {
   assert.doesNotMatch(tile, /item\.kind === "track" \? "Track" : "Album"/);
   assert.match(
     content,
-    /item\.kind === "track" \? icons\.music : icons\.library/,
+    /item\.kind === "track" \? icons\.music : icons\.album/,
+  );
+  assert.match(
+    content,
+    /props\.item\.kind === 'album' \? icons\.album : icons\.music/,
   );
   assert.match(content, /size-3 shrink-0 text-muted-foreground/);
   assert.match(

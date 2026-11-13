@@ -7,7 +7,7 @@ import { computed, onMounted, ref } from "vue";
 import TrackTable from "./TrackTable.vue";
 import { useCatalogTrackQuery } from "../composables/use-catalog-query";
 import { useLikes } from "../composables/use-likes";
-import type { TrackSort } from "../lib/library";
+import { filterTracks, type TrackSort } from "../lib/library";
 
 const props = withDefaults(
   defineProps<{ title: string; favorites?: boolean }>(),
@@ -25,7 +25,12 @@ const queryOptions = computed(() => ({
 }));
 const { tracks, loading, loadingMore, error, loaded, hasMore, load, loadMore } =
   useCatalogTrackQuery(() => queryOptions.value);
-const { load: loadLikes } = useLikes();
+const { likedTrackIds, loaded: likesLoaded, load: loadLikes } = useLikes();
+const visibleTracks = computed(() =>
+  props.favorites && likesLoaded.value
+    ? filterTracks(tracks.value, "", likedTrackIds.value)
+    : tracks.value,
+);
 
 function setSort(next: TrackSort | null) {
   sort.value = next ?? { field: "title", direction: "asc" };
@@ -40,13 +45,6 @@ onMounted(() => {
 <template>
   <div class="space-y-2">
     <h1 class="text-2xl font-semibold tracking-tight">{{ title }}</h1>
-    <p class="text-sm text-muted-foreground">
-      {{
-        favorites
-          ? t("page.liked.description")
-          : t("components.library.description")
-      }}
-    </p>
   </div>
   <section aria-labelledby="tracks-heading" class="space-y-4">
     <div class="flex items-center justify-between gap-4">
@@ -57,7 +55,7 @@ onMounted(() => {
         {{
           loading
             ? t("common.loading")
-            : `${t("count.track", { count: tracks.length }, tracks.length)}${hasMore ? "+" : ""}`
+            : `${t("count.track", { count: visibleTracks.length }, visibleTracks.length)}${hasMore ? "+" : ""}`
         }}
       </Badge>
     </div>
@@ -80,8 +78,8 @@ onMounted(() => {
       }}</Button>
     </div>
     <TrackTable
-      v-else-if="tracks.length"
-      :tracks="tracks"
+      v-else-if="visibleTracks.length"
+      :tracks="visibleTracks"
       variant="library"
       :sort="sort ?? undefined"
       :has-more="hasMore"

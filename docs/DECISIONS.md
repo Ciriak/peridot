@@ -1,5 +1,147 @@
 # Decisions
 
+## 2026-11-13: Toasts sit below the topbar at the top-right
+
+The app-level Reka toast region is fixed to the top-right and starts below the
+64px topbar. It uses the same placement in the player shell and playerless
+fullscreen settings layout, with full-width mobile insets and a bounded desktop
+width. This supersedes earlier toast viewport positions that anchored to the
+bottom or offset above the fixed player.
+
+## 2026-11-13: Home suggestions remain visible after liking
+
+Home suggestions no longer exclude albums or tracks that the signed-in user has
+liked. Liking a visible title updates its heart state in place instead of
+removing it from the suggestion feed. Existing liked-artist data still ranks
+suggestions, while the focused Liked songs, Albums, and Artists routes remain
+the complete collection views.
+
+This supersedes only the liked-record exclusion in the earlier Home suggestion
+decision; the bounded query, suggestion counts, artist omission, and separate
+playlist preview remain unchanged.
+
+## 2026-11-13: Liked titles can be downloaded automatically
+
+Settings → Library exposes an enabled-by-default `Make my liked titles
+available offline` switch with a bundled Basil cloud-download icon. The
+preference is browser-local and scoped by server and user so one account's
+choice does not change another account on the same device. Missing or malformed
+stored preferences safely fall back to the enabled default.
+
+While connected, the app pages through the authenticated liked-track catalog and
+saves every available track through the existing per-track audio, artwork, and
+manifest path. Existing saved tracks are skipped, a changed likes set triggers a
+resynchronization, and newly liked tracks join the next collection save. Only
+available tracks are attempted, matching album and playlist offline behavior.
+
+Turning the preference off stops future automatic saves but leaves existing
+offline copies untouched. The manifest does not record whether a copy came from
+an automatic liked-title sync or an explicit track, album, or playlist action,
+so removing copies here could silently undo a manual offline choice. The user
+can continue to remove individual copies through the existing offline controls.
+
+## 2026-11-13: Administrators restart the server through the running app
+
+The administrator-only Server settings page exposes a confirmed restart action.
+The endpoint responds with `202 Accepted` before the current Fastify runtime is
+closed, then build and listen are repeated on the same configured host and port
+inside the existing process. This keeps the restart available for direct
+`node apps/server/dist/index.js` deployments without requiring a process
+supervisor, while rebuilding the database connections, task scheduler, provider
+clients, realtime hub, and HTTP runtime.
+
+Persisted sessions and application data remain because they live in SQLite.
+Running tasks are interrupted and queued tasks resume through the existing task
+initialization behavior. The confirmation explains the brief disconnect and
+task effects. The restart endpoint is unavailable when an embedding builds the
+Fastify app without a restart lifecycle hook.
+
+## 2026-11-13: CI gates builds behind tests and reports each artifact separately
+
+GitHub Actions runs linting, formatting, schema validation, and type checking
+first, then the workspace test suite. Only after tests pass do web, server, and
+desktop builds begin. The web and server builds use package-filtered Turbo tasks
+so each artifact has an explicit status; the desktop job prepares the shared web
+client before Tauri packages it.
+
+The desktop job installs Tauri's Linux system prerequisites and Rust toolchain,
+and caches the Cargo target directory. Pull requests run regardless of target
+branch, while pushes are limited to `dev`, `master`, and `v*` tags. Commitlint
+remains independent so commit-message policy is visible separately from product
+quality gates. Superseded runs on the same ref are cancelled to avoid spending
+runner time on obsolete commits.
+
+## 2026-11-13: Runtime copy is action-focused rather than product-focused
+
+User-facing runtime messages describe the action, state, or relevant server
+instead of naming Peridot as the grammatical subject. Product-name-led phrases
+such as "Peridot reconnected to your server" become "Reconnected to your
+server," while references such as "your Peridot server" use the simpler
+"your server."
+
+The runtime product name remains in the application name and browser page
+titles where it identifies the product. Keeping those brand surfaces precise
+while removing repeated product subjects from guidance and feedback makes the
+interface more direct without making it anonymous.
+
+## 2026-11-13: Provider credentials use an automatic local encryption key
+
+Peridot creates a random 32-byte encryption key on server startup when
+`PERIDOT_CREDENTIAL_KEY` is unset and stores it as `<database path>.key`, with
+restrictive creation permissions where the filesystem supports them. The server
+reuses the key across restarts and continues to encrypt persisted provider
+credentials with AES-256-GCM.
+
+The key remains outside SQLite so a copied database or database-only backup
+does not include the material needed to decrypt provider tokens. The explicit
+environment variable remains an override for container deployments, secret
+managers, and migration between hosts. When an environment key successfully
+decrypts existing credentials, startup imports it into the local key file so
+subsequent local starts need no credential-key configuration. If encrypted
+credentials exist without either compatible key, startup fails instead of
+generating a replacement that would silently make them unreadable. Local
+filesystem access by the server account, or possession of both the database and
+its companion key file, still grants access to the decrypted credentials.
+Automatic local storage avoids a mandatory setup step for the default
+self-hosted installation without placing the key in browser code or API
+responses.
+
+## 2026-11-13: Catalog metadata uses reversible overflow motion
+
+The shared `ScrollingText` component measures its own viewport and a single
+slotted content wrapper. It starts moving only when the content exceeds the
+viewport by more than one pixel, so short titles remain fully static and
+interactive content such as links and track context-menu triggers is not
+duplicated.
+
+Content moves left until its ending edge is reachable, holds briefly, returns
+right to the starting position, holds again, and repeats as a continuous
+left-right-left loop. The default speed is 30 pixels per second with a
+1.5-second hold at each turnaround. Hover-only mode starts while the pointer or
+keyboard focus is inside and resets immediately on exit. Always-on mode pauses
+at the current position during hover or keyboard focus and resumes afterward.
+
+Motion uses the Web Animations API with standard Tailwind layout and clipping
+utilities, preserving the owner's prohibition on custom CSS blocks, inline
+styles, and arbitrary utility values. Responsive size and slotted-content
+changes remeasure and restart from the beginning. Reduced-motion users receive
+static clipping with the complete slotted content still present for assistive
+technology.
+
+The fixed player passes `mode="always"` for its active track title and artist
+line. Every other adopted catalog surface uses the component's default
+hover/focus mode, so scrolling starts only when the user interacts with that
+specific metadata. Adopted surfaces include track tables, queue rows and now
+playing metadata, quick picks, album/artist/playlist cards and detail headers,
+playlist entries and pickers, track/album/artist/playlist context-menu labels,
+and metadata correction results. Artist names, track and album titles, playlist
+names, and artist-album combinations remain interactive links or context-menu
+content without duplicating DOM nodes.
+
+Catalog metadata no longer relies on `truncate` for its bounded presentation.
+Settings, folder paths, task details, user-management records, errors, and
+other non-catalog text keep their existing static truncation.
+
 ## 2026-11-13: Player metadata owns the track like action and context menu
 
 The fixed player's active title and credited artists are the trigger for the

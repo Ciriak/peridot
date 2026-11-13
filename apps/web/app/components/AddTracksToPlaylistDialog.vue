@@ -4,6 +4,7 @@ import type { PlaylistDetailResponse, TrackResponse } from "@peridot/contracts";
 import { Icon } from "@iconify/vue/offline";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
+import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import { Input } from "@peridot/ui/components/ui/input";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { useQuery } from "@tanstack/vue-query";
@@ -157,10 +158,14 @@ async function add(track: TrackResponse) {
                 :server-address="scope?.serverAddress ?? ''"
               />
               <div class="min-w-0 flex-1">
-                <p class="truncate font-medium">{{ track.title }}</p>
-                <p class="truncate text-xs text-muted-foreground">
-                  {{ trackArtistNames(track).join(", ") }}
-                  <template v-if="track.album"> · {{ track.album }}</template>
+                <ScrollingText class="w-full font-medium">
+                  {{ track.title }}
+                </ScrollingText>
+                <p class="min-w-0 text-xs text-muted-foreground">
+                  <ScrollingText class="w-full">
+                    {{ trackArtistNames(track).join(", ") }}
+                    <template v-if="track.album"> · {{ track.album }}</template>
+                  </ScrollingText>
                 </p>
               </div>
               <Badge v-if="existingIds.has(track.id)" variant="secondary">

@@ -2,6 +2,7 @@ import type { LikeTarget, MessageDescriptor } from "@peridot/contracts";
 import { createToastManager } from "reka-ui";
 import { likeSuccessToast } from "./like-toast";
 import { message } from "./messages.ts";
+import { offlineSaveSuccessToast } from "./offline-toast";
 import { sourceMutationToast, type SourceMutation } from "./source-toast";
 
 export type AppToastKind = "success" | "error";
@@ -174,6 +175,14 @@ export function notifyTrackDownloadFailed(
     duration: 8000,
     kind: "error",
   });
+}
+
+export function notifyOfflineTrackSaved(trackTitle: string) {
+  addToast(offlineSaveSuccessToast("track", trackTitle));
+}
+
+export function notifyOfflineAlbumSaved(albumTitle: string) {
+  addToast(offlineSaveSuccessToast("album", albumTitle));
 }
 
 export function notifyOfflineTrackFailed(

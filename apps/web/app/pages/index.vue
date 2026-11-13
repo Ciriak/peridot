@@ -32,8 +32,6 @@ const greeting = computed(() =>
 );
 
 const {
-  likedAlbumIds,
-  likedTrackIds,
   likedArtistKeys,
   loading: likesLoading,
   error: likesError,
@@ -78,14 +76,12 @@ const {
 const suggestedAlbums = computed(() =>
   selectHomeAlbumSuggestions({
     albums: albums.value,
-    likedAlbumIds: likedAlbumIds.value,
     likedArtistKeys: likedArtistKeys.value,
   }),
 );
 const suggestedTracks = computed(() =>
   selectHomeTrackSuggestions({
     tracks: tracks.value,
-    likedTrackIds: likedTrackIds.value,
     likedArtistKeys: likedArtistKeys.value,
   }),
 );

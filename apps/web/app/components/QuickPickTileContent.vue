@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue/offline";
 import { Button } from "@peridot/ui/components/ui/button";
+import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import { computed } from "vue";
 import { useCachedArtwork } from "../composables/use-cached-artwork";
 import {
@@ -30,7 +31,7 @@ const title = computed(() =>
 );
 const artistNames = computed(() => quickPickArtistNames(props.item));
 const typeIcon = computed(() =>
-  props.item.kind === "track" ? icons.music : icons.library,
+  props.item.kind === "track" ? icons.music : icons.album,
 );
 const titleRoute = computed(() =>
   props.item.kind === "track"
@@ -64,7 +65,7 @@ const titleRoute = computed(() =>
       />
       <Icon
         v-else
-        :icon="icons.music"
+        :icon="props.item.kind === 'album' ? icons.album : icons.music"
         aria-hidden="true"
         class="size-5 text-muted-foreground"
       />
@@ -89,19 +90,19 @@ const titleRoute = computed(() =>
           aria-hidden="true"
           class="size-3 shrink-0 text-muted-foreground"
         />
-        <span
-          class="truncate text-xs font-medium"
+        <ScrollingText
+          class="min-w-0 flex-1 text-xs font-medium"
           :class="!playable && 'opacity-60'"
         >
           {{ title }}
-        </span>
+        </ScrollingText>
       </NuxtLink>
-      <p
-        class="truncate text-xs text-muted-foreground"
+      <ScrollingText
+        class="w-full text-xs text-muted-foreground"
         :title="artistNames.join(', ')"
       >
         <TrackArtistLinks :artists="artistNames" />
-      </p>
+      </ScrollingText>
     </div>
   </div>
 </template>

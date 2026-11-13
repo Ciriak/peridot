@@ -99,7 +99,10 @@ test("the persistent player controls a native audio element", async () => {
   );
   assert.match(layout, /currentCoverUrl = computed\(/);
   assert.match(layout, /<img[\s\S]*object-cover/);
-  assert.match(layout, /<Icon v-else :icon="icons\.music"/);
+  assert.match(
+    layout,
+    /<Icon\s+v-else\s+:icon="active\?\.albumId \? icons\.album : icons\.music"/,
+  );
   assert.match(
     layout,
     /<TrackArtistLinks :artists="trackArtistNames\(active\)" \/>/,
@@ -107,7 +110,7 @@ test("the persistent player controls a native audio element", async () => {
   );
   assert.match(
     layout,
-    /<p v-else class="select-none truncate text-sm font-medium">/,
+    /<p v-else class="select-none text-sm font-medium">/,
     "Unlinked player titles cannot be selected",
   );
   assert.match(layout, /@click="togglePlayback"/);
@@ -244,6 +247,26 @@ test("the persistent player controls a native audio element", async () => {
     playerFooter,
     /<TrackContextMenu\s+v-if="active"\s+:track="active"\s+@play="playActiveTrack"\s*>/,
     "The active player track metadata is a context-menu trigger",
+  );
+  assert.match(
+    playerFooter,
+    /<ScrollingText\s+:key="`\$\{active\.id\}:\$\{active\.title\}`"\s+mode="always"\s+class="w-full"\s*>[\s\S]*?<NuxtLink\s+v-if="currentTrackTitleRoute"/,
+    "Only the active player title uses the always-on scrolling text component",
+  );
+  assert.equal(
+    playerFooter.match(/<ScrollingText\b/g)?.length,
+    2,
+    "The player applies scrolling text to the title and artist line only",
+  );
+  assert.match(
+    playerFooter,
+    /<ScrollingText\s+v-else\s+mode="always"\s+class="min-w-0 flex-1 text-xs text-muted-foreground"\s*>[\s\S]*?<TrackArtistLinks\s+:artists="trackArtistNames\(active\)"\s*\/>/,
+    "The active player artist line uses the always-on scrolling text component",
+  );
+  assert.doesNotMatch(
+    playerFooter,
+    /class="[^"]*\btruncate\b[^"]*"[^>]*>\s*\{\{ active\.title \}\}/,
+    "The rolling player title no longer truncates its own content",
   );
   assert.doesNotMatch(
     layout,

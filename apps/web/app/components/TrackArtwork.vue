@@ -15,6 +15,9 @@ const coverUrl = computed(() =>
   trackCoverUrl(props.serverAddress, props.track.coverUrl),
 );
 const { artworkUrl, failed: coverFailed } = useCachedArtwork(coverUrl);
+const placeholderIcon = computed(() =>
+  props.track.albumId || props.track.album?.trim() ? icons.album : icons.music,
+);
 </script>
 
 <template>
@@ -31,7 +34,7 @@ const { artworkUrl, failed: coverFailed } = useCachedArtwork(coverUrl);
       class="size-full object-cover"
       @error="coverFailed = true"
     />
-    <Icon v-else :icon="icons.music" aria-hidden="true" class="size-5" />
+    <Icon v-else :icon="placeholderIcon" aria-hidden="true" class="size-5" />
     <slot />
   </div>
 </template>

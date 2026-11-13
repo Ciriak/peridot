@@ -27,11 +27,10 @@ are kept in same-site browser cookies. The server can be changed from Settings
 the typed address and scans the web host's private IPv4 networks for Peridot
 servers on port 17430; selecting a
 discovered server advances onboarding. Home surfaces bounded album and track
-suggestions from the authenticated catalog API, excluding records the current
-user has liked and prioritizing music by liked artists. It also shows the
-current playlist state. The focused Liked songs, Playlists, Albums, and Artists
-routes provide their complete views and refresh after completed library or
-metadata tasks.
+suggestions from the authenticated catalog API, keeping liked records visible
+and prioritizing music by liked artists. It also shows the current playlist
+state. The focused Liked songs, Playlists, Albums, and Artists routes provide
+their complete views and refresh after completed library or metadata tasks.
 The Albums view derives release-first groups from available track and provider
 metadata. Provider release identity takes precedence, followed by embedded album
 artists and title, then the containing source folder and title. Track performer
@@ -85,8 +84,8 @@ one catalog track has the same provider and external ID, and are never matched
 by title or artist guesswork.
 Right-clicking a track row opens a Reka UI context menu for
 playback, adding the track next in the queue, adding it to a playlist,
-favorites, authenticated download, album navigation, and per-artist navigation
-when a track has multiple credits.
+favorites, making the track available offline, authenticated browser download,
+album navigation, and per-artist navigation when a track has multiple credits.
 Add to queue stays available for tracks already in the queue and moves them back
 to the next position instead of creating duplicates. Right-clicking or
 long-pressing an album or artist card opens a collection menu for playing it,
@@ -151,6 +150,14 @@ Playlist offline saving reuses the same per-track manifest and skips unavailable
 or unresolved entries. Offline playback follows playlist order and includes
 only tracks that were saved.
 
+Settings → Library includes an enabled-by-default `Make my liked titles
+available offline` preference. It is stored separately for each server and
+user. While connected, the authenticated web app pages through the complete
+liked-track catalog and saves available tracks that are not already present in
+the per-track manifest. New or changed likes trigger the same synchronization.
+Turning the preference off stops automatic saves; it does not remove existing
+offline copies because those may have been created manually.
+
 Browser quotas and eviction still apply. Service-worker registration and offline
 playback require one successful online load first, and direct offline routes are
 limited to the cached SPA shell and query pages that were previously visited.
@@ -214,6 +221,10 @@ selector or stored locale preference yet. Runtime copy is defined in
 `apps/web/i18n/locales/en-US.json`; pages and components resolve it through
 `useI18n`, while reusable `@peridot/ui` components receive already-localized
 accessible labels from their callers.
+Keep runtime copy focused on the user's action or current state instead of
+making the product the grammatical subject or repeating its name before generic
+nouns such as "server" and "account." Reserve the runtime product name for the
+application name and browser page titles.
 
 Server responses carry stable `MessageDescriptor` values for errors, tasks,
 provider definitions, and metadata details. The browser owns their presentation,
@@ -259,10 +270,10 @@ The Settings sidebar has a persistent Log out action at its bottom. Logout
 first asks for confirmation, then attempts to revoke the current session, keeps
 the selected server for sign-in, and returns to the current Settings page after
 authentication.
-The web shell mounts one app-level Reka UI toast region in the bottom-right. It
-sits above the fixed player in the main shell and against the bottom edge in
-playerless fullscreen layouts. It reports source and provider changes, likes,
-download failures, and queue operations. Task activity is shown only through the
+The web shell mounts one app-level Reka UI toast region at the top-right, below
+the 64px topbar. It uses the same placement in the main shell and fullscreen
+settings layouts. It reports source and provider changes, likes, download
+failures, and queue operations. Task activity is shown only through the
 administrator topbar and Tasks settings view, while connection loss is indicated
 by the topbar network-off warning without a toast. When the connection recovers,
 an authenticated session receives a `Back online` toast.
@@ -283,10 +294,21 @@ the local defaults described in Quick start. `DATABASE_URL` selects the local SQ
 defaults support the local web development server and Tauri's HTTP and custom
 scheme webview origins; add the exact web origin when accessing Peridot from
 another device.
-Discogs metadata uses an administrator-provided personal access token. Set
-`PERIDOT_CREDENTIAL_KEY` to a base64-encoded 32-byte key before adding Discogs;
-Peridot uses it to encrypt provider credentials at rest. Keep the key backed up
-separately from the database. MusicBrainz-only installations do not require it.
+Discogs metadata uses an administrator-provided personal access token. Peridot
+encrypts provider credentials at rest with an automatically generated local key
+stored as `<database path>.key`, for example `peridot.db.key`, and reuses that
+file across restarts. The file is ignored by Git and should be backed up
+separately from database backups. Deployments may instead set
+`PERIDOT_CREDENTIAL_KEY` to a base64-encoded 32-byte key. When existing
+credentials are present, a working environment key is validated and imported
+into the local key file so later starts do not require the variable. If stored
+credentials exist but their key is unavailable, startup stops rather than
+replacing it with an incompatible key. Keep using the same key after credentials
+have been stored; changing it makes their existing ciphertext unreadable.
+Administrators can restart the running server from Settings â†’ Admin â†’ Server
+after confirming the action. The server briefly disconnects clients, rebuilds
+its Fastify runtime on the same host and port, interrupts running tasks, and
+resumes queued tasks. Sessions and persisted data are retained.
 Administrators can manage where the server gets raw audio files from
 Settings → Admin → Sources. Each source is a local folder, an external URL, or
 a future integration such as Spotify or YouTube Music. Local folder sources seed from
@@ -439,6 +461,8 @@ Administrators manage metadata providers through
 `PUT /api/admin/metadata-providers/:id` with configuration, credential, or
 enabled-state updates.
 Disabled providers remain listed but are excluded from matching.
+Administrators restart the server through `POST /api/admin/server/restart`,
+which returns `202` with `{ "status": "restarting" }`.
 `POST /api/admin/metadata/refresh` queues automatic metadata matching without a
 file scan, while
 `POST /api/admin/metadata/reset` clears every track and artist override and

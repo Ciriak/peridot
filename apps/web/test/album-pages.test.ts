@@ -35,7 +35,7 @@ test("albums have list and detail routes with derived groups", async () => {
   assert.match(albumCard, /:to="albumRoute\(album\)"/);
   assert.match(
     albumCard,
-    /<\/NuxtLink>\s+<p class="truncate text-xs text-muted-foreground">\s+<TrackArtistLinks :artists="album\.artists" \/>/,
+    /<\/NuxtLink>\s+<ScrollingText class="w-full text-xs text-muted-foreground">\s+<TrackArtistLinks :artists="album\.artists" \/>/,
     "Album card artist credits link to their artist pages",
   );
   assert.match(albumCard, /useLikes\(\)/);
@@ -45,7 +45,7 @@ test("albums have list and detail routes with derived groups", async () => {
   assert.match(albumCard, /@error="coverFailed = true"/);
   assert.match(albumCard, /loading="lazy"/);
   assert.match(albumCard, /decoding="async"/);
-  assert.match(albumCard, /<Icon\s+v-else\s+:icon="icons\.music"/);
+  assert.match(albumCard, /<Icon\s+v-else\s+:icon="icons\.album"/);
   assert.match(albumCard, /useLibraryPlayer\(\)/);
   assert.match(albumCard, /loadCollectionTracks\(/);
   assert.match(albumCard, /togglePlayback\(\)/);
@@ -130,7 +130,7 @@ test("albums have list and detail routes with derived groups", async () => {
     "The album-detail playback control is icon-only",
   );
   assert.match(detailPage, /<img[\s\S]*object-cover/);
-  assert.match(detailPage, /<Icon v-else :icon="icons\.music"/);
+  assert.match(detailPage, /<Icon v-else :icon="icons\.album"/);
   assert.match(detailPage, /<LikeButton/);
   assert.match(
     detailPage,
@@ -194,7 +194,7 @@ test("albums have list and detail routes with derived groups", async () => {
   );
   assert.match(
     trackTable,
-    /<TrackArtwork[\s\S]*icons\.play[\s\S]*<\/TrackArtwork>\s*<div class="min-w-0 flex-1">\s*<div class="flex min-w-0 items-center gap-2">\s*<span\s+:id="trackTitleAnchorId\(item\.data\.id\)"\s+class="scroll-mt-4 truncate"\s+:class="\{ 'opacity-60': isUnavailable\(item\.data\) \}"\s+>\{\{ item\.data\.title \}\}<\/span\s*>/,
+    /<TrackArtwork[\s\S]*icons\.play[\s\S]*<\/TrackArtwork>\s*<div class="min-w-0 flex-1">\s*<div class="flex min-w-0 items-center gap-2">\s*<ScrollingText\s+:id="trackTitleAnchorId\(item\.data\.id\)"\s+class="min-w-0 flex-1 scroll-mt-4"\s+:class="\{ 'opacity-60': isUnavailable\(item\.data\) \}"\s+>\{\{ item\.data\.title \}\}<\/ScrollingText/,
     "Track titles remain plain text beside artwork that embeds the play control",
   );
   assert.match(
@@ -243,7 +243,7 @@ test("albums are available in persistent navigation", async () => {
   ]);
   assert.match(
     layout,
-    /labelKey: "navigation\.albums", to: "\/albums", icon: icons\.music/,
+    /labelKey: "navigation\.albums", to: "\/albums", icon: icons\.album/,
   );
   assert.match(layout, /currentPath\.value\.startsWith\(`\$\{target\}\/`\)/);
   assert.match(layout, /useLibraryPlayer\(\)/);

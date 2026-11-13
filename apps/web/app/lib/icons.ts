@@ -10,6 +10,7 @@ import close from "@iconify-icons/basil/cross-outline";
 import menu from "@iconify-icons/basil/menu-outline";
 import plus from "@iconify-icons/basil/plus-outline";
 import music from "@iconify-icons/basil/music-outline";
+import album from "@iconify-icons/mdi/cd-rom";
 import play from "@iconify-icons/basil/play-solid";
 import pause from "@iconify-icons/basil/pause-solid";
 import waveform from "@iconify-icons/at-icons/waveform";
@@ -61,6 +62,7 @@ export const icons = {
   menu,
   plus,
   music,
+  album,
   play,
   pause,
   waveform,

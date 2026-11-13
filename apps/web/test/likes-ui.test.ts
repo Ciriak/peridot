@@ -42,7 +42,7 @@ test("successful likes map to target-specific confirmation toasts", () => {
 });
 
 test("track, album, and artist likes share accessible persistent state wiring", async () => {
-  const [likes, button, library, layout] = await Promise.all([
+  const [likes, button, library, layout, trackTable] = await Promise.all([
     readFile(
       new URL("../app/composables/use-likes.ts", import.meta.url),
       "utf8",
@@ -56,6 +56,10 @@ test("track, album, and artist likes share accessible persistent state wiring", 
       "utf8",
     ),
     readFile(new URL("../app/layouts/default.vue", import.meta.url), "utf8"),
+    readFile(
+      new URL("../app/components/TrackTable.vue", import.meta.url),
+      "utf8",
+    ),
   ]);
 
   assert.match(likes, /listLikes\(/);
@@ -67,6 +71,7 @@ test("track, album, and artist likes share accessible persistent state wiring", 
   assert.match(likes, /persistQueryKey\(/);
   assert.match(likes, /notifyLikeFailed\(/);
   assert.match(likes, /notifyLikeSucceeded\(variables\.target\)/);
+  assert.match(likes, /invalidateQueries\(\{/);
   assert.match(button, /aria-pressed/);
   assert.match(button, /:title="actionLabel"/);
   assert.match(button, /icons\.heartFilled/);
@@ -84,6 +89,17 @@ test("track, album, and artist likes share accessible persistent state wiring", 
   );
   assert.match(library, /useCatalogTrackQuery/);
   assert.match(library, /props\.favorites \? \{ liked: true \}/);
+  assert.match(
+    library,
+    /props\.favorites && likesLoaded\.value\s*\? filterTracks\(\s*tracks\.value,\s*"",\s*likedTrackIds\.value,?\s*\)/,
+    "The liked songs view removes tracks as soon as their like is removed",
+  );
+  assert.match(library, /:tracks="visibleTracks"/);
+  assert.match(
+    trackTable,
+    /likesLoaded\s*\? likedTrackIds\.includes\(item\.data\.id\)\s*: item\.data\.liked/,
+    "The loaded likes cache supersedes stale track response state",
+  );
   assert.match(layout, /loadLikes\(\)/);
   assert.match(layout, /likedTrackCount/);
   assert.match(layout, /<LikeButton/);

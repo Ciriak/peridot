@@ -44,6 +44,7 @@ export default defineConfig([
   },
   {
     files: ["packages/ui/src/components/ui/**/*.vue"],
+    languageOptions: { globals: globals.browser },
     rules: { "vue/multi-word-component-names": "off" },
   },
   {

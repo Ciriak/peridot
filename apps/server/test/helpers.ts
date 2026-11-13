@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { TaskResponse } from "@peridot/contracts";
 import { buildApp } from "../src/app.js";
+import { localCredentialKeyFile } from "../src/credential-store.js";
 import { createDatabase, type Database } from "../src/database.js";
 import { ServerLogBuffer } from "../src/server-log.js";
 
@@ -12,6 +13,7 @@ export interface TestContext {
   app: FastifyInstance;
   database: Database;
   databaseUrl: string;
+  credentialKeyFile: string;
   libraryRoot: string;
   root: string;
   authorization: { authorization: string };
@@ -22,11 +24,12 @@ export interface TestContext {
 export interface TestContextOptions {
   logger?: boolean;
   webOrigins?: string[];
+  restartServer?: () => void;
   metadataFetch?: typeof fetch;
   metadataRequestIntervalMs?: number;
   discogsFetch?: typeof fetch;
   discogsRequestIntervalMs?: number;
-  credentialEncryptionKey?: string | null;
+  credentialEncryptionKey?: string;
 }
 
 export async function createTestContext(
@@ -59,21 +62,20 @@ export async function createTestContext(
         ? Response.json({ username: "test-discogs-owner" })
         : new Response("not found", { status: 404 }));
   const metadataRequestIntervalMs = options.metadataRequestIntervalMs ?? 0;
-  const credentialEncryptionKey =
-    options.credentialEncryptionKey === null
-      ? undefined
-      : (options.credentialEncryptionKey ??
-        Buffer.alloc(32, 7).toString("base64"));
+  const credentialKeyFile = localCredentialKeyFile(databaseUrl);
   const app = await buildApp({
     config: {
       databaseUrl,
       libraryRoot,
       webOrigins: options.webOrigins ?? ["http://127.0.0.1:3000"],
-      ...(credentialEncryptionKey ? { credentialEncryptionKey } : {}),
+      ...(options.credentialEncryptionKey
+        ? { credentialEncryptionKey: options.credentialEncryptionKey }
+        : {}),
     },
     database,
     logger: options.logger ?? false,
     logBuffer,
+    ...(options.restartServer ? { restartServer: options.restartServer } : {}),
     metadataFetch,
     metadataRequestIntervalMs,
     discogsFetch,
@@ -98,6 +100,7 @@ export async function createTestContext(
     app,
     database,
     databaseUrl,
+    credentialKeyFile,
     libraryRoot,
     root,
     authorization,

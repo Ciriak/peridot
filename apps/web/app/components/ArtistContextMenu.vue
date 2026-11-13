@@ -9,6 +9,7 @@ import type {
 import { Icon } from "@iconify/vue/offline";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
+import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -232,8 +233,8 @@ async function revertMetadata() {
       <slot />
     </ContextMenuTrigger>
     <ContextMenuContent class="w-64">
-      <ContextMenuLabel class="truncate">
-        {{ artist.name }}
+      <ContextMenuLabel>
+        <ScrollingText class="w-full">{{ artist.name }}</ScrollingText>
       </ContextMenuLabel>
       <ContextMenuSeparator />
       <ContextMenuItem :disabled="!playable" @select="playArtist">
@@ -345,18 +346,20 @@ async function revertMetadata() {
           >
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-2">
-                <p class="truncate text-sm font-medium">
+                <ScrollingText class="min-w-0 flex-1 text-sm font-medium">
                   {{ candidate.name }}
-                </p>
+                </ScrollingText>
                 <Badge variant="secondary" class="shrink-0">
                   {{ candidate.providerName }}
                 </Badge>
               </div>
               <p
                 v-if="candidate.disambiguation"
-                class="truncate text-sm text-muted-foreground"
+                class="min-w-0 text-sm text-muted-foreground"
               >
-                {{ candidate.disambiguation }}
+                <ScrollingText class="w-full">
+                  {{ candidate.disambiguation }}
+                </ScrollingText>
               </p>
               <p class="mt-1 text-xs text-muted-foreground">
                 {{

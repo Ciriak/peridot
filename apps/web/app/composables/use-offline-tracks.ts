@@ -37,7 +37,10 @@ export function useOfflineTracks() {
     "player-offline-album-save-progress",
     () => ({}),
   );
-  const pendingTrackIds = ref<string[]>([]);
+  const pendingTrackIds = useState<string[]>(
+    "player-offline-pending-track-ids",
+    () => [],
+  );
   const pendingAlbumIds = useState<string[]>(
     "player-offline-pending-album-ids",
     () => [],

@@ -34,9 +34,6 @@ onMounted(() => {
     <h1 class="text-2xl font-semibold tracking-tight">
       {{ t("navigation.artists") }}
     </h1>
-    <p class="text-sm text-muted-foreground">
-      {{ t("page.artists.description") }}
-    </p>
   </div>
   <section aria-labelledby="artists-heading" class="space-y-4">
     <div class="flex items-center justify-between gap-4">

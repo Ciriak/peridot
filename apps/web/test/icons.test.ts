@@ -6,6 +6,7 @@ import { Icon } from "@iconify/vue/offline";
 import dragIcon from "@iconify-icons/akar-icons/drag-vertical";
 import waveformIcon from "@iconify-icons/at-icons/waveform";
 import playIcon from "@iconify-icons/basil/play-solid";
+import albumIcon from "@iconify-icons/mdi/cd-rom";
 import networkOffIcon from "@iconify-icons/ooui/network-off";
 import { icons } from "../app/lib/icons.ts";
 
@@ -32,5 +33,6 @@ test("transport uses basil:play-solid and a distinct pause icon", async () => {
   assert.notEqual(await render(icons.play), await render(icons.pause));
   assert.deepEqual(icons.drag, dragIcon);
   assert.deepEqual(icons.waveform, waveformIcon);
+  assert.deepEqual(icons.album, albumIcon);
   assert.deepEqual(icons.networkOff, networkOffIcon);
 });

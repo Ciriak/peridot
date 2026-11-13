@@ -1,8 +1,13 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
+import { mkdir, open, readFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const CREDENTIAL_KEY_BYTES = 32;
 const ENVELOPE_VERSION = "v1";
 const AAD = Buffer.from("peridot-metadata-provider-credential:v1", "utf8");
+const PERIDOT_CREDENTIAL_KEY = "PERIDOT_CREDENTIAL_KEY";
+const LOCAL_KEY_FILE = "local credential encryption key file";
 
 export class CredentialStoreError extends Error {
   constructor(
@@ -14,7 +19,7 @@ export class CredentialStoreError extends Error {
   }
 }
 
-function decodeKey(value: string): Buffer {
+function decodeKey(value: string, source: string): Buffer {
   const encoded = value.trim();
   if (
     !encoded ||
@@ -22,25 +27,140 @@ function decodeKey(value: string): Buffer {
     encoded.length % 4 !== 0
   ) {
     throw new CredentialStoreError(
-      "PERIDOT_CREDENTIAL_KEY must be a base64-encoded 32-byte key.",
+      `${source} must contain a base64-encoded 32-byte key.`,
       503,
     );
   }
   const key = Buffer.from(encoded, "base64");
   if (key.length !== CREDENTIAL_KEY_BYTES) {
     throw new CredentialStoreError(
-      "PERIDOT_CREDENTIAL_KEY must decode to exactly 32 bytes.",
+      `${source} must decode to exactly 32 bytes.`,
       503,
     );
   }
   return key;
 }
 
+function databasePath(databaseUrl: string): string {
+  if (!databaseUrl.startsWith("file:")) {
+    throw new Error("DATABASE_URL must be a file: URL for SQLite");
+  }
+  if (databaseUrl.startsWith("file://")) {
+    return fileURLToPath(databaseUrl);
+  }
+  const value = decodeURIComponent(databaseUrl.slice("file:".length));
+  if (!value) {
+    throw new Error("DATABASE_URL must include a SQLite file path");
+  }
+  return path.resolve(value);
+}
+
+export function localCredentialKeyFile(databaseUrl: string): string {
+  return `${databasePath(databaseUrl)}.key`;
+}
+
+async function readKeyFile(keyFile: string): Promise<string> {
+  return (await readFile(keyFile, "utf8")).trim();
+}
+
+async function loadOrCreateLocalKey(
+  keyFile: string,
+  allowCreate: boolean,
+): Promise<string> {
+  await mkdir(path.dirname(keyFile), { recursive: true });
+  try {
+    return await readKeyFile(keyFile);
+  } catch (error) {
+    if (!(
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ENOENT"
+    )) {
+      throw error;
+    }
+    if (!allowCreate) {
+      throw new CredentialStoreError(
+        "Existing metadata provider credentials require their previous encryption key. Set PERIDOT_CREDENTIAL_KEY and restart Peridot once to migrate it.",
+        503,
+      );
+    }
+  }
+
+  const encodedKey = randomBytes(CREDENTIAL_KEY_BYTES).toString("base64");
+  try {
+    const handle = await open(keyFile, "wx", 0o600);
+    try {
+      await handle.writeFile(`${encodedKey}\n`, "utf8");
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    return encodedKey;
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "EEXIST") {
+      return readKeyFile(keyFile);
+    }
+    throw error;
+  }
+}
+
+async function writeLocalKey(
+  keyFile: string,
+  encodedKey: string,
+): Promise<void> {
+  await mkdir(path.dirname(keyFile), { recursive: true });
+  const handle = await open(keyFile, "w", 0o600);
+  try {
+    await handle.writeFile(`${encodedKey}\n`, "utf8");
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+}
+
 export class CredentialStore {
   private readonly key: Buffer | null;
 
-  constructor(encodedKey?: string | null) {
-    this.key = encodedKey ? decodeKey(encodedKey) : null;
+  constructor(encodedKey?: string | null, source = PERIDOT_CREDENTIAL_KEY) {
+    this.key = encodedKey ? decodeKey(encodedKey, source) : null;
+  }
+
+  static async fromConfig(
+    encodedKey: string | undefined,
+    databaseUrl: string,
+    storedCredentials: readonly string[] = [],
+  ): Promise<CredentialStore> {
+    if (encodedKey) {
+      const store = new CredentialStore(encodedKey);
+      try {
+        store.validateStoredCredentials(storedCredentials);
+      } catch {
+        throw new CredentialStoreError(
+          "PERIDOT_CREDENTIAL_KEY cannot decrypt the existing metadata provider credentials.",
+          503,
+        );
+      }
+      if (storedCredentials.length > 0) {
+        await writeLocalKey(localCredentialKeyFile(databaseUrl), encodedKey);
+      }
+      return store;
+    }
+
+    const keyFile = localCredentialKeyFile(databaseUrl);
+    const localKey = await loadOrCreateLocalKey(
+      keyFile,
+      storedCredentials.length === 0,
+    );
+    const store = new CredentialStore(localKey, LOCAL_KEY_FILE);
+    try {
+      store.validateStoredCredentials(storedCredentials);
+    } catch {
+      throw new CredentialStoreError(
+        "The local credential encryption key cannot decrypt the existing metadata provider credentials. Set PERIDOT_CREDENTIAL_KEY to the previous key and restart Peridot once to migrate it.",
+        503,
+      );
+    }
+    return store;
   }
 
   get configured(): boolean {
@@ -50,9 +170,17 @@ export class CredentialStore {
   ensureConfigured(): void {
     if (!this.key) {
       throw new CredentialStoreError(
-        "Set PERIDOT_CREDENTIAL_KEY before configuring a keyed metadata provider.",
+        "No credential encryption key is configured.",
         503,
       );
+    }
+  }
+
+  private validateStoredCredentials(
+    storedCredentials: readonly string[],
+  ): void {
+    for (const ciphertext of storedCredentials) {
+      this.decrypt(ciphertext);
     }
   }
 
@@ -77,7 +205,7 @@ export class CredentialStore {
   decrypt(value: string): string {
     if (!this.key) {
       throw new CredentialStoreError(
-        "Set PERIDOT_CREDENTIAL_KEY to use the configured metadata provider credential.",
+        "No credential encryption key is configured.",
         503,
       );
     }

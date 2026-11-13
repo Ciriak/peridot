@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from "#imports";
 import type { ArtistSummaryResponse } from "@peridot/contracts";
+import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import { artistLikeKey, artistRoute } from "../lib/library";
 import { useLikes } from "../composables/use-likes";
 import ArtistArtwork from "./ArtistArtwork.vue";
@@ -28,13 +29,17 @@ const {
         :aria-label="t('card.openArtist', { artist: artist.name })"
       >
         <ArtistArtwork :image-url="artist.imageUrl" />
-        <div class="min-w-0">
-          <h3 class="truncate text-sm font-medium">{{ artist.name }}</h3>
+        <div class="min-w-0 flex-1">
+          <h3 class="text-sm font-medium">
+            <ScrollingText class="w-full">{{ artist.name }}</ScrollingText>
+          </h3>
           <p
             v-if="artist.name !== artist.localName"
-            class="truncate text-xs text-muted-foreground"
+            class="text-xs text-muted-foreground"
           >
-            {{ t("card.localArtistName", { artist: artist.localName }) }}
+            <ScrollingText class="w-full">
+              {{ t("card.localArtistName", { artist: artist.localName }) }}
+            </ScrollingText>
           </p>
           <p class="text-xs text-muted-foreground">
             {{

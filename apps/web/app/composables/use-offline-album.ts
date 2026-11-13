@@ -2,7 +2,10 @@ import type { AlbumSummaryResponse } from "@peridot/contracts";
 import { computed, toValue, type MaybeRefOrGetter } from "vue";
 import { loadCollectionTracks } from "../lib/catalog-collections";
 import { isAuthenticationRedirectError } from "../lib/peridot-client";
-import { notifyOfflineAlbumFailed } from "../lib/toasts";
+import {
+  notifyOfflineAlbumFailed,
+  notifyOfflineAlbumSaved,
+} from "../lib/toasts";
 import { useLocalizedMessage } from "./use-localized-message";
 import { useOfflineTracks } from "./use-offline-tracks";
 import { useServer } from "./use-server";
@@ -66,7 +69,9 @@ export function useOfflineAlbum(
         albumId: currentAlbum.id,
       });
       const saved = await saveAlbum(currentAlbum.id, tracks);
-      if (!saved && error.value) {
+      if (saved) {
+        notifyOfflineAlbumSaved(currentAlbum.title);
+      } else if (error.value) {
         notifyOfflineAlbumFailed(currentAlbum.title, error.value);
       }
       return saved;

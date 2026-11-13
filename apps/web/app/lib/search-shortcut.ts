@@ -2,7 +2,7 @@ export interface SearchShortcutEvent {
   altKey?: boolean;
   ctrlKey: boolean;
   isComposing?: boolean;
-  key: string;
+  key?: string;
   metaKey: boolean;
   shiftKey?: boolean;
 }
@@ -14,6 +14,7 @@ export function isSearchShortcut(event: SearchShortcutEvent): boolean {
     !event.altKey &&
     !event.shiftKey &&
     !event.isComposing &&
+    typeof event.key === "string" &&
     event.key.toLowerCase() === "k" &&
     (event.ctrlKey || event.metaKey)
   );

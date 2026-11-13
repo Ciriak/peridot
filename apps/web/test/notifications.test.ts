@@ -6,8 +6,9 @@ import {
   serverConnectionRestored,
   topbarStatus,
 } from "../app/lib/server-connection.ts";
+import { offlineSaveSuccessToast } from "../app/lib/offline-toast.ts";
 import { sourceMutationToast } from "../app/lib/source-toast.ts";
-import { toastViewportClass } from "../app/lib/toast-position.ts";
+import { TOAST_VIEWPORT_CLASS } from "../app/lib/toast-position.ts";
 
 test("source mutations map to concise success toasts", () => {
   assert.deepEqual(sourceMutationToast("added", " D:\\Music "), {
@@ -32,19 +33,33 @@ test("source mutations map to concise success toasts", () => {
   });
 });
 
-test("toast placement clears the player only when the active layout renders one", () => {
-  for (const layout of [undefined, "default"]) {
-    const className = toastViewportClass(layout);
-    assert.match(className, /\bbottom-52\b/);
-    assert.match(className, /\bmd:bottom-32\b/);
-  }
+test("offline saves map tracks and albums to success toasts", () => {
+  assert.deepEqual(offlineSaveSuccessToast("track", " Night Drive "), {
+    titleMessage: { key: "toast.offlineSavedTitle" },
+    descriptionMessage: {
+      key: "toast.offlineSaved",
+      params: { track: "Night Drive" },
+    },
+    status: "success",
+    kind: "success",
+    duration: 5000,
+  });
+  assert.deepEqual(offlineSaveSuccessToast("album", "Blue Hours"), {
+    titleMessage: { key: "toast.albumOfflineSavedTitle" },
+    descriptionMessage: {
+      key: "toast.albumOfflineSaved",
+      params: { album: "Blue Hours" },
+    },
+    status: "success",
+    kind: "success",
+    duration: 5000,
+  });
+});
 
-  for (const layout of ["settings", false, "custom-fullscreen"]) {
-    const className = toastViewportClass(layout);
-    assert.match(className, /\bbottom-6\b/);
-    assert.match(className, /\bmd:bottom-6\b/);
-    assert.doesNotMatch(className, /\bbottom-52\b|\bmd:bottom-32\b/);
-  }
+test("toasts sit below the topbar at the top-right", () => {
+  assert.match(TOAST_VIEWPORT_CLASS, /\btop-20\b/);
+  assert.match(TOAST_VIEWPORT_CLASS, /\bmd:right-6\b/);
+  assert.doesNotMatch(TOAST_VIEWPORT_CLASS, /\bbottom-/);
 });
 
 test("server health checks require the exact Peridot health signature", async () => {
@@ -140,7 +155,7 @@ test("task and log updates use the shared realtime subscription", async () => {
   assert.match(toaster, /<ToastProvider/);
   assert.match(toaster, /toast-manager/);
   assert.match(list, /<ToastViewport/);
-  assert.match(list, /toastViewportClass\(route\.meta\.layout\)/);
+  assert.match(list, /TOAST_VIEWPORT_CLASS/);
   assert.match(list, /<ToastRoot/);
   assert.match(notifications, /useRealtime/);
   assert.match(notifications, /useServerConnection/);

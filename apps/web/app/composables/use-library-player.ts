@@ -422,7 +422,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
         if (!serverAddress || !sessionToken) {
           throw localizedError(
             "error.connectServer",
-            "Connect to your Peridot server and try again.",
+            "Connect to your server and try again.",
           );
         }
         const savedQueue = await replaceQueue(

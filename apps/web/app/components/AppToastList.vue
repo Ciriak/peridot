@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { useRoute } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import { Button } from "@peridot/ui/components/ui/button";
 import {
@@ -10,15 +9,12 @@ import {
   ToastViewport,
   useToastManager,
 } from "reka-ui";
-import { computed } from "vue";
 import { useLocalizedMessage } from "../composables/use-localized-message";
 import { icons } from "../lib/icons";
-import { toastViewportClass } from "../lib/toast-position";
+import { TOAST_VIEWPORT_CLASS } from "../lib/toast-position";
 import type { AppToastData, AppToastKind } from "../lib/toasts";
 
-const route = useRoute();
 const { t, translate } = useLocalizedMessage();
-const viewportClass = computed(() => toastViewportClass(route.meta.layout));
 const { toasts } = useToastManager<AppToastData>();
 
 function iconFor(kind: AppToastKind | undefined) {
@@ -35,7 +31,7 @@ function descriptionFor(toast: (typeof toasts.value)[number]) {
 </script>
 
 <template>
-  <ToastViewport :class="viewportClass">
+  <ToastViewport :class="TOAST_VIEWPORT_CLASS">
     <ToastRoot
       v-for="toast in toasts"
       :key="toast.id"

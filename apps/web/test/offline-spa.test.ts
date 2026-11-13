@@ -514,6 +514,11 @@ test("the fixed player shares saved-track availability across controls", async (
     /const savedTracks = useState<SavedOfflineTrack\[\]>\(\s*"player-offline-saved-tracks"/,
   );
   assert.match(
+    offlineTracks,
+    /const pendingTrackIds = useState<string\[\]>\(\s*"player-offline-pending-track-ids"/,
+    "Offline pending state is shared by every track control",
+  );
+  assert.match(
     player,
     /const currentTrackPlayable = computed\(\(\) =>\s+active\.value\s+\? isTrackPlayable\(active\.value,[\s\S]*?savedTrackIds: offlineSavedTrackIdSet\.value/,
   );
@@ -522,7 +527,7 @@ test("the fixed player shares saved-track availability across controls", async (
   assert.match(layout, /:disabled="!currentTrackPlayable"/);
 });
 
-test("offline saves show progress without success or removal toasts", async () => {
+test("offline saves show progress and success toasts without removal toasts", async () => {
   const [table, albumAction, toasts, locale] = await Promise.all([
     readFile(
       new URL("../app/components/TrackTable.vue", import.meta.url),
@@ -547,18 +552,26 @@ test("offline saves show progress without success or removal toasts", async () =
   );
   assert.match(
     table,
-    /if \(!\(await saveOffline\(track\)\)\) \{[\s\S]*?notifyOfflineTrackFailed/,
+    /if \(await saveOffline\(track\)\) \{\s*notifyOfflineTrackSaved\(track\.title\);\s*\} else \{[\s\S]*?notifyOfflineTrackFailed/,
   );
-  assert.doesNotMatch(table, /notifyTrackSavedOffline/);
-  assert.doesNotMatch(table, /notifyTrackOfflineCopyRemoved/);
-  assert.doesNotMatch(albumAction, /notifyAlbumSavedOffline/);
-  assert.doesNotMatch(toasts, /toast\.offlineSaved/);
-  assert.doesNotMatch(toasts, /toast\.albumOfflineSaved/);
+  assert.match(table, /notifyOfflineTrackSaved\(track\.title\)/);
+  assert.match(albumAction, /notifyOfflineAlbumSaved\(currentAlbum\.title\)/);
+  assert.match(toasts, /notifyOfflineTrackSaved/);
+  assert.match(toasts, /notifyOfflineAlbumSaved/);
   assert.doesNotMatch(toasts, /toast\.offlineRemoved/);
-  assert.equal(messages["toast.offlineSavedTitle"], undefined);
-  assert.equal(messages["toast.offlineSaved"], undefined);
-  assert.equal(messages["toast.albumOfflineSavedTitle"], undefined);
-  assert.equal(messages["toast.albumOfflineSaved"], undefined);
+  assert.equal(messages["toast.offlineSavedTitle"], "Saved for offline");
+  assert.equal(
+    messages["toast.offlineSaved"],
+    "{track} is available when your server is unreachable.",
+  );
+  assert.equal(
+    messages["toast.albumOfflineSavedTitle"],
+    "Album saved for offline",
+  );
+  assert.equal(
+    messages["toast.albumOfflineSaved"],
+    "{album} is available when your server is unreachable.",
+  );
   assert.equal(messages["toast.offlineRemovedTitle"], undefined);
   assert.equal(messages["toast.offlineRemoved"], undefined);
 });

@@ -7,6 +7,7 @@ import {
   onMounted,
   ref,
   useI18n,
+  watch,
 } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import { Button } from "@peridot/ui/components/ui/button";
@@ -28,18 +29,26 @@ import {
 } from "reka-ui";
 import { useServer } from "../../composables/use-server";
 import { useServerLogsQuery } from "../../composables/use-admin-queries";
+import { useLocalizedMessage } from "../../composables/use-localized-message";
 import { useRealtime } from "../../composables/use-realtime";
 import { useSession } from "../../composables/use-session";
+import { useServerConnection } from "../../composables/use-server-connection";
 import { useUser } from "../../composables/use-user";
 import { icons } from "../../lib/icons";
 import { clearAllOfflineTracks } from "../../lib/offline-audio";
 import { clearAllPeridotQueries } from "../../lib/query-persister";
-import { revokeSession } from "../../lib/peridot-client";
+import {
+  isAuthenticationRedirectError,
+  requestServerRestart,
+  revokeSession,
+} from "../../lib/peridot-client";
 
 definePageMeta({ layout: "settings" });
 
 const { t, d } = useI18n();
+const { errorMessage } = useLocalizedMessage();
 const { address } = useServer();
+const { status: connectionStatus } = useServerConnection();
 const { token } = useSession();
 const { user } = useUser();
 const realtime = useRealtime();
@@ -50,6 +59,11 @@ let unsubscribeLogs: (() => void) | undefined;
 const logLevels = ["trace", "debug", "info", "warn", "error", "fatal"];
 const activeLevels = ref<string[]>(["debug", "warn", "error", "fatal"]);
 const logSearch = ref("");
+const restartOpen = ref(false);
+const restarting = ref(false);
+const restartNotice = ref("");
+const restartError = ref("");
+let restartSawDisconnect = false;
 const disconnectOpen = ref(false);
 const disconnecting = ref(false);
 const logError = ref("");
@@ -92,6 +106,27 @@ function requestDisconnect() {
   disconnectOpen.value = true;
 }
 
+function requestRestart() {
+  restartNotice.value = "";
+  restartError.value = "";
+  restartOpen.value = true;
+}
+
+async function confirmRestart() {
+  if (restarting.value) return;
+  restarting.value = true;
+  restartSawDisconnect = false;
+  restartError.value = "";
+  try {
+    await requestServerRestart(address.value ?? "", token.value ?? "");
+    restartNotice.value = t("settings.server.restartRequested");
+  } catch (reason) {
+    restarting.value = false;
+    if (isAuthenticationRedirectError(reason)) return;
+    restartError.value = errorMessage(reason, "settings.server.restartError");
+  }
+}
+
 async function confirmDisconnect() {
   if (disconnecting.value) return;
   disconnecting.value = true;
@@ -131,6 +166,19 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   unsubscribeLogs?.();
+});
+
+watch(connectionStatus, (status) => {
+  if (!restarting.value) return;
+  if (status === "lost") {
+    restartSawDisconnect = true;
+    return;
+  }
+  if (status === "connected" && restartSawDisconnect) {
+    restarting.value = false;
+    restartSawDisconnect = false;
+    restartNotice.value = t("settings.server.restartComplete");
+  }
 });
 </script>
 
@@ -172,18 +220,62 @@ onBeforeUnmount(() => {
           type="button"
           variant="outline"
           size="sm"
-          :disabled="disconnecting"
-          @click="requestDisconnect"
+          :disabled="restarting || connectionStatus === 'lost'"
+          @click="requestRestart"
         >
-          <Icon :icon="icons.logout" aria-hidden="true" class="size-4" />
+          <Icon :icon="icons.restart" aria-hidden="true" class="size-4" />
           {{
-            disconnecting
-              ? t("settings.server.disconnecting")
-              : t("settings.server.disconnect")
+            restarting
+              ? t("settings.server.restarting")
+              : t("settings.server.restart")
           }}
         </Button>
       </div>
+      <p
+        v-if="restartNotice"
+        role="status"
+        aria-live="polite"
+        class="text-sm text-muted-foreground"
+      >
+        {{ restartNotice }}
+      </p>
+      <p v-if="restartError" role="alert" class="text-sm text-destructive">
+        {{ restartError }}
+      </p>
     </section>
+
+    <AlertDialogRoot v-model:open="restartOpen">
+      <AlertDialogPortal>
+        <AlertDialogOverlay class="fixed inset-0 z-50 bg-background/80" />
+        <AlertDialogContent
+          class="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-card p-6 text-card-foreground shadow-lg"
+        >
+          <AlertDialogTitle class="text-lg font-semibold">
+            {{ t("settings.server.restartTitle") }}
+          </AlertDialogTitle>
+          <AlertDialogDescription class="text-sm text-muted-foreground">
+            {{ t("settings.server.restartDescription") }}
+          </AlertDialogDescription>
+          <div class="mt-6 flex justify-end gap-3">
+            <AlertDialogCancel as-child>
+              <Button type="button" variant="outline">{{
+                t("common.cancel")
+              }}</Button>
+            </AlertDialogCancel>
+            <AlertDialogAction as-child @click="confirmRestart">
+              <Button type="button" :disabled="restarting">
+                <Icon :icon="icons.restart" aria-hidden="true" class="size-4" />
+                {{
+                  restarting
+                    ? t("settings.server.restarting")
+                    : t("settings.server.restart")
+                }}
+              </Button>
+            </AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      </AlertDialogPortal>
+    </AlertDialogRoot>
 
     <AlertDialogRoot v-model:open="disconnectOpen">
       <AlertDialogPortal>
@@ -311,5 +403,22 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </section>
+
+    <div id="server-disconnect" class="mt-auto flex justify-end">
+      <Button
+        type="button"
+        variant="destructive"
+        size="sm"
+        :disabled="disconnecting"
+        @click="requestDisconnect"
+      >
+        <Icon :icon="icons.logout" aria-hidden="true" class="size-4" />
+        {{
+          disconnecting
+            ? t("settings.server.disconnecting")
+            : t("settings.server.disconnect")
+        }}
+      </Button>
+    </div>
   </template>
 </template>

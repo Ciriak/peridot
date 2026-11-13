@@ -11,6 +11,7 @@ import {
   ContextMenuTrigger,
 } from "@peridot/ui/components/ui/context-menu";
 import { ProgressCircle } from "@peridot/ui/components/ui/progress-circle";
+import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import { computed } from "vue";
 import { useLikes } from "../composables/use-likes";
 import { useLibraryPlayer } from "../composables/use-library-player";
@@ -91,8 +92,8 @@ async function playAlbum() {
       <slot />
     </ContextMenuTrigger>
     <ContextMenuContent class="w-56">
-      <ContextMenuLabel class="truncate">
-        {{ album.title }}
+      <ContextMenuLabel>
+        <ScrollingText class="w-full">{{ album.title }}</ScrollingText>
       </ContextMenuLabel>
       <ContextMenuSeparator />
       <ContextMenuItem :disabled="!playable" @select="playAlbum">
@@ -138,7 +139,7 @@ async function playAlbum() {
       </ContextMenuItem>
       <ContextMenuItem as-child>
         <NuxtLink :to="albumRoute(album)">
-          <Icon :icon="icons.music" aria-hidden="true" />
+          <Icon :icon="icons.album" aria-hidden="true" />
           {{ t("context.openAlbum") }}
         </NuxtLink>
       </ContextMenuItem>

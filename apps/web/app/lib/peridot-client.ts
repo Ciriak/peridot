@@ -36,6 +36,7 @@ import type {
   RecordTrackPlayResponse,
   ReplaceQueueRequest,
   ResetMetadataResponse,
+  RestartServerResponse,
   ServerSettingsResponse,
   SourceListResponse,
   TaskListResponse,
@@ -112,7 +113,7 @@ export class PeridotApiError extends Error {
 export class PeridotNetworkError extends Error {
   readonly messageDescriptor: MessageDescriptor;
 
-  constructor(fallbackMessage = "Could not reach this Peridot server.") {
+  constructor(fallbackMessage = "Could not reach this server.") {
     super(fallbackMessage);
     this.name = "PeridotNetworkError";
     this.messageDescriptor = message("error.apiUnavailable");
@@ -188,7 +189,7 @@ async function requestJson<T>(
       );
     }
     throw new PeridotApiError(
-      "The Peridot server rejected the request.",
+      "The server rejected the request.",
       response.status,
       body?.error.code ?? "request_failed",
       body?.error.messageDescriptor ?? null,
@@ -344,6 +345,15 @@ export function fetchServerSettings(serverAddress: string, token: string) {
     serverAddress,
     "/api/admin/server",
     token,
+  );
+}
+
+export function requestServerRestart(serverAddress: string, token: string) {
+  return authenticatedRequestJson<RestartServerResponse>(
+    serverAddress,
+    "/api/admin/server/restart",
+    token,
+    { method: "POST" },
   );
 }
 

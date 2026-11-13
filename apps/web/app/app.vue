@@ -9,6 +9,7 @@ import { isSearchShortcut } from "./lib/search-shortcut";
 import AppNotifications from "./components/AppNotifications.vue";
 import AppSplashScreen from "./components/AppSplashScreen.vue";
 import AppToaster from "./components/AppToaster.vue";
+import LikedTitlesOfflineSync from "./components/LikedTitlesOfflineSync.vue";
 import { nextTick, onBeforeUnmount, onMounted } from "vue";
 
 const { t } = useI18n();
@@ -51,4 +52,5 @@ onBeforeUnmount(() =>
   </NuxtLayout>
   <AppToaster />
   <AppNotifications />
+  <LikedTitlesOfflineSync />
 </template>

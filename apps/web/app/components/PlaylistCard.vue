@@ -6,6 +6,7 @@ import type {
 } from "@peridot/contracts";
 import { Icon } from "@iconify/vue/offline";
 import { Button } from "@peridot/ui/components/ui/button";
+import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -177,7 +178,11 @@ async function removePlaylist() {
             :to="`/playlists/${playlist.id}`"
             class="block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <h3 class="truncate font-medium">{{ playlist.name }}</h3>
+            <h3 class="font-medium">
+              <ScrollingText class="w-full">
+                {{ playlist.name }}
+              </ScrollingText>
+            </h3>
           </NuxtLink>
           <p class="truncate text-xs text-muted-foreground">
             {{
@@ -219,8 +224,8 @@ async function removePlaylist() {
       </article>
     </ContextMenuTrigger>
     <ContextMenuContent class="w-56">
-      <ContextMenuLabel class="truncate">
-        {{ playlist.name }}
+      <ContextMenuLabel>
+        <ScrollingText class="w-full">{{ playlist.name }}</ScrollingText>
       </ContextMenuLabel>
       <ContextMenuSeparator />
       <ContextMenuItem

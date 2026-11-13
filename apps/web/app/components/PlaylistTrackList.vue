@@ -4,6 +4,7 @@ import type { PlaylistEntryResponse, TrackResponse } from "@peridot/contracts";
 import { Icon } from "@iconify/vue/offline";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
+import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import { useSortable } from "@vueuse/integrations/useSortable";
 import { computed, ref, watch } from "vue";
 import { useLikes } from "../composables/use-likes";
@@ -150,17 +151,21 @@ function toggleEntryPlayback(entry: PlaylistEntryResponse) {
         v-else
         class="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground"
       >
-        <Icon :icon="icons.music" aria-hidden="true" class="size-5" />
+        <Icon
+          :icon="entry.album ? icons.album : icons.music"
+          aria-hidden="true"
+          class="size-5"
+        />
       </div>
       <div class="min-w-0 flex-1">
         <div class="flex min-w-0 flex-wrap items-center gap-2">
-          <span
-            class="truncate"
+          <ScrollingText
+            class="min-w-0 flex-1"
             :class="!playable(entry) && 'opacity-60'"
             :title="entry.title"
           >
             {{ entry.title }}
-          </span>
+          </ScrollingText>
           <Icon
             v-if="isCurrent(entry)"
             :icon="icons.waveform"
@@ -171,23 +176,22 @@ function toggleEntryPlayback(entry: PlaylistEntryResponse) {
             {{ t("playlistTracks.unavailable") }}
           </Badge>
         </div>
-        <p class="truncate text-xs text-muted-foreground">
+        <ScrollingText class="w-full text-xs text-muted-foreground">
           <TrackArtistLinks v-if="entry.track" :artists="entry.track.artists" />
           <template v-else>{{ entry.artist }}</template>
-        </p>
+        </ScrollingText>
       </div>
       <NuxtLink
         v-if="entry.album && entry.track"
         :to="trackAlbumRoute(entry.track)"
-        class="hidden w-48 shrink-0 truncate text-muted-foreground hover:text-foreground hover:underline md:block"
+        class="hidden w-48 shrink-0 text-muted-foreground hover:text-foreground hover:underline md:block"
       >
-        {{ entry.album }}
+        <ScrollingText class="w-full">{{ entry.album }}</ScrollingText>
       </NuxtLink>
-      <span
-        v-else
-        class="hidden w-48 shrink-0 truncate text-muted-foreground md:block"
-      >
-        {{ entry.album || "—" }}
+      <span v-else class="hidden w-48 shrink-0 text-muted-foreground md:block">
+        <ScrollingText class="w-full">
+          {{ entry.album || "—" }}
+        </ScrollingText>
       </span>
       <span class="w-16 shrink-0 text-right tabular-nums text-muted-foreground">
         {{ formatTrackDuration(entry.durationMs) }}

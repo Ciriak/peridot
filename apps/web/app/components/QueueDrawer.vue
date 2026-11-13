@@ -4,6 +4,7 @@ import { Icon } from "@iconify/vue/offline";
 import type { TrackResponse } from "@peridot/contracts";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
+import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import { useSortable } from "@vueuse/integrations/useSortable";
 import {
   computed,
@@ -179,11 +180,13 @@ onBeforeUnmount(() => document.removeEventListener("keydown", handleKeydown));
                 />
               </Button>
             </TrackArtwork>
-            <div class="min-w-0">
-              <p class="truncate text-sm font-medium">{{ active.title }}</p>
-              <p class="truncate text-xs text-muted-foreground">
+            <div class="min-w-0 flex-1">
+              <ScrollingText class="w-full text-sm font-medium">
+                {{ active.title }}
+              </ScrollingText>
+              <ScrollingText class="w-full text-xs text-muted-foreground">
                 <TrackArtistLinks :artists="trackArtistNames(active)" />
-              </p>
+              </ScrollingText>
             </div>
           </div>
           <p v-else class="text-sm text-muted-foreground">
@@ -267,10 +270,12 @@ onBeforeUnmount(() => document.removeEventListener("keydown", handleKeydown));
                 </Button>
               </TrackArtwork>
               <div class="min-w-0 flex-1">
-                <p class="truncate text-sm font-medium">{{ track.title }}</p>
-                <p class="truncate text-xs text-muted-foreground">
+                <ScrollingText class="w-full text-sm font-medium">
+                  {{ track.title }}
+                </ScrollingText>
+                <ScrollingText class="w-full text-xs text-muted-foreground">
                   <TrackArtistLinks :artists="trackArtistNames(track)" />
-                </p>
+                </ScrollingText>
               </div>
               <Button
                 variant="ghost"

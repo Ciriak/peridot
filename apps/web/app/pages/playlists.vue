@@ -55,9 +55,6 @@ onMounted(() => void load());
       <h1 class="text-2xl font-semibold tracking-tight">
         {{ t("navigation.playlists") }}
       </h1>
-      <p class="text-sm text-muted-foreground">
-        {{ t("page.playlists.description") }}
-      </p>
     </div>
     <Button @click="createOpen = true">
       <Icon :icon="icons.plus" aria-hidden="true" class="size-4" />

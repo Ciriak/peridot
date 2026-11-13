@@ -2,6 +2,7 @@
 import { useI18n } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import { Button } from "@peridot/ui/components/ui/button";
+import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import type { AlbumSummaryResponse } from "@peridot/contracts";
 import { albumRoute, trackCoverUrl } from "../lib/library";
 import { icons } from "../lib/icons";
@@ -114,7 +115,7 @@ async function toggleAlbumPlayback() {
               />
               <Icon
                 v-else
-                :icon="icons.music"
+                :icon="icons.album"
                 :class="compact ? 'size-4' : 'size-10'"
               />
             </div>
@@ -145,7 +146,7 @@ async function toggleAlbumPlayback() {
             />
           </Button>
         </div>
-        <div class="min-w-0" :class="compact ? 'pr-6' : 'pr-12'">
+        <div class="min-w-0 flex-1" :class="compact ? 'pr-6' : 'pr-12'">
           <NuxtLink
             :to="albumRoute(album)"
             class="block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -157,19 +158,18 @@ async function toggleAlbumPlayback() {
             "
             @click="emit('open')"
           >
-            <h3
-              class="truncate font-medium"
-              :class="compact ? 'text-xs' : 'text-sm'"
-            >
-              {{ album.title }}
+            <h3 :class="compact ? 'text-xs' : 'text-sm'" class="font-medium">
+              <ScrollingText class="w-full">
+                {{ album.title }}
+              </ScrollingText>
             </h3>
           </NuxtLink>
-          <p class="truncate text-xs text-muted-foreground">
+          <ScrollingText class="w-full text-xs text-muted-foreground">
             <TrackArtistLinks :artists="album.artists" /> ·
             {{
               t("count.track", { count: album.trackCount }, album.trackCount)
             }}
-          </p>
+          </ScrollingText>
         </div>
       </div>
       <LikeButton

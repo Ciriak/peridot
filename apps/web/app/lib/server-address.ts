@@ -7,7 +7,7 @@ export function normalizeServerAddress(value: string): string {
   if (!trimmed) {
     throw localizedError(
       "error.serverAddressRequired",
-      "Enter the address of your Peridot server.",
+      "Enter the address of your server.",
     );
   }
   const candidate = /^[a-z][a-z\d+.-]*:\/\//i.test(trimmed)

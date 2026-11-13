@@ -4,6 +4,7 @@ import { Icon } from "@iconify/vue/offline";
 import type { ArtistSummaryResponse } from "@peridot/contracts";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
+import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { computed, onMounted, ref, watch } from "vue";
 import AlbumCard from "../../components/AlbumCard.vue";
@@ -228,20 +229,22 @@ onMounted(() => {
         class="flex flex-col gap-6 rounded-lg border bg-card p-6 text-card-foreground sm:flex-row sm:items-end"
       >
         <ArtistArtwork :image-url="artist.imageUrl" size="lg" />
-        <div class="min-w-0 space-y-3">
+        <div class="min-w-0 flex-1 space-y-3">
           <p
             class="text-xs font-medium uppercase tracking-wide text-muted-foreground"
           >
             {{ t("page.artist.label") }}
           </p>
           <h1 id="artist-heading" class="text-3xl font-semibold tracking-tight">
-            {{ artist.name }}
+            <ScrollingText class="w-full">{{ artist.name }}</ScrollingText>
           </h1>
           <p
             v-if="artist.name !== artist.localName"
             class="text-sm text-muted-foreground"
           >
-            {{ t("page.artist.localName", { artist: artist.localName }) }}
+            <ScrollingText class="w-full">
+              {{ t("page.artist.localName", { artist: artist.localName }) }}
+            </ScrollingText>
           </p>
           <div class="flex flex-wrap items-center gap-3">
             <Button :disabled="!artistPlayable" @click="playWholeArtist">

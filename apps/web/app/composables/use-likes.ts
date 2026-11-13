@@ -1,4 +1,4 @@
-import { useI18n } from "#imports";
+import { useI18n, useState } from "#imports";
 import type {
   AlbumLikeResponse,
   ArtistLikeResponse,
@@ -21,7 +21,7 @@ import {
   persistQueryKey,
   removePersistedQueries,
 } from "../lib/query-persister";
-import { queryKeys } from "../lib/query-keys";
+import { peridotScopeKey, queryKeys } from "../lib/query-keys";
 import { notifyLikeFailed, notifyLikeSucceeded } from "../lib/toasts";
 import { useLocalizedMessage } from "./use-localized-message";
 import { useQueryScope } from "./use-query-scope";
@@ -152,6 +152,7 @@ export function useLikes() {
   const { status } = useServerConnection();
   const { errorMessage } = useLocalizedMessage();
   const queryClient = useQueryClient();
+  const likesRevision = useState("likes-revision", () => 0);
   const pendingTargets = ref<string[]>([]);
   const mutationError = ref<string | null>(null);
   const queryKey = computed(() =>
@@ -229,7 +230,7 @@ export function useLikes() {
       if (!scope.value || !token.value) {
         throw localizedError(
           "error.connectServer",
-          "Connect to your Peridot server and try again.",
+          "Connect to your server and try again.",
         );
       }
       if (variables.liked) {
@@ -273,8 +274,14 @@ export function useLikes() {
           response,
         ),
       );
+      likesRevision.value += 1;
       if (!variables.liked) notifyLikeSucceeded(variables.target);
       await persistLikes();
+      if (scope.value) {
+        void queryClient.invalidateQueries({
+          queryKey: [...peridotScopeKey(scope.value), "catalog", "tracks"],
+        });
+      }
     },
     async onError(reason, variables, context) {
       if (queryKey.value && context?.previous) {
@@ -340,6 +347,7 @@ export function useLikes() {
     loading,
     loaded,
     error,
+    likesRevision,
     load,
     clear,
     toggle,

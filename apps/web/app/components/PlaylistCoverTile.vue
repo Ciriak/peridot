@@ -23,6 +23,6 @@ const { artworkUrl, failed } = useCachedArtwork(() => props.url);
       class="size-full object-cover"
       @error="failed = true"
     />
-    <Icon v-else :icon="icons.music" aria-hidden="true" class="size-4" />
+    <Icon v-else :icon="icons.album" aria-hidden="true" class="size-4" />
   </div>
 </template>

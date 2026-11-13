@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { test } from "node:test";
 import {
@@ -263,8 +263,8 @@ test("administrators can manage ordered metadata providers", async () => {
   }
 });
 
-test("Discogs token storage requires the credential encryption key", async () => {
-  const context = await createTestContext({ credentialEncryptionKey: null });
+test("Discogs token storage creates a local encryption key automatically", async () => {
+  const context = await createTestContext();
   try {
     const response = await context.app.inject({
       method: "POST",
@@ -276,10 +276,11 @@ test("Discogs token storage requires the credential encryption key", async () =>
         credential: "discogs-token",
       },
     });
-    assert.equal(response.statusCode, 503);
-    assert.deepEqual(response.json().error.messageDescriptor, {
-      key: "api.message.credentialStoreError",
-    });
+    assert.equal(response.statusCode, 201);
+    const storedKey = (
+      await readFile(context.credentialKeyFile, "utf8")
+    ).trim();
+    assert.equal(Buffer.from(storedKey, "base64").length, 32);
   } finally {
     await context.close();
   }

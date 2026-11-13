@@ -8,6 +8,7 @@ import type {
 import { Icon } from "@iconify/vue/offline";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
+import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -20,6 +21,7 @@ import {
   ContextMenuTrigger,
 } from "@peridot/ui/components/ui/context-menu";
 import { Input } from "@peridot/ui/components/ui/input";
+import { ProgressCircle } from "@peridot/ui/components/ui/progress-circle";
 import { useQueryClient } from "@tanstack/vue-query";
 import {
   DialogContent,
@@ -54,6 +56,8 @@ import {
   notifyMetadataMatched,
   notifyMetadataReverted,
   notifyMetadataUpdateFailed,
+  notifyOfflineTrackFailed,
+  notifyOfflineTrackSaved,
 } from "../lib/toasts";
 import AddTrackToPlaylistDialog from "./AddTrackToPlaylistDialog.vue";
 
@@ -68,7 +72,16 @@ const { scope } = useQueryScope();
 const queryClient = useQueryClient();
 const { status: serverStatus } = useServerConnection();
 const serverLost = computed(() => serverStatus.value === "lost");
-const { savedTracks } = useOfflineTracks();
+const {
+  savedTracks,
+  canSave: canSaveOffline,
+  error: offlineError,
+  isSaved: isSavedOffline,
+  isPending: isOfflinePending,
+  progressFor: offlineProgressFor,
+  save: saveOffline,
+  remove: removeOffline,
+} = useOfflineTracks();
 const playable = computed(() =>
   isTrackPlayable(props.track, {
     serverLost: serverLost.value,
@@ -107,6 +120,37 @@ async function download() {
   } finally {
     downloading.value = false;
   }
+}
+
+async function toggleOffline() {
+  if (isOfflinePending(props.track.id)) return;
+  if (isSavedOffline(props.track.id)) {
+    const removed = await removeOffline(props.track.id);
+    if (!removed) {
+      notifyOfflineTrackFailed(
+        props.track.title,
+        offlineError.value ?? t("error.apiUnavailable"),
+      );
+    }
+    return;
+  }
+  if (await saveOffline(props.track)) {
+    notifyOfflineTrackSaved(props.track.title);
+  } else {
+    notifyOfflineTrackFailed(
+      props.track.title,
+      offlineError.value ?? t("error.apiUnavailable"),
+    );
+  }
+}
+
+function offlineActionLabel(): string {
+  if (isOfflinePending(props.track.id) && !isSavedOffline(props.track.id)) {
+    return t("context.makingAvailableOffline");
+  }
+  return isSavedOffline(props.track.id)
+    ? t("context.removeOfflineCopy")
+    : t("context.makeAvailableOffline");
 }
 
 async function addNext() {
@@ -228,7 +272,9 @@ async function revertMetadata() {
       <slot />
     </ContextMenuTrigger>
     <ContextMenuContent class="w-56">
-      <ContextMenuLabel class="truncate">{{ track.title }}</ContextMenuLabel>
+      <ContextMenuLabel>
+        <ScrollingText class="w-full">{{ track.title }}</ScrollingText>
+      </ContextMenuLabel>
       <ContextMenuSeparator />
       <ContextMenuItem :disabled="!playable" @select="emit('play')">
         <Icon :icon="icons.play" aria-hidden="true" />
@@ -264,6 +310,29 @@ async function revertMetadata() {
         }}
       </ContextMenuItem>
       <ContextMenuItem
+        :disabled="
+          isOfflinePending(track.id) ||
+          (!isSavedOffline(track.id) && (!canSaveOffline || !track.available))
+        "
+        :aria-busy="isOfflinePending(track.id)"
+        @select="toggleOffline"
+      >
+        <ProgressCircle
+          v-if="isOfflinePending(track.id) && !isSavedOffline(track.id)"
+          :value="offlineProgressFor(track.id) ?? null"
+          :label="offlineActionLabel()"
+          size="sm"
+        />
+        <Icon
+          v-else
+          :icon="
+            isSavedOffline(track.id) ? icons.cloudCheck : icons.cloudDownload
+          "
+          aria-hidden="true"
+        />
+        {{ offlineActionLabel() }}
+      </ContextMenuItem>
+      <ContextMenuItem
         :disabled="downloading || serverLost || !track.available"
         @select="download"
       >
@@ -273,12 +342,12 @@ async function revertMetadata() {
       <ContextMenuSeparator />
       <ContextMenuItem v-if="albumRouteValue" as-child>
         <NuxtLink :to="albumRouteValue">
-          <Icon :icon="icons.music" aria-hidden="true" />
+          <Icon :icon="icons.album" aria-hidden="true" />
           {{ t("context.goToAlbum") }}
         </NuxtLink>
       </ContextMenuItem>
       <ContextMenuItem v-else disabled>
-        <Icon :icon="icons.music" aria-hidden="true" />
+        <Icon :icon="icons.album" aria-hidden="true" />
         {{ t("context.goToAlbum") }}
       </ContextMenuItem>
       <ContextMenuItem v-if="artists.length === 1" as-child>
@@ -396,18 +465,20 @@ async function revertMetadata() {
           >
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-2">
-                <p class="truncate text-sm font-medium">
+                <ScrollingText class="min-w-0 flex-1 text-sm font-medium">
                   {{ candidate.title }}
-                </p>
+                </ScrollingText>
                 <Badge variant="secondary" class="shrink-0">
                   {{ candidate.providerName }}
                 </Badge>
               </div>
-              <p class="truncate text-sm text-muted-foreground">
-                {{ candidate.artist }}
-                <template v-if="candidate.album">
-                  · {{ candidate.album }}
-                </template>
+              <p class="min-w-0 text-sm text-muted-foreground">
+                <ScrollingText class="w-full">
+                  {{ candidate.artist }}
+                  <template v-if="candidate.album">
+                    · {{ candidate.album }}
+                  </template>
+                </ScrollingText>
               </p>
               <p
                 v-if="candidate.details.length"

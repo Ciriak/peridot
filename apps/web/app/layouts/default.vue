@@ -6,6 +6,7 @@ import logoNop from "@peridot/ui/assets/brand/logo-nop.png?inline";
 import { Button } from "@peridot/ui/components/ui/button";
 import { Input } from "@peridot/ui/components/ui/input";
 import { Kbd, KbdGroup } from "@peridot/ui/components/ui/kbd";
+import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import { Slider } from "@peridot/ui/components/ui/slider";
 import {
   computed,
@@ -98,7 +99,7 @@ const navigation = [
     to: "/playlists",
     icon: icons.playlist,
   },
-  { labelKey: "navigation.albums", to: "/albums", icon: icons.music },
+  { labelKey: "navigation.albums", to: "/albums", icon: icons.album },
   { labelKey: "navigation.artists", to: "/artists", icon: icons.user },
 ];
 const currentPath = computed(() => route.path);
@@ -443,26 +444,37 @@ onBeforeUnmount(stopLoadingRay);
             class="size-full object-cover"
             @error="coverFailed = true"
           />
-          <Icon v-else :icon="icons.music" aria-hidden="true" class="size-8" />
+          <Icon
+            v-else
+            :icon="active?.albumId ? icons.album : icons.music"
+            aria-hidden="true"
+            class="size-8"
+          />
         </div>
-        <div class="min-w-0">
+        <div class="min-w-0 flex-1">
           <TrackContextMenu
             v-if="active"
             :track="active"
             @play="playActiveTrack"
           >
             <div class="min-w-0">
-              <NuxtLink
-                v-if="currentTrackTitleRoute"
-                :to="currentTrackTitleRoute"
-                class="block truncate rounded-sm text-sm font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                :class="!currentTrackPlayable && 'opacity-60'"
+              <ScrollingText
+                :key="`${active.id}:${active.title}`"
+                mode="always"
+                class="w-full"
               >
-                {{ active.title }}
-              </NuxtLink>
-              <p v-else class="select-none truncate text-sm font-medium">
-                {{ active.title }}
-              </p>
+                <NuxtLink
+                  v-if="currentTrackTitleRoute"
+                  :to="currentTrackTitleRoute"
+                  class="inline-block rounded-sm text-sm font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  :class="!currentTrackPlayable && 'opacity-60'"
+                >
+                  {{ active.title }}
+                </NuxtLink>
+                <p v-else class="select-none text-sm font-medium">
+                  {{ active.title }}
+                </p>
+              </ScrollingText>
               <div class="flex min-w-0 items-center gap-1">
                 <p
                   v-if="error"
@@ -471,12 +483,13 @@ onBeforeUnmount(stopLoadingRay);
                 >
                   {{ error }}
                 </p>
-                <p
+                <ScrollingText
                   v-else
-                  class="min-w-0 flex-1 truncate text-xs text-muted-foreground"
+                  mode="always"
+                  class="min-w-0 flex-1 text-xs text-muted-foreground"
                 >
                   <TrackArtistLinks :artists="trackArtistNames(active)" />
-                </p>
+                </ScrollingText>
                 <LikeButton
                   class="shrink-0"
                   :liked="

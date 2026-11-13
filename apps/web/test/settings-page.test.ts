@@ -441,15 +441,49 @@ test("server settings no longer contain source or library status management", as
   assert.match(page, /settings\.server\.categories/);
 });
 
+test("server settings confirm before restarting the connected server", async () => {
+  const page = await readSource("../app/pages/settings/server.vue");
+  const serverCard = page.slice(
+    page.indexOf('<section aria-labelledby="server-heading"'),
+    page.indexOf('<AlertDialogRoot v-model:open="restartOpen">'),
+  );
+  const restartDialog = page.slice(
+    page.indexOf('<AlertDialogRoot v-model:open="restartOpen">'),
+    page.indexOf('<AlertDialogRoot v-model:open="disconnectOpen">'),
+  );
+
+  assert.match(page, /requestServerRestart/);
+  assert.match(serverCard, /@click="requestRestart"/);
+  assert.match(
+    serverCard,
+    /:disabled="restarting \|\| connectionStatus === 'lost'"/,
+  );
+  assert.match(page, /useServerConnection/);
+  assert.match(page, /status === "lost"/);
+  assert.match(page, /status === "connected" && restartSawDisconnect/);
+  assert.match(page, /settings\.server\.restartComplete/);
+  assert.doesNotMatch(serverCard, /@click="confirmRestart"/);
+  assert.match(restartDialog, /settings\.server\.restartTitle/);
+  assert.match(restartDialog, /settings\.server\.restartDescription/);
+  assert.match(restartDialog, /<AlertDialogCancel as-child>/);
+  assert.match(restartDialog, /@click="confirmRestart"/);
+  assert.match(page, /settings\.server\.restartRequested/);
+});
+
 test("server settings confirm before disconnecting from the connected server", async () => {
   const page = await readSource("../app/pages/settings/server.vue");
   const serverCard = page.slice(
     page.indexOf('<section aria-labelledby="server-heading"'),
-    page.indexOf('<AlertDialogRoot v-model:open="disconnectOpen">'),
+    page.indexOf('<AlertDialogRoot v-model:open="restartOpen">'),
+  );
+  const disconnectControl = page.slice(
+    page.indexOf(
+      '<div id="server-disconnect" class="mt-auto flex justify-end">',
+    ),
+    page.indexOf("</template>", page.indexOf('id="server-disconnect"')),
   );
   const disconnectDialog = page.slice(
     page.indexOf('<AlertDialogRoot v-model:open="disconnectOpen">'),
-    page.indexOf('<section aria-labelledby="server-log-heading"'),
   );
 
   assert.match(page, /revokeSession/);
@@ -457,9 +491,14 @@ test("server settings confirm before disconnecting from the connected server", a
     serverCard,
     /class="flex flex-col gap-4 rounded-lg border bg-card p-6 text-card-foreground sm:flex-row sm:items-center sm:justify-between"/,
   );
-  assert.match(serverCard, /:disabled="disconnecting"/);
-  assert.match(serverCard, /@click="requestDisconnect"/);
-  assert.doesNotMatch(serverCard, /@click="confirmDisconnect"/);
+  assert.doesNotMatch(serverCard, /@click="requestDisconnect"/);
+  assert.match(disconnectControl, /variant="destructive"/);
+  assert.match(
+    disconnectControl,
+    /variant="destructive"[\s\S]*?:disabled="disconnecting"/,
+  );
+  assert.match(disconnectControl, /@click="requestDisconnect"/);
+  assert.doesNotMatch(disconnectControl, /@click="confirmDisconnect"/);
   assert.match(disconnectDialog, /settings\.server\.disconnectTitle/);
   assert.match(disconnectDialog, /settings\.server\.disconnectDescription/);
   assert.match(disconnectDialog, /<AlertDialogCancel as-child>/);

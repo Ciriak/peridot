@@ -228,6 +228,74 @@ test("ProgressCircle exports its component and variants", async () => {
   assert.ok(progressCircle.ProgressCircle);
   assert.equal(typeof progressCircle.progressCircleVariants, "function");
 });
+test("ScrollingText preserves arbitrary slotted links and its activation mode", async () => {
+  const { default: component } = await server.ssrLoadModule(
+    "/src/components/ui/scrolling-text/ScrollingText.vue",
+  );
+  const html = await renderToString(
+    createSSRApp({
+      render: () =>
+        h(
+          component,
+          { class: "w-full", mode: "always" },
+          {
+            default: () =>
+              h(
+                "a",
+                {
+                  class: "inline-block",
+                  href: "/artists/aurora",
+                  "data-track-id": "track-1",
+                },
+                "A very long track title",
+              ),
+          },
+        ),
+    }),
+  );
+
+  assert.match(html, /data-slot="scrolling-text"/);
+  assert.match(html, /data-mode="always"/);
+  assert.match(html, /class="[^"]*overflow-hidden[^"]*w-full/);
+  assert.match(html, /class="inline-block w-max"/);
+  assert.match(
+    html,
+    /<a class="inline-block" href="\/artists\/aurora" data-track-id="track-1">A very long track title<\/a>/,
+  );
+  assert.equal(
+    (html.match(/A very long track title/g) ?? []).length,
+    1,
+    "Slotted content is rendered once rather than duplicated for the animation",
+  );
+});
+test("ScrollingText calculations enforce its overflow threshold and timing defaults", async () => {
+  const timing = await server.ssrLoadModule("/src/lib/scrolling-text.ts");
+
+  assert.equal(timing.SCROLLING_TEXT_SPEED_PX_PER_SECOND, 30);
+  assert.equal(timing.SCROLLING_TEXT_HOLD_MS, 1500);
+  assert.equal(timing.scrollingTextOverflowDistance(320, 200), 120);
+  assert.equal(timing.scrollingTextOverflowDistance(200, 200), 0);
+  assert.equal(timing.scrollingTextOverflowDistance(201, 200), 0);
+  assert.equal(timing.scrollingTextOverflowDistance(Number.NaN, 200), 0);
+  assert.equal(timing.scrollingTextTravelDuration(120), 4000);
+  assert.equal(timing.scrollingTextLoopDuration(120), 11000);
+  assert.equal(timing.scrollingTextLoopDuration(0), 0);
+  assert.deepEqual(
+    timing
+      .scrollingTextKeyframes(120)
+      .map((frame: { offset: number; transform: string }) => [
+        frame.offset,
+        frame.transform,
+      ]),
+    [
+      [0, "translateX(0)"],
+      [4 / 11, "translateX(-120px)"],
+      [5.5 / 11, "translateX(-120px)"],
+      [9.5 / 11, "translateX(0)"],
+      [1, "translateX(0)"],
+    ],
+  );
+});
 test("gradient keeps primary blobs decorative and content above them", async () => {
   const html = await render(
     "Gradient",

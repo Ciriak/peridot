@@ -4,6 +4,7 @@ import { Icon } from "@iconify/vue/offline";
 import type { AlbumSummaryResponse } from "@peridot/contracts";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
+import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { computed, onMounted, ref, watch } from "vue";
 import LikeButton from "../../components/LikeButton.vue";
@@ -250,20 +251,20 @@ onMounted(() => {
           class="size-full object-cover"
           @error="coverFailed = true"
         />
-        <Icon v-else :icon="icons.music" class="size-16" />
+        <Icon v-else :icon="icons.album" class="size-16" />
       </div>
-      <div class="min-w-0 space-y-3 pr-12">
+      <div class="min-w-0 flex-1 space-y-3 pr-12">
         <p
           class="text-xs font-medium uppercase tracking-wide text-muted-foreground"
         >
           {{ t("page.album.label") }}
         </p>
         <h1 id="album-heading" class="text-3xl font-semibold tracking-tight">
-          {{ album.title }}
+          <ScrollingText class="w-full">{{ album.title }}</ScrollingText>
         </h1>
-        <p class="text-sm text-muted-foreground">
+        <ScrollingText class="w-full text-sm text-muted-foreground">
           <TrackArtistLinks :artists="album.artists" />
-        </p>
+        </ScrollingText>
         <div class="flex flex-wrap items-center gap-3">
           <Button
             size="icon-lg"

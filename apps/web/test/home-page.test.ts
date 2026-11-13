@@ -22,9 +22,8 @@ test("home suggests albums and tracks from the catalog", async () => {
   assert.match(homePage, /useCatalogTrackQuery/);
   assert.match(homePage, /selectHomeAlbumSuggestions/);
   assert.match(homePage, /selectHomeTrackSuggestions/);
-  assert.match(homePage, /likedAlbumIds/);
-  assert.match(homePage, /likedTrackIds/);
   assert.match(homePage, /likedArtistKeys/);
+  assert.doesNotMatch(homePage, /likedAlbumIds|likedTrackIds/);
   assert.match(homePage, /limit: HOME_CANDIDATE_LIMIT/g);
   assert.match(homePage, /<AlbumCard/);
   assert.match(homePage, /:album="album"/);

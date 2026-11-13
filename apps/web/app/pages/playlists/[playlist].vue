@@ -11,6 +11,7 @@ import type { PlaylistEntryResponse, TrackResponse } from "@peridot/contracts";
 import { Icon } from "@iconify/vue/offline";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
+import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { computed, onMounted, ref } from "vue";
 import AddTracksToPlaylistDialog from "../../components/AddTracksToPlaylistDialog.vue";
@@ -205,14 +206,14 @@ onMounted(() => void load());
       <div class="w-40 shrink-0">
         <PlaylistCover :cover-urls="coverUrls" />
       </div>
-      <div class="min-w-0 space-y-3 pr-12">
+      <div class="min-w-0 flex-1 space-y-3 pr-12">
         <p
           class="text-xs font-medium uppercase tracking-wide text-muted-foreground"
         >
           {{ t("page.playlist.label") }}
         </p>
         <h1 id="playlist-heading" class="text-3xl font-semibold tracking-tight">
-          {{ playlist.name }}
+          <ScrollingText class="w-full">{{ playlist.name }}</ScrollingText>
         </h1>
         <div class="flex flex-wrap items-center gap-3">
           <Button

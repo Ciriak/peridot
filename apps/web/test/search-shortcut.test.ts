@@ -31,6 +31,7 @@ test("search shortcut accepts Ctrl or Command plus K", () => {
 
 test("search shortcut ignores incomplete or modified key combinations", () => {
   assert.equal(isSearchShortcut(shortcutEvent()), false);
+  assert.equal(isSearchShortcut(shortcutEvent({ key: undefined })), false);
   assert.equal(
     isSearchShortcut(shortcutEvent({ key: "j", ctrlKey: true })),
     false,

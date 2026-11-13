@@ -42,6 +42,7 @@ export interface BuildAppOptions {
   database?: Database;
   logger?: boolean;
   logBuffer?: ServerLogBuffer;
+  restartServer?: () => void;
   metadataFetch?: typeof fetch;
   metadataRequestIntervalMs?: number;
   discogsFetch?: typeof fetch;
@@ -52,7 +53,24 @@ export async function buildApp(options: BuildAppOptions = {}) {
   const config = options.config ?? (await loadServerConfig());
   const database = options.database ?? createDatabase(config.databaseUrl);
   const ownsDatabase = options.database === undefined;
-  const credentials = new CredentialStore(config.credentialEncryptionKey);
+  let credentials: CredentialStore;
+  try {
+    const storedCredentialCiphertexts = (
+      await database.orm.MetadataProvider.where((provider) =>
+        provider.credentialCiphertext.isNotNull(),
+      ).all()
+    ).flatMap((provider) =>
+      provider.credentialCiphertext ? [provider.credentialCiphertext] : [],
+    );
+    credentials = await CredentialStore.fromConfig(
+      config.credentialEncryptionKey,
+      config.databaseUrl,
+      storedCredentialCiphertexts,
+    );
+  } catch (error) {
+    if (ownsDatabase) await database.close();
+    throw error;
+  }
   const registry = new MetadataResolverRegistry()
     .register(
       new MusicBrainzResolver(
@@ -175,6 +193,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
             realtime.disconnectSession(sessionId);
           }
         },
+        options.restartServer,
       );
     },
     (request) => playbackTokens.authorizeRequest(request.method, request.url),
