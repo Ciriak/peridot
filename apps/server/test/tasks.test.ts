@@ -228,6 +228,53 @@ test("task service runs FIFO, coalesces queued duplicates, and reports progress"
   }
 });
 
+test("task failures and restart interruptions are visible in server logs", async () => {
+  const context = await createTestContext();
+  await context.app.close();
+  const logs: Array<{ level: string; message: string }> = [];
+  const tasks = new TaskService(context.database, undefined, (level, message) =>
+    logs.push({ level, message }),
+  );
+  try {
+    await context.database.orm.Task.create({
+      kind: "library_scan",
+      status: "running",
+      title: "Interrupted library scan",
+      startedAt: new Date(),
+    });
+    await tasks.initialize();
+    assert.ok(
+      logs.some(
+        (entry) =>
+          entry.level === "warn" &&
+          entry.message.includes(
+            "Interrupted 1 running task because the server restarted.",
+          ),
+      ),
+    );
+
+    tasks.registerExecutor("plugin:test:failure-log", async () => {
+      throw new Error("Jellyfin request failed");
+    });
+    const failed = await tasks.enqueue({
+      kind: "plugin:test:failure-log",
+      title: "Broken Jellyfin sync",
+      sourceName: "Media server",
+    });
+    await waitForStatus(tasks, failed.id, "failed");
+    assert.ok(
+      logs.some(
+        (entry) =>
+          entry.level === "error" &&
+          entry.message.includes("Task failed: Broken Jellyfin sync."),
+      ),
+    );
+  } finally {
+    await tasks.close();
+    await context.close();
+  }
+});
+
 test("terminal task history is bounded to thirty days and five hundred rows", async () => {
   const context = await createTestContext();
   await context.app.close();

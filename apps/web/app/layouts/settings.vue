@@ -4,30 +4,51 @@ import { Icon } from "@iconify/vue/offline";
 import type { TaskStatus } from "@peridot/contracts";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
+import { ProgressCircle } from "@peridot/ui/components/ui/progress-circle";
 import { computed, ref, watch } from "vue";
 import TaskProgressIndicator from "../components/TaskProgressIndicator.vue";
 import { useAdminSourcesQuery } from "../composables/use-admin-queries";
 import { useTasks } from "../composables/use-tasks";
 import { useUser } from "../composables/use-user";
 import { icons } from "../lib/icons";
+import { isActiveTaskStatus, overallTaskProgress } from "../lib/task-progress";
 
 const route = useRoute();
-const { t, d } = useI18n();
+const { t, n } = useI18n();
 const { user } = useUser();
-const { items: sources, loaded: sourcesLoaded, load: loadSources } =
-  useAdminSourcesQuery();
+const {
+  items: sources,
+  loaded: sourcesLoaded,
+  load: loadSources,
+} = useAdminSourcesQuery();
 const { tasks } = useTasks();
 const runtimeConfig = useRuntimeConfig();
 const appVersion = runtimeConfig.public.appVersion;
 const environment = runtimeConfig.public.environment;
 const mobileNavigation = ref(false);
 const previousLibraryTaskStatuses = new Map<string, TaskStatus>();
-const sourceFileCount = computed(() =>
-  sources.value.reduce(
-    (total, source) =>
-      total + (Number.isFinite(source.fileCount) ? source.fileCount : 0),
-    0,
+const sourceCount = computed(() => sources.value.length);
+const activeTasks = computed(() =>
+  tasks.value.filter((task) => isActiveTaskStatus(task.status)),
+);
+const activeSourceTasks = computed(() =>
+  tasks.value.filter(
+    (task) => task.kind === "library_scan" && isActiveTaskStatus(task.status),
   ),
+);
+const activeMetadataTasks = computed(() =>
+  tasks.value.filter(
+    (task) => task.kind === "metadata_fetch" && isActiveTaskStatus(task.status),
+  ),
+);
+const sourceTaskProgress = computed(() =>
+  overallTaskProgress(activeSourceTasks.value),
+);
+const metadataTaskProgress = computed(() =>
+  overallTaskProgress(activeMetadataTasks.value),
+);
+const activeTaskProgress = computed(() =>
+  overallTaskProgress(activeTasks.value),
 );
 const commonCategories = [
   { labelKey: "settings.profile", to: "/settings/account", icon: icons.user },
@@ -175,13 +196,56 @@ watch(tasks, (current) => {
               <Icon :icon="item.icon" aria-hidden="true" class="size-5" />{{
                 t(item.labelKey)
               }}
-              <Badge
-                v-if="item.to === '/settings/sources' && sourcesLoaded"
-                variant="secondary"
-                class="ml-auto"
-              >
-                {{ d(sourceFileCount, "integer") }}
-              </Badge>
+              <span class="ml-auto flex items-center gap-2">
+                <ProgressCircle
+                  v-if="item.to === '/settings/tasks' && activeTasks.length"
+                  size="sm"
+                  :value="activeTaskProgress"
+                  :label="
+                    t('settings.tasks.progressFor', {
+                      title: t('settings.tasks'),
+                    })
+                  "
+                  class="size-4"
+                />
+                <ProgressCircle
+                  v-if="
+                    item.to === '/settings/sources' && activeSourceTasks.length
+                  "
+                  size="sm"
+                  :value="sourceTaskProgress"
+                  :label="
+                    t('settings.sources.progress', {
+                      source: t('settings.sources'),
+                    })
+                  "
+                  class="size-4"
+                />
+                <ProgressCircle
+                  v-if="
+                    item.to === '/settings/metadata' &&
+                    activeMetadataTasks.length
+                  "
+                  size="sm"
+                  :value="metadataTaskProgress"
+                  :label="
+                    t('settings.tasks.progressFor', {
+                      title: t('settings.metadata'),
+                    })
+                  "
+                  class="size-4"
+                />
+                <Badge
+                  v-if="
+                    item.to === '/settings/sources' &&
+                    sourcesLoaded &&
+                    !activeSourceTasks.length
+                  "
+                  variant="secondary"
+                >
+                  {{ n(sourceCount, "integer") }}
+                </Badge>
+              </span>
             </NuxtLink>
           </Button>
         </section>

@@ -327,7 +327,18 @@ import Peridot-supported original audio containers, and cache bounded album
 artwork. Item IDs and ETags provide stable identity and change detection. Static
 audio and byte-range requests are proxied through Peridot with the encrypted API
 key remaining server-side. Unsupported Jellyfin audio containers are skipped and
-reported in the scan error count.
+reported in the scan error count. Pages are processed incrementally so large
+remote libraries update progress without holding the complete Jellyfin catalog
+in memory. Jellyfin requests allow up to 60 seconds for response headers because
+large library pages can be slow to prepare. Task failures, partial-completion
+warnings, and startup interruptions are written to the administrator log.
+Source rows show the current available file count and latest successful sync
+time. The Settings sidebar shows the number of configured sources beside
+Sources. Both refresh from the shared source query after a completed library
+scan. Active tasks add a compact progress circle beside Tasks, while active
+library scans and metadata tasks also identify Sources and Metadata. An active
+library scan temporarily replaces the Sources count badge with its progress
+circle.
 The local-folder picker supports case-insensitive deep folder search without
 requiring folders to be expanded first.
 

@@ -129,8 +129,7 @@ const formValid = computed(() => {
 useSortable(providerList, providerRows, {
   animation: 150,
   draggable: ".sortable-item",
-  filter: "a, button, input",
-  preventOnFilter: false,
+  handle: ".drag-handle",
   watchElement: true,
   onEnd: () => void persistOrder(),
 });
@@ -409,14 +408,14 @@ onMounted(() => void loadProviders());
             :key="row.definition.kind"
             :class="{
               'opacity-60': row.provider && !row.provider.enabled,
-              'sortable-item cursor-grab active:cursor-grabbing': row.provider,
+              'sortable-item': row.provider,
             }"
             class="flex items-center gap-2 rounded-md border p-2"
           >
             <button
               v-if="row.provider"
               type="button"
-              class="cursor-grab rounded-md p-1 text-muted-foreground active:cursor-grabbing"
+              class="drag-handle cursor-grab rounded-md p-1 text-muted-foreground active:cursor-grabbing"
               :aria-label="t('settings.metadata.drag')"
             >
               <Icon :icon="icons.drag" aria-hidden="true" class="size-4" />
@@ -532,7 +531,7 @@ onMounted(() => void loadProviders());
       </div>
       <Button
         type="button"
-        variant="outline"
+        variant="destructive"
         class="shrink-0"
         :disabled="hasActiveTasks || serverLost"
         @click="requestReset"

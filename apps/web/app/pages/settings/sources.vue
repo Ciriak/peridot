@@ -38,6 +38,11 @@ import {
   DropdownMenuPortal,
   DropdownMenuRoot,
   DropdownMenuTrigger,
+  TooltipContent,
+  TooltipPortal,
+  TooltipProvider,
+  TooltipRoot,
+  TooltipTrigger,
 } from "reka-ui";
 import { useServer } from "../../composables/use-server";
 import { useServerConnection } from "../../composables/use-server-connection";
@@ -57,13 +62,15 @@ import { sourceFolderName } from "../../lib/source-label";
 import {
   activeTaskForSource,
   sourceTaskProgress,
+  taskProgressMessage,
+  taskStatusMessage,
 } from "../../lib/task-progress";
 import { notifySourceMutation } from "../../lib/toasts";
 
 definePageMeta({ layout: "settings" });
 
 const { t, d } = useI18n();
-const { errorMessage } = useLocalizedMessage();
+const { errorMessage, translate } = useLocalizedMessage();
 const { address } = useServer();
 const { token } = useSession();
 const { user } = useUser();
@@ -96,8 +103,7 @@ const pendingDelete = ref<SourceResponse | null>(null);
 
 useSortable(sourceList, sources, {
   animation: 150,
-  filter: "a, button, input",
-  preventOnFilter: false,
+  handle: ".drag-handle",
   watchElement: true,
   onEnd: () => void persistOrder(),
 });
@@ -132,6 +138,21 @@ function sourceTask(source: SourceResponse) {
 function sourceProgress(source: SourceResponse): number | null {
   const task = sourceTask(source);
   return task ? sourceTaskProgress(task) : null;
+}
+
+function sourceTaskTitle(source: SourceResponse): string {
+  const task = sourceTask(source);
+  return task ? translate(task.titleMessage) : "";
+}
+
+function sourceTaskStatus(source: SourceResponse): string {
+  const task = sourceTask(source);
+  return task ? translate(taskStatusMessage(task)) : "";
+}
+
+function sourceTaskProgressLabel(source: SourceResponse): string {
+  const task = sourceTask(source);
+  return task ? translate(taskProgressMessage(task)) : "";
 }
 
 function sourceFileCount(source: SourceResponse): string {
@@ -364,12 +385,12 @@ onMounted(() => void loadSources());
         <li
           v-for="source in sources"
           :key="source.id"
-          class="flex cursor-grab items-center gap-2 rounded-md border p-2 active:cursor-grabbing"
+          class="flex items-center gap-2 rounded-md border p-2"
           :title="source.kind === 'path' ? (source.path ?? '') : undefined"
         >
           <button
             type="button"
-            class="cursor-grab rounded-md p-1 text-muted-foreground active:cursor-grabbing"
+            class="drag-handle cursor-grab rounded-md p-1 text-muted-foreground active:cursor-grabbing"
             :aria-label="t('settings.sources.drag')"
           >
             <Icon :icon="icons.drag" aria-hidden="true" class="size-4" />
@@ -416,7 +437,9 @@ onMounted(() => void loadSources());
             <span
               class="mt-1 flex flex-wrap items-center gap-x-1 text-xs text-muted-foreground"
             >
-              <span>{{ sourceFileCount(source) }}</span>
+              <span class="font-semibold text-foreground">{{
+                sourceFileCount(source)
+              }}</span>
               <span aria-hidden="true">·</span>
               <time v-if="source.lastSyncedAt" :datetime="source.lastSyncedAt">
                 {{ sourceLastSync(source) }}
@@ -424,17 +447,47 @@ onMounted(() => void loadSources());
               <span v-else>{{ sourceLastSync(source) }}</span>
             </span>
           </div>
-          <ProgressCircle
-            v-if="sourceTask(source)"
-            size="sm"
-            :value="sourceProgress(source)"
-            :label="
-              t('settings.sources.progress', {
-                source: sourceFolderName(sourceLabel(source)),
-              })
-            "
-            class="size-5"
-          />
+          <TooltipProvider v-if="sourceTask(source)" :delay-duration="150">
+            <TooltipRoot>
+              <TooltipTrigger as-child>
+                <ProgressCircle
+                  tabindex="0"
+                  size="sm"
+                  :value="sourceProgress(source)"
+                  :label="
+                    t('settings.sources.progress', {
+                      source: sourceFolderName(sourceLabel(source)),
+                    })
+                  "
+                  class="size-5 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                />
+              </TooltipTrigger>
+              <TooltipPortal>
+                <TooltipContent
+                  side="bottom"
+                  align="end"
+                  :side-offset="6"
+                  class="z-50 w-64 rounded-md border bg-popover p-3 text-popover-foreground shadow-md"
+                >
+                  <p class="text-sm font-semibold">
+                    {{ sourceTaskTitle(source) }}
+                  </p>
+                  <p class="mt-1 text-xs text-muted-foreground">
+                    <span
+                      :class="
+                        sourceTask(source)?.status === 'running'
+                          ? 'font-medium text-primary'
+                          : 'font-medium'
+                      "
+                      >{{ sourceTaskStatus(source) }}</span
+                    >
+                    ·
+                    {{ sourceTaskProgressLabel(source) }}
+                  </p>
+                </TooltipContent>
+              </TooltipPortal>
+            </TooltipRoot>
+          </TooltipProvider>
           <DropdownMenuRoot>
             <DropdownMenuTrigger as-child>
               <Button

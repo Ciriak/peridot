@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, definePageMeta, onMounted, useI18n, watch } from "#imports";
+import { useIntervalFn, useNow } from "@vueuse/core";
 import {
   TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY,
   type TaskResponse,
@@ -22,11 +23,15 @@ import {
   taskProgressMessage,
   taskStatusMessage,
 } from "../../lib/task-progress";
+import { formatTimeAgo } from "../../lib/relative-time";
 
 definePageMeta({ layout: "settings" });
 
-const { t, d } = useI18n();
+const { t, d, locale } = useI18n();
 const { translate } = useLocalizedMessage();
+const now = useNow({
+  scheduler: (update) => useIntervalFn(update, 60_000, { immediate: true }),
+});
 
 const { address } = useServer();
 const { token } = useSession();
@@ -84,6 +89,18 @@ function taskTimeLabel(task: TaskResponse): string {
   return t("settings.tasks.queued", {
     date: d(new Date(task.createdAt), "medium"),
   });
+}
+
+function taskHistoryTimestamp(task: TaskResponse): string {
+  return task.completedAt ?? task.createdAt;
+}
+
+function taskHistoryTimeLabel(task: TaskResponse): string {
+  return formatTimeAgo(taskHistoryTimestamp(task), now.value, locale.value);
+}
+
+function taskHistoryTimeTitle(task: TaskResponse): string {
+  return d(new Date(taskHistoryTimestamp(task)), "medium");
 }
 
 function visibleDetails(task: TaskResponse) {
@@ -294,10 +311,11 @@ onMounted(() => {
             </div>
           </dl>
           <time
-            :datetime="task.completedAt ?? task.createdAt"
+            :datetime="taskHistoryTimestamp(task)"
+            :title="taskHistoryTimeTitle(task)"
             class="mt-3 block text-xs text-muted-foreground"
           >
-            {{ taskTimeLabel(task) }}
+            {{ taskHistoryTimeLabel(task) }}
           </time>
         </article>
 

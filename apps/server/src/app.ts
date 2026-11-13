@@ -119,7 +119,12 @@ export async function buildApp(options: BuildAppOptions = {}) {
     catalog,
     options.discogsFetch ?? fetch,
   );
-  const tasks = new TaskService(database, (task) => realtime.publishTask(task));
+  const logBuffer = options.logBuffer ?? new ServerLogBuffer();
+  const tasks = new TaskService(
+    database,
+    (task) => realtime.publishTask(task),
+    (level, message) => logBuffer.add(level, message),
+  );
   const scanner = new LibraryScanner(
     database,
     metadataEnrichment,
@@ -133,7 +138,6 @@ export async function buildApp(options: BuildAppOptions = {}) {
   tasks.registerExecutor("metadata_fetch", (task, taskService) =>
     metadataEnrichment.runTask(task, taskService),
   );
-  const logBuffer = options.logBuffer ?? new ServerLogBuffer();
   logBuffer.onEntry((entry) => realtime.publishLog(entry));
   catalog.setPublisher((change) => realtime.publishCatalog(change));
   const app = Fastify({

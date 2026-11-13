@@ -20,6 +20,11 @@ unavailable, while a failed Jellyfin connection fails the scan without mass
 invalidation. Removing a Jellyfin source removes that instance's imported
 Tracks; playlist display snapshots remain.
 
+Source rows show the current available file count and the latest successful
+library scan time. The Settings sidebar shows the number of configured sources,
+while each source row shows its own file count. Counts refresh after a
+completed source-scoped or all-source scan.
+
 ## 2026-11-13: The add-source dialog offers server-internal folders
 
 The source choice formerly labeled `Local files` is now

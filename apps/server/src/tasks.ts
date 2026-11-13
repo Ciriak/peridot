@@ -60,6 +60,8 @@ export type TaskExecutor = (
 ) => Promise<TaskExecutionResult | void>;
 
 export type TaskChangePublisher = (task: TaskResponse) => void;
+export type TaskLogLevel = "warn" | "error";
+export type TaskLogPublisher = (level: TaskLogLevel, message: string) => void;
 
 export class TaskExecutionError extends Error {
   constructor(
@@ -219,6 +221,7 @@ export class TaskService {
   constructor(
     private readonly database: Database,
     private readonly publisher?: TaskChangePublisher,
+    private readonly logPublisher?: TaskLogPublisher,
   ) {}
 
   registerExecutor(kind: TaskKind, executor: TaskExecutor): void {
@@ -230,12 +233,20 @@ export class TaskService {
 
   async initialize(): Promise<void> {
     const now = new Date();
-    await this.database.orm.Task.where({ status: "running" }).updateAndCount({
+    const interrupted = await this.database.orm.Task.where({
+      status: "running",
+    }).updateAndCount({
       status: "interrupted",
       completedAt: now,
       failureSummary: "The server stopped before this task completed.",
       failureMessage: serializeMessage(message("api.message.taskInterrupted")),
     });
+    if (interrupted > 0) {
+      this.logPublisher?.(
+        "warn",
+        `Interrupted ${interrupted} running task${interrupted === 1 ? "" : "s"} because the server restarted.`,
+      );
+    }
     await this.prune();
     this.kick();
   }
@@ -350,6 +361,12 @@ export class TaskService {
   }
 
   async complete(id: string, result: TaskExecutionResult = {}): Promise<void> {
+    const failureSummary = result.failureSummary
+      ? boundedText(result.failureSummary, MAX_FAILURE_SUMMARY_LENGTH)
+      : null;
+    const task = failureSummary
+      ? await this.database.orm.Task.first({ id })
+      : null;
     const update: {
       status: string;
       completedAt: Date;
@@ -361,9 +378,7 @@ export class TaskService {
     } = {
       status: "completed",
       completedAt: new Date(),
-      failureSummary: result.failureSummary
-        ? boundedText(result.failureSummary, MAX_FAILURE_SUMMARY_LENGTH)
-        : null,
+      failureSummary,
     };
     if (result.details) {
       update.details = JSON.stringify(normalizeTaskDetails(result.details));
@@ -380,6 +395,12 @@ export class TaskService {
       }
     }
     await this.database.orm.Task.where({ id }).update(update);
+    if (failureSummary) {
+      this.logPublisher?.(
+        "warn",
+        `Task completed with errors: ${task?.title ?? id}. ${failureSummary}`,
+      );
+    }
     this.publishTask(id, true);
   }
 
@@ -389,12 +410,18 @@ export class TaskService {
     status: "failed" | "interrupted" = "failed",
     messageDescriptor?: MessageDescriptor,
   ): Promise<void> {
+    const task = await this.database.orm.Task.first({ id });
+    const summary = boundedText(failureSummary, MAX_FAILURE_SUMMARY_LENGTH);
     await this.database.orm.Task.where({ id }).update({
       status,
       completedAt: new Date(),
-      failureSummary: boundedText(failureSummary, MAX_FAILURE_SUMMARY_LENGTH),
+      failureSummary: summary,
       failureMessage: serializeMessage(messageDescriptor),
     });
+    this.logPublisher?.(
+      status === "interrupted" ? "warn" : "error",
+      `Task ${status}: ${task?.title ?? id}. ${summary}`,
+    );
     this.publishTask(id, true);
   }
 

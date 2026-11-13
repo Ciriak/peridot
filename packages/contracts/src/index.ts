@@ -105,7 +105,7 @@ export interface AlbumSummaryResponse {
   artist: string;
   artists: string[];
   coverUrl: string | null;
-  fileCount: number;
+  trackCount: number;
   durationMs: number | null;
   releaseYear: number | null;
   liked: boolean;
@@ -408,7 +408,7 @@ export interface SourceResponse {
   path: string | null;
   url: string | null;
   integration: string | null;
-  trackCount: number;
+  fileCount: number;
   lastSyncedAt: string | null;
 }
 

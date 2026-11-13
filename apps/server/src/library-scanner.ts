@@ -149,6 +149,7 @@ async function discoverAudioFiles(root: string): Promise<DiscoveredFile[]> {
 
 export class LibraryScanner {
   private folderCoverCache = new Map<string, CoverImage | null>();
+  private jellyfinCoverCache = new Map<string, CoverImage | null>();
 
   constructor(
     private readonly database: Database,
@@ -171,6 +172,7 @@ export class LibraryScanner {
 
     try {
       this.folderCoverCache.clear();
+      this.jellyfinCoverCache.clear();
       let requestedSource: SourceRow | undefined;
       if (task.sourceId) {
         const source = await this.database.orm.Source.first({
@@ -221,8 +223,7 @@ export class LibraryScanner {
         (requestedSource ? task.sourceName : null) ||
         "All sources";
       const files: SourceFile[] = [];
-      const remoteItems: RemoteSourceItem[] = [];
-      let unsupportedCount = 0;
+      const jellyfinSources: JellyfinSource[] = [];
       for (const source of sources) {
         if (source.kind === "path") {
           if (!source.path) {
@@ -264,21 +265,16 @@ export class LibraryScanner {
           url: source.url,
           apiKey,
         };
-        const remote = await this.jellyfin.listAudio(
-          remoteSource.url,
-          remoteSource.apiKey,
-        );
-        unsupportedCount += remote.unsupportedCount;
-        for (const item of remote.items) {
-          remoteItems.push({ source: remoteSource, item });
-        }
+        jellyfinSources.push(remoteSource);
       }
-      const discoveredCount =
-        files.length + remoteItems.length + unsupportedCount;
+      let discoveredCount = files.length;
+      let processedItems = 0;
+      let unsupportedCount = 0;
+      let completedRemoteTotal = 0;
       await tasks.updateProgress(
         task.id,
         0,
-        discoveredCount,
+        jellyfinSources.length ? null : files.length,
         scanDetails({
           source: sourceName,
           discovered: discoveredCount,
@@ -291,7 +287,6 @@ export class LibraryScanner {
       );
 
       let nextFile = 0;
-      let processedItems = unsupportedCount;
       const workers = Array.from(
         { length: Math.min(SCAN_CONCURRENCY, files.length) },
         async () => {
@@ -302,7 +297,7 @@ export class LibraryScanner {
             await tasks.updateProgress(
               task.id,
               processedItems,
-              discoveredCount,
+              jellyfinSources.length ? null : discoveredCount,
               scanDetails({
                 source: sourceName,
                 discovered: discoveredCount,
@@ -317,23 +312,48 @@ export class LibraryScanner {
         },
       );
       await Promise.all(workers);
-      for (const remote of remoteItems) {
-        await this.processRemoteItem(remote, task.id, counts);
-        processedItems += 1;
-        await tasks.updateProgress(
-          task.id,
-          processedItems,
-          discoveredCount,
-          scanDetails({
-            source: sourceName,
-            discovered: discoveredCount,
-            created: counts.createdCount,
-            updated: counts.updatedCount,
-            unchanged: counts.unchangedCount,
-            unavailable: 0,
-            errors: counts.errorCount + unsupportedCount,
-          }),
+      for (const source of jellyfinSources) {
+        let sourceTotal: number | null = null;
+        if (!this.jellyfin) {
+          throw new TaskExecutionError(
+            "The selected Jellyfin source is not available.",
+            "failed",
+            message("api.message.sourceUnavailable"),
+          );
+        }
+        const remote = await this.jellyfin.listAudio(
+          source.url,
+          source.apiKey,
+          async (page) => {
+            for (const item of page.items) {
+              await this.processRemoteItem({ source, item }, task.id, counts);
+            }
+            sourceTotal = page.totalCount ?? sourceTotal;
+            unsupportedCount += page.unsupportedCount;
+            processedItems += page.items.length + page.unsupportedCount;
+            discoveredCount =
+              files.length +
+              completedRemoteTotal +
+              (sourceTotal ?? page.processedCount);
+            await tasks.updateProgress(
+              task.id,
+              processedItems,
+              discoveredCount,
+              scanDetails({
+                source: sourceName,
+                discovered: discoveredCount,
+                created: counts.createdCount,
+                updated: counts.updatedCount,
+                unchanged: counts.unchangedCount,
+                unavailable: 0,
+                errors: counts.errorCount + unsupportedCount,
+              }),
+            );
+          },
         );
+        completedRemoteTotal +=
+          sourceTotal ?? remote.totalCount ?? remote.processedCount;
+        discoveredCount = files.length + completedRemoteTotal;
       }
       await this.removeUnusedCovers();
 
@@ -549,17 +569,26 @@ export class LibraryScanner {
 
       let cover: CoverImage | null = null;
       if (item.coverItemId && this.jellyfin) {
-        try {
-          cover = await this.jellyfin.cover(
-            source.url,
-            source.apiKey,
-            item.coverItemId,
-            item.coverTag,
-          );
-        } catch (error) {
-          if (error instanceof JellyfinError && error.code !== "unavailable") {
-            throw error;
+        const cacheKey = `${item.coverItemId}\u0000${item.coverTag ?? ""}`;
+        if (this.jellyfinCoverCache.has(cacheKey)) {
+          cover = this.jellyfinCoverCache.get(cacheKey) ?? null;
+        } else {
+          try {
+            cover = await this.jellyfin.cover(
+              source.url,
+              source.apiKey,
+              item.coverItemId,
+              item.coverTag,
+            );
+          } catch (error) {
+            if (
+              error instanceof JellyfinError &&
+              error.code !== "unavailable"
+            ) {
+              throw error;
+            }
           }
+          this.jellyfinCoverCache.set(cacheKey, cover);
         }
       }
       const coverId = await this.storeCover(cover);

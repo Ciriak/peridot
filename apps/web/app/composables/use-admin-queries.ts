@@ -45,8 +45,8 @@ export function useAdminSourcesQuery() {
   const { token } = useSession();
   const { user } = useUser();
   const { errorMessage } = useLocalizedMessage();
-  const enabled = computed(
-    () => Boolean(scope.value && token.value && user.value?.role === "admin"),
+  const enabled = computed(() =>
+    Boolean(scope.value && token.value && user.value?.role === "admin"),
   );
   const query = useQuery({
     queryKey: computed(() =>

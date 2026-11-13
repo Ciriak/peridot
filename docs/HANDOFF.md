@@ -16,6 +16,18 @@ duplicates, album artwork is cached with the existing cover store, and removed
 remote items become unavailable without being deleted. Unsupported audio
 containers are skipped and reported in the scan error count. The existing
 automatic metadata task still runs after successful scans.
+Each source row shows its current available file count and the latest successful
+sync time. The Settings sidebar shows the number of configured sources beside
+Sources; both views refresh after completed source-scoped or all-source scans.
+Active library scans and metadata tasks show compact progress circles beside
+Sources and Metadata in the settings sidebar; every active task also shows one
+beside Tasks. An active library scan temporarily replaces the Sources count
+badge with its progress circle.
+Jellyfin pages are processed incrementally so progress advances while large
+libraries are importing, and repeated album covers are fetched once per scan.
+The Jellyfin header timeout is 60 seconds to account for large library pages.
+Failed tasks, completed tasks with warnings, and running tasks interrupted by a
+server restart now appear in Settings → Admin → Logs.
 
 The existing authenticated Peridot audio endpoint now proxies Jellyfin GET,
 HEAD, and byte-range requests using the server-side API key. Browser code and
@@ -24,21 +36,21 @@ instance's imported catalog rows while preserving playlist display snapshots.
 
 Checks run:
 
-- Server tests (118 passing), including credential encryption, multiple
+- Server tests (120 passing), including credential encryption, multiple
   instances, audio-only scans, artwork, ETag updates, deleted-item availability,
-  source removal, and proxied GET/HEAD/range playback
-- Web tests (187 passing) and shared UI tests (16 passing)
+  source removal, task failure logging, and proxied GET/HEAD/range playback
+- Web tests (189 passing) and shared UI tests (16 passing)
 - Full workspace type check
 - Workspace ESLint
 - Prisma contract validation and generation
 - Full workspace production build, including the bundled Jellyfin WebP asset
-  and a 107-entry web precache
+  and a 106-entry web precache
 - Targeted Prettier checks
 - `git diff --check`
 
-Known limits: no live Jellyfin server was available for a real-instance smoke
-test, and browser visual QA of the new dialog was not run. The Jellyfin
-compatibility behavior is covered with mocked Jellyfin API responses. No
+Known limits: live Jellyfin authentication and the first audio page were
+verified, but a complete large-library sync and browser visual QA were not run.
+Automated behavior remains covered with mocked Jellyfin API responses. No
 commit, push, tag, publication, or deployment was performed. The root
 `pnpm format:check` still reports the pre-existing formatting issue in
 `README.md`; all changed files pass Prettier.

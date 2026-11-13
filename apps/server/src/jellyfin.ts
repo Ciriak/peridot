@@ -3,7 +3,7 @@ import { message } from "./messages.js";
 
 const AUDIO_PAGE_SIZE = 500;
 const MAX_COVER_BYTES = 5 * 1024 * 1024;
-const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
+const DEFAULT_REQUEST_TIMEOUT_MS = 60_000;
 const AUDIO_TYPES = new Map<string, { extension: string; mimeType: string }>([
   ["aac", { extension: "aac", mimeType: "audio/aac" }],
   ["flac", { extension: "flac", mimeType: "audio/flac" }],
@@ -82,6 +82,13 @@ export interface JellyfinAudioItem {
   container: string;
   coverItemId: string | null;
   coverTag: string | null;
+}
+
+export interface JellyfinAudioPage {
+  items: JellyfinAudioItem[];
+  unsupportedCount: number;
+  processedCount: number;
+  totalCount: number | null;
 }
 
 export interface JellyfinCover {
@@ -296,10 +303,17 @@ export class JellyfinClient {
   async listAudio(
     baseUrl: string,
     apiKey: string,
-  ): Promise<{ items: JellyfinAudioItem[]; unsupportedCount: number }> {
+    onPage?: (page: JellyfinAudioPage) => Promise<void> | void,
+  ): Promise<{
+    items: JellyfinAudioItem[];
+    unsupportedCount: number;
+    totalCount: number | null;
+    processedCount: number;
+  }> {
     const items: JellyfinAudioItem[] = [];
     let unsupportedCount = 0;
     let startIndex = 0;
+    let totalCount: number | null = null;
 
     while (true) {
       const url = endpoint(baseUrl, "Items");
@@ -344,27 +358,41 @@ export class JellyfinClient {
       }
       const page = jsonObject(raw) as JellyfinItemsResponse;
       const pageItems = Array.isArray(page.Items) ? page.Items : [];
+      const convertedItems: JellyfinAudioItem[] = [];
+      let pageUnsupportedCount = 0;
       for (const item of pageItems) {
         const converted = toAudioItem(item);
-        if (converted.value) items.push(converted.value);
-        if (converted.unsupported) unsupportedCount += 1;
+        if (converted.value) convertedItems.push(converted.value);
+        if (converted.unsupported) pageUnsupportedCount += 1;
       }
+      unsupportedCount += pageUnsupportedCount;
       startIndex += pageItems.length;
-      const total =
+      const pageTotal =
         typeof page.TotalRecordCount === "number" &&
         Number.isFinite(page.TotalRecordCount)
           ? page.TotalRecordCount
           : null;
+      if (pageTotal !== null) totalCount = pageTotal;
+      if (onPage) {
+        await onPage({
+          items: convertedItems,
+          unsupportedCount: pageUnsupportedCount,
+          processedCount: startIndex,
+          totalCount: pageTotal ?? totalCount,
+        });
+      } else {
+        items.push(...convertedItems);
+      }
       if (
         pageItems.length === 0 ||
         pageItems.length < AUDIO_PAGE_SIZE ||
-        (total !== null && startIndex >= total)
+        (pageTotal !== null && startIndex >= pageTotal)
       ) {
         break;
       }
     }
 
-    return { items, unsupportedCount };
+    return { items, unsupportedCount, totalCount, processedCount: startIndex };
   }
 
   async cover(
@@ -443,10 +471,11 @@ export class JellyfinClient {
     const abortFromCaller = () => controller.abort(options.signal?.reason);
     if (options.signal?.aborted) abortFromCaller();
     options.signal?.addEventListener("abort", abortFromCaller, { once: true });
-    const timer = setTimeout(
-      () => controller.abort(new Error("Jellyfin request timed out")),
-      this.requestTimeoutMs,
-    );
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort(new Error("Jellyfin request timed out"));
+    }, this.requestTimeoutMs);
     try {
       const response = await this.fetchImpl(url, {
         ...options,
@@ -461,8 +490,21 @@ export class JellyfinClient {
       return response;
     } catch (error) {
       if (error instanceof JellyfinError) throw error;
+      const cause =
+        error && typeof error === "object" && "cause" in error
+          ? (error as { cause?: unknown }).cause
+          : null;
+      const causeCode =
+        cause && typeof cause === "object" && "code" in cause
+          ? String((cause as { code?: unknown }).code ?? "")
+          : "";
+      const detail = timedOut
+        ? `timed out after ${this.requestTimeoutMs}ms`
+        : causeCode
+          ? `network error ${causeCode}`
+          : "network request failed";
       throw new JellyfinError(
-        "Jellyfin could not be reached.",
+        `Jellyfin could not be reached: ${detail}.`,
         "unavailable",
         502,
         message("api.message.jellyfinUnavailable"),

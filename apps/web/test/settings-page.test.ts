@@ -42,10 +42,23 @@ test("settings is a fullscreen routed area with a separate administrator group",
   assert.match(layout, /import TaskProgressIndicator/);
   assert.match(layout, /<TaskProgressIndicator \/>/);
   assert.match(layout, /useAdminSourcesQuery/);
-  assert.match(layout, /sourceFileCount/);
+  assert.match(layout, /sourceCount/);
+  assert.match(layout, /computed\(\(\) => sources\.value\.length\)/);
+  assert.doesNotMatch(layout, /source\.fileCount/);
   assert.match(layout, /item\.to === '\/settings\/sources'/);
   assert.match(layout, /variant="secondary"/);
-  assert.match(layout, /d\(sourceFileCount, "integer"\)/);
+  assert.match(layout, /n\(sourceCount, "integer"\)/);
+  assert.match(layout, /activeSourceTasks/);
+  assert.match(layout, /sourcesLoaded\s*&&\s*!activeSourceTasks\.length/);
+  assert.match(layout, /activeMetadataTasks/);
+  assert.match(layout, /activeTasks/);
+  assert.match(layout, /sourceTaskProgress/);
+  assert.match(layout, /metadataTaskProgress/);
+  assert.match(layout, /activeTaskProgress/);
+  assert.match(layout, /item\.to === '\/settings\/tasks'/);
+  assert.match(layout, /item\.to === '\/settings\/metadata'/);
+  assert.match(layout, /settings\.sources\.progress/);
+  assert.match(layout, /settings\.tasks\.progressFor/);
   for (const page of [
     "plugins",
     "tasks",
@@ -207,18 +220,22 @@ test("sources are managed on their own page with row action menus", async () => 
   assert.match(page, /deleteSource/);
   assert.match(page, /reorderSources/);
   assert.match(page, /useSortable/);
-  assert.doesNotMatch(page, /handle: "\.drag-handle"/);
-  assert.match(page, /filter: "a, button, input"/);
-  assert.match(page, /class="flex cursor-grab items-center/);
+  assert.match(page, /handle: "\.drag-handle"/);
+  assert.doesNotMatch(page, /filter: "a, button, input"/);
+  assert.match(page, /class="flex items-center/);
   assert.match(
     page,
-    /class="cursor-grab rounded-md p-1 text-muted-foreground active:cursor-grabbing"\s*:aria-label="t\('settings\.sources\.drag'\)"/,
+    /class="drag-handle cursor-grab rounded-md p-1 text-muted-foreground active:cursor-grabbing"\s*:aria-label="t\('settings\.sources\.drag'\)"/,
   );
   assert.match(page, /AlertDialogRoot/);
   assert.match(page, /DialogRoot/);
   assert.match(page, /<FolderTree/);
   assert.match(page, /sourceFolderName\(source\.path \?\? ""\)/);
   assert.match(page, /sourceFileCount\(source\)/);
+  assert.match(
+    page,
+    /class="font-semibold text-foreground">\{\{\s*sourceFileCount\(source\)/,
+  );
   assert.match(page, /settings\.sources\.lastSync/);
   assert.match(page, /settings\.sources\.notSynced/);
   assert.match(page, /:datetime="source\.lastSyncedAt"/);
@@ -285,6 +302,13 @@ test("sources are managed on their own page with row action menus", async () => 
   assert.match(page, /v-if="sourceTask\(source\)"/);
   assert.match(page, /:value="sourceProgress\(source\)"/);
   assert.match(page, /settings\.sources\.progress/);
+  assert.match(page, /TooltipProvider/);
+  assert.match(page, /TooltipTrigger as-child/);
+  assert.match(page, /tabindex="0"/);
+  assert.match(page, /side="bottom"/);
+  assert.match(page, /translate\(task\.titleMessage\)/);
+  assert.match(page, /taskStatusMessage\(task\)/);
+  assert.match(page, /taskProgressMessage\(task\)/);
 });
 
 test("metadata providers have a dedicated sortable management page", async () => {
@@ -295,12 +319,16 @@ test("metadata providers have a dedicated sortable management page", async () =>
   assert.match(page, /updateMetadataProvider/);
   assert.match(page, /reorderMetadataProviders/);
   assert.match(page, /useSortable/);
-  assert.doesNotMatch(page, /handle: "\.drag-handle"/);
+  assert.match(page, /handle: "\.drag-handle"/);
   assert.match(page, /draggable: "\.sortable-item"/);
-  assert.match(page, /'sortable-item cursor-grab active:cursor-grabbing'/);
+  assert.match(page, /'sortable-item': row\.provider/);
   assert.match(
     page,
-    /class="cursor-grab rounded-md p-1 text-muted-foreground active:cursor-grabbing"\s*:aria-label="t\('settings\.metadata\.drag'\)"/,
+    /class="drag-handle cursor-grab rounded-md p-1 text-muted-foreground active:cursor-grabbing"\s*:aria-label="t\('settings\.metadata\.drag'\)"/,
+  );
+  assert.match(
+    page,
+    /variant="destructive"[\s\S]*?settings\.metadata\.resetAction/,
   );
   assert.match(page, /configurationFields/);
   assert.match(page, /credentialField/);
@@ -406,6 +434,14 @@ test("tasks have a settings view for active work and paginated history", async (
   assert.match(page, /@click="loadMoreHistory"/);
   assert.match(page, /visibleDetails\(task\)/);
   assert.match(page, /taskTimeLabel\(task\)/);
+  assert.match(page, /formatTimeAgo/);
+  assert.match(page, /useNow/);
+  assert.match(page, /taskHistoryTimestamp\(task\)/);
+  assert.match(page, /taskHistoryTimeTitle\(task\)/);
+  assert.match(
+    page,
+    /<time\s+:datetime="taskHistoryTimestamp\(task\)"\s+:title="taskHistoryTimeTitle\(task\)"/,
+  );
 });
 
 test("administrators can create, edit, promote, and delete managed accounts", async () => {

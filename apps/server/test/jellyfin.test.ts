@@ -461,3 +461,56 @@ test("Jellyfin rescans use item versions and mark remotely deleted audio unavail
     await context.close();
   }
 });
+
+test("a failed Jellyfin scan writes an error to the administrator log", async () => {
+  const context = await createTestContext({
+    jellyfinFetch: async (input) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      if (url.pathname.endsWith("/System/Info")) {
+        return Response.json({ ServerName: "Logging Jellyfin" });
+      }
+      if (url.pathname.endsWith("/Items")) {
+        return new Response("library unavailable", { status: 503 });
+      }
+      return new Response("not found", { status: 404 });
+    },
+  });
+  try {
+    const created = await context.app.inject({
+      method: "POST",
+      url: "/api/admin/sources",
+      headers: context.authorization,
+      payload: {
+        kind: "integration",
+        integration: "jellyfin",
+        url: "http://jellyfin-logging.example.test",
+        apiKey: API_KEY,
+      },
+    });
+    assert.equal(created.statusCode, 201, created.body);
+    const task = created.json<{ task: TaskResponse }>().task;
+    const failed = await waitForScan(context, task.id);
+    assert.equal(failed.status, "failed");
+
+    const logs = await context.app.inject({
+      method: "GET",
+      url: "/api/admin/logs",
+      headers: context.authorization,
+    });
+    assert.equal(logs.statusCode, 200);
+    const entries = logs.json<{
+      items: Array<{ level: string; message: string }>;
+    }>().items;
+    assert.ok(
+      entries.some(
+        (entry) =>
+          entry.level === "error" &&
+          entry.message.includes(
+            "Task failed: Logging Jellyfin scan. Jellyfin could not list its audio library.",
+          ),
+      ),
+    );
+  } finally {
+    await context.close();
+  }
+});
