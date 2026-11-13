@@ -593,7 +593,7 @@ test("album offline controls load and save the complete album collection", async
   assert.match(button, /<ProgressCircle/);
   assert.match(button, /:aria-pressed="allSaved"/);
   assert.doesNotMatch(button, /showLabel|visibleLabel|<span/);
-  assert.match(card, /<AlbumOfflineButton/);
+  assert.doesNotMatch(card, /<AlbumOfflineButton/);
   assert.match(
     detail,
     /<AlbumOfflineButton\s+:album="album"\s+class="absolute right-4 top-4"/,

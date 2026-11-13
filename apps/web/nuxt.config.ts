@@ -1,4 +1,12 @@
+import { readFileSync } from "node:fs";
 import tailwindcss from "@tailwindcss/vite";
+
+const webPackage = JSON.parse(
+  readFileSync(new URL("./package.json", import.meta.url), "utf8"),
+) as { version: string };
+const appEnvironment =
+  process.env.PERIDOT_ENVIRONMENT?.trim() ||
+  (process.env.NODE_ENV === "production" ? "production" : "development");
 
 const optimizedDependencies = [
   "@iconify-icons/akar-icons/drag-vertical",
@@ -66,6 +74,12 @@ export default defineNuxtConfig({
   ssr: false,
   compatibilityDate: "2026-11-10",
   devtools: { enabled: false },
+  runtimeConfig: {
+    public: {
+      appVersion: webPackage.version,
+      environment: appEnvironment,
+    },
+  },
   modules: ["@nuxtjs/i18n", "@vite-pwa/nuxt"],
   i18n: {
     defaultLocale: "en-US",

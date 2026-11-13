@@ -2,15 +2,46 @@
 
 Last updated: 2026-11-13.
 
+## Profile logout and build metadata
+
+The Settings logout control now sits at the bottom-right of the Profile page.
+Its confirmation dialog and session-clearing behavior are unchanged: confirming
+revokes the current session when possible, clears local session and offline
+data, retains the selected server, and returns to sign-in with the Profile route
+as the return destination.
+
+The fixed Settings sidebar footer now shows the `@peridot/web` package version
+and the current environment. Version `0.1.0` comes from `apps/web/package.json`;
+the environment uses `PERIDOT_ENVIRONMENT` when set, otherwise `production` or
+`development` from `NODE_ENV`. The metadata uses `text-xs` and a 60%-opacity
+muted theme token to stay visually secondary.
+
+Checks run:
+
+- Focused Settings tests (13 passing)
+- Full web suite (159 passing)
+- Web typecheck
+- Targeted ESLint and Prettier checks
+- Live development response at `/settings/account` (HTTP 200, with runtime
+  config reporting version `0.1.0` and environment `development`)
+- Production web build (96 PWA precache entries, with generated runtime config
+  reporting version `0.1.0` and environment `production`)
+- `git diff --check`
+
+Known limits: a browser visual pass was not completed. Unrelated concurrent
+album/offline edits were present and preserved. No commit, push, tag,
+publication, or deployment was performed.
+
 ## Whole-album offline saving
 
-Album cards now expose a compact cloud icon in their top-right corner, and album
-detail headers expose the same icon-only action in the header card's top-right
-corner. The album context menu provides the matching text action. Activating the
-control loads every paginated album track, saves each available track that is
-not already cached, and updates the shared saved-track manifest. The action
-shows determinate or indeterminate aggregate progress while it works. Once the
-whole album is saved, the same control removes all of its offline copies.
+Album detail headers expose the icon-only whole-album offline action in the
+header card's top-right corner. Album cards no longer duplicate that button;
+their navigation, playback, likes, and context menus are unchanged. The album
+context menu provides the matching text action. Activating the control loads
+every paginated album track, saves each available track that is not already
+cached, and updates the shared saved-track manifest. The action shows
+determinate or indeterminate aggregate progress while it works. Once the whole
+album is saved, the same control removes all of its offline copies.
 
 Individual track and whole-album saves no longer emit success toasts. The icon
 and progress state provide completion feedback, while failures still produce
@@ -21,15 +52,11 @@ Checks run:
 - Focused album/context/offline tests (23 passing)
 - Full web suite (159 passing)
 - Web typecheck
-- Root ESLint
-- Production web build (94 PWA precache entries)
-- Targeted Prettier checks for every changed source, test, and locale file
+- Targeted ESLint and Prettier checks
+- Production web build (96 PWA precache entries)
 
-Known limits: the repository-wide format check currently reports an existing
-uncommitted formatting issue in `apps/web/app/layouts/default.vue`. An
-authenticated browser save and visual QA were not exercised. Existing offline
-work remains uncommitted and was preserved. No commit, push, tag, publication,
-or deployment was performed.
+Known limits: browser visual QA was not run. Existing uncommitted Settings work
+was preserved. No commit, push, tag, publication, or deployment was performed.
 
 ## Separate offline IndexedDB databases
 

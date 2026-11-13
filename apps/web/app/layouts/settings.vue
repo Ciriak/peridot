@@ -1,35 +1,19 @@
 <script setup lang="ts">
-import { navigateTo, useI18n, useRoute } from "#imports";
+import { useI18n, useRoute, useRuntimeConfig } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import { Button } from "@peridot/ui/components/ui/button";
-import {
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogOverlay,
-  AlertDialogPortal,
-  AlertDialogRoot,
-  AlertDialogTitle,
-} from "reka-ui";
 import { ref, watch } from "vue";
 import TaskProgressIndicator from "../components/TaskProgressIndicator.vue";
-import { useServer } from "../composables/use-server";
-import { useSession } from "../composables/use-session";
 import { useUser } from "../composables/use-user";
 import { icons } from "../lib/icons";
-import { revokeSession } from "../lib/peridot-client";
-import { clearAllOfflineTracks } from "../lib/offline-audio";
-import { clearAllPeridotQueries } from "../lib/query-persister";
 
 const route = useRoute();
 const { t } = useI18n();
-const { address } = useServer();
-const { token } = useSession();
 const { user } = useUser();
+const runtimeConfig = useRuntimeConfig();
+const appVersion = runtimeConfig.public.appVersion;
+const environment = runtimeConfig.public.environment;
 const mobileNavigation = ref(false);
-const logoutOpen = ref(false);
-const loggingOut = ref(false);
 const commonCategories = [
   { labelKey: "settings.profile", to: "/settings/account", icon: icons.user },
   {
@@ -59,36 +43,6 @@ const adminCategories = [
   },
   { labelKey: "settings.server", to: "/settings/server", icon: icons.server },
 ];
-
-function requestLogout() {
-  if (!loggingOut.value) logoutOpen.value = true;
-}
-
-async function confirmLogout() {
-  if (loggingOut.value) return;
-  loggingOut.value = true;
-  const currentAddress = address.value;
-  const currentToken = token.value;
-  token.value = null;
-  user.value = null;
-  await Promise.all([clearAllPeridotQueries(), clearAllOfflineTracks()]);
-  try {
-    if (currentAddress && currentToken) {
-      await revokeSession(currentAddress, currentToken);
-    }
-  } catch {
-    // Local credentials are cleared even if the server cannot be reached.
-  } finally {
-    loggingOut.value = false;
-    await navigateTo(
-      {
-        path: "/onboarding",
-        query: { auth: "login", redirect: route.fullPath },
-      },
-      { replace: true },
-    );
-  }
-}
 
 watch(
   () => route.path,
@@ -197,48 +151,21 @@ watch(
           </Button>
         </section>
       </nav>
-      <div class="shrink-0 border-t border-sidebar-border p-3">
-        <Button
-          type="button"
-          variant="ghost"
-          class="w-full justify-start"
-          :disabled="loggingOut"
-          :aria-busy="loggingOut"
-          @click="requestLogout"
-        >
-          <Icon :icon="icons.logout" aria-hidden="true" class="size-5" />
-          {{ loggingOut ? t("navigation.loggingOut") : t("navigation.logOut") }}
-        </Button>
+      <div
+        class="shrink-0 border-t border-sidebar-border p-3 text-xs leading-tight text-muted-foreground/60"
+      >
+        <dl class="space-y-1">
+          <div class="flex justify-between gap-3">
+            <dt>{{ t("navigation.version") }}</dt>
+            <dd>{{ appVersion }}</dd>
+          </div>
+          <div class="flex justify-between gap-3">
+            <dt>{{ t("navigation.environment") }}</dt>
+            <dd>{{ environment }}</dd>
+          </div>
+        </dl>
       </div>
     </aside>
-
-    <AlertDialogRoot v-model:open="logoutOpen">
-      <AlertDialogPortal>
-        <AlertDialogOverlay class="fixed inset-0 z-50 bg-background/80" />
-        <AlertDialogContent
-          class="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-card p-6 text-card-foreground shadow-lg"
-        >
-          <AlertDialogTitle class="text-lg font-semibold">
-            {{ t("navigation.logOutTitle") }}
-          </AlertDialogTitle>
-          <AlertDialogDescription class="text-sm text-muted-foreground">
-            {{ t("navigation.logOutDescription") }}
-          </AlertDialogDescription>
-          <div class="mt-6 flex justify-end gap-3">
-            <AlertDialogCancel as-child>
-              <Button type="button" variant="outline">{{
-                t("common.cancel")
-              }}</Button>
-            </AlertDialogCancel>
-            <AlertDialogAction as-child @click="confirmLogout">
-              <Button type="button" variant="destructive">{{
-                t("navigation.logOut")
-              }}</Button>
-            </AlertDialogAction>
-          </div>
-        </AlertDialogContent>
-      </AlertDialogPortal>
-    </AlertDialogRoot>
 
     <div class="flex min-w-0 flex-1 flex-col">
       <header
@@ -264,7 +191,9 @@ watch(
         tabindex="-1"
         class="min-h-0 flex-1 overflow-y-auto p-4 md:p-6"
       >
-        <div class="mx-auto max-w-4xl space-y-8"><slot /></div>
+        <div class="mx-auto flex min-h-full max-w-4xl flex-col space-y-8">
+          <slot />
+        </div>
       </main>
     </div>
   </div>

@@ -67,6 +67,8 @@
   "navigation.loggingOut": "Logging out…",
   "navigation.logOutTitle": "Log out of Peridot?",
   "navigation.logOutDescription": "Your current session will end. You will return to sign in and can come back to this Settings page afterward.",
+  "navigation.version": "Version",
+  "navigation.environment": "Environment",
   "player.region": "Music player",
   "player.noTrack": "No track selected",
   "player.scanLibrary": "Select a track to get started",

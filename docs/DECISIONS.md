@@ -393,6 +393,24 @@ clears the server selection so another server can be chosen. Logout failures do
 not trap the user in the signed-in shell because local credentials are cleared
 before the server revocation request completes.
 
+## 2026-11-13: Profile owns logout and the sidebar shows build metadata
+
+Move the Settings logout control from the persistent sidebar footer to the
+bottom-right of the Profile page. Keep the existing confirmation, session
+revocation, offline-data clearing, selected-server retention, and return-route
+behavior unchanged.
+
+Use the sidebar footer for compact build diagnostics instead. Read the version
+from the `@peridot/web` package and expose it with the build environment through
+Nuxt runtime config. `PERIDOT_ENVIRONMENT` can name an explicit deployment
+environment; otherwise the footer shows `production` for a production build and
+`development` for local development. Render the values with the smallest
+standard Tailwind text size and reduced muted-token opacity so they remain
+available without competing with Settings navigation.
+
+This supersedes the earlier sidebar placement of Log out while preserving its
+session-clearing semantics.
+
 ## 2026-11-12: Administrator settings form a separate navigation group
 
 The Settings sidebar keeps Account, Library, and Playback as common categories.

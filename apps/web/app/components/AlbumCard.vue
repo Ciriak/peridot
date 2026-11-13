@@ -16,7 +16,6 @@ import { useSession } from "../composables/use-session";
 import { loadCollectionTracks } from "../lib/catalog-collections";
 import { isPeridotNetworkError } from "../lib/peridot-client";
 import AlbumContextMenu from "./AlbumContextMenu.vue";
-import AlbumOfflineButton from "./AlbumOfflineButton.vue";
 import LikeButton from "./LikeButton.vue";
 import TrackArtistLinks from "./TrackArtistLinks.vue";
 
@@ -120,12 +119,6 @@ async function toggleAlbumPlayback() {
               />
             </div>
           </NuxtLink>
-          <AlbumOfflineButton
-            :album="album"
-            compact
-            overlay
-            class="absolute right-1 top-1 z-10 rounded-full shadow-md"
-          />
           <Button
             variant="default"
             :size="compact ? 'icon-sm' : 'icon'"

@@ -61,31 +61,72 @@ test("/settings redirects to account and /plugins redirects into settings", asyn
   assert.match(plugins, /navigateTo\("\/settings\/plugins"/);
 });
 
-test("settings sidebar confirms before logout and retains the selected server", async () => {
-  const layout = await readSource("../app/layouts/settings.vue");
-  const logoutFooter = layout.slice(
-    layout.indexOf('<div class="shrink-0 border-t border-sidebar-border p-3">'),
+test("settings shows app metadata and profile owns confirmed logout", async () => {
+  const [layout, page, config, packageSource] = await Promise.all([
+    readSource("../app/layouts/settings.vue"),
+    readSource("../app/pages/settings/account.vue"),
+    readSource("../nuxt.config.ts"),
+    readSource("../package.json"),
+  ]);
+  const metadataFooter = layout.slice(
+    layout.indexOf(
+      'class="shrink-0 border-t border-sidebar-border p-3 text-xs',
+    ),
     layout.indexOf("</aside>"),
   );
-  const logoutDialog = layout.slice(
-    layout.indexOf('<AlertDialogRoot v-model:open="logoutOpen">'),
-    layout.indexOf("</AlertDialogRoot>"),
+  const logoutControl = page.slice(
+    page.indexOf('<div class="mt-auto flex justify-end">'),
+    page.indexOf("<AlertDialogRoot"),
+  );
+  const logoutDialog = page.slice(
+    page.indexOf('<AlertDialogRoot v-model:open="logoutOpen">'),
+    page.indexOf("</AlertDialogRoot>"),
   );
 
-  assert.match(layout, /useServer/);
-  assert.match(layout, /useSession/);
-  assert.match(layout, /revokeSession/);
-  assert.match(layout, /token\.value = null/);
-  assert.match(layout, /user\.value = null/);
-  assert.doesNotMatch(layout, /address\.value = null/);
-  assert.match(layout, /query: \{ auth: "login", redirect: route\.fullPath \}/);
-  assert.match(logoutFooter, /:icon="icons\.logout"/);
-  assert.match(logoutFooter, /navigation\.loggingOut/);
-  assert.match(logoutFooter, /navigation\.logOut/);
-  assert.match(logoutFooter, /:disabled="loggingOut"/);
-  assert.match(logoutFooter, /@click="requestLogout"/);
-  assert.doesNotMatch(logoutFooter, /@click="confirmLogout"/);
-  assert.match(layout, /AlertDialogRoot/);
+  assert.match(layout, /useRuntimeConfig/);
+  assert.match(layout, /runtimeConfig\.public\.appVersion/);
+  assert.match(layout, /runtimeConfig\.public\.environment/);
+  assert.match(
+    metadataFooter,
+    /text-xs leading-tight text-muted-foreground\/60/,
+  );
+  assert.match(metadataFooter, /navigation\.version/);
+  assert.match(metadataFooter, /\{\{ appVersion \}\}/);
+  assert.match(metadataFooter, /navigation\.environment/);
+  assert.match(metadataFooter, /\{\{ environment \}\}/);
+  assert.doesNotMatch(metadataFooter, /icons\.logout/);
+  assert.doesNotMatch(metadataFooter, /navigation\.logOut/);
+  assert.doesNotMatch(layout, /revokeSession|AlertDialogRoot/);
+
+  const runtimeConfig = config.slice(
+    config.indexOf("runtimeConfig:"),
+    config.indexOf("modules:"),
+  );
+  const packageJson = JSON.parse(packageSource) as { version?: string };
+  assert.match(packageJson.version ?? "", /^\d+\.\d+\.\d+$/);
+  assert.match(config, /readFileSync\(new URL\("\.\/package\.json"/);
+  assert.match(runtimeConfig, /appVersion: webPackage\.version/);
+  assert.match(runtimeConfig, /environment: appEnvironment/);
+  assert.match(config, /process\.env\.PERIDOT_ENVIRONMENT\?\.trim\(\)/);
+  assert.match(
+    config,
+    /process\.env\.NODE_ENV === "production" \? "production" : "development"/,
+  );
+
+  assert.match(logoutControl, /:icon="icons\.logout"/);
+  assert.match(logoutControl, /navigation\.loggingOut/);
+  assert.match(logoutControl, /navigation\.logOut/);
+  assert.match(logoutControl, /:disabled="loggingOut"/);
+  assert.match(logoutControl, /@click="requestLogout"/);
+  assert.doesNotMatch(logoutControl, /@click="confirmLogout"/);
+  assert.match(page, /useServer/);
+  assert.match(page, /useSession/);
+  assert.match(page, /revokeSession/);
+  assert.match(page, /token\.value = null/);
+  assert.match(page, /user\.value = null/);
+  assert.doesNotMatch(page, /address\.value = null/);
+  assert.match(page, /query: \{ auth: "login", redirect: route\.fullPath \}/);
+  assert.match(page, /AlertDialogRoot/);
   assert.match(logoutDialog, /navigation\.logOutTitle/);
   assert.match(logoutDialog, /navigation\.logOutDescription/);
   assert.match(logoutDialog, /<AlertDialogCancel as-child>/);

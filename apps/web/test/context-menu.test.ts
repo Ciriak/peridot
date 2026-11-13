@@ -128,10 +128,10 @@ test("album and artist cards expose collection-aware context menus", async () =>
     /<AlbumContextMenu[\s\S]*<article[\s\S]*<NuxtLink/,
     "The entire album card is the context-menu trigger",
   );
-  assert.match(
+  assert.doesNotMatch(
     albumCard,
     /<AlbumOfflineButton[\s\S]*:album="album"[\s\S]*compact[\s\S]*overlay/,
-    "Album cards expose a dedicated whole-album offline action",
+    "Album cards do not duplicate the album-header offline action",
   );
   assert.match(
     artistCard,
