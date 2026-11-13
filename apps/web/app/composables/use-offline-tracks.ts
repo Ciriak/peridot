@@ -1,5 +1,5 @@
 import type { TrackResponse } from "@peridot/contracts";
-import { useI18n } from "#imports";
+import { useI18n, useState } from "#imports";
 import { computed, ref, watch } from "vue";
 import {
   readSavedOfflineTrack,
@@ -20,6 +20,10 @@ export function useOfflineTracks() {
   const { status } = useServerConnection();
   const { t } = useI18n();
   const { errorMessage } = useLocalizedMessage();
+  const playerSavedTrackIds = useState<string[]>(
+    "player-offline-saved-track-ids",
+    () => [],
+  );
   const savedTracks = ref<SavedOfflineTrack[]>([]);
   const pendingTrackIds = ref<string[]>([]);
   const loaded = ref(false);
@@ -28,11 +32,15 @@ export function useOfflineTracks() {
   async function refresh() {
     if (!scope.value) {
       savedTracks.value = [];
+      playerSavedTrackIds.value = [];
       loaded.value = true;
       return;
     }
     try {
       savedTracks.value = await readSavedOfflineTracks(scope.value);
+      playerSavedTrackIds.value = savedTracks.value.map(
+        (saved) => saved.track.id,
+      );
     } finally {
       loaded.value = true;
     }
@@ -59,6 +67,9 @@ export function useOfflineTracks() {
           (candidate) => candidate.track.id !== track.id,
         ),
       ];
+      playerSavedTrackIds.value = savedTracks.value.map(
+        (candidate) => candidate.track.id,
+      );
       return true;
     } catch (reason) {
       if (isAuthenticationRedirectError(reason)) return false;
@@ -82,6 +93,9 @@ export function useOfflineTracks() {
       await removeTrackForOffline(scope.value, trackId);
       savedTracks.value = savedTracks.value.filter(
         (candidate) => candidate.track.id !== trackId,
+      );
+      playerSavedTrackIds.value = savedTracks.value.map(
+        (candidate) => candidate.track.id,
       );
       return true;
     } catch (reason) {

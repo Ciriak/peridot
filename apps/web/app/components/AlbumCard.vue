@@ -5,7 +5,8 @@ import { Button } from "@peridot/ui/components/ui/button";
 import type { AlbumSummaryResponse } from "@peridot/contracts";
 import { albumRoute, trackCoverUrl } from "../lib/library";
 import { icons } from "../lib/icons";
-import { computed, ref, watch } from "vue";
+import { computed } from "vue";
+import { useCachedArtwork } from "../composables/use-cached-artwork";
 import { useLikes } from "../composables/use-likes";
 import { useLibraryPlayer } from "../composables/use-library-player";
 import { useOfflineTracks } from "../composables/use-offline-tracks";
@@ -27,15 +28,13 @@ const { t } = useI18n();
 const { address } = useServer();
 const { token } = useSession();
 const { active, playing, playCollection, togglePlayback } = useLibraryPlayer();
-const { tracksMatching } = useOfflineTracks();
+const { savedTracks, tracksMatching } = useOfflineTracks();
 const { status: serverStatus } = useServerConnection();
-const coverFailed = ref(false);
 const coverUrl = computed(() =>
   trackCoverUrl(address.value ?? "", props.album.coverUrl),
 );
-watch(coverUrl, () => {
-  coverFailed.value = false;
-});
+const { artworkUrl: coverImageUrl, failed: coverFailed } =
+  useCachedArtwork(coverUrl);
 const {
   likedAlbumIds,
   loaded: likesLoaded,
@@ -45,12 +44,20 @@ const {
 const albumActive = computed(() => {
   return active.value?.albumId === props.album.id;
 });
+const albumPlayable = computed(
+  () =>
+    Boolean(props.album.trackCount) &&
+    (serverStatus.value !== "lost" ||
+      savedTracks.value.some(
+        (saved) => saved.track.albumId === props.album.id,
+      )),
+);
 async function toggleAlbumPlayback() {
   if (albumActive.value && playing.value) {
     togglePlayback();
     return;
   }
-  if (!address.value || !token.value || !props.album.trackCount) return;
+  if (!address.value || !token.value || !albumPlayable.value) return;
   const playSaved = async () => {
     const saved = await tracksMatching(
       (track) => track.albumId === props.album.id,
@@ -97,8 +104,8 @@ async function toggleAlbumPlayback() {
               class="flex aspect-square items-center justify-center overflow-hidden rounded-md bg-muted text-muted-foreground group-hover:text-foreground"
             >
               <img
-                v-if="coverUrl && !coverFailed"
-                :src="coverUrl"
+                v-if="coverImageUrl && !coverFailed"
+                :src="coverImageUrl"
                 alt=""
                 loading="lazy"
                 decoding="async"
@@ -117,7 +124,7 @@ async function toggleAlbumPlayback() {
             :size="compact ? 'icon-sm' : 'icon'"
             class="pointer-events-none absolute z-10 cursor-pointer rounded-full opacity-0 shadow-md transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
             :class="compact ? 'bottom-1 right-1' : 'bottom-2 right-2'"
-            :disabled="!album.trackCount"
+            :disabled="!albumPlayable"
             :aria-label="
               albumActive && playing
                 ? t('card.pauseAlbum', {

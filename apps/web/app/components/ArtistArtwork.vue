@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue/offline";
-import { computed, ref, watch } from "vue";
+import { computed } from "vue";
+import { useCachedArtwork } from "../composables/use-cached-artwork";
 import { useServer } from "../composables/use-server";
 import { icons } from "../lib/icons";
 import { trackCoverUrl } from "../lib/library";
@@ -14,14 +15,10 @@ const props = withDefaults(
 );
 
 const { address } = useServer();
-const imageFailed = ref(false);
 const resolvedUrl = computed(() =>
   trackCoverUrl(address.value ?? "", props.imageUrl),
 );
-
-watch(resolvedUrl, () => {
-  imageFailed.value = false;
-});
+const { artworkUrl, failed: imageFailed } = useCachedArtwork(resolvedUrl);
 </script>
 
 <template>
@@ -31,8 +28,8 @@ watch(resolvedUrl, () => {
     :class="size === 'lg' ? 'size-40' : 'size-16'"
   >
     <img
-      v-if="resolvedUrl && !imageFailed"
-      :src="resolvedUrl"
+      v-if="artworkUrl && !imageFailed"
+      :src="artworkUrl"
       alt=""
       loading="lazy"
       decoding="async"

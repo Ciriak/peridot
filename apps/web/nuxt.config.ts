@@ -139,19 +139,6 @@ export default defineNuxtConfig({
       globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
       navigateFallback: "/",
       navigateFallbackDenylist: [/^\/api\//],
-      runtimeCaching: [
-        {
-          urlPattern:
-            /\/api\/(?:covers\/[^/?]+|artists\/[^/?]+\/image)(?:\?.*)?$/,
-          handler: "CacheFirst",
-          options: {
-            cacheName: "peridot-artwork-v1",
-            cacheableResponse: {
-              statuses: [0, 200],
-            },
-          },
-        },
-      ],
     },
   },
 });

@@ -4,10 +4,19 @@ import test from "node:test";
 import { QueryClient, QueryObserver } from "@tanstack/vue-query";
 import {
   OFFLINE_AUDIO_CACHE,
-  OFFLINE_DATABASE,
   offlineAudioCacheRequest,
   offlineTrackStorageKey,
 } from "../app/lib/offline-audio.ts";
+import {
+  OFFLINE_DATABASE,
+  offlineTracks,
+  type OfflineCatalogSnapshot,
+} from "../app/lib/offline-catalog.ts";
+import {
+  OFFLINE_ARTWORK_CACHE,
+  offlineArtworkCacheRequest,
+} from "../app/lib/offline-artwork.ts";
+import { isTrackPlayable } from "../app/lib/offline-playback.ts";
 import { queryKeys } from "../app/lib/query-keys.ts";
 import {
   blockingQueryLoading,
@@ -40,11 +49,38 @@ test("Nuxt builds a client-rendered installable offline shell", async () => {
   assert.match(config, /devOptions: \{\s*enabled: true,?\s*\}/);
   assert.match(config, /navigateFallback: "\/"/);
   assert.match(config, /additionalManifestEntries/);
-  assert.match(config, /peridot-artwork-v1/);
   assert.match(config, /rel: "manifest", href: "\/manifest.webmanifest"/);
-  assert.doesNotMatch(config, /runtimeCaching:[\s\S]*\/api\/tracks/);
+  assert.doesNotMatch(config, /runtimeCaching:/);
   assert.equal(indexIcon, undefined);
   assert.equal(maskableIcon, undefined);
+});
+
+test("the topbar names the unavailable-server state as offline mode", async () => {
+  const locale = JSON.parse(
+    await readFile(
+      new URL("../i18n/locales/en-US.json", import.meta.url),
+      "utf8",
+    ),
+  ) as Record<string, string>;
+
+  assert.equal(
+    locale["components.taskProgress.connectionLost"],
+    "Offline mode",
+  );
+  assert.match(
+    locale["components.taskProgress.connectionLostDescription"] ?? "",
+    /Saved tracks remain available/,
+  );
+});
+
+test("catalog synchronization does not depend on query-client initialization order", async () => {
+  const plugin = await readFile(
+    new URL("../app/plugins/offline-catalog.client.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(plugin, /useState\("catalog-revision"/);
+  assert.doesNotMatch(plugin, /useCatalogRevision|useQueryClient/);
 });
 
 test("query keys isolate server, user, resource, and list options", () => {
@@ -136,9 +172,136 @@ test("offline audio keys are stable and scoped without bearer credentials", () =
     offlineTrackStorageKey({ ...scope, userId: "user-2" }, "track-1"),
   );
   assert.equal(OFFLINE_AUDIO_CACHE, "peridot-offline-audio-v1");
+  assert.equal(OFFLINE_ARTWORK_CACHE, "peridot-artwork-v2");
 });
 
-test("offline playback falls back only from a typed network failure", async () => {
+test("offline artwork keys ignore rotating signed query parameters", () => {
+  const first = offlineArtworkCacheRequest(
+    scope,
+    "http://127.0.0.1:17430/api/covers/cover-1?coverToken=first",
+    "https://peridot.example",
+  );
+  const second = offlineArtworkCacheRequest(
+    scope,
+    "http://127.0.0.1:17430/api/covers/cover-1?coverToken=second",
+    "https://peridot.example",
+  );
+  const otherUser = offlineArtworkCacheRequest(
+    { ...scope, userId: "user-2" },
+    "http://127.0.0.1:17430/api/covers/cover-1?coverToken=first",
+    "https://peridot.example",
+  );
+
+  assert.ok(first);
+  assert.ok(second);
+  assert.equal(first.url, second.url);
+  assert.doesNotMatch(first.url, /coverToken|first|second/);
+  assert.notEqual(first.url, otherUser?.url);
+});
+
+test("full catalog snapshots preserve every availability state", () => {
+  const track = (
+    id: string,
+    available: boolean,
+    albumId: string | null = null,
+  ) => ({
+    id,
+    title: id,
+    artist: "Artist",
+    artists: ["Artist"],
+    album: albumId ? "Album" : null,
+    albumId,
+    discNumber: null,
+    trackNumber: null,
+    durationMs: null,
+    mimeType: "audio/mpeg",
+    available,
+    coverUrl: null,
+    metadata: null,
+    liked: false,
+  });
+  const snapshot: OfflineCatalogSnapshot = {
+    version: 1,
+    scope,
+    tracks: [
+      track("z-available", true),
+      track("a-unavailable", false),
+      track("m-other-album", true, "album-2"),
+    ],
+    albums: [],
+    artists: [],
+    catalogRevision: 3,
+    syncedAt: "2026-11-13T10:00:00.000Z",
+  };
+
+  assert.deepEqual(
+    offlineTracks(snapshot, {
+      availability: "all",
+      sort: "title",
+    }).map((item) => item.id),
+    ["a-unavailable", "m-other-album", "z-available"],
+  );
+  assert.deepEqual(
+    offlineTracks(snapshot, { availability: "unavailable" }).map(
+      (item) => item.id,
+    ),
+    ["a-unavailable"],
+  );
+  assert.deepEqual(
+    offlineTracks(snapshot, { albumId: "album-2" }).map((item) => item.id),
+    ["m-other-album"],
+  );
+  assert.deepEqual(
+    offlineTracks(snapshot, { query: "Artist Album" }).map((item) => item.id),
+    ["m-other-album"],
+  );
+});
+
+test("offline playback uses only saved copies while disconnected", () => {
+  const track = {
+    id: "track-1",
+    title: "Track",
+    artist: "Artist",
+    artists: ["Artist"],
+    album: null,
+    albumId: null,
+    discNumber: null,
+    trackNumber: null,
+    durationMs: null,
+    mimeType: "audio/mpeg",
+    available: true,
+    coverUrl: null,
+    metadata: null,
+    liked: false,
+  };
+
+  assert.equal(
+    isTrackPlayable(track, {
+      serverLost: true,
+      savedTrackIds: new Set(),
+    }),
+    false,
+  );
+  assert.equal(
+    isTrackPlayable(track, {
+      serverLost: true,
+      savedTrackIds: new Set(["track-1"]),
+    }),
+    true,
+  );
+  assert.equal(
+    isTrackPlayable(
+      { ...track, available: false },
+      {
+        serverLost: false,
+        savedTrackIds: new Set(["track-1"]),
+      },
+    ),
+    false,
+  );
+});
+
+test("offline playback prefers saved audio and recovers stream failures", async () => {
   const [player, persister, table] = await Promise.all([
     readFile(
       new URL("../app/composables/use-library-player.ts", import.meta.url),
@@ -153,6 +316,12 @@ test("offline playback falls back only from a typed network failure", async () =
 
   assert.match(player, /isPeridotNetworkError\(reason\)/);
   assert.match(player, /offlineAudioBlob\(/);
+  assert.match(player, /serverStatus\.value === "lost"[\s\S]*loadOfflineTrack/);
+  assert.match(
+    player,
+    /const handleError = \(\) => \{[\s\S]*loadOfflineTrack\(failedTrackId, failedAttempt\)/,
+  );
+  assert.match(player, /addEventListener\("error", handleError\)/);
   assert.match(player, /URL\.revokeObjectURL\(offlineObjectUrl\)/);
   assert.match(persister, /experimental_createQueryPersister/);
   assert.match(persister, /maxAge: Number\.POSITIVE_INFINITY/);

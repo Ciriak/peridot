@@ -29,8 +29,16 @@ const { t } = useI18n();
 const { address } = useServer();
 const { token } = useSession();
 const { playCollection } = useLibraryPlayer();
-const { tracksMatching } = useOfflineTracks();
+const { savedTracks, tracksMatching } = useOfflineTracks();
 const { status: serverStatus } = useServerConnection();
+const playable = computed(
+  () =>
+    Boolean(props.album.trackCount) &&
+    (serverStatus.value !== "lost" ||
+      savedTracks.value.some(
+        (saved) => saved.track.albumId === props.album.id,
+      )),
+);
 const {
   loaded: likesLoaded,
   toggle: toggleLike,
@@ -45,7 +53,7 @@ const target = computed<LikeTarget>(() => ({
 }));
 
 async function playAlbum() {
-  if (!address.value || !token.value) return;
+  if (!address.value || !token.value || !playable.value) return;
   const playSaved = async () => {
     const saved = await tracksMatching(
       (track) => track.albumId === props.album.id,
@@ -78,7 +86,7 @@ async function playAlbum() {
         {{ album.title }}
       </ContextMenuLabel>
       <ContextMenuSeparator />
-      <ContextMenuItem :disabled="!album.trackCount" @select="playAlbum">
+      <ContextMenuItem :disabled="!playable" @select="playAlbum">
         <Icon :icon="icons.play" aria-hidden="true" />
         {{ t("context.playAlbum") }}
       </ContextMenuItem>

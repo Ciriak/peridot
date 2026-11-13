@@ -67,7 +67,7 @@ const { status: serverStatus } = useServerConnection();
 const serverLost = computed(() => serverStatus.value === "lost");
 const { token } = useSession();
 const { playCollection } = useLibraryPlayer();
-const { tracksMatching } = useOfflineTracks();
+const { savedTracks, tracksMatching } = useOfflineTracks();
 const { invalidate: invalidateCatalog } = useCatalogRevision();
 const {
   loaded: likesLoaded,
@@ -86,9 +86,19 @@ const target = computed<LikeTarget>(() => ({
   kind: "artist",
   name: props.artist.localName,
 }));
+const playable = computed(() => {
+  if (!props.artist.trackCount) return false;
+  if (!serverLost.value) return true;
+  const localName = props.artist.localName.trim().toLowerCase();
+  return savedTracks.value.some((saved) =>
+    trackArtistNames(saved.track).some(
+      (name) => name.trim().toLowerCase() === localName,
+    ),
+  );
+});
 
 async function playArtist() {
-  if (!address.value || !token.value) return;
+  if (!address.value || !token.value || !playable.value) return;
   const playSaved = async () => {
     const localName = props.artist.localName.trim().toLowerCase();
     const saved = await tracksMatching((track) =>
@@ -226,7 +236,7 @@ async function revertMetadata() {
         {{ artist.name }}
       </ContextMenuLabel>
       <ContextMenuSeparator />
-      <ContextMenuItem :disabled="!artist.trackCount" @select="playArtist">
+      <ContextMenuItem :disabled="!playable" @select="playArtist">
         <Icon :icon="icons.play" aria-hidden="true" />
         {{ t("context.playArtist") }}
       </ContextMenuItem>

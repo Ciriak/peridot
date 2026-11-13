@@ -1,5 +1,22 @@
 # Decisions
 
+## 2026-11-13: Sidebar brand mark is embedded in the offline application bundle
+
+The small sidebar logo is imported as an inline Vite asset. The service worker
+precaches hashed image files, but an inline logo has no second offline asset
+lookup that can fail independently from the application shell. The payload is
+small and uses the same source asset, so the sidebar brand remains available
+without adding custom styling or changing the server.
+
+## 2026-11-13: Development startup builds runtime workspace contracts
+
+The root development command builds `@peridot/contracts` before starting the web
+and server watch processes. The package publishes its source types but resolves
+runtime imports through `dist`, so starting from a checkout with ignored, stale
+generated output could otherwise fail on newly added runtime exports. Building
+the contract package at startup makes a fresh clone and an existing clone behave
+the same without committing generated files.
+
 ## 2026-11-12: Desktop prototype uses Tauri around the shared Nuxt client
 
 The first desktop application is a Tauri 2 shell in `apps/desktop`. Development

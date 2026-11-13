@@ -43,7 +43,7 @@ const { address } = useServer();
 const { token } = useSession();
 const { playCollection } = useLibraryPlayer();
 const { status: serverStatus } = useServerConnection();
-const { tracksMatching } = useOfflineTracks();
+const { savedTracks, tracksMatching } = useOfflineTracks();
 const {
   likedArtistKeys,
   loaded: likesLoaded,
@@ -57,6 +57,16 @@ const artistName = computed(() => {
 });
 const artist = ref<ArtistSummaryResponse | null>(null);
 const offlinePlaybackError = ref("");
+const artistPlayable = computed(() => {
+  if (!artist.value?.trackCount) return false;
+  if (serverStatus.value !== "lost") return true;
+  const localName = artist.value.localName.trim().toLowerCase();
+  return savedTracks.value.some((saved) =>
+    trackArtistNames(saved.track).some(
+      (name) => name.trim().toLowerCase() === localName,
+    ),
+  );
+});
 const {
   items: artistMatches,
   loading: artistMatchesLoading,
@@ -108,7 +118,8 @@ function loadArtist(force = false) {
 }
 
 async function playWholeArtist() {
-  if (!address.value || !token.value || !artist.value) return;
+  if (!address.value || !token.value || !artist.value || !artistPlayable.value)
+    return;
   offlinePlaybackError.value = "";
   const playSavedTracks = async () => {
     const localName = artist.value?.localName.trim().toLowerCase();
@@ -233,7 +244,7 @@ onMounted(() => {
             {{ t("page.artist.localName", { artist: artist.localName }) }}
           </p>
           <div class="flex flex-wrap items-center gap-3">
-            <Button :disabled="!artist.trackCount" @click="playWholeArtist">
+            <Button :disabled="!artistPlayable" @click="playWholeArtist">
               <Icon :icon="icons.play" aria-hidden="true" />{{
                 t("context.playArtist")
               }}

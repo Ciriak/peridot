@@ -194,7 +194,7 @@ test("shared track lists show cover artwork beside every title", async () => {
   );
   assert.match(
     table,
-    /<TrackArtwork :track="item\.data"[\s\S]*class="[^"]*absolute inset-0 size-full cursor-pointer[^"]*bg-background\/70[^"]*hover:bg-background\/70[^"]*"[\s\S]*@click="playFromList\(item\.data\)"[\s\S]*class="text-foreground"[\s\S]*<\/TrackArtwork>\s*<div class="min-w-0 flex-1">[\s\S]*\{\{ item\.data\.title \}\}/,
+    /<TrackArtwork[\s\S]*class="[^"]*absolute inset-0 size-full cursor-pointer[^"]*bg-background\/70[^"]*hover:bg-background\/70[^"]*"[\s\S]*@click="playFromList\(item\.data\)"[\s\S]*class="text-foreground"[\s\S]*<\/TrackArtwork>\s*<div class="min-w-0 flex-1">[\s\S]*\{\{ item\.data\.title \}\}/,
     "The full-cover track control uses a pointer cursor and matches the Quick pick colors",
   );
 });
@@ -250,7 +250,7 @@ test("player queue details are merged without refetching known tracks", () => {
   );
 });
 
-test("unavailable track titles are dimmed without muting available titles", async () => {
+test("unavailable track titles and artwork are dimmed with inert controls", async () => {
   const table = await readFile(
     new URL("../app/components/TrackTable.vue", import.meta.url),
     "utf8",
@@ -258,7 +258,13 @@ test("unavailable track titles are dimmed without muting available titles", asyn
 
   assert.match(
     table,
-    /<span\s+:id="trackTitleAnchorId\(item\.data\.id\)"\s+class="scroll-mt-4 truncate"\s+:class="\{ 'opacity-60': !item\.data\.available \}"\s+>\{\{ item\.data\.title \}\}<\/span/,
+    /<span\s+:id="trackTitleAnchorId\(item\.data\.id\)"\s+class="scroll-mt-4 truncate"\s+:class="\{ 'opacity-60': isUnavailable\(item\.data\) \}"\s+>\{\{ item\.data\.title \}\}<\/span/,
+  );
+  assert.match(table, /:class="isUnavailable\(item\.data\) && 'opacity-60'"/);
+  assert.match(table, /:disabled="isUnavailable\(item\.data\)"/);
+  assert.match(
+    table,
+    /function isUnavailable\(track: TrackResponse\): boolean/,
   );
 });
 

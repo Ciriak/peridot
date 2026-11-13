@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue/offline";
+import { Badge } from "@peridot/ui/components/ui/badge";
 import { ProgressCircle } from "@peridot/ui/components/ui/progress-circle";
 import {
   TooltipContent,
@@ -49,13 +50,16 @@ const progressLabel = computed(() => {
   <TooltipProvider v-if="status === 'connection-lost'" :delay-duration="150">
     <TooltipRoot>
       <TooltipTrigger as-child>
-        <Icon
-          :icon="icons.networkOff"
-          role="img"
+        <Badge
+          variant="outline"
+          role="status"
           tabindex="0"
           :aria-label="t('components.taskProgress.connectionLost')"
-          class="size-4 text-foreground motion-safe:animate-pulse focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-        />
+          class="cursor-default text-foreground motion-safe:animate-pulse"
+        >
+          <Icon :icon="icons.networkOff" aria-hidden="true" />
+          {{ t("components.taskProgress.offlineBadge") }}
+        </Badge>
       </TooltipTrigger>
       <TooltipPortal>
         <TooltipContent

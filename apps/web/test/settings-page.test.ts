@@ -128,6 +128,7 @@ test("the header places task progress before the account avatar", async () => {
   assert.match(header, /group-focus-visible\/avatar:opacity-100/);
   assert.match(layout, /gravatarUrl/);
   assert.match(layout, /@peridot\/ui\/assets\/brand\/logo\.svg/);
+  assert.match(layout, /@peridot\/ui\/assets\/brand\/logo-nop\.png\?inline/);
   assert.match(layout, /flex-1 justify-start text-lg font-semibold/);
   assert.match(
     layout,

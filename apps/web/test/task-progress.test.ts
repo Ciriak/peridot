@@ -244,6 +244,13 @@ test("the topbar shares connection loss and exposes task progress to admins", as
   assert.doesNotMatch(indicator, /text-destructive|border-destructive/);
   assert.match(indicator, /motion-safe:animate-pulse/);
   assert.match(indicator, /t\('components\.taskProgress\.connectionLost'\)/);
+  assert.match(indicator, /import \{ Badge \}/);
+  assert.match(indicator, /<Badge[\s\S]*variant="outline"[\s\S]*role="status"/);
+  assert.match(
+    indicator,
+    /<Icon :icon="icons\.networkOff" aria-hidden="true" \/>/,
+  );
+  assert.match(indicator, /t\("components\.taskProgress\.offlineBadge"\)/);
   assert.match(indicator, /<TooltipTrigger as-child>/);
   assert.match(indicator, /<NuxtLink\s+to="\/settings\/tasks"/);
   assert.match(indicator, /t\('components\.taskProgress\.open'\)/);

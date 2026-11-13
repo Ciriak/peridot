@@ -1,6 +1,55 @@
 # Handoff
 
-Last updated: 2026-11-12.
+Last updated: 2026-11-13.
+
+## Offline sidebar brand mark
+
+The sidebar logo is now embedded in the web application bundle instead of being
+requested as a separate hashed image. Offline mode therefore does not depend on
+that image receiving its own successful service-worker cache lookup. The logo
+asset, sizing, semantic link, and app name are unchanged.
+
+Checks run:
+
+- `pnpm --filter @peridot/web exec node --test
+test/settings-page.test.ts` (13 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build` (93 PWA precache entries; sidebar PNG no
+  longer emitted as a separate asset)
+- Prettier checks for the changed layout, test, and documentation files
+- `git diff --check`
+
+Known limits: browser-level visual verification was blocked because Computer Use
+could not verify the local browser URL. The production build and regression
+review the asset boundary rather than claiming a live offline render.
+
+No commit, push, tag, publication, or deployment was performed.
+
+## Development contracts build
+
+The root `pnpm dev` command now rebuilds `@peridot/contracts` before starting the
+web and server development processes. This fixes the stale ignored `dist`
+artifact that omitted the runtime export
+`TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY` and made Nuxt return HTTP 500.
+
+Checks run:
+
+- `pnpm --filter @peridot/contracts build`
+- Direct runtime import from `@peridot/contracts` returned
+  `metadata.activeProvider`
+- `pnpm --filter @peridot/web exec node --test test/task-progress.test.ts`
+  (9 passing)
+- `pnpm --filter @peridot/contracts typecheck`
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/server test` (101 passing)
+- `pnpm --filter @peridot/web build`
+- Root `pnpm dev` startup, followed by HTTP 200 responses from `/` and
+  `/settings/tasks` and an `ok` response from `/api/health`
+- Prettier checks for changed files and `git diff --check`
+
+Generated `dist` files remain ignored. Changes to contracts made while `pnpm
+dev` is already running still require rebuilding the package or restarting the
+development command. These changes remain uncommitted.
 
 ## Tauri desktop prototype
 

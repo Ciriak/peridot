@@ -164,7 +164,7 @@ test("the persistent player controls a native audio element", async () => {
   );
   assert.match(
     playerFooter,
-    /<div\s+aria-hidden="true"\s+class="pointer-events-none absolute inset-y-0 left-0 -z-10 w-2\/3[\s\S]*<div class="absolute inset-0 opacity-40">[\s\S]*<Transition[\s\S]*<img\s+v-if="currentCoverUrl && !coverFailed"[\s\S]*:src="currentCoverUrl"[\s\S]*scale-125 object-cover object-left blur-3xl/,
+    /<div\s+aria-hidden="true"\s+class="pointer-events-none absolute inset-y-0 left-0 -z-10 w-2\/3[\s\S]*<div class="absolute inset-0 opacity-40">[\s\S]*<Transition[\s\S]*<img\s+v-if="currentCoverImageUrl && !coverFailed"[\s\S]*:src="currentCoverImageUrl"[\s\S]*scale-125 object-cover object-left blur-3xl/,
     "The decorative background stays mounted while its current cover is rendered",
   );
   assert.doesNotMatch(
@@ -173,13 +173,13 @@ test("the persistent player controls a native audio element", async () => {
     "Missing cover art fades out instead of abruptly removing the background layer",
   );
   assert.equal(
-    playerFooter.match(/:key="currentCoverUrl"/g)?.length,
+    playerFooter.match(/:key="currentCoverImageUrl"/g)?.length,
     2,
     "Both player cover layers update when the track cover changes",
   );
   assert.match(
     playerFooter,
-    /<Transition\s+enter-active-class="transition-opacity duration-3000 delay-150 ease-in-out motion-reduce:transition-none"[\s\S]*leave-active-class="transition-opacity duration-3000 delay-150 ease-in-out motion-reduce:transition-none"[\s\S]*<img\s+v-if="currentCoverUrl && !coverFailed"\s+:key="currentCoverUrl"\s+:src="currentCoverUrl"/,
+    /<Transition\s+enter-active-class="transition-opacity duration-3000 delay-150 ease-in-out motion-reduce:transition-none"[\s\S]*leave-active-class="transition-opacity duration-3000 delay-150 ease-in-out motion-reduce:transition-none"[\s\S]*<img\s+v-if="currentCoverImageUrl && !coverFailed"\s+:key="currentCoverImageUrl"\s+:src="currentCoverImageUrl"/,
     "The decorative player background waits briefly, then directly crossfades over three seconds",
   );
   assert.equal(
@@ -266,12 +266,12 @@ test("the player replaces known track metadata without an unresolved frame", asy
   );
   assert.match(
     player,
-    /rememberQueueTrackDetails\(tracks, nextQueue\);\s+setQueueSnapshot\(/,
+    /rememberQueueTrackDetails\(playableTracks, nextQueue\);\s+setQueueSnapshot\(/,
     "Known collection tracks are added before the collection queue becomes active",
   );
   assert.match(
     trackTable,
-    /playCollection\(props\.tracks, track\.id\)/,
+    /playCollection\([\s\S]*props\.tracks\.filter\(\(candidate\) => !isUnavailable\(candidate\)\),[\s\S]*track\.id/,
     "Track-table playback forwards the loaded track objects",
   );
   assert.match(

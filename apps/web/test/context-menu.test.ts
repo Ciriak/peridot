@@ -32,7 +32,10 @@ test("track rows expose a Reka context menu with playback, favorites, downloads,
     "Context menu primitives come from the shared shadcn-vue layer",
   );
   assert.match(menu, /<ContextMenuTrigger as-child>/);
-  assert.match(menu, /@select="emit\('play'\)"/);
+  assert.match(
+    menu,
+    /<ContextMenuItem :disabled="!playable" @select="emit\('play'\)">/,
+  );
   assert.match(menu, /useLikes\(\)/);
   assert.match(menu, /toggleLike\(\{ kind: 'track', trackId: track\.id \}\)/);
   assert.match(menu, /downloadTrack\(props\.track\.id\)/);
@@ -55,8 +58,8 @@ test("track rows expose a Reka context menu with playback, favorites, downloads,
   assert.match(trackTable, /@play="playFromList\(item\.data, true\)"/);
   assert.match(
     trackTable,
-    /playCollection\(props\.tracks, track\.id\)/,
-    "Playing a row queues the complete displayed track list",
+    /playCollection\(\s*props\.tracks\.filter\(\(candidate\) => !isUnavailable\(candidate\)\),\s*track\.id,?\s*\)/,
+    "Playing a row queues the complete playable displayed track list",
   );
 
   for (const [name, source, variant] of [

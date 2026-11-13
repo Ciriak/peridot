@@ -5,13 +5,23 @@ import type { TrackResponse } from "@peridot/contracts";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { useSortable } from "@vueuse/integrations/useSortable";
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from "vue";
 import TrackArtwork from "./TrackArtwork.vue";
 import TrackArtistLinks from "./TrackArtistLinks.vue";
 import { useLibraryPlayer } from "../composables/use-library-player";
+import { useOfflineTracks } from "../composables/use-offline-tracks";
 import { useServer } from "../composables/use-server";
+import { useServerConnection } from "../composables/use-server-connection";
 import { icons } from "../lib/icons";
 import { trackArtistNames } from "../lib/library";
+import { isTrackPlayable } from "../lib/offline-playback";
 
 const open = defineModel<boolean>("open", { required: true });
 const { t } = useI18n();
@@ -19,6 +29,11 @@ const queueList = ref<HTMLElement | null>(null);
 const panel = ref<HTMLElement | null>(null);
 const sortableTracks = ref<TrackResponse[]>([]);
 const { address } = useServer();
+const { status: serverStatus } = useServerConnection();
+const { savedTracks } = useOfflineTracks();
+const savedTrackIds = computed(
+  () => new Set(savedTracks.value.map((saved) => saved.track.id)),
+);
 const {
   active,
   playing,
@@ -33,6 +48,13 @@ const {
   play,
   togglePlayback,
 } = useLibraryPlayer();
+
+function isUnavailable(track: TrackResponse): boolean {
+  return !isTrackPlayable(track, {
+    serverLost: serverStatus.value === "lost",
+    savedTrackIds: savedTrackIds.value,
+  });
+}
 
 watch(
   upcomingTracks,
@@ -133,11 +155,16 @@ onBeforeUnmount(() => document.removeEventListener("keydown", handleKeydown));
             v-if="active"
             class="group/track-artwork flex min-w-0 items-center gap-3"
           >
-            <TrackArtwork :track="active" :server-address="address ?? ''">
+            <TrackArtwork
+              :track="active"
+              :server-address="address ?? ''"
+              :class="isUnavailable(active) && 'opacity-60'"
+            >
               <Button
                 variant="ghost"
                 size="icon-sm"
-                class="absolute inset-0 size-full cursor-pointer rounded-md bg-background/70 opacity-0 transition-opacity hover:bg-background/70 hover:text-foreground dark:hover:bg-background/70 group-hover/track-artwork:opacity-100 group-focus-within/track-artwork:opacity-100"
+                class="absolute inset-0 size-full cursor-pointer rounded-md bg-background/70 opacity-0 transition-opacity hover:bg-background/70 hover:text-foreground disabled:cursor-not-allowed dark:hover:bg-background/70 group-hover/track-artwork:opacity-100 group-focus-within/track-artwork:opacity-100"
+                :disabled="isUnavailable(active)"
                 :aria-label="
                   playing
                     ? t('player.pauseTitle', { title: active.title })
@@ -211,6 +238,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", handleKeydown));
               v-for="track in sortableTracks"
               :key="track.id"
               class="group/track-artwork flex cursor-grab items-center gap-2 rounded-md border p-2 active:cursor-grabbing"
+              :class="isUnavailable(track) && 'text-muted-foreground'"
             >
               <span
                 aria-hidden="true"
@@ -218,11 +246,16 @@ onBeforeUnmount(() => document.removeEventListener("keydown", handleKeydown));
               >
                 <Icon :icon="icons.drag" aria-hidden="true" class="size-4" />
               </span>
-              <TrackArtwork :track="track" :server-address="address ?? ''">
+              <TrackArtwork
+                :track="track"
+                :server-address="address ?? ''"
+                :class="isUnavailable(track) && 'opacity-60'"
+              >
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  class="absolute inset-0 size-full cursor-pointer rounded-md bg-background/70 opacity-0 transition-opacity hover:bg-background/70 hover:text-foreground dark:hover:bg-background/70 group-hover/track-artwork:opacity-100 group-focus-within/track-artwork:opacity-100"
+                  class="absolute inset-0 size-full cursor-pointer rounded-md bg-background/70 opacity-0 transition-opacity hover:bg-background/70 hover:text-foreground disabled:cursor-not-allowed dark:hover:bg-background/70 group-hover/track-artwork:opacity-100 group-focus-within/track-artwork:opacity-100"
+                  :disabled="isUnavailable(track)"
                   :aria-label="t('queue.playFrom', { title: track.title })"
                   @click.stop="play(track)"
                 >

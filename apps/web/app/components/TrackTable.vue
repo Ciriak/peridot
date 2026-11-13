@@ -13,6 +13,7 @@ import { useLikes } from "../composables/use-likes";
 import { useLibraryPlayer } from "../composables/use-library-player";
 import { useOfflineTracks } from "../composables/use-offline-tracks";
 import { useServer } from "../composables/use-server";
+import { useServerConnection } from "../composables/use-server-connection";
 import { icons } from "../lib/icons";
 import {
   notifyOfflineTrackFailed,
@@ -31,6 +32,7 @@ import {
   type TrackTableVariant,
   type TrackSortField,
 } from "../lib/library";
+import { isTrackPlayable } from "../lib/offline-playback";
 
 const props = defineProps<{
   tracks: readonly TrackResponse[];
@@ -47,6 +49,7 @@ const emit = defineEmits<{
 }>();
 
 const { address } = useServer();
+const { status: serverStatus } = useServerConnection();
 const { playing, currentTrackId, play, playCollection } = useLibraryPlayer();
 const {
   likedTrackIds,
@@ -55,6 +58,7 @@ const {
   isPending: isLikePending,
 } = useLikes();
 const {
+  savedTracks: savedOfflineTracks,
   canSave: canSaveOffline,
   error: offlineError,
   isSaved: isSavedOffline,
@@ -62,6 +66,9 @@ const {
   save: saveOffline,
   remove: removeOffline,
 } = useOfflineTracks();
+const savedTrackIds = computed(
+  () => new Set(savedOfflineTracks.value.map((saved) => saved.track.id)),
+);
 
 const activeSort = computed(
   () => props.sort ?? defaultTrackSort(props.variant),
@@ -128,6 +135,13 @@ function isPlaying(track: TrackResponse): boolean {
   return isActive(track) && playing.value;
 }
 
+function isUnavailable(track: TrackResponse): boolean {
+  return !isTrackPlayable(track, {
+    serverLost: serverStatus.value === "lost",
+    savedTrackIds: savedTrackIds.value,
+  });
+}
+
 function loadMoreRows() {
   if (hasHiddenRows.value) {
     visibleCount.value = Math.min(
@@ -140,11 +154,15 @@ function loadMoreRows() {
 }
 
 function playFromList(track: TrackResponse, restart = false) {
+  if (isUnavailable(track)) return;
   if (!restart && currentTrackId.value === track.id) {
     play(track);
     return;
   }
-  playCollection(props.tracks, track.id);
+  playCollection(
+    props.tracks.filter((candidate) => !isUnavailable(candidate)),
+    track.id,
+  );
 }
 
 async function toggleOffline(track: TrackResponse) {
@@ -332,11 +350,16 @@ watch(
             {{ formatTrackNumber(item.data) }}
           </div>
           <div role="cell" class="flex min-w-0 flex-1 items-center gap-2 p-2">
-            <TrackArtwork :track="item.data" :server-address="address ?? ''">
+            <TrackArtwork
+              :track="item.data"
+              :server-address="address ?? ''"
+              :class="isUnavailable(item.data) && 'opacity-60'"
+            >
               <Button
                 variant="ghost"
                 size="icon-sm"
-                class="absolute inset-0 size-full cursor-pointer rounded-md bg-background/70 opacity-0 transition-opacity hover:bg-background/70 hover:text-foreground dark:hover:bg-background/70 group-hover/track-artwork:opacity-100 group-focus-within/track-artwork:opacity-100"
+                class="absolute inset-0 size-full cursor-pointer rounded-md bg-background/70 opacity-0 transition-opacity hover:bg-background/70 hover:text-foreground disabled:cursor-not-allowed dark:hover:bg-background/70 group-hover/track-artwork:opacity-100 group-focus-within/track-artwork:opacity-100"
+                :disabled="isUnavailable(item.data)"
                 :aria-label="
                   isPlaying(item.data)
                     ? t('trackTable.pause', { title: item.data.title })
@@ -357,7 +380,7 @@ watch(
                 <span
                   :id="trackTitleAnchorId(item.data.id)"
                   class="scroll-mt-4 truncate"
-                  :class="{ 'opacity-60': !item.data.available }"
+                  :class="{ 'opacity-60': isUnavailable(item.data) }"
                   >{{ item.data.title }}</span
                 >
                 <Icon
@@ -402,7 +425,8 @@ watch(
               size="icon-sm"
               :disabled="
                 isOfflinePending(item.data.id) ||
-                (!isSavedOffline(item.data.id) && !canSaveOffline)
+                (!isSavedOffline(item.data.id) &&
+                  (!canSaveOffline || !item.data.available))
               "
               :aria-busy="isOfflinePending(item.data.id)"
               :aria-label="

@@ -51,7 +51,7 @@ test("albums have list and detail routes with derived groups", async () => {
   assert.match(albumCard, /togglePlayback\(\)/);
   assert.match(
     albumCard,
-    /async function toggleAlbumPlayback\(\) \{\s+if \(albumActive\.value && playing\.value\) \{\s+togglePlayback\(\);\s+return;\s+\}\s+if \(!address\.value/,
+    /async function toggleAlbumPlayback\(\) \{\s+if \(albumActive\.value && playing\.value\) \{\s+togglePlayback\(\);\s+return;\s+\}\s+if \(!address\.value[^\n]*!albumPlayable\.value\) return;/,
     "The album card pauses while playing but starts a collection from its first track otherwise",
   );
   assert.match(
@@ -189,7 +189,7 @@ test("albums have list and detail routes with derived groups", async () => {
   );
   assert.match(
     trackTable,
-    /<TrackArtwork :track="item\.data"[\s\S]*icons\.play[\s\S]*<\/TrackArtwork>\s*<div class="min-w-0 flex-1">\s*<div class="flex min-w-0 items-center gap-2">\s*<span\s+:id="trackTitleAnchorId\(item\.data\.id\)"\s+class="scroll-mt-4 truncate"\s+:class="\{ 'opacity-60': !item\.data\.available \}"\s+>\{\{ item\.data\.title \}\}<\/span\s*>/,
+    /<TrackArtwork[\s\S]*icons\.play[\s\S]*<\/TrackArtwork>\s*<div class="min-w-0 flex-1">\s*<div class="flex min-w-0 items-center gap-2">\s*<span\s+:id="trackTitleAnchorId\(item\.data\.id\)"\s+class="scroll-mt-4 truncate"\s+:class="\{ 'opacity-60': isUnavailable\(item\.data\) \}"\s+>\{\{ item\.data\.title \}\}<\/span\s*>/,
     "Track titles remain plain text beside artwork that embeds the play control",
   );
   assert.match(

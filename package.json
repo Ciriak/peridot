@@ -8,7 +8,8 @@
   "scripts": {
     "prepare": "husky",
     "commitlint": "commitlint",
-    "dev": "pnpm db:update && pnpm --parallel --filter @peridot/web --filter @peridot/server run dev",
+    "dev": "pnpm db:update && pnpm --filter @peridot/contracts build && pnpm --parallel --filter @peridot/web --filter @peridot/server run dev",
+    "dev:server": "pnpm db:update && pnpm --filter @peridot/contracts build && pnpm --filter @peridot/server run dev",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",

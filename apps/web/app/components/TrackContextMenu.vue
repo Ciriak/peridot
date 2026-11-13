@@ -34,12 +34,14 @@ import { useLikes } from "../composables/use-likes";
 import { useLibraryPlayer } from "../composables/use-library-player";
 import { useCatalogRevision } from "../composables/use-catalog-query";
 import { useLocalizedMessage } from "../composables/use-localized-message";
+import { useOfflineTracks } from "../composables/use-offline-tracks";
 import { useQueryScope } from "../composables/use-query-scope";
 import { useServer } from "../composables/use-server";
 import { useServerConnection } from "../composables/use-server-connection";
 import { useSession } from "../composables/use-session";
 import { icons } from "../lib/icons";
 import { artistRoute, trackAlbumRoute, trackArtistNames } from "../lib/library";
+import { isTrackPlayable } from "../lib/offline-playback";
 import { queryKeys } from "../lib/query-keys";
 import {
   applyTrackMetadata,
@@ -65,6 +67,13 @@ const { scope } = useQueryScope();
 const queryClient = useQueryClient();
 const { status: serverStatus } = useServerConnection();
 const serverLost = computed(() => serverStatus.value === "lost");
+const { savedTracks } = useOfflineTracks();
+const playable = computed(() =>
+  isTrackPlayable(props.track, {
+    serverLost: serverLost.value,
+    savedTrackIds: new Set(savedTracks.value.map((saved) => saved.track.id)),
+  }),
+);
 const { token } = useSession();
 const {
   likedTrackIds,
@@ -219,12 +228,12 @@ async function revertMetadata() {
     <ContextMenuContent class="w-56">
       <ContextMenuLabel class="truncate">{{ track.title }}</ContextMenuLabel>
       <ContextMenuSeparator />
-      <ContextMenuItem @select="emit('play')">
+      <ContextMenuItem :disabled="!playable" @select="emit('play')">
         <Icon :icon="icons.play" aria-hidden="true" />
         {{ t("context.play") }}
       </ContextMenuItem>
       <ContextMenuItem
-        :disabled="!queueLoaded || addingToQueue"
+        :disabled="!playable || !queueLoaded || addingToQueue"
         @select="addNext"
       >
         <Icon :icon="icons.addToQueue" aria-hidden="true" />
@@ -248,7 +257,10 @@ async function revertMetadata() {
             : t("context.like")
         }}
       </ContextMenuItem>
-      <ContextMenuItem :disabled="downloading || serverLost" @select="download">
+      <ContextMenuItem
+        :disabled="downloading || serverLost || !track.available"
+        @select="download"
+      >
         <Icon :icon="icons.download" aria-hidden="true" />
         {{ downloading ? t("common.downloading") : t("common.download") }}
       </ContextMenuItem>

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue/offline";
 import type { TrackResponse } from "@peridot/contracts";
-import { computed, ref, watch } from "vue";
+import { computed } from "vue";
+import { useCachedArtwork } from "../composables/use-cached-artwork";
 import { icons } from "../lib/icons";
 import { trackCoverUrl } from "../lib/library";
 
@@ -10,14 +11,10 @@ const props = defineProps<{
   serverAddress: string;
 }>();
 
-const coverFailed = ref(false);
 const coverUrl = computed(() =>
   trackCoverUrl(props.serverAddress, props.track.coverUrl),
 );
-
-watch(coverUrl, () => {
-  coverFailed.value = false;
-});
+const { artworkUrl, failed: coverFailed } = useCachedArtwork(coverUrl);
 </script>
 
 <template>
@@ -25,8 +22,8 @@ watch(coverUrl, () => {
     class="relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted text-muted-foreground"
   >
     <img
-      v-if="coverUrl && !coverFailed"
-      :src="coverUrl"
+      v-if="artworkUrl && !coverFailed"
+      :src="artworkUrl"
       alt=""
       aria-hidden="true"
       loading="lazy"

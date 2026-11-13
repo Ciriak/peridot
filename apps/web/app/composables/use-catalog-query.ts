@@ -20,6 +20,12 @@ import {
   type TrackListOptions,
 } from "../lib/peridot-client";
 import {
+  offlineAlbums,
+  offlineArtists,
+  offlineTracks,
+  type OfflineCatalogSnapshot,
+} from "../lib/offline-catalog";
+import {
   PERIDOT_QUERY_ROOT,
   peridotScopeKey,
   queryKeys,
@@ -30,7 +36,9 @@ import {
   visibleQueryError,
 } from "../lib/query-view-state";
 import { useLocalizedMessage } from "./use-localized-message";
+import { useOfflineCatalog } from "./use-offline-catalog";
 import { useQueryScope } from "./use-query-scope";
+import { useServerConnection } from "./use-server-connection";
 import { useSession } from "./use-session";
 
 export function useCatalogRevision() {
@@ -93,9 +101,12 @@ function useCatalogInfiniteQuery<T>(options: {
     catalogRevision: number;
   }>;
   itemKey: (item: T) => string;
+  offlineItems: (snapshot: OfflineCatalogSnapshot) => T[];
 }) {
   const { scope } = useQueryScope();
   const { token } = useSession();
+  const { status } = useServerConnection();
+  const { snapshot: offlineSnapshot } = useOfflineCatalog();
   const { errorMessage } = useLocalizedMessage();
   const query = useInfiniteQuery<
     {
@@ -124,7 +135,7 @@ function useCatalogInfiniteQuery<T>(options: {
     meta: { persist: true },
   });
 
-  const items = computed(() => {
+  const serverItems = computed(() => {
     const seen = new Set<string>();
     return (query.data.value?.pages ?? []).flatMap((page) =>
       page.items.filter((item) => {
@@ -135,31 +146,55 @@ function useCatalogInfiniteQuery<T>(options: {
       }),
     );
   });
-  const loaded = computed(() => query.data.value !== undefined);
-  const loading = computed(() =>
-    blockingQueryLoading(loaded.value, query.isPending.value),
+  const usingOffline = computed(
+    () => status.value !== "connected" && offlineSnapshot.value !== null,
   );
-  const loadingMore = computed(() => query.isFetchingNextPage.value);
+  const items = computed(() =>
+    usingOffline.value && offlineSnapshot.value
+      ? options.offlineItems(offlineSnapshot.value)
+      : serverItems.value,
+  );
+  const loaded = computed(
+    () => usingOffline.value || query.data.value !== undefined,
+  );
+  const loading = computed(() =>
+    usingOffline.value
+      ? false
+      : blockingQueryLoading(loaded.value, query.isPending.value),
+  );
+  const loadingMore = computed(
+    () => !usingOffline.value && query.isFetchingNextPage.value,
+  );
   const error = computed(() =>
-    visibleQueryError(
-      loaded.value,
-      query.error.value
-        ? catalogErrorMessage(query.error.value, errorMessage)
-        : null,
-    ),
+    usingOffline.value
+      ? null
+      : visibleQueryError(
+          loaded.value,
+          query.error.value
+            ? catalogErrorMessage(query.error.value, errorMessage)
+            : null,
+        ),
   );
   const nextCursor = computed(
     () => query.data.value?.pages.at(-1)?.nextCursor ?? null,
   );
-  const hasMore = computed(() => query.hasNextPage.value);
+  const hasMore = computed(
+    () => !usingOffline.value && query.hasNextPage.value,
+  );
 
   async function load(force = false) {
-    if (!scope.value || !token.value) return;
+    if (!scope.value || !token.value || usingOffline.value) return;
     if (force || !query.data.value) await query.refetch();
   }
 
   async function loadMore() {
-    if (!query.hasNextPage.value || query.isFetchingNextPage.value) return;
+    if (
+      usingOffline.value ||
+      !query.hasNextPage.value ||
+      query.isFetchingNextPage.value
+    ) {
+      return;
+    }
     await query.fetchNextPage();
   }
 
@@ -201,6 +236,7 @@ export function useCatalogTrackQuery(
         ...(cursor ? { cursor } : {}),
       }),
     itemKey: (track) => track.id,
+    offlineItems: (snapshot) => offlineTracks(snapshot, optionKey.value),
   });
   return { ...query, tracks: query.items };
 }
@@ -220,6 +256,10 @@ function useCatalogCardQuery<T extends { id: string }>(config: {
     catalogRevision: number;
   }>;
   options: () => CardListOptions;
+  offlineItems: (
+    snapshot: OfflineCatalogSnapshot,
+    options: CardListOptions,
+  ) => T[];
 }) {
   const { scope } = useQueryScope();
   const optionKey = computed(() => config.options());
@@ -236,6 +276,7 @@ function useCatalogCardQuery<T extends { id: string }>(config: {
         ...(cursor ? { cursor } : {}),
       }),
     itemKey: (item) => item.id,
+    offlineItems: (snapshot) => config.offlineItems(snapshot, optionKey.value),
   });
 }
 
@@ -246,6 +287,7 @@ export function useCatalogAlbumQuery(
     queryKey: queryKeys.albums,
     fetchPage: listAlbums,
     options,
+    offlineItems: offlineAlbums,
   });
 }
 
@@ -256,5 +298,6 @@ export function useCatalogArtistQuery(
     queryKey: queryKeys.artists,
     fetchPage: listArtists,
     options,
+    offlineItems: offlineArtists,
   });
 }

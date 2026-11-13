@@ -13,6 +13,7 @@ import {
   useCatalogAlbumQuery,
   useCatalogTrackQuery,
 } from "../../composables/use-catalog-query";
+import { useCachedArtwork } from "../../composables/use-cached-artwork";
 import { useLikes } from "../../composables/use-likes";
 import { useLibraryPlayer } from "../../composables/use-library-player";
 import { useOfflineTracks } from "../../composables/use-offline-tracks";
@@ -40,7 +41,7 @@ const { address } = useServer();
 const { token } = useSession();
 const { active, playing, playCollection, togglePlayback } = useLibraryPlayer();
 const { status: serverStatus } = useServerConnection();
-const { tracksMatching } = useOfflineTracks();
+const { savedTracks, tracksMatching } = useOfflineTracks();
 const {
   likedAlbumIds,
   loaded: likesLoaded,
@@ -96,13 +97,19 @@ const albumActive = computed(() => {
   const current = active.value;
   return Boolean(current && album.value && current.albumId === album.value.id);
 });
-const coverFailed = ref(false);
+const albumPlayable = computed(
+  () =>
+    Boolean(album.value?.trackCount) &&
+    (serverStatus.value !== "lost" ||
+      savedTracks.value.some(
+        (saved) => saved.track.albumId === album.value?.id,
+      )),
+);
 const coverUrl = computed(() =>
   trackCoverUrl(address.value ?? "", album.value?.coverUrl ?? null),
 );
-watch(coverUrl, () => {
-  coverFailed.value = false;
-});
+const { artworkUrl: coverImageUrl, failed: coverFailed } =
+  useCachedArtwork(coverUrl);
 useHead(() => ({
   title: album.value
     ? t("page.album.title", {
@@ -116,7 +123,8 @@ function loadAlbum(force = false) {
 }
 
 async function playWholeAlbum() {
-  if (!address.value || !token.value || !album.value) return;
+  if (!address.value || !token.value || !album.value || !albumPlayable.value)
+    return;
   offlinePlaybackError.value = "";
   const playSavedTracks = async () => {
     const saved = await tracksMatching(
@@ -234,8 +242,8 @@ onMounted(() => {
         class="flex size-40 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted text-muted-foreground"
       >
         <img
-          v-if="coverUrl && !coverFailed"
-          :src="coverUrl"
+          v-if="coverImageUrl && !coverFailed"
+          :src="coverImageUrl"
           alt=""
           class="size-full object-cover"
           @error="coverFailed = true"
@@ -258,7 +266,7 @@ onMounted(() => {
           <Button
             size="icon-lg"
             class="rounded-full"
-            :disabled="!album.trackCount"
+            :disabled="!albumPlayable"
             :aria-label="
               albumActive && playing
                 ? t('card.pauseAlbum', {

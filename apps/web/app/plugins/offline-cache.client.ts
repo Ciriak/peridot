@@ -1,8 +1,10 @@
 import { defineNuxtPlugin } from "#imports";
 import { watch } from "vue";
 import { clearAllOfflineTracks } from "../lib/offline-audio";
+import { clearOfflineCatalog } from "../lib/offline-catalog";
 import { clearAllPeridotQueries } from "../lib/query-persister";
 import { resetServerReachability } from "../lib/server-connectivity";
+import { setOfflineCatalogSnapshot } from "../composables/use-offline-catalog";
 import { useServer } from "../composables/use-server";
 import { useSession } from "../composables/use-session";
 import { useUser } from "../composables/use-user";
@@ -20,12 +22,22 @@ export default defineNuxtPlugin(() => {
       if (nextIdentity !== previousIdentity) {
         previousIdentity = nextIdentity;
         resetServerReachability();
-        await Promise.all([clearAllPeridotQueries(), clearAllOfflineTracks()]);
+        setOfflineCatalogSnapshot(null);
+        await Promise.all([
+          clearAllPeridotQueries(),
+          clearAllOfflineTracks(),
+          clearOfflineCatalog(),
+        ]);
         return;
       }
       if (!nextToken) {
         resetServerReachability();
-        await Promise.all([clearAllPeridotQueries(), clearAllOfflineTracks()]);
+        setOfflineCatalogSnapshot(null);
+        await Promise.all([
+          clearAllPeridotQueries(),
+          clearAllOfflineTracks(),
+          clearOfflineCatalog(),
+        ]);
       }
     },
   );

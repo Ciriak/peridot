@@ -177,7 +177,7 @@ test("the sidebar renders linked, context-aware quick picks", async () => {
   assert.match(tile, /togglePlayback\(\)/);
   assert.match(
     tile,
-    /async function toggleItemPlayback\(\) \{\s+if \(activeItem\.value && playing\.value\) \{\s+togglePlayback\(\);\s+return;\s+\}/,
+    /async function toggleItemPlayback\(\) \{\s+if \(!playable\.value\) return;\s+if \(activeItem\.value && playing\.value\) \{\s+togglePlayback\(\);\s+return;\s+\}/,
     "An album quick pick pauses while playing but restarts the album otherwise",
   );
   assert.match(

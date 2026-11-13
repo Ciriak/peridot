@@ -9,11 +9,14 @@ import {
 } from "idb-keyval";
 import { createPlaybackToken, trackAudioUrl } from "./peridot-client.ts";
 import { trackCoverUrl } from "./library.ts";
+import {
+  clearOfflineArtwork,
+  loadArtworkBlob,
+} from "./offline-artwork.ts";
+import { OFFLINE_DATABASE } from "./offline-catalog.ts";
 import type { PeridotQueryScope } from "./query-keys";
 
 export const OFFLINE_AUDIO_CACHE = "peridot-offline-audio-v1";
-export const OFFLINE_ARTWORK_CACHE = "peridot-artwork-v1";
-export const OFFLINE_DATABASE = "peridot-web-offline";
 const OFFLINE_TRACK_STORE = "offline-tracks";
 
 export interface SavedOfflineTrack {
@@ -89,6 +92,9 @@ export async function saveTrackForOffline(
   ) {
     throw new Error("Offline storage is unavailable.");
   }
+  if (!track.available) {
+    throw new Error("This track is unavailable.");
+  }
 
   if (navigator.storage?.persist) {
     await navigator.storage.persist().catch(() => false);
@@ -113,11 +119,7 @@ export async function saveTrackForOffline(
     const coverUrl = trackCoverUrl(scope.serverAddress, coverPath);
     if (coverUrl) {
       try {
-        const coverResponse = await fetch(coverUrl);
-        if (coverResponse.ok) {
-          const artworkCache = await caches.open(OFFLINE_ARTWORK_CACHE);
-          await artworkCache.put(coverUrl, coverResponse);
-        }
+        await loadArtworkBlob(scope, coverUrl);
       } catch {
         // Audio remains useful when artwork cannot be cached.
       }
@@ -165,6 +167,6 @@ export async function clearAllOfflineTracks(): Promise<void> {
   }
   if (typeof caches !== "undefined") {
     await caches.delete(OFFLINE_AUDIO_CACHE);
-    await caches.delete(OFFLINE_ARTWORK_CACHE);
   }
+  await clearOfflineArtwork();
 }

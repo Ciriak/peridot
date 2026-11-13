@@ -2,7 +2,7 @@
 import { useI18n, useRoute, useRouter, useState } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import logo from "@peridot/ui/assets/brand/logo.svg";
-import logoNop from "@peridot/ui/assets/brand/logo-nop.png";
+import logoNop from "@peridot/ui/assets/brand/logo-nop.png?inline";
 import { Button } from "@peridot/ui/components/ui/button";
 import { Input } from "@peridot/ui/components/ui/input";
 import { Slider } from "@peridot/ui/components/ui/slider";
@@ -18,9 +18,12 @@ import LikeButton from "../components/LikeButton.vue";
 import QueueDrawer from "../components/QueueDrawer.vue";
 import SidebarQuickPicks from "../components/SidebarQuickPicks.vue";
 import TaskProgressIndicator from "../components/TaskProgressIndicator.vue";
+import { useCachedArtwork } from "../composables/use-cached-artwork";
 import { useLikes } from "../composables/use-likes";
 import { useLibraryPlayer } from "../composables/use-library-player";
+import { useOfflineTracks } from "../composables/use-offline-tracks";
 import { useServer } from "../composables/use-server";
+import { useServerConnection } from "../composables/use-server-connection";
 import { useSession } from "../composables/use-session";
 import { useUser } from "../composables/use-user";
 import { gravatarUrl } from "../lib/gravatar";
@@ -42,6 +45,7 @@ const loadingRayAtRight = ref(false);
 let loadingRayFrame: number | undefined;
 let loadingRayTimeout: ReturnType<typeof setTimeout> | undefined;
 const { address } = useServer();
+const { status: serverStatus } = useServerConnection();
 const { token } = useSession();
 const { user } = useUser();
 const avatarFailed = ref(false);
@@ -58,6 +62,7 @@ const {
   toggle: toggleLike,
   isPending: isLikePending,
 } = useLikes();
+const { savedTracks } = useOfflineTracks();
 const {
   playing,
   repeatMode,
@@ -105,16 +110,20 @@ const currentTrackLikeTarget = computed(() =>
     ? ({ kind: "track", trackId: currentTrackId.value } as const)
     : null,
 );
-const coverFailed = ref(false);
+const currentTrackPlayable = computed(() => {
+  if (!active.value) return false;
+  return serverStatus.value === "lost"
+    ? savedTracks.value.some((saved) => saved.track.id === active.value?.id)
+    : active.value.available;
+});
 const currentCoverUrl = computed(() =>
   trackCoverUrl(address.value ?? "", active.value?.coverUrl ?? null),
 );
+const { artworkUrl: currentCoverImageUrl, failed: coverFailed } =
+  useCachedArtwork(currentCoverUrl);
 const currentTrackTitleRoute = computed(() =>
   active.value ? trackAlbumTitleRoute(active.value) : null,
 );
-watch(currentCoverUrl, () => {
-  coverFailed.value = false;
-});
 
 function toggleCurrentTrackLike() {
   if (currentTrackId.value)
@@ -362,9 +371,9 @@ onBeforeUnmount(stopLoadingRay);
             leave-to-class="opacity-0"
           >
             <img
-              v-if="currentCoverUrl && !coverFailed"
-              :key="currentCoverUrl"
-              :src="currentCoverUrl"
+              v-if="currentCoverImageUrl && !coverFailed"
+              :key="currentCoverImageUrl"
+              :src="currentCoverImageUrl"
               alt=""
               class="absolute inset-0 size-full scale-125 object-cover object-left blur-3xl"
             />
@@ -383,11 +392,12 @@ onBeforeUnmount(stopLoadingRay);
         <div
           aria-hidden="true"
           class="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted text-muted-foreground md:size-20"
+          :class="active && !currentTrackPlayable && 'opacity-60'"
         >
           <img
-            v-if="currentCoverUrl && !coverFailed"
-            :key="currentCoverUrl"
-            :src="currentCoverUrl"
+            v-if="currentCoverImageUrl && !coverFailed"
+            :key="currentCoverImageUrl"
+            :src="currentCoverImageUrl"
             alt=""
             class="size-full object-cover"
             @error="coverFailed = true"
@@ -399,6 +409,7 @@ onBeforeUnmount(stopLoadingRay);
             v-if="currentTrackTitleRoute"
             :to="currentTrackTitleRoute"
             class="block truncate rounded-sm text-sm font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            :class="!currentTrackPlayable && 'opacity-60'"
           >
             {{ active?.title }}
           </NuxtLink>
@@ -475,7 +486,7 @@ onBeforeUnmount(stopLoadingRay);
           <Button
             size="icon-lg"
             class="size-12 translate-y-1 rounded-full"
-            :disabled="!active"
+            :disabled="!currentTrackPlayable"
             :aria-label="playing ? t('player.pause') : t('player.play')"
             :aria-busy="loading"
             @click="togglePlayback"
@@ -532,13 +543,12 @@ onBeforeUnmount(stopLoadingRay);
         <div
           class="flex items-center gap-3 text-xs tabular-nums text-muted-foreground"
         >
-          <span>{{ clock(elapsed) }}</span
-          ><Slider
+          <span>{{ clock(elapsed) }}</span><Slider
             :model-value="[elapsed]"
             :min="0"
             :max="Math.max(durationSeconds, 1)"
             :step="1"
-            :disabled="!active || durationSeconds <= 0"
+            :disabled="!currentTrackPlayable || durationSeconds <= 0"
             :aria-busy="loading"
             class="min-h-11 flex-1"
             :thumb-label="t('player.position')"

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue/offline";
 import { Button } from "@peridot/ui/components/ui/button";
-import { computed, ref, watch } from "vue";
+import { computed } from "vue";
+import { useCachedArtwork } from "../composables/use-cached-artwork";
 import {
   quickPickArtistNames,
   type ResolvedQuickPickItem,
@@ -17,10 +18,13 @@ const props = defineProps<{
   playing: boolean;
   playLabel: string;
   busy: boolean;
+  playable: boolean;
 }>();
 const emit = defineEmits<{ play: [] }>();
 
-const coverFailed = ref(false);
+const { artworkUrl: cachedCoverUrl, failed: coverFailed } = useCachedArtwork(
+  () => props.coverUrl,
+);
 const title = computed(() =>
   props.item.kind === "track" ? props.item.track.title : props.item.album.title,
 );
@@ -34,13 +38,6 @@ const titleRoute = computed(() =>
       artistRoute({ name: props.item.track.artist }))
     : albumRoute(props.item.album),
 );
-
-watch(
-  () => props.coverUrl,
-  () => {
-    coverFailed.value = false;
-  },
-);
 </script>
 
 <template>
@@ -53,11 +50,12 @@ watch(
       class="relative size-10 shrink-0 cursor-pointer overflow-hidden rounded-md p-0"
       :aria-label="playLabel"
       :aria-busy="busy"
+      :disabled="!playable"
       @click="emit('play')"
     >
       <img
-        v-if="coverUrl && !coverFailed"
-        :src="coverUrl"
+        v-if="cachedCoverUrl && !coverFailed"
+        :src="cachedCoverUrl"
         alt=""
         loading="lazy"
         decoding="async"
@@ -91,7 +89,10 @@ watch(
           aria-hidden="true"
           class="size-3 shrink-0 text-muted-foreground"
         />
-        <span class="truncate text-xs font-medium">
+        <span
+          class="truncate text-xs font-medium"
+          :class="!playable && 'opacity-60'"
+        >
           {{ title }}
         </span>
       </NuxtLink>
