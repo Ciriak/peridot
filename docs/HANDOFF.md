@@ -2,6 +2,45 @@
 
 Last updated: 2026-11-13.
 
+## Search shortcut and desktop media keys
+
+The top-bar search can now be opened from anywhere in the authenticated app with
+`Ctrl+K` on Windows/Linux or `Cmd+K` on Apple platforms. The shortcut activates
+the existing `/search` route and focuses its single input. The bar shows the
+platform-specific shortcut using the official shadcn-vue `Kbd`/`KbdGroup`
+components, while `aria-keyshortcuts` provides the accessible instruction.
+
+The desktop app now registers Play/Pause, Previous, and Next media keys through
+Tauri's official global-shortcut plugin while an active track exists. The keys
+drive the existing app-level player and are unregistered when no track is active
+or the app unmounts, so an idle Peridot window does not capture keys from other
+apps. The Tauri capability allows only shortcut registration and
+unregistration.
+
+Browsers and installed PWAs that support the Media Session API publish the
+current track metadata, artwork, playback state, and position, with transport
+handlers for play, pause, previous, next, and seeking. Desktop skips this browser
+path while using the native Tauri shortcuts.
+
+Checks run:
+
+- Full web suite (167 passing)
+- Shared UI suite (14 passing)
+- Desktop suite (4 passing)
+- Web typecheck
+- Desktop `cargo check`
+- Desktop Rust media-key parser test (1 passing)
+- Root ESLint
+- Production web build (97 PWA precache entries)
+- Desktop package build
+- Rust formatting check
+
+Known limits: live browser and physical media-key QA were not completed.
+Computer Use stopped because it could not verify the active Brave URL as
+allowed. The shortcut routing and event mapping are covered by behavioral
+tests, and the Tauri plugin compiles. No commit, push, tag, publication, or
+deployment was performed.
+
 ## Profile logout and build metadata
 
 The Settings logout control now sits at the bottom-right of the Profile page.

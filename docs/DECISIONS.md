@@ -1,5 +1,25 @@
 # Decisions
 
+## 2026-11-13: Global shortcuts activate existing search and desktop playback state
+
+The authenticated app shell owns the `Ctrl+K` and `Cmd+K` search shortcut. It
+opens the dedicated search route, focuses the single top-bar input, and ignores
+modified or composing key events. The displayed shortcut uses the official
+shadcn-vue `Kbd` and `KbdGroup` primitives with the platform modifier while the
+input exposes `aria-keyshortcuts` as the accessible instruction. The keycaps are
+decorative to assistive technology.
+
+Desktop media keys use Tauri's official global-shortcut plugin and the existing
+app-level audio player. Play/Pause, Previous, and Next are registered only while
+an active track exists, then unregistered when playback state is cleared or the
+app unmounts. This prevents a running idle desktop app from taking media keys
+away from other applications. The capability grants only shortcut registration
+and unregistration; the browser/PWA build does not initialize Tauri shortcuts.
+Where supported, the web/PWA build instead publishes track metadata, playback
+state, position, and transport handlers through the standard Media Session API.
+Tauri skips that browser path so native and web media-key handlers cannot act on
+the same player command twice.
+
 ## 2026-11-13: Whole-album offline saves reuse the per-track manifest
 
 An album is not stored as a separate offline bundle. The album action loads

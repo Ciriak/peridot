@@ -5,6 +5,7 @@ import logo from "@peridot/ui/assets/brand/logo.svg";
 import logoNop from "@peridot/ui/assets/brand/logo-nop.png?inline";
 import { Button } from "@peridot/ui/components/ui/button";
 import { Input } from "@peridot/ui/components/ui/input";
+import { Kbd, KbdGroup } from "@peridot/ui/components/ui/kbd";
 import { Slider } from "@peridot/ui/components/ui/slider";
 import {
   computed,
@@ -31,12 +32,17 @@ import {
   trackArtistNames,
   trackCoverUrl,
 } from "../lib/library";
+import {
+  searchShortcutModifier,
+  type SearchShortcutModifier,
+} from "../lib/search-shortcut";
 
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
 const searchQuery = useState("search-query", () => "");
 const searchInput = ref<{ $el?: HTMLInputElement } | null>(null);
+const shortcutModifier = ref<SearchShortcutModifier>("ctrl");
 const mobileNavigation = ref(false);
 const queueOpen = ref(false);
 const loadingRayAtRight = ref(false);
@@ -183,6 +189,9 @@ watch(
 );
 
 onMounted(() => {
+  shortcutModifier.value = searchShortcutModifier(
+    navigator.platform || navigator.userAgent,
+  );
   void loadLikes();
 });
 
@@ -285,14 +294,23 @@ onBeforeUnmount(stopLoadingRay);
             />
             <Input
               ref="searchInput"
+              id="global-search"
               v-model="searchQuery"
               type="search"
               :aria-label="t('navigation.searchPlaceholder')"
+              aria-keyshortcuts="Control+K Meta+K"
               :placeholder="t('navigation.searchPlaceholder')"
-              class="pl-9"
+              class="pl-9 pr-16"
               @click="openSearch"
               @focus="openSearch"
             />
+            <KbdGroup
+              aria-hidden="true"
+              class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2"
+            >
+              <Kbd>{{ shortcutModifier === "command" ? "⌘" : "Ctrl" }}</Kbd>
+              <Kbd>K</Kbd>
+            </KbdGroup>
           </div>
           <div class="ml-auto flex shrink-0 items-center gap-2">
             <TaskProgressIndicator />
@@ -534,7 +552,8 @@ onBeforeUnmount(stopLoadingRay);
         <div
           class="flex items-center gap-3 text-xs tabular-nums text-muted-foreground"
         >
-          <span>{{ clock(elapsed) }}</span><Slider
+          <span>{{ clock(elapsed) }}</span
+          ><Slider
             :model-value="[elapsed]"
             :min="0"
             :max="Math.max(durationSeconds, 1)"

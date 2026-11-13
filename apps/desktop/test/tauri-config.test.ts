@@ -68,5 +68,46 @@ test("desktop window keeps a restricted capability surface", async () => {
     "Core capability for the Peridot main window",
   );
   assert.deepEqual(capability.windows, ["main"]);
-  assert.deepEqual(capability.permissions, ["core:default"]);
+  assert.deepEqual(capability.permissions, [
+    "core:default",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister",
+  ]);
+});
+
+test("Tauri hosts native media-key shortcuts through the official plugin", async () => {
+  const [cargo, source] = await Promise.all([
+    readFile(path.join(desktopRoot, "src-tauri/Cargo.toml"), "utf8"),
+    readFile(path.join(desktopRoot, "src-tauri/src/lib.rs"), "utf8"),
+  ]);
+
+  assert.match(cargo, /tauri-plugin-global-shortcut = "2\.4\.1"/);
+  assert.match(
+    source,
+    /tauri_plugin_global_shortcut::Builder::new\(\)\.build\(\)/,
+  );
+  assert.match(source, /MediaPlayPause/);
+  assert.match(source, /MediaTrackNext/);
+  assert.match(source, /MediaTrackPrevious/);
+});
+
+test("browser media session complements the desktop-only native shortcuts", async () => {
+  const [app, session, actions] = await Promise.all([
+    readFile(path.join(desktopRoot, "../web/app/app.vue"), "utf8"),
+    readFile(
+      path.join(desktopRoot, "../web/app/composables/use-web-media-session.ts"),
+      "utf8",
+    ),
+    readFile(
+      path.join(desktopRoot, "../web/app/lib/web-media-session.ts"),
+      "utf8",
+    ),
+  ]);
+
+  assert.match(app, /useWebMediaSession\(player\)/);
+  assert.match(session, /isTauriRuntime\(\)/);
+  assert.match(session, /navigator\.mediaSession/);
+  assert.match(session, /MediaMetadata/);
+  assert.match(actions, /"previoustrack"/);
+  assert.match(actions, /"nexttrack"/);
 });

@@ -55,6 +55,7 @@ const optimizedDependencies = [
   "@peridot/ui/components/ui/context-menu",
   "@peridot/ui/components/ui/gradient",
   "@peridot/ui/components/ui/input",
+  "@peridot/ui/components/ui/kbd",
   "@peridot/ui/components/ui/progress-circle",
   "@peridot/ui/components/ui/slider",
   "@peridot/ui/components/ui/spinner",

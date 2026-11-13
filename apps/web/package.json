@@ -24,6 +24,7 @@
     "@peridot/ui": "workspace:*",
     "@tanstack/query-persist-client-core": "^5.107.1",
     "@tanstack/vue-query": "^5.107.1",
+    "@tauri-apps/plugin-global-shortcut": "2.4.1",
     "@vite-pwa/nuxt": "^1.1.1",
     "h3": "^1.15.11",
     "idb-keyval": "^6.3.0",

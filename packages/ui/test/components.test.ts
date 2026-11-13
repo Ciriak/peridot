@@ -53,6 +53,11 @@ test("search input preserves its initial model and accessible name during SSR", 
   assert.match(html, /value="Ambient"/);
   assert.match(html, /aria-label="Search library"/);
 });
+test("Kbd renders keyboard keys with shadcn key styling", async () => {
+  const html = await render("Kbd", { class: "shortcut-key" }, "Ctrl", "kbd");
+  assert.match(html, /^<kbd class="[^"]*bg-muted[^"]*shortcut-key"/);
+  assert.match(html, /Ctrl<!--\]--><\/kbd>/);
+});
 test("switch renders its checked state and accessible name", async () => {
   const html = await render("Switch", {
     modelValue: true,
