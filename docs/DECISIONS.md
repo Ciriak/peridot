@@ -1,5 +1,49 @@
 # Decisions
 
+## 2026-11-13: Home is the library overview
+
+The standalone Library page and navigation section are removed. Home presents
+bounded previews of the signed-in user's liked songs, liked albums, and liked
+artists, plus the current playlist state. Complete collection views remain at
+their focused routes, and playlist creation remains explicitly marked as
+coming soon until the playlist model and APIs exist.
+
+The persistent navigation order is Home, Liked songs, Playlists, Albums, and
+Artists. Removing the Library route lets the existing SPA catch-all return
+bookmarks for `/library` to Home instead of preserving a second catalog screen.
+The homepage previews ask the existing catalog APIs for liked records rather
+than filtering full, unbounded collections in the browser.
+
+## 2026-11-13: Startup uses a brand-only splash screen
+
+The client-rendered web app shows the shared Peridot spinner centered on a
+fully black viewport while its root application shell starts. The splash mounts
+before the routed layout and remains for a short minimum interval so the brand
+state does not flash for a single frame. It fades out over the mounted app,
+while reduced-motion users receive the shared static brand mark and an immediate
+removal instead. Nuxt's SPA loading template puts the same inline spinner in the
+initial HTML, so the branded surface is painted while the client bundle is still
+loading instead of appearing only after Vue starts.
+
+The overlay exists only at root startup; client-side route changes use their
+existing page loading states. It uses the shared spinner behavior, localized
+loading label, standard Tailwind positioning utilities, and the explicitly
+requested black background. The native Tauri main window uses the same opaque
+black as its `backgroundColor`; together with the pre-hydration template, the
+browser and desktop surfaces remain branded from their first paint. The PWA
+manifest also uses black as its launch background so installed-app startup does
+not introduce a white frame.
+
+## 2026-11-13: Desktop history controls sit beside the sidebar brand
+
+Only the Tauri desktop shell shows back and forward controls immediately to the
+right of the Peridot brand. The shared web build keeps the same sidebar layout
+but omits the control group entirely. The controls call Vue Router's history
+methods directly and use bundled `size-5` Basil caret icons inside the existing
+small icon-button variant. They also remain hidden below the desktop breakpoint,
+matching the existing breakpoint where the persistent sidebar gives way to the
+mobile navigation drawer.
+
 ## 2026-11-13: Global shortcuts activate existing search and desktop playback state
 
 The authenticated app shell owns the `Ctrl+K` and `Cmd+K` search shortcut. It
@@ -94,8 +138,8 @@ queue, account, provider, or source data.
 ## 2026-11-12: Connection recovery is announced with a success toast
 
 The topbar connection warning uses the owner-selected `ooui:network-off` icon
-with the standard foreground color. It keeps its reduced-motion-safe pulse and
-tooltip, but neither the icon nor the tooltip uses destructive red.
+with the standard foreground color. The Offline tag remains static and keeps
+its tooltip, but neither the icon nor the tooltip uses destructive red.
 
 The app-level notifications component watches server reachability only inside
 an authenticated, non-onboarding scope. A transition from `lost` to `connected`

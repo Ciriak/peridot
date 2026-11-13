@@ -7,6 +7,7 @@ import { useWebMediaSession } from "./composables/use-web-media-session";
 import { useSession } from "./composables/use-session";
 import { isSearchShortcut } from "./lib/search-shortcut";
 import AppNotifications from "./components/AppNotifications.vue";
+import AppSplashScreen from "./components/AppSplashScreen.vue";
 import AppToaster from "./components/AppToaster.vue";
 import { nextTick, onBeforeUnmount, onMounted } from "vue";
 
@@ -44,6 +45,7 @@ onBeforeUnmount(() =>
 </script>
 
 <template>
+  <AppSplashScreen />
   <NuxtLayout>
     <NuxtPage />
   </NuxtLayout>

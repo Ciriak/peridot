@@ -10,6 +10,7 @@ test("app layout respects the owner's Tailwind and shadcn styling authority", as
     "../app/components/AppToastList.vue",
     "../app/components/AppToaster.vue",
     "../app/components/AppNotifications.vue",
+    "../app/components/AppSplashScreen.vue",
     "../app/components/AlbumCard.vue",
     "../app/components/AlbumContextMenu.vue",
     "../app/components/ArtistCard.vue",

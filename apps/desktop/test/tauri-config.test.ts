@@ -39,6 +39,7 @@ test("desktop window keeps a restricted capability surface", async () => {
         height: number;
         minWidth: number;
         minHeight: number;
+        backgroundColor: [number, number, number, number];
       }>;
       security: { csp: string };
     };
@@ -58,6 +59,7 @@ test("desktop window keeps a restricted capability surface", async () => {
       height: 800,
       minWidth: 900,
       minHeight: 600,
+      backgroundColor: [0, 0, 0, 255],
     },
   ]);
   assert.match(config.app.security.csp, /default-src 'self'/);

@@ -18,6 +18,7 @@ import restart from "@iconify-icons/basil/refresh-outline";
 import repeatOne from "@iconify-icons/basil/refresh-solid";
 import caretUp from "@iconify-icons/basil/caret-up-outline";
 import caretDown from "@iconify-icons/basil/caret-down-outline";
+import caretLeft from "@iconify-icons/basil/caret-left-outline";
 import caretRight from "@iconify-icons/basil/caret-right-outline";
 import folder from "@iconify-icons/basil/folder-outline";
 import globe from "@iconify-icons/basil/globe-outline";
@@ -68,6 +69,7 @@ export const icons = {
   repeatOne,
   caretUp,
   caretDown,
+  caretLeft,
   caretRight,
   folder,
   globe,

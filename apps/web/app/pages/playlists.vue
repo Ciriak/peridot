@@ -25,9 +25,7 @@ const { t } = useI18n();
       {{ t("page.playlists.placeholder") }}
     </p>
     <Button as-child variant="outline" class="mt-4"
-      ><NuxtLink to="/library">{{
-        t("page.playlists.browse")
-      }}</NuxtLink></Button
+      ><NuxtLink to="/liked">{{ t("page.playlists.browse") }}</NuxtLink></Button
     >
   </section>
 </template>

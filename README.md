@@ -26,9 +26,11 @@ are kept in same-site browser cookies. The server can be changed from Settings
 → Admin → Server by disconnecting first. Server selection continuously probes
 the typed address and scans the web host's private IPv4 networks for Peridot
 servers on port 17430; selecting a
-discovered server advances onboarding. The routed library view reads cataloged
-tracks from the authenticated catalog API and refreshes after completed library
-or metadata tasks.
+discovered server advances onboarding. Home is the library overview, surfacing
+liked songs, liked albums, liked artists, and playlists from the authenticated
+catalog API. The focused Liked songs, Playlists, Albums, and Artists routes
+provide the complete views and refresh after completed library or metadata
+tasks.
 The Albums view derives release-first groups from available track and provider
 metadata. Provider release identity takes precedence, followed by embedded album
 artists and title, then the containing source folder and title. Track performer
@@ -37,8 +39,8 @@ different identities remain separate. Album cards open a detail page with
 disc/track ordering, album playback actions, and an available provider release
 year beside the total duration. Album artwork is read from embedded
 front-cover tags or same-folder `cover`, `folder`, `front`, or `albumart` images.
-Tracks without album tags remain in the Library view and are omitted from
-Albums. The Artists view groups every tagged performer in the catalog, including
+Tracks without album tags remain available in track lists and search but are
+omitted from Albums. The Artists view groups every tagged performer in the catalog, including
 artists whose tracks have no album metadata, and opens an artist page with album
 cards, an all-tracks list, and artist playback actions. Artist names in the
 shared track list appear beneath each title and link to their derived artist
@@ -237,7 +239,7 @@ Settings → Admin → Tasks, which lists active work and paginated terminal his
 The same indicator remains visible in the fullscreen Settings header for
 administrators.
 When the server health monitor reports a lost connection, the same topbar slot
-replaces the progress circle with a pulsing `ooui:network-off` icon in the
+replaces the progress circle with a static `ooui:network-off` Offline tag in the
 standard foreground color and an accessible explanation for every signed-in
 user. Administrator task progress returns after a healthy probe.
 The Settings sidebar has a persistent Log out action at its bottom. Logout

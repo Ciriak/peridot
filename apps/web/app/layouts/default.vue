@@ -25,6 +25,7 @@ import { useLibraryPlayer } from "../composables/use-library-player";
 import { useServer } from "../composables/use-server";
 import { useSession } from "../composables/use-session";
 import { useUser } from "../composables/use-user";
+import { isTauriRuntime } from "../lib/desktop-runtime";
 import { gravatarUrl } from "../lib/gravatar";
 import { icons } from "../lib/icons";
 import {
@@ -45,6 +46,7 @@ const searchInput = ref<{ $el?: HTMLInputElement } | null>(null);
 const shortcutModifier = ref<SearchShortcutModifier>("ctrl");
 const mobileNavigation = ref(false);
 const queueOpen = ref(false);
+const desktopRuntime = ref(false);
 const loadingRayAtRight = ref(false);
 let loadingRayFrame: number | undefined;
 let loadingRayTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -89,15 +91,14 @@ const {
 } = useLibraryPlayer();
 const navigation = [
   { labelKey: "navigation.home", to: "/", icon: icons.home },
-  { labelKey: "navigation.library", to: "/library", icon: icons.library },
-  { labelKey: "navigation.albums", to: "/albums", icon: icons.music },
-  { labelKey: "navigation.artists", to: "/artists", icon: icons.user },
   { labelKey: "navigation.likedSongs", to: "/liked", icon: icons.heart },
   {
     labelKey: "navigation.playlists",
     to: "/playlists",
     icon: icons.playlist,
   },
+  { labelKey: "navigation.albums", to: "/albums", icon: icons.music },
+  { labelKey: "navigation.artists", to: "/artists", icon: icons.user },
 ];
 const currentPath = computed(() => route.path);
 const isNavigationActive = (target: string) =>
@@ -189,6 +190,7 @@ watch(
 );
 
 onMounted(() => {
+  desktopRuntime.value = isTauriRuntime();
   shortcutModifier.value = searchShortcutModifier(
     navigator.platform || navigator.userAgent,
   );
@@ -229,6 +231,31 @@ onBeforeUnmount(stopLoadingRay);
               }}</NuxtLink
             ></Button
           >
+          <div
+            v-if="desktopRuntime"
+            class="hidden shrink-0 items-center gap-1 md:flex"
+          >
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              :aria-label="t('navigation.historyBack')"
+              @click="router.back()"
+            >
+              <Icon :icon="icons.caretLeft" aria-hidden="true" class="size-5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              :aria-label="t('navigation.historyForward')"
+              @click="router.forward()"
+            >
+              <Icon
+                :icon="icons.caretRight"
+                aria-hidden="true"
+                class="size-5"
+              />
+            </Button>
+          </div>
           <Button
             variant="ghost"
             size="icon-sm"

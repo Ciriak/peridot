@@ -242,7 +242,7 @@ test("the topbar shares connection loss and exposes task progress to admins", as
   assert.match(indicator, /:icon="icons\.networkOff"/);
   assert.match(indicator, /text-foreground/);
   assert.doesNotMatch(indicator, /text-destructive|border-destructive/);
-  assert.match(indicator, /motion-safe:animate-pulse/);
+  assert.doesNotMatch(indicator, /animate-pulse/);
   assert.match(indicator, /t\('components\.taskProgress\.connectionLost'\)/);
   assert.match(indicator, /import \{ Badge \}/);
   assert.match(indicator, /<Badge[\s\S]*variant="outline"[\s\S]*role="status"/);

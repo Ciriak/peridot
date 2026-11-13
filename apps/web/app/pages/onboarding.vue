@@ -7,7 +7,6 @@ import {
   useRoute,
 } from "#imports";
 import logo from "@peridot/ui/assets/brand/logo.svg";
-import logoW from "@peridot/ui/assets/brand/logo-w.png";
 import { Button } from "@peridot/ui/components/ui/button";
 import { Gradient } from "@peridot/ui/components/ui/gradient";
 import { Input } from "@peridot/ui/components/ui/input";
@@ -70,16 +69,31 @@ const addressScanState = ref<"idle" | "checking" | "found" | "not-found">(
 );
 const discoveryState = ref<"scanning" | "complete" | "failed">("scanning");
 const discoveredServers = ref<DiscoveredServer[]>([]);
+const selectedServer = ref<DiscoveredServer | null>(null);
+const selectedServerHostname = computed(() => {
+  const server = selectedServer.value;
+  if (!server) return "";
+  try {
+    return new URL(server.address).hostname;
+  } catch {
+    return server.host;
+  }
+});
 const manualEntryOpen = ref(false);
 let addressScanTimer: ReturnType<typeof setTimeout> | undefined;
 let networkScanTimer: ReturnType<typeof setTimeout> | undefined;
 let addressScanSequence = 0;
 
-function rememberServer(server: DiscoveredServer) {
-  if (
-    !discoveredServers.value.some((item) => item.address === server.address)
-  ) {
-    discoveredServers.value.push(server);
+function rememberServer(server: DiscoveredServer, select = false) {
+  let remembered = discoveredServers.value.find(
+    (item) => item.address === server.address,
+  );
+  if (!remembered) {
+    remembered = server;
+    discoveredServers.value.push(remembered);
+  }
+  if (select || !selectedServer.value) {
+    selectedServer.value = remembered;
   }
 }
 
@@ -90,7 +104,7 @@ function revealManualEntry() {
   });
 }
 
-async function scanAddress(value: string) {
+async function scanAddress(value: string, select = false) {
   const sequence = ++addressScanSequence;
   let normalized: string;
   try {
@@ -104,7 +118,10 @@ async function scanAddress(value: string) {
     await fetchAuthStatus(normalized);
     if (sequence !== addressScanSequence) return;
     addressScanState.value = "found";
-    rememberServer({ address: normalized, host: new URL(normalized).host });
+    rememberServer(
+      { address: normalized, host: new URL(normalized).host },
+      select,
+    );
   } catch {
     if (sequence === addressScanSequence) {
       addressScanState.value = "not-found";
@@ -117,7 +134,10 @@ watch(
   (value) => {
     if (addressScanTimer) clearTimeout(addressScanTimer);
     addressScanState.value = "idle";
-    addressScanTimer = setTimeout(() => void scanAddress(value), 450);
+    addressScanTimer = setTimeout(
+      () => void scanAddress(value, manualEntryOpen.value),
+      450,
+    );
   },
   { immediate: true },
 );
@@ -138,11 +158,6 @@ async function scanLocalNetwork() {
   }
 }
 
-async function selectDiscoveredServer(server: DiscoveredServer) {
-  serverAddress.value = server.address;
-  await connectToServer();
-}
-
 onMounted(() => {
   if (opensAccountStep) {
     void connectToServer();
@@ -155,11 +170,15 @@ onBeforeUnmount(() => {
   addressScanSequence += 1;
 });
 
-async function connectToServer() {
+async function connectToServer(serverAddressOverride?: string) {
   error.value = "";
   loading.value = true;
   try {
-    selectedAddress.value = normalizeServerAddress(serverAddress.value);
+    selectedAddress.value = normalizeServerAddress(
+      serverAddressOverride ??
+        selectedServer.value?.address ??
+        serverAddress.value,
+    );
     const status = await fetchAuthStatus(selectedAddress.value);
     requiresAdminUser.value = status.requiresAdminUser;
     step.value = "account";
@@ -246,34 +265,26 @@ function changeServer() {
       </div>
       <div v-if="step === 'server'" class="space-y-4">
         <section :aria-label="t('onboarding.discovery')" class="space-y-3">
-          <div class="flex items-center gap-3">
+          <div v-if="!selectedServer" class="flex items-center gap-3">
             <PeridotSpinner :label="t('onboarding.looking')" class="size-6" />
             <p aria-hidden="true" class="text-sm text-muted-foreground">
               {{ t("onboarding.looking") }}
             </p>
           </div>
-          <div v-if="discoveredServers.length" class="space-y-2">
-            <h2 class="text-sm font-medium">
-              {{ t("onboarding.foundServers") }}
-            </h2>
-            <ul class="space-y-2">
-              <li v-for="server in discoveredServers" :key="server.address">
-                <Button
-                  type="button"
-                  class="h-auto w-full justify-between gap-2 py-3"
-                  @click="selectDiscoveredServer(server)"
-                >
-                  <span class="truncate">{{ server.address }}</span>
-                  <img
-                    :src="logoW"
-                    alt=""
-                    aria-hidden="true"
-                    class="size-4 shrink-0"
-                  />
-                </Button>
-              </li>
-            </ul>
-          </div>
+          <h2 v-if="selectedServer" class="text-center text-sm font-medium">
+            {{ t("onboarding.serverFoundOn") }}
+            <strong>{{ selectedServerHostname }}</strong>
+          </h2>
+          <Button
+            type="button"
+            class="h-12 w-full text-base"
+            :disabled="loading || !selectedServer"
+            @click="connectToServer(selectedServer?.address)"
+          >
+            {{
+              loading ? t("onboarding.pleaseWait") : t("onboarding.continue")
+            }}
+          </Button>
           <p
             v-if="discoveryState === 'failed'"
             role="status"

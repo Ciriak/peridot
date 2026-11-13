@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-test("server selection prioritizes discovery and reveals manual entry on demand", async () => {
+test("server selection detects and selects the first server before continuing", async () => {
   const source = await readFile(
     new URL("../app/pages/onboarding.vue", import.meta.url),
     "utf8",
@@ -19,9 +19,39 @@ test("server selection prioritizes discovery and reveals manual entry on demand"
     "The shared spinner announces the active network search",
   );
   assert.doesNotMatch(source, /v-if="discoveryState === 'scanning'"/);
-  assert.match(source, /v-if="discoveredServers.length"/);
-  assert.match(source, /v-for="server in discoveredServers"/);
-  assert.match(source, /@click="selectDiscoveredServer\(server\)"/);
+  assert.match(
+    source,
+    /if \(select \|\| !selectedServer\.value\) \{\s*selectedServer\.value = remembered;/,
+    "The first detected server is selected automatically",
+  );
+  assert.match(
+    source,
+    /v-if="!selectedServer"[\s\S]*?t\("onboarding\.looking"\)/,
+    "Discovery status is hidden after a server is found",
+  );
+  assert.match(
+    source,
+    /<h2 v-if="selectedServer" class="text-center text-sm font-medium">/,
+    "The found status is centered",
+  );
+  assert.match(
+    source,
+    /<strong>\{\{ selectedServerHostname \}\}<\/strong>/,
+    "The found status emphasizes the detected hostname",
+  );
+  assert.doesNotMatch(source, /selectedServerEndpoint\.port/);
+  assert.match(
+    source,
+    /@click="connectToServer\(selectedServer\?\.address\)"/,
+    "Continue connects to the selected server",
+  );
+  assert.match(source, /t\("onboarding\.continue"\)/);
+  assert.match(source, /class="h-12 w-full text-base"/);
+  assert.match(
+    source,
+    /:disabled="loading \|\| !selectedServer"/,
+    "Continue waits for a discovered server",
+  );
   assert.match(source, /v-if="!manualEntryOpen"/);
   assert.match(source, /@click="revealManualEntry"/);
   assert.match(source, /aria-controls="manual-server-entry"/);
@@ -39,7 +69,6 @@ test("server selection prioritizes discovery and reveals manual entry on demand"
   );
   assert.match(source, /void connectToServer\(\);/);
   assert.doesNotMatch(source, /No servers found\./);
-  assert.doesNotMatch(source, />\s*Continue\s*</);
   assert.doesNotMatch(source, /Scan again/);
 });
 

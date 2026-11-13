@@ -55,7 +55,7 @@ const progressLabel = computed(() => {
           role="status"
           tabindex="0"
           :aria-label="t('components.taskProgress.connectionLost')"
-          class="cursor-default text-foreground motion-safe:animate-pulse"
+          class="cursor-default text-foreground"
         >
           <Icon :icon="icons.networkOff" aria-hidden="true" />
           {{ t("components.taskProgress.offlineBadge") }}

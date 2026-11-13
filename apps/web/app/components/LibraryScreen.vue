@@ -10,8 +10,8 @@ import { useLikes } from "../composables/use-likes";
 import type { TrackSort } from "../lib/library";
 
 const props = withDefaults(
-  defineProps<{ title: string; home?: boolean; favorites?: boolean }>(),
-  { home: false, favorites: false },
+  defineProps<{ title: string; favorites?: boolean }>(),
+  { favorites: false },
 );
 const { t } = useI18n();
 const sort = ref<TrackSort | null>({ field: "title", direction: "asc" });
@@ -41,7 +41,11 @@ onMounted(() => {
   <div class="space-y-2">
     <h1 class="text-2xl font-semibold tracking-tight">{{ title }}</h1>
     <p class="text-sm text-muted-foreground">
-      {{ t("components.library.description") }}
+      {{
+        favorites
+          ? t("page.liked.description")
+          : t("components.library.description")
+      }}
     </p>
   </div>
   <section aria-labelledby="tracks-heading" class="space-y-4">
@@ -49,12 +53,7 @@ onMounted(() => {
       <h2 id="tracks-heading" class="text-lg font-semibold">
         {{ t("components.tracks.label") }}
       </h2>
-      <Button v-if="home" as-child variant="ghost" size="sm"
-        ><NuxtLink to="/library">{{
-          t("components.library.view")
-        }}</NuxtLink></Button
-      >
-      <Badge v-else variant="secondary">
+      <Badge variant="secondary">
         {{
           loading
             ? t("common.loading")

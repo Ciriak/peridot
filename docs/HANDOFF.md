@@ -2,6 +2,95 @@
 
 Last updated: 2026-11-13.
 
+## Home library overview
+
+The standalone Library page and sidebar item are removed. Home now acts as the
+library overview with bounded liked-song, liked-album, and liked-artist
+previews, plus the current playlist state. Focused routes still provide complete
+liked songs, playlists, albums, and artists. The sidebar order is Home, Liked
+songs, Playlists, Albums, and Artists, and old `/library` links fall through the
+existing catch-all redirect to Home.
+
+Checks run:
+
+- Focused homepage, navigation, localization, and progressive-loading tests
+  (12 passing)
+- Full web test suite (170 passing)
+- Web typecheck
+- Production web build (94 PWA precache entries)
+- Targeted ESLint and Prettier checks
+- `git diff --check`
+
+Known limits: playlist creation remains unavailable, and live browser visual
+QA was not run. Schema and server checks were skipped because this change only
+uses existing catalog and likes APIs. Existing uncommitted onboarding, splash,
+offline-tag, and desktop changes were preserved. No commit, push, tag,
+publication, or deployment was performed.
+
+## Branded startup splash
+
+The web app now mounts a full black startup splash before the application
+layout. The shared PeridotSpinner is centered in the viewport, shows the
+localized Loading status to assistive technology, and fades into the mounted
+app after a short minimum interval. Reduced-motion users retain the shared
+static brand mark and skip the fade.
+
+Nuxt's `app/spa-loading-template.html` places an inline copy of the spinner in
+the initial HTML. The splash therefore appears before the client bundle loads
+and remains through SPA startup, then hands off to the mounted Vue overlay for
+its fade-out. The inline geometry is covered by the branding test so it cannot
+drift from the shared spinner accidentally. The PWA manifest now uses black as
+its launch background to avoid a white frame in installed-app startup.
+
+The splash is limited to the root application startup and does not replace the
+existing page-level loading states during client-side navigation.
+
+The Tauri main window also has an opaque black `backgroundColor`, preventing
+the native webview surface from showing a different default before the client
+shell or splash paints.
+
+The desktop sidebar now has back and forward history controls immediately to
+the right of the Peridot brand. They use Vue Router history, larger `size-5`
+bundled Basil caret icons, and localized accessible labels. The control group
+is rendered only inside the Tauri desktop shell, and remains hidden below the
+existing desktop breakpoint so it does not appear in either the web sidebar or
+the mobile navigation drawer.
+
+Checks run:
+
+- Focused branding, history, icon, localization, and styling tests
+- Focused desktop-only sidebar history regression (1 passing)
+- Web test suite (169 passing)
+- Web typecheck
+- Production web build (95 PWA precache entries)
+- Production HTML contains the inline loader before the first body script; the
+  served manifest uses `#000000` as its launch background
+- Desktop suite (4 passing)
+- Desktop `cargo check`
+- Targeted ESLint and Prettier checks
+- `git diff --check`
+
+Known limits: live browser visual QA pending. Existing uncommitted onboarding,
+splash, and offline-tag changes were preserved. No commit, push, tag,
+publication, or deployment was performed.
+
+## Static offline tag
+
+The topbar connection warning no longer pulses. Its bundled
+`ooui:network-off` icon, Offline label, standard foreground color, accessible
+connection explanation, and tooltip are unchanged.
+
+Checks run:
+
+- Focused task-progress tests (9 passing)
+- Full web suite
+- Web typecheck
+- Targeted ESLint and Prettier checks
+- `git diff --check`
+
+Known limits: browser visual QA was not run. No commit, push, tag, publication,
+or deployment was performed.
+
 ## Search shortcut and desktop media keys
 
 The top-bar search can now be opened from anywhere in the authenticated app with

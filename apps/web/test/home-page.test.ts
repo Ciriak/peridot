@@ -1,19 +1,29 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
-test("home presents catalog suggestions with the shared album-card grid", async () => {
+test("home is the library overview for liked collections", async () => {
   const [homePage, albumPage] = await Promise.all([
     readFile(new URL("../app/pages/index.vue", import.meta.url), "utf8"),
     readFile(new URL("../app/pages/albums/index.vue", import.meta.url), "utf8"),
   ]);
 
+  assert.match(homePage, /useCatalogTrackQuery/);
   assert.match(homePage, /useCatalogAlbumQuery/);
-  assert.match(homePage, /items: albums/);
+  assert.match(homePage, /useCatalogArtistQuery/);
+  assert.match(homePage, /liked: true/g);
+  assert.match(homePage, /limit: HOME_PREVIEW_LIMIT/g);
+  assert.match(homePage, /<TrackTable/);
+  assert.match(homePage, /variant="library"/);
   assert.match(homePage, /<AlbumCard/);
   assert.match(homePage, /:album="album"/);
+  assert.match(homePage, /<ArtistCard/);
+  assert.match(homePage, /:artist="artist"/);
+  assert.match(homePage, /page\.home\.likedSongs/);
+  assert.match(homePage, /page\.home\.playlists/);
+  assert.match(homePage, /page\.home\.likedAlbums/);
+  assert.match(homePage, /page\.home\.likedArtists/);
   assert.match(homePage, /void loadLikes\(\)/);
-  assert.doesNotMatch(homePage, /\$\{albums\.length\} suggestions/);
   assert.doesNotMatch(homePage, /library-search/);
   assert.doesNotMatch(homePage, /<LibraryScreen/);
 
@@ -21,4 +31,27 @@ test("home presents catalog suggestions with the shared album-card grid", async 
     /grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5/;
   assert.match(homePage, gridClass);
   assert.match(albumPage, gridClass);
+});
+
+test("the standalone library route and navigation item are removed", async () => {
+  await assert.rejects(
+    access(new URL("../app/pages/library.vue", import.meta.url)),
+  );
+  const layout = await readFile(
+    new URL("../app/layouts/default.vue", import.meta.url),
+    "utf8",
+  );
+  const navigation = layout.slice(
+    layout.indexOf("const navigation = ["),
+    layout.indexOf("];", layout.indexOf("const navigation = [")),
+  );
+
+  assert.doesNotMatch(navigation, /navigation\.library/);
+  assert.doesNotMatch(navigation, /to: "\/library"/);
+  assert.deepEqual(
+    [...navigation.matchAll(/labelKey: "navigation\.(\w+)"/g)].map(
+      (match) => match[1],
+    ),
+    ["home", "likedSongs", "playlists", "albums", "artists"],
+  );
 });
