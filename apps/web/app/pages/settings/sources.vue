@@ -14,7 +14,6 @@ import type {
   SourceResponse,
 } from "@peridot/contracts";
 import { Button } from "@peridot/ui/components/ui/button";
-import { Input } from "@peridot/ui/components/ui/input";
 import { ProgressCircle } from "@peridot/ui/components/ui/progress-circle";
 import { useSortable } from "@vueuse/integrations/useSortable";
 import {
@@ -83,9 +82,8 @@ const sourceList = ref<HTMLElement | null>(null);
 const loading = sourcesQuery.loading;
 const pageError = ref("");
 const addOpen = ref(false);
-const newKind = ref<SourceKind | null>(null);
+const newKind = ref<Exclude<SourceKind, "url"> | null>(null);
 const newPath = ref("");
-const newUrl = ref("");
 const adding = ref(false);
 const addError = ref("");
 const removeOpen = ref(false);
@@ -148,11 +146,10 @@ function openAddDialog() {
   addError.value = "";
   newKind.value = null;
   newPath.value = "";
-  newUrl.value = "";
   addOpen.value = true;
 }
 
-function chooseKind(kind: SourceKind) {
+function chooseKind(kind: Exclude<SourceKind, "url">) {
   addError.value = "";
   newKind.value = kind;
 }
@@ -161,7 +158,6 @@ function closeAddDialog() {
   addOpen.value = false;
   newKind.value = null;
   newPath.value = "";
-  newUrl.value = "";
 }
 
 function handleDialogBack() {
@@ -175,7 +171,6 @@ function handleDialogBack() {
 
 function canAdd(): boolean {
   if (newKind.value === "path") return Boolean(newPath.value.trim());
-  if (newKind.value === "url") return Boolean(newUrl.value.trim());
   return false;
 }
 
@@ -185,7 +180,6 @@ async function addSource() {
   addError.value = "";
   const body: CreateSourceRequest = { kind: newKind.value };
   if (newKind.value === "path") body.path = newPath.value;
-  if (newKind.value === "url") body.url = newUrl.value;
   try {
     const source = await createSource(
       address.value ?? "",
@@ -454,15 +448,6 @@ onMounted(() => void loadSources());
             type="button"
             variant="outline"
             class="justify-start"
-            @click="chooseKind('url')"
-          >
-            <Icon :icon="icons.globe" aria-hidden="true" class="size-5" />
-            {{ t("settings.sources.url") }}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            class="justify-start"
             @click="chooseKind('integration')"
           >
             <Icon :icon="icons.plugins" aria-hidden="true" class="size-5" />
@@ -479,18 +464,6 @@ onMounted(() => void loadSources());
             <p class="text-sm text-muted-foreground">
               {{ newPath || t("settings.sources.noFolder") }}
             </p>
-          </div>
-
-          <div v-else-if="newKind === 'url'" class="space-y-2">
-            <label for="source-url" class="text-sm font-medium">
-              {{ t("settings.sources.externalUrl") }}
-            </label>
-            <Input
-              id="source-url"
-              v-model="newUrl"
-              type="url"
-              placeholder="https://example.com/music"
-            />
           </div>
 
           <p v-else class="text-sm text-muted-foreground">

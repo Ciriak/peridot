@@ -310,12 +310,14 @@ after confirming the action. The server briefly disconnects clients, rebuilds
 its Fastify runtime on the same host and port, interrupts running tasks, and
 resumes queued tasks. Sessions and persisted data are retained.
 Administrators can manage where the server gets raw audio files from
-Settings → Admin → Sources. Each source is a local folder, an external URL, or
-a future integration such as Spotify or YouTube Music. Local folder sources seed from
+Settings → Admin → Sources. The add-source dialog offers a folder inside the
+server or the future integration option such as Spotify or YouTube Music.
+Existing URL sources remain listed and removable for compatibility, but the
+dialog no longer offers URL creation. Folder sources seed from
 `MUSIC_LIBRARY_PATH` on first launch and are used by library scans; URL and
-integration sources are stored but not indexed yet. Adding a local folder source
+integration sources are stored but not indexed yet. Adding a folder source
 queues its source-scoped library scan automatically. A successful scan queues a
-linked metadata-fetch task for the same source. Each local source row has a
+linked metadata-fetch task for the same source. Each folder source row has a
 three-dot action menu for a source-scoped rescan or confirmed removal.
 The local-folder picker supports case-insensitive deep folder search without
 requiring folders to be expanded first.

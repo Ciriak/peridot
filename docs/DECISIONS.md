@@ -1,5 +1,17 @@
 # Decisions
 
+## 2026-11-13: The add-source dialog offers server-internal folders
+
+The source choice formerly labeled `Local files` is now
+`Server internal folder`, making clear that the folder picker browses paths on
+the Peridot host rather than files on the administrator's device. The
+add-source dialog no longer offers external URL creation.
+
+Existing URL source records remain visible and removable so the UI change does
+not strand previously stored sources. The server source contract and indexing
+boundaries stay unchanged; this is an administrator UI choice rather than
+removal of historical data support.
+
 ## 2026-11-13: Toasts sit below the topbar at the top-right
 
 The app-level Reka toast region is fixed to the top-right and starts below the

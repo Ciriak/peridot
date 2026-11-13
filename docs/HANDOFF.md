@@ -2,6 +2,26 @@
 
 Last updated: 2026-11-13.
 
+## Add-source dialog uses server-internal folders
+
+The administrator add-source dialog now labels the path source as
+`Server internal folder` and no longer offers external URL creation. Existing
+URL source records remain visible and removable for compatibility, and the
+server source contract is unchanged.
+
+Checks run:
+
+- Focused settings and localization tests (19 passing)
+- Full web test suite (187 passing)
+- Web type check
+- Targeted ESLint and Prettier checks
+- Production web build (107 PWA precache entries)
+- `git diff --check`
+
+Known limits: live browser visual confirmation was not run. No server, schema,
+dependency, or lockfile changes were made. The work is uncommitted on `dev`; no
+commit, push, tag, publication, or deployment was performed.
+
 ## Toasts moved below the topbar
 
 The shared app-level toast region now opens at the top-right, below the 64px

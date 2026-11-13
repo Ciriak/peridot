@@ -223,9 +223,12 @@ test("sources are managed on their own page with row action menus", async () => 
     page,
     /<Icon :icon="icons\.folder" aria-hidden="true" class="size-5" \/>\s*\{\{ t\("settings\.sources\.path"\) \}\}/,
   );
+  assert.doesNotMatch(page, /chooseKind\('url'\)/);
+  assert.doesNotMatch(page, /settings\.sources\.externalUrl/);
+  assert.doesNotMatch(page, /id="source-url"/);
   assert.match(
     page,
-    /<Icon :icon="icons\.globe" aria-hidden="true" class="size-5" \/>\s*\{\{ t\("settings\.sources\.url"\) \}\}/,
+    /if \(kind === "url"\) return t\("settings\.sources\.url"\)/,
   );
   assert.match(
     page,

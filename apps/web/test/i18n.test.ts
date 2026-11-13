@@ -61,6 +61,11 @@ test("en-US messages interpolate and pluralize", () => {
     i18n.global.t("player.scanLibrary"),
     "Select a track to get started",
   );
+  assert.equal(
+    i18n.global.t("settings.sources.path"),
+    "Server internal folder",
+  );
+  assert.equal(i18n.global.te("settings.sources.externalUrl"), false);
 });
 
 test("every en-US message compiles", () => {
