@@ -199,6 +199,10 @@ test("task labels distinguish queued, determinate, and indeterminate work", () =
     taskStatusMessage(task({ status: "interrupted" })).key,
     "settings.tasks.status.interrupted",
   );
+  assert.equal(
+    taskStatusMessage(task({ status: "stopped" })).key,
+    "settings.tasks.status.stopped",
+  );
   assert.deepEqual(taskProgressMessage(task()), {
     key: "settings.tasks.progress",
     params: { percent: 67, completed: 8, total: 12 },

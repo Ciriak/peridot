@@ -573,6 +573,15 @@ export function getTask(serverAddress: string, token: string, taskId: string) {
   );
 }
 
+export function stopTask(serverAddress: string, token: string, taskId: string) {
+  return authenticatedRequestJson<TaskResponse>(
+    serverAddress,
+    `/api/admin/tasks/${encodeURIComponent(taskId)}/stop`,
+    token,
+    { method: "POST" },
+  );
+}
+
 export interface TrackListOptions {
   cursor?: string | null;
   limit?: number;

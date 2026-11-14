@@ -37,3 +37,6 @@ generated/
 *.db-journal
 *.db-shm
 *.db-wal
+
+# Use pnpm lockfile not npm lockfile
+package-lock.json

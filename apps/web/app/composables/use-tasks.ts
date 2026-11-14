@@ -1,11 +1,12 @@
 import type { TaskListResponse, TaskResponse } from "@peridot/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import {
   listTasks,
   refreshMetadata,
   rescanSource,
   startLibraryScan,
+  stopTask as requestStopTask,
 } from "../lib/peridot-client";
 import { persistQueryKey } from "../lib/query-persister";
 import { queryKeys } from "../lib/query-keys";
@@ -46,6 +47,7 @@ export function useTasks() {
   const { token } = useSession();
   const { status } = useServerConnection();
   const queryClient = useQueryClient();
+  const stoppingTaskIds = ref<Set<string>>(new Set());
   const queryKey = computed(() =>
     scope.value ? queryKeys.tasks(scope.value, TASKS_QUERY_OPTIONS) : null,
   );
@@ -162,6 +164,30 @@ export function useTasks() {
     return queueMutation.mutateAsync({ kind: "metadata" });
   }
 
+  function isStoppingTask(taskId: string): boolean {
+    return stoppingTaskIds.value.has(taskId);
+  }
+
+  async function stopTask(taskId: string) {
+    if (!scope.value || !token.value) {
+      throw new Error("Peridot query scope is unavailable.");
+    }
+    stoppingTaskIds.value = new Set([...stoppingTaskIds.value, taskId]);
+    try {
+      const stopped = await requestStopTask(
+        scope.value.serverAddress,
+        token.value,
+        taskId,
+      );
+      track(stopped);
+      return stopped;
+    } finally {
+      stoppingTaskIds.value = new Set(
+        [...stoppingTaskIds.value].filter((id) => id !== taskId),
+      );
+    }
+  }
+
   return {
     tasks,
     loaded,
@@ -177,5 +203,7 @@ export function useTasks() {
     queueLibraryScan,
     queueSourceScan,
     queueMetadataRefresh,
+    isStoppingTask,
+    stopTask,
   };
 }

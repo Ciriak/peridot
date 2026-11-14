@@ -289,7 +289,9 @@ export async function waitForTask(
       headers: context.authorization,
     });
     const task = response.json<TaskResponse>();
-    if (["completed", "failed", "interrupted"].includes(task.status)) {
+    if (
+      ["completed", "failed", "interrupted", "stopped"].includes(task.status)
+    ) {
       return task;
     }
     await new Promise((resolve) => setTimeout(resolve, 10));

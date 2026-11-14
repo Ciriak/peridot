@@ -228,6 +228,176 @@ test("task service runs FIFO, coalesces queued duplicates, and reports progress"
   }
 });
 
+test("running and queued tasks can be stopped without running queued work", async () => {
+  const context = await createTestContext();
+  await context.app.close();
+  const tasks = new TaskService(context.database);
+  const events: string[] = [];
+  let started!: () => void;
+  let aborted!: () => void;
+  const sawStart = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  const sawAbort = new Promise<void>((resolve) => {
+    aborted = resolve;
+  });
+  tasks.registerExecutor(
+    "plugin:test:stoppable",
+    async (task, _service, signal) => {
+      events.push(`start:${task.id}`);
+      started();
+      await new Promise<void>((_, reject) => {
+        signal.addEventListener(
+          "abort",
+          () => {
+            aborted();
+            reject(signal.reason);
+          },
+          { once: true },
+        );
+      });
+    },
+  );
+  await tasks.initialize();
+
+  try {
+    const running = await tasks.enqueue({
+      kind: "plugin:test:stoppable",
+      title: "Running work",
+      sourceId: "source-a",
+      sourceName: "Source A",
+    });
+    await sawStart;
+    const queued = await tasks.enqueue({
+      kind: "plugin:test:stoppable",
+      title: "Queued work",
+      sourceId: "source-b",
+      sourceName: "Source B",
+    });
+
+    await tasks.stop(queued.id);
+    await tasks.stop(running.id);
+    await sawAbort;
+
+    const stoppedQueued = await tasks.get(queued.id);
+    const stoppedRunning = await tasks.get(running.id);
+    assert.equal(stoppedQueued?.status, "stopped");
+    assert.equal(stoppedRunning?.status, "stopped");
+    assert.equal(
+      stoppedRunning?.failureMessage,
+      JSON.stringify(message("api.message.taskStopped")),
+    );
+    assert.deepEqual(events, [`start:${running.id}`]);
+  } finally {
+    await tasks.close();
+    await context.close();
+  }
+});
+
+test("administrators stop active tasks", async () => {
+  const context = await createTestContext();
+  const member = await createMemberSession(context);
+  try {
+    const task = await context.database.orm.Task.create({
+      kind: "library_scan",
+      status: "running",
+      title: "Running scan",
+      startedAt: new Date(),
+    });
+    const memberStop = await context.app.inject({
+      method: "POST",
+      url: `/api/admin/tasks/${task.id}/stop`,
+      headers: member,
+    });
+    assert.equal(memberStop.statusCode, 403);
+
+    const stopped = await context.app.inject({
+      method: "POST",
+      url: `/api/admin/tasks/${task.id}/stop`,
+      headers: context.authorization,
+    });
+    assert.equal(stopped.statusCode, 200);
+    assert.equal(stopped.json<TaskResponse>().status, "stopped");
+    assert.deepEqual(
+      stopped.json<TaskResponse>().failureMessage,
+      message("api.message.taskStopped"),
+    );
+
+    const missing = await context.app.inject({
+      method: "POST",
+      url: "/api/admin/tasks/missing/stop",
+      headers: context.authorization,
+    });
+    assert.equal(missing.statusCode, 404);
+  } finally {
+    await context.close();
+  }
+});
+
+test("deleting a source stops relevant work and preserves unrelated tasks", async () => {
+  const context = await createTestContext();
+  try {
+    const source = await context.database.orm.Source.create({
+      kind: "path",
+      name: "Remove me",
+      path: context.libraryRoot,
+      position: 1,
+    });
+    const otherSource = await context.database.orm.Source.create({
+      kind: "path",
+      name: "Keep me",
+      path: context.libraryRoot,
+      position: 2,
+    });
+    const relevant = await context.database.orm.Task.create({
+      kind: "library_scan",
+      status: "running",
+      title: "Source scan",
+      sourceId: source.id,
+      sourceName: source.name,
+      startedAt: new Date(),
+    });
+    const allSources = await context.database.orm.Task.create({
+      kind: "metadata_fetch",
+      status: "queued",
+      title: "Full library metadata",
+    });
+    const unrelated = await context.database.orm.Task.create({
+      kind: "library_scan",
+      status: "running",
+      title: "Other source scan",
+      sourceId: otherSource.id,
+      sourceName: otherSource.name,
+      startedAt: new Date(),
+    });
+
+    const removed = await context.app.inject({
+      method: "DELETE",
+      url: `/api/admin/sources/${source.id}`,
+      headers: context.authorization,
+    });
+    assert.equal(removed.statusCode, 204);
+    assert.equal(
+      await context.database.orm.Source.first({ id: source.id }),
+      null,
+    );
+    assert.equal(
+      (await context.database.orm.Task.first({ id: relevant.id }))?.status,
+      "stopped",
+    );
+    assert.equal(
+      (await context.database.orm.Task.first({ id: allSources.id }))?.status,
+      "stopped",
+    );
+    assert.equal(
+      (await context.database.orm.Task.first({ id: unrelated.id }))?.status,
+      "running",
+    );
+  } finally {
+    await context.close();
+  }
+});
+
 test("task failures and restart interruptions are visible in server logs", async () => {
   const context = await createTestContext();
   await context.app.close();

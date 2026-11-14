@@ -1,5 +1,36 @@
 # Decisions
 
+## 2026-11-14: Administrators can stop tasks and remove active sources
+
+Running and queued tasks can be stopped from the Tasks settings view. Stopping a
+queued task marks it terminal before the scheduler can start it. Stopping a
+running core task aborts its task-specific signal and waits for the scanner or
+metadata executor to leave its current iteration before the stop request
+returns. A distinct `stopped` terminal status keeps administrator cancellation
+separate from startup interruptions and execution failures.
+
+Source deletion no longer waits for all task activity to end. The server stops
+active tasks scoped to that source plus unscoped all-source tasks that could
+read it, then removes the source. Source-specific work for other sources
+continues because it cannot access the deleted source. This keeps destructive
+source management available without allowing deletion and scanning to race.
+
+Task event emissions are tracked during shutdown and awaited before the shared
+catalog and database close, preventing late task notifications from querying a
+closed SQLite client.
+
+## 2026-11-14: Sources keeps its count visible during scans
+
+The Settings sidebar shows only the configured-source count beside Sources.
+Library-scan progress no longer replaces the count or adds a second progress
+indicator to that navigation item. This keeps the navigation label stable and
+preserves the collection-size information while work is in progress.
+
+Source-specific scan progress remains beside the corresponding source row,
+where it can identify which configured source is being processed. Generic task
+progress remains beside Tasks, and active metadata matching remains identified
+beside Metadata.
+
 ## 2026-11-13: Jellyfin is a live audio source behind the Peridot audio boundary
 
 The administrator add-source dialog offers `Jellyfin instance` directly rather

@@ -31,18 +31,10 @@ const sourceCount = computed(() => sources.value.length);
 const activeTasks = computed(() =>
   tasks.value.filter((task) => isActiveTaskStatus(task.status)),
 );
-const activeSourceTasks = computed(() =>
-  tasks.value.filter(
-    (task) => task.kind === "library_scan" && isActiveTaskStatus(task.status),
-  ),
-);
 const activeMetadataTasks = computed(() =>
   tasks.value.filter(
     (task) => task.kind === "metadata_fetch" && isActiveTaskStatus(task.status),
   ),
-);
-const sourceTaskProgress = computed(() =>
-  overallTaskProgress(activeSourceTasks.value),
 );
 const metadataTaskProgress = computed(() =>
   overallTaskProgress(activeMetadataTasks.value),
@@ -210,19 +202,6 @@ watch(tasks, (current) => {
                 />
                 <ProgressCircle
                   v-if="
-                    item.to === '/settings/sources' && activeSourceTasks.length
-                  "
-                  size="sm"
-                  :value="sourceTaskProgress"
-                  :label="
-                    t('settings.sources.progress', {
-                      source: t('settings.sources'),
-                    })
-                  "
-                  class="size-4"
-                />
-                <ProgressCircle
-                  v-if="
                     item.to === '/settings/metadata' &&
                     activeMetadataTasks.length
                   "
@@ -236,11 +215,7 @@ watch(tasks, (current) => {
                   class="size-4"
                 />
                 <Badge
-                  v-if="
-                    item.to === '/settings/sources' &&
-                    sourcesLoaded &&
-                    !activeSourceTasks.length
-                  "
+                  v-if="item.to === '/settings/sources' && sourcesLoaded"
                   variant="secondary"
                 >
                   {{ n(sourceCount, "integer") }}

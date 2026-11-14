@@ -339,7 +339,7 @@ export type LikeResponse =
   | ({ kind: "playlist" } & PlaylistLikeResponse);
 
 export type TaskStatus =
-  "queued" | "running" | "completed" | "failed" | "interrupted";
+  "queued" | "running" | "completed" | "failed" | "interrupted" | "stopped";
 
 export type TaskKind = "library_scan" | "metadata_fetch" | `plugin:${string}`;
 

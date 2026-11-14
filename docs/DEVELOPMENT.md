@@ -321,7 +321,10 @@ mechanism as metadata-provider credentials. Multiple Jellyfin instances with
 different URLs are supported. Adding a folder or Jellyfin source queues its
 source-scoped library scan automatically. A successful scan queues a linked
 metadata-fetch task for the same source. Each scannable source row has a
-three-dot action menu for a source-scoped rescan or confirmed removal.
+three-dot action menu for a source-scoped rescan or confirmed removal. Source
+removal remains available while work is active; the server first stops running
+or queued work for that source and stops unscoped all-source work that could
+access it. Unrelated source-specific tasks continue.
 Jellyfin scans request only `Audio` items, page through the complete result set,
 import Peridot-supported original audio containers, and cache bounded album
 artwork. Item IDs and ETags provide stable identity and change detection. Static
@@ -335,10 +338,10 @@ warnings, and startup interruptions are written to the administrator log.
 Source rows show the current available file count and latest successful sync
 time. The Settings sidebar shows the number of configured sources beside
 Sources. Both refresh from the shared source query after a completed library
-scan. Active tasks add a compact progress circle beside Tasks, while active
-library scans and metadata tasks also identify Sources and Metadata. An active
-library scan temporarily replaces the Sources count badge with its progress
-circle.
+scan. Active tasks add a compact progress circle beside Tasks, and active
+metadata tasks also identify Metadata. The Sources item keeps its configured
+source count visible during scans; source-specific scan progress remains on
+each source row.
 The local-folder picker supports case-insensitive deep folder search without
 requiring folders to be expanded first.
 
@@ -445,10 +448,13 @@ plays each eligible track once per pass, and resumes the same pass after a
 reload. New scans are explicit and are never started automatically at server
 startup; explicitly queued tasks resume after a restart while tasks that were
 running become interrupted. Library scans and metadata fetches are separate
-linked tasks with queued, running, completed, failed, or interrupted states
-and determinate or indeterminate progress. Finished task history is retained for
-30 days, capped at the newest 500 terminal tasks. MP3, M4A/AAC, OGG/Opus, WAV,
-and FLAC files are cataloged; originals are
+linked tasks with queued, running, completed, failed, interrupted, or stopped
+states and determinate or indeterminate progress. Active tasks can be stopped
+from Settings → Admin → Tasks; stopping a queued task prevents it from starting,
+while stopping running core work aborts the scan or metadata executor before the
+request completes. Finished task history is retained for 30 days, capped at the
+newest 500 terminal tasks. MP3, M4A/AAC, OGG/Opus, WAV, and FLAC files are
+cataloged; originals are
 streamed without transcoding. Catalog responses include nullable disc and track
 numbers used for album ordering. A metadata-version marker makes the next scan
 backfill those fields once for catalog rows created before the columns existed,
@@ -477,7 +483,8 @@ source plus its automatically queued scan task. A Jellyfin create request uses
 `POST /api/admin/sources/:id/scans`; a scoped scan only changes availability for
 tracks from that source and queues metadata matching for that source. Requests
 are queued behind active work, and equivalent requests that are still queued
-coalesce into the existing task.
+coalesce into the existing task. Administrators stop an active task with
+`POST /api/admin/tasks/:id/stop`.
 Administrators manage metadata providers through
 `GET/POST /api/admin/metadata-providers`,
 `GET /api/admin/metadata-providers/definitions`,

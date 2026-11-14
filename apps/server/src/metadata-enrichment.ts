@@ -359,8 +359,12 @@ export class MetadataEnrichment {
   async runTask(
     task: TaskRow,
     tasks: TaskService,
+    signal: AbortSignal,
   ): Promise<TaskExecutionResult> {
+    const requestSignal = AbortSignal.any([this.controller.signal, signal]);
     try {
+      if (requestSignal.aborted)
+        throw new DOMException("Stopped", "AbortError");
       const providers = await orderedMetadataProviders(this.database);
       if (!providers.length) {
         throw new TaskExecutionError(
@@ -514,9 +518,15 @@ export class MetadataEnrichment {
       };
 
       for (const group of groups.values()) {
+        if (requestSignal.aborted) {
+          throw new DOMException("Stopped", "AbortError");
+        }
         const album = folderAlbumTitle(group.tracks, group.title);
         let unresolved = [...group.tracks];
         for (const provider of providers) {
+          if (requestSignal.aborted) {
+            throw new DOMException("Stopped", "AbortError");
+          }
           if (!unresolved.length) break;
           activeProviderId = provider.id;
           await recordProgress();
@@ -533,7 +543,7 @@ export class MetadataEnrichment {
                 ...trackInput(track),
                 album,
               })),
-              this.controller.signal,
+              requestSignal,
             );
             const nextUnresolved: TrackRow[] = [];
             for (const track of unresolved) {
@@ -550,7 +560,7 @@ export class MetadataEnrichment {
             }
             unresolved = nextUnresolved;
           } catch (error) {
-            if (this.controller.signal.aborted) throw error;
+            if (requestSignal.aborted) throw error;
             failureSummary =
               error instanceof Error
                 ? error.message
@@ -569,10 +579,16 @@ export class MetadataEnrichment {
       }
 
       for (const artist of artistTargets) {
+        if (requestSignal.aborted) {
+          throw new DOMException("Stopped", "AbortError");
+        }
         let nameCandidate: ArtistMetadataProviderCandidate | null = null;
         let portraitCandidate: ArtistMetadataProviderCandidate | null = null;
         let hadProviderError = false;
         for (const provider of providers) {
+          if (requestSignal.aborted) {
+            throw new DOMException("Stopped", "AbortError");
+          }
           activeProviderId = provider.id;
           await recordProgress();
           try {
@@ -586,13 +602,13 @@ export class MetadataEnrichment {
               context,
               artist.name,
               undefined,
-              this.controller.signal,
+              requestSignal,
             );
             const exact = exactArtistCandidate(artist, candidates);
             nameCandidate ??= exact;
             if (exact?.imageUrl) portraitCandidate ??= exact;
           } catch (error) {
-            if (this.controller.signal.aborted) throw error;
+            if (requestSignal.aborted) throw error;
             hadProviderError = true;
             failureSummary =
               error instanceof Error
@@ -611,9 +627,12 @@ export class MetadataEnrichment {
           let image: ArtistImageRow | null = null;
           if (portraitCandidate?.imageUrl) {
             try {
-              image = await this.cacheArtistImage(portraitCandidate);
+              image = await this.cacheArtistImage(
+                portraitCandidate,
+                requestSignal,
+              );
             } catch (error) {
-              if (this.controller.signal.aborted) throw error;
+              if (requestSignal.aborted) throw error;
               artistErrorCount += 1;
               failureSummary =
                 error instanceof Error
@@ -635,6 +654,9 @@ export class MetadataEnrichment {
         await recordProgress();
       }
 
+      if (requestSignal.aborted) {
+        throw new DOMException("Stopped", "AbortError");
+      }
       await this.removeUnusedArtistImages();
       await this.catalog?.flushChanges();
       return {
@@ -653,16 +675,24 @@ export class MetadataEnrichment {
         failureSummary,
       };
     } catch (error) {
-      const interrupted = this.controller.signal.aborted;
+      const interrupted = requestSignal.aborted;
       if (error instanceof TaskExecutionError) throw error;
       throw new TaskExecutionError(
         interrupted
-          ? "Metadata matching was interrupted by server shutdown."
+          ? this.controller.signal.aborted
+            ? "Metadata matching was interrupted by server shutdown."
+            : "Stopped by an administrator."
           : "Metadata matching could not be completed.",
-        interrupted ? "interrupted" : "failed",
+        interrupted
+          ? this.controller.signal.aborted
+            ? "interrupted"
+            : "stopped"
+          : "failed",
         message(
           interrupted
-            ? "api.message.metadataInterrupted"
+            ? this.controller.signal.aborted
+              ? "api.message.metadataInterrupted"
+              : "api.message.taskStopped"
             : "api.message.metadataFailed",
         ),
       );
@@ -1190,6 +1220,7 @@ export class MetadataEnrichment {
 
   private async cacheArtistImage(
     candidate: ArtistMetadataProviderCandidate,
+    taskSignal?: AbortSignal,
   ): Promise<ArtistImageRow> {
     const imageUrl = candidate.imageUrl
       ? allowedArtistImageUrl(candidate.imageUrl)
@@ -1202,7 +1233,9 @@ export class MetadataEnrichment {
       );
     }
     const timeout = AbortSignal.timeout(ARTIST_IMAGE_TIMEOUT_MS);
-    const signal = AbortSignal.any([this.controller.signal, timeout]);
+    const signal = taskSignal
+      ? AbortSignal.any([this.controller.signal, taskSignal, timeout])
+      : AbortSignal.any([this.controller.signal, timeout]);
     const response = await this.portraitFetch(imageUrl, {
       headers: { Accept: "image/jpeg,image/png,image/webp" },
       redirect: "error",

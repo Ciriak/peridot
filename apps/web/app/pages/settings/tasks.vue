@@ -1,5 +1,12 @@
 <script setup lang="ts">
-import { computed, definePageMeta, onMounted, useI18n, watch } from "#imports";
+import {
+  computed,
+  definePageMeta,
+  onMounted,
+  ref,
+  useI18n,
+  watch,
+} from "#imports";
 import { useIntervalFn, useNow } from "@vueuse/core";
 import {
   TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY,
@@ -11,6 +18,7 @@ import { Button } from "@peridot/ui/components/ui/button";
 import { ProgressCircle } from "@peridot/ui/components/ui/progress-circle";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { useServer } from "../../composables/use-server";
+import { useServerConnection } from "../../composables/use-server-connection";
 import { useSession } from "../../composables/use-session";
 import { useTaskHistoryQuery } from "../../composables/use-admin-queries";
 import { useTasks } from "../../composables/use-tasks";
@@ -24,20 +32,32 @@ import {
   taskStatusMessage,
 } from "../../lib/task-progress";
 import { formatTimeAgo } from "../../lib/relative-time";
+import { isAuthenticationRedirectError } from "../../lib/peridot-client";
 
 definePageMeta({ layout: "settings" });
 
 const { t, d, locale } = useI18n();
-const { translate } = useLocalizedMessage();
+const { errorMessage, translate } = useLocalizedMessage();
 const now = useNow({
   scheduler: (update) => useIntervalFn(update, 60_000, { immediate: true }),
 });
 
 const { address } = useServer();
 const { token } = useSession();
+const { status: serverStatus } = useServerConnection();
 const { user } = useUser();
-const { tasks, activeTasks, loading, loaded, refresh } = useTasks();
+const {
+  tasks,
+  activeTasks,
+  loading,
+  loaded,
+  refresh,
+  isStoppingTask,
+  stopTask,
+} = useTasks();
 const canManageTasks = computed(() => user.value?.role === "admin");
+const serverLost = computed(() => serverStatus.value === "lost");
+const stopError = ref("");
 const historyQuery = useTaskHistoryQuery();
 const history = historyQuery.items;
 const historyLoading = historyQuery.loading;
@@ -64,6 +84,7 @@ function taskStatusClass(status: TaskStatus): string {
       return "border-success text-success";
     case "failed":
     case "interrupted":
+    case "stopped":
       return "border-destructive text-destructive";
   }
 }
@@ -122,6 +143,16 @@ async function loadMoreHistory() {
   await historyQuery.loadMore();
 }
 
+async function stopActiveTask(task: TaskResponse) {
+  stopError.value = "";
+  try {
+    await stopTask(task.id);
+  } catch (reason) {
+    if (isAuthenticationRedirectError(reason)) return;
+    stopError.value = errorMessage(reason, "settings.tasks.stopError");
+  }
+}
+
 watch([address, token, user], () => {
   previousStatuses.clear();
 });
@@ -178,6 +209,9 @@ onMounted(() => {
         </h3>
         <Badge variant="outline">{{ activeRows.length }}</Badge>
       </div>
+      <p v-if="stopError" role="alert" class="text-sm text-destructive">
+        {{ stopError }}
+      </p>
 
       <div
         v-if="!loaded && loading && !activeRows.length"
@@ -217,9 +251,27 @@ onMounted(() => {
                     </template>
                   </p>
                 </div>
-                <Badge variant="outline" :class="taskStatusClass(task.status)">
-                  {{ translate(taskStatusMessage(task)) }}
-                </Badge>
+                <div class="flex flex-wrap items-center justify-end gap-2">
+                  <Badge
+                    variant="outline"
+                    :class="taskStatusClass(task.status)"
+                  >
+                    {{ translate(taskStatusMessage(task)) }}
+                  </Badge>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    :disabled="isStoppingTask(task.id) || serverLost"
+                    @click="stopActiveTask(task)"
+                  >
+                    {{
+                      isStoppingTask(task.id)
+                        ? t("settings.tasks.stopping")
+                        : t("settings.tasks.stop")
+                    }}
+                  </Button>
+                </div>
               </div>
               <div
                 class="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"

@@ -280,6 +280,7 @@ export async function registerAdminRoutes(
             message("api.message.sourceNotFound"),
           );
         }
+        await tasks.stopForSource(source.id);
         if (
           source.kind === "integration" &&
           source.integration === "jellyfin"
@@ -306,6 +307,23 @@ export async function registerAdminRoutes(
           );
         }
         return reply.code(204).send();
+      },
+    );
+
+    admin.post<{ Params: { id: string } }>(
+      "/api/admin/tasks/:id/stop",
+      async (request, reply) => {
+        const task = await tasks.stop(request.params.id);
+        if (!task) {
+          return sendError(
+            reply,
+            404,
+            "task_not_found",
+            "Task not found",
+            message("api.message.taskNotFound"),
+          );
+        }
+        return toTaskResponse(task);
       },
     );
 

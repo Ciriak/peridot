@@ -76,7 +76,6 @@ const { token } = useSession();
 const { user } = useUser();
 const { status: serverStatus } = useServerConnection();
 const {
-  hasActiveTasks,
   queueLibraryScan,
   queueSourceScan,
   tasks,
@@ -530,7 +529,7 @@ onMounted(() => void loadSources());
                   {{ t("settings.sources.rescan") }}
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  :disabled="hasActiveTasks || serverLost"
+                  :disabled="serverLost"
                   class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm text-destructive outline-none data-disabled:cursor-default data-disabled:opacity-50"
                   @select="askRemove(source)"
                 >
@@ -653,7 +652,10 @@ onMounted(() => void loadSources());
           {{ t("settings.sources.remove") }}
         </AlertDialogTitle>
         <AlertDialogDescription class="text-sm text-muted-foreground">
-          {{ sourceLabel(pendingDelete) }}
+          <span class="block">{{ sourceLabel(pendingDelete) }}</span>
+          <span class="mt-2 block">
+            {{ t("settings.sources.removeDescription") }}
+          </span>
         </AlertDialogDescription>
         <div class="mt-6 flex justify-end gap-3">
           <AlertDialogCancel as-child>

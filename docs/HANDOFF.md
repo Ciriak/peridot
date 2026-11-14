@@ -1,6 +1,65 @@
 # Handoff
 
-Last updated: 2026-11-13.
+Last updated: 2026-11-14.
+
+## Tasks can be stopped and active sources can be deleted
+
+Administrators can stop queued or running tasks from Settings → Admin → Tasks.
+Stopping a queued task prevents it from starting. Running library scans and
+metadata tasks receive a task-specific abort signal, stop at their next safe
+iteration, and finish with a distinct `stopped` status and administrator-stop
+message. The authenticated stop endpoint is
+`POST /api/admin/tasks/:id/stop`.
+
+Source removal is available while tasks are active. Before deleting a source,
+the server stops running or queued tasks scoped to that source plus unscoped
+all-source tasks that could access it. Source-specific tasks for other sources
+continue. The source row menu no longer disables Remove while any task is active,
+and its confirmation explains the cleanup behavior.
+
+Task change emissions are now tracked and awaited during shutdown before the
+catalog and SQLite database close. This fixed a late-event race exposed while
+testing source creation immediately followed by teardown.
+
+Checks run:
+
+- Full server test suite (123 passing), including running/queued cancellation,
+  administrator authorization, source deletion with relevant and unrelated
+  tasks, and shutdown emission cleanup
+- Full web test suite (189 passing)
+- Full workspace type check, including the desktop shell
+- Workspace ESLint
+- Prisma contract validation and generation
+- Server and web production builds
+- Targeted Prettier checks and `git diff --check`
+
+Known limits: live browser interaction QA of Stop and source removal was not
+run. Automated core executors honor cancellation, while future isolated plugin
+runtimes must implement equivalent abort handling when they are introduced. The
+pre-existing `package-lock.json` deletion remains untouched, and the root
+`pnpm format:check` still reports only the pre-existing `README.md` formatting
+issue. All changed files pass targeted Prettier checks. No commit, push, tag,
+publication, or deployment was performed.
+
+## Sources sidebar keeps its count during scans
+
+The Settings sidebar no longer replaces or supplements the Sources counter with
+library-scan progress. Sources always shows the configured-source count once
+loaded, including while a scan is active. Scan progress remains beside each
+source row so it stays associated with the source being processed. Task and
+metadata progress indicators are unchanged.
+
+Checks run:
+
+- Full web test suite (189 passing)
+- Web type check
+- Targeted ESLint and Prettier checks
+- Production web build
+- `git diff --check`
+
+Known limits: live browser visual confirmation was not run. The pre-existing
+deletion of `package-lock.json` remains untouched. No commit, push, tag,
+publication, or deployment was performed.
 
 ## Jellyfin audio sources
 
@@ -19,10 +78,10 @@ automatic metadata task still runs after successful scans.
 Each source row shows its current available file count and the latest successful
 sync time. The Settings sidebar shows the number of configured sources beside
 Sources; both views refresh after completed source-scoped or all-source scans.
-Active library scans and metadata tasks show compact progress circles beside
-Sources and Metadata in the settings sidebar; every active task also shows one
-beside Tasks. An active library scan temporarily replaces the Sources count
-badge with its progress circle.
+Active metadata tasks show a compact progress circle beside Metadata in the
+settings sidebar, and every active task shows one beside Tasks. Library-scan
+progress appears on the corresponding source row while the Sources navigation
+item keeps its configured-source count.
 Jellyfin pages are processed incrementally so progress advances while large
 libraries are importing, and repeated album covers are fetched once per scan.
 The Jellyfin header timeout is 60 seconds to account for large library pages.

@@ -304,6 +304,7 @@ export class JellyfinClient {
     baseUrl: string,
     apiKey: string,
     onPage?: (page: JellyfinAudioPage) => Promise<void> | void,
+    signal?: AbortSignal,
   ): Promise<{
     items: JellyfinAudioItem[];
     unsupportedCount: number;
@@ -328,7 +329,9 @@ export class JellyfinClient {
         startIndex: String(startIndex),
         limit: String(AUDIO_PAGE_SIZE),
       }).toString();
-      const response = await this.request(url, apiKey);
+      const response = await this.request(url, apiKey, {
+        ...(signal ? { signal } : {}),
+      });
       if (response.status === 401 || response.status === 403) {
         throw new JellyfinError(
           "Jellyfin rejected the API key.",
@@ -400,6 +403,7 @@ export class JellyfinClient {
     apiKey: string,
     itemId: string,
     tag: string | null,
+    signal?: AbortSignal,
   ): Promise<JellyfinCover | null> {
     const url = endpoint(
       baseUrl,
@@ -413,6 +417,7 @@ export class JellyfinClient {
     }).toString();
     const response = await this.request(url, apiKey, {
       headers: { Accept: "*/*" },
+      ...(signal ? { signal } : {}),
     });
     if (!response.ok) return null;
     const mimeType =

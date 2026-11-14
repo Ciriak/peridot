@@ -48,16 +48,18 @@ test("settings is a fullscreen routed area with a separate administrator group",
   assert.match(layout, /item\.to === '\/settings\/sources'/);
   assert.match(layout, /variant="secondary"/);
   assert.match(layout, /n\(sourceCount, "integer"\)/);
-  assert.match(layout, /activeSourceTasks/);
-  assert.match(layout, /sourcesLoaded\s*&&\s*!activeSourceTasks\.length/);
+  assert.doesNotMatch(layout, /activeSourceTasks/);
+  assert.doesNotMatch(layout, /sourceTaskProgress/);
+  assert.match(
+    layout,
+    /v-if="item\.to === '\/settings\/sources' && sourcesLoaded"/,
+  );
   assert.match(layout, /activeMetadataTasks/);
   assert.match(layout, /activeTasks/);
-  assert.match(layout, /sourceTaskProgress/);
   assert.match(layout, /metadataTaskProgress/);
   assert.match(layout, /activeTaskProgress/);
   assert.match(layout, /item\.to === '\/settings\/tasks'/);
   assert.match(layout, /item\.to === '\/settings\/metadata'/);
-  assert.match(layout, /settings\.sources\.progress/);
   assert.match(layout, /settings\.tasks\.progressFor/);
   for (const page of [
     "plugins",
@@ -271,6 +273,7 @@ test("sources are managed on their own page with row action menus", async () => 
     /:title="source\.kind === 'path' \? \(source\.path \?\? ''\) : undefined"/,
   );
   assert.match(page, /useTasks/);
+  assert.doesNotMatch(page, /hasActiveTasks/);
   assert.match(page, /queueLibraryScan/);
   assert.match(
     page,
@@ -309,6 +312,7 @@ test("sources are managed on their own page with row action menus", async () => 
   assert.match(page, /translate\(task\.titleMessage\)/);
   assert.match(page, /taskStatusMessage\(task\)/);
   assert.match(page, /taskProgressMessage\(task\)/);
+  assert.match(page, /settings\.sources\.removeDescription/);
 });
 
 test("metadata providers have a dedicated sortable management page", async () => {
@@ -420,6 +424,11 @@ test("tasks have a settings view for active work and paginated history", async (
     /onMounted\(\(\) => \{\s+if \(!canManageTasks\.value\) return;/,
   );
   assert.match(page, /useTasks/);
+  assert.match(page, /isStoppingTask/);
+  assert.match(page, /stopTask/);
+  assert.match(page, /settings\.tasks\.stop/);
+  assert.match(page, /settings\.tasks\.stopping/);
+  assert.match(page, /@click="stopActiveTask\(task\)"/);
   assert.match(page, /orderedActiveTasks\(activeTasks\.value\)/);
   assert.match(page, /useTaskHistoryQuery/);
   assert.match(page, /historyQuery\.loadMore\(\)/);

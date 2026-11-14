@@ -102,6 +102,8 @@ export function taskStatusMessage(task: TaskResponse): MessageDescriptor {
       return message("settings.tasks.status.failed");
     case "interrupted":
       return message("settings.tasks.status.interrupted");
+    case "stopped":
+      return message("settings.tasks.status.stopped");
   }
 }
 

@@ -132,11 +132,11 @@ export async function buildApp(options: BuildAppOptions = {}) {
     jellyfin,
     credentials,
   );
-  tasks.registerExecutor("library_scan", (task, taskService) =>
-    scanner.runTask(task, taskService),
+  tasks.registerExecutor("library_scan", (task, taskService, signal) =>
+    scanner.runTask(task, taskService, signal),
   );
-  tasks.registerExecutor("metadata_fetch", (task, taskService) =>
-    metadataEnrichment.runTask(task, taskService),
+  tasks.registerExecutor("metadata_fetch", (task, taskService, signal) =>
+    metadataEnrichment.runTask(task, taskService, signal),
   );
   logBuffer.onEntry((entry) => realtime.publishLog(entry));
   catalog.setPublisher((change) => realtime.publishCatalog(change));
@@ -235,9 +235,9 @@ export async function buildApp(options: BuildAppOptions = {}) {
       clearImmediate(backfillImmediate);
       backfillImmediate = undefined;
     }
-    await catalog.close();
     metadataEnrichment.close();
     await tasks.close();
+    await catalog.close();
     logBuffer.onEntry(null);
     realtime.close();
     if (ownsDatabase) await database.close();

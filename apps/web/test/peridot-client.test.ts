@@ -54,6 +54,7 @@ import {
   searchDirectories,
   setAuthenticationRedirectHandler,
   startLibraryScan,
+  stopTask,
   trackAudioUrl,
   updateManagedUser,
   updateMetadataProvider,
@@ -1085,6 +1086,16 @@ test("authenticated admin calls send the bearer token and expected bodies", asyn
     if (init?.method === "POST" && url.endsWith("/api/admin/server/restart")) {
       return Response.json({ status: "restarting" }, { status: 202 });
     }
+    if (
+      init?.method === "POST" &&
+      url.endsWith("/api/admin/tasks/scan-1/stop")
+    ) {
+      return Response.json({
+        ...queuedTask("scan-1", "library_scan", null),
+        status: "stopped",
+        completedAt: "2026-11-11T10:01:00.000Z",
+      });
+    }
     if (url.includes("/api/tasks/")) {
       return Response.json({
         ...queuedTask("scan-1", "library_scan", null),
@@ -1176,6 +1187,10 @@ test("authenticated admin calls send the bearer token and expected bodies", asyn
     (await getTask("http://127.0.0.1:17430", "s", "scan-1")).status,
     "completed",
   );
+  assert.equal(
+    (await stopTask("http://127.0.0.1:17430", "s", "scan-1")).status,
+    "stopped",
+  );
 
   assert.deepEqual(
     requests.map((request) => request.input),
@@ -1191,6 +1206,7 @@ test("authenticated admin calls send the bearer token and expected bodies", asyn
       "http://127.0.0.1:17430/api/auth/session",
       "http://127.0.0.1:17430/api/library/scans",
       "http://127.0.0.1:17430/api/tasks/scan-1",
+      "http://127.0.0.1:17430/api/admin/tasks/scan-1/stop",
     ],
   );
   for (const request of requests) {

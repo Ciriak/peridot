@@ -115,12 +115,23 @@ function scanFailureSummary(error: unknown): string {
     : "The library scan failed while reading the configured root.";
 }
 
-async function discoverAudioFiles(root: string): Promise<DiscoveredFile[]> {
+function throwIfAborted(signal: AbortSignal): void {
+  if (signal.aborted) {
+    throw new DOMException("The library scan was stopped.", "AbortError");
+  }
+}
+
+async function discoverAudioFiles(
+  root: string,
+  signal: AbortSignal,
+): Promise<DiscoveredFile[]> {
   const files: DiscoveredFile[] = [];
 
   async function visit(directory: string): Promise<void> {
+    throwIfAborted(signal);
     const entries = await opendir(directory);
     for await (const entry of entries) {
+      throwIfAborted(signal);
       const absolutePath = path.join(directory, entry.name);
       if (entry.isSymbolicLink()) continue;
       if (entry.isDirectory()) {
@@ -162,6 +173,7 @@ export class LibraryScanner {
   async runTask(
     task: TaskRow,
     tasks: TaskService,
+    signal: AbortSignal,
   ): Promise<TaskExecutionResult> {
     const counts: ScanCounts = {
       createdCount: 0,
@@ -171,6 +183,7 @@ export class LibraryScanner {
     };
 
     try {
+      throwIfAborted(signal);
       this.folderCoverCache.clear();
       this.jellyfinCoverCache.clear();
       let requestedSource: SourceRow | undefined;
@@ -225,6 +238,7 @@ export class LibraryScanner {
       const files: SourceFile[] = [];
       const jellyfinSources: JellyfinSource[] = [];
       for (const source of sources) {
+        throwIfAborted(signal);
         if (source.kind === "path") {
           if (!source.path) {
             throw new TaskExecutionError(
@@ -233,7 +247,7 @@ export class LibraryScanner {
               message("api.message.sourceUnavailable"),
             );
           }
-          for (const file of await discoverAudioFiles(source.path)) {
+          for (const file of await discoverAudioFiles(source.path, signal)) {
             files.push({ ...file, sourceId: source.id });
           }
           continue;
@@ -291,8 +305,9 @@ export class LibraryScanner {
         { length: Math.min(SCAN_CONCURRENCY, files.length) },
         async () => {
           while (nextFile < files.length) {
+            throwIfAborted(signal);
             const file = files[nextFile++];
-            if (file) await this.processFile(file, task.id, counts);
+            if (file) await this.processFile(file, task.id, counts, signal);
             processedItems += 1;
             await tasks.updateProgress(
               task.id,
@@ -313,6 +328,7 @@ export class LibraryScanner {
       );
       await Promise.all(workers);
       for (const source of jellyfinSources) {
+        throwIfAborted(signal);
         let sourceTotal: number | null = null;
         if (!this.jellyfin) {
           throw new TaskExecutionError(
@@ -325,8 +341,14 @@ export class LibraryScanner {
           source.url,
           source.apiKey,
           async (page) => {
+            throwIfAborted(signal);
             for (const item of page.items) {
-              await this.processRemoteItem({ source, item }, task.id, counts);
+              await this.processRemoteItem(
+                { source, item },
+                task.id,
+                counts,
+                signal,
+              );
             }
             sourceTotal = page.totalCount ?? sourceTotal;
             unsupportedCount += page.unsupportedCount;
@@ -350,11 +372,13 @@ export class LibraryScanner {
               }),
             );
           },
+          signal,
         );
         completedRemoteTotal +=
           sourceTotal ?? remote.totalCount ?? remote.processedCount;
         discoveredCount = files.length + completedRemoteTotal;
       }
+      throwIfAborted(signal);
       await this.removeUnusedCovers();
 
       const trackQuery = this.database.orm.Track.where({ available: 1 }).where(
@@ -402,6 +426,13 @@ export class LibraryScanner {
         }),
       };
     } catch (error) {
+      if (signal.aborted) {
+        throw new TaskExecutionError(
+          "Stopped by an administrator.",
+          "stopped",
+          message("api.message.taskStopped"),
+        );
+      }
       if (error instanceof TaskExecutionError) throw error;
       if (error instanceof JellyfinError) {
         throw new TaskExecutionError(
@@ -426,9 +457,11 @@ export class LibraryScanner {
     file: SourceFile,
     scanId: string,
     counts: ScanCounts,
+    signal: AbortSignal,
   ): Promise<void> {
     let existing: TrackRow | null = null;
     try {
+      throwIfAborted(signal);
       const unique = {
         sourceId: file.sourceId,
         relativePath: file.relativePath,
@@ -520,7 +553,8 @@ export class LibraryScanner {
         await this.catalog?.reindexTrack(created.id, "scan");
         counts.createdCount += 1;
       }
-    } catch {
+    } catch (error) {
+      if (signal.aborted) throw error;
       counts.errorCount += 1;
       if (existing) {
         try {
@@ -543,10 +577,12 @@ export class LibraryScanner {
     remote: RemoteSourceItem,
     scanId: string,
     counts: ScanCounts,
+    signal: AbortSignal,
   ): Promise<void> {
     const { source, item } = remote;
     let existing: TrackRow | null = null;
     try {
+      throwIfAborted(signal);
       existing = await this.database.orm.Track.where({
         sourceId: source.id,
         externalId: item.externalId,
@@ -579,8 +615,10 @@ export class LibraryScanner {
               source.apiKey,
               item.coverItemId,
               item.coverTag,
+              signal,
             );
           } catch (error) {
+            if (signal.aborted) throw error;
             if (
               error instanceof JellyfinError &&
               error.code !== "unavailable"
@@ -635,7 +673,8 @@ export class LibraryScanner {
         await this.catalog?.reindexTrack(created.id, "scan");
         counts.createdCount += 1;
       }
-    } catch {
+    } catch (error) {
+      if (signal.aborted) throw error;
       counts.errorCount += 1;
       if (existing) {
         try {

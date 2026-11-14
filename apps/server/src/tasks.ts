@@ -26,6 +26,7 @@ export const TERMINAL_TASK_STATUSES: readonly TaskStatus[] = [
   "completed",
   "failed",
   "interrupted",
+  "stopped",
 ];
 
 const MAX_DETAILS = 16;
@@ -57,6 +58,7 @@ export interface TaskExecutionResult {
 export type TaskExecutor = (
   task: TaskRow,
   tasks: TaskService,
+  signal: AbortSignal,
 ) => Promise<TaskExecutionResult | void>;
 
 export type TaskChangePublisher = (task: TaskResponse) => void;
@@ -66,7 +68,7 @@ export type TaskLogPublisher = (level: TaskLogLevel, message: string) => void;
 export class TaskExecutionError extends Error {
   constructor(
     message: string,
-    readonly status: "failed" | "interrupted" = "failed",
+    readonly status: "failed" | "interrupted" | "stopped" = "failed",
     readonly messageDescriptor?: MessageDescriptor,
   ) {
     super(message);
@@ -175,7 +177,9 @@ export function toTaskResponse(task: TaskRow): TaskResponse {
         ? message(
             task.status === "interrupted"
               ? "api.message.taskInterrupted"
-              : "api.message.taskFailedGeneric",
+              : task.status === "stopped"
+                ? "api.message.taskStopped"
+                : "api.message.taskFailedGeneric",
           )
         : null),
     createdAt: task.createdAt.toISOString(),
@@ -199,6 +203,12 @@ function activeRank(status: string): number {
   return 2;
 }
 
+interface RunningTaskControl {
+  controller: AbortController;
+  completion: Promise<void>;
+  finish(): void;
+}
+
 function detailNumber(
   details: readonly TaskDetailResponse[],
   key: string,
@@ -210,9 +220,11 @@ function detailNumber(
 
 export class TaskService {
   private readonly executors = new Map<string, TaskExecutor>();
+  private readonly runningTasks = new Map<string, RunningTaskControl>();
   private admissionTail: Promise<unknown> = Promise.resolve();
   private drainPromise: Promise<void> | null = null;
   private stopping = false;
+  private readonly pendingEmits = new Set<Promise<void>>();
   private readonly eventTimers = new Map<
     string,
     ReturnType<typeof setTimeout>
@@ -407,7 +419,7 @@ export class TaskService {
   async fail(
     id: string,
     failureSummary: string,
-    status: "failed" | "interrupted" = "failed",
+    status: "failed" | "interrupted" | "stopped" = "failed",
     messageDescriptor?: MessageDescriptor,
   ): Promise<void> {
     const task = await this.database.orm.Task.first({ id });
@@ -423,6 +435,21 @@ export class TaskService {
       `Task ${status}: ${task?.title ?? id}. ${summary}`,
     );
     this.publishTask(id, true);
+  }
+
+  async stop(id: string): Promise<TaskRow | null> {
+    await this.stopTasks([id]);
+    return this.get(id);
+  }
+
+  async stopForSource(sourceId: string): Promise<TaskRow[]> {
+    const active = await this.database.orm.Task.where((task) =>
+      task.status.in([...ACTIVE_TASK_STATUSES]),
+    ).all();
+    const ids = active
+      .filter((task) => task.sourceId === null || task.sourceId === sourceId)
+      .map((task) => task.id);
+    return this.stopTasks(ids);
   }
 
   async prune(): Promise<void> {
@@ -452,8 +479,57 @@ export class TaskService {
     this.stopping = true;
     for (const timer of this.eventTimers.values()) clearTimeout(timer);
     this.eventTimers.clear();
+    for (const control of this.runningTasks.values()) {
+      control.controller.abort();
+    }
     await this.admissionTail;
     await this.drainPromise;
+    await Promise.allSettled([...this.pendingEmits]);
+  }
+
+  private async stopTasks(ids: readonly string[]): Promise<TaskRow[]> {
+    const uniqueIds = [...new Set(ids)];
+    if (!uniqueIds.length) return [];
+    const active = await this.database.orm.Task.where((task) =>
+      task.id.in(uniqueIds),
+    )
+      .where((task) => task.status.in([...ACTIVE_TASK_STATUSES]))
+      .all();
+    if (!active.length) {
+      return this.database.orm.Task.where((task) =>
+        task.id.in(uniqueIds),
+      ).all();
+    }
+
+    const now = new Date();
+    const failureSummary = "Stopped by an administrator.";
+    const failureMessage = serializeMessage(message("api.message.taskStopped"));
+    await this.database.transaction(async (transaction) => {
+      for (const task of active) {
+        await transaction.orm.Task.where({
+          id: task.id,
+          status: task.status,
+        }).update({
+          status: "stopped",
+          completedAt: now,
+          failureSummary,
+          failureMessage,
+        });
+      }
+    });
+
+    const completions: Array<Promise<void>> = [];
+    for (const task of active) {
+      const control = this.runningTasks.get(task.id);
+      if (control) {
+        control.controller.abort();
+        completions.push(control.completion);
+      }
+      this.publishTask(task.id, true);
+    }
+    this.kick();
+    await Promise.all(completions);
+    return this.database.orm.Task.where((task) => task.id.in(uniqueIds)).all();
   }
 
   private publishTask(id: string, immediate = false) {
@@ -462,13 +538,13 @@ export class TaskService {
       const timer = this.eventTimers.get(id);
       if (timer) clearTimeout(timer);
       this.eventTimers.delete(id);
-      void this.emitTask(id);
+      this.queueEmit(id);
       return;
     }
     if (this.eventTimers.has(id)) return;
     const timer = setTimeout(() => {
       this.eventTimers.delete(id);
-      void this.emitTask(id);
+      this.queueEmit(id);
     }, 250);
     timer.unref?.();
     this.eventTimers.set(id, timer);
@@ -478,6 +554,15 @@ export class TaskService {
     if (!this.publisher) return;
     const task = await this.database.orm.Task.first({ id });
     if (task) this.publisher(toTaskResponse(task));
+  }
+
+  private queueEmit(id: string): void {
+    const pending = this.emitTask(id)
+      .catch(() => undefined)
+      .finally(() => {
+        this.pendingEmits.delete(pending);
+      });
+    this.pendingEmits.add(pending);
   }
 
   private serializeAdmission<T>(operation: () => Promise<T>): Promise<T> {
@@ -543,7 +628,11 @@ export class TaskService {
           );
           continue;
         }
-        if (parent.status === "failed" || parent.status === "interrupted") {
+        if (
+          parent.status === "failed" ||
+          parent.status === "interrupted" ||
+          parent.status === "stopped"
+        ) {
           await this.fail(
             candidate.id,
             "The parent task did not complete successfully.",
@@ -585,15 +674,25 @@ export class TaskService {
         continue;
       }
 
+      const controller = new AbortController();
+      let finish!: () => void;
+      const completion = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      this.runningTasks.set(running.id, {
+        controller,
+        completion,
+        finish,
+      });
       try {
-        const result = await executor(running, this);
+        const result = await executor(running, this, controller.signal);
         const current = await this.database.orm.Task.first({ id: running.id });
-        if (current?.status === "running") {
+        if (current?.status === "running" && !this.stopping) {
           await this.complete(running.id, result ?? {});
         }
       } catch (error) {
         const current = await this.database.orm.Task.first({ id: running.id });
-        if (current?.status === "running") {
+        if (current?.status === "running" && !this.stopping) {
           const failure =
             error instanceof TaskExecutionError
               ? error
@@ -609,6 +708,9 @@ export class TaskService {
             failure.messageDescriptor,
           );
         }
+      } finally {
+        this.runningTasks.delete(running.id);
+        finish();
       }
       await this.prune();
     }
