@@ -8,6 +8,8 @@ export const DESKTOP_WEB_ORIGINS = [
   "tauri://localhost",
 ] as const;
 
+export const MOBILE_WEB_ORIGINS = ["http://localhost"] as const;
+
 export interface ServerConfig {
   databaseUrl: string;
   libraryRoot: string;
@@ -42,13 +44,14 @@ export async function loadServerConfig(
     environment.PERIDOT_WEB_ORIGINS?.split(",")
       .map((origin) => origin.trim())
       .filter(Boolean) ?? [];
-  const webOrigins = configuredOrigins.length
+  const baseOrigins = configuredOrigins.length
     ? configuredOrigins.map(normalizeOrigin)
     : [
         "http://127.0.0.1:3000",
         "http://localhost:3000",
         ...DESKTOP_WEB_ORIGINS,
       ];
+  const webOrigins = [...new Set([...baseOrigins, ...MOBILE_WEB_ORIGINS])];
 
   const credentialEncryptionKey =
     environment.PERIDOT_CREDENTIAL_KEY?.trim() || undefined;

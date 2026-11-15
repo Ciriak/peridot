@@ -12,7 +12,7 @@
     "dev:server": "pnpm db:update && pnpm --filter @peridot/contracts build && pnpm --filter @peridot/server run dev",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
-    "test": "turbo run test",
+    "test": "turbo run test --filter=!@peridot/android",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
     "check": "pnpm lint && pnpm format:check",
@@ -23,7 +23,14 @@
     "db:update": "pnpm --filter @peridot/server db:update",
     "db:reset": "pnpm --filter @peridot/server db:reset",
     "desktop:dev": "pnpm --filter @peridot/desktop dev",
-    "desktop:build": "pnpm --filter @peridot/desktop package"
+    "desktop:build": "pnpm --filter @peridot/desktop package",
+    "android:sync": "pnpm --filter @peridot/android sync",
+    "android:dev": "pnpm --filter @peridot/android dev",
+    "android:open": "pnpm --filter @peridot/android open",
+    "android:test": "pnpm --filter @peridot/android sync && pnpm --filter @peridot/android test",
+    "android:instrument": "pnpm --filter @peridot/android sync && pnpm --filter @peridot/android instrument",
+    "android:build": "pnpm --filter @peridot/android sync && pnpm --filter @peridot/android build",
+    "android:bundle": "pnpm --filter @peridot/android sync && pnpm --filter @peridot/android bundle"
   },
   "devDependencies": {
     "@commitlint/cli": "21.2.4",

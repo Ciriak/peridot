@@ -1,14 +1,18 @@
 <p align="center">
   <img
-    src="packages/ui/src/assets/brand/logo-nop.png"
-    width="64"
+    src="packages/ui/src/assets/brand/logo-title.png"
+    height="128"
     alt="Peridot app icon"
   />
 </p>
 
-<h1 align="center">Peridot</h1>
+<h3 align="center">Your self-hosted music platform</h2>
 
-<h2 align="center">Your self-hosted music platform</h2>
+
+  **Peridot is a self-hosted music platform, giving you total control over your
+  music library.
+  No ads, no paywall. You have control.**
+
 
 <img
     src="packages/ui/src/assets/ui-demo.png"
@@ -16,12 +20,7 @@
     alt="Peridot app icon"
   />
 
-<p align="center">
-  Peridot is a self-hosted music platform, giving you total control over your
-  music library.
-  <br />
-  No ads, no paywall. You have control.
-</p>
+
 
 ## Features
 

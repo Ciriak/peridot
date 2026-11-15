@@ -7,6 +7,7 @@ const webPackage = JSON.parse(
 const appEnvironment =
   process.env.PERIDOT_ENVIRONMENT?.trim() ||
   (process.env.NODE_ENV === "production" ? "production" : "development");
+const capacitorBuild = process.env.PERIDOT_CAPACITOR === "1";
 
 const optimizedDependencies = [
   "@iconify-icons/akar-icons/drag-vertical",
@@ -115,49 +116,51 @@ export default defineNuxtConfig({
       link: [{ rel: "manifest", href: "/manifest.webmanifest" }],
     },
   },
-  pwa: {
-    registerType: "autoUpdate",
-    client: {
-      installPrompt: false,
-    },
-    devOptions: {
-      enabled: true,
-    },
-    manifest: {
-      name: "Peridot",
-      short_name: "Peridot",
-      description: "Your music. Your space.",
-      theme_color: "#0A0A0A",
-      background_color: "#000000",
-      display: "standalone",
-      orientation: "any",
-      start_url: "/",
-      scope: "/",
-      icons: [
-        {
-          src: "/pwa-192x192.png",
-          sizes: "192x192",
-          type: "image/png",
+  pwa: capacitorBuild
+    ? { disable: true }
+    : {
+        registerType: "autoUpdate",
+        client: {
+          installPrompt: false,
         },
-        {
-          src: "/pwa-512x512.png",
-          sizes: "512x512",
-          type: "image/png",
+        devOptions: {
+          enabled: true,
         },
-        {
-          src: "/pwa-maskable-512x512.png",
-          sizes: "512x512",
-          type: "image/png",
-          purpose: "maskable",
+        manifest: {
+          name: "Peridot",
+          short_name: "Peridot",
+          description: "Your music. Your space.",
+          theme_color: "#0A0A0A",
+          background_color: "#000000",
+          display: "standalone",
+          orientation: "any",
+          start_url: "/",
+          scope: "/",
+          icons: [
+            {
+              src: "/pwa-192x192.png",
+              sizes: "192x192",
+              type: "image/png",
+            },
+            {
+              src: "/pwa-512x512.png",
+              sizes: "512x512",
+              type: "image/png",
+            },
+            {
+              src: "/pwa-maskable-512x512.png",
+              sizes: "512x512",
+              type: "image/png",
+              purpose: "maskable",
+            },
+          ],
         },
-      ],
-    },
-    workbox: {
-      additionalManifestEntries: [{ url: "/", revision: pwaBuildRevision }],
-      cleanupOutdatedCaches: true,
-      globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
-      navigateFallback: "/",
-      navigateFallbackDenylist: [/^\/api\//],
-    },
-  },
+        workbox: {
+          additionalManifestEntries: [{ url: "/", revision: pwaBuildRevision }],
+          cleanupOutdatedCaches: true,
+          globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+          navigateFallback: "/",
+          navigateFallbackDenylist: [/^\/api\//],
+        },
+      },
 });

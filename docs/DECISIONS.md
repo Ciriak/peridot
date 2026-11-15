@@ -1,5 +1,70 @@
 # Decisions
 
+## 2026-11-15: CI runs each test suite in a parallel job
+
+The root workspace test command excludes `@peridot/android` because Gradle tests
+require a generated Capacitor module, Java 21, and Android SDK 36. Running that
+package from the generic test job made the same project depend on native
+toolchain setup and exposed checkout-file-mode failures before the dedicated
+Android job could run.
+
+After linting, CI runs Web, Server, shared UI, Desktop, and Android tests in
+independent jobs. The cross-platform suites use a matrix with `fail-fast:
+false`, preserving every test result while still failing the aggregate matrix
+job when any package fails. Android runs in its own toolchain-specific job and
+performs Capacitor sync before Kotlin tests. Every artifact build requires both
+the matrix result and the Android test result, so any failed suite blocks the
+build stage.
+
+The Gradle wrapper is tracked with its executable bit so Linux CI can launch it
+directly. Package-level Android testing remains available through
+`pnpm android:test`. The Android debug build remains in its own job after tests.
+Both Android jobs use `android-actions/setup-android@v4` with an explicit
+`platform-tools` package input. Version 3 tried to install Google's removed
+legacy `tools` package before the workflow's SDK 36 installation step could run.
+
+Android generation builds `@peridot/contracts` before starting the web
+generation. The shared web client imports runtime values from that workspace
+package, so a clean checkout cannot resolve it from the package's `dist`
+entrypoint until the dependency has been compiled. Keeping this build inside
+the Android generation script makes `pnpm android:sync`, `android:test`, and
+`android:build` self-contained when run outside Turbo's dependency graph.
+
+## 2026-11-15: Android uses a shared Capacitor UI and native Media3 service
+
+The Android client packages the existing Nuxt application with Capacitor rather
+than creating a second React Native or Compose interface. This keeps catalog
+browsing, settings, playlist, queue, and metadata workflows in one Vue codebase
+while allowing Android-specific behavior through a small native bridge.
+
+Playback on Android is owned by a Kotlin `MediaLibraryService` backed by
+Media3/ExoPlayer. The browser and desktop continue to use `HTMLAudioElement`.
+The native service is authoritative for transport state, the active media item,
+position, duration, repeat, and shuffle while Android is active. Vue sends queue
+snapshots and commands and applies native playback events without writing the
+server queue for every position heartbeat.
+
+Android Auto uses the service's `MediaLibrarySession` tree with stable root,
+album, artist, playlist, and track media IDs. Queue, Liked songs, Albums,
+Artists, Playlists, and search are available. Android Auto is online-only in
+this release; the phone client retains native file-backed offline playback.
+
+The native session bearer is encrypted with an Android Keystore AES-GCM key.
+Playback URLs are resolved through the existing short-lived server playback
+token immediately before ExoPlayer opens them, so bearer credentials are not
+stored in MediaItems or audio URLs. The service persists only queue metadata,
+playback position, and encrypted authentication state needed for playback
+resumption.
+
+The Android WebView uses `http://localhost` with cleartext traffic enabled so
+self-hosted servers on private LAN HTTP addresses continue to work. The server
+adds that exact origin to CORS and realtime checks. Packaged Android builds
+disable the PWA service worker to prevent stale Capacitor assets.
+
+Android Auto v1 targets mobile Android Auto through the standard media-service
+contract. Standalone Android Automotive OS, templated Car App Library UI, and
+offline car browsing are deferred.
+
 ## 2026-11-15: Media type is explicit per source
 
 Peridot stores `music`, `audiobook`, or `podcast` on each source and copies that

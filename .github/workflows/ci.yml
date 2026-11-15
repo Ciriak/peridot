@@ -62,6 +62,29 @@ jobs:
       - run: pnpm typecheck
 
   test:
+    name: Test ${{ matrix.package }}
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - "@peridot/web"
+          - "@peridot/server"
+          - "@peridot/ui"
+          - "@peridot/desktop"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec turbo run test --filter=${{ matrix.package }}
+
+  test-android:
+    name: Test Android
     needs: lint
     runs-on: ubuntu-latest
     steps:
@@ -71,12 +94,20 @@ jobs:
         with:
           node-version: "24.15.0"
           cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
+      - run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test
+      - run: pnpm android:test
 
   build-web:
-    name: Build web
-    needs: test
+    name: Build Web
+    needs: [test, test-android]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -89,8 +120,8 @@ jobs:
       - run: pnpm exec turbo run build --filter=@peridot/web
 
   build-server:
-    name: Build server
-    needs: test
+    name: Build Server
+    needs: [test, test-android]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -103,8 +134,8 @@ jobs:
       - run: pnpm exec turbo run build --filter=@peridot/server
 
   build-desktop:
-    name: Build desktop
-    needs: test
+    name: Build Desktop
+    needs: [test, test-android]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -131,3 +162,25 @@ jobs:
         with:
           workspaces: apps/desktop/src-tauri -> target
       - run: pnpm desktop:build
+
+  build-android:
+    name: Build Android
+    needs: [test, test-android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
+      - run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm android:build

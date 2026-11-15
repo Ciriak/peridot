@@ -35,6 +35,7 @@ import {
   normalizeServerAddress,
   safeRedirectPath,
 } from "../lib/server-address";
+import { isAndroidRuntime } from "../lib/android-runtime";
 
 definePageMeta({ layout: false });
 const { t } = useI18n();
@@ -44,7 +45,10 @@ const route = useRoute();
 const { address, configure } = useServer();
 const { token } = useSession();
 const { user } = useUser();
-const serverAddress = ref(address.value ?? DEFAULT_SERVER_ADDRESS);
+const androidRuntime = isAndroidRuntime();
+const serverAddress = ref(
+  address.value ?? (androidRuntime ? "" : DEFAULT_SERVER_ADDRESS),
+);
 const selectedAddress = ref("");
 const opensAccountStep =
   (route.query.auth === "login" || route.query.auth === "setup") &&
@@ -67,7 +71,9 @@ const confirmationError = computed(() =>
 const addressScanState = ref<"idle" | "checking" | "found" | "not-found">(
   "idle",
 );
-const discoveryState = ref<"scanning" | "complete" | "failed">("scanning");
+const discoveryState = ref<"scanning" | "complete" | "failed">(
+  androidRuntime ? "complete" : "scanning",
+);
 const discoveredServers = ref<DiscoveredServer[]>([]);
 const selectedServer = ref<DiscoveredServer | null>(null);
 const selectedServerHostname = computed(() => {
@@ -79,7 +85,7 @@ const selectedServerHostname = computed(() => {
     return server.host;
   }
 });
-const manualEntryOpen = ref(false);
+const manualEntryOpen = ref(androidRuntime);
 let addressScanTimer: ReturnType<typeof setTimeout> | undefined;
 let networkScanTimer: ReturnType<typeof setTimeout> | undefined;
 let addressScanSequence = 0;
@@ -143,7 +149,7 @@ watch(
 );
 
 async function scanLocalNetwork() {
-  if (step.value !== "server") return;
+  if (androidRuntime || step.value !== "server") return;
   discoveryState.value = "scanning";
   try {
     const result = await discoverLocalServers();
@@ -162,7 +168,7 @@ onMounted(() => {
   if (opensAccountStep) {
     void connectToServer();
   }
-  void scanLocalNetwork();
+  if (!androidRuntime) void scanLocalNetwork();
 });
 onBeforeUnmount(() => {
   if (addressScanTimer) clearTimeout(addressScanTimer);
@@ -228,7 +234,11 @@ function changeServer() {
   confirmPassword.value = "";
   user.value = null;
   step.value = "server";
-  void scanLocalNetwork();
+  if (androidRuntime) {
+    manualEntryOpen.value = true;
+  } else {
+    void scanLocalNetwork();
+  }
 }
 </script>
 
@@ -265,7 +275,10 @@ function changeServer() {
       </div>
       <div v-if="step === 'server'" class="space-y-4">
         <section :aria-label="t('onboarding.discovery')" class="space-y-3">
-          <div v-if="!selectedServer" class="flex items-center gap-3">
+          <div
+            v-if="!selectedServer && !androidRuntime"
+            class="flex items-center gap-3"
+          >
             <PeridotSpinner :label="t('onboarding.looking')" class="size-6" />
             <p aria-hidden="true" class="text-sm text-muted-foreground">
               {{ t("onboarding.looking") }}

@@ -11,6 +11,8 @@ import { createPlaybackToken, trackAudioUrl } from "./peridot-client.ts";
 import { trackCoverUrl } from "./library.ts";
 import { clearOfflineArtwork, loadArtworkBlob } from "./offline-artwork.ts";
 import type { PeridotQueryScope } from "./query-keys";
+import { isAndroidRuntime } from "./android-runtime.ts";
+import { PeridotMedia, trackResponseFromAndroid } from "./android-playback.ts";
 
 export const OFFLINE_AUDIO_CACHE = "peridot-offline-audio-v1";
 export const OFFLINE_TRACK_DATABASE = "peridot-web-offline-tracks-v1";
@@ -139,6 +141,15 @@ export function offlineAudioCacheRequest(
 export async function readSavedOfflineTracks(
   scope: PeridotQueryScope,
 ): Promise<SavedOfflineTrack[]> {
+  if (isAndroidRuntime()) {
+    const { items } = await PeridotMedia.listCachedTracks();
+    return items.map((item) => ({
+      scope,
+      track: trackResponseFromAndroid(item.track),
+      savedAt: item.savedAt,
+      size: item.size,
+    }));
+  }
   if (typeof indexedDB === "undefined") return [];
   const prefix = scopePrefix(scope);
   const values = await entries<string, SavedOfflineTrack>(offlineTrackStore());
@@ -155,6 +166,11 @@ export async function readSavedOfflineTrack(
   scope: PeridotQueryScope,
   trackId: string,
 ): Promise<SavedOfflineTrack | undefined> {
+  if (isAndroidRuntime()) {
+    return (await readSavedOfflineTracks(scope)).find(
+      (saved) => saved.track.id === trackId,
+    );
+  }
   if (typeof indexedDB === "undefined") return undefined;
   const saved = await get<SavedOfflineTrack>(
     offlineTrackStorageKey(scope, trackId),
@@ -171,6 +187,43 @@ export async function saveTrackForOffline(
     onProgress?: (progress: number | null) => void;
   } = {},
 ): Promise<SavedOfflineTrack> {
+  if (isAndroidRuntime()) {
+    if (!track.available) {
+      throw new Error("This track is unavailable.");
+    }
+    const savedTrack = snapshotTrackForOffline(track);
+    const progressListener = options.onProgress
+      ? await PeridotMedia.addListener("offlineProgress", (event) => {
+          if (event.trackId === track.id) options.onProgress?.(event.progress);
+        })
+      : null;
+    try {
+      const cached = await PeridotMedia.cacheTrack({
+        track: {
+          id: savedTrack.id,
+          title: savedTrack.title,
+          artist: savedTrack.artists.join(", ") || savedTrack.artist,
+          album: savedTrack.album,
+          albumId: savedTrack.albumId,
+          durationMs: savedTrack.durationMs,
+          coverUrl: savedTrack.coverUrl
+            ? trackCoverUrl(scope.serverAddress, savedTrack.coverUrl)
+            : null,
+          mimeType: savedTrack.mimeType,
+          available: savedTrack.available,
+          mediaType: savedTrack.mediaType,
+        },
+      });
+      return {
+        scope,
+        track: savedTrack,
+        savedAt: cached.savedAt,
+        size: cached.size,
+      };
+    } finally {
+      await progressListener?.remove();
+    }
+  }
   if (
     typeof caches === "undefined" ||
     typeof navigator === "undefined" ||
@@ -237,6 +290,10 @@ export async function removeTrackForOffline(
   scope: PeridotQueryScope,
   trackId: string,
 ): Promise<void> {
+  if (isAndroidRuntime()) {
+    await PeridotMedia.removeCachedTrack({ trackId });
+    return;
+  }
   if (typeof caches !== "undefined") {
     const cache = await caches.open(OFFLINE_AUDIO_CACHE);
     await cache.delete(offlineAudioCacheRequest(scope, trackId));
@@ -248,6 +305,7 @@ export async function offlineAudioBlob(
   scope: PeridotQueryScope,
   trackId: string,
 ): Promise<Blob | null> {
+  if (isAndroidRuntime()) return null;
   if (typeof caches === "undefined") return null;
   const cache = await caches.open(OFFLINE_AUDIO_CACHE);
   const response = await cache.match(offlineAudioCacheRequest(scope, trackId));
@@ -255,6 +313,10 @@ export async function offlineAudioBlob(
 }
 
 export async function clearAllOfflineTracks(): Promise<void> {
+  if (isAndroidRuntime()) {
+    await PeridotMedia.clearOfflineTracks();
+    return;
+  }
   if (typeof indexedDB !== "undefined") {
     await clearStore(offlineTrackStore());
   }

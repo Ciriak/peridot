@@ -26,7 +26,7 @@ test("server selection detects and selects the first server before continuing", 
   );
   assert.match(
     source,
-    /v-if="!selectedServer"[\s\S]*?t\("onboarding\.looking"\)/,
+    /v-if="!selectedServer && !androidRuntime"[\s\S]*?t\("onboarding\.looking"\)/,
     "Discovery status is hidden after a server is found",
   );
   assert.match(
@@ -70,6 +70,8 @@ test("server selection detects and selects the first server before continuing", 
   assert.match(source, /void connectToServer\(\);/);
   assert.doesNotMatch(source, /No servers found\./);
   assert.doesNotMatch(source, /Scan again/);
+  assert.match(source, /manualEntryOpen = ref\(androidRuntime\)/);
+  assert.match(source, /if \(!androidRuntime\) void scanLocalNetwork\(\)/);
 });
 
 test("administrator setup collects a display name while sign-in is email-only", async () => {
