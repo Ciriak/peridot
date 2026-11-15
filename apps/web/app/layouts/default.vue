@@ -351,13 +351,13 @@ onBeforeUnmount(stopLoadingRay);
               :aria-label="t('navigation.searchPlaceholder')"
               aria-keyshortcuts="Control+K Meta+K"
               :placeholder="t('navigation.searchPlaceholder')"
-              class="pl-9 pr-16"
+              class="pl-9 pr-3 md:pr-16"
               @click="openSearch"
               @focus="openSearch"
             />
             <KbdGroup
               aria-hidden="true"
-              class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2"
+              class="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 md:flex"
             >
               <Kbd>{{ shortcutModifier === "command" ? "⌘" : "Ctrl" }}</Kbd>
               <Kbd>K</Kbd>

@@ -91,4 +91,14 @@ test("top-bar search advertises and opens from the global shortcut", async () =>
     layout,
     /<KbdGroup[\s\S]*?<Kbd>[\s\S]*?shortcutModifier === "command"/,
   );
+  assert.match(
+    layout,
+    /<KbdGroup[\s\S]*?class="[^"]*hidden[^"]*md:flex/,
+    "The shortcut keycaps stay hidden on mobile",
+  );
+  assert.match(
+    layout,
+    /class="pl-9 pr-3 md:pr-16"/,
+    "The input only reserves keycap space on desktop",
+  );
 });
