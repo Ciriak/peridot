@@ -11,7 +11,9 @@ suite. CI now runs Web, Server, shared UI, Desktop, and Android tests in
 independent parallel jobs after linting. The matrix uses `fail-fast: false` so
 all package results are reported, while any failed matrix entry fails the
 aggregate `test` job. All artifact builds require both `test` and `test-android`
-to pass.
+to pass. Both Android jobs use `android-actions/setup-android@v4` with
+`platform-tools`, avoiding the removed legacy `tools` package that broke v3
+before SDK 36 installation began.
 
 Checks completed:
 
@@ -19,12 +21,15 @@ Checks completed:
   16, and desktop 4 tests
 - `pnpm android:test`: Capacitor sync and Android Kotlin unit tests passed
 - `pnpm android:build`: Capacitor sync and debug APK build passed
-- Workflow YAML formatting and syntax parsing passed
+- Workflow YAML formatting, syntax, and Android SDK action configuration
+  validation passed
 - `git diff --check` and indexed Git mode verification passed
 
-No commit, push, tag, publication, or deployment was performed. The existing
-uncommitted capitalization-only change in `.github/workflows/ci.yml` was
-preserved.
+No commit, push, tag, publication, or deployment was performed. The workflow and
+documentation changes remain uncommitted.
+
+The upgraded setup-android action has not executed remotely yet; the next CI run
+on the updated workflow should be used to confirm the Linux SDK installation.
 
 ## Android client with Android Auto
 

@@ -19,6 +19,9 @@ build stage.
 The Gradle wrapper is tracked with its executable bit so Linux CI can launch it
 directly. Package-level Android testing remains available through
 `pnpm android:test`. The Android debug build remains in its own job after tests.
+Both Android jobs use `android-actions/setup-android@v4` with an explicit
+`platform-tools` package input. Version 3 tried to install Google's removed
+legacy `tools` package before the workflow's SDK 36 installation step could run.
 
 ## 2026-11-15: Android uses a shared Capacitor UI and native Media3 service
 
