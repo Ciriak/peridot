@@ -1,0 +1,1170 @@
+import type {
+  AddPlaylistItemRequest,
+  AddPlaylistItemResponse,
+  ApiErrorResponse,
+  ApplyArtistMetadataRequest,
+  ApplyTrackMetadataRequest,
+  AlbumListResponse,
+  ArtistListResponse,
+  AudiobookListResponse,
+  AudiobookSummaryResponse,
+  ArtistMetadataCandidateListResponse,
+  AuthSessionResponse,
+  AuthStatusResponse,
+  CreateMetadataProviderRequest,
+  CreatePlaylistRequest,
+  CreateSourceRequest,
+  CreateSourceResponse,
+  CreateUserRequest,
+  DirectoryListResponse,
+  DirectorySearchResponse,
+  DiscoverJellyfinLibrariesRequest,
+  JellyfinLibraryListResponse,
+  InstallUpdateResponse,
+  LikeListResponse,
+  LikeResponse,
+  LikeTarget,
+  LogListResponse,
+  MessageDescriptor,
+  MetadataCandidateListResponse,
+  MetadataProviderDefinitionListResponse,
+  MetadataProviderListResponse,
+  MetadataProviderResponse,
+  PlaylistDetailResponse,
+  PlaylistListResponse,
+  PodcastListResponse,
+  PodcastSummaryResponse,
+  QuickPickListResponse,
+  RealtimeTicketResponse,
+  ReorderPlaylistItemsRequest,
+  ResolveTracksResponse,
+  PlaybackTokenResponse,
+  QueueResponse,
+  RecordTrackPlayResponse,
+  ReplaceQueueRequest,
+  ResetMetadataResponse,
+  RestartServerResponse,
+  ServerSettingsResponse,
+  SourceListResponse,
+  TaskListResponse,
+  TaskResponse,
+  TrackListResponse,
+  UpdatePlaylistRequest,
+  UpdateUserProfileRequest,
+  UpdateMetadataProviderRequest,
+  UpdateServerSettingsRequest,
+  UpdateSourceRequest,
+  UpdateStatusResponse,
+  UpdateUserRequest,
+  UserListResponse,
+  UserResponse,
+} from "@peridot/contracts";
+import { localizedError, message } from "./messages.ts";
+import { reportServerReachability } from "./server-connectivity.ts";
+
+export interface AdministratorCredentials {
+  email: string;
+  displayName: string;
+  password: string;
+}
+
+export interface SignInCredentials {
+  email: string;
+  password: string;
+}
+
+export interface DiscoveredServer {
+  address: string;
+  host: string;
+}
+
+export interface DiscoveryResponse {
+  items: DiscoveredServer[];
+  scannedSubnets: string[];
+}
+
+export type AuthenticationRedirectReason = "login" | "setup";
+
+export class AuthenticationRedirectError extends Error {
+  readonly reason: AuthenticationRedirectReason;
+  readonly messageDescriptor: MessageDescriptor;
+
+  constructor(
+    fallbackMessage: string,
+    reason: AuthenticationRedirectReason,
+    messageDescriptor: MessageDescriptor,
+  ) {
+    super(fallbackMessage);
+    this.name = "AuthenticationRedirectError";
+    this.reason = reason;
+    this.messageDescriptor = messageDescriptor;
+  }
+}
+
+export class PeridotApiError extends Error {
+  readonly statusCode: number;
+  readonly code: string;
+  readonly messageDescriptor: MessageDescriptor | null;
+
+  constructor(
+    fallbackMessage: string,
+    statusCode: number,
+    code: string,
+    messageDescriptor: MessageDescriptor | null,
+  ) {
+    super(fallbackMessage);
+    this.name = "PeridotApiError";
+    this.statusCode = statusCode;
+    this.code = code;
+    this.messageDescriptor = messageDescriptor;
+  }
+}
+
+export class PeridotNetworkError extends Error {
+  readonly messageDescriptor: MessageDescriptor;
+
+  constructor(fallbackMessage = "Could not reach this server.") {
+    super(fallbackMessage);
+    this.name = "PeridotNetworkError";
+    this.messageDescriptor = message("error.apiUnavailable");
+  }
+}
+
+export function isPeridotNetworkError(reason: unknown): boolean {
+  return reason instanceof PeridotNetworkError;
+}
+
+let authenticationRedirectHandler:
+  ((reason: AuthenticationRedirectReason) => void) | null = null;
+
+export function setAuthenticationRedirectHandler(
+  handler: ((reason: AuthenticationRedirectReason) => void) | null,
+) {
+  authenticationRedirectHandler = handler;
+}
+
+export function reportAuthenticationRedirect(
+  reason: AuthenticationRedirectReason,
+) {
+  authenticationRedirectHandler?.(reason);
+}
+
+export function isAuthenticationRedirectError(reason: unknown): boolean {
+  return reason instanceof AuthenticationRedirectError;
+}
+
+async function requestJson<T>(
+  serverAddress: string,
+  path: string,
+  init?: RequestInit,
+  options: { reportAuthenticationRedirect?: boolean } = {},
+): Promise<T> {
+  let response: Response;
+  try {
+    const headers = new Headers(init?.headers);
+    if (init?.body != null) {
+      headers.set("Content-Type", "application/json");
+    }
+    response = await fetch(`${serverAddress}${path}`, {
+      ...init,
+      headers,
+    });
+  } catch (reason) {
+    if (reason instanceof DOMException && reason.name === "AbortError") {
+      throw reason;
+    }
+    reportServerReachability(false);
+    throw new PeridotNetworkError();
+  }
+  reportServerReachability(true);
+  if (!response.ok) {
+    const body = (await response
+      .json()
+      .catch(() => null)) as ApiErrorResponse | null;
+    const redirectReason =
+      options.reportAuthenticationRedirect &&
+      (response.status === 401 ||
+        (response.status === 428 && body?.error.code === "setup_required"))
+        ? response.status === 428
+          ? "setup"
+          : "login"
+        : null;
+    if (redirectReason) {
+      reportAuthenticationRedirect(redirectReason);
+      throw new AuthenticationRedirectError(
+        "Authentication is required.",
+        redirectReason,
+        body?.error.messageDescriptor ??
+          message("error.authenticationRequired"),
+      );
+    }
+    throw new PeridotApiError(
+      "The server rejected the request.",
+      response.status,
+      body?.error.code ?? "request_failed",
+      body?.error.messageDescriptor ?? null,
+    );
+  }
+  if (response.status === 204) return undefined as T;
+  return (await response.json()) as T;
+}
+
+function authenticatedRequestJson<T>(
+  serverAddress: string,
+  path: string,
+  token: string,
+  init?: RequestInit,
+): Promise<T> {
+  return requestJson<T>(
+    serverAddress,
+    path,
+    {
+      ...init,
+      headers: { Authorization: `Bearer ${token}`, ...init?.headers },
+    },
+    {
+      reportAuthenticationRedirect: true,
+    },
+  );
+}
+
+export function fetchAuthStatus(serverAddress: string) {
+  return requestJson<AuthStatusResponse>(serverAddress, "/api/auth/status");
+}
+
+export async function discoverLocalServers(): Promise<DiscoveryResponse> {
+  try {
+    const response = await fetch("/api/discovery/servers", {
+      headers: { accept: "application/json" },
+    });
+    if (!response.ok) throw new Error();
+    return (await response.json()) as DiscoveryResponse;
+  } catch {
+    throw localizedError(
+      "error.discoveryUnavailable",
+      "Local server discovery is unavailable.",
+    );
+  }
+}
+
+export function createAdministrator(
+  serverAddress: string,
+  credentials: AdministratorCredentials,
+) {
+  return requestJson<AuthSessionResponse>(
+    serverAddress,
+    "/api/auth/bootstrap",
+    {
+      method: "POST",
+      body: JSON.stringify(credentials),
+    },
+  );
+}
+
+export function createUserSession(
+  serverAddress: string,
+  credentials: SignInCredentials,
+) {
+  return requestJson<AuthSessionResponse>(serverAddress, "/api/auth/sessions", {
+    method: "POST",
+    body: JSON.stringify(credentials),
+  });
+}
+
+export function updateUserProfile(
+  serverAddress: string,
+  token: string,
+  profile: UpdateUserProfileRequest,
+) {
+  return authenticatedRequestJson<UserResponse>(
+    serverAddress,
+    "/api/users/me",
+    token,
+    { method: "PUT", body: JSON.stringify(profile) },
+  );
+}
+
+export function listUsers(serverAddress: string, token: string) {
+  return authenticatedRequestJson<UserListResponse>(
+    serverAddress,
+    "/api/admin/users",
+    token,
+  );
+}
+
+export function createManagedUser(
+  serverAddress: string,
+  token: string,
+  user: CreateUserRequest,
+) {
+  return authenticatedRequestJson<UserResponse>(
+    serverAddress,
+    "/api/admin/users",
+    token,
+    { method: "POST", body: JSON.stringify(user) },
+  );
+}
+
+export function updateManagedUser(
+  serverAddress: string,
+  token: string,
+  userId: string,
+  update: UpdateUserRequest,
+) {
+  return authenticatedRequestJson<UserResponse>(
+    serverAddress,
+    `/api/admin/users/${encodeURIComponent(userId)}`,
+    token,
+    { method: "PUT", body: JSON.stringify(update) },
+  );
+}
+
+export function deleteManagedUser(
+  serverAddress: string,
+  token: string,
+  userId: string,
+) {
+  return authenticatedRequestJson<void>(
+    serverAddress,
+    `/api/admin/users/${encodeURIComponent(userId)}`,
+    token,
+    { method: "DELETE" },
+  );
+}
+
+export function revokeSession(serverAddress: string, token: string) {
+  return authenticatedRequestJson<void>(
+    serverAddress,
+    "/api/auth/session",
+    token,
+    { method: "DELETE" },
+  );
+}
+
+export function createRealtimeTicket(serverAddress: string, token: string) {
+  return authenticatedRequestJson<RealtimeTicketResponse>(
+    serverAddress,
+    "/api/realtime/ticket",
+    token,
+    { method: "POST" },
+  );
+}
+
+export function fetchServerSettings(serverAddress: string, token: string) {
+  return authenticatedRequestJson<ServerSettingsResponse>(
+    serverAddress,
+    "/api/admin/server",
+    token,
+  );
+}
+
+export function requestServerRestart(serverAddress: string, token: string) {
+  return authenticatedRequestJson<RestartServerResponse>(
+    serverAddress,
+    "/api/admin/server/restart",
+    token,
+    { method: "POST" },
+  );
+}
+
+export function fetchUpdateStatus(serverAddress: string, token: string) {
+  return authenticatedRequestJson<UpdateStatusResponse>(
+    serverAddress,
+    "/api/admin/updates",
+    token,
+  );
+}
+
+export function checkForUpdates(serverAddress: string, token: string) {
+  return authenticatedRequestJson<UpdateStatusResponse>(
+    serverAddress,
+    "/api/admin/updates/check",
+    token,
+    { method: "POST" },
+  );
+}
+
+export function installUpdate(serverAddress: string, token: string) {
+  return authenticatedRequestJson<InstallUpdateResponse>(
+    serverAddress,
+    "/api/admin/updates/install",
+    token,
+    { method: "POST" },
+  );
+}
+
+export function updateServerSettings(
+  serverAddress: string,
+  token: string,
+  settings: UpdateServerSettingsRequest,
+) {
+  return authenticatedRequestJson<ServerSettingsResponse>(
+    serverAddress,
+    "/api/admin/server",
+    token,
+    { method: "PUT", body: JSON.stringify(settings) },
+  );
+}
+
+export function listMetadataProviders(serverAddress: string, token: string) {
+  return authenticatedRequestJson<MetadataProviderListResponse>(
+    serverAddress,
+    "/api/admin/metadata-providers",
+    token,
+  );
+}
+
+export function listMetadataProviderDefinitions(
+  serverAddress: string,
+  token: string,
+) {
+  return authenticatedRequestJson<MetadataProviderDefinitionListResponse>(
+    serverAddress,
+    "/api/admin/metadata-providers/definitions",
+    token,
+  );
+}
+
+export function createMetadataProvider(
+  serverAddress: string,
+  token: string,
+  provider: CreateMetadataProviderRequest,
+) {
+  return authenticatedRequestJson<MetadataProviderResponse>(
+    serverAddress,
+    "/api/admin/metadata-providers",
+    token,
+    { method: "POST", body: JSON.stringify(provider) },
+  );
+}
+
+export function updateMetadataProvider(
+  serverAddress: string,
+  token: string,
+  providerId: string,
+  update: UpdateMetadataProviderRequest,
+) {
+  return authenticatedRequestJson<MetadataProviderResponse>(
+    serverAddress,
+    `/api/admin/metadata-providers/${providerId}`,
+    token,
+    { method: "PUT", body: JSON.stringify(update) },
+  );
+}
+
+export function reorderMetadataProviders(
+  serverAddress: string,
+  token: string,
+  ids: string[],
+) {
+  return authenticatedRequestJson<MetadataProviderListResponse>(
+    serverAddress,
+    "/api/admin/metadata-providers/order",
+    token,
+    { method: "PUT", body: JSON.stringify({ ids }) },
+  );
+}
+
+export function refreshMetadata(serverAddress: string, token: string) {
+  return authenticatedRequestJson<TaskResponse>(
+    serverAddress,
+    "/api/admin/metadata/refresh",
+    token,
+    { method: "POST" },
+  );
+}
+
+export function resetMetadata(serverAddress: string, token: string) {
+  return authenticatedRequestJson<ResetMetadataResponse>(
+    serverAddress,
+    "/api/admin/metadata/reset",
+    token,
+    { method: "POST" },
+  );
+}
+
+export function fetchLogs(serverAddress: string, token: string, after = 0) {
+  return authenticatedRequestJson<LogListResponse>(
+    serverAddress,
+    `/api/admin/logs?after=${after}`,
+    token,
+  );
+}
+
+export function listSources(serverAddress: string, token: string) {
+  return authenticatedRequestJson<SourceListResponse>(
+    serverAddress,
+    "/api/admin/sources",
+    token,
+  );
+}
+
+export function createSource(
+  serverAddress: string,
+  token: string,
+  source: CreateSourceRequest,
+) {
+  return authenticatedRequestJson<CreateSourceResponse>(
+    serverAddress,
+    "/api/admin/sources",
+    token,
+    { method: "POST", body: JSON.stringify(source) },
+  );
+}
+
+export function deleteSource(
+  serverAddress: string,
+  token: string,
+  sourceId: string,
+) {
+  return authenticatedRequestJson<void>(
+    serverAddress,
+    `/api/admin/sources/${sourceId}`,
+    token,
+    { method: "DELETE" },
+  );
+}
+
+export function updateSource(
+  serverAddress: string,
+  token: string,
+  sourceId: string,
+  request: UpdateSourceRequest,
+) {
+  return authenticatedRequestJson<CreateSourceResponse>(
+    serverAddress,
+    `/api/admin/sources/${encodeURIComponent(sourceId)}`,
+    token,
+    { method: "PATCH", body: JSON.stringify(request) },
+  );
+}
+
+export function discoverJellyfinLibraries(
+  serverAddress: string,
+  token: string,
+  request: DiscoverJellyfinLibrariesRequest,
+) {
+  return authenticatedRequestJson<JellyfinLibraryListResponse>(
+    serverAddress,
+    "/api/admin/integrations/jellyfin/libraries",
+    token,
+    { method: "POST", body: JSON.stringify(request) },
+  );
+}
+
+export function reorderSources(
+  serverAddress: string,
+  token: string,
+  ids: string[],
+) {
+  return authenticatedRequestJson<SourceListResponse>(
+    serverAddress,
+    "/api/admin/sources/order",
+    token,
+    { method: "PUT", body: JSON.stringify({ ids }) },
+  );
+}
+
+export function rescanSource(
+  serverAddress: string,
+  token: string,
+  sourceId: string,
+) {
+  return authenticatedRequestJson<TaskResponse>(
+    serverAddress,
+    `/api/admin/sources/${sourceId}/scans`,
+    token,
+    { method: "POST" },
+  );
+}
+
+export function listDirectories(
+  serverAddress: string,
+  token: string,
+  parent?: string,
+) {
+  return authenticatedRequestJson<DirectoryListResponse>(
+    serverAddress,
+    parent
+      ? `/api/admin/filesystem/tree?path=${encodeURIComponent(parent)}`
+      : "/api/admin/filesystem/tree",
+    token,
+  );
+}
+
+export function searchDirectories(
+  serverAddress: string,
+  token: string,
+  query: string,
+  parent?: string,
+  signal?: AbortSignal,
+) {
+  const params = new URLSearchParams({ query });
+  if (parent) params.set("path", parent);
+  return authenticatedRequestJson<DirectorySearchResponse>(
+    serverAddress,
+    `/api/admin/filesystem/search?${params.toString()}`,
+    token,
+    { signal },
+  );
+}
+
+export function startLibraryScan(serverAddress: string, token: string) {
+  return authenticatedRequestJson<TaskResponse>(
+    serverAddress,
+    "/api/library/scans",
+    token,
+    { method: "POST" },
+  );
+}
+
+export function listTasks(
+  serverAddress: string,
+  token: string,
+  options: {
+    status?: "all" | "active" | "terminal";
+    limit?: number;
+    offset?: number;
+  } = {},
+) {
+  const params = new URLSearchParams();
+  if (options.status) params.set("status", options.status);
+  if (options.limit !== undefined) params.set("limit", String(options.limit));
+  if (options.offset !== undefined) {
+    params.set("offset", String(options.offset));
+  }
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return authenticatedRequestJson<TaskListResponse>(
+    serverAddress,
+    `/api/tasks${suffix}`,
+    token,
+  );
+}
+
+export function getTask(serverAddress: string, token: string, taskId: string) {
+  return authenticatedRequestJson<TaskResponse>(
+    serverAddress,
+    `/api/tasks/${encodeURIComponent(taskId)}`,
+    token,
+  );
+}
+
+export function stopTask(serverAddress: string, token: string, taskId: string) {
+  return authenticatedRequestJson<TaskResponse>(
+    serverAddress,
+    `/api/admin/tasks/${encodeURIComponent(taskId)}/stop`,
+    token,
+    { method: "POST" },
+  );
+}
+
+export interface TrackListOptions {
+  cursor?: string | null;
+  limit?: number;
+  sort?: "title" | "artist" | "album" | "duration" | "track" | "published";
+  direction?: "asc" | "desc";
+  query?: string;
+  availability?: "available" | "unavailable" | "all";
+  albumId?: string;
+  collectionId?: string;
+  mediaType?: "music" | "audiobook" | "podcast" | "all";
+  artistId?: string;
+  liked?: boolean;
+}
+
+function trackListParams(options: TrackListOptions): URLSearchParams {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(options)) {
+    if (value === undefined || value === null || value === "") continue;
+    params.set(key, String(value));
+  }
+  return params;
+}
+
+function cardListParams(options: CardListOptions): URLSearchParams {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(options)) {
+    if (value === undefined || value === null || value === "") continue;
+    params.set(key, String(value));
+  }
+  return params;
+}
+
+export function listAudiobooks(
+  serverAddress: string,
+  token: string,
+  options: CardListOptions = {},
+) {
+  const params = cardListParams(options);
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return authenticatedRequestJson<AudiobookListResponse>(
+    serverAddress,
+    `/api/audiobooks${suffix}`,
+    token,
+  );
+}
+
+export function fetchAudiobook(
+  serverAddress: string,
+  token: string,
+  audiobookId: string,
+) {
+  return authenticatedRequestJson<AudiobookSummaryResponse>(
+    serverAddress,
+    `/api/audiobooks/${encodeURIComponent(audiobookId)}`,
+    token,
+  );
+}
+
+export function listAudiobookChapters(
+  serverAddress: string,
+  token: string,
+  audiobookId: string,
+  options: TrackListOptions = {},
+) {
+  const params = trackListParams(options);
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return authenticatedRequestJson<TrackListResponse>(
+    serverAddress,
+    `/api/audiobooks/${encodeURIComponent(audiobookId)}/chapters${suffix}`,
+    token,
+  );
+}
+
+export function listPodcasts(
+  serverAddress: string,
+  token: string,
+  options: CardListOptions = {},
+) {
+  const params = cardListParams(options);
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return authenticatedRequestJson<PodcastListResponse>(
+    serverAddress,
+    `/api/podcasts${suffix}`,
+    token,
+  );
+}
+
+export function fetchPodcast(
+  serverAddress: string,
+  token: string,
+  podcastId: string,
+) {
+  return authenticatedRequestJson<PodcastSummaryResponse>(
+    serverAddress,
+    `/api/podcasts/${encodeURIComponent(podcastId)}`,
+    token,
+  );
+}
+
+export function listPodcastEpisodes(
+  serverAddress: string,
+  token: string,
+  podcastId: string,
+  options: TrackListOptions = {},
+) {
+  const params = trackListParams(options);
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return authenticatedRequestJson<TrackListResponse>(
+    serverAddress,
+    `/api/podcasts/${encodeURIComponent(podcastId)}/episodes${suffix}`,
+    token,
+  );
+}
+
+export function listTracks(
+  serverAddress: string,
+  token: string,
+  options: TrackListOptions = {},
+) {
+  const params = trackListParams(options);
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return authenticatedRequestJson<TrackListResponse>(
+    serverAddress,
+    `/api/tracks${suffix}`,
+    token,
+  );
+}
+
+export function resolveTracks(
+  serverAddress: string,
+  token: string,
+  ids: string[],
+) {
+  return authenticatedRequestJson<ResolveTracksResponse>(
+    serverAddress,
+    "/api/tracks/resolve",
+    token,
+    { method: "POST", body: JSON.stringify({ ids }) },
+  );
+}
+
+export interface CardListOptions {
+  cursor?: string | null;
+  limit?: number;
+  sort?: string;
+  direction?: "asc" | "desc";
+  query?: string;
+  liked?: boolean;
+  artistId?: string;
+}
+
+export function listAlbums(
+  serverAddress: string,
+  token: string,
+  options: CardListOptions = {},
+) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(options)) {
+    if (value === undefined || value === null || value === "") continue;
+    params.set(key, String(value));
+  }
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return authenticatedRequestJson<AlbumListResponse>(
+    serverAddress,
+    `/api/albums${suffix}`,
+    token,
+  );
+}
+
+export function fetchAlbum(
+  serverAddress: string,
+  token: string,
+  albumId: string,
+) {
+  return authenticatedRequestJson<AlbumListResponse["items"][number]>(
+    serverAddress,
+    `/api/albums/${encodeURIComponent(albumId)}`,
+    token,
+  );
+}
+
+export function listArtists(
+  serverAddress: string,
+  token: string,
+  options: CardListOptions = {},
+) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(options)) {
+    if (value === undefined || value === null || value === "") continue;
+    params.set(key, String(value));
+  }
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return authenticatedRequestJson<ArtistListResponse>(
+    serverAddress,
+    `/api/artists${suffix}`,
+    token,
+  );
+}
+
+export interface PlaylistListOptions {
+  limit?: number;
+  offset?: number;
+  trackId?: string;
+}
+
+export function listPlaylists(
+  serverAddress: string,
+  token: string,
+  options: PlaylistListOptions = {},
+) {
+  const params = new URLSearchParams();
+  if (options.limit !== undefined) params.set("limit", String(options.limit));
+  if (options.offset !== undefined) {
+    params.set("offset", String(options.offset));
+  }
+  if (options.trackId) params.set("trackId", options.trackId);
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return authenticatedRequestJson<PlaylistListResponse>(
+    serverAddress,
+    `/api/playlists${suffix}`,
+    token,
+  );
+}
+
+export function fetchPlaylist(
+  serverAddress: string,
+  token: string,
+  playlistId: string,
+) {
+  return authenticatedRequestJson<PlaylistDetailResponse>(
+    serverAddress,
+    `/api/playlists/${encodeURIComponent(playlistId)}`,
+    token,
+  );
+}
+
+export function createPlaylist(
+  serverAddress: string,
+  token: string,
+  request: CreatePlaylistRequest,
+) {
+  return authenticatedRequestJson<PlaylistDetailResponse>(
+    serverAddress,
+    "/api/playlists",
+    token,
+    { method: "POST", body: JSON.stringify(request) },
+  );
+}
+
+export function updatePlaylist(
+  serverAddress: string,
+  token: string,
+  playlistId: string,
+  request: UpdatePlaylistRequest,
+) {
+  return authenticatedRequestJson<PlaylistDetailResponse>(
+    serverAddress,
+    `/api/playlists/${encodeURIComponent(playlistId)}`,
+    token,
+    { method: "PATCH", body: JSON.stringify(request) },
+  );
+}
+
+export function deletePlaylist(
+  serverAddress: string,
+  token: string,
+  playlistId: string,
+) {
+  return authenticatedRequestJson<void>(
+    serverAddress,
+    `/api/playlists/${encodeURIComponent(playlistId)}`,
+    token,
+    { method: "DELETE" },
+  );
+}
+
+export function addPlaylistItem(
+  serverAddress: string,
+  token: string,
+  playlistId: string,
+  request: AddPlaylistItemRequest,
+) {
+  return authenticatedRequestJson<AddPlaylistItemResponse>(
+    serverAddress,
+    `/api/playlists/${encodeURIComponent(playlistId)}/items`,
+    token,
+    { method: "POST", body: JSON.stringify(request) },
+  );
+}
+
+export function removePlaylistItem(
+  serverAddress: string,
+  token: string,
+  playlistId: string,
+  itemId: string,
+) {
+  return authenticatedRequestJson<void>(
+    serverAddress,
+    `/api/playlists/${encodeURIComponent(playlistId)}/items/${encodeURIComponent(itemId)}`,
+    token,
+    { method: "DELETE" },
+  );
+}
+
+export function reorderPlaylistItems(
+  serverAddress: string,
+  token: string,
+  playlistId: string,
+  request: ReorderPlaylistItemsRequest,
+) {
+  return authenticatedRequestJson<PlaylistDetailResponse>(
+    serverAddress,
+    `/api/playlists/${encodeURIComponent(playlistId)}/items/order`,
+    token,
+    { method: "PUT", body: JSON.stringify(request) },
+  );
+}
+
+export function fetchArtist(
+  serverAddress: string,
+  token: string,
+  artistId: string,
+) {
+  return authenticatedRequestJson<ArtistListResponse["items"][number]>(
+    serverAddress,
+    `/api/artists/${encodeURIComponent(artistId)}`,
+    token,
+  );
+}
+
+export function listArtistMetadataCandidates(
+  serverAddress: string,
+  token: string,
+  artistId: string,
+  query?: string,
+) {
+  const params = new URLSearchParams();
+  if (query?.trim()) params.set("query", query.trim());
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return authenticatedRequestJson<ArtistMetadataCandidateListResponse>(
+    serverAddress,
+    `/api/artists/${encodeURIComponent(artistId)}/metadata/candidates${suffix}`,
+    token,
+  );
+}
+
+export function applyArtistMetadata(
+  serverAddress: string,
+  token: string,
+  artistId: string,
+  metadata: ApplyArtistMetadataRequest,
+) {
+  return authenticatedRequestJson<null>(
+    serverAddress,
+    `/api/artists/${encodeURIComponent(artistId)}/metadata`,
+    token,
+    { method: "PUT", body: JSON.stringify(metadata) },
+  );
+}
+
+export function revertArtistMetadata(
+  serverAddress: string,
+  token: string,
+  artistId: string,
+) {
+  return authenticatedRequestJson<null>(
+    serverAddress,
+    `/api/artists/${encodeURIComponent(artistId)}/metadata`,
+    token,
+    { method: "DELETE" },
+  );
+}
+
+export function recordTrackPlay(
+  serverAddress: string,
+  token: string,
+  trackId: string,
+) {
+  return authenticatedRequestJson<RecordTrackPlayResponse>(
+    serverAddress,
+    `/api/tracks/${encodeURIComponent(trackId)}/plays`,
+    token,
+    { method: "POST" },
+  );
+}
+
+export function fetchQuickPicks(serverAddress: string, token: string) {
+  return authenticatedRequestJson<QuickPickListResponse>(
+    serverAddress,
+    "/api/quick-picks",
+    token,
+  );
+}
+
+export function listMetadataCandidates(
+  serverAddress: string,
+  token: string,
+  trackId: string,
+  query?: string,
+) {
+  const params = new URLSearchParams();
+  if (query?.trim()) params.set("query", query.trim());
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return authenticatedRequestJson<MetadataCandidateListResponse>(
+    serverAddress,
+    `/api/tracks/${encodeURIComponent(trackId)}/metadata/candidates${suffix}`,
+    token,
+  );
+}
+
+export function applyTrackMetadata(
+  serverAddress: string,
+  token: string,
+  trackId: string,
+  metadata: ApplyTrackMetadataRequest,
+) {
+  return authenticatedRequestJson<void>(
+    serverAddress,
+    `/api/tracks/${encodeURIComponent(trackId)}/metadata`,
+    token,
+    { method: "PUT", body: JSON.stringify(metadata) },
+  );
+}
+
+export function revertTrackMetadata(
+  serverAddress: string,
+  token: string,
+  trackId: string,
+) {
+  return authenticatedRequestJson<void>(
+    serverAddress,
+    `/api/tracks/${encodeURIComponent(trackId)}/metadata`,
+    token,
+    { method: "DELETE" },
+  );
+}
+
+export function fetchQueue(serverAddress: string, token: string) {
+  return authenticatedRequestJson<QueueResponse>(
+    serverAddress,
+    "/api/queue",
+    token,
+  );
+}
+
+export function replaceQueue(
+  serverAddress: string,
+  token: string,
+  queue: ReplaceQueueRequest,
+) {
+  return authenticatedRequestJson<QueueResponse>(
+    serverAddress,
+    "/api/queue",
+    token,
+    { method: "PUT", body: JSON.stringify(queue) },
+  );
+}
+
+export function listLikes(serverAddress: string, token: string) {
+  return authenticatedRequestJson<LikeListResponse>(
+    serverAddress,
+    "/api/likes",
+    token,
+  );
+}
+
+export function createLike(
+  serverAddress: string,
+  token: string,
+  target: LikeTarget,
+) {
+  return authenticatedRequestJson<LikeResponse>(
+    serverAddress,
+    "/api/likes",
+    token,
+    { method: "POST", body: JSON.stringify(target) },
+  );
+}
+
+export function deleteLike(
+  serverAddress: string,
+  token: string,
+  target: LikeTarget,
+) {
+  return authenticatedRequestJson<void>(serverAddress, "/api/likes", token, {
+    method: "DELETE",
+    body: JSON.stringify(target),
+  });
+}
+
+export function createPlaybackToken(
+  serverAddress: string,
+  token: string,
+  trackId: string,
+) {
+  return authenticatedRequestJson<PlaybackTokenResponse>(
+    serverAddress,
+    `/api/tracks/${encodeURIComponent(trackId)}/playback-token`,
+    token,
+    { method: "POST" },
+  );
+}
+
+export function trackAudioUrl(
+  serverAddress: string,
+  trackId: string,
+  playbackToken: string,
+) {
+  return `${serverAddress}/api/tracks/${encodeURIComponent(trackId)}/audio?playbackToken=${encodeURIComponent(playbackToken)}`;
+}

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "tasks": {
+    "dev": { "cache": false, "persistent": true },
+    "build": { "dependsOn": ["^build"], "outputs": ["dist/**", ".output/**"] },
+    "@peridot/android#build": {
+      "dependsOn": ["^build"],
+      "outputs": ["android/app/build/outputs/apk/debug/**"]
+    },
+    "typecheck": { "dependsOn": ["^typecheck"] },
+    "test": { "dependsOn": ["^build"], "outputs": [] }
+  }
+}

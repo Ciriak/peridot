@@ -1,0 +1,327 @@
+import type { TrackResponse } from "@peridot/contracts";
+import {
+  clear as clearStore,
+  createStore,
+  del,
+  entries,
+  get,
+  set,
+} from "idb-keyval";
+import { createPlaybackToken, trackAudioUrl } from "./peridot-client.ts";
+import { trackCoverUrl } from "./library.ts";
+import { clearOfflineArtwork, loadArtworkBlob } from "./offline-artwork.ts";
+import type { PeridotQueryScope } from "./query-keys";
+import { isAndroidRuntime } from "./android-runtime.ts";
+import { PeridotMedia, trackResponseFromAndroid } from "./android-playback.ts";
+
+export const OFFLINE_AUDIO_CACHE = "peridot-offline-audio-v1";
+export const OFFLINE_TRACK_DATABASE = "peridot-web-offline-tracks-v1";
+const OFFLINE_TRACK_STORE = "offline-tracks";
+
+export interface SavedOfflineTrack {
+  scope: PeridotQueryScope;
+  track: TrackResponse;
+  savedAt: string;
+  size: number;
+}
+
+export interface PreparedOfflineResponse {
+  response: Response;
+  size: number;
+}
+
+export function snapshotTrackForOffline(track: TrackResponse): TrackResponse {
+  // TanStack Query exposes deeply reactive Vue proxies. IndexedDB cannot
+  // structured-clone those proxies, so persist only their plain data snapshot.
+  return JSON.parse(JSON.stringify(track)) as TrackResponse;
+}
+
+export async function prepareOfflineResponse(
+  response: Response,
+  onProgress?: (progress: number | null) => void,
+): Promise<PreparedOfflineResponse> {
+  const totalBytes = Math.max(
+    0,
+    Number(response.headers.get("content-length")) || 0,
+  );
+  const reportProgress = (receivedBytes: number) => {
+    onProgress?.(
+      totalBytes > 0
+        ? Math.min(100, Math.round((receivedBytes / totalBytes) * 100))
+        : null,
+    );
+  };
+  reportProgress(0);
+
+  if (!response.body) {
+    const blob = await response.blob();
+    onProgress?.(100);
+    return {
+      response: new Response(blob, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+      }),
+      size: blob.size,
+    };
+  }
+
+  const reader = response.body.getReader();
+  const chunks: ArrayBuffer[] = [];
+  let receivedBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = new Uint8Array(value.byteLength);
+      chunk.set(value);
+      chunks.push(chunk.buffer);
+      receivedBytes += value.byteLength;
+      reportProgress(receivedBytes);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  onProgress?.(100);
+  const blob = new Blob(chunks, {
+    type: response.headers.get("content-type") ?? "",
+  });
+  return {
+    response: new Response(blob, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+    }),
+    size: blob.size,
+  };
+}
+
+function offlineTrackStore() {
+  return createStore(OFFLINE_TRACK_DATABASE, OFFLINE_TRACK_STORE);
+}
+
+function normalizeSavedOfflineTrack(
+  saved: SavedOfflineTrack,
+): SavedOfflineTrack {
+  return {
+    ...saved,
+    track: {
+      ...saved.track,
+      mediaType: saved.track.mediaType ?? "music",
+      publishedAt: saved.track.publishedAt ?? null,
+    },
+  };
+}
+
+function scopePrefix(scope: PeridotQueryScope): string {
+  return `${encodeURIComponent(scope.serverAddress)}:${encodeURIComponent(scope.userId)}:`;
+}
+
+export function offlineTrackStorageKey(
+  scope: PeridotQueryScope,
+  trackId: string,
+): string {
+  return `${scopePrefix(scope)}${encodeURIComponent(trackId)}`;
+}
+
+export function offlineAudioCacheRequest(
+  scope: PeridotQueryScope,
+  trackId: string,
+  origin = globalThis.location?.origin ?? "http://peridot.local",
+): Request {
+  return new Request(
+    new URL(
+      `/__peridot/offline-audio/${scopePrefix(scope)}${encodeURIComponent(trackId)}`,
+      origin,
+    ),
+  );
+}
+
+export async function readSavedOfflineTracks(
+  scope: PeridotQueryScope,
+): Promise<SavedOfflineTrack[]> {
+  if (isAndroidRuntime()) {
+    const { items } = await PeridotMedia.listCachedTracks();
+    return items.map((item) => ({
+      scope,
+      track: trackResponseFromAndroid(item.track),
+      savedAt: item.savedAt,
+      size: item.size,
+    }));
+  }
+  if (typeof indexedDB === "undefined") return [];
+  const prefix = scopePrefix(scope);
+  const values = await entries<string, SavedOfflineTrack>(offlineTrackStore());
+  return values
+    .filter(([key]) => key.startsWith(prefix))
+    .map(([, value]) => normalizeSavedOfflineTrack(value))
+    .sort(
+      (left, right) =>
+        new Date(right.savedAt).getTime() - new Date(left.savedAt).getTime(),
+    );
+}
+
+export async function readSavedOfflineTrack(
+  scope: PeridotQueryScope,
+  trackId: string,
+): Promise<SavedOfflineTrack | undefined> {
+  if (isAndroidRuntime()) {
+    return (await readSavedOfflineTracks(scope)).find(
+      (saved) => saved.track.id === trackId,
+    );
+  }
+  if (typeof indexedDB === "undefined") return undefined;
+  const saved = await get<SavedOfflineTrack>(
+    offlineTrackStorageKey(scope, trackId),
+    offlineTrackStore(),
+  );
+  return saved ? normalizeSavedOfflineTrack(saved) : undefined;
+}
+
+export async function saveTrackForOffline(
+  scope: PeridotQueryScope,
+  token: string,
+  track: TrackResponse,
+  options: {
+    onProgress?: (progress: number | null) => void;
+  } = {},
+): Promise<SavedOfflineTrack> {
+  if (isAndroidRuntime()) {
+    if (!track.available) {
+      throw new Error("This track is unavailable.");
+    }
+    const savedTrack = snapshotTrackForOffline(track);
+    const progressListener = options.onProgress
+      ? await PeridotMedia.addListener("offlineProgress", (event) => {
+          if (event.trackId === track.id) options.onProgress?.(event.progress);
+        })
+      : null;
+    try {
+      const cached = await PeridotMedia.cacheTrack({
+        track: {
+          id: savedTrack.id,
+          title: savedTrack.title,
+          artist: savedTrack.artists.join(", ") || savedTrack.artist,
+          album: savedTrack.album,
+          albumId: savedTrack.albumId,
+          durationMs: savedTrack.durationMs,
+          coverUrl: savedTrack.coverUrl
+            ? trackCoverUrl(scope.serverAddress, savedTrack.coverUrl)
+            : null,
+          mimeType: savedTrack.mimeType,
+          available: savedTrack.available,
+          mediaType: savedTrack.mediaType,
+        },
+      });
+      return {
+        scope,
+        track: savedTrack,
+        savedAt: cached.savedAt,
+        size: cached.size,
+      };
+    } finally {
+      await progressListener?.remove();
+    }
+  }
+  if (
+    typeof caches === "undefined" ||
+    typeof navigator === "undefined" ||
+    typeof window === "undefined"
+  ) {
+    throw new Error("Offline storage is unavailable.");
+  }
+  const savedTrack = snapshotTrackForOffline(track);
+  if (!savedTrack.available) {
+    throw new Error("This track is unavailable.");
+  }
+
+  if (navigator.storage?.persist) {
+    await navigator.storage.persist().catch(() => false);
+  }
+  const issued = await createPlaybackToken(
+    scope.serverAddress,
+    token,
+    savedTrack.id,
+  );
+  const response = await fetch(
+    trackAudioUrl(scope.serverAddress, savedTrack.id, issued.token),
+  );
+  if (!response.ok) {
+    throw new Error("The audio file could not be saved.");
+  }
+  const prepared = await prepareOfflineResponse(response, options.onProgress);
+  const cache = await caches.open(OFFLINE_AUDIO_CACHE);
+  const cacheRequest = offlineAudioCacheRequest(scope, savedTrack.id);
+  await cache.put(cacheRequest, prepared.response);
+
+  const coverPath = savedTrack.coverUrl;
+  if (coverPath) {
+    const coverUrl = trackCoverUrl(scope.serverAddress, coverPath);
+    if (coverUrl) {
+      try {
+        await loadArtworkBlob(scope, coverUrl);
+      } catch {
+        // Audio remains useful when artwork cannot be cached.
+      }
+    }
+  }
+
+  const saved: SavedOfflineTrack = {
+    scope,
+    track: savedTrack,
+    savedAt: new Date().toISOString(),
+    size: prepared.size,
+  };
+  try {
+    await set(
+      offlineTrackStorageKey(scope, savedTrack.id),
+      saved,
+      offlineTrackStore(),
+    );
+  } catch (reason) {
+    await cache.delete(cacheRequest).catch(() => false);
+    throw reason;
+  }
+  return saved;
+}
+
+export async function removeTrackForOffline(
+  scope: PeridotQueryScope,
+  trackId: string,
+): Promise<void> {
+  if (isAndroidRuntime()) {
+    await PeridotMedia.removeCachedTrack({ trackId });
+    return;
+  }
+  if (typeof caches !== "undefined") {
+    const cache = await caches.open(OFFLINE_AUDIO_CACHE);
+    await cache.delete(offlineAudioCacheRequest(scope, trackId));
+  }
+  await del(offlineTrackStorageKey(scope, trackId), offlineTrackStore());
+}
+
+export async function offlineAudioBlob(
+  scope: PeridotQueryScope,
+  trackId: string,
+): Promise<Blob | null> {
+  if (isAndroidRuntime()) return null;
+  if (typeof caches === "undefined") return null;
+  const cache = await caches.open(OFFLINE_AUDIO_CACHE);
+  const response = await cache.match(offlineAudioCacheRequest(scope, trackId));
+  return response ? response.blob() : null;
+}
+
+export async function clearAllOfflineTracks(): Promise<void> {
+  if (isAndroidRuntime()) {
+    await PeridotMedia.clearOfflineTracks();
+    return;
+  }
+  if (typeof indexedDB !== "undefined") {
+    await clearStore(offlineTrackStore());
+  }
+  if (typeof caches !== "undefined") {
+    await caches.delete(OFFLINE_AUDIO_CACHE);
+  }
+  await clearOfflineArtwork();
+}

@@ -1,0 +1,45 @@
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.jks
+*.keystore
+apps/android/android/signing.properties
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local editor state
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Workspace outputs
+node_modules/
+.turbo/
+.nuxt/
+.output/
+dist/
+coverage/
+generated/
+.peridot/
+.agents/skills/
+.claude/skills/
+.cursor/skills/
+.devin/skills/
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Use pnpm lockfile not npm lockfile
+package-lock.json

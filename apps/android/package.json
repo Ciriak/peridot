@@ -1,0 +1,30 @@
+{
+  "name": "@peridot/android",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "pnpm --filter @peridot/contracts build && cross-env PERIDOT_CAPACITOR=1 pnpm --filter @peridot/web generate",
+    "sync": "pnpm generate && cap sync android",
+    "dev": "pnpm sync && cap run android",
+    "open": "pnpm sync && cap open android",
+    "test": "node scripts/gradle.mjs testDebugUnitTest",
+    "lint": "node scripts/gradle.mjs lintDebug",
+    "instrument": "node scripts/gradle.mjs connectedDebugAndroidTest",
+    "build": "node scripts/gradle.mjs assembleDebug",
+    "bundle": "node scripts/gradle.mjs bundleRelease assembleRelease",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.6.2",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/core": "8.6.2",
+    "@capacitor/status-bar": "8.0.4"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.6.2",
+    "cross-env": "^10.1.0",
+    "typescript": "5.9.3"
+  },
+  "license": "Apache-2.0"
+}

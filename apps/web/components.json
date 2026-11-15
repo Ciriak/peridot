@@ -1,0 +1,20 @@
+{
+  "$schema": "https://shadcn-vue.com/schema.json",
+  "style": "new-york",
+  "typescript": true,
+  "tailwind": {
+    "config": "",
+    "css": "app/assets/css/tailwind.css",
+    "baseColor": "neutral",
+    "cssVariables": true,
+    "prefix": ""
+  },
+  "aliases": {
+    "components": "@peridot/ui/components",
+    "ui": "@peridot/ui/components/ui",
+    "lib": "@peridot/ui/lib",
+    "utils": "@peridot/ui/lib/utils",
+    "composables": "@peridot/ui/composables"
+  },
+  "iconLibrary": "lucide"
+}
