@@ -9,9 +9,14 @@ import { useQuery } from "@tanstack/vue-query";
 import { watchDebounced } from "@vueuse/core";
 import { computed, onMounted, ref, watch } from "vue";
 import AlbumCard from "../components/AlbumCard.vue";
+import ArtistCard from "../components/ArtistCard.vue";
+import MediaCollectionCard from "../components/MediaCollectionCard.vue";
 import TrackTable from "../components/TrackTable.vue";
 import {
   useCatalogAlbumQuery,
+  useCatalogArtistQuery,
+  useCatalogAudiobookQuery,
+  useCatalogPodcastQuery,
   useCatalogTrackQuery,
 } from "../composables/use-catalog-query";
 import { useLikes } from "../composables/use-likes";
@@ -27,7 +32,8 @@ import type { TrackSort } from "../lib/library";
 const { t } = useI18n();
 useHead({ title: t("page.search.title") });
 
-type ResultFilter = "all" | "albums" | "tracks";
+type ResultFilter =
+  "all" | "artists" | "albums" | "tracks" | "audiobooks" | "podcasts";
 
 const query = useState("search-query", () => "");
 const debouncedQuery = ref("");
@@ -81,6 +87,18 @@ const searchTerm = computed(() =>
   searching.value ? debouncedQuery.value : "__peridot_no_search__",
 );
 const {
+  items: artistResults,
+  loading: artistsLoading,
+  loadingMore: artistsLoadingMore,
+  error: artistsError,
+  hasMore: hasMoreArtists,
+  load: loadArtists,
+  loadMore: loadMoreArtists,
+} = useCatalogArtistQuery(() => ({
+  query: searchTerm.value,
+  sort: "name",
+}));
+const {
   items: albumResults,
   loading: albumsLoading,
   loadingMore: albumsLoadingMore,
@@ -89,6 +107,30 @@ const {
   load: loadAlbums,
   loadMore: loadMoreAlbums,
 } = useCatalogAlbumQuery(() => ({
+  query: searchTerm.value,
+  sort: "title",
+}));
+const {
+  items: audiobookResults,
+  loading: audiobooksLoading,
+  loadingMore: audiobooksLoadingMore,
+  error: audiobooksError,
+  hasMore: hasMoreAudiobooks,
+  load: loadAudiobooks,
+  loadMore: loadMoreAudiobooks,
+} = useCatalogAudiobookQuery(() => ({
+  query: searchTerm.value,
+  sort: "title",
+}));
+const {
+  items: podcastResults,
+  loading: podcastsLoading,
+  loadingMore: podcastsLoadingMore,
+  error: podcastsError,
+  hasMore: hasMorePodcasts,
+  load: loadPodcasts,
+  loadMore: loadMorePodcasts,
+} = useCatalogPodcastQuery(() => ({
   query: searchTerm.value,
   sort: "title",
 }));
@@ -107,12 +149,53 @@ const {
   direction: trackSort.value.direction,
 }));
 
-const showAlbums = computed(() => resultFilter.value !== "tracks");
-const showTracks = computed(() => resultFilter.value !== "albums");
+const resultsLoading = computed(
+  () =>
+    artistsLoading.value ||
+    albumsLoading.value ||
+    tracksLoading.value ||
+    audiobooksLoading.value ||
+    podcastsLoading.value,
+);
+const resultsError = computed(
+  () =>
+    artistsError.value ||
+    albumsError.value ||
+    tracksError.value ||
+    audiobooksError.value ||
+    podcastsError.value,
+);
+const hasResults = computed(() =>
+  Boolean(
+    artistResults.value.length ||
+    albumResults.value.length ||
+    trackResults.value.length ||
+    audiobookResults.value.length ||
+    podcastResults.value.length,
+  ),
+);
+const showArtists = computed(
+  () => resultFilter.value === "all" || resultFilter.value === "artists",
+);
+const showAlbums = computed(
+  () => resultFilter.value === "all" || resultFilter.value === "albums",
+);
+const showTracks = computed(
+  () => resultFilter.value === "all" || resultFilter.value === "tracks",
+);
+const showAudiobooks = computed(
+  () => resultFilter.value === "all" || resultFilter.value === "audiobooks",
+);
+const showPodcasts = computed(
+  () => resultFilter.value === "all" || resultFilter.value === "podcasts",
+);
 const resultFilters: { value: ResultFilter; labelKey: string }[] = [
   { value: "all", labelKey: "page.search.all" },
+  { value: "artists", labelKey: "page.search.artists" },
   { value: "albums", labelKey: "page.search.albums" },
   { value: "tracks", labelKey: "page.search.tracks" },
+  { value: "audiobooks", labelKey: "page.search.audiobooks" },
+  { value: "podcasts", labelKey: "page.search.podcasts" },
 ];
 
 function openAlbum(album: AlbumSummaryResponse) {
@@ -123,13 +206,26 @@ function setTrackSort(next: TrackSort | null) {
   trackSort.value = next ?? { field: "title", direction: "asc" };
 }
 
+function retrySearch() {
+  void Promise.all([
+    loadArtists(true),
+    loadAlbums(true),
+    loadTracks(true),
+    loadAudiobooks(true),
+    loadPodcasts(true),
+  ]);
+}
+
 watch(searching, (active) => {
   if (!active) resultFilter.value = "all";
 });
 onMounted(() => {
   debouncedQuery.value = query.value.trim();
+  void loadArtists();
   void loadAlbums();
   void loadTracks();
+  void loadAudiobooks();
+  void loadPodcasts();
   void loadLikes();
 });
 </script>
@@ -160,12 +256,7 @@ onMounted(() => {
     </section>
 
     <div
-      v-if="
-        (albumsLoading || tracksLoading) &&
-        searching &&
-        !albumResults.length &&
-        !trackResults.length
-      "
+      v-if="resultsLoading && searching && !hasResults"
       role="status"
       class="flex items-center gap-3 rounded-lg border p-6 text-sm text-muted-foreground"
     >
@@ -173,18 +264,12 @@ onMounted(() => {
       {{ t("page.search.searching") }}
     </div>
     <div
-      v-else-if="albumsError || tracksError"
+      v-else-if="resultsError"
       role="alert"
       class="space-y-3 rounded-lg border p-6 text-sm"
     >
-      <p>{{ albumsError || tracksError }}</p>
-      <Button
-        variant="outline"
-        @click="
-          loadAlbums(true);
-          loadTracks(true);
-        "
-      >
+      <p>{{ resultsError }}</p>
+      <Button variant="outline" @click="retrySearch">
         {{ t("common.tryAgain") }}
       </Button>
     </div>
@@ -230,6 +315,58 @@ onMounted(() => {
     </section>
 
     <template v-else>
+      <section
+        v-if="showArtists"
+        aria-labelledby="local-artists-heading"
+        class="space-y-4"
+      >
+        <div class="flex items-center justify-between gap-4">
+          <h2 id="local-artists-heading" class="text-lg font-semibold">
+            {{ t("page.search.localArtists") }}
+          </h2>
+          <Badge variant="secondary">
+            {{
+              `${t(
+                "count.artist",
+                { count: artistResults.length },
+                artistResults.length,
+              )}${hasMoreArtists ? "+" : ""}`
+            }}
+          </Badge>
+        </div>
+        <div
+          v-if="artistResults.length"
+          class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+        >
+          <ArtistCard
+            v-for="artist in artistResults"
+            :key="artist.id"
+            :artist="artist"
+          />
+          <div v-if="hasMoreArtists" class="col-span-full flex justify-center">
+            <Button
+              type="button"
+              variant="outline"
+              :disabled="artistsLoadingMore"
+              @click="loadMoreArtists"
+            >
+              {{
+                artistsLoadingMore
+                  ? t("page.search.loadingMoreArtists")
+                  : t("page.search.loadMoreArtists")
+              }}
+            </Button>
+          </div>
+        </div>
+        <p
+          v-else
+          role="status"
+          class="rounded-lg border p-6 text-sm text-muted-foreground"
+        >
+          {{ t("page.search.noArtists") }}
+        </p>
+      </section>
+
       <section
         v-if="showAlbums"
         aria-labelledby="local-albums-heading"
@@ -319,6 +456,113 @@ onMounted(() => {
           class="rounded-lg border p-6 text-sm text-muted-foreground"
         >
           {{ t("page.search.noTracks") }}
+        </p>
+      </section>
+
+      <section
+        v-if="showAudiobooks"
+        aria-labelledby="local-audiobooks-heading"
+        class="space-y-4"
+      >
+        <div class="flex items-center justify-between gap-4">
+          <h2 id="local-audiobooks-heading" class="text-lg font-semibold">
+            {{ t("page.search.localAudiobooks") }}
+          </h2>
+          <Badge variant="secondary">
+            {{
+              `${t(
+                "count.audiobook",
+                { count: audiobookResults.length },
+                audiobookResults.length,
+              )}${hasMoreAudiobooks ? "+" : ""}`
+            }}
+          </Badge>
+        </div>
+        <div
+          v-if="audiobookResults.length"
+          class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+        >
+          <MediaCollectionCard
+            v-for="audiobook in audiobookResults"
+            :key="audiobook.id"
+            :collection="audiobook"
+          />
+          <div
+            v-if="hasMoreAudiobooks"
+            class="col-span-full flex justify-center"
+          >
+            <Button
+              type="button"
+              variant="outline"
+              :disabled="audiobooksLoadingMore"
+              @click="loadMoreAudiobooks"
+            >
+              {{
+                audiobooksLoadingMore
+                  ? t("page.search.loadingMoreAudiobooks")
+                  : t("page.search.loadMoreAudiobooks")
+              }}
+            </Button>
+          </div>
+        </div>
+        <p
+          v-else
+          role="status"
+          class="rounded-lg border p-6 text-sm text-muted-foreground"
+        >
+          {{ t("page.search.noAudiobooks") }}
+        </p>
+      </section>
+
+      <section
+        v-if="showPodcasts"
+        aria-labelledby="local-podcasts-heading"
+        class="space-y-4"
+      >
+        <div class="flex items-center justify-between gap-4">
+          <h2 id="local-podcasts-heading" class="text-lg font-semibold">
+            {{ t("page.search.localPodcasts") }}
+          </h2>
+          <Badge variant="secondary">
+            {{
+              `${t(
+                "count.podcast",
+                { count: podcastResults.length },
+                podcastResults.length,
+              )}${hasMorePodcasts ? "+" : ""}`
+            }}
+          </Badge>
+        </div>
+        <div
+          v-if="podcastResults.length"
+          class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+        >
+          <MediaCollectionCard
+            v-for="podcast in podcastResults"
+            :key="podcast.id"
+            :collection="podcast"
+          />
+          <div v-if="hasMorePodcasts" class="col-span-full flex justify-center">
+            <Button
+              type="button"
+              variant="outline"
+              :disabled="podcastsLoadingMore"
+              @click="loadMorePodcasts"
+            >
+              {{
+                podcastsLoadingMore
+                  ? t("page.search.loadingMorePodcasts")
+                  : t("page.search.loadMorePodcasts")
+              }}
+            </Button>
+          </div>
+        </div>
+        <p
+          v-else
+          role="status"
+          class="rounded-lg border p-6 text-sm text-muted-foreground"
+        >
+          {{ t("page.search.noPodcasts") }}
         </p>
       </section>
 

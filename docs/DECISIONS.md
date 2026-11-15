@@ -1,5 +1,19 @@
 # Decisions
 
+## 2026-11-15: Search composes independent catalog collections
+
+The full search page queries artists, albums, tracks, audiobooks, and podcasts
+through their existing bounded catalog endpoints instead of introducing an
+aggregate search response. Each result group keeps its own cursor, sort,
+loading, empty, and error state, and reuses the established card, navigation,
+like, playback, and offline behavior for that catalog type.
+
+Artists remain music-only, while audiobook books and podcast shows search their
+projected title and creator terms. This keeps search aligned with the existing
+browse categories and avoids duplicating serialization or authorization logic
+in a new cross-type endpoint. The UI exposes result-type quick filters but
+loads only the first page of each type until the user requests more.
+
 ## 2026-11-15: CI runs each test suite in a parallel job
 
 The root workspace test command excludes `@peridot/android` because Gradle tests

@@ -2,6 +2,37 @@
 
 Last updated: 2026-11-15.
 
+## Multi-type catalog search
+
+The global search page now includes local artists, albums, tracks, audiobooks,
+and podcasts. Each result type has its own paginated section and a matching
+quick filter. Artists open their existing detail routes, while audiobook books
+and podcast shows reuse the established media collection cards for navigation,
+playback, likes, and offline controls.
+
+Search continues to use the existing bounded catalog endpoints. Server coverage
+now verifies artist-name queries, audiobook-author queries, and podcast-publisher
+queries in addition to the existing track search.
+
+Checks completed:
+
+- Web tests: 200 passing
+- Server tests: 132 passing
+- Web and server type checks
+- Workspace ESLint
+- Prisma 8 contract emit and validation
+- Web and server production builds
+- Targeted Prettier checks and `git diff --check`
+
+Known limits: live browser visual QA and interaction testing with a populated
+mixed-media library were not run. Search issues one request for the first page
+of each result type, so live visual review should confirm the five-section layout
+at desktop and mobile widths. No commit, push, tag, publication, or deployment
+was performed.
+
+Next: verify the search filters and section spacing with mixed music, audiobook,
+and podcast data, then exercise load-more in each paginated result group.
+
 ## Parallel CI test suites
 
 Fixed the Android test job's Linux checkout failure by tracking
