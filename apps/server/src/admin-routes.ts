@@ -21,6 +21,8 @@ import type {
   UpdateSourceRequest,
   UpdateUserRequest,
   UserListResponse,
+  UpdateStatusResponse,
+  InstallUpdateResponse,
 } from "@peridot/contracts";
 import type { FastifyInstance } from "fastify";
 import type { CatalogService } from "./catalog.js";
@@ -44,6 +46,7 @@ import {
   updateSourceRefreshSettings,
 } from "./server-settings.js";
 import type { SourceRefreshScheduler } from "./source-refresh-scheduler.js";
+import { UpdateError, type UpdateService } from "./updates.js";
 import {
   createSource,
   deleteSource,
@@ -82,6 +85,7 @@ export async function registerAdminRoutes(
   jellyfin?: JellyfinClient,
   catalog?: CatalogService,
   sourceRefreshScheduler?: SourceRefreshScheduler,
+  updates?: UpdateService,
 ) {
   await app.register(async (admin) => {
     admin.addHook("onRequest", async (request, reply) => {
@@ -177,6 +181,63 @@ export async function registerAdminRoutes(
         reply.code(202).send({ status: "restarting" });
         restartServer();
         return undefined;
+      },
+    );
+
+    admin.get("/api/admin/updates", async (): Promise<UpdateStatusResponse> => {
+      if (!updates) {
+        throw new Error("Update service is unavailable.");
+      }
+      return updates.status();
+    });
+
+    admin.post("/api/admin/updates/check", async (_request, reply) => {
+      if (!updates) {
+        throw new Error("Update service is unavailable.");
+      }
+      try {
+        return await updates.check();
+      } catch (error) {
+        if (error instanceof UpdateError) {
+          return sendError(
+            reply,
+            error.statusCode,
+            error.code,
+            error.message,
+            message(error.messageKey),
+          );
+        }
+        throw error;
+      }
+    });
+
+    admin.post(
+      "/api/admin/updates/install",
+      async (request, reply): Promise<InstallUpdateResponse | undefined> => {
+        if (!updates) {
+          throw new Error("Update service is unavailable.");
+        }
+        try {
+          const response = updates.install();
+          reply.code(202).send(response);
+          setImmediate(() => {
+            void updates.requestWatchtowerUpdate().catch((error) => {
+              request.log.error(error, "Could not request a Watchtower update");
+            });
+          });
+          return undefined;
+        } catch (error) {
+          if (error instanceof UpdateError) {
+            return sendError(
+              reply,
+              error.statusCode,
+              error.code,
+              error.message,
+              message(error.messageKey),
+            );
+          }
+          throw error;
+        }
       },
     );
 

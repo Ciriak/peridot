@@ -328,7 +328,7 @@ function changeServer() {
               type="text"
               inputmode="url"
               autocomplete="url"
-              placeholder="http://192.168.1.20:17430"
+              placeholder="http://192.168.1.20:17431"
               :aria-invalid="Boolean(error)"
               :aria-describedby="error ? 'server-error' : undefined"
             />

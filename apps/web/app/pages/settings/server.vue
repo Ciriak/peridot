@@ -12,7 +12,6 @@ import {
 import { Icon } from "@iconify/vue/offline";
 import { Button } from "@peridot/ui/components/ui/button";
 import { Input } from "@peridot/ui/components/ui/input";
-import { Switch } from "@peridot/ui/components/ui/switch";
 import {
   AlertDialogAction,
   AlertDialogCancel,
@@ -31,7 +30,7 @@ import {
 import { useServer } from "../../composables/use-server";
 import {
   useServerLogsQuery,
-  useServerSettingsQuery,
+  useUpdatesQuery,
 } from "../../composables/use-admin-queries";
 import { useLocalizedMessage } from "../../composables/use-localized-message";
 import { useRealtime } from "../../composables/use-realtime";
@@ -57,7 +56,7 @@ const { token } = useSession();
 const { user } = useUser();
 const realtime = useRealtime();
 const logsQuery = useServerLogsQuery();
-const serverSettings = useServerSettingsQuery();
+const updates = useUpdatesQuery();
 const logs = logsQuery.items;
 let logAfter = 0;
 let unsubscribeLogs: (() => void) | undefined;
@@ -72,25 +71,33 @@ let restartSawDisconnect = false;
 const disconnectOpen = ref(false);
 const disconnecting = ref(false);
 const logError = ref("");
-const sourceRefreshEnabled = ref(true);
-const sourceRefreshCron = ref("0 3 * * *");
-const sourceRefreshSaving = ref(false);
-const sourceRefreshNotice = ref("");
-const sourceRefreshError = ref("");
+const updateChecking = ref(false);
+const updateCheckingNotice = ref("");
+const updateCheckingError = ref("");
+const installOpen = ref(false);
+const installing = ref(false);
+const installNotice = ref("");
+const installError = ref("");
+let installSawDisconnect = false;
+let installWatchdog: ReturnType<typeof setTimeout> | undefined;
 
-watch(
-  serverSettings.settings,
-  (settings) => {
-    if (!settings) return;
-    sourceRefreshEnabled.value = settings.sourceRefresh.enabled;
-    sourceRefreshCron.value = settings.sourceRefresh.cron;
-  },
-  { immediate: true },
+const updateStatus = computed(() => updates.status.value);
+const updateChannel = computed(() => {
+  const channel = updateStatus.value?.channel;
+  if (channel === "dev") return t("settings.server.updates.channel.dev");
+  if (channel === "master") return t("settings.server.updates.channel.master");
+  if (channel === "stable") return t("settings.server.updates.channel.stable");
+  return t("settings.server.updates.channel.local");
+});
+const updateRevision = computed(
+  () =>
+    updateStatus.value?.currentTag ??
+    updateStatus.value?.currentCommit?.slice(0, 8) ??
+    t("settings.server.updates.unknownRevision"),
 );
-
-const nextSourceRefresh = computed(() => {
-  const nextRunAt = serverSettings.settings.value?.sourceRefresh.nextRunAt;
-  return nextRunAt ? d(new Date(nextRunAt), "medium") : null;
+const updateCheckTime = computed(() => {
+  const checkedAt = updateStatus.value?.checkedAt;
+  return checkedAt ? d(new Date(checkedAt), "medium") : null;
 });
 
 async function refreshLogs() {
@@ -152,27 +159,55 @@ async function confirmRestart() {
   }
 }
 
-async function saveSourceRefresh() {
-  if (sourceRefreshSaving.value) return;
-  sourceRefreshSaving.value = true;
-  sourceRefreshNotice.value = "";
-  sourceRefreshError.value = "";
+async function checkUpdates() {
+  if (updateChecking.value) return;
+  updateChecking.value = true;
+  updateCheckingNotice.value = "";
+  updateCheckingError.value = "";
   try {
-    await serverSettings.save({
-      sourceRefresh: {
-        enabled: sourceRefreshEnabled.value,
-        cron: sourceRefreshCron.value,
-      },
-    });
-    sourceRefreshNotice.value = t("settings.server.scheduleSaved");
+    const result = await updates.check();
+    updateCheckingNotice.value =
+      result.state === "available"
+        ? t("settings.server.updates.available")
+        : t("settings.server.updates.current");
   } catch (reason) {
     if (isAuthenticationRedirectError(reason)) return;
-    sourceRefreshError.value = errorMessage(
+    updateCheckingError.value = errorMessage(
       reason,
-      "settings.server.scheduleSaveError",
+      "settings.server.updates.checkError",
     );
   } finally {
-    sourceRefreshSaving.value = false;
+    updateChecking.value = false;
+  }
+}
+
+function requestInstall() {
+  installNotice.value = "";
+  installError.value = "";
+  installOpen.value = true;
+}
+
+async function confirmInstall() {
+  if (installing.value) return;
+  installing.value = true;
+  installSawDisconnect = false;
+  installError.value = "";
+  try {
+    await updates.install();
+    installNotice.value = t("settings.server.updates.installRequested");
+    clearTimeout(installWatchdog);
+    installWatchdog = setTimeout(() => {
+      if (!installing.value || installSawDisconnect) return;
+      installing.value = false;
+      installNotice.value = t("settings.server.updates.installNotStarted");
+    }, 45_000);
+  } catch (reason) {
+    installing.value = false;
+    if (isAuthenticationRedirectError(reason)) return;
+    installError.value = errorMessage(
+      reason,
+      "settings.server.updates.installError",
+    );
   }
 }
 
@@ -203,7 +238,7 @@ onMounted(() => {
     return;
   }
   void refreshLogs();
-  void serverSettings.load();
+  void updates.load();
   unsubscribeLogs = realtime.subscribe(["logs"], (message) => {
     if (message.type === "log.appended") {
       if (message.entry.id <= logAfter) return;
@@ -215,19 +250,34 @@ onMounted(() => {
   });
 });
 onBeforeUnmount(() => {
+  clearTimeout(installWatchdog);
   unsubscribeLogs?.();
 });
 
 watch(connectionStatus, (status) => {
-  if (!restarting.value) return;
-  if (status === "lost") {
-    restartSawDisconnect = true;
-    return;
+  if (restarting.value) {
+    if (status === "lost") {
+      restartSawDisconnect = true;
+      return;
+    }
+    if (status === "connected" && restartSawDisconnect) {
+      restarting.value = false;
+      restartSawDisconnect = false;
+      restartNotice.value = t("settings.server.restartComplete");
+    }
   }
-  if (status === "connected" && restartSawDisconnect) {
-    restarting.value = false;
-    restartSawDisconnect = false;
-    restartNotice.value = t("settings.server.restartComplete");
+  if (installing.value) {
+    if (status === "lost") {
+      installSawDisconnect = true;
+      clearTimeout(installWatchdog);
+      return;
+    }
+    if (status === "connected" && installSawDisconnect) {
+      installing.value = false;
+      installSawDisconnect = false;
+      clearTimeout(installWatchdog);
+      installNotice.value = t("settings.server.updates.installComplete");
+    }
   }
 });
 </script>
@@ -251,104 +301,115 @@ watch(connectionStatus, (status) => {
   </section>
 
   <template v-else>
-    <section aria-labelledby="source-refresh-heading" class="space-y-4">
-      <h3 id="source-refresh-heading" class="text-lg font-semibold">
-        {{ t("settings.server.scheduleTitle") }}
+    <section aria-labelledby="software-updates-heading" class="space-y-4">
+      <h3 id="software-updates-heading" class="text-lg font-semibold">
+        {{ t("settings.server.updates.title") }}
       </h3>
       <div class="space-y-5 rounded-lg border bg-card p-6 text-card-foreground">
-        <div class="flex items-start justify-between gap-4">
+        <dl class="grid gap-4 text-sm sm:grid-cols-3">
           <div class="space-y-1">
-            <p class="text-sm font-medium">
-              {{ t("settings.server.scheduleEnabled") }}
-            </p>
-            <p class="text-sm text-muted-foreground">
-              {{ t("settings.server.scheduleEnabledHelp") }}
-            </p>
+            <dt class="text-muted-foreground">
+              {{ t("settings.server.updates.version") }}
+            </dt>
+            <dd class="font-medium">{{ updateStatus?.version ?? "—" }}</dd>
           </div>
-          <Switch
-            v-model="sourceRefreshEnabled"
-            :disabled="sourceRefreshSaving || connectionStatus === 'lost'"
-            :aria-label="t('settings.server.scheduleEnabled')"
-          />
-        </div>
-        <div class="space-y-2">
-          <label for="source-refresh-cron" class="text-sm font-medium">
-            {{ t("settings.server.scheduleCron") }}
-          </label>
-          <Input
-            id="source-refresh-cron"
-            v-model="sourceRefreshCron"
-            :disabled="
-              !sourceRefreshEnabled ||
-              sourceRefreshSaving ||
-              connectionStatus === 'lost'
-            "
-            :placeholder="t('settings.server.scheduleCronPlaceholder')"
-            autocomplete="off"
-            spellcheck="false"
-          />
-          <p class="text-sm text-muted-foreground">
-            {{ t("settings.server.scheduleCronHelp") }}
-            <a
-              href="https://crontab.guru/"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="inline-flex items-center gap-1 underline underline-offset-4 hover:text-foreground"
-            >
-              {{ t("settings.server.scheduleCronHelpLink") }}
-              <Icon
-                :icon="icons.externalLink"
-                aria-hidden="true"
-                class="size-3"
-              />
-            </a>
-          </p>
-        </div>
+          <div class="space-y-1">
+            <dt class="text-muted-foreground">
+              {{ t("settings.server.updates.channel") }}
+            </dt>
+            <dd class="font-medium">{{ updateChannel }}</dd>
+          </div>
+          <div class="space-y-1">
+            <dt class="text-muted-foreground">
+              {{ t("settings.server.updates.revision") }}
+            </dt>
+            <dd class="break-all font-mono text-xs">{{ updateRevision }}</dd>
+          </div>
+        </dl>
+        <p class="text-sm text-muted-foreground">
+          <template v-if="updateStatus?.state === 'available'">
+            {{ t("settings.server.updates.availableDetail") }}
+          </template>
+          <template v-else-if="updateStatus?.state === 'current'">
+            {{ t("settings.server.updates.currentDetail") }}
+          </template>
+          <template v-else>
+            {{ t("settings.server.updates.unchecked") }}
+          </template>
+          <template v-if="updateCheckTime">
+            {{
+              t("settings.server.updates.checkedAt", { date: updateCheckTime })
+            }}
+          </template>
+        </p>
         <div
           class="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between"
         >
           <p class="text-sm text-muted-foreground">
-            <template v-if="!sourceRefreshEnabled">
-              {{ t("settings.server.scheduleDisabled") }}
-            </template>
-            <template v-else-if="nextSourceRefresh">
-              {{
-                t("settings.server.scheduleNext", {
-                  date: nextSourceRefresh,
-                })
-              }}
-            </template>
-            <template v-else>
-              {{ t("settings.server.schedulePending") }}
-            </template>
-          </p>
-          <Button
-            type="button"
-            size="sm"
-            :disabled="sourceRefreshSaving || connectionStatus === 'lost'"
-            @click="saveSourceRefresh"
-          >
             {{
-              sourceRefreshSaving
-                ? t("common.saving")
-                : t("settings.server.scheduleSave")
+              updateStatus?.channel === "local"
+                ? t("settings.server.updates.localHelp")
+                : t("settings.server.updates.automaticHelp")
             }}
-          </Button>
+          </p>
+          <div class="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              :disabled="
+                updateChecking ||
+                installing ||
+                connectionStatus === 'lost' ||
+                updateStatus?.channel === 'local'
+              "
+              @click="checkUpdates"
+            >
+              <Icon :icon="icons.restart" aria-hidden="true" class="size-4" />
+              {{
+                updateChecking
+                  ? t("settings.server.updates.checking")
+                  : t("settings.server.updates.check")
+              }}
+            </Button>
+            <Button
+              v-if="updateStatus?.state === 'available'"
+              type="button"
+              size="sm"
+              :disabled="
+                installing ||
+                !updateStatus.installAvailable ||
+                connectionStatus === 'lost'
+              "
+              @click="requestInstall"
+            >
+              <Icon
+                :icon="icons.cloudDownload"
+                aria-hidden="true"
+                class="size-4"
+              />
+              {{
+                installing
+                  ? t("settings.server.updates.installing")
+                  : t("settings.server.updates.install")
+              }}
+            </Button>
+          </div>
         </div>
         <p
-          v-if="sourceRefreshNotice"
+          v-if="updateCheckingNotice || installNotice"
           role="status"
           aria-live="polite"
           class="text-sm text-muted-foreground"
         >
-          {{ sourceRefreshNotice }}
+          {{ installNotice || updateCheckingNotice }}
         </p>
         <p
-          v-if="sourceRefreshError || serverSettings.error.value"
+          v-if="updateCheckingError || installError || updates.error.value"
           role="alert"
           class="text-sm text-destructive"
         >
-          {{ sourceRefreshError || serverSettings.error.value }}
+          {{ updateCheckingError || installError || updates.error.value }}
         </p>
       </div>
     </section>
@@ -421,6 +482,43 @@ watch(connectionStatus, (status) => {
                   restarting
                     ? t("settings.server.restarting")
                     : t("settings.server.restart")
+                }}
+              </Button>
+            </AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      </AlertDialogPortal>
+    </AlertDialogRoot>
+
+    <AlertDialogRoot v-model:open="installOpen">
+      <AlertDialogPortal>
+        <AlertDialogOverlay class="fixed inset-0 z-50 bg-background/80" />
+        <AlertDialogContent
+          class="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-card p-6 text-card-foreground shadow-lg"
+        >
+          <AlertDialogTitle class="text-lg font-semibold">
+            {{ t("settings.server.updates.installTitle") }}
+          </AlertDialogTitle>
+          <AlertDialogDescription class="text-sm text-muted-foreground">
+            {{ t("settings.server.updates.installDescription") }}
+          </AlertDialogDescription>
+          <div class="mt-6 flex justify-end gap-3">
+            <AlertDialogCancel as-child>
+              <Button type="button" variant="outline">{{
+                t("common.cancel")
+              }}</Button>
+            </AlertDialogCancel>
+            <AlertDialogAction as-child @click="confirmInstall">
+              <Button type="button" :disabled="installing">
+                <Icon
+                  :icon="icons.cloudDownload"
+                  aria-hidden="true"
+                  class="size-4"
+                />
+                {{
+                  installing
+                    ? t("settings.server.updates.installing")
+                    : t("settings.server.updates.install")
                 }}
               </Button>
             </AlertDialogAction>

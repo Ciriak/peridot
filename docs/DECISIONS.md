@@ -14,6 +14,35 @@ browse categories and avoids duplicating serialization or authorization logic
 in a new cross-type endpoint. The UI exposes result-type quick filters but
 loads only the first page of each type until the user requests more.
 
+
+## 2026-11-15: Docker uses three release channels and an embedded web proxy
+
+Peridot publishes immutable multi-architecture images to
+`ghcr.io/ciriak/peridot`. `dev` follows development, `master` is beta, and
+non-prerelease `vX.Y.Z` tags create production releases. The mutable `stable`
+image alias advances only for those release tags and is the default Compose
+installation channel. Release tags must match the synchronized root workspace
+version.
+
+The built server keeps the API on port 17430 and runs a separate Fastify web
+listener on 17431. That listener serves the generated static Nuxt application,
+falls back to `200.html` for SPA routes, and proxies `/api` traffic including
+audio ranges and WebSocket upgrades to the API. Browser discovery and the
+default onboarding address therefore use 17431, while native clients may still
+target the API directly.
+
+Automatic image replacement uses the maintained `nickfedor/watchtower` fork,
+scoped by its enable label and polling every six hours. Administrators can
+compare the deployed branch or release tag with GitHub from Settings and trigger
+Watchtower through a private bearer token generated automatically in `/data` by
+the Docker entrypoint. The browser never receives the Watchtower endpoint token
+and users do not supply an external token. Persistent application data remains
+in `/data`, and music sources remain read-only mounts.
+
+The root package version is the sole version source. Every workspace package
+must match it, `pnpm version:sync` propagates bumps, and `version:check` runs in
+normal verification and CI.
+
 ## 2026-11-15: CI runs each test suite in a parallel job
 
 The root workspace test command excludes `@peridot/android` because Gradle tests

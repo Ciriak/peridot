@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -42,6 +42,8 @@ test("server configuration validates storage and browser origins", async () => {
     assert.deepEqual(defaults.webOrigins, [
       "http://127.0.0.1:3000",
       "http://localhost:3000",
+      "http://127.0.0.1:17431",
+      "http://localhost:17431",
       ...DESKTOP_WEB_ORIGINS,
       ...MOBILE_WEB_ORIGINS,
     ]);
@@ -73,6 +75,42 @@ test("server configuration validates storage and browser origins", async () => {
       "tauri://localhost",
       ...MOBILE_WEB_ORIGINS,
     ]);
+
+    const release = await loadServerConfig({
+      DATABASE_URL: "file:test.db",
+      MUSIC_LIBRARY_PATH: libraryRoot,
+      PERIDOT_UPDATE_CHANNEL: "stable",
+      PERIDOT_BUILD_TAG: "v0.0.1",
+      PERIDOT_BUILD_COMMIT: "a".repeat(40),
+      PERIDOT_WATCHTOWER_URL: "http://watchtower:8080/",
+      PERIDOT_WATCHTOWER_TOKEN: "private-token",
+    });
+    assert.deepEqual(release.updates, {
+      channel: "stable",
+      repository: "Ciriak/peridot",
+      currentTag: "v0.0.1",
+      currentCommit: "a".repeat(40),
+      watchtowerUrl: "http://watchtower:8080",
+      watchtowerToken: "private-token",
+    });
+    const tokenFile = path.join(root, "watchtower-token");
+    await writeFile(tokenFile, "file-token\n");
+    const generatedSecret = await loadServerConfig({
+      DATABASE_URL: "file:test.db",
+      MUSIC_LIBRARY_PATH: libraryRoot,
+      PERIDOT_UPDATE_CHANNEL: "stable",
+      PERIDOT_WATCHTOWER_URL: "http://watchtower:8080",
+      PERIDOT_WATCHTOWER_TOKEN_FILE: tokenFile,
+    });
+    assert.equal(generatedSecret.updates?.watchtowerToken, "file-token");
+    await assert.rejects(
+      loadServerConfig({
+        DATABASE_URL: "file:test.db",
+        MUSIC_LIBRARY_PATH: libraryRoot,
+        PERIDOT_UPDATE_CHANNEL: "nightly",
+      }),
+      /PERIDOT_UPDATE_CHANNEL must be dev, master, stable, or local/,
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }

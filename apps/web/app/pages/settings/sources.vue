@@ -18,6 +18,7 @@ import type {
 import { Button } from "@peridot/ui/components/ui/button";
 import { Input } from "@peridot/ui/components/ui/input";
 import { ProgressCircle } from "@peridot/ui/components/ui/progress-circle";
+import { Switch } from "@peridot/ui/components/ui/switch";
 import jellyfinIcon from "@peridot/ui/assets/jellyfin-icon.webp";
 import { useSortable } from "@vueuse/integrations/useSortable";
 import {
@@ -49,7 +50,10 @@ import {
 import { useServer } from "../../composables/use-server";
 import { useServerConnection } from "../../composables/use-server-connection";
 import { useSession } from "../../composables/use-session";
-import { useAdminSourcesQuery } from "../../composables/use-admin-queries";
+import {
+  useAdminSourcesQuery,
+  useServerSettingsQuery,
+} from "../../composables/use-admin-queries";
 import { useTasks } from "../../composables/use-tasks";
 import { useUser } from "../../composables/use-user";
 import { useLocalizedMessage } from "../../composables/use-localized-message";
@@ -89,6 +93,7 @@ const allowed = computed(() => user.value?.role === "admin");
 const serverLost = computed(() => serverStatus.value === "lost");
 
 const sourcesQuery = useAdminSourcesQuery();
+const serverSettings = useServerSettingsQuery();
 const sources = ref<SourceResponse[]>([]);
 const sourceList = ref<HTMLElement | null>(null);
 const mediaTypes: MediaType[] = ["music", "audiobook", "podcast"];
@@ -108,6 +113,26 @@ const adding = ref(false);
 const addError = ref("");
 const removeOpen = ref(false);
 const pendingDelete = ref<SourceResponse | null>(null);
+const sourceRefreshEnabled = ref(true);
+const sourceRefreshCron = ref("0 3 * * *");
+const sourceRefreshSaving = ref(false);
+const sourceRefreshNotice = ref("");
+const sourceRefreshError = ref("");
+
+watch(
+  serverSettings.settings,
+  (settings) => {
+    if (!settings) return;
+    sourceRefreshEnabled.value = settings.sourceRefresh.enabled;
+    sourceRefreshCron.value = settings.sourceRefresh.cron;
+  },
+  { immediate: true },
+);
+
+const nextSourceRefresh = computed(() => {
+  const nextRunAt = serverSettings.settings.value?.sourceRefresh.nextRunAt;
+  return nextRunAt ? d(new Date(nextRunAt), "medium") : null;
+});
 
 useSortable(sourceList, sources, {
   animation: 150,
@@ -407,7 +432,34 @@ async function persistOrder() {
   }
 }
 
-onMounted(() => void loadSources());
+async function saveSourceRefresh() {
+  if (sourceRefreshSaving.value) return;
+  sourceRefreshSaving.value = true;
+  sourceRefreshNotice.value = "";
+  sourceRefreshError.value = "";
+  try {
+    await serverSettings.save({
+      sourceRefresh: {
+        enabled: sourceRefreshEnabled.value,
+        cron: sourceRefreshCron.value,
+      },
+    });
+    sourceRefreshNotice.value = t("settings.server.scheduleSaved");
+  } catch (reason) {
+    if (isAuthenticationRedirectError(reason)) return;
+    sourceRefreshError.value = errorMessage(
+      reason,
+      "settings.server.scheduleSaveError",
+    );
+  } finally {
+    sourceRefreshSaving.value = false;
+  }
+}
+
+onMounted(() => {
+  void loadSources();
+  void serverSettings.load();
+});
 </script>
 
 <template>
@@ -658,6 +710,105 @@ onMounted(() => void loadSources());
         {{ t("settings.sources.empty") }}
       </p>
     </div>
+    <section aria-labelledby="source-refresh-heading" class="space-y-4">
+      <h3 id="source-refresh-heading" class="text-lg font-semibold">
+        {{ t("settings.server.scheduleTitle") }}
+      </h3>
+      <div class="space-y-5 rounded-lg border bg-card p-6 text-card-foreground">
+        <div class="flex items-start justify-between gap-4">
+          <div class="space-y-1">
+            <p class="text-sm font-medium">
+              {{ t("settings.server.scheduleEnabled") }}
+            </p>
+            <p class="text-sm text-muted-foreground">
+              {{ t("settings.server.scheduleEnabledHelp") }}
+            </p>
+          </div>
+          <Switch
+            v-model="sourceRefreshEnabled"
+            :disabled="sourceRefreshSaving || serverLost"
+            :aria-label="t('settings.server.scheduleEnabled')"
+          />
+        </div>
+        <div class="space-y-2">
+          <label for="source-refresh-cron" class="text-sm font-medium">
+            {{ t("settings.server.scheduleCron") }}
+          </label>
+          <Input
+            id="source-refresh-cron"
+            v-model="sourceRefreshCron"
+            :disabled="
+              !sourceRefreshEnabled || sourceRefreshSaving || serverLost
+            "
+            :placeholder="t('settings.server.scheduleCronPlaceholder')"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <p class="text-sm text-muted-foreground">
+            {{ t("settings.server.scheduleCronHelp") }}
+            <a
+              href="https://crontab.guru/"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center gap-1 underline underline-offset-4 hover:text-foreground"
+            >
+              {{ t("settings.server.scheduleCronHelpLink") }}
+              <Icon
+                :icon="icons.externalLink"
+                aria-hidden="true"
+                class="size-3"
+              />
+            </a>
+          </p>
+        </div>
+        <div
+          class="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <p class="text-sm text-muted-foreground">
+            <template v-if="!sourceRefreshEnabled">
+              {{ t("settings.server.scheduleDisabled") }}
+            </template>
+            <template v-else-if="nextSourceRefresh">
+              {{
+                t("settings.server.scheduleNext", {
+                  date: nextSourceRefresh,
+                })
+              }}
+            </template>
+            <template v-else>
+              {{ t("settings.server.schedulePending") }}
+            </template>
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            :disabled="sourceRefreshSaving || serverLost"
+            @click="saveSourceRefresh"
+          >
+            {{
+              sourceRefreshSaving
+                ? t("common.saving")
+                : t("settings.server.scheduleSave")
+            }}
+          </Button>
+        </div>
+        <p
+          v-if="sourceRefreshNotice"
+          role="status"
+          aria-live="polite"
+          class="text-sm text-muted-foreground"
+        >
+          {{ sourceRefreshNotice }}
+        </p>
+        <p
+          v-if="sourceRefreshError || serverSettings.error.value"
+          role="alert"
+          class="text-sm text-destructive"
+        >
+          {{ sourceRefreshError || serverSettings.error.value }}
+        </p>
+      </div>
+    </section>
   </section>
 
   <DialogRoot v-model:open="addOpen">

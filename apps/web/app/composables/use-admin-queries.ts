@@ -4,6 +4,7 @@ import type {
   ServerSettingsResponse,
   TaskListResponse,
   UpdateServerSettingsRequest,
+  UpdateStatusResponse,
 } from "@peridot/contracts";
 import {
   useInfiniteQuery,
@@ -13,8 +14,11 @@ import {
 } from "@tanstack/vue-query";
 import { computed } from "vue";
 import {
+  checkForUpdates,
   fetchLogs,
   fetchServerSettings,
+  fetchUpdateStatus,
+  installUpdate,
   isAuthenticationRedirectError,
   listDirectories,
   listMetadataProviderDefinitions,
@@ -102,6 +106,86 @@ export function useServerSettingsQuery() {
       );
       queryClient.setQueryData(queryKeys.serverSettings(scope.value), result);
       return result;
+    },
+  };
+}
+
+export function useUpdatesQuery() {
+  const { scope } = useQueryScope();
+  const { token } = useSession();
+  const { user } = useUser();
+  const { errorMessage } = useLocalizedMessage();
+  const queryClient = useQueryClient();
+  const enabled = computed(() =>
+    Boolean(scope.value && token.value && user.value?.role === "admin"),
+  );
+  const query = useQuery({
+    queryKey: computed(() =>
+      scope.value
+        ? queryKeys.updates(scope.value)
+        : ["peridot", "unscoped", "admin", "updates"],
+    ),
+    queryFn: () => {
+      if (!scope.value || !token.value) {
+        throw new Error("Peridot query scope is unavailable.");
+      }
+      return fetchUpdateStatus(scope.value.serverAddress, token.value);
+    },
+    enabled,
+    meta: { persist: false },
+  });
+  const status = computed(() => query.data.value);
+  const loaded = computed(() => status.value !== undefined);
+  function scopeCredentials() {
+    if (!scope.value || !token.value) {
+      throw new Error("Peridot query scope is unavailable.");
+    }
+    return {
+      serverAddress: scope.value.serverAddress,
+      userId: scope.value.userId,
+      token: token.value,
+    };
+  }
+  return {
+    status,
+    loading: computed(() =>
+      blockingQueryLoading(loaded.value, query.isPending.value),
+    ),
+    loaded,
+    checking: computed(() => query.isFetching.value),
+    error: computed(() =>
+      visibleQueryError(
+        loaded.value,
+        query.error.value
+          ? localizedQueryError(
+              query.error.value,
+              errorMessage,
+              "settings.server.updatesLoadError",
+            )
+          : null,
+      ),
+    ),
+    load: async (force = false) => {
+      if (force || !status.value) await query.refetch();
+    },
+    check: async () => {
+      const credentials = scopeCredentials();
+      const result: UpdateStatusResponse = await checkForUpdates(
+        credentials.serverAddress,
+        credentials.token,
+      );
+      queryClient.setQueryData(
+        queryKeys.updates({
+          serverAddress: credentials.serverAddress,
+          userId: credentials.userId,
+        }),
+        result,
+      );
+      return result;
+    },
+    install: async () => {
+      const credentials = scopeCredentials();
+      return installUpdate(credentials.serverAddress, credentials.token);
     },
   };
 }

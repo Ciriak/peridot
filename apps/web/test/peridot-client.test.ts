@@ -24,6 +24,7 @@ import {
   fetchQueue,
   fetchQuickPicks,
   fetchServerSettings,
+  fetchUpdateStatus,
   getTask,
   isAuthenticationRedirectError,
   listArtistMetadataCandidates,
@@ -40,6 +41,8 @@ import {
   PeridotApiError,
   recordTrackPlay,
   refreshMetadata,
+  checkForUpdates,
+  installUpdate,
   removePlaylistItem,
   requestServerRestart,
   reorderMetadataProviders,
@@ -1070,6 +1073,48 @@ test("log polling reads from the admin logs endpoint", async (context) => {
   const result = await fetchLogs("http://127.0.0.1:17430", "s", 2);
   assert.equal(seen, "http://127.0.0.1:17430/api/admin/logs?after=2");
   assert.equal(result.items[0]?.message, "hello");
+});
+
+test("update checks and installs use authenticated administrator endpoints", async (context) => {
+  const originalFetch = globalThis.fetch;
+  const requests: Array<{ input: string; init?: RequestInit }> = [];
+  context.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  const status = {
+    version: "0.0.1",
+    channel: "stable",
+    currentTag: "v0.0.1",
+    currentCommit: "a".repeat(40),
+    latestTag: "v0.0.2",
+    latestCommit: "b".repeat(40),
+    state: "available",
+    checkedAt: "2026-11-15T12:00:00.000Z",
+    installAvailable: true,
+  };
+  globalThis.fetch = async (input, init) => {
+    requests.push({ input: String(input), init });
+    return String(input).endsWith("/api/admin/updates/install")
+      ? Response.json({ status: "updating" }, { status: 202 })
+      : Response.json(status);
+  };
+
+  const server = "http://127.0.0.1:17431";
+  assert.deepEqual(await fetchUpdateStatus(server, "s"), status);
+  assert.deepEqual(await checkForUpdates(server, "s"), status);
+  assert.deepEqual(await installUpdate(server, "s"), { status: "updating" });
+  assert.deepEqual(
+    requests.map((request) => [
+      request.input,
+      request.init?.method ?? "GET",
+      new Headers(request.init?.headers).get("Authorization"),
+    ]),
+    [
+      [`${server}/api/admin/updates`, "GET", "Bearer s"],
+      [`${server}/api/admin/updates/check`, "POST", "Bearer s"],
+      [`${server}/api/admin/updates/install`, "POST", "Bearer s"],
+    ],
+  );
 });
 
 test("authenticated admin calls send the bearer token and expected bodies", async (context) => {

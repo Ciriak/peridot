@@ -86,7 +86,7 @@ test("settings shows app metadata and profile owns confirmed logout", async () =
     readSource("../app/layouts/settings.vue"),
     readSource("../app/pages/settings/account.vue"),
     readSource("../nuxt.config.ts"),
-    readSource("../package.json"),
+    readSource("../../../package.json"),
   ]);
   const metadataFooter = layout.slice(
     layout.indexOf(
@@ -124,8 +124,8 @@ test("settings shows app metadata and profile owns confirmed logout", async () =
   );
   const packageJson = JSON.parse(packageSource) as { version?: string };
   assert.match(packageJson.version ?? "", /^\d+\.\d+\.\d+$/);
-  assert.match(config, /readFileSync\(new URL\("\.\/package\.json"/);
-  assert.match(runtimeConfig, /appVersion: webPackage\.version/);
+  assert.match(config, /readFileSync\(new URL\("\.\.\/\.\.\/package\.json"/);
+  assert.match(runtimeConfig, /appVersion: rootPackage\.version/);
   assert.match(runtimeConfig, /environment: appEnvironment/);
   assert.match(config, /process\.env\.PERIDOT_ENVIRONMENT\?\.trim\(\)/);
   assert.match(
@@ -240,6 +240,18 @@ test("sources are managed on their own page with row action menus", async () => 
   );
   assert.match(page, /settings\.sources\.lastSync/);
   assert.match(page, /settings\.sources\.notSynced/);
+  assert.match(page, /useServerSettingsQuery/);
+  assert.match(page, /sourceRefreshEnabled/);
+  assert.match(page, /sourceRefreshCron/);
+  assert.match(page, /saveSourceRefresh/);
+  assert.match(page, /settings\.server\.scheduleTitle/);
+  assert.match(page, /settings\.server\.scheduleCronHelp/);
+  assert.match(page, /https:\/\/crontab\.guru\//);
+  assert.match(page, /settings\.server\.scheduleCronHelpLink/);
+  assert.match(
+    page,
+    /v-else class="text-sm text-muted-foreground">[\s\S]*?<\/div>\s*<section aria-labelledby="source-refresh-heading"/,
+  );
   assert.match(page, /:datetime="source\.lastSyncedAt"/);
   assert.match(page, /sourceKindIcon\(source\.kind\)/);
   assert.match(page, /sourceKindLabel\(source\.kind\)/);
@@ -510,19 +522,19 @@ test("administrators can create, edit, promote, and delete managed accounts", as
   assert.match(page, /settings\.users\.newPassword/);
 });
 
-test("server settings expose automatic source refresh without library status management", async () => {
+test("server settings leave source refresh without library status management", async () => {
   const page = await readSource("../app/pages/settings/server.vue");
   assert.doesNotMatch(page, /Library status/);
   assert.doesNotMatch(page, /Rescan library/);
   assert.doesNotMatch(page, /listSources/);
-  assert.match(page, /useServerSettingsQuery/);
-  assert.match(page, /sourceRefreshEnabled/);
-  assert.match(page, /sourceRefreshCron/);
-  assert.match(page, /saveSourceRefresh/);
-  assert.match(page, /settings\.server\.scheduleTitle/);
-  assert.match(page, /settings\.server\.scheduleCronHelp/);
-  assert.match(page, /https:\/\/crontab\.guru\//);
-  assert.match(page, /settings\.server\.scheduleCronHelpLink/);
+  assert.doesNotMatch(page, /useServerSettingsQuery/);
+  assert.doesNotMatch(page, /sourceRefreshEnabled/);
+  assert.doesNotMatch(page, /sourceRefreshCron/);
+  assert.doesNotMatch(page, /saveSourceRefresh/);
+  assert.doesNotMatch(page, /settings\.server\.scheduleTitle/);
+  assert.doesNotMatch(page, /settings\.server\.scheduleCronHelp/);
+  assert.doesNotMatch(page, /https:\/\/crontab\.guru\//);
+  assert.doesNotMatch(page, /settings\.server\.scheduleCronHelpLink/);
   assert.match(page, /useServerLogsQuery/);
   assert.match(page, /settings\.server\.log/);
   assert.match(page, /settings\.server\.search/);
@@ -556,6 +568,31 @@ test("server settings confirm before restarting the connected server", async () 
   assert.match(restartDialog, /<AlertDialogCancel as-child>/);
   assert.match(restartDialog, /@click="confirmRestart"/);
   assert.match(page, /settings\.server\.restartRequested/);
+});
+
+test("server settings expose channel update checks and confirmed installation", async () => {
+  const page = await readSource("../app/pages/settings/server.vue");
+  const updateCard = page.slice(
+    page.indexOf('<section aria-labelledby="software-updates-heading"'),
+    page.indexOf('<section aria-labelledby="server-heading"'),
+  );
+  const installDialog = page.slice(
+    page.indexOf('<AlertDialogRoot v-model:open="installOpen">'),
+    page.indexOf('<AlertDialogRoot v-model:open="disconnectOpen">'),
+  );
+
+  assert.match(page, /useUpdatesQuery/);
+  assert.match(updateCard, /settings\.server\.updates\.version/);
+  assert.match(updateCard, /settings\.server\.updates\.channel/);
+  assert.match(updateCard, /settings\.server\.updates\.revision/);
+  assert.match(updateCard, /@click="checkUpdates"/);
+  assert.match(updateCard, /updateStatus\?\.state === 'available'/);
+  assert.match(updateCard, /@click="requestInstall"/);
+  assert.match(page, /status === "lost"/);
+  assert.match(page, /status === "connected" && installSawDisconnect/);
+  assert.match(installDialog, /settings\.server\.updates\.installTitle/);
+  assert.match(installDialog, /@click="confirmInstall"/);
+  assert.match(page, /settings\.server\.updates\.installComplete/);
 });
 
 test("server settings confirm before disconnecting from the connected server", async () => {

@@ -103,6 +103,7 @@ const navigation = [
     icon: icons.playlist,
   },
   { labelKey: "navigation.albums", to: "/albums", icon: icons.album },
+  { labelKey: "navigation.artists", to: "/artists", icon: icons.user },
   {
     labelKey: "navigation.audiobooks",
     to: "/audiobooks",
@@ -113,7 +114,6 @@ const navigation = [
     to: "/podcasts",
     icon: icons.podcast,
   },
-  { labelKey: "navigation.artists", to: "/artists", icon: icons.user },
 ];
 const currentPath = computed(() => route.path);
 const isNavigationActive = (target: string) =>

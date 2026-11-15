@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import tailwindcss from "@tailwindcss/vite";
 
-const webPackage = JSON.parse(
-  readFileSync(new URL("./package.json", import.meta.url), "utf8"),
+const rootPackage = JSON.parse(
+  readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
 ) as { version: string };
 const appEnvironment =
   process.env.PERIDOT_ENVIRONMENT?.trim() ||
@@ -82,7 +82,7 @@ export default defineNuxtConfig({
   devtools: { enabled: false },
   runtimeConfig: {
     public: {
-      appVersion: webPackage.version,
+      appVersion: rootPackage.version,
       environment: appEnvironment,
     },
   },

@@ -8,6 +8,7 @@ import { buildApp } from "../src/app.js";
 import { localCredentialKeyFile } from "../src/credential-store.js";
 import { createDatabase, type Database } from "../src/database.js";
 import { ServerLogBuffer } from "../src/server-log.js";
+import type { UpdateService } from "../src/updates.js";
 
 export interface TestContext {
   app: FastifyInstance;
@@ -33,6 +34,7 @@ export interface TestContextOptions {
   jellyfinRequestTimeoutMs?: number;
   credentialEncryptionKey?: string;
   enableSourceRefreshScheduler?: boolean;
+  updateService?: UpdateService;
 }
 
 export async function createTestContext(
@@ -92,6 +94,7 @@ export async function createTestContext(
     ...(options.enableSourceRefreshScheduler
       ? { enableSourceRefreshScheduler: true }
       : {}),
+    ...(options.updateService ? { updateService: options.updateService } : {}),
   });
   const bootstrap = await app.inject({
     method: "POST",
