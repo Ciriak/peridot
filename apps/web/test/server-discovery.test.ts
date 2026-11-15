@@ -56,6 +56,9 @@ test("discovery only returns hosts with the Peridot health signature", async () 
       if (url === "http://192.168.50.44:17431/api/health") {
         return Response.json({ status: "ok", service: "another-service" });
       }
+      if (url === "https://192.168.50.45:17431/api/health") {
+        return Response.json({ status: "ok", service: "peridot" });
+      }
       return new Response(null, { status: 404 });
     },
   });
@@ -70,10 +73,16 @@ test("discovery only returns hosts with the Peridot health signature", async () 
         address: "http://192.168.50.43:17430",
         host: "192.168.50.43",
       },
+      {
+        address: "https://192.168.50.45:17431",
+        host: "192.168.50.45",
+      },
     ],
     scannedSubnets: ["192.168.50.0/24"],
   });
-  assert.equal(requested.length, 510);
+  assert.equal(requested.length, 1020);
   assert.ok(requested.includes("http://127.0.0.1:17431/api/health"));
+  assert.ok(requested.includes("https://127.0.0.1:17431/api/health"));
   assert.ok(requested.includes("http://127.0.0.1:17430/api/health"));
+  assert.ok(requested.includes("https://127.0.0.1:17430/api/health"));
 });

@@ -3,6 +3,7 @@ import { localizedError } from "./messages.ts";
 export const DEFAULT_SERVER_PORT = 17431;
 export const DEFAULT_SERVER_ADDRESS = `http://127.0.0.1:${DEFAULT_SERVER_PORT}`;
 export const FALLBACK_SERVER_PORTS = [17431, 17430] as const;
+const SERVER_PROTOCOLS = ["http", "https"] as const;
 
 type ServerProbeFetcher = (
   input: RequestInfo | URL,
@@ -45,28 +46,47 @@ export function normalizeServerAddress(value: string): string {
   return url.toString().replace(/\/$/, "");
 }
 
-function hasExplicitPort(address: string): boolean {
+function hasExplicitScheme(address: string): boolean {
+  return /^[a-z][a-z\d+.-]*:\/\//i.test(address.trim());
+}
+
+function explicitServerPort(address: string): number | null {
   const trimmed = address.trim();
-  const candidate = /^[a-z][a-z\d+.-]*:\/\//i.test(trimmed)
+  const candidate = hasExplicitScheme(trimmed)
     ? trimmed
     : `http://${trimmed}`;
   const authority = /^[a-z][a-z\d+.-]*:\/\/([^/?#]+)/i.exec(candidate)?.[1];
-  if (!authority) return false;
-  return authority.startsWith("[")
-    ? /^\[[^\]]+\]:\d+$/.test(authority)
-    : /:\d+$/.test(authority);
+  if (!authority) return null;
+  const port = authority.startsWith("[")
+    ? /^\[[^\]]+\]:(\d+)$/.exec(authority)?.[1]
+    : /:(\d+)$/.exec(authority)?.[1];
+  return port ? Number(port) : null;
 }
 
 export function serverAddressCandidates(value: string): string[] {
   const normalized = normalizeServerAddress(value);
-  if (hasExplicitPort(value)) return [normalized];
-
   const url = new URL(normalized);
-  const candidates = [normalized];
-  for (const port of FALLBACK_SERVER_PORTS) {
-    const candidate = new URL(url);
-    candidate.port = String(port);
-    candidates.push(candidate.toString().replace(/\/$/, ""));
+  const protocols = hasExplicitScheme(value)
+    ? [url.protocol.slice(0, -1)]
+    : SERVER_PROTOCOLS;
+  const configuredPort = explicitServerPort(value);
+  const ports = configuredPort
+    ? [configuredPort]
+    : [null, ...FALLBACK_SERVER_PORTS];
+  const candidates = ports.flatMap((port) =>
+    protocols.map((protocol) => {
+      const candidate = new URL(url);
+      candidate.protocol = `${protocol}:`;
+      candidate.port = port === null ? "" : String(port);
+      return candidate.toString().replace(/\/$/, "");
+    }),
+  );
+  if (
+    hasExplicitScheme(value) &&
+    configuredPort !== null &&
+    candidates.length === 1
+  ) {
+    return [normalized];
   }
   return [...new Set(candidates)];
 }

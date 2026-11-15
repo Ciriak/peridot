@@ -48,11 +48,14 @@ test("rejects unsafe or incomplete server addresses", () => {
   );
 });
 
-test("host-only addresses probe both configured Peridot ports", () => {
+test("scheme-less addresses probe HTTP and HTTPS on configured Peridot ports", () => {
   assert.deepEqual(serverAddressCandidates("192.168.1.20"), [
     "http://192.168.1.20",
+    "https://192.168.1.20",
     "http://192.168.1.20:17431",
+    "https://192.168.1.20:17431",
     "http://192.168.1.20:17430",
+    "https://192.168.1.20:17430",
   ]);
   assert.deepEqual(
     serverAddressCandidates("https://music.example.com/peridot"),
@@ -64,9 +67,11 @@ test("host-only addresses probe both configured Peridot ports", () => {
   );
   assert.deepEqual(serverAddressCandidates("192.168.1.20:17430"), [
     "http://192.168.1.20:17430",
+    "https://192.168.1.20:17430",
   ]);
   assert.deepEqual(serverAddressCandidates("192.168.1.20:80"), [
     "http://192.168.1.20",
+    "https://192.168.1.20:80",
   ]);
 });
 
@@ -86,9 +91,27 @@ test("manual address probing selects a responsive fallback port", async () => {
   assert.equal(found, "http://192.168.1.20:17431");
   assert.deepEqual(requests.sort(), [
     "http://192.168.1.20/api/health",
+    "https://192.168.1.20/api/health",
     "http://192.168.1.20:17430/api/health",
+    "https://192.168.1.20:17430/api/health",
     "http://192.168.1.20:17431/api/health",
+    "https://192.168.1.20:17431/api/health",
   ]);
+});
+
+test("scheme-less addresses discover an HTTPS-only server", async () => {
+  const found = await findPeridotServerAddress("192.168.1.20", {
+    fetcher: async (input) => {
+      if (
+        String(input) === "https://192.168.1.20:17431/api/health"
+      ) {
+        return Response.json({ status: "ok", service: "peridot" });
+      }
+      return new Response(null, { status: 404 });
+    },
+  });
+
+  assert.equal(found, "https://192.168.1.20:17431");
 });
 
 test("manual address probing requires the Peridot health signature", async () => {

@@ -1,14 +1,16 @@
 # Decisions
 
-## 2026-11-15: Onboarding probes both configured Peridot listener ports
+## 2026-11-15: Onboarding probes both protocols on configured Peridot ports
 
 Onboarding uses the fixed public web and API listener ports, 17431 and 17430,
 rather than requiring users to remember the port. Automatic LAN discovery scans
-both ports on its bounded private-subnet targets, and a manually entered host
-without a port probes both after its normalized default address. If both
-listeners answer, the public web listener on 17431 is preferred so browser
-traffic remains same-origin. An explicitly supplied port is respected, and no
-caller-selected targets or arbitrary port range is accepted.
+both ports over HTTP and HTTPS on its bounded private-subnet targets. A
+scheme-less IP address or hostname probes both protocols, including on an
+explicitly supplied port; a scheme-less host without a port also tries both
+protocols on both Peridot ports. If both listeners answer, the public web
+listener on 17431 is preferred so browser traffic remains same-origin. An
+explicitly supplied scheme or port is respected, and no caller-selected targets
+or arbitrary port range is accepted.
 
 ## 2026-11-15: Compose creates persistent state without setup directories
 

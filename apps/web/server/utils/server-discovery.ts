@@ -5,6 +5,7 @@ import {
 } from "node:os";
 
 export const DISCOVERY_PORTS = [17431, 17430] as const;
+export const DISCOVERY_PROTOCOLS = ["http", "https"] as const;
 
 type InterfaceMap = NodeJS.Dict<NetworkInterfaceInfo[]>;
 type DiscoveryFetch = (
@@ -85,15 +86,23 @@ export async function discoverLocalPeridotServers(
     ),
   ];
   const targets = hosts.flatMap((host) =>
-    ports.map((port) => ({
-      address: `http://${host}:${port}`,
-      host,
-      port,
-    })),
+    ports.flatMap((port) =>
+      DISCOVERY_PROTOCOLS.map((protocol) => ({
+        address: `${protocol}://${host}:${port}`,
+        host,
+        port,
+        protocol,
+      })),
+    ),
   );
   const foundByHost = new Map<
     string,
-    { address: string; host: string; port: number }
+    {
+      address: string;
+      host: string;
+      port: number;
+      protocol: (typeof DISCOVERY_PROTOCOLS)[number];
+    }
   >();
   let cursor = 0;
 
@@ -115,7 +124,10 @@ export async function discoverLocalPeridotServers(
           const existing = foundByHost.get(target.host);
           if (
             !existing ||
-            ports.indexOf(target.port) < ports.indexOf(existing.port)
+            ports.indexOf(target.port) < ports.indexOf(existing.port) ||
+            (target.port === existing.port &&
+              DISCOVERY_PROTOCOLS.indexOf(target.protocol) <
+                DISCOVERY_PROTOCOLS.indexOf(existing.protocol))
           ) {
             foundByHost.set(target.host, target);
           }
