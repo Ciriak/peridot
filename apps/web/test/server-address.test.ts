@@ -91,10 +91,10 @@ test("manual address probing selects a responsive fallback port", async () => {
   assert.equal(found, "http://192.168.1.20:17431");
   assert.deepEqual(requests.sort(), [
     "http://192.168.1.20/api/health",
-    "https://192.168.1.20/api/health",
     "http://192.168.1.20:17430/api/health",
-    "https://192.168.1.20:17430/api/health",
     "http://192.168.1.20:17431/api/health",
+    "https://192.168.1.20/api/health",
+    "https://192.168.1.20:17430/api/health",
     "https://192.168.1.20:17431/api/health",
   ]);
 });
@@ -102,9 +102,7 @@ test("manual address probing selects a responsive fallback port", async () => {
 test("scheme-less addresses discover an HTTPS-only server", async () => {
   const found = await findPeridotServerAddress("192.168.1.20", {
     fetcher: async (input) => {
-      if (
-        String(input) === "https://192.168.1.20:17431/api/health"
-      ) {
+      if (String(input) === "https://192.168.1.20:17431/api/health") {
         return Response.json({ status: "ok", service: "peridot" });
       }
       return new Response(null, { status: 404 });

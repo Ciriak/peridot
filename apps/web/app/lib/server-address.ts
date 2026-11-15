@@ -52,9 +52,7 @@ function hasExplicitScheme(address: string): boolean {
 
 function explicitServerPort(address: string): number | null {
   const trimmed = address.trim();
-  const candidate = hasExplicitScheme(trimmed)
-    ? trimmed
-    : `http://${trimmed}`;
+  const candidate = hasExplicitScheme(trimmed) ? trimmed : `http://${trimmed}`;
   const authority = /^[a-z][a-z\d+.-]*:\/\/([^/?#]+)/i.exec(candidate)?.[1];
   if (!authority) return null;
   const port = authority.startsWith("[")
@@ -70,6 +68,9 @@ export function serverAddressCandidates(value: string): string[] {
     ? [url.protocol.slice(0, -1)]
     : SERVER_PROTOCOLS;
   const configuredPort = explicitServerPort(value);
+  if (hasExplicitScheme(value) && configuredPort !== null) {
+    return [normalized];
+  }
   const ports = configuredPort
     ? [configuredPort]
     : [null, ...FALLBACK_SERVER_PORTS];
@@ -81,13 +82,6 @@ export function serverAddressCandidates(value: string): string[] {
       return candidate.toString().replace(/\/$/, "");
     }),
   );
-  if (
-    hasExplicitScheme(value) &&
-    configuredPort !== null &&
-    candidates.length === 1
-  ) {
-    return [normalized];
-  }
   return [...new Set(candidates)];
 }
 
