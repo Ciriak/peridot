@@ -14,7 +14,6 @@ browse categories and avoids duplicating serialization or authorization logic
 in a new cross-type endpoint. The UI exposes result-type quick filters but
 loads only the first page of each type until the user requests more.
 
-
 ## 2026-11-15: Docker uses three release channels and an embedded web proxy
 
 Peridot publishes immutable multi-architecture images to

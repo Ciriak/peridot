@@ -2,6 +2,34 @@
 
 Last updated: 2026-11-15.
 
+## Mobile search shortcut hint
+
+The global search bar now hides its `Ctrl`/`Command` + `K` keycap hint below the
+desktop breakpoint. The input no longer reserves space for the hidden hint on
+mobile, while the shortcut continues to open and focus search at every width.
+The change was committed as `fc1c10e`.
+
+Checks completed:
+
+- Targeted search shortcut and search view tests: 7 passing
+- Web type check
+- Targeted ESLint and Prettier checks
+- Web production build
+- `git diff --check`
+
+Known limits: live visual QA at mobile and desktop widths was not run. The
+documentation cleanup below remains uncommitted.
+
+Next: confirm the search header at a narrow viewport and at the `md`
+breakpoint.
+
+## AI-facing documentation cleanup
+
+Corrected the malformed README heading markup and inaccurate interface image
+alternative text. Updated the infrastructure README so it no longer describes
+the already implemented Docker image and Compose orchestration as future work.
+Formatting in the decision log is also normalized.
+
 ## Multi-type catalog search
 
 The global search page now includes local artists, albums, tracks, audiobooks,

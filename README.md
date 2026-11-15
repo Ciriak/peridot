@@ -6,19 +6,18 @@
   />
 </p>
 
-<h3 align="center">Your self-hosted music platform</h2>
+<h3 align="center">Your self-hosted music platform</h3>
 
-
-  **Peridot is a self-hosted music platform, giving you total control over your
-  music library.
-  No ads, no paywall. You have control.**
-
+<p align="center">
+  <strong>Peridot gives you total control over your music library.</strong><br />
+  No ads. No paywall. You have control.
+</p>
 
 <img
-    src="packages/ui/src/assets/ui-demo.png"
-    width="800"
-    alt="Peridot app icon"
-  />
+  src="packages/ui/src/assets/ui-demo.png"
+  width="800"
+  alt="Peridot library interface"
+/>
 
 ## Install with Docker
 
