@@ -8,12 +8,36 @@ type PeridotWebServer = Awaited<ReturnType<typeof buildWebServer>>;
 
 const DEFAULT_WEB_DIST = new URL("../../web/.output/public", import.meta.url);
 
+export interface ServerRuntimeOptions {
+  port: number;
+  webPort: number;
+  host: string;
+  webHost: string;
+  serveWeb: boolean;
+  webRoot: string;
+}
+
 function parsePort(value: string | undefined, fallback: number, name: string) {
   const port = Number(value ?? fallback);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error(`${name} must be an integer between 1 and 65535`);
   }
   return port;
+}
+
+export function resolveServerRuntimeOptions(
+  environment: NodeJS.ProcessEnv,
+  defaultWebRoot: string,
+): ServerRuntimeOptions {
+  const host = environment.HOST ?? "127.0.0.1";
+  return {
+    port: parsePort(environment.PORT, DEFAULT_SERVER_PORT, "PORT"),
+    webPort: parsePort(environment.WEB_PORT, DEFAULT_WEB_PORT, "WEB_PORT"),
+    host,
+    webHost: environment.WEB_HOST ?? host,
+    serveWeb: environment.PERIDOT_SERVE_WEB !== "false",
+    webRoot: environment.PERIDOT_WEB_DIST?.trim() || defaultWebRoot,
+  };
 }
 
 function apiBaseUrl(host: string, port: number): string {
@@ -29,13 +53,8 @@ function apiBaseUrl(host: string, port: number): string {
 export async function startServer(
   environment: NodeJS.ProcessEnv = process.env,
 ): Promise<void> {
-  const port = parsePort(environment.PORT, DEFAULT_SERVER_PORT, "PORT");
-  const webPort = parsePort(environment.WEB_PORT, DEFAULT_WEB_PORT, "WEB_PORT");
-  const host = environment.HOST ?? "127.0.0.1";
-  const webHost = environment.WEB_HOST ?? host;
-  const serveWeb = environment.PERIDOT_SERVE_WEB !== "false";
-  const webRoot =
-    environment.PERIDOT_WEB_DIST?.trim() || fileURLToPath(DEFAULT_WEB_DIST);
+  const { port, webPort, host, webHost, serveWeb, webRoot } =
+    resolveServerRuntimeOptions(environment, fileURLToPath(DEFAULT_WEB_DIST));
   let app: PeridotServer | null = null;
   let webApp: PeridotWebServer | null = null;
   let restartScheduled = false;

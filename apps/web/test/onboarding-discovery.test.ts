@@ -69,6 +69,11 @@ test("server selection detects and selects the first server before continuing", 
   assert.match(source, /id="server-address"/);
   assert.match(
     source,
+    /placeholder="my\.server\.ip:17430"/,
+    "Manual server entry shows the default API address format",
+  );
+  assert.match(
+    source,
     /\(route\.query\.auth === "login" \|\| route\.query\.auth === "setup"\)/,
     "Lost authentication and first-administrator setup open the account step",
   );

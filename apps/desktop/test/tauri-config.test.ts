@@ -21,7 +21,7 @@ test("Tauri embeds the generated Nuxt client and uses the development stack", as
     };
   }>("src-tauri/tauri.conf.json");
 
-  assert.equal(config.build.devUrl, "http://127.0.0.1:3000");
+  assert.equal(config.build.devUrl, "http://127.0.0.1:17431");
   assert.equal(config.build.beforeDevCommand, "pnpm --dir ../.. dev");
   assert.equal(config.build.beforeBuildCommand, "pnpm --dir ../web generate");
   assert.equal(config.build.frontendDist, "../../web/.output/public");

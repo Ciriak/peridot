@@ -72,7 +72,7 @@ export async function createTestContext(
     config: {
       databaseUrl,
       libraryRoot,
-      webOrigins: options.webOrigins ?? ["http://127.0.0.1:3000"],
+      webOrigins: options.webOrigins ?? ["http://127.0.0.1:17431"],
       ...(options.credentialEncryptionKey
         ? { credentialEncryptionKey: options.credentialEncryptionKey }
         : {}),

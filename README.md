@@ -26,6 +26,8 @@
    Save this as `compose.yaml`.
 
    ```yaml
+   name: peridot
+
    services:
      peridot:
        image: ghcr.io/ciriak/peridot:${PERIDOT_CHANNEL:-stable}
@@ -71,7 +73,9 @@
 
 3. **Open Peridot**
 
-   Go to **http://YOUR_SERVER_IP:17431** in your browser.
+   Go to **http://YOUR_SERVER_IP:17431** in your browser. The server exposes
+   the API on port `17430` and the web application, including its API proxy, on
+   port `17431`.
 
 ## Features
 

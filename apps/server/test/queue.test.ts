@@ -167,7 +167,7 @@ test("queue survives a server restart", async () => {
       config: {
         databaseUrl: context.databaseUrl,
         libraryRoot: context.libraryRoot,
-        webOrigins: ["http://127.0.0.1:3000"],
+        webOrigins: ["http://127.0.0.1:17431"],
       },
       database: context.database,
       logger: false,

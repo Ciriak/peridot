@@ -55,7 +55,7 @@ test("source mutations are allowed by the configured web origin", async () => {
         method: "OPTIONS",
         url: "/api/admin/sources/order",
         headers: {
-          origin: "http://127.0.0.1:3000",
+          origin: "http://127.0.0.1:17431",
           "access-control-request-method": method,
           "access-control-request-headers": "authorization,content-type",
         },
@@ -64,7 +64,7 @@ test("source mutations are allowed by the configured web origin", async () => {
       assert.equal(response.statusCode, 204);
       assert.equal(
         response.headers["access-control-allow-origin"],
-        "http://127.0.0.1:3000",
+        "http://127.0.0.1:17431",
       );
       assert.match(
         String(response.headers["access-control-allow-methods"]),

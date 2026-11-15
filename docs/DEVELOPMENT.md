@@ -14,7 +14,7 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Development web: http://localhost:3000. API health:
+Development web: http://localhost:17431. API health:
 http://127.0.0.1:17430/api/health. A built server serves the production SPA on
 http://127.0.0.1:17431 and proxies `/api` to port 17430.
 Development startup synchronizes the local database with the Prisma 8 contract
@@ -142,8 +142,10 @@ failed test suite blocks the build jobs.
 Build output: `apps/web/.output/public` and `apps/server/dist`. Start the built
 server with `node apps/server/dist/index.js`; it serves the API on 17430 and the
 embedded web application on 17431. Local development disables the embedded web
-listener so Nuxt HMR can run separately on 3000. Set `PERIDOT_SERVE_WEB=false`
+listener so Nuxt HMR can run separately on 17431. Set `PERIDOT_SERVE_WEB=false`
 to intentionally run the built server without the web listener.
+The web package's standard build runs `nuxt generate` so `.output/public`
+contains the SPA entry and fallback documents required by the embedded server.
 
 ## Offline SPA
 

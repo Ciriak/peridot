@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import {
   DEFAULT_SERVER_PORT,
+  DEFAULT_WEB_PORT,
   DESKTOP_WEB_ORIGINS,
   MOBILE_WEB_ORIGINS,
   loadServerConfig,
@@ -30,6 +31,7 @@ test("health endpoint responds without database or external services", async () 
 
 test("server configuration validates storage and browser origins", async () => {
   assert.equal(DEFAULT_SERVER_PORT, 17430);
+  assert.equal(DEFAULT_WEB_PORT, 17431);
   const root = await mkdtemp(path.join(tmpdir(), "peridot-config-"));
   const libraryRoot = path.join(root, "music");
   await mkdir(libraryRoot);
@@ -40,8 +42,6 @@ test("server configuration validates storage and browser origins", async () => {
       MUSIC_LIBRARY_PATH: libraryRoot,
     });
     assert.deepEqual(defaults.webOrigins, [
-      "http://127.0.0.1:3000",
-      "http://localhost:3000",
       "http://127.0.0.1:17431",
       "http://localhost:17431",
       ...DESKTOP_WEB_ORIGINS,

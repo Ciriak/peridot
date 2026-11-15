@@ -2,30 +2,100 @@
 
 Last updated: 2026-11-15.
 
-## Onboarding probes both Peridot ports
+## Fixed API and web defaults on 17430 and 17431
 
-Onboarding network discovery now checks both fixed Peridot listener ports,
-17431 and 17430, and returns one result per host with 17431 preferred. A
-manually entered host without a port also probes both listeners after its
-normalized default address. Explicit ports are preserved, and every candidate
-must return the exact public Peridot health signature. This lets setup work
-whether users enter an IP, hostname, or complete server URL.
+The API defaults to 17430 and the browser-facing web listener defaults to 17431.
+The built server serves the generated SPA and proxies API, audio, and realtime
+traffic through 17431 by default. Nuxt development, Tauri development, default
+CORS origins, onboarding discovery, and the manual onboarding address all use
+the same port contract. The manual address placeholder is
+`my.server.ip:17430`.
+
+The standard web build now runs `nuxt generate`, ensuring `.output/public`
+contains the SPA entry and fallback files required by the server. A built-server
+smoke test returned 200 from `/`, a nested settings route, and the proxied
+`/api/health` endpoint on 17431. The README Compose snippet now includes the
+tracked project name and accurately identifies the API and web ports.
 
 Checks completed:
 
-- Focused onboarding, address, discovery, and client tests: 28 passing
-- Full web test suite: 205 passing
+- Server tests: 139 passing, including new default runtime listener tests
+- Web tests: 206 passing
+- Desktop tests: 4 passing
+- Web, server, and desktop type checks
+- Server and static web production builds
+- Full workspace ESLint and Prettier checks
+- `docker compose config`, resolving host and container ports 17430 and 17431
+- Live built-server API, SPA, nested-route, and proxied-health checks on the
+  default listeners using loopback alias `127.0.0.2`
+- `git diff --check`
+
+Known limits: an existing development process already owned
+`127.0.0.1:17430` with the embedded web listener disabled, so the live smoke
+test used `127.0.0.2` to leave that process running. No Docker image rebuild or
+Compose container startup was repeated because the Dockerfile did not change and
+the resolved Compose configuration was validated directly. These changes and
+the preceding portrait-orientation edits remain uncommitted on `dev`; no commit,
+push, tag, publication, or deployment was performed.
+
+Next: rebuild the Docker image from this revision and confirm the Compose stack
+serves the UI and proxied health endpoint on 17431 from its default container
+ports.
+
+## Mobile portrait orientation lock
+
+The Android activity now declares portrait orientation in the packaged
+manifest, and the installable PWA manifest now requests portrait instead of
+allowing any orientation. Normal desktop browser layout and the Android Auto
+media service are unchanged.
+
+Checks completed:
+
+- New Android manifest test and the full Android Kotlin unit suite
+- Android `lintDebug` and debug APK build
+- Full web test suite: 206 passing
+- Web type check and production build
+- ESLint, targeted Prettier checks, and `git diff --check`
+- Generated PWA and Android merged manifests both contain `portrait`
+
+Known limit: rotation was not exercised on a physical device or emulator.
+These changes remain uncommitted on `dev`; no commit, push, tag, publication, or
+deployment was performed.
+
+Next: install a debug build on a phone and rotate the device to confirm the
+activity does not leave portrait.
+
+## Onboarding probes both protocols on both Peridot ports
+
+Onboarding network discovery now checks both fixed Peridot listener ports,
+17431 and 17430, over both HTTP and HTTPS, and returns one result per host with
+17431 preferred. A scheme-less IP or hostname probes both protocols, including
+when it supplies a port. A scheme-less host without a port also probes both
+listeners after its normalized default address. Explicit schemes and ports are
+preserved, and every candidate must return the exact public Peridot health
+signature. This lets setup work whether users enter a bare IP, hostname, or
+complete server URL.
+
+Checks completed:
+
+- Focused onboarding, address, discovery, and client tests: 11 passing
+- Full web test suite: 206 passing
 - Web type check and changed-file ESLint
 - Targeted Prettier checks and `git diff --check`
 - Production web build, including the discovery server route and 119 PWA
   precache entries
 
 Known limit: live LAN discovery and onboarding interaction were not exercised
-against servers exposed only on each listener. These changes are uncommitted on
-`dev`; no commit, push, tag, publication, or deployment was performed.
+against HTTP-only and HTTPS-only servers. HTTPS discovery uses normal
+certificate validation, so an untrusted self-signed certificate must be trusted
+by the browser or host before it can be selected. The source and decision
+changes are recorded in commits `40ad58f` and `a0b86ba`; this handoff update and
+the unrelated portrait-orientation edits remain uncommitted. Nothing was
+pushed, tagged, published, or deployed.
 
 Next: run onboarding from a LAN address with the embedded web server on 17431
-and from development with the API on 17430, entering a bare host in each case.
+and from development with the API on 17430, entering a bare host over both HTTP
+and HTTPS in each case.
 
 ## Compose-only installation
 

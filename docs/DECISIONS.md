@@ -1,5 +1,28 @@
 # Decisions
 
+## 2026-11-15: Fixed defaults use the API and web listener ports everywhere
+
+The API listener defaults to 17430 and the browser-facing web listener defaults
+to 17431. The built server serves the generated web application and proxies API,
+audio, and realtime traffic through 17431 by default. Nuxt development and the
+Tauri development window use 17431 too, so browser, desktop, onboarding,
+discovery, CORS defaults, Compose, and deployment all expose the same stable
+addresses. Explicit `PORT`, `WEB_PORT`, and related environment overrides remain
+available for deployments and tests.
+
+The standard web package build also runs `nuxt generate`. It must emit the static
+SPA entry and fallback documents rather than only client assets, because the
+built Fastify server serves those files on 17431 after the documented workspace
+build.
+
+## 2026-11-15: The mobile application stays in portrait
+
+The packaged Android activity declares portrait orientation so the shared
+Peridot interface remains upright on phones. The installable PWA manifest uses
+the same orientation, giving the standalone mobile web app consistent behavior.
+This does not change normal desktop browser layout or the Android media service
+used by Android Auto.
+
 ## 2026-11-15: Onboarding probes both protocols on configured Peridot ports
 
 Onboarding uses the fixed public web and API listener ports, 17431 and 17430,

@@ -133,7 +133,7 @@ export default defineNuxtConfig({
           theme_color: "#0A0A0A",
           background_color: "#000000",
           display: "standalone",
-          orientation: "any",
+          orientation: "portrait",
           start_url: "/",
           scope: "/",
           icons: [

@@ -59,8 +59,6 @@ export async function loadServerConfig(
   const baseOrigins = configuredOrigins.length
     ? configuredOrigins.map(normalizeOrigin)
     : [
-        "http://127.0.0.1:3000",
-        "http://localhost:3000",
         "http://127.0.0.1:17431",
         "http://localhost:17431",
         ...DESKTOP_WEB_ORIGINS,

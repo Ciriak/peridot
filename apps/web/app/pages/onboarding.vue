@@ -332,7 +332,7 @@ function changeServer() {
               type="text"
               inputmode="url"
               autocomplete="url"
-              placeholder="http://192.168.1.20:17431"
+              placeholder="my.server.ip:17430"
               :aria-invalid="Boolean(error)"
               :aria-describedby="error ? 'server-error' : undefined"
             />

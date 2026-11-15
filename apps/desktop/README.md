@@ -9,7 +9,7 @@ pnpm desktop:dev
 ```
 
 The Tauri development command starts the normal database update, Nuxt server,
-and Fastify server, then loads `http://127.0.0.1:3000`. It exercises the same
+and Fastify server, then loads `http://127.0.0.1:17431`. It exercises the same
 web application, API, realtime connection, and playback path as the browser.
 
 Build a runnable desktop executable without creating an installer:

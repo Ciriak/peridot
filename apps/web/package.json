@@ -4,8 +4,8 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "dev": "nuxt dev --host 127.0.0.1",
-    "build": "nuxt build",
+    "dev": "nuxt dev --host 127.0.0.1 --port 17431",
+    "build": "nuxt generate",
     "generate": "nuxt generate",
     "typecheck": "nuxt typecheck",
     "postinstall": "nuxt prepare",
