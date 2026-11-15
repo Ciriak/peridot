@@ -2,21 +2,24 @@
 
 Last updated: 2026-11-15.
 
-## Android CI test launch
+## Parallel CI test suites
 
 Fixed the Android test job's Linux checkout failure by tracking
 `apps/android/android/gradlew` as executable (`100755`). The root `pnpm test`
 command now excludes the Android package from the cross-platform workspace
-suite. The dedicated Android CI job continues to run `pnpm android:test`, which
-performs Capacitor sync before Kotlin tests and has the required Java 21 and
-Android SDK setup.
+suite. CI now runs Web, Server, shared UI, Desktop, and Android tests in
+independent parallel jobs after linting. The matrix uses `fail-fast: false` so
+all package results are reported, while any failed matrix entry fails the
+aggregate `test` job. All artifact builds require both `test` and `test-android`
+to pass.
 
 Checks completed:
 
-- `pnpm test`: 7-package cross-platform suite passed (web 200, server 132,
-  shared UI 16, desktop 4)
+- Each CI matrix command passed independently: web 200, server 132, shared UI
+  16, and desktop 4 tests
 - `pnpm android:test`: Capacitor sync and Android Kotlin unit tests passed
-- `pnpm --filter @peridot/android build`: debug APK build passed
+- `pnpm android:build`: Capacitor sync and debug APK build passed
+- Workflow YAML formatting and syntax parsing passed
 - `git diff --check` and indexed Git mode verification passed
 
 No commit, push, tag, publication, or deployment was performed. The existing

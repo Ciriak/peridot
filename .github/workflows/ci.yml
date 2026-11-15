@@ -62,6 +62,29 @@ jobs:
       - run: pnpm typecheck
 
   test:
+    name: Test ${{ matrix.package }}
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - "@peridot/web"
+          - "@peridot/server"
+          - "@peridot/ui"
+          - "@peridot/desktop"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec turbo run test --filter=${{ matrix.package }}
+
+  test-android:
+    name: Test Android
     needs: lint
     runs-on: ubuntu-latest
     steps:
@@ -71,12 +94,18 @@ jobs:
         with:
           node-version: "24.15.0"
           cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test
+      - run: pnpm android:test
 
   build-web:
     name: Build Web
-    needs: test
+    needs: [test, test-android]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -90,7 +119,7 @@ jobs:
 
   build-server:
     name: Build Server
-    needs: test
+    needs: [test, test-android]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -104,7 +133,7 @@ jobs:
 
   build-desktop:
     name: Build Desktop
-    needs: test
+    needs: [test, test-android]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -134,7 +163,7 @@ jobs:
 
   build-android:
     name: Build Android
-    needs: test
+    needs: [test, test-android]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -150,5 +179,4 @@ jobs:
       - uses: android-actions/setup-android@v3
       - run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
       - run: pnpm install --frozen-lockfile
-      - run: pnpm android:test
-      - run: pnpm --filter @peridot/android build
+      - run: pnpm android:build

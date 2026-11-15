@@ -1,6 +1,6 @@
 # Decisions
 
-## 2026-11-15: Android tests run in the Android CI job
+## 2026-11-15: CI runs each test suite in a parallel job
 
 The root workspace test command excludes `@peridot/android` because Gradle tests
 require a generated Capacitor module, Java 21, and Android SDK 36. Running that
@@ -8,10 +8,17 @@ package from the generic test job made the same project depend on native
 toolchain setup and exposed checkout-file-mode failures before the dedicated
 Android job could run.
 
-The dedicated Android job performs Capacitor sync, Kotlin unit tests, and the
-debug build with explicit Java and SDK setup. The Gradle wrapper is tracked with
-its executable bit so Linux CI can launch it directly. Package-level Android
-testing remains available through `pnpm android:test`.
+After linting, CI runs Web, Server, shared UI, Desktop, and Android tests in
+independent jobs. The cross-platform suites use a matrix with `fail-fast:
+false`, preserving every test result while still failing the aggregate matrix
+job when any package fails. Android runs in its own toolchain-specific job and
+performs Capacitor sync before Kotlin tests. Every artifact build requires both
+the matrix result and the Android test result, so any failed suite blocks the
+build stage.
+
+The Gradle wrapper is tracked with its executable bit so Linux CI can launch it
+directly. Package-level Android testing remains available through
+`pnpm android:test`. The Android debug build remains in its own job after tests.
 
 ## 2026-11-15: Android uses a shared Capacitor UI and native Media3 service
 
