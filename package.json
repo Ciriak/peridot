@@ -12,7 +12,7 @@
     "dev:server": "pnpm db:update && pnpm --filter @peridot/contracts build && pnpm --filter @peridot/server run dev",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
-    "test": "turbo run test",
+    "test": "turbo run test --filter=!@peridot/android",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
     "check": "pnpm lint && pnpm format:check",

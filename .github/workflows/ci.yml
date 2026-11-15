@@ -75,7 +75,7 @@ jobs:
       - run: pnpm test
 
   build-web:
-    name: Build web
+    name: Build Web
     needs: test
     runs-on: ubuntu-latest
     steps:
@@ -89,7 +89,7 @@ jobs:
       - run: pnpm exec turbo run build --filter=@peridot/web
 
   build-server:
-    name: Build server
+    name: Build Server
     needs: test
     runs-on: ubuntu-latest
     steps:
@@ -103,7 +103,7 @@ jobs:
       - run: pnpm exec turbo run build --filter=@peridot/server
 
   build-desktop:
-    name: Build desktop
+    name: Build Desktop
     needs: test
     runs-on: ubuntu-latest
     steps:

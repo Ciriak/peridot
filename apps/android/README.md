@@ -20,6 +20,10 @@ pnpm android:build
 pnpm android:bundle
 ```
 
+The root `pnpm test` command covers the cross-platform workspace tests.
+`pnpm android:test` runs Capacitor sync and the Android Kotlin tests with the
+Android/Java prerequisites above.
+
 Release signing reads `android/signing.properties`, which is ignored by Git.
 The local release key is stored under `.peridot/android/` and must be backed
 up before submitting a build to Google Play.

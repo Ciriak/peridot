@@ -1,5 +1,18 @@
 # Decisions
 
+## 2026-11-15: Android tests run in the Android CI job
+
+The root workspace test command excludes `@peridot/android` because Gradle tests
+require a generated Capacitor module, Java 21, and Android SDK 36. Running that
+package from the generic test job made the same project depend on native
+toolchain setup and exposed checkout-file-mode failures before the dedicated
+Android job could run.
+
+The dedicated Android job performs Capacitor sync, Kotlin unit tests, and the
+debug build with explicit Java and SDK setup. The Gradle wrapper is tracked with
+its executable bit so Linux CI can launch it directly. Package-level Android
+testing remains available through `pnpm android:test`.
+
 ## 2026-11-15: Android uses a shared Capacitor UI and native Media3 service
 
 The Android client packages the existing Nuxt application with Capacitor rather

@@ -128,6 +128,11 @@ pnpm db:validate
 pnpm build
 ```
 
+`pnpm test` runs the cross-platform TypeScript and Vue workspace tests.
+Android's Kotlin tests use `pnpm android:test`, which runs Capacitor sync first
+and requires the Android and Java toolchain described below. CI runs that
+Android command in its dedicated job.
+
 Build output: `apps/web/.output` and `apps/server/dist`. Start the built server
 with `node apps/server/dist/index.js`, and the web app with
 `node apps/web/.output/server/index.mjs` (separate terminals).
