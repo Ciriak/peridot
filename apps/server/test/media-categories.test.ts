@@ -137,6 +137,17 @@ test("audiobook and podcast sources stay separate from music collections", async
     assert.equal(audiobook.title, "Book One");
     assert.equal(audiobook.author, "Author One");
     assert.equal(audiobook.chapterCount, 2);
+    const matchingAudiobooks = (
+      await context.app.inject({
+        method: "GET",
+        url: "/api/audiobooks?query=author%20one",
+        headers: context.authorization,
+      })
+    ).json<AudiobookListResponse>();
+    assert.deepEqual(
+      matchingAudiobooks.items.map((book) => book.title),
+      ["Book One"],
+    );
 
     const chaptersResponse = await context.app.inject({
       method: "GET",
@@ -161,6 +172,17 @@ test("audiobook and podcast sources stay separate from music collections", async
     assert.equal(podcast.title, "Show One");
     assert.equal(podcast.publisher, "Publisher One");
     assert.equal(podcast.episodeCount, 2);
+    const matchingPodcasts = (
+      await context.app.inject({
+        method: "GET",
+        url: "/api/podcasts?query=publisher%20one",
+        headers: context.authorization,
+      })
+    ).json<PodcastListResponse>();
+    assert.deepEqual(
+      matchingPodcasts.items.map((show) => show.title),
+      ["Show One"],
+    );
 
     const episodesResponse = await context.app.inject({
       method: "GET",

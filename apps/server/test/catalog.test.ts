@@ -89,6 +89,17 @@ test("catalog endpoints page tracks, albums, artists, search, and likes", async 
       artists.items.map((artist) => artist.name),
       ["North Artist", "South Artist"],
     );
+    const matchingArtists = (
+      await context.app.inject({
+        method: "GET",
+        url: "/api/artists?query=south",
+        headers: context.authorization,
+      })
+    ).json<ArtistListResponse>();
+    assert.deepEqual(
+      matchingArtists.items.map((artist) => artist.name),
+      ["South Artist"],
+    );
 
     const search = (
       await context.app.inject({
