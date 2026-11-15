@@ -59,6 +59,8 @@
      peridot-data:
    ```
 
+   *Note: `master` and `dev` channels are also available*
+
 2. **Start it**
 
    Run this from the folder with your Compose file.
