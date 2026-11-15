@@ -1,5 +1,19 @@
 # Decisions
 
+## 2026-11-15: Compose creates persistent state without setup directories
+
+The default Compose stack stores application state in a named `peridot-data`
+volume. Docker initializes the empty volume from the image's node-owned `/data`
+directory, so the non-root server can create the database, credential key, and
+updater token without a preceding host-side `mkdir`. A relative music bind
+mount is still created automatically when missing and remains read-only; users
+can replace that path with an existing library without any separate directory
+setup step.
+
+This keeps installing Peridot to creating and starting one Compose file while
+preserving persistent upgrades and the separation between writable application
+state and source audio.
+
 ## 2026-11-15: Search composes independent catalog collections
 
 The full search page queries artists, albums, tracks, audiobooks, and podcasts

@@ -2,6 +2,29 @@
 
 Last updated: 2026-11-15.
 
+## Compose-only installation
+
+The Compose stack now persists `/data` in a named `peridot-data` volume instead
+of a relative bind mount. This lets Docker initialize writable server state with
+the container user's ownership, so the README no longer requires
+`mkdir -p data music`. The music source remains a read-only relative bind that
+Docker creates automatically and users can replace with an existing library
+path.
+
+Checks completed:
+
+- Current Dockerfile image built locally
+- Compose stack started from a clean directory with no pre-created folders
+- API health and the embedded web application both returned `200`
+- Persistent volume ownership and database/updater-state creation verified
+- Root and README Compose configurations, `pnpm check`, and `git diff --check`
+  passed
+
+Known limit: the clean-directory run used the locally built image rather than
+pulling the published GHCR `stable` tag.
+
+No commit, push, tag, publication, or deployment was performed.
+
 ## Mobile search shortcut hint
 
 The global search bar now hides its `Ctrl`/`Command` + `K` keycap hint below the

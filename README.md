@@ -23,9 +23,7 @@
 
 1. **Create a Compose file**
 
-   Save this as `compose.yaml` and create the local folders. Change the music
-   path to include your library. The default `stable` image is the production
-   channel.
+   Save this as `compose.yaml`.
 
    ```yaml
    services:
@@ -36,7 +34,7 @@
          - "${PERIDOT_API_PORT:-17430}:17430"
          - "${PERIDOT_WEB_PORT:-17431}:17431"
        volumes:
-         - ./data:/data
+         - peridot-data:/data
          - ./music:/music:ro
 
      watchtower:
@@ -54,12 +52,11 @@
        environment:
          WATCHTOWER_HTTP_API_TOKEN: /data/watchtower-token
        volumes:
-         - ./data:/data:ro
+         - peridot-data:/data:ro
          - /var/run/docker.sock:/var/run/docker.sock
-   ```
 
-   ```sh
-   mkdir -p data music
+   volumes:
+     peridot-data:
    ```
 
 2. **Start it**
