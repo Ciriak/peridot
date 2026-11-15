@@ -224,8 +224,9 @@ pnpm android:build
 pnpm android:bundle
 ```
 
-`android:sync` generates the client with the service worker disabled and copies
-it into the Capacitor project. `android:test` runs Kotlin unit tests.
+`android:sync` builds the shared contracts package, generates the client with
+the service worker disabled, and copies it into the Capacitor project.
+`android:test` runs Kotlin unit tests.
 `android:instrument` runs the MediaBrowser instrumentation test on a connected
 device or emulator. `android:build` creates the debug APK, while `android:bundle`
 creates signed release APK and AAB artifacts when

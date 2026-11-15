@@ -13,7 +13,9 @@ all package results are reported, while any failed matrix entry fails the
 aggregate `test` job. All artifact builds require both `test` and `test-android`
 to pass. Both Android jobs use `android-actions/setup-android@v4` with
 `platform-tools`, avoiding the removed legacy `tools` package that broke v3
-before SDK 36 installation began.
+before SDK 36 installation began. Android generation now builds
+`@peridot/contracts` before generating the shared web client, fixing clean-check
+CI runs that could not resolve the package's `dist` entrypoint.
 
 Checks completed:
 
@@ -21,6 +23,8 @@ Checks completed:
   16, and desktop 4 tests
 - `pnpm android:test`: Capacitor sync and Android Kotlin unit tests passed
 - `pnpm android:build`: Capacitor sync and debug APK build passed
+- `pnpm --filter @peridot/android generate`: dependency build and web
+  generation passed
 - Workflow YAML formatting, syntax, and Android SDK action configuration
   validation passed
 - `git diff --check` and indexed Git mode verification passed

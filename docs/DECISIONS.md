@@ -23,6 +23,13 @@ Both Android jobs use `android-actions/setup-android@v4` with an explicit
 `platform-tools` package input. Version 3 tried to install Google's removed
 legacy `tools` package before the workflow's SDK 36 installation step could run.
 
+Android generation builds `@peridot/contracts` before starting the web
+generation. The shared web client imports runtime values from that workspace
+package, so a clean checkout cannot resolve it from the package's `dist`
+entrypoint until the dependency has been compiled. Keeping this build inside
+the Android generation script makes `pnpm android:sync`, `android:test`, and
+`android:build` self-contained when run outside Turbo's dependency graph.
+
 ## 2026-11-15: Android uses a shared Capacitor UI and native Media3 service
 
 The Android client packages the existing Nuxt application with Capacitor rather

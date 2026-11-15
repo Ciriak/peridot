@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "generate": "cross-env PERIDOT_CAPACITOR=1 pnpm --filter @peridot/web generate",
+    "generate": "pnpm --filter @peridot/contracts build && cross-env PERIDOT_CAPACITOR=1 pnpm --filter @peridot/web generate",
     "sync": "pnpm generate && cap sync android",
     "dev": "pnpm sync && cap run android",
     "open": "pnpm sync && cap open android",
