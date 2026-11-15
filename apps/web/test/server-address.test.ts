@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   DEFAULT_SERVER_ADDRESS,
+  findPeridotServerAddress,
   normalizeServerAddress,
   safeRedirectPath,
+  serverAddressCandidates,
   serverLabel,
 } from "../app/lib/server-address.ts";
 
@@ -44,4 +46,56 @@ test("rejects unsafe or incomplete server addresses", () => {
     () => normalizeServerAddress("https://example.com?token=secret"),
     /without credentials/,
   );
+});
+
+test("host-only addresses probe both configured Peridot ports", () => {
+  assert.deepEqual(serverAddressCandidates("192.168.1.20"), [
+    "http://192.168.1.20",
+    "http://192.168.1.20:17431",
+    "http://192.168.1.20:17430",
+  ]);
+  assert.deepEqual(
+    serverAddressCandidates("https://music.example.com/peridot"),
+    [
+      "https://music.example.com/peridot",
+      "https://music.example.com:17431/peridot",
+      "https://music.example.com:17430/peridot",
+    ],
+  );
+  assert.deepEqual(serverAddressCandidates("192.168.1.20:17430"), [
+    "http://192.168.1.20:17430",
+  ]);
+  assert.deepEqual(serverAddressCandidates("192.168.1.20:80"), [
+    "http://192.168.1.20",
+  ]);
+});
+
+test("manual address probing selects a responsive fallback port", async () => {
+  const requests: string[] = [];
+  const found = await findPeridotServerAddress("192.168.1.20", {
+    fetcher: async (input) => {
+      const url = String(input);
+      requests.push(url);
+      if (url === "http://192.168.1.20:17431/api/health") {
+        return Response.json({ status: "ok", service: "peridot" });
+      }
+      return new Response(null, { status: 404 });
+    },
+  });
+
+  assert.equal(found, "http://192.168.1.20:17431");
+  assert.deepEqual(requests.sort(), [
+    "http://192.168.1.20/api/health",
+    "http://192.168.1.20:17430/api/health",
+    "http://192.168.1.20:17431/api/health",
+  ]);
+});
+
+test("manual address probing requires the Peridot health signature", async () => {
+  const found = await findPeridotServerAddress("192.168.1.20:17431", {
+    fetcher: async () =>
+      Response.json({ status: "ok", service: "another-service" }),
+  });
+
+  assert.equal(found, null);
 });

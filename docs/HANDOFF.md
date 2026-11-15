@@ -2,6 +2,31 @@
 
 Last updated: 2026-11-15.
 
+## Onboarding probes both Peridot ports
+
+Onboarding network discovery now checks both fixed Peridot listener ports,
+17431 and 17430, and returns one result per host with 17431 preferred. A
+manually entered host without a port also probes both listeners after its
+normalized default address. Explicit ports are preserved, and every candidate
+must return the exact public Peridot health signature. This lets setup work
+whether users enter an IP, hostname, or complete server URL.
+
+Checks completed:
+
+- Focused onboarding, address, discovery, and client tests: 28 passing
+- Full web test suite: 205 passing
+- Web type check and changed-file ESLint
+- Targeted Prettier checks and `git diff --check`
+- Production web build, including the discovery server route and 119 PWA
+  precache entries
+
+Known limit: live LAN discovery and onboarding interaction were not exercised
+against servers exposed only on each listener. These changes are uncommitted on
+`dev`; no commit, push, tag, publication, or deployment was performed.
+
+Next: run onboarding from a LAN address with the embedded web server on 17431
+and from development with the API on 17430, entering a bare host in each case.
+
 ## Compose-only installation
 
 The Compose stack now persists `/data` in a named `peridot-data` volume instead

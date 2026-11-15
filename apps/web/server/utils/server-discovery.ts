@@ -4,7 +4,7 @@ import {
   type NetworkInterfaceInfoIPv4,
 } from "node:os";
 
-export const DEFAULT_DISCOVERY_PORT = 17431;
+export const DISCOVERY_PORTS = [17431, 17430] as const;
 
 type InterfaceMap = NodeJS.Dict<NetworkInterfaceInfo[]>;
 type DiscoveryFetch = (
@@ -64,13 +64,19 @@ export async function discoverLocalPeridotServers(
   options: {
     fetcher?: DiscoveryFetch;
     interfaces?: InterfaceMap;
-    port?: number;
+    ports?: readonly number[];
     concurrency?: number;
     timeoutMs?: number;
   } = {},
 ): Promise<DiscoveryResult> {
   const fetcher = options.fetcher ?? fetch;
-  const port = options.port ?? DEFAULT_DISCOVERY_PORT;
+  const ports = [
+    ...new Set(
+      (options.ports ?? DISCOVERY_PORTS).filter(
+        (port) => Number.isInteger(port) && port > 0 && port <= 65_535,
+      ),
+    ),
+  ];
   const prefixes = localPrivateSubnetPrefixes(options.interfaces);
   const hosts = [
     "127.0.0.1",
@@ -78,16 +84,25 @@ export async function discoverLocalPeridotServers(
       Array.from({ length: 254 }, (_, index) => `${prefix}.${index + 1}`),
     ),
   ];
-  const found: DiscoveredServer[] = [];
+  const targets = hosts.flatMap((host) =>
+    ports.map((port) => ({
+      address: `http://${host}:${port}`,
+      host,
+      port,
+    })),
+  );
+  const foundByHost = new Map<
+    string,
+    { address: string; host: string; port: number }
+  >();
   let cursor = 0;
 
   async function worker() {
-    while (cursor < hosts.length) {
-      const host = hosts[cursor++];
-      if (!host) continue;
-      const address = `http://${host}:${port}`;
+    while (cursor < targets.length) {
+      const target = targets[cursor++];
+      if (!target) continue;
       try {
-        const response = await fetcher(`${address}/api/health`, {
+        const response = await fetcher(`${target.address}/api/health`, {
           headers: { accept: "application/json" },
           signal: AbortSignal.timeout(options.timeoutMs ?? 350),
         });
@@ -97,7 +112,13 @@ export async function discoverLocalPeridotServers(
           service?: unknown;
         };
         if (body.status === "ok" && body.service === "peridot") {
-          found.push({ address, host });
+          const existing = foundByHost.get(target.host);
+          if (
+            !existing ||
+            ports.indexOf(target.port) < ports.indexOf(existing.port)
+          ) {
+            foundByHost.set(target.host, target);
+          }
         }
       } catch {
         // Unreachable hosts are expected during local network discovery.
@@ -107,14 +128,16 @@ export async function discoverLocalPeridotServers(
 
   await Promise.all(
     Array.from(
-      { length: Math.min(options.concurrency ?? 64, hosts.length) },
+      { length: Math.min(options.concurrency ?? 64, targets.length) },
       () => worker(),
     ),
   );
   return {
-    items: found.sort((left, right) =>
-      left.host.localeCompare(right.host, undefined, { numeric: true }),
-    ),
+    items: [...foundByHost.values()]
+      .map(({ address, host }) => ({ address, host }))
+      .sort((left, right) =>
+        left.host.localeCompare(right.host, undefined, { numeric: true }),
+      ),
     scannedSubnets: prefixes.map((prefix) => `${prefix}.0/24`),
   };
 }

@@ -1,5 +1,15 @@
 # Decisions
 
+## 2026-11-15: Onboarding probes both configured Peridot listener ports
+
+Onboarding uses the fixed public web and API listener ports, 17431 and 17430,
+rather than requiring users to remember the port. Automatic LAN discovery scans
+both ports on its bounded private-subnet targets, and a manually entered host
+without a port probes both after its normalized default address. If both
+listeners answer, the public web listener on 17431 is preferred so browser
+traffic remains same-origin. An explicitly supplied port is respected, and no
+caller-selected targets or arbitrary port range is accepted.
+
 ## 2026-11-15: Compose creates persistent state without setup directories
 
 The default Compose stack stores application state in a named `peridot-data`

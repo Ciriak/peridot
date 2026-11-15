@@ -45,6 +45,16 @@ test("server selection detects and selects the first server before continuing", 
     /@click="connectToServer\(selectedServer\?\.address\)"/,
     "Continue connects to the selected server",
   );
+  assert.match(
+    source,
+    /const foundAddress = await findPeridotServerAddress\(value\)/,
+    "Manual entry probes all configured server ports",
+  );
+  assert.match(
+    source,
+    /rememberServer\(\s*\{ address: foundAddress, host: new URL\(foundAddress\)\.host \},/,
+    "The responsive endpoint is selected",
+  );
   assert.match(source, /t\("onboarding\.continue"\)/);
   assert.match(source, /class="h-12 w-full text-base"/);
   assert.match(

@@ -27,8 +27,9 @@ in when the server already has users. The server address and expiring session
 are kept in same-site browser cookies. The server can be changed from Settings
 → Admin → Server by disconnecting first. Server selection continuously probes
 the typed address and scans the web host's private IPv4 networks for Peridot
-servers on port 17431; selecting a
-discovered server advances onboarding. Home surfaces bounded album and track
+servers on ports 17431 and 17430. Host-only addresses try both ports
+automatically and prefer 17431; selecting a discovered server advances
+onboarding. Home surfaces bounded album and track
 suggestions from the authenticated catalog API, keeping liked records visible
 and prioritizing music by liked artists. It also shows the current playlist
 state. The focused Liked songs, Playlists, Albums, and Artists routes provide
