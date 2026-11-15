@@ -73,6 +73,14 @@ test("the standalone library route and navigation item are removed", async () =>
     [...navigation.matchAll(/labelKey: "navigation\.(\w+)"/g)].map(
       (match) => match[1],
     ),
-    ["home", "likedSongs", "playlists", "albums", "artists"],
+    [
+      "home",
+      "likedSongs",
+      "playlists",
+      "albums",
+      "audiobooks",
+      "podcasts",
+      "artists",
+    ],
   );
 });

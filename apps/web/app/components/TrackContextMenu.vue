@@ -106,6 +106,7 @@ const metadataError = ref("");
 const applyingMetadataId = ref("");
 const revertingMetadata = ref(false);
 const artists = computed(() => trackArtistNames(props.track));
+const music = computed(() => props.track.mediaType === "music");
 const albumRouteValue = computed(() =>
   props.track.album?.trim() && artists.value.length
     ? trackAlbumRoute(props.track)
@@ -218,6 +219,7 @@ async function chooseMetadata(candidate: MetadataCandidateResponse) {
     artists: candidate.artists,
     albumArtists: candidate.albumArtists,
     album: candidate.album,
+    genres: candidate.genres,
     discNumber: candidate.discNumber,
     trackNumber: candidate.trackNumber,
     sourceUrl: candidate.sourceUrl,
@@ -292,6 +294,7 @@ async function revertMetadata() {
         {{ t("context.addToPlaylist") }}
       </ContextMenuItem>
       <ContextMenuItem
+        v-if="music"
         :disabled="
           !likesLoaded || isLikePending({ kind: 'track', trackId: track.id })
         "
@@ -343,20 +346,28 @@ async function revertMetadata() {
       <ContextMenuItem v-if="albumRouteValue" as-child>
         <NuxtLink :to="albumRouteValue">
           <Icon :icon="icons.album" aria-hidden="true" />
-          {{ t("context.goToAlbum") }}
+          {{
+            t(
+              track.mediaType === "audiobook"
+                ? "context.goToAudiobook"
+                : track.mediaType === "podcast"
+                  ? "context.goToPodcast"
+                  : "context.goToAlbum",
+            )
+          }}
         </NuxtLink>
       </ContextMenuItem>
-      <ContextMenuItem v-else disabled>
+      <ContextMenuItem v-else-if="music" disabled>
         <Icon :icon="icons.album" aria-hidden="true" />
         {{ t("context.goToAlbum") }}
       </ContextMenuItem>
-      <ContextMenuItem v-if="artists.length === 1" as-child>
+      <ContextMenuItem v-if="music && artists.length === 1" as-child>
         <NuxtLink :to="artistRoute({ name: artists[0]! })">
           <Icon :icon="icons.user" aria-hidden="true" />
           {{ t("context.goToArtist") }}
         </NuxtLink>
       </ContextMenuItem>
-      <ContextMenuSub v-else-if="artists.length > 1">
+      <ContextMenuSub v-else-if="music && artists.length > 1">
         <ContextMenuSubTrigger>
           <Icon :icon="icons.user" aria-hidden="true" />
           {{ t("context.goToArtists") }}
@@ -371,18 +382,18 @@ async function revertMetadata() {
           </ContextMenuItem>
         </ContextMenuSubContent>
       </ContextMenuSub>
-      <ContextMenuItem v-else disabled>
+      <ContextMenuItem v-else-if="music" disabled>
         <Icon :icon="icons.user" aria-hidden="true" />
         {{ t("context.goToArtist") }}
       </ContextMenuItem>
       <ContextMenuSeparator />
-      <ContextMenuLabel v-if="track.metadata" class="text-xs">
+      <ContextMenuLabel v-if="music && track.metadata" class="text-xs">
         {{
           t("context.matchedWith", { provider: track.metadata.providerName })
         }}
       </ContextMenuLabel>
       <ContextMenuLabel
-        v-if="track.metadata?.details.length"
+        v-if="music && track.metadata?.details.length"
         class="truncate text-xs"
       >
         {{
@@ -394,13 +405,23 @@ async function revertMetadata() {
             .join(" · ")
         }}
       </ContextMenuLabel>
-      <ContextMenuItem v-if="track.metadata" as-child>
+      <ContextMenuLabel
+        v-if="music && track.genres.length"
+        class="truncate text-xs"
+      >
+        {{ t("context.genres", { genres: track.genres.join(", ") }) }}
+      </ContextMenuLabel>
+      <ContextMenuItem v-if="music && track.metadata" as-child>
         <a :href="track.metadata.sourceUrl" target="_blank" rel="noreferrer">
           <Icon :icon="icons.plugins" aria-hidden="true" />
           {{ t("context.viewMetadataSource") }}
         </a>
       </ContextMenuItem>
-      <ContextMenuItem :disabled="serverLost" @select="openMetadataDialog">
+      <ContextMenuItem
+        v-if="music"
+        :disabled="serverLost"
+        @select="openMetadataDialog"
+      >
         <Icon :icon="icons.search" aria-hidden="true" />
         {{
           track.metadata
@@ -409,7 +430,7 @@ async function revertMetadata() {
         }}
       </ContextMenuItem>
       <ContextMenuItem
-        v-if="track.metadata"
+        v-if="music && track.metadata"
         :disabled="revertingMetadata || serverLost"
         @select="revertMetadata"
       >
@@ -491,6 +512,16 @@ async function revertMetadata() {
                         `${translate(detail.labelMessage)}: ${detail.value}`,
                     )
                     .join(" · ")
+                }}
+              </p>
+              <p
+                v-if="candidate.genres.length"
+                class="mt-1 truncate text-xs text-muted-foreground"
+              >
+                {{
+                  t("context.metadataGenres", {
+                    genres: candidate.genres.join(", "),
+                  })
                 }}
               </p>
             </div>

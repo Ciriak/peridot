@@ -41,11 +41,10 @@ test("albums have list and detail routes with derived groups", async () => {
   assert.match(albumCard, /useLikes\(\)/);
   assert.match(albumCard, /<LikeButton/);
   assert.match(albumCard, /trackCoverUrl\(/);
-  assert.match(albumCard, /<img[\s\S]*object-cover/);
+  assert.match(albumCard, /<FadeInImage[\s\S]*:src="coverImageUrl"/);
+  assert.match(albumCard, /class="absolute inset-0"/);
   assert.match(albumCard, /@error="coverFailed = true"/);
-  assert.match(albumCard, /loading="lazy"/);
-  assert.match(albumCard, /decoding="async"/);
-  assert.match(albumCard, /<Icon\s+v-else\s+:icon="icons\.album"/);
+  assert.match(albumCard, /<Icon\s+:icon="icons\.album"/);
   assert.match(albumCard, /useLibraryPlayer\(\)/);
   assert.match(albumCard, /loadCollectionTracks\(/);
   assert.match(albumCard, /togglePlayback\(\)/);
@@ -129,8 +128,11 @@ test("albums have list and detail routes with derived groups", async () => {
     />\s*Play album\s*</,
     "The album-detail playback control is icon-only",
   );
-  assert.match(detailPage, /<img[\s\S]*object-cover/);
-  assert.match(detailPage, /<Icon v-else :icon="icons\.album"/);
+  assert.match(
+    detailPage,
+    /<FadeInImage[\s\S]*:src="coverImageUrl"[\s\S]*loading="eager"/,
+  );
+  assert.match(detailPage, /<Icon :icon="icons\.album"/);
   assert.match(detailPage, /<LikeButton/);
   assert.match(
     detailPage,

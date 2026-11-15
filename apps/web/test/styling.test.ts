@@ -17,6 +17,8 @@ test("app layout respects the owner's Tailwind and shadcn styling authority", as
     "../app/components/AlbumContextMenu.vue",
     "../app/components/ArtistCard.vue",
     "../app/components/ArtistContextMenu.vue",
+    "../app/components/ArtistArtwork.vue",
+    "../app/components/FadeInImage.vue",
     "../app/components/LikeButton.vue",
     "../app/components/LibraryScreen.vue",
     "../app/components/PlaylistCard.vue",

@@ -50,7 +50,7 @@ test("track rows expose a Reka context menu with playback, favorites, offline st
   assert.match(menu, /context\.goToArtist/);
   assert.match(menu, /context\.goToArtists/);
   assert.match(menu, /v-for="artist in artists"/);
-  assert.match(menu, /v-else-if="artists\.length > 1"/);
+  assert.match(menu, /v-else-if="music && artists\.length > 1"/);
   assert.match(menu, /context\.matchedWith/);
   assert.match(menu, /context\.metadataCorrect/);
   assert.match(menu, /context\.metadataRestore/);
@@ -60,6 +60,9 @@ test("track rows expose a Reka context menu with playback, favorites, offline st
   assert.match(menu, /context\.metadataSearchLabel/);
   assert.match(menu, /externalTrackId/);
   assert.match(menu, /candidate\.details/);
+  assert.match(menu, /genres: candidate\.genres/);
+  assert.match(menu, /context\.metadataGenres/);
+  assert.match(trackTable, /item\.data\.genres\.join\(" · "\)/);
 
   const offlineActionIndex = menu.indexOf('@select="toggleOffline"');
   const downloadActionIndex = menu.indexOf('@select="download"');

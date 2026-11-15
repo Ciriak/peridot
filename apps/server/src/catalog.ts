@@ -3,15 +3,20 @@ import path from "node:path";
 import type {
   AlbumListResponse,
   AlbumSummaryResponse,
+  AudiobookListResponse,
+  AudiobookSummaryResponse,
   ArtistMetadataResponse,
   ArtistListResponse,
   ArtistSummaryResponse,
   CatalogSortDirection,
   CatalogSortField,
   MessageDescriptor,
+  PodcastListResponse,
+  PodcastSummaryResponse,
   ResolveTracksResponse,
   TrackListResponse,
 } from "@peridot/contracts";
+import type { MediaType } from "@peridot/contracts";
 import type { Database } from "./database.js";
 import {
   parseStoredArtistCredits,
@@ -26,9 +31,11 @@ import {
   toCoverUrl,
   toTrackResponse,
 } from "./track-response.js";
+import { parseStoredGenres } from "./genres.js";
+import { storedMediaType, trackMediaFilter } from "./media.js";
 
 const CATALOG_STATE_ID = "catalog";
-const PROJECTION_VERSION = 3;
+const PROJECTION_VERSION = 5;
 const CHANGE_THROTTLE_MS = 2_000;
 const BACKFILL_BATCH_SIZE = 500;
 const DEFAULT_PAGE_SIZE = 100;
@@ -107,6 +114,8 @@ interface TrackPageOptions {
   albumId?: string;
   artistId?: string;
   liked?: string;
+  mediaType?: string;
+  collectionId?: string;
 }
 
 interface CardPageOptions {
@@ -131,6 +140,7 @@ function stableId(prefix: string, value: string): string {
 }
 
 export interface CatalogAlbumIdentity {
+  mediaType: MediaType;
   album: string;
   albumArtists: readonly string[];
   albumReleaseKey: string | null;
@@ -155,20 +165,21 @@ export function catalogAlbumReleaseKey(
 
 export function catalogAlbumId(identity: CatalogAlbumIdentity): string {
   const album = normalize(identity.album);
+  const prefix = identity.mediaType === "music" ? "album" : identity.mediaType;
   if (identity.albumReleaseKey) {
-    return stableId("album", identity.albumReleaseKey);
+    return stableId(prefix, identity.albumReleaseKey);
   }
   const albumArtists = [
     ...new Set(identity.albumArtists.map(normalize).filter(Boolean)),
   ].sort();
   if (albumArtists.length) {
     return stableId(
-      "album",
+      prefix,
       `artists\u0000${albumArtists.join("\u0000")}\u0000${album}`,
     );
   }
   return stableId(
-    "album",
+    prefix,
     `folder\u0000${identity.albumFolderKey}\u0000${album}`,
   );
 }
@@ -267,10 +278,14 @@ function orderDirection(direction: CatalogSortDirection): "asc" | "desc" {
 
 function trackSort(value: string | undefined): CatalogSortField {
   const sort = value ?? "artist";
-  if (!["title", "artist", "album", "duration", "track"].includes(sort)) {
+  if (
+    !["title", "artist", "album", "duration", "track", "published"].includes(
+      sort,
+    )
+  ) {
     throw new CatalogError(
       "invalid_catalog_query",
-      "sort must be title, artist, album, duration, or track",
+      "sort must be title, artist, album, duration, track, or published",
     );
   }
   return sort as CatalogSortField;
@@ -312,8 +327,10 @@ function trackSignature(options: TrackPageOptions): string {
     query: normalize(options.query ?? ""),
     availability: options.availability ?? "available",
     albumId: options.albumId ?? null,
+    collectionId: options.collectionId ?? null,
     artistId: options.artistId ?? null,
     liked: options.liked === "true",
+    mediaType: trackMediaFilter(options.mediaType),
   });
 }
 
@@ -451,6 +468,8 @@ export class CatalogService {
       await this.removeTrackUnlocked(trackId);
       return;
     }
+    const trackMediaType = storedMediaType(track.mediaType);
+    const music = trackMediaType === "music";
     const effective = effectiveTrackFields(track);
     const album = effective.album?.trim() || null;
     const normalizedAlbum = normalize(album ?? "");
@@ -458,15 +477,18 @@ export class CatalogService {
       track.sourceId,
       track.relativePath,
     );
-    const albumReleaseKey = catalogAlbumReleaseKey(
-      track.metadataProviderId,
-      track.metadataExternalReleaseId,
-    );
+    const albumReleaseKey = music
+      ? catalogAlbumReleaseKey(
+          track.metadataProviderId,
+          track.metadataExternalReleaseId,
+        )
+      : null;
     const folderSiblings =
       album && !albumReleaseKey
         ? await this.database.orm.CatalogTrack.where({
             albumFolderKey,
             normalizedAlbum,
+            mediaType: trackMediaType,
           }).all()
         : [];
     const siblingReleaseKeys = [
@@ -505,6 +527,7 @@ export class CatalogService {
           previous.normalizedAlbum,
           previous.albumId,
           reason,
+          storedMediaType(previous.mediaType),
         );
       }
       const previousTerms = await this.database.orm.CatalogSearchTerm.where({
@@ -523,6 +546,7 @@ export class CatalogService {
       (siblingReleaseKeys.length === 1 ? siblingReleaseKeys[0]! : null);
     const albumId = album
       ? catalogAlbumId({
+          mediaType: trackMediaType,
           album,
           albumArtists: effective.albumArtists,
           albumReleaseKey: bridgedReleaseKey,
@@ -531,6 +555,7 @@ export class CatalogService {
       : null;
     const releaseYear = albumReleaseYear(track);
     const values = {
+      mediaType: trackMediaType,
       title: effective.title,
       artist: effective.artist,
       artistCredits: JSON.stringify(effective.artists),
@@ -540,7 +565,9 @@ export class CatalogService {
       normalizedTitle: normalize(effective.title),
       normalizedArtist: normalize(effective.artist),
       normalizedAlbum: normalize(album ?? ""),
+      normalizedGenres: normalize(effective.genres.join(" ")),
       durationMs: effective.durationMs,
+      publishedAt: track.publishedAt,
       discNumber: effective.discNumber,
       trackNumber: effective.trackNumber,
       releaseYear,
@@ -558,6 +585,7 @@ export class CatalogService {
         effective.title,
         effective.artist,
         album,
+        ...effective.genres,
         ...effective.artists,
         ...effective.albumArtists,
       ]);
@@ -572,23 +600,25 @@ export class CatalogService {
       await this.refreshAlbum(albumId);
     }
 
-    for (const artist of effective.artists) {
-      const artistId = catalogArtistId(artist);
-      await this.addArtistContribution(
-        artistId,
-        artist,
-        albumId,
-        effective.durationMs,
-      );
-      const artistLink = await this.database.orm.CatalogTrackArtist.first({
-        trackId,
-        artistId,
-      });
-      if (!artistLink) {
-        await this.database.orm.CatalogTrackArtist.create({
+    if (music) {
+      for (const artist of effective.artists) {
+        const artistId = catalogArtistId(artist);
+        await this.addArtistContribution(
+          artistId,
+          artist,
+          albumId,
+          effective.durationMs,
+        );
+        const artistLink = await this.database.orm.CatalogTrackArtist.first({
           trackId,
           artistId,
         });
+        if (!artistLink) {
+          await this.database.orm.CatalogTrackArtist.create({
+            trackId,
+            artistId,
+          });
+        }
       }
     }
 
@@ -596,6 +626,8 @@ export class CatalogService {
       effective.title,
       effective.artist,
       album,
+      ...effective.genres,
+      ...parseStoredGenres(track.genres),
       ...effective.artists,
       ...effective.albumArtists,
     ]);
@@ -644,6 +676,7 @@ export class CatalogService {
         previous.normalizedAlbum,
         previous.albumId,
         "metadata",
+        storedMediaType(previous.mediaType),
       );
     }
     const terms = await this.database.orm.CatalogSearchTerm.where({
@@ -669,6 +702,7 @@ export class CatalogService {
     const siblings = await this.database.orm.CatalogTrack.where({
       albumFolderKey,
       normalizedAlbum,
+      mediaType: "music",
     }).all();
     const releaseKeys = new Set(
       siblings.flatMap((track) =>
@@ -693,12 +727,14 @@ export class CatalogService {
     normalizedAlbum: string,
     previousAlbumId: string | null,
     reason: CatalogChange["reason"],
+    mediaType: MediaType,
   ): Promise<void> {
     if (!previousAlbumId) return;
     const siblings = await this.database.orm.CatalogTrack.where({
       albumFolderKey,
       normalizedAlbum,
       albumId: previousAlbumId,
+      mediaType,
     }).all();
     for (const sibling of siblings) {
       if (sibling.albumReleaseKey || !sibling.available) continue;
@@ -766,6 +802,7 @@ export class CatalogService {
     const direction = sortDirection(options.direction);
     const sort = trackSort(options.sort);
     const availability = availabilityFilter(options.availability);
+    const requestedMediaType = trackMediaFilter(options.mediaType);
     const signature = trackSignature(options);
     const revision = await this.revision();
     const cursor = decodeCursor(options.cursor);
@@ -786,7 +823,11 @@ export class CatalogService {
 
     let query = this.database.orm.CatalogTrack;
     if (availability !== null) query = query.where({ available: availability });
-    if (options.albumId) query = query.where({ albumId: options.albumId });
+    if (requestedMediaType !== "all") {
+      query = query.where({ mediaType: requestedMediaType });
+    }
+    const collectionId = options.collectionId ?? options.albumId;
+    if (collectionId) query = query.where({ albumId: collectionId });
     if (filterIds) query = query.where((track) => track.id.in([...filterIds]));
 
     const directionValue = orderDirection(direction);
@@ -801,6 +842,11 @@ export class CatalogService {
     } else if (sort === "duration") {
       ordered = query.orderBy([
         (track) => track.durationMs[directionValue](),
+        (track) => track.id[directionValue](),
+      ]);
+    } else if (sort === "published") {
+      ordered = query.orderBy([
+        (track) => track.publishedAt[directionValue]({ nulls: "last" }),
         (track) => track.id[directionValue](),
       ]);
     } else if (sort === "title") {
@@ -901,7 +947,7 @@ export class CatalogService {
     }
     let query = this.database.orm.CatalogAlbum.where((album) =>
       album.trackCount.gt(0),
-    );
+    ).where({ mediaType: "music" });
     if (options.artistId) {
       const artistAlbums = await this.database.orm.CatalogArtistAlbum.where({
         artistId: options.artistId,
@@ -937,6 +983,170 @@ export class CatalogService {
         ? encodeCursor((cursor?.offset ?? 0) + limit, revision, signature)
         : null,
       catalogRevision: revision,
+    };
+  }
+
+  async listAudiobooks(
+    options: CardPageOptions,
+  ): Promise<AudiobookListResponse> {
+    return (await this.listMediaCollections(
+      "audiobook",
+      options,
+    )) as AudiobookListResponse;
+  }
+
+  async listPodcasts(options: CardPageOptions): Promise<PodcastListResponse> {
+    return (await this.listMediaCollections(
+      "podcast",
+      options,
+    )) as PodcastListResponse;
+  }
+
+  private async listMediaCollections(
+    mediaType: "audiobook" | "podcast",
+    options: CardPageOptions,
+  ): Promise<AudiobookListResponse | PodcastListResponse> {
+    const limit = pageSize(
+      options.limit,
+      MAX_CARD_PAGE_SIZE,
+      DEFAULT_CARD_PAGE_SIZE,
+    );
+    const direction = sortDirection(options.direction);
+    const sort = albumSort(options.sort);
+    const signature = cardSignature(mediaType, options);
+    const revision = await this.revision();
+    const cursor = decodeCursor(options.cursor);
+    if (
+      cursor &&
+      (cursor.revision !== revision || cursor.signature !== signature)
+    ) {
+      throw new CatalogError(
+        "stale_catalog_cursor",
+        "The catalog changed while paging; reload from the first page",
+      );
+    }
+    const filterIds = await this.cardFilterIds("album", options);
+    if (filterIds && !filterIds.size) {
+      return { items: [], nextCursor: null, catalogRevision: revision };
+    }
+    let query = this.database.orm.CatalogAlbum.where((album) =>
+      album.trackCount.gt(0),
+    ).where({ mediaType });
+    if (filterIds) query = query.where((album) => album.id.in([...filterIds]));
+    const directionValue = orderDirection(direction);
+    const rows = await query
+      .orderBy([
+        sort === "artist"
+          ? (album) => album.normalizedArtist[directionValue]()
+          : (album) => album.normalizedTitle[directionValue](),
+        (album) => album.id[directionValue](),
+      ])
+      .offset(cursor?.offset ?? 0)
+      .limit(limit + 1)
+      .all();
+    const hasMore = rows.length > limit;
+    const likedIds = await this.likedAlbumIds(options.userId);
+    const items = rows.slice(0, limit).map((collection) => {
+      const authors = this.collectionCreators(collection.artistCredits, [
+        collection.artist,
+      ]);
+      if (mediaType === "audiobook") {
+        return {
+          id: collection.id,
+          mediaType,
+          title: collection.title,
+          author: collection.artist,
+          authors,
+          coverUrl: toCoverUrl(collection.coverId, this.playbackTokens),
+          chapterCount: collection.trackCount,
+          durationMs: collection.durationMs,
+          releaseYear: collection.releaseYear,
+          liked: likedIds.has(collection.id),
+        } satisfies AudiobookSummaryResponse;
+      }
+      return {
+        id: collection.id,
+        mediaType,
+        title: collection.title,
+        publisher: collection.artist,
+        publishers: authors,
+        coverUrl: toCoverUrl(collection.coverId, this.playbackTokens),
+        episodeCount: collection.trackCount,
+        durationMs: collection.durationMs,
+        latestPublishedAt: collection.latestPublishedAt?.toISOString() ?? null,
+        liked: likedIds.has(collection.id),
+      } satisfies PodcastSummaryResponse;
+    });
+    return {
+      items,
+      nextCursor: hasMore
+        ? encodeCursor((cursor?.offset ?? 0) + limit, revision, signature)
+        : null,
+      catalogRevision: revision,
+    } as AudiobookListResponse | PodcastListResponse;
+  }
+
+  async audiobook(
+    id: string,
+    userId: string,
+  ): Promise<AudiobookSummaryResponse | null> {
+    return (await this.collection(
+      "audiobook",
+      id,
+      userId,
+    )) as AudiobookSummaryResponse | null;
+  }
+
+  async podcast(
+    id: string,
+    userId: string,
+  ): Promise<PodcastSummaryResponse | null> {
+    return (await this.collection(
+      "podcast",
+      id,
+      userId,
+    )) as PodcastSummaryResponse | null;
+  }
+
+  private async collection(
+    mediaType: "audiobook" | "podcast",
+    id: string,
+    userId: string,
+  ): Promise<AudiobookSummaryResponse | PodcastSummaryResponse | null> {
+    const collection = await this.database.orm.CatalogAlbum.where({
+      id,
+      mediaType,
+    }).first();
+    if (!collection || collection.trackCount < 1) return null;
+    const creators = this.collectionCreators(collection.artistCredits, [
+      collection.artist,
+    ]);
+    const liked = (await this.likedAlbumIds(userId)).has(collection.id);
+    if (mediaType === "audiobook") {
+      return {
+        id: collection.id,
+        mediaType,
+        title: collection.title,
+        author: collection.artist,
+        authors: creators,
+        coverUrl: toCoverUrl(collection.coverId, this.playbackTokens),
+        chapterCount: collection.trackCount,
+        durationMs: collection.durationMs,
+        releaseYear: collection.releaseYear,
+        liked,
+      };
+    }
+    return {
+      id: collection.id,
+      mediaType,
+      title: collection.title,
+      publisher: collection.artist,
+      publishers: creators,
+      coverUrl: toCoverUrl(collection.coverId, this.playbackTokens),
+      episodeCount: collection.trackCount,
+      durationMs: collection.durationMs,
+      latestPublishedAt: collection.latestPublishedAt?.toISOString() ?? null,
+      liked,
     };
   }
 
@@ -1004,7 +1214,10 @@ export class CatalogService {
     id: string,
     userId: string,
   ): Promise<AlbumSummaryResponse | null> {
-    const album = await this.database.orm.CatalogAlbum.first({ id });
+    const album = await this.database.orm.CatalogAlbum.where({
+      id,
+      mediaType: "music",
+    }).first();
     if (!album || album.trackCount < 1) return null;
     return this.toAlbumSummary(
       album,
@@ -1176,7 +1389,7 @@ export class CatalogService {
       ).all();
       return new Set(
         rows.flatMap((track) => {
-          const value = `${track.normalizedTitle} ${track.normalizedArtist} ${track.normalizedAlbum}`;
+          const value = `${track.normalizedTitle} ${track.normalizedArtist} ${track.normalizedAlbum} ${track.normalizedGenres}`;
           return terms.every((term) => value.includes(term)) ? [track.id] : [];
         }),
       );
@@ -1263,6 +1476,27 @@ export class CatalogService {
       releaseYear: album.releaseYear,
       liked,
     };
+  }
+
+  private collectionCreators(
+    artistCredits: string | null,
+    fallback: readonly string[],
+  ): string[] {
+    try {
+      const parsed = artistCredits
+        ? (JSON.parse(artistCredits) as unknown)
+        : null;
+      if (Array.isArray(parsed)) {
+        const values = parsed.filter(
+          (value): value is string =>
+            typeof value === "string" && value.trim().length > 0,
+        );
+        if (values.length) return values;
+      }
+    } catch {
+      // Projection data falls back to the stored creator.
+    }
+    return [...fallback];
   }
 
   private toArtistSummary(
@@ -1388,12 +1622,21 @@ export class CatalogService {
       ? explicitAlbumArtists
       : parseStoredArtistCredits(first.artistCredits, first.artist);
     const albumArtist = albumArtists.join(", ");
+    const collectionMediaType = storedMediaType(first.mediaType);
+    const latestPublishedAt =
+      tracks
+        .flatMap((track) => (track.publishedAt ? [track.publishedAt] : []))
+        .sort((left, right) => right.getTime() - left.getTime())[0] ?? null;
     const values = {
+      mediaType: collectionMediaType,
       title: first.album ?? "Unknown Album",
       artist: albumArtist,
       normalizedTitle: normalize(first.album ?? "Unknown Album"),
       normalizedArtist: normalize(albumArtist),
-      artistId: catalogArtistId(albumArtists[0] ?? first.artist),
+      artistId:
+        collectionMediaType === "music"
+          ? catalogArtistId(albumArtists[0] ?? first.artist)
+          : null,
       coverId: coverTrack.coverId,
       coverTrackId: coverTrack.coverId ? coverTrack.id : null,
       artistCredits: JSON.stringify(albumArtists),
@@ -1405,6 +1648,7 @@ export class CatalogService {
           )
         : null,
       releaseYear: years.size === 1 ? [...years][0]! : null,
+      latestPublishedAt,
     };
     const existing = await this.database.orm.CatalogAlbum.first({
       id: albumId,

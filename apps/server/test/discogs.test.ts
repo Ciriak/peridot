@@ -17,6 +17,8 @@ function release(id: number, position: string, title = "Blue Hours") {
     title: "Night Sessions",
     year: 1999,
     country: "UK",
+    genres: ["Electronic"],
+    styles: ["Downtempo"],
     labels: [{ name: "Night Records", catno: `NIGHT-${id}` }],
     formats: [{ name: "Vinyl", descriptions: ["LP", "Album"] }],
     artists: [{ name: "Elliot Lake" }],
@@ -87,6 +89,7 @@ test("Discogs validates identity, preserves details, caches releases, and spaces
   assert.equal(second.length, 2);
   assert.equal(first[0]?.trackNumber, 1);
   assert.deepEqual(first[0]?.albumArtists, ["Elliot Lake"]);
+  assert.deepEqual(first[0]?.genres, ["Electronic", "Downtempo"]);
   assert.equal(
     first[0]?.details.find((detail) => detail.key === "trackPosition")?.value,
     "A1",

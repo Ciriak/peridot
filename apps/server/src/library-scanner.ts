@@ -3,6 +3,7 @@ import path from "node:path";
 import { opendir, readdir, readFile, stat } from "node:fs/promises";
 import { and, or } from "@prisma/orm-sqlite/orm-client";
 import { parseFile } from "music-metadata";
+import type { MediaType } from "@peridot/contracts";
 import {
   normalizeArtistCredits,
   normalizeOptionalArtistCredits,
@@ -11,12 +12,18 @@ import {
 import type { CatalogService } from "./catalog.js";
 import type { CredentialStore } from "./credential-store.js";
 import type { Database } from "./database.js";
+import { serializeGenres } from "./genres.js";
 import {
   JellyfinClient,
   JellyfinError,
   type JellyfinAudioItem,
 } from "./jellyfin.js";
 import type { MetadataEnrichment } from "./metadata-enrichment.js";
+import {
+  collectionFallbackTitle,
+  mediaType,
+  parsePublishedAt,
+} from "./media.js";
 import { message } from "./messages.js";
 import type { SourceRow, TaskRow, TrackRow } from "./prisma/models.js";
 import {
@@ -30,6 +37,7 @@ import {
 const AUDIO_MIME_TYPES = new Map([
   [".mp3", "audio/mpeg"],
   [".m4a", "audio/mp4"],
+  [".m4b", "audio/mp4"],
   [".aac", "audio/aac"],
   [".ogg", "audio/ogg"],
   [".opus", "audio/ogg"],
@@ -40,7 +48,7 @@ const AUDIO_MIME_TYPES = new Map([
 // SQLite has a single-writer model. Keep catalog mutations serialized so
 // concurrent file workers cannot fail a scan with SQLITE_BUSY.
 const SCAN_CONCURRENCY = 1;
-const CURRENT_METADATA_VERSION = 4;
+const CURRENT_METADATA_VERSION = 6;
 const MAX_COVER_BYTES = 5 * 1024 * 1024;
 const FOLDER_COVER_NAMES = new Set([
   "albumart.jpg",
@@ -74,6 +82,7 @@ interface DiscoveredFile {
 
 interface SourceFile extends DiscoveredFile {
   sourceId: string;
+  mediaType: MediaType;
 }
 
 interface JellyfinSource {
@@ -81,6 +90,8 @@ interface JellyfinSource {
   name: string;
   url: string;
   apiKey: string;
+  mediaType: MediaType;
+  libraryId: string | null;
 }
 
 interface RemoteSourceItem {
@@ -248,7 +259,11 @@ export class LibraryScanner {
             );
           }
           for (const file of await discoverAudioFiles(source.path, signal)) {
-            files.push({ ...file, sourceId: source.id });
+            files.push({
+              ...file,
+              sourceId: source.id,
+              mediaType: mediaType(source.mediaType),
+            });
           }
           continue;
         }
@@ -278,6 +293,8 @@ export class LibraryScanner {
             "Jellyfin",
           url: source.url,
           apiKey,
+          mediaType: mediaType(source.mediaType),
+          libraryId: source.externalLibraryId,
         };
         jellyfinSources.push(remoteSource);
       }
@@ -340,6 +357,7 @@ export class LibraryScanner {
         const remote = await this.jellyfin.listAudio(
           source.url,
           source.apiKey,
+          source.libraryId,
           async (page) => {
             throwIfAborted(signal);
             for (const item of page.items) {
@@ -402,7 +420,10 @@ export class LibraryScanner {
         });
       }
 
-      if (this.metadataEnrichment) {
+      if (
+        this.metadataEnrichment &&
+        sources.some((source) => mediaType(source.mediaType) === "music")
+      ) {
         await queueMetadataFetch(tasks, {
           source: requestedSource
             ? {
@@ -467,10 +488,12 @@ export class LibraryScanner {
         relativePath: file.relativePath,
       };
       existing = await this.database.orm.Track.where(unique).first();
+      const sourceMediaType = mediaType(file.mediaType);
       const unchanged =
         existing?.fileSizeBytes === file.size &&
         existing.fileModifiedAt.getTime() === file.modifiedAt.getTime() &&
-        existing.metadataVersion >= CURRENT_METADATA_VERSION;
+        existing.metadataVersion >= CURRENT_METADATA_VERSION &&
+        mediaType(existing.mediaType) === sourceMediaType;
 
       if (existing && unchanged) {
         const wasUnavailable = !existing.available;
@@ -505,31 +528,52 @@ export class LibraryScanner {
           ? metadata.common.albumartists
           : [metadata.common.albumartist],
       );
-      const albumArtist = albumArtistCredits.length
-        ? albumArtistCredits.join(", ")
+      const creatorCredits =
+        sourceMediaType !== "music" && albumArtistCredits.length === 0
+          ? artistCredits
+          : albumArtistCredits;
+      const albumArtist = creatorCredits.length
+        ? creatorCredits.join(", ")
         : null;
-      const album = metadata.common.album?.trim() || null;
+      const album =
+        metadata.common.album?.trim() ||
+        (sourceMediaType === "music"
+          ? null
+          : collectionFallbackTitle(file.relativePath));
+      const genres = serializeGenres(metadata.common.genre);
       const discNumber = positiveInteger(metadata.common.disk.no);
       const trackNumber = positiveInteger(metadata.common.track.no);
       const durationMs = Number.isFinite(metadata.format.duration)
         ? Math.round(metadata.format.duration! * 1000)
         : null;
+      const taggedPublishedAt = parsePublishedAt(
+        metadata.common.releasedate,
+        metadata.common.originaldate,
+        metadata.common.date,
+        metadata.common.year,
+      );
+      const publishedAt =
+        taggedPublishedAt ??
+        (sourceMediaType === "podcast" ? file.modifiedAt : null);
       const coverId = await this.storeCover(
         await this.coverFor(file.absolutePath, metadata.common.picture),
       );
 
       const trackData = {
+        mediaType: sourceMediaType,
         title,
         artist,
         artistCredits: serializeArtistCredits(artistCredits),
         albumArtist,
-        albumArtistCredits: albumArtistCredits.length
-          ? JSON.stringify(albumArtistCredits)
+        albumArtistCredits: creatorCredits.length
+          ? JSON.stringify(creatorCredits)
           : null,
         album,
+        genres,
         discNumber,
         trackNumber,
         durationMs,
+        publishedAt,
         coverId,
         mimeType: file.mimeType,
         fileSizeBytes: file.size,
@@ -633,9 +677,17 @@ export class LibraryScanner {
       const artistCredits = normalizeArtistCredits(
         item.artists.length ? item.artists : ["Unknown artist"],
       );
-      const albumArtists = normalizeOptionalArtistCredits(item.albumArtists);
+      const sourceMediaType = mediaType(remote.source.mediaType);
+      const itemAlbumArtists = normalizeOptionalArtistCredits(
+        item.albumArtists,
+      );
+      const albumArtists =
+        sourceMediaType !== "music" && itemAlbumArtists.length === 0
+          ? artistCredits
+          : itemAlbumArtists;
       const relativePath = `jellyfin/${item.albumId ?? "unknown"}/${item.externalId}`;
       const trackData = {
+        mediaType: sourceMediaType,
         relativePath,
         title: item.title,
         artist: artistCredits.join(", "),
@@ -645,9 +697,11 @@ export class LibraryScanner {
           ? JSON.stringify(albumArtists)
           : null,
         album: item.album,
+        genres: serializeGenres(item.genres),
         discNumber: item.discNumber,
         trackNumber: item.trackNumber,
         durationMs: item.durationMs,
+        publishedAt: item.publishedAt ?? parsePublishedAt(item.fileModifiedAt),
         coverId,
         mimeType: item.mimeType,
         fileSizeBytes: item.fileSizeBytes,

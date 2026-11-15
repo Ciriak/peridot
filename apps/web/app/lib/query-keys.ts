@@ -28,6 +28,12 @@ export const queryKeys = {
   albums(scope: PeridotQueryScope, options: CardListOptions) {
     return [...peridotScopeKey(scope), "catalog", "albums", options];
   },
+  audiobooks(scope: PeridotQueryScope, options: CardListOptions) {
+    return [...peridotScopeKey(scope), "catalog", "audiobooks", options];
+  },
+  podcasts(scope: PeridotQueryScope, options: CardListOptions) {
+    return [...peridotScopeKey(scope), "catalog", "podcasts", options];
+  },
   artists(scope: PeridotQueryScope, options: CardListOptions) {
     return [...peridotScopeKey(scope), "catalog", "artists", options];
   },

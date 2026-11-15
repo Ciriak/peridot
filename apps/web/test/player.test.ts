@@ -98,14 +98,14 @@ test("the persistent player controls a native audio element", async () => {
     "Changing layouts must not restore player state over active playback",
   );
   assert.match(layout, /currentCoverUrl = computed\(/);
-  assert.match(layout, /<img[\s\S]*object-cover/);
+  assert.match(layout, /<FadeInImage[\s\S]*:src="currentCoverImageUrl"/);
+  assert.match(layout, /icons\.book/);
+  assert.match(layout, /icons\.podcast/);
+  assert.match(layout, /icons\.album/);
+  assert.match(layout, /icons\.music/);
   assert.match(
     layout,
-    /<Icon\s+v-else\s+:icon="active\?\.albumId \? icons\.album : icons\.music"/,
-  );
-  assert.match(
-    layout,
-    /<TrackArtistLinks :artists="trackArtistNames\(active\)" \/>/,
+    /<TrackArtistLinks\s+v-if="active\.mediaType === 'music'"\s+:artists="trackArtistNames\(active\)"\s+\/>/,
     "The active track's credited artists link from the persistent player",
   );
   assert.match(
@@ -157,7 +157,7 @@ test("the persistent player controls a native audio element", async () => {
   );
   assert.match(
     playerFooter,
-    /class="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted text-muted-foreground md:size-20"/,
+    /class="relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted text-muted-foreground md:size-20"/,
     "The player artwork is larger on compact and medium layouts",
   );
   assert.match(
@@ -167,7 +167,7 @@ test("the persistent player controls a native audio element", async () => {
   );
   assert.match(
     playerFooter,
-    /<div\s+aria-hidden="true"\s+class="pointer-events-none absolute inset-y-0 left-0 -z-10 w-2\/3[\s\S]*<div class="absolute inset-0 opacity-40">[\s\S]*<Transition[\s\S]*<img\s+v-if="currentCoverImageUrl && !coverFailed"[\s\S]*:src="currentCoverImageUrl"[\s\S]*scale-125 object-cover object-left blur-3xl/,
+    /<div\s+aria-hidden="true"\s+class="pointer-events-none absolute inset-y-0 left-0 -z-10 w-2\/3[\s\S]*<div class="absolute inset-0 opacity-40">[\s\S]*<Transition[\s\S]*<FadeInImage\s+v-if="currentCoverImageUrl && !coverFailed"[\s\S]*:src="currentCoverImageUrl"[\s\S]*scale-125 object-left blur-3xl/,
     "The decorative background stays mounted while its current cover is rendered",
   );
   assert.doesNotMatch(
@@ -182,7 +182,7 @@ test("the persistent player controls a native audio element", async () => {
   );
   assert.match(
     playerFooter,
-    /<Transition\s+enter-active-class="transition-opacity duration-3000 delay-150 ease-in-out motion-reduce:transition-none"[\s\S]*leave-active-class="transition-opacity duration-3000 delay-150 ease-in-out motion-reduce:transition-none"[\s\S]*<img\s+v-if="currentCoverImageUrl && !coverFailed"\s+:key="currentCoverImageUrl"\s+:src="currentCoverImageUrl"/,
+    /<Transition\s+enter-active-class="transition-opacity duration-3000 delay-150 ease-in-out motion-reduce:transition-none"[\s\S]*leave-active-class="transition-opacity duration-3000 delay-150 ease-in-out motion-reduce:transition-none"[\s\S]*<FadeInImage\s+v-if="currentCoverImageUrl && !coverFailed"\s+:key="currentCoverImageUrl"\s+:src="currentCoverImageUrl"/,
     "The decorative player background waits briefly, then directly crossfades over three seconds",
   );
   assert.equal(
@@ -260,7 +260,7 @@ test("the persistent player controls a native audio element", async () => {
   );
   assert.match(
     playerFooter,
-    /<ScrollingText\s+v-else\s+mode="always"\s+class="min-w-0 flex-1 text-xs text-muted-foreground"\s*>[\s\S]*?<TrackArtistLinks\s+:artists="trackArtistNames\(active\)"\s*\/>/,
+    /<ScrollingText\s+v-else\s+mode="always"\s+class="min-w-0 flex-1 text-xs text-muted-foreground"\s*>[\s\S]*?<TrackArtistLinks\s+v-if="active\.mediaType === 'music'"\s+:artists="trackArtistNames\(active\)"\s*\/>/,
     "The active player artist line uses the always-on scrolling text component",
   );
   assert.doesNotMatch(

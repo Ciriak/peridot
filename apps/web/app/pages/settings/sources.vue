@@ -10,6 +10,8 @@ import {
 import { Icon } from "@iconify/vue/offline";
 import type {
   CreateSourceRequest,
+  JellyfinLibraryResponse,
+  MediaType,
   SourceKind,
   SourceResponse,
 } from "@peridot/contracts";
@@ -55,8 +57,10 @@ import { icons } from "../../lib/icons";
 import {
   createSource,
   deleteSource,
+  discoverJellyfinLibraries,
   isAuthenticationRedirectError,
   reorderSources,
+  updateSource,
 } from "../../lib/peridot-client";
 import { sourceFolderName } from "../../lib/source-label";
 import {
@@ -87,6 +91,7 @@ const serverLost = computed(() => serverStatus.value === "lost");
 const sourcesQuery = useAdminSourcesQuery();
 const sources = ref<SourceResponse[]>([]);
 const sourceList = ref<HTMLElement | null>(null);
+const mediaTypes: MediaType[] = ["music", "audiobook", "podcast"];
 const loading = sourcesQuery.loading;
 const pageError = ref("");
 const addOpen = ref(false);
@@ -95,6 +100,10 @@ const newKind = ref<SourceChoice | null>(null);
 const newPath = ref("");
 const newUrl = ref("");
 const newApiKey = ref("");
+const newMediaType = ref<MediaType>("music");
+const newLibraryId = ref("");
+const jellyfinLibraries = ref<JellyfinLibraryResponse[]>([]);
+const discoveringLibraries = ref(false);
 const adding = ref(false);
 const addError = ref("");
 const removeOpen = ref(false);
@@ -190,6 +199,9 @@ function openAddDialog() {
   newPath.value = "";
   newUrl.value = "";
   newApiKey.value = "";
+  newMediaType.value = "music";
+  newLibraryId.value = "";
+  jellyfinLibraries.value = [];
   addOpen.value = true;
 }
 
@@ -204,6 +216,9 @@ function closeAddDialog() {
   newPath.value = "";
   newUrl.value = "";
   newApiKey.value = "";
+  newMediaType.value = "music";
+  newLibraryId.value = "";
+  jellyfinLibraries.value = [];
 }
 
 function handleDialogBack() {
@@ -212,6 +227,9 @@ function handleDialogBack() {
     newPath.value = "";
     newUrl.value = "";
     newApiKey.value = "";
+    newMediaType.value = "music";
+    newLibraryId.value = "";
+    jellyfinLibraries.value = [];
     addError.value = "";
   } else {
     closeAddDialog();
@@ -221,7 +239,11 @@ function handleDialogBack() {
 function canAdd(): boolean {
   if (newKind.value === "path") return Boolean(newPath.value.trim());
   if (newKind.value === "jellyfin") {
-    return Boolean(newUrl.value.trim() && newApiKey.value.trim());
+    return Boolean(
+      newUrl.value.trim() &&
+      newApiKey.value.trim() &&
+      newLibraryId.value.trim(),
+    );
   }
   return false;
 }
@@ -232,13 +254,19 @@ async function addSource() {
   addError.value = "";
   let body: CreateSourceRequest;
   if (newKind.value === "path") {
-    body = { kind: "path", path: newPath.value };
+    body = {
+      kind: "path",
+      path: newPath.value,
+      mediaType: newMediaType.value,
+    };
   } else {
     body = {
       kind: "integration",
       integration: "jellyfin",
       url: newUrl.value,
       apiKey: newApiKey.value,
+      mediaType: newMediaType.value,
+      libraryId: newLibraryId.value,
     };
   }
   try {
@@ -265,6 +293,59 @@ async function addSource() {
     addError.value = errorMessage(reason, "settings.sources.addError");
   } finally {
     adding.value = false;
+  }
+}
+
+async function discoverLibraries() {
+  if (!address.value || !token.value) return;
+  discoveringLibraries.value = true;
+  addError.value = "";
+  try {
+    const response = await discoverJellyfinLibraries(
+      address.value,
+      token.value,
+      {
+        url: newUrl.value,
+        apiKey: newApiKey.value,
+      },
+    );
+    jellyfinLibraries.value = response.items;
+    if (!response.items.some((library) => library.id === newLibraryId.value)) {
+      newLibraryId.value = response.items[0]?.id ?? "";
+    }
+  } catch (reason) {
+    if (isAuthenticationRedirectError(reason)) return;
+    addError.value = errorMessage(reason, "settings.sources.addError");
+  } finally {
+    discoveringLibraries.value = false;
+  }
+}
+
+function mediaTypeLabel(mediaType: MediaType): string {
+  return t(
+    mediaType === "music"
+      ? "settings.sources.media.music"
+      : mediaType === "audiobook"
+        ? "settings.sources.media.audiobook"
+        : "settings.sources.media.podcast",
+  );
+}
+
+async function changeMediaType(source: SourceResponse, mediaType: MediaType) {
+  if (source.mediaType === mediaType || serverLost.value) return;
+  pageError.value = "";
+  try {
+    const updated = await updateSource(
+      address.value ?? "",
+      token.value ?? "",
+      source.id,
+      { mediaType },
+    );
+    if (updated.task) trackTask(updated.task);
+    await loadSources();
+  } catch (reason) {
+    if (isAuthenticationRedirectError(reason)) return;
+    pageError.value = errorMessage(reason, "settings.sources.updateError");
   }
 }
 
@@ -440,6 +521,10 @@ onMounted(() => void loadSources());
                 sourceFileCount(source)
               }}</span>
               <span aria-hidden="true">·</span>
+              <span class="font-medium text-foreground">{{
+                mediaTypeLabel(source.mediaType)
+              }}</span>
+              <span aria-hidden="true">·</span>
               <time v-if="source.lastSyncedAt" :datetime="source.lastSyncedAt">
                 {{ sourceLastSync(source) }}
               </time>
@@ -529,6 +614,34 @@ onMounted(() => void loadSources());
                   {{ t("settings.sources.rescan") }}
                 </DropdownMenuItem>
                 <DropdownMenuItem
+                  v-for="mediaType in mediaTypes"
+                  :key="mediaType"
+                  :disabled="
+                    source.mediaType === mediaType ||
+                    serverLost ||
+                    (source.kind !== 'path' && !isJellyfin(source))
+                  "
+                  class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none data-disabled:cursor-default data-disabled:opacity-50"
+                  @select="changeMediaType(source, mediaType)"
+                >
+                  <Icon
+                    :icon="
+                      mediaType === 'music'
+                        ? icons.music
+                        : mediaType === 'audiobook'
+                          ? icons.book
+                          : icons.podcast
+                    "
+                    aria-hidden="true"
+                    class="size-4"
+                  />
+                  {{
+                    t("settings.sources.setMediaType", {
+                      mediaType: mediaTypeLabel(mediaType),
+                    })
+                  }}
+                </DropdownMenuItem>
+                <DropdownMenuItem
                   :disabled="serverLost"
                   class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm text-destructive outline-none data-disabled:cursor-default data-disabled:opacity-50"
                   @select="askRemove(source)"
@@ -551,7 +664,7 @@ onMounted(() => void loadSources());
     <DialogPortal>
       <DialogOverlay class="fixed inset-0 z-50 bg-background/80" />
       <DialogContent
-        class="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-card p-6 text-card-foreground shadow-lg"
+        class="fixed left-1/2 top-1/2 z-50 max-h-svh w-full max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border bg-card p-6 text-card-foreground shadow-lg"
       >
         <DialogTitle class="text-lg font-semibold">
           {{ t("settings.sources.addTitle") }}
@@ -582,6 +695,35 @@ onMounted(() => void loadSources());
         </div>
 
         <div v-else class="mt-4 space-y-4">
+          <div class="space-y-2">
+            <p class="text-sm font-medium">
+              {{ t("settings.sources.mediaType") }}
+            </p>
+            <div class="grid grid-cols-3 gap-2">
+              <Button
+                v-for="mediaType in mediaTypes"
+                :key="mediaType"
+                type="button"
+                :variant="newMediaType === mediaType ? 'default' : 'outline'"
+                size="sm"
+                @click="newMediaType = mediaType"
+              >
+                <Icon
+                  :icon="
+                    mediaType === 'music'
+                      ? icons.music
+                      : mediaType === 'audiobook'
+                        ? icons.book
+                        : icons.podcast
+                  "
+                  aria-hidden="true"
+                  class="size-4"
+                />
+                {{ mediaTypeLabel(mediaType) }}
+              </Button>
+            </div>
+          </div>
+
           <div v-if="newKind === 'path'" class="space-y-2">
             <label for="source-path" class="text-sm font-medium">
               {{ t("settings.sources.folder") }}
@@ -617,6 +759,45 @@ onMounted(() => void loadSources());
               <p class="text-sm text-muted-foreground">
                 {{ t("settings.sources.jellyfinApiKeyHelp") }}
               </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              :disabled="
+                discoveringLibraries ||
+                !newUrl.trim() ||
+                !newApiKey.trim() ||
+                serverLost
+              "
+              @click="discoverLibraries"
+            >
+              {{
+                discoveringLibraries
+                  ? t("settings.sources.loadingLibraries")
+                  : t("settings.sources.loadLibraries")
+              }}
+            </Button>
+            <div v-if="jellyfinLibraries.length" class="space-y-2">
+              <p class="text-sm font-medium">
+                {{ t("settings.sources.jellyfinLibrary") }}
+              </p>
+              <div class="grid gap-2">
+                <Button
+                  v-for="library in jellyfinLibraries"
+                  :key="library.id"
+                  type="button"
+                  :variant="newLibraryId === library.id ? 'default' : 'outline'"
+                  class="justify-start"
+                  @click="newLibraryId = library.id"
+                >
+                  <Icon
+                    :icon="icons.library"
+                    aria-hidden="true"
+                    class="size-4"
+                  />
+                  {{ library.name }}
+                </Button>
+              </div>
             </div>
           </div>
 

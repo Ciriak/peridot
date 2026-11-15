@@ -20,6 +20,20 @@ function jellyfinResponse(input: string | URL | Request): Response {
       Version: "10.10.0",
     });
   }
+  if (url.pathname === "/Library/VirtualFolders") {
+    return Response.json([
+      {
+        ItemId: "audio-library-id",
+        Name: "Audiobooks",
+        CollectionType: "books",
+      },
+      {
+        ItemId: "music-library-id",
+        Name: "Music",
+        CollectionType: "music",
+      },
+    ]);
+  }
   if (url.pathname === "/Items") {
     return Response.json({
       Items: [
@@ -37,6 +51,7 @@ function jellyfinResponse(input: string | URL | Request): Response {
           AlbumId: ALBUM_ID,
           AlbumArtists: [{ Name: "Album Artist" }],
           AlbumPrimaryImageTag: "cover-v1",
+          Genres: ["Electronic", "Synthwave"],
           MediaSources: [{ Container: "mp3", Size: AUDIO.length }],
         },
         {
@@ -81,6 +96,78 @@ function jellyfinResponse(input: string | URL | Request): Response {
   }
   return new Response("not found", { status: 404 });
 }
+
+test("Jellyfin library discovery creates one typed source per selected library", async () => {
+  const requestedUrls: string[] = [];
+  const jellyfinFetch: typeof fetch = async (input, init) => {
+    const request =
+      input instanceof Request
+        ? input
+        : new Request(String(input), init as RequestInit);
+    requestedUrls.push(request.url);
+    return jellyfinResponse(request);
+  };
+  const context = await createTestContext({ jellyfinFetch });
+  try {
+    const discovery = await context.app.inject({
+      method: "POST",
+      url: "/api/admin/integrations/jellyfin/libraries",
+      headers: context.authorization,
+      payload: {
+        url: "http://jellyfin.local:8096",
+        apiKey: API_KEY,
+      },
+    });
+    assert.equal(discovery.statusCode, 200, discovery.body);
+    assert.equal(
+      discovery.json<{ items: Array<{ name: string }> }>().items[0]?.name,
+      "Audiobooks",
+    );
+
+    const create = await context.app.inject({
+      method: "POST",
+      url: "/api/admin/sources",
+      headers: context.authorization,
+      payload: {
+        kind: "integration",
+        integration: "jellyfin",
+        mediaType: "audiobook",
+        libraryId: "audio-library-id",
+        url: "http://jellyfin.local:8096",
+        apiKey: API_KEY,
+      },
+    });
+    assert.equal(create.statusCode, 201, create.body);
+    const source = create.json<{
+      id: string;
+      mediaType: string;
+      externalLibraryId: string;
+      task: TaskResponse;
+    }>();
+    assert.equal(source.mediaType, "audiobook");
+    assert.equal(source.externalLibraryId, "audio-library-id");
+    await waitForScan(context, source.task.id);
+
+    assert.ok(
+      requestedUrls.some(
+        (url) =>
+          new URL(url).pathname === "/Items" &&
+          new URL(url).searchParams.get("parentId") === "audio-library-id",
+      ),
+    );
+    const books = await context.app.inject({
+      method: "GET",
+      url: "/api/audiobooks",
+      headers: context.authorization,
+    });
+    assert.equal(
+      books.json<{ items: Array<{ title: string }> }>().items[0]?.title,
+      "Night Album",
+    );
+  } finally {
+    await context.close();
+  }
+});
 
 test("Jellyfin sources validate, import audio only, encrypt credentials, proxy playback, and remove cleanly", async () => {
   const authorizationHeaders: string[] = [];
@@ -175,6 +262,7 @@ test("Jellyfin sources validate, import audio only, encrypt credentials, proxy p
         durationMs: number | null;
         coverUrl: string | null;
         mimeType: string;
+        genres: string[];
       }>;
     }>().items[0];
     assert.ok(track);
@@ -185,7 +273,15 @@ test("Jellyfin sources validate, import audio only, encrypt credentials, proxy p
     assert.equal(track.trackNumber, 2);
     assert.equal(track.durationMs, 12_340);
     assert.equal(track.mimeType, "audio/mpeg");
+    assert.deepEqual(track.genres, ["Electronic", "Synthwave"]);
     assert.ok(track.coverUrl);
+    assert.ok(
+      requestedUrls.some((url) => {
+        const fields = new URL(url).searchParams.get("fields") ?? "";
+        return fields.includes("MediaSources") && fields.includes("Genres");
+      }),
+      "Jellyfin requests genre fields",
+    );
 
     const playbackToken = await context.app.inject({
       method: "POST",

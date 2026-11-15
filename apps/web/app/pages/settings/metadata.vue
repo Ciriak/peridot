@@ -61,6 +61,8 @@ import {
 import {
   activeTaskForMetadataProvider,
   activeTaskPercent,
+  taskProgressMessage,
+  taskStatusMessage,
 } from "../../lib/task-progress";
 import {
   notifyMetadataProviderMutation,
@@ -299,6 +301,23 @@ function providerProgress(provider: MetadataProviderResponse | null) {
   return task ? activeTaskPercent(task) : null;
 }
 
+function providerTaskTitle(provider: MetadataProviderResponse | null): string {
+  const task = providerTask(provider);
+  return task ? translate(task.titleMessage) : "";
+}
+
+function providerTaskStatus(provider: MetadataProviderResponse | null): string {
+  const task = providerTask(provider);
+  return task ? translate(taskStatusMessage(task)) : "";
+}
+
+function providerTaskProgressLabel(
+  provider: MetadataProviderResponse | null,
+): string {
+  const task = providerTask(provider);
+  return task ? translate(taskProgressMessage(task)) : "";
+}
+
 async function persistOrder() {
   try {
     await reorderMetadataProviders(
@@ -401,7 +420,7 @@ onMounted(() => void loadProviders());
       <p v-if="loading" class="text-sm text-muted-foreground">
         {{ t("common.loadingMore") }}
       </p>
-      <TooltipProvider v-else-if="providerRows.length">
+      <TooltipProvider v-else-if="providerRows.length" :delay-duration="150">
         <ul ref="providerList" class="space-y-2">
           <li
             v-for="row in providerRows"
@@ -440,17 +459,45 @@ onMounted(() => void loadProviders());
                 {{ providerStatusLabel(row.provider) }}
               </span>
             </span>
-            <ProgressCircle
-              v-if="row.provider && providerTask(row.provider)"
-              size="sm"
-              :value="providerProgress(row.provider)"
-              :label="
-                t('settings.metadata.progress', {
-                  provider: row.provider.name,
-                })
-              "
-              class="size-5"
-            />
+            <TooltipRoot v-if="row.provider && providerTask(row.provider)">
+              <TooltipTrigger as-child>
+                <ProgressCircle
+                  tabindex="0"
+                  size="sm"
+                  :value="providerProgress(row.provider)"
+                  :label="
+                    t('settings.metadata.progress', {
+                      provider: row.provider.name,
+                    })
+                  "
+                  class="size-5 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                />
+              </TooltipTrigger>
+              <TooltipPortal>
+                <TooltipContent
+                  side="bottom"
+                  align="end"
+                  :side-offset="6"
+                  class="z-50 w-64 rounded-md border bg-popover p-3 text-popover-foreground shadow-md"
+                >
+                  <p class="text-sm font-semibold">
+                    {{ providerTaskTitle(row.provider) }}
+                  </p>
+                  <p class="mt-1 text-xs text-muted-foreground">
+                    <span
+                      :class="
+                        providerTask(row.provider)?.status === 'running'
+                          ? 'font-medium text-primary'
+                          : 'font-medium'
+                      "
+                      >{{ providerTaskStatus(row.provider) }}</span
+                    >
+                    ·
+                    {{ providerTaskProgressLabel(row.provider) }}
+                  </p>
+                </TooltipContent>
+              </TooltipPortal>
+            </TooltipRoot>
             <div class="flex flex-col items-center gap-1">
               <TooltipRoot
                 v-if="row.provider && providerNeedsConfiguration(row.provider)"

@@ -177,8 +177,11 @@ function toggleEntryPlayback(entry: PlaylistEntryResponse) {
           </Badge>
         </div>
         <ScrollingText class="w-full text-xs text-muted-foreground">
-          <TrackArtistLinks v-if="entry.track" :artists="entry.track.artists" />
-          <template v-else>{{ entry.artist }}</template>
+          <TrackArtistLinks
+            v-if="entry.track?.mediaType === 'music'"
+            :artists="entry.track.artists"
+          />
+          <span v-else>{{ entry.artist }}</span>
         </ScrollingText>
       </div>
       <NuxtLink
@@ -197,7 +200,7 @@ function toggleEntryPlayback(entry: PlaylistEntryResponse) {
         {{ formatTrackDuration(entry.durationMs) }}
       </span>
       <LikeButton
-        v-if="entry.track"
+        v-if="entry.track?.mediaType === 'music'"
         compact
         :liked="entry.liked"
         :label="entry.title"

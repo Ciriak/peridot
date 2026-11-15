@@ -66,6 +66,10 @@ test("en-US messages interpolate and pluralize", () => {
     "Server internal folder",
   );
   assert.equal(i18n.global.t("settings.sources.jellyfin"), "Jellyfin instance");
+  assert.equal(
+    i18n.global.t("trackTable.genres", { genres: "Electronic, Ambient" }),
+    "Genres: Electronic, Ambient",
+  );
   assert.equal(i18n.global.t("count.file", { count: 1 }, 1), "1 file");
   assert.equal(i18n.global.t("count.file", { count: 2 }, 2), "2 files");
   assert.equal(

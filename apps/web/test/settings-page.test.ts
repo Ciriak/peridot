@@ -363,7 +363,21 @@ test("metadata providers have a dedicated sortable management page", async () =>
     page,
     /activeTaskForMetadataProvider\(tasks\.value, provider\.id\)/,
   );
-  assert.match(page, /v-if="row\.provider && providerTask\(row\.provider\)"/);
+  assert.match(
+    page,
+    /<TooltipRoot\s+v-if="row\.provider && providerTask\(row\.provider\)"/,
+  );
+  assert.match(
+    page,
+    /<TooltipProvider\s+v-else-if="providerRows\.length"\s+:delay-duration="150"/,
+  );
+  assert.match(page, /tabindex="0"/);
+  assert.match(page, /side="bottom"/);
+  assert.match(page, /providerTaskTitle\(row\.provider\)/);
+  assert.match(page, /providerTaskStatus\(row\.provider\)/);
+  assert.match(page, /providerTaskProgressLabel\(row\.provider\)/);
+  assert.match(page, /taskStatusMessage\(task\)/);
+  assert.match(page, /taskProgressMessage\(task\)/);
   assert.match(page, /:value="providerProgress\(row\.provider\)"/);
   assert.match(page, /settings\.metadata\.progress/);
   assert.doesNotMatch(page, />\s*Add provider\s*</);
@@ -496,12 +510,19 @@ test("administrators can create, edit, promote, and delete managed accounts", as
   assert.match(page, /settings\.users\.newPassword/);
 });
 
-test("server settings no longer contain source or library status management", async () => {
+test("server settings expose automatic source refresh without library status management", async () => {
   const page = await readSource("../app/pages/settings/server.vue");
   assert.doesNotMatch(page, /Library status/);
   assert.doesNotMatch(page, /Rescan library/);
   assert.doesNotMatch(page, /listSources/);
-  assert.doesNotMatch(page, /fetchServerSettings/);
+  assert.match(page, /useServerSettingsQuery/);
+  assert.match(page, /sourceRefreshEnabled/);
+  assert.match(page, /sourceRefreshCron/);
+  assert.match(page, /saveSourceRefresh/);
+  assert.match(page, /settings\.server\.scheduleTitle/);
+  assert.match(page, /settings\.server\.scheduleCronHelp/);
+  assert.match(page, /https:\/\/crontab\.guru\//);
+  assert.match(page, /settings\.server\.scheduleCronHelpLink/);
   assert.match(page, /useServerLogsQuery/);
   assert.match(page, /settings\.server\.log/);
   assert.match(page, /settings\.server\.search/);

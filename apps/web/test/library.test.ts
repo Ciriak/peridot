@@ -174,7 +174,7 @@ test("shared track rows always show linked artists beneath the title", async () 
 
   assert.match(
     table,
-    /<ScrollingText class="w-full text-xs text-muted-foreground">\s*<TrackArtistLinks :artists="trackArtistNames\(item\.data\)" \/>/,
+    /<ScrollingText class="w-full text-xs text-muted-foreground">\s*<TrackArtistLinks[\s\S]*?showArtists !== false[\s\S]*?item\.data\.mediaType === 'music'[\s\S]*?:artists="trackArtistNames\(item\.data\)"/,
   );
   assert.doesNotMatch(table, />\s*Artist\s*<Icon/);
   assert.equal(table.match(/<TrackArtistLinks/g)?.length, 1);

@@ -5,6 +5,7 @@ import { computed } from "vue";
 import { useCachedArtwork } from "../composables/use-cached-artwork";
 import { icons } from "../lib/icons";
 import { trackCoverUrl } from "../lib/library";
+import FadeInImage from "./FadeInImage.vue";
 
 const props = defineProps<{
   track: TrackResponse;
@@ -24,17 +25,13 @@ const placeholderIcon = computed(() =>
   <div
     class="relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted text-muted-foreground"
   >
-    <img
+    <Icon :icon="placeholderIcon" aria-hidden="true" class="size-5" />
+    <FadeInImage
       v-if="artworkUrl && !coverFailed"
       :src="artworkUrl"
-      alt=""
-      aria-hidden="true"
-      loading="lazy"
-      decoding="async"
-      class="size-full object-cover"
+      class="absolute inset-0"
       @error="coverFailed = true"
     />
-    <Icon v-else :icon="placeholderIcon" aria-hidden="true" class="size-5" />
     <slot />
   </div>
 </template>

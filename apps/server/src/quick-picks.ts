@@ -3,6 +3,7 @@ const QUICK_PICK_HALF_LIFE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface PlayedTrackInfo {
   id: string;
+  mediaType?: string;
   artist: string;
   album: string | null;
   albumArtist: string | null;
@@ -73,6 +74,12 @@ export function rankQuickPicks(
 
   for (const event of events) {
     if (!event.track.available) continue;
+    if (
+      event.track.mediaType !== undefined &&
+      event.track.mediaType !== "music"
+    ) {
+      continue;
+    }
     const playedAt = event.playedAt.getTime();
     const score = decayedPlayScore(event.playedAt, now);
     const track = tracks.get(event.track.id);

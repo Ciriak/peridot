@@ -3,19 +3,43 @@ import {
   effectiveAlbumArtistCredits,
   effectiveArtistCredits,
 } from "./metadata-enrichment.js";
+import {
+  parseStoredArtistCredits,
+  parseStoredOptionalArtistCredits,
+} from "./artist-credits.js";
 import { parseStoredMetadataDetails } from "./metadata-details.js";
+import { effectiveTrackGenres, parseStoredGenres } from "./genres.js";
 import type { PlaybackTokenService } from "./playback-tokens.js";
 import type { TrackRow } from "./prisma/models.js";
+import { storedMediaType } from "./media.js";
 
 export function effectiveTrackFields(track: TrackRow) {
+  const music = storedMediaType(track.mediaType) === "music";
   return {
-    title: track.metadataTitle ?? track.title,
-    artist: track.metadataArtist ?? track.artist,
-    artists: effectiveArtistCredits(track),
-    albumArtists: effectiveAlbumArtistCredits(track),
-    album: track.metadataAlbum ?? track.album,
-    discNumber: track.metadataDiscNumber ?? track.discNumber,
-    trackNumber: track.metadataTrackNumber ?? track.trackNumber,
+    title: music ? (track.metadataTitle ?? track.title) : track.title,
+    artist: music ? (track.metadataArtist ?? track.artist) : track.artist,
+    artists: music
+      ? effectiveArtistCredits(track)
+      : parseStoredArtistCredits(track.artistCredits, track.artist),
+    albumArtists: music
+      ? effectiveAlbumArtistCredits(track)
+      : (() => {
+          const creators = parseStoredOptionalArtistCredits(
+            track.albumArtistCredits,
+            track.albumArtist,
+          );
+          return creators.length ? creators : [track.artist];
+        })(),
+    album: music ? (track.metadataAlbum ?? track.album) : track.album,
+    genres: music
+      ? effectiveTrackGenres(track)
+      : parseStoredGenres(track.genres),
+    discNumber: music
+      ? (track.metadataDiscNumber ?? track.discNumber)
+      : track.discNumber,
+    trackNumber: music
+      ? (track.metadataTrackNumber ?? track.trackNumber)
+      : track.trackNumber,
     durationMs: track.durationMs,
   };
 }
@@ -47,6 +71,7 @@ export function toTrackResponse(
 ): TrackResponse {
   const effective = effectiveTrackFields(track);
   const matched =
+    storedMediaType(track.mediaType) === "music" &&
     track.metadataExternalTrackId &&
     (track.metadataProviderKind === "musicbrainz" ||
       track.metadataProviderKind === "discogs") &&
@@ -67,19 +92,23 @@ export function toTrackResponse(
             (track.metadataProviderKind === "musicbrainz"
               ? `https://musicbrainz.org/recording/${encodeURIComponent(track.metadataExternalTrackId)}`
               : "https://www.discogs.com/"),
+          genres: parseStoredGenres(track.metadataGenres),
           details: parseStoredMetadataDetails(track.metadataDetails),
         }
       : null;
   const coverUrl = toCoverUrl(track.coverId, playbackTokens);
   return {
     id: track.id,
+    mediaType: storedMediaType(track.mediaType),
     title: effective.title,
     artist: effective.artist,
     artists: effective.artists,
     album: effective.album,
+    genres: effective.genres,
     discNumber: effective.discNumber,
     trackNumber: effective.trackNumber,
     durationMs: effective.durationMs,
+    publishedAt: track.publishedAt?.toISOString() ?? null,
     albumId,
     mimeType: track.mimeType,
     available: Boolean(track.available),

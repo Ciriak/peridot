@@ -6,6 +6,8 @@ import type {
   ApplyTrackMetadataRequest,
   AlbumListResponse,
   ArtistListResponse,
+  AudiobookListResponse,
+  AudiobookSummaryResponse,
   ArtistMetadataCandidateListResponse,
   AuthSessionResponse,
   AuthStatusResponse,
@@ -16,6 +18,8 @@ import type {
   CreateUserRequest,
   DirectoryListResponse,
   DirectorySearchResponse,
+  DiscoverJellyfinLibrariesRequest,
+  JellyfinLibraryListResponse,
   LikeListResponse,
   LikeResponse,
   LikeTarget,
@@ -27,6 +31,8 @@ import type {
   MetadataProviderResponse,
   PlaylistDetailResponse,
   PlaylistListResponse,
+  PodcastListResponse,
+  PodcastSummaryResponse,
   QuickPickListResponse,
   RealtimeTicketResponse,
   ReorderPlaylistItemsRequest,
@@ -45,6 +51,8 @@ import type {
   UpdatePlaylistRequest,
   UpdateUserProfileRequest,
   UpdateMetadataProviderRequest,
+  UpdateServerSettingsRequest,
+  UpdateSourceRequest,
   UpdateUserRequest,
   UserListResponse,
   UserResponse,
@@ -357,6 +365,19 @@ export function requestServerRestart(serverAddress: string, token: string) {
   );
 }
 
+export function updateServerSettings(
+  serverAddress: string,
+  token: string,
+  settings: UpdateServerSettingsRequest,
+) {
+  return authenticatedRequestJson<ServerSettingsResponse>(
+    serverAddress,
+    "/api/admin/server",
+    token,
+    { method: "PUT", body: JSON.stringify(settings) },
+  );
+}
+
 export function listMetadataProviders(serverAddress: string, token: string) {
   return authenticatedRequestJson<MetadataProviderListResponse>(
     serverAddress,
@@ -476,6 +497,33 @@ export function deleteSource(
   );
 }
 
+export function updateSource(
+  serverAddress: string,
+  token: string,
+  sourceId: string,
+  request: UpdateSourceRequest,
+) {
+  return authenticatedRequestJson<CreateSourceResponse>(
+    serverAddress,
+    `/api/admin/sources/${encodeURIComponent(sourceId)}`,
+    token,
+    { method: "PATCH", body: JSON.stringify(request) },
+  );
+}
+
+export function discoverJellyfinLibraries(
+  serverAddress: string,
+  token: string,
+  request: DiscoverJellyfinLibrariesRequest,
+) {
+  return authenticatedRequestJson<JellyfinLibraryListResponse>(
+    serverAddress,
+    "/api/admin/integrations/jellyfin/libraries",
+    token,
+    { method: "POST", body: JSON.stringify(request) },
+  );
+}
+
 export function reorderSources(
   serverAddress: string,
   token: string,
@@ -585,13 +633,115 @@ export function stopTask(serverAddress: string, token: string, taskId: string) {
 export interface TrackListOptions {
   cursor?: string | null;
   limit?: number;
-  sort?: "title" | "artist" | "album" | "duration" | "track";
+  sort?: "title" | "artist" | "album" | "duration" | "track" | "published";
   direction?: "asc" | "desc";
   query?: string;
   availability?: "available" | "unavailable" | "all";
   albumId?: string;
+  collectionId?: string;
+  mediaType?: "music" | "audiobook" | "podcast" | "all";
   artistId?: string;
   liked?: boolean;
+}
+
+function trackListParams(options: TrackListOptions): URLSearchParams {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(options)) {
+    if (value === undefined || value === null || value === "") continue;
+    params.set(key, String(value));
+  }
+  return params;
+}
+
+function cardListParams(options: CardListOptions): URLSearchParams {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(options)) {
+    if (value === undefined || value === null || value === "") continue;
+    params.set(key, String(value));
+  }
+  return params;
+}
+
+export function listAudiobooks(
+  serverAddress: string,
+  token: string,
+  options: CardListOptions = {},
+) {
+  const params = cardListParams(options);
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return authenticatedRequestJson<AudiobookListResponse>(
+    serverAddress,
+    `/api/audiobooks${suffix}`,
+    token,
+  );
+}
+
+export function fetchAudiobook(
+  serverAddress: string,
+  token: string,
+  audiobookId: string,
+) {
+  return authenticatedRequestJson<AudiobookSummaryResponse>(
+    serverAddress,
+    `/api/audiobooks/${encodeURIComponent(audiobookId)}`,
+    token,
+  );
+}
+
+export function listAudiobookChapters(
+  serverAddress: string,
+  token: string,
+  audiobookId: string,
+  options: TrackListOptions = {},
+) {
+  const params = trackListParams(options);
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return authenticatedRequestJson<TrackListResponse>(
+    serverAddress,
+    `/api/audiobooks/${encodeURIComponent(audiobookId)}/chapters${suffix}`,
+    token,
+  );
+}
+
+export function listPodcasts(
+  serverAddress: string,
+  token: string,
+  options: CardListOptions = {},
+) {
+  const params = cardListParams(options);
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return authenticatedRequestJson<PodcastListResponse>(
+    serverAddress,
+    `/api/podcasts${suffix}`,
+    token,
+  );
+}
+
+export function fetchPodcast(
+  serverAddress: string,
+  token: string,
+  podcastId: string,
+) {
+  return authenticatedRequestJson<PodcastSummaryResponse>(
+    serverAddress,
+    `/api/podcasts/${encodeURIComponent(podcastId)}`,
+    token,
+  );
+}
+
+export function listPodcastEpisodes(
+  serverAddress: string,
+  token: string,
+  podcastId: string,
+  options: TrackListOptions = {},
+) {
+  const params = trackListParams(options);
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return authenticatedRequestJson<TrackListResponse>(
+    serverAddress,
+    `/api/podcasts/${encodeURIComponent(podcastId)}/episodes${suffix}`,
+    token,
+  );
 }
 
 export function listTracks(
@@ -599,11 +749,7 @@ export function listTracks(
   token: string,
   options: TrackListOptions = {},
 ) {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(options)) {
-    if (value === undefined || value === null || value === "") continue;
-    params.set(key, String(value));
-  }
+  const params = trackListParams(options);
   const suffix = params.size ? `?${params.toString()}` : "";
   return authenticatedRequestJson<TrackListResponse>(
     serverAddress,

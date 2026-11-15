@@ -23,7 +23,10 @@ export async function startServer(
         await app.close();
         if (shuttingDown) return;
 
-        app = await buildApp({ restartServer: requestRestart });
+        app = await buildApp({
+          restartServer: requestRestart,
+          enableSourceRefreshScheduler: true,
+        });
         if (shuttingDown) {
           await app.close();
           return;
@@ -38,7 +41,10 @@ export async function startServer(
     });
   }
 
-  app = await buildApp({ restartServer: requestRestart });
+  app = await buildApp({
+    restartServer: requestRestart,
+    enableSourceRefreshScheduler: true,
+  });
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     process.once(signal, () => {
       if (shuttingDown) return;

@@ -7,8 +7,9 @@ import { Button } from "@peridot/ui/components/ui/button";
 import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { computed, onMounted, ref, watch } from "vue";
-import LikeButton from "../../components/LikeButton.vue";
 import AlbumOfflineButton from "../../components/AlbumOfflineButton.vue";
+import FadeInImage from "../../components/FadeInImage.vue";
+import LikeButton from "../../components/LikeButton.vue";
 import TrackArtistLinks from "../../components/TrackArtistLinks.vue";
 import TrackTable from "../../components/TrackTable.vue";
 import {
@@ -242,16 +243,16 @@ onMounted(() => {
       <AlbumOfflineButton :album="album" class="absolute right-4 top-4" />
       <div
         aria-hidden="true"
-        class="flex size-40 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted text-muted-foreground"
+        class="relative flex size-40 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted text-muted-foreground"
       >
-        <img
+        <Icon :icon="icons.album" class="size-16" />
+        <FadeInImage
           v-if="coverImageUrl && !coverFailed"
           :src="coverImageUrl"
-          alt=""
-          class="size-full object-cover"
+          loading="eager"
+          class="absolute inset-0"
           @error="coverFailed = true"
         />
-        <Icon v-else :icon="icons.album" class="size-16" />
       </div>
       <div class="min-w-0 flex-1 space-y-3 pr-12">
         <p

@@ -12,6 +12,7 @@ import {
 import { Icon } from "@iconify/vue/offline";
 import { Button } from "@peridot/ui/components/ui/button";
 import { Input } from "@peridot/ui/components/ui/input";
+import { Switch } from "@peridot/ui/components/ui/switch";
 import {
   AlertDialogAction,
   AlertDialogCancel,
@@ -28,7 +29,10 @@ import {
   DropdownMenuTrigger,
 } from "reka-ui";
 import { useServer } from "../../composables/use-server";
-import { useServerLogsQuery } from "../../composables/use-admin-queries";
+import {
+  useServerLogsQuery,
+  useServerSettingsQuery,
+} from "../../composables/use-admin-queries";
 import { useLocalizedMessage } from "../../composables/use-localized-message";
 import { useRealtime } from "../../composables/use-realtime";
 import { useSession } from "../../composables/use-session";
@@ -53,6 +57,7 @@ const { token } = useSession();
 const { user } = useUser();
 const realtime = useRealtime();
 const logsQuery = useServerLogsQuery();
+const serverSettings = useServerSettingsQuery();
 const logs = logsQuery.items;
 let logAfter = 0;
 let unsubscribeLogs: (() => void) | undefined;
@@ -67,6 +72,26 @@ let restartSawDisconnect = false;
 const disconnectOpen = ref(false);
 const disconnecting = ref(false);
 const logError = ref("");
+const sourceRefreshEnabled = ref(true);
+const sourceRefreshCron = ref("0 3 * * *");
+const sourceRefreshSaving = ref(false);
+const sourceRefreshNotice = ref("");
+const sourceRefreshError = ref("");
+
+watch(
+  serverSettings.settings,
+  (settings) => {
+    if (!settings) return;
+    sourceRefreshEnabled.value = settings.sourceRefresh.enabled;
+    sourceRefreshCron.value = settings.sourceRefresh.cron;
+  },
+  { immediate: true },
+);
+
+const nextSourceRefresh = computed(() => {
+  const nextRunAt = serverSettings.settings.value?.sourceRefresh.nextRunAt;
+  return nextRunAt ? d(new Date(nextRunAt), "medium") : null;
+});
 
 async function refreshLogs() {
   logError.value = "";
@@ -127,6 +152,30 @@ async function confirmRestart() {
   }
 }
 
+async function saveSourceRefresh() {
+  if (sourceRefreshSaving.value) return;
+  sourceRefreshSaving.value = true;
+  sourceRefreshNotice.value = "";
+  sourceRefreshError.value = "";
+  try {
+    await serverSettings.save({
+      sourceRefresh: {
+        enabled: sourceRefreshEnabled.value,
+        cron: sourceRefreshCron.value,
+      },
+    });
+    sourceRefreshNotice.value = t("settings.server.scheduleSaved");
+  } catch (reason) {
+    if (isAuthenticationRedirectError(reason)) return;
+    sourceRefreshError.value = errorMessage(
+      reason,
+      "settings.server.scheduleSaveError",
+    );
+  } finally {
+    sourceRefreshSaving.value = false;
+  }
+}
+
 async function confirmDisconnect() {
   if (disconnecting.value) return;
   disconnecting.value = true;
@@ -154,6 +203,7 @@ onMounted(() => {
     return;
   }
   void refreshLogs();
+  void serverSettings.load();
   unsubscribeLogs = realtime.subscribe(["logs"], (message) => {
     if (message.type === "log.appended") {
       if (message.entry.id <= logAfter) return;
@@ -201,6 +251,108 @@ watch(connectionStatus, (status) => {
   </section>
 
   <template v-else>
+    <section aria-labelledby="source-refresh-heading" class="space-y-4">
+      <h3 id="source-refresh-heading" class="text-lg font-semibold">
+        {{ t("settings.server.scheduleTitle") }}
+      </h3>
+      <div class="space-y-5 rounded-lg border bg-card p-6 text-card-foreground">
+        <div class="flex items-start justify-between gap-4">
+          <div class="space-y-1">
+            <p class="text-sm font-medium">
+              {{ t("settings.server.scheduleEnabled") }}
+            </p>
+            <p class="text-sm text-muted-foreground">
+              {{ t("settings.server.scheduleEnabledHelp") }}
+            </p>
+          </div>
+          <Switch
+            v-model="sourceRefreshEnabled"
+            :disabled="sourceRefreshSaving || connectionStatus === 'lost'"
+            :aria-label="t('settings.server.scheduleEnabled')"
+          />
+        </div>
+        <div class="space-y-2">
+          <label for="source-refresh-cron" class="text-sm font-medium">
+            {{ t("settings.server.scheduleCron") }}
+          </label>
+          <Input
+            id="source-refresh-cron"
+            v-model="sourceRefreshCron"
+            :disabled="
+              !sourceRefreshEnabled ||
+              sourceRefreshSaving ||
+              connectionStatus === 'lost'
+            "
+            :placeholder="t('settings.server.scheduleCronPlaceholder')"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <p class="text-sm text-muted-foreground">
+            {{ t("settings.server.scheduleCronHelp") }}
+            <a
+              href="https://crontab.guru/"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center gap-1 underline underline-offset-4 hover:text-foreground"
+            >
+              {{ t("settings.server.scheduleCronHelpLink") }}
+              <Icon
+                :icon="icons.externalLink"
+                aria-hidden="true"
+                class="size-3"
+              />
+            </a>
+          </p>
+        </div>
+        <div
+          class="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <p class="text-sm text-muted-foreground">
+            <template v-if="!sourceRefreshEnabled">
+              {{ t("settings.server.scheduleDisabled") }}
+            </template>
+            <template v-else-if="nextSourceRefresh">
+              {{
+                t("settings.server.scheduleNext", {
+                  date: nextSourceRefresh,
+                })
+              }}
+            </template>
+            <template v-else>
+              {{ t("settings.server.schedulePending") }}
+            </template>
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            :disabled="sourceRefreshSaving || connectionStatus === 'lost'"
+            @click="saveSourceRefresh"
+          >
+            {{
+              sourceRefreshSaving
+                ? t("common.saving")
+                : t("settings.server.scheduleSave")
+            }}
+          </Button>
+        </div>
+        <p
+          v-if="sourceRefreshNotice"
+          role="status"
+          aria-live="polite"
+          class="text-sm text-muted-foreground"
+        >
+          {{ sourceRefreshNotice }}
+        </p>
+        <p
+          v-if="sourceRefreshError || serverSettings.error.value"
+          role="alert"
+          class="text-sm text-destructive"
+        >
+          {{ sourceRefreshError || serverSettings.error.value }}
+        </p>
+      </div>
+    </section>
+
     <section aria-labelledby="server-heading" class="space-y-4">
       <h3 id="server-heading" class="text-lg font-semibold">
         {{ t("settings.server.title") }}

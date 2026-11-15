@@ -12,7 +12,9 @@ export interface LikeToastContent {
 
 export function likeSuccessToast(target: LikeTarget): LikeToastContent {
   const label =
-    target.kind === "album"
+    target.kind === "album" ||
+    target.kind === "audiobook" ||
+    target.kind === "podcast"
       ? target.title.trim()
       : target.kind === "playlist"
         ? target.name.trim()
@@ -26,9 +28,13 @@ export function likeSuccessToast(target: LikeTarget): LikeToastContent {
         ? "toast.trackLikedTitle"
         : target.kind === "album"
           ? "toast.albumLikedTitle"
-          : target.kind === "playlist"
-            ? "toast.playlistLikedTitle"
-            : "toast.artistLikedTitle",
+          : target.kind === "audiobook"
+            ? "toast.audiobookLikedTitle"
+            : target.kind === "podcast"
+              ? "toast.podcastLikedTitle"
+              : target.kind === "playlist"
+                ? "toast.playlistLikedTitle"
+                : "toast.artistLikedTitle",
     ),
     descriptionMessage: label
       ? message("toast.likedNamed", { target: label })

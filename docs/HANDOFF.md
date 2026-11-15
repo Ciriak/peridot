@@ -1,6 +1,153 @@
 # Handoff
 
-Last updated: 2026-11-14.
+Last updated: 2026-11-15.
+
+## Audiobooks and podcasts categories
+
+Audiobooks and podcasts are now first-class browse categories beside Albums,
+Artists, and Playlists. Sources are explicitly classified as music, audiobooks,
+or podcasts; existing rows migrate to music. Audiobooks group into book
+collections by title and author with chapter ordering, while podcasts group into
+shows by title and publisher with newest-first episode ordering. Both use the
+existing player, queue, likes storage, and per-track offline cache.
+
+The web app adds Audiobooks and Podcasts navigation routes, collection cards,
+detail pages, collection playback, collection likes, and offline collection
+controls. Music-only Albums, Artists, Home suggestions, metadata providers, and
+Quick picks exclude the new media types. Search and playlists support explicit
+mixed-media track results. Settings → Admin → Sources now shows each source's
+media type, supports changing it with an automatic reclassification scan, and
+lets administrators discover and add individual Jellyfin libraries.
+
+The Prisma 8 contract adds media type and publication fields plus a Jellyfin
+library ID. The additive `db update` applied 12 operations to the local
+development database without resetting existing data. The catalog projection
+version is 5 and the local metadata version is 6 so existing tracks are
+reindexed once. Browser offline catalog storage moved to a v2 database so old
+snapshots are rebuilt while saved audio manifests remain reusable.
+
+Checks run:
+
+- Server tests: 131 passing
+- Web tests: 194 passing
+- Shared UI tests: 16 passing
+- Desktop tests: 4 passing
+- Full workspace lint and type check
+- Prisma 8 contract emit, validation, and additive local `db update`
+- Full workspace production build, including 115 PWA precache entries
+- Targeted Prettier checks and `git diff --check`
+
+Known limits: live browser visual QA of the new navigation and source-library
+dialog was not run. Jellyfin behavior is covered with mocked API responses; a
+complete mixed-library Jellyfin sync was not exercised. RSS/OPML podcast
+subscriptions are intentionally out of scope. The root `pnpm format:check`
+still reports only the pre-existing unformatted `README.md`, which was preserved.
+All work remains uncommitted with unrelated changes preserved; no commit, push,
+tag, publication, or deployment was performed.
+
+Next: visually confirm Audiobooks, Podcasts, playback/offline controls, and
+Jellyfin library selection at desktop and mobile widths, then exercise one real
+mixed Jellyfin server.
+
+## Automatic source and metadata refresh
+
+The server now refreshes configured library sources when it starts and on a
+persisted cron schedule. Automatic refresh is enabled by default with the
+five-field local-time expression `0 3 * * *`; six-field expressions with seconds
+are also accepted. The all-source scan queues metadata matching on completion,
+so source discovery and metadata enrichment use one scheduled pipeline.
+
+Administrators can enable, pause, and change the schedule from
+Settings → Admin → Server, with a crontab.guru help link beside the cron
+guidance. `GET /api/admin/server` now returns the saved schedule and next run,
+while `PUT /api/admin/server` validates and persists changes and reschedules the
+active job without a restart. Invalid cron expressions leave stored settings
+unchanged. Timed refreshes coalesce with active scans, and the job timer is
+stopped during server shutdown.
+
+Checks run:
+
+- Full workspace tests (server 128, web 191, shared UI 16, desktop 4)
+- Full workspace type check and ESLint
+- Prisma contract generation and validation
+- Production workspace build, including 106 web PWA precache entries
+- Targeted Prettier checks and `git diff --check`
+
+Previously existing uncommitted genre, artwork-fade, metadata-settings, and
+documentation changes were preserved. No commit, push, tag, publication, or
+deployment was performed.
+
+`pnpm format:check` still reports only the pre-existing formatting issue in
+`README.md`. Live browser visual QA and a live Jellyfin startup refresh were not
+run; startup and cron behavior are covered with local-server integration tests.
+
+Next: verify the schedule control visually in Settings → Admin → Server and
+exercise startup refresh against a live Jellyfin source.
+
+## Track genres and metadata provider support
+
+Tracks now store normalized multi-valued genres from embedded file tags and
+Jellyfin items. Discogs release genres and styles plus MusicBrainz release
+genres and tags are included in provider candidates and persisted when a
+metadata match is applied. Provider genres override file genres while a match
+is active; reverting or resetting metadata restores the file genres.
+
+Track API responses expose an effective `genres` array and provider metadata
+responses expose the selected provider genres. Track rows and metadata menus
+show genres, metadata candidates preview provider genres, and catalog search
+matches genre text through the indexed projection. The local metadata version
+is now 5 and the catalog projection version is 4 so unchanged tracks are
+rescanned once and indexed without manual database recreation.
+
+Checks run:
+
+- Full workspace test suite (server 125, web 191, shared UI 16, desktop 4)
+- Full workspace type check and ESLint
+- Prisma contract generation and validation
+- Production workspace build, including 106 web PWA precache entries
+- Targeted Prettier checks and `git diff --check`
+
+`pnpm format:check` still reports only the pre-existing formatting issue in
+`README.md`.
+
+Known limits: live Jellyfin, MusicBrainz, and Discogs response QA was not run;
+provider behavior is covered with mocked API responses. Album-level genre
+editing and dedicated genre filters were not added. Existing unrelated
+uncommitted artwork, metadata-settings, and documentation changes were
+preserved. No commit, push, tag, publication, or deployment was performed.
+
+Next: visually confirm genre presentation in library, album, and
+metadata-correction surfaces.
+
+## Cover art and artist portraits fade in after loading
+
+Album cover art and artist portraits now start transparent and fade to full
+opacity only after the browser reports that the image loaded. A shared
+fade-in-image primitive resets when its source changes and keeps the semantic
+placeholder underneath while an image is loading or unavailable. The behavior
+covers album cards, album details, track rows and queue artwork, playlist
+mosaics, quick picks, both fixed-player cover layers, artist cards, and artist
+details. Reduced-motion users receive the loaded image without an opacity
+transition.
+
+Checks run:
+
+- Focused image-fade, album, artist, player, quick-pick, and styling tests
+  (13 passing)
+- Full web test suite (191 passing)
+- Web type check
+- Workspace ESLint
+- Targeted Prettier checks
+- Production web build (106 PWA precache entries)
+
+Known limits: live browser visual confirmation of the fade was not run. The
+separate uncommitted changes in `apps/web/app/pages/settings/metadata.vue` and
+`apps/web/test/settings-page.test.ts` were preserved and are not part of this
+image-fade change. All image-fade changes remain uncommitted on `dev`; no commit,
+push, tag, publication, or deployment was performed.
+
+Next: visually confirm the fade and reduced-motion behavior with a library cover
+that does not remain in the browser cache.
 
 ## Tasks can be stopped and active sources can be deleted
 

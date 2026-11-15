@@ -16,6 +16,7 @@ import {
   ref,
   watch,
 } from "vue";
+import FadeInImage from "../components/FadeInImage.vue";
 import LikeButton from "../components/LikeButton.vue";
 import QueueDrawer from "../components/QueueDrawer.vue";
 import SidebarQuickPicks from "../components/SidebarQuickPicks.vue";
@@ -100,6 +101,16 @@ const navigation = [
     icon: icons.playlist,
   },
   { labelKey: "navigation.albums", to: "/albums", icon: icons.album },
+  {
+    labelKey: "navigation.audiobooks",
+    to: "/audiobooks",
+    icon: icons.book,
+  },
+  {
+    labelKey: "navigation.podcasts",
+    to: "/podcasts",
+    icon: icons.podcast,
+  },
   { labelKey: "navigation.artists", to: "/artists", icon: icons.user },
 ];
 const currentPath = computed(() => route.path);
@@ -412,12 +423,12 @@ onBeforeUnmount(stopLoadingRay);
             leave-from-class="opacity-100"
             leave-to-class="opacity-0"
           >
-            <img
+            <FadeInImage
               v-if="currentCoverImageUrl && !coverFailed"
               :key="currentCoverImageUrl"
               :src="currentCoverImageUrl"
-              alt=""
-              class="absolute inset-0 size-full scale-125 object-cover object-left blur-3xl"
+              loading="eager"
+              class="absolute inset-0 scale-125 object-left blur-3xl"
             />
           </Transition>
         </div>
@@ -433,22 +444,29 @@ onBeforeUnmount(stopLoadingRay);
       <div class="flex min-w-0 items-center gap-3 md:flex-1">
         <div
           aria-hidden="true"
-          class="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted text-muted-foreground md:size-20"
+          class="relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted text-muted-foreground md:size-20"
           :class="active && !currentTrackPlayable && 'opacity-60'"
         >
-          <img
+          <Icon
+            :icon="
+              active?.mediaType === 'audiobook'
+                ? icons.book
+                : active?.mediaType === 'podcast'
+                  ? icons.podcast
+                  : active?.albumId
+                    ? icons.album
+                    : icons.music
+            "
+            aria-hidden="true"
+            class="size-8"
+          />
+          <FadeInImage
             v-if="currentCoverImageUrl && !coverFailed"
             :key="currentCoverImageUrl"
             :src="currentCoverImageUrl"
-            alt=""
-            class="size-full object-cover"
+            loading="eager"
+            class="absolute inset-0"
             @error="coverFailed = true"
-          />
-          <Icon
-            v-else
-            :icon="active?.albumId ? icons.album : icons.music"
-            aria-hidden="true"
-            class="size-8"
           />
         </div>
         <div class="min-w-0 flex-1">
@@ -488,7 +506,11 @@ onBeforeUnmount(stopLoadingRay);
                   mode="always"
                   class="min-w-0 flex-1 text-xs text-muted-foreground"
                 >
-                  <TrackArtistLinks :artists="trackArtistNames(active)" />
+                  <TrackArtistLinks
+                    v-if="active.mediaType === 'music'"
+                    :artists="trackArtistNames(active)"
+                  />
+                  <template v-else>{{ active.artist }}</template>
                 </ScrollingText>
                 <LikeButton
                   class="shrink-0"

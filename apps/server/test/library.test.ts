@@ -81,14 +81,17 @@ test("scans catalog supported regular files, reconcile availability, and persist
     assert.equal(list.items.length, 1);
     assert.deepEqual(list.items[0], {
       id: list.items[0]?.id,
+      mediaType: "music",
       title: "Song",
       artist: "Unknown Artist",
       artists: ["Unknown Artist"],
       album: null,
+      genres: [],
       albumId: null,
       discNumber: null,
       trackNumber: null,
       durationMs: 100,
+      publishedAt: null,
       mimeType: "audio/wav",
       available: true,
       coverUrl: null,
@@ -165,7 +168,7 @@ test("scans track, disc, and album tags and backfills legacy metadata once", asy
     assert.equal(firstTrack.mimeType, "audio/mpeg");
     assert.equal(firstTrack.discNumber, 2);
     assert.equal(firstTrack.trackNumber, 5);
-    assert.equal(firstTrack.metadataVersion, 4);
+    assert.equal(firstTrack.metadataVersion, 6);
 
     await context.database.orm.Track.where({ id: firstTrack.id }).update({
       metadataVersion: 0,
@@ -179,7 +182,7 @@ test("scans track, disc, and album tags and backfills legacy metadata once", asy
     });
     assert.equal(backfilledTrack.discNumber, 2);
     assert.equal(backfilledTrack.trackNumber, 5);
-    assert.equal(backfilledTrack.metadataVersion, 4);
+    assert.equal(backfilledTrack.metadataVersion, 6);
 
     const unchangedScan = await startScan(context);
     assert.equal(unchangedScan.unchangedCount, 1);
@@ -199,6 +202,52 @@ test("scans track, disc, and album tags and backfills legacy metadata once", asy
       "Elliot Lake",
       "Óra",
     ]);
+  } finally {
+    await context.close();
+  }
+});
+
+test("scans multi-valued track genres and makes them searchable", async () => {
+  const context = await createTestContext();
+  try {
+    await writeFile(
+      path.join(context.libraryRoot, "genres.mp3"),
+      createTaggedMp3({
+        title: "Genre Song",
+        artist: "Genre Artist",
+        album: "Genre Album",
+        genres: ["Electronic", "Ambient", "electronic"],
+        discNumber: 1,
+        trackNumber: 1,
+      }),
+    );
+    const scan = await startScan(context);
+    assert.equal(scan.status, "completed");
+
+    const track = await context.database.orm.Track.firstOrThrow();
+    assert.deepEqual(JSON.parse(track.genres ?? "[]"), [
+      "Electronic",
+      "Ambient",
+    ]);
+
+    const response = await context.app.inject({
+      method: "GET",
+      url: "/api/tracks?query=ambient",
+      headers: context.authorization,
+    });
+    assert.equal(response.statusCode, 200, response.body);
+    const items = response.json<{
+      items: Array<{ title: string; genres: string[] }>;
+    }>().items;
+    assert.deepEqual(
+      items.map(({ title, genres }) => ({ title, genres })),
+      [
+        {
+          title: "Genre Song",
+          genres: ["Electronic", "Ambient"],
+        },
+      ],
+    );
   } finally {
     await context.close();
   }

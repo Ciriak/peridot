@@ -61,16 +61,22 @@ export interface TrackReference {
   isrc?: string;
 }
 
+export type MediaType = "music" | "audiobook" | "podcast";
+export type TrackMediaFilter = MediaType | "all";
+
 export interface TrackResponse {
   id: string;
+  mediaType: MediaType;
   title: string;
   artist: string;
   artists: string[];
   album: string | null;
+  genres: string[];
   albumId: string | null;
   discNumber: number | null;
   trackNumber: number | null;
   durationMs: number | null;
+  publishedAt: string | null;
   mimeType: string;
   available: boolean;
   coverUrl: string | null;
@@ -79,7 +85,7 @@ export interface TrackResponse {
 }
 
 export type CatalogSortField =
-  "title" | "artist" | "album" | "duration" | "track";
+  "title" | "artist" | "album" | "duration" | "track" | "published";
 
 export type CatalogSortDirection = "asc" | "desc";
 
@@ -113,6 +119,44 @@ export interface AlbumSummaryResponse {
 
 export interface AlbumListResponse {
   items: AlbumSummaryResponse[];
+  nextCursor: string | null;
+  catalogRevision: number;
+}
+
+export interface AudiobookSummaryResponse {
+  id: string;
+  mediaType: "audiobook";
+  title: string;
+  author: string;
+  authors: string[];
+  coverUrl: string | null;
+  chapterCount: number;
+  durationMs: number | null;
+  releaseYear: number | null;
+  liked: boolean;
+}
+
+export interface PodcastSummaryResponse {
+  id: string;
+  mediaType: "podcast";
+  title: string;
+  publisher: string;
+  publishers: string[];
+  coverUrl: string | null;
+  episodeCount: number;
+  durationMs: number | null;
+  latestPublishedAt: string | null;
+  liked: boolean;
+}
+
+export interface AudiobookListResponse {
+  items: AudiobookSummaryResponse[];
+  nextCursor: string | null;
+  catalogRevision: number;
+}
+
+export interface PodcastListResponse {
+  items: PodcastSummaryResponse[];
   nextCursor: string | null;
   catalogRevision: number;
 }
@@ -308,6 +352,20 @@ export interface AlbumLikeResponse {
   likedAt: string;
 }
 
+export interface AudiobookLikeResponse {
+  audiobookId: string;
+  title: string;
+  author: string;
+  likedAt: string;
+}
+
+export interface PodcastLikeResponse {
+  podcastId: string;
+  title: string;
+  publisher: string;
+  likedAt: string;
+}
+
 export interface ArtistLikeResponse {
   name: string;
   likedAt: string;
@@ -322,6 +380,8 @@ export interface PlaylistLikeResponse {
 export interface LikeListResponse {
   tracks: TrackLikeResponse[];
   albums: AlbumLikeResponse[];
+  audiobooks: AudiobookLikeResponse[];
+  podcasts: PodcastLikeResponse[];
   artists: ArtistLikeResponse[];
   playlists: PlaylistLikeResponse[];
 }
@@ -329,12 +389,26 @@ export interface LikeListResponse {
 export type LikeTarget =
   | { kind: "track"; trackId: string }
   | { kind: "album"; albumId: string; title: string; artist: string }
+  | {
+      kind: "audiobook";
+      audiobookId: string;
+      title: string;
+      author: string;
+    }
+  | {
+      kind: "podcast";
+      podcastId: string;
+      title: string;
+      publisher: string;
+    }
   | { kind: "artist"; name: string }
   | { kind: "playlist"; playlistId: string; name: string };
 
 export type LikeResponse =
   | ({ kind: "track" } & TrackLikeResponse)
   | ({ kind: "album" } & AlbumLikeResponse)
+  | ({ kind: "audiobook" } & AudiobookLikeResponse)
+  | ({ kind: "podcast" } & PodcastLikeResponse)
   | ({ kind: "artist" } & ArtistLikeResponse)
   | ({ kind: "playlist" } & PlaylistLikeResponse);
 
@@ -404,10 +478,12 @@ export type SourceKind = "path" | "url" | "integration";
 export interface SourceResponse {
   id: string;
   kind: SourceKind;
+  mediaType: MediaType;
   name: string | null;
   path: string | null;
   url: string | null;
   integration: string | null;
+  externalLibraryId: string | null;
   fileCount: number;
   lastSyncedAt: string | null;
 }
@@ -422,12 +498,14 @@ export interface SourceListResponse {
 
 export interface CreatePathSourceRequest {
   kind: "path";
+  mediaType?: MediaType;
   name?: string | null;
   path: string;
 }
 
 export interface CreateUrlSourceRequest {
   kind: "url";
+  mediaType?: MediaType;
   name?: string | null;
   url: string;
 }
@@ -435,15 +513,36 @@ export interface CreateUrlSourceRequest {
 export interface CreateJellyfinSourceRequest {
   kind: "integration";
   integration: "jellyfin";
+  mediaType?: MediaType;
   name?: string | null;
   url: string;
   apiKey: string;
+  libraryId?: string;
 }
 
 export type CreateSourceRequest =
   | CreatePathSourceRequest
   | CreateUrlSourceRequest
   | CreateJellyfinSourceRequest;
+
+export interface UpdateSourceRequest {
+  mediaType: MediaType;
+}
+
+export interface JellyfinLibraryResponse {
+  id: string;
+  name: string;
+  collectionType: string | null;
+}
+
+export interface JellyfinLibraryListResponse {
+  items: JellyfinLibraryResponse[];
+}
+
+export interface DiscoverJellyfinLibrariesRequest {
+  url: string;
+  apiKey: string;
+}
 
 export interface ReorderSourcesRequest {
   ids: string[];
@@ -518,6 +617,7 @@ export interface TrackMetadataResponse {
   matchedAt: string;
   mode: TrackMetadataMatchMode;
   sourceUrl: string;
+  genres: string[];
   details: TrackMetadataDetail[];
 }
 
@@ -538,6 +638,7 @@ export interface MetadataCandidateResponse {
   artists: string[];
   albumArtists: string[];
   album: string | null;
+  genres: string[];
   discNumber: number | null;
   trackNumber: number | null;
   durationMs: number | null;
@@ -559,6 +660,7 @@ export interface ApplyTrackMetadataRequest {
   artists: string[];
   albumArtists: string[];
   album: string | null;
+  genres: string[];
   discNumber: number | null;
   trackNumber: number | null;
   sourceUrl: string;
@@ -587,6 +689,20 @@ export interface DirectorySearchResponse {
 export interface ServerSettingsResponse {
   trackCount: number;
   availableTrackCount: number;
+  sourceRefresh: SourceRefreshSettingsResponse;
+}
+
+export interface SourceRefreshSettingsResponse {
+  enabled: boolean;
+  cron: string;
+  nextRunAt: string | null;
+}
+
+export interface UpdateServerSettingsRequest {
+  sourceRefresh: {
+    enabled: boolean;
+    cron: string;
+  };
 }
 
 export interface RestartServerResponse {

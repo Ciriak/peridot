@@ -22,7 +22,8 @@ export interface ArtistGroup {
   durationMs: number | null;
 }
 
-export type TrackTableVariant = "library" | "album" | "artist";
+export type TrackTableVariant =
+  "library" | "album" | "artist" | "audiobook" | "podcast";
 
 export type TrackSortField =
   "number" | "title" | "artist" | "album" | "duration";
@@ -400,6 +401,26 @@ export function albumRoute(
 }
 
 export function trackAlbumRoute(track: TrackResponse) {
+  if (track.mediaType === "audiobook") {
+    return {
+      name: "audiobook-detail",
+      params: { book: track.album?.trim() ?? "" },
+      query: {
+        author: track.artist,
+        ...(track.albumId ? { id: track.albumId } : {}),
+      },
+    };
+  }
+  if (track.mediaType === "podcast") {
+    return {
+      name: "podcast-detail",
+      params: { show: track.album?.trim() ?? "" },
+      query: {
+        publisher: track.artist,
+        ...(track.albumId ? { id: track.albumId } : {}),
+      },
+    };
+  }
   return albumRoute({
     title: track.album?.trim() ?? "",
     artist: track.artist.trim(),

@@ -11,6 +11,11 @@ Peridot is a flexible, self-hosted music platform for organizing and listening t
 an owner's music collection. Core owns users, the canonical library, audio, and
 playlists. Optional plugins extend capabilities through versioned contracts.
 
+The core audio library also supports audiobooks and locally stored podcast
+episodes as first-class browse categories. Media type is configured explicitly
+per source so music, books, and shows remain deterministic and separately
+browsable without title-based classification heuristics.
+
 - In-app marketplace for plugin discovery, permissions, installation, and updates.
 - Playlist account linking and synchronization: Spotify, Deezer, SoundCloud,
   YouTube Music. Keep external track references and show unmatched local tracks.
@@ -56,7 +61,8 @@ motion, visible keyboard focus, and accessible contrast.
 
 1. Runnable monorepo foundation and continuity documentation (current milestone).
 2. Local library vertical slice: configure a folder, scan tracks into the catalog,
-   list real tracks, and play one through an authenticated audio endpoint.
+   list real tracks, classify music, audiobooks, and podcasts, and play one
+   through an authenticated audio endpoint.
 3. Users, playlists, matching, and playback persistence.
 4. Plugin SDK v1, credential handling, isolated runtime, one trusted provider.
 5. Marketplace and further providers; desktop packaging; OpenSubsonic verification.

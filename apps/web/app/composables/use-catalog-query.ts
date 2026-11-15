@@ -2,6 +2,8 @@ import { useState } from "#imports";
 import type {
   AlbumSummaryResponse,
   ArtistSummaryResponse,
+  AudiobookSummaryResponse,
+  PodcastSummaryResponse,
   TrackResponse,
 } from "@peridot/contracts";
 import {
@@ -15,6 +17,8 @@ import {
   isAuthenticationRedirectError,
   listAlbums,
   listArtists,
+  listAudiobooks,
+  listPodcasts,
   listTracks,
   type CardListOptions,
   type TrackListOptions,
@@ -22,6 +26,8 @@ import {
 import {
   offlineAlbums,
   offlineArtists,
+  offlineAudiobooks,
+  offlinePodcasts,
   offlineTracks,
   type OfflineCatalogSnapshot,
 } from "../lib/offline-catalog";
@@ -302,5 +308,27 @@ export function useCatalogArtistQuery(
     fetchPage: listArtists,
     options,
     offlineItems: offlineArtists,
+  });
+}
+
+export function useCatalogAudiobookQuery(
+  options: () => CardListOptions = () => ({}),
+) {
+  return useCatalogCardQuery<AudiobookSummaryResponse>({
+    queryKey: queryKeys.audiobooks,
+    fetchPage: listAudiobooks,
+    options,
+    offlineItems: offlineAudiobooks,
+  });
+}
+
+export function useCatalogPodcastQuery(
+  options: () => CardListOptions = () => ({}),
+) {
+  return useCatalogCardQuery<PodcastSummaryResponse>({
+    queryKey: queryKeys.podcasts,
+    fetchPage: listPodcasts,
+    options,
+    offlineItems: offlinePodcasts,
   });
 }

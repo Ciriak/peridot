@@ -1,12 +1,16 @@
 import type {
   AlbumSummaryResponse,
   ArtistSummaryResponse,
+  AudiobookSummaryResponse,
+  PodcastSummaryResponse,
   TrackResponse,
 } from "@peridot/contracts";
 import { clear, createStore, get, set } from "idb-keyval";
 import {
   listAlbums,
   listArtists,
+  listAudiobooks,
+  listPodcasts,
   listTracks,
   type CardListOptions,
   type TrackListOptions,
@@ -14,8 +18,8 @@ import {
 import type { PeridotQueryScope } from "./query-keys";
 import { sortTracks, trackArtistNames } from "./library.ts";
 
-export const OFFLINE_CATALOG_VERSION = 1 as const;
-export const OFFLINE_DATABASE = "peridot-web-offline-catalog-v1";
+export const OFFLINE_CATALOG_VERSION = 2 as const;
+export const OFFLINE_DATABASE = "peridot-web-offline-catalog-v2";
 const OFFLINE_CATALOG_STORE = "offline-catalog";
 const OFFLINE_CATALOG_KEY = "catalog-snapshot";
 const OFFLINE_PAGE_SIZE = 200;
@@ -25,6 +29,8 @@ export interface OfflineCatalogSnapshot {
   scope: PeridotQueryScope;
   tracks: TrackResponse[];
   albums: AlbumSummaryResponse[];
+  audiobooks: AudiobookSummaryResponse[];
+  podcasts: PodcastSummaryResponse[];
   artists: ArtistSummaryResponse[];
   catalogRevision: number;
   syncedAt: string;
@@ -81,9 +87,19 @@ export function offlineTracks(
         );
   const availability = options.availability ?? "available";
   const filtered = snapshot.tracks.filter((track) => {
+    const trackMediaType = track.mediaType ?? "music";
     if (availability === "available" && !track.available) return false;
     if (availability === "unavailable" && track.available) return false;
-    if (options.albumId && track.albumId !== options.albumId) return false;
+    if (
+      options.mediaType &&
+      options.mediaType !== "all" &&
+      trackMediaType !== options.mediaType
+    ) {
+      return false;
+    }
+    if (!options.mediaType && trackMediaType !== "music") return false;
+    const collectionId = options.collectionId ?? options.albumId;
+    if (collectionId && track.albumId !== collectionId) return false;
     if (options.liked && !track.liked) return false;
     if (
       artistNames &&
@@ -98,6 +114,17 @@ export function offlineTracks(
       options.query,
     );
   });
+
+  if (options.sort === "published") {
+    return filtered.sort((left, right) => {
+      const publishedOrder =
+        (right.publishedAt ? new Date(right.publishedAt).getTime() : 0) -
+        (left.publishedAt ? new Date(left.publishedAt).getTime() : 0);
+      const directionOrder =
+        options.direction === "asc" ? -publishedOrder : publishedOrder;
+      return directionOrder || compareText(left.title, right.title);
+    });
+  }
 
   if (
     !options.sort ||
@@ -163,6 +190,48 @@ export function offlineArtists(
     );
 }
 
+export function offlineAudiobooks(
+  snapshot: OfflineCatalogSnapshot,
+  options: CardListOptions = {},
+): AudiobookSummaryResponse[] {
+  return snapshot.audiobooks
+    .filter((book) => {
+      if (options.liked && !book.liked) return false;
+      return matchesQuery(
+        [book.title, book.author, ...book.authors],
+        options.query,
+      );
+    })
+    .sort((left, right) =>
+      compareDirection(
+        compareText(left.title, right.title) ||
+          compareText(left.author, right.author),
+        options.direction,
+      ),
+    );
+}
+
+export function offlinePodcasts(
+  snapshot: OfflineCatalogSnapshot,
+  options: CardListOptions = {},
+): PodcastSummaryResponse[] {
+  return snapshot.podcasts
+    .filter((podcast) => {
+      if (options.liked && !podcast.liked) return false;
+      return matchesQuery(
+        [podcast.title, podcast.publisher, ...podcast.publishers],
+        options.query,
+      );
+    })
+    .sort((left, right) =>
+      compareDirection(
+        compareText(left.title, right.title) ||
+          compareText(left.publisher, right.publisher),
+        options.direction,
+      ),
+    );
+}
+
 export async function readOfflineCatalog(
   scope: PeridotQueryScope,
 ): Promise<OfflineCatalogSnapshot | null> {
@@ -216,31 +285,49 @@ export async function syncOfflineCatalog(
     throw new Error("Offline catalog storage is unavailable.");
   }
 
-  const [trackPage, albumPage, artistPage] = await Promise.all([
-    collectPages((cursor) =>
-      listTracks(scope.serverAddress, token, {
-        availability: "all",
-        limit: OFFLINE_PAGE_SIZE,
-        sort: "title",
-        direction: "asc",
-        ...(cursor ? { cursor } : {}),
-      }),
-    ),
-    collectPages((cursor) =>
-      listAlbums(scope.serverAddress, token, {
-        limit: OFFLINE_PAGE_SIZE,
-        sort: "title",
-        direction: "asc",
-        ...(cursor ? { cursor } : {}),
-      }),
-    ),
-    collectPages((cursor) =>
-      listArtists(scope.serverAddress, token, {
-        limit: OFFLINE_PAGE_SIZE,
-        ...(cursor ? { cursor } : {}),
-      }),
-    ),
-  ]);
+  const [trackPage, albumPage, artistPage, audiobookPage, podcastPage] =
+    await Promise.all([
+      collectPages((cursor) =>
+        listTracks(scope.serverAddress, token, {
+          availability: "all",
+          mediaType: "all",
+          limit: OFFLINE_PAGE_SIZE,
+          sort: "title",
+          direction: "asc",
+          ...(cursor ? { cursor } : {}),
+        }),
+      ),
+      collectPages((cursor) =>
+        listAlbums(scope.serverAddress, token, {
+          limit: OFFLINE_PAGE_SIZE,
+          sort: "title",
+          direction: "asc",
+          ...(cursor ? { cursor } : {}),
+        }),
+      ),
+      collectPages((cursor) =>
+        listArtists(scope.serverAddress, token, {
+          limit: OFFLINE_PAGE_SIZE,
+          ...(cursor ? { cursor } : {}),
+        }),
+      ),
+      collectPages((cursor) =>
+        listAudiobooks(scope.serverAddress, token, {
+          limit: OFFLINE_PAGE_SIZE,
+          sort: "title",
+          direction: "asc",
+          ...(cursor ? { cursor } : {}),
+        }),
+      ),
+      collectPages((cursor) =>
+        listPodcasts(scope.serverAddress, token, {
+          limit: OFFLINE_PAGE_SIZE,
+          sort: "title",
+          direction: "asc",
+          ...(cursor ? { cursor } : {}),
+        }),
+      ),
+    ]);
 
   const snapshot: OfflineCatalogSnapshot = {
     version: OFFLINE_CATALOG_VERSION,
@@ -248,10 +335,14 @@ export async function syncOfflineCatalog(
     tracks: trackPage.items,
     albums: albumPage.items,
     artists: artistPage.items,
+    audiobooks: audiobookPage.items,
+    podcasts: podcastPage.items,
     catalogRevision: Math.max(
       trackPage.catalogRevision,
       albumPage.catalogRevision,
       artistPage.catalogRevision,
+      audiobookPage.catalogRevision,
+      podcastPage.catalogRevision,
     ),
     syncedAt: new Date().toISOString(),
   };

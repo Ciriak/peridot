@@ -83,6 +83,18 @@ function artistCredits(value: unknown): string[] {
   return [...new Set(credits)];
 }
 
+function namedValues(value: unknown): string[] {
+  return [
+    ...new Set(
+      asArray(value)
+        .map(asRecord)
+        .filter((item): item is Record<string, unknown> => item !== null)
+        .map((item) => text(item.name).trim())
+        .filter(Boolean),
+    ),
+  ];
+}
+
 function candidateFromRecording(
   provider: MetadataProviderContext,
   value: unknown,
@@ -107,6 +119,7 @@ function candidateFromRecording(
     artists,
     albumArtists,
     album: text(release?.title).trim() || null,
+    genres: [...namedValues(recording.genres), ...namedValues(recording.tags)],
     discNumber: null,
     trackNumber: null,
     durationMs: durationMs(recording.length),
@@ -189,6 +202,7 @@ function recordingCandidateFromRelease(
   album: string,
   albumArtists: string[],
   releaseTrack: ReleaseTrack,
+  genres: string[],
 ): MetadataCandidateResponse | null {
   const base = candidateFromRecording(
     {
@@ -206,6 +220,7 @@ function recordingCandidateFromRelease(
     externalReleaseId: releaseId,
     album,
     albumArtists,
+    genres,
     discNumber: releaseTrack.discNumber,
     trackNumber: releaseTrack.trackNumber,
   };
@@ -386,7 +401,7 @@ export class MusicBrainzClient {
     const releaseResponse = await this.request(
       contact,
       `release/${releaseId}`,
-      { inc: "recordings+artist-credits" },
+      { inc: "recordings+artist-credits+genres+tags" },
       signal,
     );
     const releaseDetail = asRecord(releaseResponse);
@@ -395,6 +410,10 @@ export class MusicBrainzClient {
     const albumArtists = detailAlbumArtists.length
       ? detailAlbumArtists
       : artistCredits(release?.["artist-credit"]);
+    const genres = [
+      ...namedValues(releaseDetail?.genres),
+      ...namedValues(releaseDetail?.tags),
+    ];
     const tracks = releaseTracks(releaseResponse);
     for (const target of targets) {
       const releaseTrack = bestReleaseTrack(target, tracks);
@@ -405,6 +424,7 @@ export class MusicBrainzClient {
         album,
         albumArtists,
         releaseTrack,
+        genres,
       );
       if (candidate) matches.set(target.id, [candidate]);
     }

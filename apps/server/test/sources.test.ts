@@ -22,6 +22,11 @@ test("administrators can read server counts and the default source", async () =>
     assert.deepEqual(status.json(), {
       trackCount: 0,
       availableTrackCount: 0,
+      sourceRefresh: {
+        enabled: true,
+        cron: "0 3 * * *",
+        nextRunAt: null,
+      },
     });
 
     const sources = await context.app.inject({

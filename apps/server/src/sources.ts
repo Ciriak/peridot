@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import type {
   DirectorySearchResponse,
+  JellyfinLibraryResponse,
   MessageDescriptor,
   SourceKind,
   SourceResponse,
@@ -10,6 +11,7 @@ import type {
 import type { CredentialStore } from "./credential-store.js";
 import type { Database } from "./database.js";
 import { JellyfinClient, JellyfinError } from "./jellyfin.js";
+import { mediaType as normalizeMediaType, mediaTypeOrNull } from "./media.js";
 import { message } from "./messages.js";
 import type { SourceRow } from "./prisma/models.js";
 
@@ -48,10 +50,12 @@ function toSourceResponse(
   return {
     id: source.id,
     kind: source.kind as SourceKind,
+    mediaType: normalizeMediaType(source.mediaType),
     name: source.name,
     path: source.path,
     url: source.url,
     integration: source.integration,
+    externalLibraryId: source.externalLibraryId,
     fileCount,
     lastSyncedAt: lastSyncedAt?.toISOString() ?? null,
   };
@@ -67,6 +71,7 @@ export async function ensureDefaultSource(
   if (count === 0) {
     await database.orm.Source.create({
       kind: "path",
+      mediaType: "music",
       path: seedLibraryRoot,
       position: 0,
     });
@@ -119,6 +124,8 @@ export async function createSource(
     url?: unknown;
     integration?: unknown;
     apiKey?: unknown;
+    libraryId?: unknown;
+    mediaType?: unknown;
   };
   const kind = value.kind;
   if (kind !== "path" && kind !== "url" && kind !== "integration") {
@@ -131,6 +138,7 @@ export async function createSource(
     typeof value.name === "string" && value.name.trim()
       ? value.name.trim()
       : null;
+  const requestedMediaType = normalizeMediaType(value.mediaType);
   const { count: position } = await database.orm.Source.aggregate(
     (aggregate) => ({ count: aggregate.count() }),
   );
@@ -157,6 +165,7 @@ export async function createSource(
     }
     const source = await database.orm.Source.create({
       kind,
+      mediaType: requestedMediaType,
       name,
       path: resolved,
       position,
@@ -181,6 +190,7 @@ export async function createSource(
     }
     const source = await database.orm.Source.create({
       kind,
+      mediaType: requestedMediaType,
       name,
       url,
       position,
@@ -218,21 +228,43 @@ export async function createSource(
       message("api.message.jellyfinApiKeyRequired"),
     );
   }
-  const duplicate = await database.orm.Source.first({
+  const libraryId =
+    typeof value.libraryId === "string" && value.libraryId.trim()
+      ? value.libraryId.trim()
+      : null;
+  const duplicate = await database.orm.Source.where({
     kind: "integration",
     integration,
     url,
-  });
+  })
+    .where((source) =>
+      libraryId
+        ? source.externalLibraryId.eq(libraryId)
+        : source.externalLibraryId.isNull(),
+    )
+    .first();
   if (duplicate) {
     throw new SourceError(
       "This integration is already a source.",
       message("api.message.sourceIntegrationDuplicate"),
     );
   }
-  let serverName: string;
+  let sourceName: string;
+  let selectedLibraryName: string | null = null;
   try {
     const info = await jellyfin.validate(url, apiKey);
-    serverName = info.name;
+    sourceName = info.name;
+    if (libraryId) {
+      const libraries = await jellyfin.listLibraries(url, apiKey);
+      const library = libraries.find((item) => item.id === libraryId);
+      if (!library) {
+        throw new SourceError(
+          "Choose an available Jellyfin library.",
+          message("api.message.jellyfinLibraryMissing"),
+        );
+      }
+      selectedLibraryName = library.name;
+    }
   } catch (error) {
     if (error instanceof JellyfinError) {
       throw new SourceError(error.message, error.messageDescriptor);
@@ -241,13 +273,78 @@ export async function createSource(
   }
   const source = await database.orm.Source.create({
     kind,
-    name: name || serverName,
+    mediaType: requestedMediaType,
+    name: name || selectedLibraryName || sourceName,
     url,
     integration,
+    externalLibraryId: libraryId,
     credentialCiphertext: credentials.encrypt(apiKey, "source"),
     position,
   });
   return toSourceResponse(source);
+}
+
+export async function listJellyfinLibraries(
+  jellyfin: JellyfinClient,
+  body: unknown,
+): Promise<JellyfinLibraryResponse[]> {
+  const value = (body ?? {}) as { url?: unknown; apiKey?: unknown };
+  const url = normalizeIntegrationUrl(value.url);
+  if (!url) {
+    throw new SourceError(
+      "Enter a valid Jellyfin server URL.",
+      message("api.message.jellyfinUrlInvalid"),
+    );
+  }
+  const apiKey = typeof value.apiKey === "string" ? value.apiKey.trim() : "";
+  if (!apiKey || apiKey.length > 1_024) {
+    throw new SourceError(
+      "Enter a Jellyfin API key.",
+      message("api.message.jellyfinApiKeyRequired"),
+    );
+  }
+  try {
+    return await jellyfin.listLibraries(url, apiKey);
+  } catch (error) {
+    if (error instanceof JellyfinError) {
+      throw new SourceError(error.message, error.messageDescriptor);
+    }
+    throw error;
+  }
+}
+
+export async function updateSourceMediaType(
+  database: Database,
+  id: string,
+  value: unknown,
+): Promise<SourceResponse> {
+  const source = await database.orm.Source.first({ id });
+  if (!source) {
+    throw new SourceError(
+      "Source not found",
+      message("api.message.sourceNotFound"),
+    );
+  }
+  if (
+    source.kind !== "path" &&
+    !(source.kind === "integration" && source.integration === "jellyfin")
+  ) {
+    throw new SourceError(
+      "Only configured folder and Jellyfin sources can change media type.",
+      message("api.message.sourceNotRescanable"),
+    );
+  }
+  const requested = mediaTypeOrNull(value);
+  if (!requested) {
+    throw new SourceError(
+      "Choose a valid media type.",
+      message("api.message.sourceMediaTypeInvalid"),
+    );
+  }
+  const updated = await database.orm.Source.where({ id }).update({
+    mediaType: requested,
+  });
+  return toSourceResponse(updated ?? source);
 }
 
 async function resolveDirectory(value: string): Promise<string> {

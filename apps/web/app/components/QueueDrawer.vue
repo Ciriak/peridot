@@ -185,7 +185,11 @@ onBeforeUnmount(() => document.removeEventListener("keydown", handleKeydown));
                 {{ active.title }}
               </ScrollingText>
               <ScrollingText class="w-full text-xs text-muted-foreground">
-                <TrackArtistLinks :artists="trackArtistNames(active)" />
+                <TrackArtistLinks
+                  v-if="active.mediaType === 'music'"
+                  :artists="trackArtistNames(active)"
+                />
+                <template v-else>{{ active.artist }}</template>
               </ScrollingText>
             </div>
           </div>
@@ -274,7 +278,11 @@ onBeforeUnmount(() => document.removeEventListener("keydown", handleKeydown));
                   {{ track.title }}
                 </ScrollingText>
                 <ScrollingText class="w-full text-xs text-muted-foreground">
-                  <TrackArtistLinks :artists="trackArtistNames(track)" />
+                  <TrackArtistLinks
+                    v-if="track.mediaType === 'music'"
+                    :artists="trackArtistNames(track)"
+                  />
+                  <template v-else>{{ track.artist }}</template>
                 </ScrollingText>
               </div>
               <Button

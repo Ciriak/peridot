@@ -18,6 +18,7 @@ import {
 import type { CatalogService } from "./catalog.js";
 import type { CredentialStore } from "./credential-store.js";
 import type { Database } from "./database.js";
+import { normalizeGenres, serializeGenres } from "./genres.js";
 import {
   normalizeMetadataDetails,
   parseStoredMetadataDetails,
@@ -271,6 +272,7 @@ function matchData(
       ? JSON.stringify(candidate.albumArtists)
       : null,
     metadataAlbum: candidate.album,
+    metadataGenres: serializeGenres(candidate.genres),
     metadataDiscNumber: candidate.discNumber,
     metadataTrackNumber: candidate.trackNumber,
     metadataProviderId: candidate.providerId,
@@ -312,6 +314,7 @@ function normalizeCandidate(
     artists,
     albumArtists,
     album: candidate.album?.trim() || null,
+    genres: normalizeGenres(candidate.genres),
     discNumber:
       Number.isInteger(candidate.discNumber) && candidate.discNumber! > 0
         ? candidate.discNumber
@@ -377,6 +380,7 @@ export class MetadataEnrichment {
       const trackQuery = this.database.orm.Track.where({
         available: 1,
         metadataMode: "automatic",
+        mediaType: "music",
       });
       const tracks = await (
         task.sourceId
@@ -1027,6 +1031,7 @@ export class MetadataEnrichment {
       metadataAlbumArtist: null,
       metadataAlbumArtistCredits: null,
       metadataAlbum: null,
+      metadataGenres: null,
       metadataDiscNumber: null,
       metadataTrackNumber: null,
       metadataProviderId: null,
@@ -1073,6 +1078,7 @@ export class MetadataEnrichment {
       !body.artist.trim() ||
       !Array.isArray(body.artists) ||
       !Array.isArray(body.albumArtists) ||
+      !Array.isArray(body.genres) ||
       !Array.isArray(body.details)
     ) {
       throw new MetadataEnrichmentError(
@@ -1124,6 +1130,7 @@ export class MetadataEnrichment {
       artists,
       albumArtists,
       album: typeof body.album === "string" ? body.album : null,
+      genres: body.genres,
       discNumber: body.discNumber,
       trackNumber: body.trackNumber,
       durationMs: track.durationMs,
@@ -1158,6 +1165,7 @@ export class MetadataEnrichment {
       metadataArtist: null,
       metadataArtistCredits: null,
       metadataAlbum: null,
+      metadataGenres: null,
       metadataDiscNumber: null,
       metadataTrackNumber: null,
       metadataProviderId: null,

@@ -17,6 +17,7 @@ import { useSession } from "../composables/use-session";
 import { loadCollectionTracks } from "../lib/catalog-collections";
 import { isPeridotNetworkError } from "../lib/peridot-client";
 import AlbumContextMenu from "./AlbumContextMenu.vue";
+import FadeInImage from "./FadeInImage.vue";
 import LikeButton from "./LikeButton.vue";
 import TrackArtistLinks from "./TrackArtistLinks.vue";
 
@@ -102,21 +103,17 @@ async function toggleAlbumPlayback() {
           >
             <div
               aria-hidden="true"
-              class="flex aspect-square items-center justify-center overflow-hidden rounded-md bg-muted text-muted-foreground group-hover:text-foreground"
+              class="relative flex aspect-square items-center justify-center overflow-hidden rounded-md bg-muted text-muted-foreground group-hover:text-foreground"
             >
-              <img
-                v-if="coverImageUrl && !coverFailed"
-                :src="coverImageUrl"
-                alt=""
-                loading="lazy"
-                decoding="async"
-                class="size-full object-cover"
-                @error="coverFailed = true"
-              />
               <Icon
-                v-else
                 :icon="icons.album"
                 :class="compact ? 'size-4' : 'size-10'"
+              />
+              <FadeInImage
+                v-if="coverImageUrl && !coverFailed"
+                :src="coverImageUrl"
+                class="absolute inset-0"
+                @error="coverFailed = true"
               />
             </div>
           </NuxtLink>

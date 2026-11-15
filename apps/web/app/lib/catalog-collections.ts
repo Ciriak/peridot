@@ -3,6 +3,8 @@ import { listTracks } from "./peridot-client";
 
 interface CollectionQuery {
   albumId?: string;
+  collectionId?: string;
+  mediaType?: "music" | "audiobook" | "podcast";
   artistId?: string;
 }
 
@@ -17,8 +19,13 @@ export async function loadCollectionTracks(
     const page = await listTracks(serverAddress, token, {
       ...query,
       limit: 200,
-      sort: query.albumId ? "track" : "artist",
-      direction: "asc",
+      sort:
+        query.mediaType === "podcast"
+          ? "published"
+          : query.albumId || query.collectionId
+            ? "track"
+            : "artist",
+      direction: query.mediaType === "podcast" ? "desc" : "asc",
       ...(cursor ? { cursor } : {}),
     });
     tracks.push(...page.items);

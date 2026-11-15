@@ -73,7 +73,9 @@ the panel, which is non-modal so the player controls remain interactive.
 Track tables and queue rows show each track's cover artwork beside its title.
 Play and pause controls are embedded in the artwork and reveal on hover or
 keyboard focus, matching the Quick pick interaction; missing artwork uses the
-semantic music-note placeholder.
+semantic music-note placeholder. Track rows show normalized multi-valued genres
+beside artist credits, and catalog search includes genre text. Metadata menus
+show the effective genres and preview provider genres before a match is applied.
 The Playlists view provides private per-user collections with create, rename,
 delete, like, ordered drag-and-drop editing, removal, and a bounded track
 picker. Playlist cards and details derive a live 3x3 mosaic from the first nine
@@ -94,6 +96,16 @@ Tracks, albums, artists, and playlists can be liked independently from their
 rows, cards, and detail headers. Likes are private to the signed-in user and persist across
 reloads, sessions, and server restarts. The server requires an initialized local
 SQLite database and a music folder, but no API key or hosted service.
+Sources are explicitly classified as music, audiobooks, or podcasts. Existing
+sources and tracks default to music. Audiobooks are grouped into books by album
+title and author, with chapters ordered by disc and track number. Podcast audio
+is grouped into shows by album title and publisher, with episodes newest first
+using published metadata and file-date fallback. The Audiobooks and Podcasts
+routes provide collection cards, detail pages, collection playback, likes, and
+offline saving. Music Albums, Artists, Home suggestions, metadata providers, and
+Quick picks remain music-only. Jellyfin sources select one discovered library;
+each library is stored as a separate source so one Jellyfin server can expose
+music, books, and podcasts independently.
 The sidebar's up-to-eight-item `Quick pick` list mixes tracks and albums using
 the signed-in user's successful playback starts, with one item per line. Each
 start is retained as a timestamped event and receives exponential time decay
@@ -309,6 +321,15 @@ Administrators can restart the running server from Settings â†’ Admin â†
 after confirming the action. The server briefly disconnects clients, rebuilds
 its Fastify runtime on the same host and port, interrupts running tasks, and
 resumes queued tasks. Sessions and persisted data are retained.
+Settings → Admin → Server also persists an automatic source-refresh toggle and
+cron expression. It is enabled by default with the five-field schedule
+`0 3 * * *`. When enabled, Peridot queues an all-source library scan at server
+startup and on each cron occurrence. Five-field expressions use minute
+precision; six-field expressions may add seconds. Cron times use the server's
+local timezone. Scheduled scans share the normal task queue, coalesce with
+active library scans, and continue into metadata matching after a successful
+scan. Disabling the schedule prevents both startup and recurring automatic
+scans while retaining manual rescans.
 Administrators can manage where the server gets raw audio files from
 Settings → Admin → Sources. The add-source dialog offers a folder inside the
 server or a Jellyfin instance. Existing URL sources remain listed and removable
@@ -373,12 +394,14 @@ provider kind cannot be added twice and is disabled or re-enabled instead of
 removed.
 Provider metadata is stored separately from local file tags, including
 provider-specific details such as Discogs release year, label, catalog number,
-country, format, and track position. Track context menus merge candidates from
-every enabled provider and let signed-in users choose another match or return
-to the original file metadata. Artist context menus provide the equivalent
-profile correction and local-metadata restore actions. Reset metadata clears
-track and artist matches and removes cached artist portraits. Peridot never
-rewrites the audio files.
+country, format, track position, and genres. Discogs genres and styles plus
+MusicBrainz release genres and tags become the active track genres when a match
+is applied; reverting the match restores embedded or source genres. Track
+context menus merge candidates from every enabled provider and let signed-in
+users choose another match or return to the original file metadata. Artist
+context menus provide the equivalent profile correction and local-metadata
+restore actions. Reset metadata clears track and artist matches and removes
+cached artist portraits. Peridot never rewrites the audio files.
 
 Synchronize an existing local database with the current Prisma 8 contract:
 
@@ -420,6 +443,13 @@ with `GET /api/tracks/:id/audio`. Catalog pages default to 100 tracks or 50
 album/artist summaries, with `cursor`, `query`, sort, availability, and
 authenticated like filters. `POST /api/tracks/resolve` hydrates at most 500
 queue track IDs in requested order.
+Signed-in clients list derived books with `GET /api/audiobooks`, read one with
+`GET /api/audiobooks/:id`, and page its chapters through
+`GET /api/audiobooks/:id/chapters`. Podcast shows use
+`GET /api/podcasts`, `GET /api/podcasts/:id`, and
+`GET /api/podcasts/:id/episodes`. Track responses include `mediaType` and
+optional `publishedAt`. `/api/tracks` filters by media type and defaults to
+music; `mediaType=all` supports mixed search and playlists.
 `POST /api/realtime/ticket` issues a 30-second single-use ticket for the
 authenticated `/api/realtime` WebSocket. Subscriptions cover tasks, catalog
 revisions, and administrator-only logs; catalog events never include track rows.
@@ -445,23 +475,24 @@ user's source-order track IDs, active track, and remaining randomized pool;
 track outside the queue, and random-pool entries outside the non-active queue
 are rejected. Randomized playback keeps the visible queue order unchanged,
 plays each eligible track once per pass, and resumes the same pass after a
-reload. New scans are explicit and are never started automatically at server
-startup; explicitly queued tasks resume after a restart while tasks that were
-running become interrupted. Library scans and metadata fetches are separate
-linked tasks with queued, running, completed, failed, interrupted, or stopped
-states and determinate or indeterminate progress. Active tasks can be stopped
-from Settings → Admin → Tasks; stopping a queued task prevents it from starting,
+reload. When automatic source refresh is enabled, an all-source library scan
+starts after server initialization and recurs on its configured cron schedule.
+Explicitly queued tasks resume after a restart while tasks that were running
+become interrupted. Library scans and metadata fetches are separate linked tasks
+with queued, running, completed, failed, interrupted, or stopped states and
+determinate or indeterminate progress. Active tasks can be stopped from
+Settings → Admin → Tasks; stopping a queued task prevents it from starting,
 while stopping running core work aborts the scan or metadata executor before the
 request completes. Finished task history is retained for 30 days, capped at the
 newest 500 terminal tasks. MP3, M4A/AAC, OGG/Opus, WAV, and FLAC files are
-cataloged; originals are
-streamed without transcoding. Catalog responses include nullable disc and track
-numbers used for album ordering. A metadata-version marker makes the next scan
-backfill those fields once for catalog rows created before the columns existed,
-including files whose contents have not changed. The web shell receives shared
-task events for the administrator topbar and Tasks settings view. The server
-maintains indexed catalog projections and returns bounded cursor pages so the
-browser never downloads the complete catalog.
+cataloged; originals are streamed without transcoding. Catalog responses include
+nullable disc and track numbers used for album ordering and an effective genre
+array. A metadata-version marker makes the next scan backfill those fields once
+for catalog rows created before the columns existed, including files whose
+contents have not changed. The web shell receives shared task events for the
+administrator topbar and Tasks settings view. The server maintains indexed
+catalog projections and returns bounded cursor pages so the browser never
+downloads the complete catalog.
 Successful browser playback starts are recorded with
 `POST /api/tracks/:id/plays`. The authenticated per-user mixed ranking is
 available from `GET /api/quick-picks`; the server returns up to eight ordered track
@@ -476,6 +507,11 @@ details, and the player.
 Administrators can search local directories recursively with
 `GET /api/admin/filesystem/search?query=<term>`; results are bounded and do not
 follow symbolic links.
+`GET /api/admin/server` returns catalog counts plus the persisted source-refresh
+schedule and its next run. `PUT /api/admin/server` accepts
+`{ "sourceRefresh": { "enabled": boolean, "cron": string } }`, validates the
+expression, persists it, and reschedules the active timer without restarting the
+server.
 Creating a folder or Jellyfin source with `POST /api/admin/sources` returns the
 source plus its automatically queued scan task. A Jellyfin create request uses
 `kind: "integration"`, `integration: "jellyfin"`, `url`, and the write-only
@@ -485,6 +521,12 @@ tracks from that source and queues metadata matching for that source. Requests
 are queued behind active work, and equivalent requests that are still queued
 coalesce into the existing task. Administrators stop an active task with
 `POST /api/admin/tasks/:id/stop`.
+Source creation accepts `mediaType`, and Jellyfin creation also accepts the
+selected `libraryId`. Administrators discover Jellyfin libraries through
+`POST /api/admin/integrations/jellyfin/libraries` using write-only connection
+credentials. `PATCH /api/admin/sources/:id` changes a source's media type; the
+server stops source-scoped operations and queues a rescan that reclassifies
+unchanged tracks.
 Administrators manage metadata providers through
 `GET/POST /api/admin/metadata-providers`,
 `GET /api/admin/metadata-providers/definitions`,

@@ -215,7 +215,8 @@ test("the sidebar renders linked, context-aware quick picks", async () => {
   const buttonStart = content.indexOf("<Button");
   const buttonEnd = content.indexOf("</Button>");
   assert.ok(buttonStart >= 0 && buttonEnd > buttonStart);
-  assert.ok(content.indexOf("<img") > buttonStart);
+  assert.ok(content.indexOf("<FadeInImage") > buttonStart);
+  assert.ok(content.indexOf("<FadeInImage") < buttonEnd);
   assert.ok(content.indexOf("{{ title }}") > buttonEnd);
   assert.match(composer, /watch\(playHistoryVersion/);
   assert.match(composer, /fetchQuickPicks/);

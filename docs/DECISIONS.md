@@ -1,5 +1,88 @@
 # Decisions
 
+## 2026-11-15: Media type is explicit per source
+
+Peridot stores `music`, `audiobook`, or `podcast` on each source and copies that
+type onto its tracks. Existing sources migrate as music. This avoids unreliable
+title and folder-name inference while still allowing mixed libraries by adding
+separate folder sources or, for Jellyfin, separate discovered libraries.
+
+New Jellyfin sources select a library ID and scan within that parent. Legacy
+whole-instance Jellyfin rows remain valid music sources. Duplicate normalized
+folder paths and duplicate Jellyfin libraries are rejected. Changing a source's
+media type stops source-scoped work, updates the source, and queues a fresh scan;
+unchanged files are still reindexed so their category, grouping, and catalog
+visibility cannot remain stale.
+
+Audiobooks reuse the existing track, player, queue, likes storage, and offline
+cache with a derived book collection keyed by title and author. Podcasts use the
+same foundation with a show collection keyed by title and publisher. Collection
+IDs include media type, preventing same-named albums, books, and shows from
+merging. Chapters sort by disc and track number; episodes sort newest first by
+publication metadata, Jellyfin dates, then file-modified fallback.
+
+Albums, Artists, Home suggestions, music metadata providers, and Quick picks
+remain music-only. Track search and playlists can include explicit mixed-media
+results. Book and show favorites are collection-level; individual chapter and
+episode like controls remain hidden. Local files and Jellyfin audio are in
+scope, while RSS/OPML subscriptions remain future work.
+
+## 2026-11-15: Source and metadata refresh runs at startup and on a persisted cron
+
+Peridot owns one server-wide automatic source-refresh schedule rather than
+separate timers for each source and metadata provider. The schedule is enabled
+by default with the five-field local-time expression `0 3 * * *`. When enabled,
+startup queues one unscoped library scan after the task service is ready. The
+same schedule queues later unscoped scans, and the existing successful-scan
+pipeline chains metadata matching for tracks and artists.
+
+The administrator can enable or disable the schedule and replace its cron
+expression from Settings → Admin → Server. Expressions accept five fields for
+minute precision or six fields for second precision, and invalid expressions
+fail the update without altering persisted settings. The active Croner job is
+rescheduled immediately after a successful save and stops during Fastify
+shutdown.
+
+Scheduled work uses the normal task queue, so it cannot overlap a running scan.
+If a scan is already queued or running when the timer fires, that occurrence is
+skipped. This preserves source availability reconciliation and task progress
+semantics, avoids duplicate full-library scans, and leaves manual source-scoped
+rescans available when the automatic schedule is disabled.
+
+## 2026-11-15: Genres are track-scoped metadata with provider overrides
+
+Track genres are stored as normalized string arrays in two separate fields:
+embedded or source genres on the track, and provider genres selected by the
+current metadata match. The provider array takes precedence while a match is
+active; clearing or reverting the match restores the local array. This mirrors
+the existing track metadata override model and avoids rewriting audio files.
+
+Local scans read normalized multi-valued genre tags. Jellyfin imports item
+genres, Discogs imports both broad genres and release styles, and MusicBrainz
+release matching imports genres plus tags. Provider candidate and apply
+contracts carry the genre array, so manual correction persists the same values
+as automatic matching.
+
+The catalog projection includes genre text for search and bumps its version so
+existing tracks are reindexed. Albums remain derived from tracks; this change
+does not introduce independently editable album genres.
+
+## 2026-11-15: Artwork fades in after a successful image load
+
+Album covers and artist portraits begin transparent and transition to full
+opacity only after the browser fires their `load` event. The shared
+fade-in-image component resets that state when its source changes, so navigating
+between tracks, albums, or artists cannot leave a stale loaded state on the next
+image. The semantic album, music, or artist placeholder remains beneath the
+image while it loads or if it fails.
+
+The fade applies to album cards, album details, artist cards, artist details,
+shared track and queue artwork, playlist mosaics, quick picks, and the fixed
+player's visible and ambient cover layers. Reduced-motion preferences remove the
+transition while preserving the wait-for-load behavior. A 300ms standard
+Tailwind opacity transition keeps the reveal subtle without introducing custom
+styling or a loading flash.
+
 ## 2026-11-14: Administrators can stop tasks and remove active sources
 
 Running and queued tasks can be stopped from the Tasks settings view. Stopping a

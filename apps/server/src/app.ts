@@ -29,6 +29,7 @@ import { registerAdminRoutes } from "./admin-routes.js";
 import { registerTaskRoutes } from "./task-routes.js";
 import { TaskService } from "./tasks.js";
 import { ensureServerSettings } from "./server-settings.js";
+import { SourceRefreshScheduler } from "./source-refresh-scheduler.js";
 import { ensureDefaultSource } from "./sources.js";
 import { ServerLogBuffer } from "./server-log.js";
 import {
@@ -50,6 +51,7 @@ export interface BuildAppOptions {
   discogsRequestIntervalMs?: number;
   jellyfinFetch?: typeof fetch;
   jellyfinRequestTimeoutMs?: number;
+  enableSourceRefreshScheduler?: boolean;
 }
 
 export async function buildApp(options: BuildAppOptions = {}) {
@@ -189,6 +191,14 @@ export async function buildApp(options: BuildAppOptions = {}) {
   await ensureDefaultSource(database, config.libraryRoot);
   await ensureDefaultMetadataProvider(database);
   await tasks.initialize();
+  const sourceRefreshScheduler = new SourceRefreshScheduler(
+    database,
+    tasks,
+    (level, message) => logBuffer.add(level, message),
+  );
+  await sourceRefreshScheduler.initialize(
+    options.enableSourceRefreshScheduler ?? false,
+  );
   await registerProtectedRoutes(
     app,
     database,
@@ -225,12 +235,14 @@ export async function buildApp(options: BuildAppOptions = {}) {
         options.restartServer,
         jellyfin,
         catalog,
+        sourceRefreshScheduler,
       );
     },
     (request) => playbackTokens.authorizeRequest(request.method, request.url),
     (sessionId) => realtime.disconnectSession(sessionId),
   );
   app.addHook("onClose", async () => {
+    sourceRefreshScheduler.close();
     if (backfillImmediate) {
       clearImmediate(backfillImmediate);
       backfillImmediate = undefined;

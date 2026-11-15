@@ -61,6 +61,8 @@ interface DiscogsRelease {
   title: string;
   year?: number | undefined;
   country?: string | undefined;
+  genres?: string[] | undefined;
+  styles?: string[] | undefined;
   labels?: DiscogsLabel[] | undefined;
   formats?: DiscogsFormat[] | undefined;
   artists: DiscogsArtist[];
@@ -124,6 +126,8 @@ function parseRelease(value: unknown): DiscogsRelease | null {
     title,
     year: positiveInteger(release.year) ?? undefined,
     country: text(release.country) || undefined,
+    genres: asArray(release.genres).map(text).filter(Boolean),
+    styles: asArray(release.styles).map(text).filter(Boolean),
     labels: asArray(release.labels)
       .map(asRecord)
       .filter((label): label is Record<string, unknown> => label !== null)
@@ -320,6 +324,7 @@ function releaseCandidate(
     artists,
     albumArtists,
     album: release.title,
+    genres: unique([...(release.genres ?? []), ...(release.styles ?? [])]),
     discNumber: discTrack ? Number(discTrack[1]) : 1,
     trackNumber: discTrack
       ? Number(discTrack[2])

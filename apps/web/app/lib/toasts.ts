@@ -251,6 +251,34 @@ export function notifyLikeSucceeded(target: LikeTarget) {
   addToast(content);
 }
 
+export function notifyOfflineCollectionSaved(title: string) {
+  addToast({
+    titleMessage: message("toast.collectionOfflineSavedTitle"),
+    descriptionMessage: message("toast.collectionOfflineSaved", {
+      collection: title,
+    }),
+    status: "success",
+    duration: 5000,
+    kind: "success",
+  });
+}
+
+export function notifyOfflineCollectionFailed(
+  title: string,
+  detailMessage: string,
+) {
+  addToast({
+    titleMessage: message("toast.collectionOfflineFailedTitle"),
+    descriptionMessage: message("toast.collectionOfflineFailed", {
+      collection: title,
+      message: detailMessage,
+    }),
+    status: "error",
+    duration: 8000,
+    kind: "error",
+  });
+}
+
 export function notifyServerOnline() {
   addToast({
     titleMessage: message("toast.serverOnlineTitle"),

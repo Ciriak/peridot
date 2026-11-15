@@ -76,17 +76,20 @@ model Session {
 
 model Track {
   id                         String     @id @onCreate(cuid(2))
+  mediaType                  String     @default("music")
   title                      String
   artist                     String
   artistCredits              String?
   albumArtist                String?
   albumArtistCredits         String?
   album                      String?
+  genres                     String?
   discNumber                 Int?
   trackNumber                Int?
   relativePath               String
   mimeType                   String
   durationMs                 Int?
+  publishedAt                DateTime?
   fileSizeBytes              BigInt
   fileModifiedAt             DateTime
   metadataVersion            Int        @default(0)
@@ -97,6 +100,7 @@ model Track {
   metadataAlbumArtist        String?
   metadataAlbumArtistCredits String?
   metadataAlbum              String?
+  metadataGenres             String?
   metadataDiscNumber         Int?
   metadataTrackNumber        Int?
   metadataProviderId         String?
@@ -122,6 +126,7 @@ model Track {
   @@unique([sourceId, relativePath])
   @@unique([sourceId, externalId])
   @@index([available])
+  @@index([mediaType])
   @@index([artist, album, title])
   @@index([sourceId])
   @@index([coverId])
@@ -238,18 +243,22 @@ model Task {
 }
 
 model ServerSetting {
-  id          String   @id
-  libraryRoot String
-  updatedAt   DateTime @onCreate(now()) @onUpdate(now())
+  id                   String   @id
+  libraryRoot          String
+  sourceRefreshEnabled Int      @default(1)
+  sourceRefreshCron    String   @default("0 3 * * *")
+  updatedAt            DateTime @onCreate(now()) @onUpdate(now())
 }
 
 model Source {
   id                   String   @id @onCreate(cuid(2))
   kind                 String
+  mediaType            String   @default("music")
   name                 String?
   path                 String?
   url                  String?
   integration          String?
+  externalLibraryId    String?
   credentialCiphertext String?
   lastSyncedAt         DateTime?
   position             Int      @default(0)
@@ -257,6 +266,7 @@ model Source {
   updatedAt            DateTime @onCreate(now()) @onUpdate(now())
 
   @@index([kind])
+  @@index([mediaType])
   @@index([position])
 }
 
@@ -284,6 +294,7 @@ model CatalogState {
 
 model CatalogTrack {
   id               String   @id
+  mediaType        String   @default("music")
   title            String
   artist           String
   artistCredits    String
@@ -293,7 +304,9 @@ model CatalogTrack {
   normalizedTitle  String
   normalizedArtist String
   normalizedAlbum  String
+  normalizedGenres String   @default("")
   durationMs       Int?
+  publishedAt      DateTime?
   discNumber       Int?
   trackNumber      Int?
   releaseYear      Int?
@@ -310,12 +323,14 @@ model CatalogTrack {
   @@index([normalizedTitle, id], map: "ct_title")
   @@index([durationMs, id], map: "ct_duration")
   @@index([available, id])
+  @@index([mediaType, available, id])
   @@index([albumId])
   @@index([albumFolderKey, normalizedAlbum, id])
 }
 
 model CatalogAlbum {
   id               String   @id
+  mediaType        String   @default("music")
   title            String
   artist           String
   normalizedTitle  String
@@ -327,9 +342,11 @@ model CatalogAlbum {
   trackCount       Int      @default(0)
   durationMs       Int?
   releaseYear      Int?
+  latestPublishedAt DateTime?
   updatedAt        DateTime @onCreate(now()) @onUpdate(now())
 
   @@index([normalizedTitle, normalizedArtist, id], map: "ca_title_artist")
+  @@index([mediaType, normalizedTitle, id])
   @@index([normalizedArtist, normalizedTitle, id], map: "ca_artist_title")
   @@index([artistId, id])
 }

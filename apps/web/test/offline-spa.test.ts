@@ -111,7 +111,7 @@ test("query keys isolate server, user, resource, and list options", () => {
     scope.userId,
     "likes",
   ]);
-  assert.equal(OFFLINE_DATABASE, "peridot-web-offline-catalog-v1");
+  assert.equal(OFFLINE_DATABASE, "peridot-web-offline-catalog-v2");
   assert.equal(OFFLINE_TRACK_DATABASE, "peridot-web-offline-tracks-v1");
   assert.notEqual(OFFLINE_DATABASE, OFFLINE_TRACK_DATABASE);
 });
@@ -126,7 +126,14 @@ test("cached query data remains renderable after a background failure", async ()
     },
   });
   const queryKey = queryKeys.likes(scope);
-  const cached = { tracks: [], albums: [], artists: [], playlists: [] };
+  const cached = {
+    tracks: [],
+    albums: [],
+    audiobooks: [],
+    podcasts: [],
+    artists: [],
+    playlists: [],
+  };
   const options = {
     queryKey,
     queryFn: async () => cached,
@@ -400,6 +407,7 @@ test("full catalog snapshots preserve every availability state", () => {
     albumId: string | null = null,
   ) => ({
     id,
+    mediaType: "music" as const,
     title: id,
     artist: "Artist",
     artists: ["Artist"],
@@ -408,6 +416,7 @@ test("full catalog snapshots preserve every availability state", () => {
     discNumber: null,
     trackNumber: null,
     durationMs: null,
+    publishedAt: null,
     mimeType: "audio/mpeg",
     available,
     coverUrl: null,
@@ -415,7 +424,7 @@ test("full catalog snapshots preserve every availability state", () => {
     liked: false,
   });
   const snapshot: OfflineCatalogSnapshot = {
-    version: 1,
+    version: 2,
     scope,
     tracks: [
       track("z-available", true),
@@ -423,8 +432,9 @@ test("full catalog snapshots preserve every availability state", () => {
       track("m-other-album", true, "album-2"),
     ],
     albums: [],
+    audiobooks: [],
+    podcasts: [],
     artists: [],
-    playlists: [],
     catalogRevision: 3,
     syncedAt: "2026-11-13T10:00:00.000Z",
   };

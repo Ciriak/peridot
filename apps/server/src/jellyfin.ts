@@ -1,4 +1,7 @@
-import type { MessageDescriptor } from "@peridot/contracts";
+import type {
+  JellyfinLibraryResponse,
+  MessageDescriptor,
+} from "@peridot/contracts";
 import { message } from "./messages.js";
 
 const AUDIO_PAGE_SIZE = 500;
@@ -34,6 +37,7 @@ interface JellyfinItem {
   IndexNumber?: number | null;
   ParentIndexNumber?: number | null;
   DateCreated?: string | null;
+  PremiereDate?: string | null;
   Artists?: string[] | null;
   ArtistItems?: JellyfinNameId[] | null;
   Album?: string | null;
@@ -42,12 +46,20 @@ interface JellyfinItem {
   AlbumArtists?: JellyfinNameId[] | null;
   AlbumPrimaryImageTag?: string | null;
   ImageTags?: Record<string, string | null> | null;
+  Genres?: string[] | null;
+  GenreItems?: JellyfinNameId[] | null;
   MediaSources?: JellyfinMediaSource[] | null;
 }
 
 interface JellyfinItemsResponse {
   Items?: JellyfinItem[] | null;
   TotalRecordCount?: number | null;
+}
+
+interface JellyfinLibrary {
+  ItemId?: string | null;
+  Name?: string | null;
+  CollectionType?: string | null;
 }
 
 interface JellyfinSystemInfo {
@@ -73,9 +85,11 @@ export interface JellyfinAudioItem {
   albumArtists: string[];
   album: string | null;
   albumId: string | null;
+  genres: string[];
   discNumber: number | null;
   trackNumber: number | null;
   durationMs: number | null;
+  publishedAt: Date | null;
   fileSizeBytes: bigint;
   fileModifiedAt: Date;
   mimeType: string;
@@ -175,6 +189,11 @@ function toAudioItem(item: JellyfinItem): {
   );
   const album = item.Album?.trim() || null;
   const albumId = item.AlbumId?.trim() || null;
+  const genres = uniqueValues(
+    item.Genres?.length
+      ? item.Genres
+      : (item.GenreItems ?? []).map((genre) => genre.Name),
+  );
   const primaryImageTag = item.ImageTags?.Primary?.trim() || null;
   const albumCoverItemId =
     album && albumId && item.AlbumPrimaryImageTag ? albumId : null;
@@ -192,6 +211,14 @@ function toAudioItem(item: JellyfinItem): {
     item.RunTimeTicks && item.RunTimeTicks > 0
       ? Math.round(item.RunTimeTicks / 10_000)
       : null;
+  const publishedAt = (() => {
+    for (const value of [item.PremiereDate, item.DateCreated]) {
+      if (!value) continue;
+      const parsed = new Date(value);
+      if (!Number.isNaN(parsed.getTime())) return parsed;
+    }
+    return null;
+  })();
   const size = item.MediaSources?.[0]?.Size;
 
   return {
@@ -205,6 +232,7 @@ function toAudioItem(item: JellyfinItem): {
           item.Name ?? "",
           (item.Artists ?? []).join("|"),
           item.Album ?? "",
+          genres.join("|"),
           item.RunTimeTicks ?? "",
           coverTag ?? "",
         ].join(":"),
@@ -214,9 +242,11 @@ function toAudioItem(item: JellyfinItem): {
       albumArtists,
       album,
       albumId,
+      genres,
       discNumber: positiveInteger(item.ParentIndexNumber),
       trackNumber: positiveInteger(item.IndexNumber),
       durationMs,
+      publishedAt,
       fileSizeBytes:
         size !== null &&
         size !== undefined &&
@@ -303,6 +333,7 @@ export class JellyfinClient {
   async listAudio(
     baseUrl: string,
     apiKey: string,
+    libraryId: string | null,
     onPage?: (page: JellyfinAudioPage) => Promise<void> | void,
     signal?: AbortSignal,
   ): Promise<{
@@ -322,7 +353,8 @@ export class JellyfinClient {
         recursive: "true",
         includeItemTypes: "Audio",
         mediaTypes: "Audio",
-        fields: "MediaSources",
+        ...(libraryId ? { parentId: libraryId } : {}),
+        fields: "MediaSources,Genres,PremiereDate,DateCreated",
         enableImages: "true",
         enableTotalRecordCount: "true",
         sortBy: "SortName",
@@ -396,6 +428,69 @@ export class JellyfinClient {
     }
 
     return { items, unsupportedCount, totalCount, processedCount: startIndex };
+  }
+
+  async listLibraries(
+    baseUrl: string,
+    apiKey: string,
+    signal?: AbortSignal,
+  ): Promise<JellyfinLibraryResponse[]> {
+    const response = await this.request(
+      endpoint(baseUrl, "Library/VirtualFolders"),
+      apiKey,
+      {
+        ...(signal ? { signal } : {}),
+      },
+    );
+    if (response.status === 401 || response.status === 403) {
+      throw new JellyfinError(
+        "Jellyfin rejected the API key.",
+        "invalid_credentials",
+        400,
+        message("api.message.jellyfinInvalidCredentials"),
+      );
+    }
+    if (!response.ok) {
+      throw new JellyfinError(
+        "Jellyfin could not list its libraries.",
+        "unavailable",
+        502,
+        message("api.message.jellyfinUnavailable"),
+      );
+    }
+    let raw: unknown;
+    try {
+      raw = await response.json();
+    } catch {
+      throw new JellyfinError(
+        "Jellyfin returned an invalid library response.",
+        "invalid_response",
+        502,
+        message("api.message.jellyfinInvalidResponse"),
+      );
+    }
+    if (!Array.isArray(raw)) {
+      throw new JellyfinError(
+        "Jellyfin returned an invalid library response.",
+        "invalid_response",
+        502,
+        message("api.message.jellyfinInvalidResponse"),
+      );
+    }
+    return raw.flatMap((value) => {
+      const library = jsonObject(value) as JellyfinLibrary;
+      const id = library.ItemId?.trim();
+      const name = library.Name?.trim();
+      return id && name
+        ? [
+            {
+              id,
+              name,
+              collectionType: library.CollectionType?.trim() || null,
+            },
+          ]
+        : [];
+    });
   }
 
   async cover(

@@ -31,7 +31,7 @@ test("artists have list and detail routes with artist-scoped content", async () 
   assert.match(artistCard, /<ArtistArtwork :image-url="artist\.imageUrl"/);
   assert.match(artistCard, /card\.localArtistName/);
   assert.match(artistArtwork, /icons\.user/);
-  assert.match(artistArtwork, /object-cover/);
+  assert.match(artistArtwork, /<FadeInImage[\s\S]*:src="artworkUrl"/);
   assert.match(artistCard, /useLikes\(\)/);
   assert.match(artistCard, /<LikeButton/);
   assert.match(listPage, /t\("page\.artists\.empty"\)/);
@@ -97,7 +97,7 @@ test("artist names link from navigation and track lists", async () => {
   assert.match(albumDetail, /<TrackArtistLinks :artists="album\.artists" \/>/);
   assert.match(
     trackTable,
-    /<TrackArtistLinks :artists="trackArtistNames\(item\.data\)" \/>/,
+    /<TrackArtistLinks[\s\S]*?showArtists !== false[\s\S]*?item\.data\.mediaType === 'music'[\s\S]*?:artists="trackArtistNames\(item\.data\)"/,
   );
   assert.match(
     trackTable,

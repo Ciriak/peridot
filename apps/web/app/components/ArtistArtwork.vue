@@ -5,6 +5,7 @@ import { useCachedArtwork } from "../composables/use-cached-artwork";
 import { useServer } from "../composables/use-server";
 import { icons } from "../lib/icons";
 import { trackCoverUrl } from "../lib/library";
+import FadeInImage from "./FadeInImage.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -24,22 +25,15 @@ const { artworkUrl, failed: imageFailed } = useCachedArtwork(resolvedUrl);
 <template>
   <div
     aria-hidden="true"
-    class="flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-muted-foreground"
+    class="relative flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-muted-foreground"
     :class="size === 'lg' ? 'size-40' : 'size-16'"
   >
-    <img
+    <Icon :icon="icons.user" :class="size === 'lg' ? 'size-16' : 'size-8'" />
+    <FadeInImage
       v-if="artworkUrl && !imageFailed"
       :src="artworkUrl"
-      alt=""
-      loading="lazy"
-      decoding="async"
-      class="size-full object-cover"
+      class="absolute inset-0"
       @error="imageFailed = true"
-    />
-    <Icon
-      v-else
-      :icon="icons.user"
-      :class="size === 'lg' ? 'size-16' : 'size-8'"
     />
   </div>
 </template>

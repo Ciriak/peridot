@@ -48,6 +48,8 @@ function musicBrainzResponses(): typeof fetch {
       return Response.json({
         id: "release-1",
         title: "Night Sessions",
+        genres: [{ name: "Electronic" }],
+        tags: [{ name: "Night" }],
         media: [
           {
             position: 1,
@@ -93,6 +95,7 @@ function musicBrainzResponses(): typeof fetch {
             title: "Blue Hours",
             score: 100,
             length: 125000,
+            genres: [{ name: "Electronic" }],
             "artist-credit": [
               { name: "Elliot Lake", artist: { name: "Elliot Lake" } },
             ],
@@ -527,6 +530,7 @@ test("scans automatically enrich album tracks with MusicBrainz provenance", asyn
         title: string;
         album: string | null;
         albumId: string | null;
+        genres: string[];
         metadata: Record<string, unknown> | null;
       }>;
     }>().items;
@@ -537,6 +541,8 @@ test("scans automatically enrich album tracks with MusicBrainz provenance", asyn
       assert.equal(track.metadata?.providerKind, "musicbrainz");
       assert.equal(track.metadata?.mode, "automatic");
       assert.match(String(track.metadata?.sourceUrl), /recording/);
+      assert.deepEqual(track.genres, ["Electronic", "Night"]);
+      assert.deepEqual(track.metadata?.genres, ["Electronic", "Night"]);
     }
   } finally {
     await context.close();
@@ -591,6 +597,8 @@ test("Discogs credentials fall back after MusicBrainz and manual results merge p
           title: "Night Sessions",
           year: 1999,
           country: "UK",
+          genres: ["Electronic"],
+          styles: ["Downtempo"],
           labels: [{ name: "Night Records", catno: "NIGHT-301" }],
           formats: [{ name: "Vinyl", descriptions: ["LP", "Album"] }],
           artists: [{ name: "Elliot Lake" }],
@@ -656,6 +664,7 @@ test("Discogs credentials fall back after MusicBrainz and manual results merge p
         metadata: {
           providerKind: string;
           externalTrackId: string;
+          genres: string[];
           details: Array<{ key: string; value: string }>;
           sourceUrl: string;
         } | null;
@@ -668,6 +677,7 @@ test("Discogs credentials fall back after MusicBrainz and manual results merge p
       "1999",
     );
     assert.match(track.metadata?.sourceUrl ?? "", /discogs\.com\/release\/301/);
+    assert.deepEqual(track.metadata?.genres, ["Electronic", "Downtempo"]);
 
     const candidates = await context.app.inject({
       method: "GET",
@@ -686,6 +696,7 @@ test("Discogs credentials fall back after MusicBrainz and manual results merge p
         artists: string[];
         albumArtists: string[];
         album: string | null;
+        genres: string[];
         discNumber: number | null;
         trackNumber: number | null;
         sourceUrl: string;
@@ -716,6 +727,7 @@ test("Discogs credentials fall back after MusicBrainz and manual results merge p
         artists: discogsCandidate.artists,
         albumArtists: discogsCandidate.albumArtists,
         album: discogsCandidate.album,
+        genres: discogsCandidate.genres,
         discNumber: discogsCandidate.discNumber,
         trackNumber: discogsCandidate.trackNumber,
         sourceUrl: discogsCandidate.sourceUrl,
@@ -724,6 +736,7 @@ test("Discogs credentials fall back after MusicBrainz and manual results merge p
     });
     assert.equal(applied.statusCode, 204);
     assert.deepEqual(discogsCandidate.albumArtists, ["Elliot Lake"]);
+    assert.deepEqual(discogsCandidate.genres, ["Electronic", "Downtempo"]);
     assert.equal(
       (
         await context.database.orm.CatalogTrack.firstOrThrow({
@@ -746,6 +759,7 @@ test("Discogs credentials fall back after MusicBrainz and manual results merge p
         ).value,
       "NIGHT-301",
     );
+    assert.deepEqual(manual.json().genres, ["Electronic", "Downtempo"]);
   } finally {
     await context.close();
   }
@@ -909,6 +923,7 @@ test("members can replace and revert a manual metadata match", async () => {
         title: "Blue Hours",
         artist: "Elliot Lake",
         album: "Local Album",
+        genres: ["Local Rock"],
         discNumber: 1,
         trackNumber: 1,
       }),
@@ -947,6 +962,7 @@ test("members can replace and revert a manual metadata match", async () => {
         artists: candidate.artists,
         albumArtists: candidate.albumArtists,
         album: candidate.album,
+        genres: candidate.genres,
         discNumber: candidate.discNumber,
         trackNumber: candidate.trackNumber,
         sourceUrl: candidate.sourceUrl,
@@ -961,6 +977,7 @@ test("members can replace and revert a manual metadata match", async () => {
     });
     assert.equal(matched.json().metadata.mode, "manual");
     assert.equal(matched.json().title, "Blue Hours");
+    assert.deepEqual(matched.json().genres, ["Electronic"]);
 
     const reverted = await context.app.inject({
       method: "DELETE",
@@ -974,6 +991,7 @@ test("members can replace and revert a manual metadata match", async () => {
       headers: member,
     });
     assert.equal(local.json().album, "Local Album");
+    assert.deepEqual(local.json().genres, ["Local Rock"]);
     assert.equal(local.json().metadata, null);
 
     await startScan(context);
@@ -983,6 +1001,7 @@ test("members can replace and revert a manual metadata match", async () => {
       headers: member,
     });
     assert.equal(afterScan.json().album, "Local Album");
+    assert.deepEqual(afterScan.json().genres, ["Local Rock"]);
     assert.equal(afterScan.json().metadata, null);
   } finally {
     await context.close();
@@ -1065,6 +1084,7 @@ test("administrators can reset all track metadata to file tags", async () => {
       assert.equal(track.metadataArtist, null);
       assert.equal(track.metadataArtistCredits, null);
       assert.equal(track.metadataAlbum, null);
+      assert.equal(track.metadataGenres, null);
       assert.equal(track.metadataDiscNumber, null);
       assert.equal(track.metadataTrackNumber, null);
       assert.equal(track.metadataProviderId, null);

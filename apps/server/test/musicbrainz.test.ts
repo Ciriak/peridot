@@ -44,6 +44,8 @@ test("MusicBrainz client uses the official origin, contact User-Agent, and reque
       return Response.json({
         id: "release-1",
         title: "Night Sessions",
+        genres: [{ name: "Electronic" }],
+        tags: [{ name: "Night" }],
         media: [
           {
             position: 1,
@@ -91,6 +93,14 @@ test("MusicBrainz client uses the official origin, contact User-Agent, and reque
   assert.equal(matches.get("track-1")?.[0]?.externalTrackId, "recording-1");
   assert.equal(matches.get("track-1")?.[0]?.trackNumber, 1);
   assert.deepEqual(matches.get("track-1")?.[0]?.albumArtists, ["Elliot Lake"]);
+  assert.deepEqual(matches.get("track-1")?.[0]?.genres, [
+    "Electronic",
+    "Night",
+  ]);
+  assert.equal(
+    requests[1]?.searchParams.get("inc"),
+    "recordings+artist-credits+genres+tags",
+  );
 });
 
 test("MusicBrainz client retries rate limits before succeeding", async () => {

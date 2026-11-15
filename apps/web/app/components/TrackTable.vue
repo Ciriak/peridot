@@ -42,6 +42,8 @@ const props = defineProps<{
   sort?: TrackSort;
   hasMore?: boolean;
   loadingMore?: boolean;
+  showArtists?: boolean;
+  allowTrackLike?: boolean;
 }>();
 const { t } = useI18n();
 const emit = defineEmits<{
@@ -274,7 +276,7 @@ watch(
           </button>
         </div>
         <div
-          v-if="variant !== 'album'"
+          v-if="!['album', 'audiobook', 'podcast'].includes(variant)"
           role="columnheader"
           class="hidden w-56 shrink-0 p-3 font-medium md:block"
           :aria-sort="ariaSort('album')"
@@ -327,6 +329,7 @@ watch(
           <span class="sr-only">{{ t("trackTable.offline") }}</span>
         </div>
         <div
+          v-if="allowTrackLike !== false"
           role="columnheader"
           class="w-14 shrink-0 p-3 text-right font-medium"
         >
@@ -400,12 +403,28 @@ watch(
                 />
               </div>
               <ScrollingText class="w-full text-xs text-muted-foreground">
-                <TrackArtistLinks :artists="trackArtistNames(item.data)" />
+                <TrackArtistLinks
+                  v-if="
+                    showArtists !== false && item.data.mediaType === 'music'
+                  "
+                  :artists="trackArtistNames(item.data)"
+                />
+                <template v-else>{{ item.data.artist }}</template>
+                <span
+                  v-if="item.data.genres.length"
+                  :aria-label="
+                    t('trackTable.genres', {
+                      genres: item.data.genres.join(', '),
+                    })
+                  "
+                >
+                  · {{ item.data.genres.join(" · ") }}
+                </span>
               </ScrollingText>
             </div>
           </div>
           <div
-            v-if="variant !== 'album'"
+            v-if="!['album', 'audiobook', 'podcast'].includes(variant)"
             role="cell"
             class="hidden w-56 shrink-0 p-3 text-muted-foreground md:block"
           >
@@ -473,7 +492,11 @@ watch(
               />
             </Button>
           </div>
-          <div role="cell" class="w-14 shrink-0 p-2 text-right">
+          <div
+            v-if="allowTrackLike !== false && item.data.mediaType === 'music'"
+            role="cell"
+            class="w-14 shrink-0 p-2 text-right"
+          >
             <LikeButton
               :liked="
                 likesLoaded

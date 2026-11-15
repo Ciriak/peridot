@@ -155,6 +155,8 @@ test("likes persist for tracks, albums, and artists with normalized identities",
     assert.deepEqual(await listLikes(context), {
       tracks: [],
       albums: [],
+      audiobooks: [],
+      podcasts: [],
       artists: [],
       playlists: [],
     });

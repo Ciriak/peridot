@@ -1,6 +1,8 @@
 import type {
   AlbumListResponse,
   ArtistListResponse,
+  AudiobookListResponse,
+  PodcastListResponse,
   ResolveTracksRequest,
   ResolveTracksResponse,
   TrackListResponse,
@@ -20,6 +22,8 @@ interface CursorQuery {
   albumId?: string;
   artistId?: string;
   liked?: string;
+  mediaType?: string;
+  collectionId?: string;
 }
 
 function limitNumber(value: string | undefined): number | undefined {
@@ -125,6 +129,121 @@ export async function registerCatalogRoutes(
         );
       }
       return album;
+    },
+  );
+
+  app.get<{ Querystring: CursorQuery }>(
+    "/api/audiobooks",
+    async (request, reply): Promise<AudiobookListResponse | undefined> => {
+      try {
+        const { limit: rawLimit, ...query } = request.query;
+        const limit = limitNumber(rawLimit);
+        return await catalog.listAudiobooks({
+          userId: request.authenticatedUser!.id,
+          ...query,
+          ...(limit === undefined ? {} : { limit }),
+        });
+      } catch (error) {
+        return handleCatalogError(reply, error);
+      }
+    },
+  );
+
+  app.get<{ Params: { id: string } }>(
+    "/api/audiobooks/:id",
+    async (request, reply) => {
+      const audiobook = await catalog.audiobook(
+        request.params.id,
+        request.authenticatedUser!.id,
+      );
+      if (!audiobook) {
+        return sendError(
+          reply,
+          404,
+          "audiobook_not_found",
+          "Audiobook not found",
+          message("api.message.audiobookNotFound"),
+        );
+      }
+      return audiobook;
+    },
+  );
+
+  app.get<{ Params: { id: string }; Querystring: CursorQuery }>(
+    "/api/audiobooks/:id/chapters",
+    async (request, reply): Promise<TrackListResponse | undefined> => {
+      try {
+        const { limit: rawLimit, ...query } = request.query;
+        const limit = limitNumber(rawLimit);
+        return await catalog.listTracks({
+          userId: request.authenticatedUser!.id,
+          ...query,
+          mediaType: "audiobook",
+          collectionId: request.params.id,
+          sort: query.sort ?? "track",
+          ...(limit === undefined ? {} : { limit }),
+        });
+      } catch (error) {
+        return handleCatalogError(reply, error);
+      }
+    },
+  );
+
+  app.get<{ Querystring: CursorQuery }>(
+    "/api/podcasts",
+    async (request, reply): Promise<PodcastListResponse | undefined> => {
+      try {
+        const { limit: rawLimit, ...query } = request.query;
+        const limit = limitNumber(rawLimit);
+        return await catalog.listPodcasts({
+          userId: request.authenticatedUser!.id,
+          ...query,
+          ...(limit === undefined ? {} : { limit }),
+        });
+      } catch (error) {
+        return handleCatalogError(reply, error);
+      }
+    },
+  );
+
+  app.get<{ Params: { id: string } }>(
+    "/api/podcasts/:id",
+    async (request, reply) => {
+      const podcast = await catalog.podcast(
+        request.params.id,
+        request.authenticatedUser!.id,
+      );
+      if (!podcast) {
+        return sendError(
+          reply,
+          404,
+          "podcast_not_found",
+          "Podcast not found",
+          message("api.message.podcastNotFound"),
+        );
+      }
+      return podcast;
+    },
+  );
+
+  app.get<{ Params: { id: string }; Querystring: CursorQuery }>(
+    "/api/podcasts/:id/episodes",
+    async (request, reply): Promise<TrackListResponse | undefined> => {
+      try {
+        const { limit: rawLimit, ...query } = request.query;
+        const limit = limitNumber(rawLimit);
+        return await catalog.listTracks({
+          userId: request.authenticatedUser!.id,
+          ...query,
+          mediaType: "podcast",
+          collectionId: request.params.id,
+          sort: query.sort ?? "published",
+          direction: query.direction ?? "desc",
+          ...(limit === undefined ? {} : { limit }),
+        });
+      } catch (error) {
+        return handleCatalogError(reply, error);
+      }
     },
   );
 

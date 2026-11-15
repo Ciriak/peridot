@@ -625,6 +625,20 @@
                   "kind": "scalar"
                 }
               },
+              "latestPublishedAt": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                }
+              },
+              "mediaType": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
               "normalizedArtist": {
                 "nullable": false,
                 "type": {
@@ -691,6 +705,12 @@
                 },
                 "id": {
                   "column": "id"
+                },
+                "latestPublishedAt": {
+                  "column": "latestPublishedAt"
+                },
+                "mediaType": {
+                  "column": "mediaType"
                 },
                 "normalizedArtist": {
                   "column": "normalizedArtist"
@@ -1062,6 +1082,13 @@
                   "kind": "scalar"
                 }
               },
+              "mediaType": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
               "normalizedAlbum": {
                 "nullable": false,
                 "type": {
@@ -1076,10 +1103,24 @@
                   "kind": "scalar"
                 }
               },
+              "normalizedGenres": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
               "normalizedTitle": {
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "publishedAt": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
                   "kind": "scalar"
                 }
               },
@@ -1154,14 +1195,23 @@
                 "id": {
                   "column": "id"
                 },
+                "mediaType": {
+                  "column": "mediaType"
+                },
                 "normalizedAlbum": {
                   "column": "normalizedAlbum"
                 },
                 "normalizedArtist": {
                   "column": "normalizedArtist"
                 },
+                "normalizedGenres": {
+                  "column": "normalizedGenres"
+                },
                 "normalizedTitle": {
                   "column": "normalizedTitle"
+                },
+                "publishedAt": {
+                  "column": "publishedAt"
                 },
                 "releaseYear": {
                   "column": "releaseYear"
@@ -1892,6 +1942,20 @@
                   "kind": "scalar"
                 }
               },
+              "sourceRefreshCron": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "sourceRefreshEnabled": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
               "updatedAt": {
                 "nullable": false,
                 "type": {
@@ -1908,6 +1972,12 @@
                 },
                 "libraryRoot": {
                   "column": "libraryRoot"
+                },
+                "sourceRefreshCron": {
+                  "column": "sourceRefreshCron"
+                },
+                "sourceRefreshEnabled": {
+                  "column": "sourceRefreshEnabled"
                 },
                 "updatedAt": {
                   "column": "updatedAt"
@@ -2011,6 +2081,13 @@
                   "kind": "scalar"
                 }
               },
+              "externalLibraryId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
               "id": {
                 "nullable": false,
                 "type": {
@@ -2036,6 +2113,13 @@
                 "nullable": true,
                 "type": {
                   "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                }
+              },
+              "mediaType": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
                   "kind": "scalar"
                 }
               },
@@ -2084,6 +2168,9 @@
                 "credentialCiphertext": {
                   "column": "credentialCiphertext"
                 },
+                "externalLibraryId": {
+                  "column": "externalLibraryId"
+                },
                 "id": {
                   "column": "id"
                 },
@@ -2095,6 +2182,9 @@
                 },
                 "lastSyncedAt": {
                   "column": "lastSyncedAt"
+                },
+                "mediaType": {
+                  "column": "mediaType"
                 },
                 "name": {
                   "column": "name"
@@ -2414,6 +2504,13 @@
                   "kind": "scalar"
                 }
               },
+              "genres": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
               "id": {
                 "nullable": false,
                 "type": {
@@ -2423,6 +2520,13 @@
               },
               "lastSeenScanId": {
                 "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "mediaType": {
+                "nullable": false,
                 "type": {
                   "codecId": "sqlite/text@1",
                   "kind": "scalar"
@@ -2498,6 +2602,13 @@
                   "kind": "scalar"
                 }
               },
+              "metadataGenres": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
               "metadataMatchedAt": {
                 "nullable": true,
                 "type": {
@@ -2565,6 +2676,13 @@
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "publishedAt": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
                   "kind": "scalar"
                 }
               },
@@ -2669,11 +2787,17 @@
                 "fileSizeBytes": {
                   "column": "fileSizeBytes"
                 },
+                "genres": {
+                  "column": "genres"
+                },
                 "id": {
                   "column": "id"
                 },
                 "lastSeenScanId": {
                   "column": "lastSeenScanId"
+                },
+                "mediaType": {
+                  "column": "mediaType"
                 },
                 "metadataAlbum": {
                   "column": "metadataAlbum"
@@ -2705,6 +2829,9 @@
                 "metadataExternalTrackId": {
                   "column": "metadataExternalTrackId"
                 },
+                "metadataGenres": {
+                  "column": "metadataGenres"
+                },
                 "metadataMatchedAt": {
                   "column": "metadataMatchedAt"
                 },
@@ -2734,6 +2861,9 @@
                 },
                 "mimeType": {
                   "column": "mimeType"
+                },
+                "publishedAt": {
+                  "column": "publishedAt"
                 },
                 "relativePath": {
                   "column": "relativePath"
@@ -3506,6 +3636,20 @@
                   "dataType": "sqlite/text",
                   "nullable": false
                 },
+                "latestPublishedAt": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/datetime",
+                  "nullable": true
+                },
+                "mediaType": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "default": {
+                    "kind": "literal",
+                    "value": "music"
+                  },
+                  "nullable": false
+                },
                 "normalizedArtist": {
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
@@ -3550,6 +3694,16 @@
                   ],
                   "name": "CatalogAlbum_artistId_id_idx_55808dc9",
                   "prefix": "CatalogAlbum_artistId_id_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "mediaType",
+                    "normalizedTitle",
+                    "id"
+                  ],
+                  "name": "CatalogAlbum_mediaType_normalizedTitle_id_idx_676f984c",
+                  "prefix": "CatalogAlbum_mediaType_normalizedTitle_id_idx",
                   "unique": false
                 },
                 {
@@ -3881,6 +4035,15 @@
                   "dataType": "sqlite/text",
                   "nullable": false
                 },
+                "mediaType": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "default": {
+                    "kind": "literal",
+                    "value": "music"
+                  },
+                  "nullable": false
+                },
                 "normalizedAlbum": {
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
@@ -3891,10 +4054,24 @@
                   "dataType": "sqlite/text",
                   "nullable": false
                 },
+                "normalizedGenres": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "default": {
+                    "kind": "literal",
+                    "value": ""
+                  },
+                  "nullable": false
+                },
                 "normalizedTitle": {
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
                   "nullable": false
+                },
+                "publishedAt": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/datetime",
+                  "nullable": true
                 },
                 "releaseYear": {
                   "codecId": "sqlite/integer@1",
@@ -3944,6 +4121,16 @@
                   ],
                   "name": "CatalogTrack_available_id_idx_2e938ac3",
                   "prefix": "CatalogTrack_available_id_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "mediaType",
+                    "available",
+                    "id"
+                  ],
+                  "name": "CatalogTrack_mediaType_available_id_idx_16156cf2",
+                  "prefix": "CatalogTrack_mediaType_available_id_idx",
                   "unique": false
                 },
                 {
@@ -4696,6 +4883,24 @@
                   "dataType": "sqlite/text",
                   "nullable": false
                 },
+                "sourceRefreshCron": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "default": {
+                    "kind": "literal",
+                    "value": "0 3 * * *"
+                  },
+                  "nullable": false
+                },
+                "sourceRefreshEnabled": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "default": {
+                    "kind": "literal",
+                    "value": "1"
+                  },
+                  "nullable": false
+                },
                 "updatedAt": {
                   "codecId": "sqlite/datetime@1",
                   "dataType": "sqlite/datetime",
@@ -4812,6 +5017,11 @@
                   "dataType": "sqlite/text",
                   "nullable": true
                 },
+                "externalLibraryId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
                 "id": {
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
@@ -4831,6 +5041,15 @@
                   "codecId": "sqlite/datetime@1",
                   "dataType": "sqlite/datetime",
                   "nullable": true
+                },
+                "mediaType": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "default": {
+                    "kind": "literal",
+                    "value": "music"
+                  },
+                  "nullable": false
                 },
                 "name": {
                   "codecId": "sqlite/text@1",
@@ -4870,6 +5089,14 @@
                   ],
                   "name": "Source_kind_idx_c9ca668f",
                   "prefix": "Source_kind_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "mediaType"
+                  ],
+                  "name": "Source_mediaType_idx_c1745d97",
+                  "prefix": "Source_mediaType_idx",
                   "unique": false
                 },
                 {
@@ -5114,6 +5341,11 @@
                   "dataType": "sqlite/integer",
                   "nullable": false
                 },
+                "genres": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
                 "id": {
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
@@ -5123,6 +5355,15 @@
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
                   "nullable": true
+                },
+                "mediaType": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "default": {
+                    "kind": "literal",
+                    "value": "music"
+                  },
+                  "nullable": false
                 },
                 "metadataAlbum": {
                   "codecId": "sqlite/text@1",
@@ -5170,6 +5411,11 @@
                   "nullable": true
                 },
                 "metadataExternalTrackId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "metadataGenres": {
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
                   "nullable": true
@@ -5231,6 +5477,11 @@
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
                   "nullable": false
+                },
+                "publishedAt": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/datetime",
+                  "nullable": true
                 },
                 "relativePath": {
                   "codecId": "sqlite/text@1",
@@ -5305,6 +5556,14 @@
                   ],
                   "name": "Track_coverId_idx_daf0cb52",
                   "prefix": "Track_coverId_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "mediaType"
+                  ],
+                  "name": "Track_mediaType_idx_c1745d97",
+                  "prefix": "Track_mediaType_idx",
                   "unique": false
                 },
                 {
@@ -5681,7 +5940,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "656d7b91bd7d44abdcb1e755e1408a191c518b6b63f0a5c6839893918b0f05cf"
+    "storageHash": "3853caf909819c8979d24f4601cbb5756faf8898b0e5a6b6b64128610fc2efd5"
   },
   "execution": {
     "executionHash": "69abe59ddf12aaa78738519fa294ac279958f3b4caa4e85b2cb8fd0effde430a",

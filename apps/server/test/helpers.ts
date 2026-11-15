@@ -32,6 +32,7 @@ export interface TestContextOptions {
   jellyfinFetch?: typeof fetch;
   jellyfinRequestTimeoutMs?: number;
   credentialEncryptionKey?: string;
+  enableSourceRefreshScheduler?: boolean;
 }
 
 export async function createTestContext(
@@ -88,6 +89,9 @@ export async function createTestContext(
     ...(options.discogsRequestIntervalMs !== undefined
       ? { discogsRequestIntervalMs: options.discogsRequestIntervalMs }
       : { discogsRequestIntervalMs: 0 }),
+    ...(options.enableSourceRefreshScheduler
+      ? { enableSourceRefreshScheduler: true }
+      : {}),
   });
   const bootstrap = await app.inject({
     method: "POST",
@@ -192,6 +196,8 @@ export function createTaggedMp3(tags: {
   artist: string;
   albumArtist?: string;
   album: string;
+  genres?: string[];
+  date?: string;
   discNumber: number;
   trackNumber: number;
   cover?: {
@@ -204,6 +210,10 @@ export function createTaggedMp3(tags: {
     id3TextFrame("TPE1", tags.artist),
     ...(tags.albumArtist ? [id3TextFrame("TPE2", tags.albumArtist)] : []),
     id3TextFrame("TALB", tags.album),
+    ...(tags.genres?.length
+      ? [id3TextFrame("TCON", tags.genres.join("\0"))]
+      : []),
+    ...(tags.date ? [id3TextFrame("TDRC", tags.date)] : []),
     id3TextFrame("TRCK", String(tags.trackNumber)),
     id3TextFrame("TPOS", String(tags.discNumber)),
   ];

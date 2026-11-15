@@ -10,6 +10,7 @@ import {
 } from "../lib/quick-picks";
 import { albumRoute, artistRoute, trackAlbumTitleRoute } from "../lib/library";
 import { icons } from "../lib/icons";
+import FadeInImage from "./FadeInImage.vue";
 import TrackArtistLinks from "./TrackArtistLinks.vue";
 
 const props = defineProps<{
@@ -54,20 +55,16 @@ const titleRoute = computed(() =>
       :disabled="!playable"
       @click="emit('play')"
     >
-      <img
-        v-if="cachedCoverUrl && !coverFailed"
-        :src="cachedCoverUrl"
-        alt=""
-        loading="lazy"
-        decoding="async"
-        class="size-full object-cover"
-        @error="coverFailed = true"
-      />
       <Icon
-        v-else
         :icon="props.item.kind === 'album' ? icons.album : icons.music"
         aria-hidden="true"
         class="size-5 text-muted-foreground"
+      />
+      <FadeInImage
+        v-if="cachedCoverUrl && !coverFailed"
+        :src="cachedCoverUrl"
+        class="absolute inset-0"
+        @error="coverFailed = true"
       />
       <span
         aria-hidden="true"

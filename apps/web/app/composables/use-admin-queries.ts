@@ -1,7 +1,9 @@
 import type {
   LogEntryResponse,
   LogListResponse,
+  ServerSettingsResponse,
   TaskListResponse,
+  UpdateServerSettingsRequest,
 } from "@peridot/contracts";
 import {
   useInfiniteQuery,
@@ -12,6 +14,7 @@ import {
 import { computed } from "vue";
 import {
   fetchLogs,
+  fetchServerSettings,
   isAuthenticationRedirectError,
   listDirectories,
   listMetadataProviderDefinitions,
@@ -19,6 +22,7 @@ import {
   listSources,
   listTasks,
   listUsers,
+  updateServerSettings,
 } from "../lib/peridot-client";
 import { queryKeys } from "../lib/query-keys";
 import {
@@ -38,6 +42,68 @@ function localizedQueryError(
   return isAuthenticationRedirectError(reason)
     ? null
     : errorMessage(reason, fallbackKey);
+}
+
+export function useServerSettingsQuery() {
+  const { scope } = useQueryScope();
+  const { token } = useSession();
+  const { user } = useUser();
+  const { errorMessage } = useLocalizedMessage();
+  const queryClient = useQueryClient();
+  const enabled = computed(() =>
+    Boolean(scope.value && token.value && user.value?.role === "admin"),
+  );
+  const query = useQuery({
+    queryKey: computed(() =>
+      scope.value
+        ? queryKeys.serverSettings(scope.value)
+        : ["peridot", "unscoped", "admin", "server"],
+    ),
+    queryFn: () => {
+      if (!scope.value || !token.value) {
+        throw new Error("Peridot query scope is unavailable.");
+      }
+      return fetchServerSettings(scope.value.serverAddress, token.value);
+    },
+    enabled,
+    meta: { persist: true },
+  });
+  const settings = computed(() => query.data.value);
+  const loaded = computed(() => settings.value !== undefined);
+  return {
+    settings,
+    loading: computed(() =>
+      blockingQueryLoading(loaded.value, query.isPending.value),
+    ),
+    loaded,
+    error: computed(() =>
+      visibleQueryError(
+        loaded.value,
+        query.error.value
+          ? localizedQueryError(
+              query.error.value,
+              errorMessage,
+              "settings.server.settingsLoadError",
+            )
+          : null,
+      ),
+    ),
+    load: async (force = false) => {
+      if (force || !settings.value) await query.refetch();
+    },
+    save: async (input: UpdateServerSettingsRequest) => {
+      if (!scope.value || !token.value) {
+        throw new Error("Peridot query scope is unavailable.");
+      }
+      const result: ServerSettingsResponse = await updateServerSettings(
+        scope.value.serverAddress,
+        token.value,
+        input,
+      );
+      queryClient.setQueryData(queryKeys.serverSettings(scope.value), result);
+      return result;
+    },
+  };
 }
 
 export function useAdminSourcesQuery() {

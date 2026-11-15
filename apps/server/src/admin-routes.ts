@@ -5,6 +5,8 @@ import type {
   CreateSourceRequest,
   CreateSourceResponse,
   DirectoryListResponse,
+  DiscoverJellyfinLibrariesRequest,
+  JellyfinLibraryListResponse,
   LogListResponse,
   MetadataProviderDefinitionListResponse,
   MetadataProviderListResponse,
@@ -15,6 +17,8 @@ import type {
   ServerSettingsResponse,
   SourceListResponse,
   UpdateMetadataProviderRequest,
+  UpdateServerSettingsRequest,
+  UpdateSourceRequest,
   UpdateUserRequest,
   UserListResponse,
 } from "@peridot/contracts";
@@ -36,13 +40,20 @@ import {
 import type { MetadataResolverRegistry } from "./metadata-resolver.js";
 import type { ServerLogBuffer } from "./server-log.js";
 import {
+  ServerSettingsError,
+  updateSourceRefreshSettings,
+} from "./server-settings.js";
+import type { SourceRefreshScheduler } from "./source-refresh-scheduler.js";
+import {
   createSource,
   deleteSource,
   listDirectoryEntries,
+  listJellyfinLibraries,
   listSources,
   reorderSources,
   searchDirectoryEntries,
   SourceError,
+  updateSourceMediaType,
 } from "./sources.js";
 import {
   queueLibraryScan,
@@ -70,6 +81,7 @@ export async function registerAdminRoutes(
   restartServer?: () => void,
   jellyfin?: JellyfinClient,
   catalog?: CatalogService,
+  sourceRefreshScheduler?: SourceRefreshScheduler,
 ) {
   await app.register(async (admin) => {
     admin.addHook("onRequest", async (request, reply) => {
@@ -98,7 +110,54 @@ export async function registerAdminRoutes(
         return {
           trackCount: trackCount.count,
           availableTrackCount: availableTrackCount.count,
+          sourceRefresh: sourceRefreshScheduler?.status() ?? {
+            enabled: false,
+            cron: "",
+            nextRunAt: null,
+          },
         };
+      },
+    );
+
+    admin.put<{ Body: UpdateServerSettingsRequest }>(
+      "/api/admin/server",
+      async (request, reply): Promise<ServerSettingsResponse | undefined> => {
+        try {
+          const settings = await updateSourceRefreshSettings(
+            database,
+            request.body?.sourceRefresh,
+          );
+          const sourceRefresh = (await sourceRefreshScheduler?.reconfigure(
+            settings,
+          )) ?? {
+            ...settings,
+            nextRunAt: null,
+          };
+          const [trackCount, availableTrackCount] = await Promise.all([
+            database.orm.Track.aggregate((aggregate) => ({
+              count: aggregate.count(),
+            })),
+            database.orm.Track.where({ available: 1 }).aggregate(
+              (aggregate) => ({ count: aggregate.count() }),
+            ),
+          ]);
+          return {
+            trackCount: trackCount.count,
+            availableTrackCount: availableTrackCount.count,
+            sourceRefresh,
+          };
+        } catch (error) {
+          if (error instanceof ServerSettingsError) {
+            return sendError(
+              reply,
+              400,
+              "invalid_server_settings",
+              error.message,
+              error.messageDescriptor,
+            );
+          }
+          throw error;
+        }
       },
     );
 
@@ -124,6 +183,34 @@ export async function registerAdminRoutes(
     admin.get("/api/admin/sources", async (): Promise<SourceListResponse> => ({
       items: await listSources(database),
     }));
+
+    admin.post<{ Body: DiscoverJellyfinLibrariesRequest }>(
+      "/api/admin/integrations/jellyfin/libraries",
+      async (
+        request,
+        reply,
+      ): Promise<JellyfinLibraryListResponse | undefined> => {
+        try {
+          if (!jellyfin) {
+            throw new Error("Jellyfin client is unavailable.");
+          }
+          return {
+            items: await listJellyfinLibraries(jellyfin, request.body),
+          };
+        } catch (error) {
+          if (error instanceof SourceError) {
+            return sendError(
+              reply,
+              400,
+              "invalid_source",
+              error.message,
+              error.messageDescriptor,
+            );
+          }
+          throw error;
+        }
+      },
+    );
 
     admin.get("/api/admin/users", async (): Promise<UserListResponse> => ({
       items: await listManagedUsers(database),
@@ -228,6 +315,40 @@ export async function registerAdminRoutes(
             task: task ? toTaskResponse(task) : null,
           };
           return reply.code(201).send(response);
+        } catch (error) {
+          if (error instanceof SourceError) {
+            return sendError(
+              reply,
+              400,
+              "invalid_source",
+              error.message,
+              error.messageDescriptor,
+            );
+          }
+          throw error;
+        }
+      },
+    );
+
+    admin.patch<{ Params: { id: string }; Body: UpdateSourceRequest }>(
+      "/api/admin/sources/:id",
+      async (request, reply): Promise<CreateSourceResponse | undefined> => {
+        try {
+          const source = await updateSourceMediaType(
+            database,
+            request.params.id,
+            request.body?.mediaType,
+          );
+          await tasks.stopForSource(source.id);
+          const task = await queueLibraryScan(tasks, {
+            id: source.id,
+            name:
+              source.name ||
+              (source.path
+                ? path.basename(source.path)
+                : (source.url ?? "Jellyfin")),
+          });
+          return { ...source, task: toTaskResponse(task) };
         } catch (error) {
           if (error instanceof SourceError) {
             return sendError(

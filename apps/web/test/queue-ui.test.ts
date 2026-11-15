@@ -91,12 +91,12 @@ test("the player exposes randomize and a persistent right-side queue drawer", as
   assert.match(drawer, /removeFromQueue\(track\.id\)/);
   assert.match(
     drawer,
-    /<TrackArtistLinks :artists="trackArtistNames\(active\)" \/>/,
+    /<TrackArtistLinks\s+v-if="active\.mediaType === 'music'"\s+:artists="trackArtistNames\(active\)"\s+\/>/,
     "The currently playing artist credit links to artist pages",
   );
   assert.match(
     drawer,
-    /<TrackArtistLinks :artists="trackArtistNames\(track\)" \/>/,
+    /<TrackArtistLinks\s+v-if="track\.mediaType === 'music'"\s+:artists="trackArtistNames\(track\)"\s+\/>/,
   );
   assert.match(
     drawer,

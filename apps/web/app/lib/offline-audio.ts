@@ -99,6 +99,19 @@ function offlineTrackStore() {
   return createStore(OFFLINE_TRACK_DATABASE, OFFLINE_TRACK_STORE);
 }
 
+function normalizeSavedOfflineTrack(
+  saved: SavedOfflineTrack,
+): SavedOfflineTrack {
+  return {
+    ...saved,
+    track: {
+      ...saved.track,
+      mediaType: saved.track.mediaType ?? "music",
+      publishedAt: saved.track.publishedAt ?? null,
+    },
+  };
+}
+
 function scopePrefix(scope: PeridotQueryScope): string {
   return `${encodeURIComponent(scope.serverAddress)}:${encodeURIComponent(scope.userId)}:`;
 }
@@ -131,7 +144,7 @@ export async function readSavedOfflineTracks(
   const values = await entries<string, SavedOfflineTrack>(offlineTrackStore());
   return values
     .filter(([key]) => key.startsWith(prefix))
-    .map(([, value]) => value)
+    .map(([, value]) => normalizeSavedOfflineTrack(value))
     .sort(
       (left, right) =>
         new Date(right.savedAt).getTime() - new Date(left.savedAt).getTime(),
@@ -143,10 +156,11 @@ export async function readSavedOfflineTrack(
   trackId: string,
 ): Promise<SavedOfflineTrack | undefined> {
   if (typeof indexedDB === "undefined") return undefined;
-  return get<SavedOfflineTrack>(
+  const saved = await get<SavedOfflineTrack>(
     offlineTrackStorageKey(scope, trackId),
     offlineTrackStore(),
   );
+  return saved ? normalizeSavedOfflineTrack(saved) : undefined;
 }
 
 export async function saveTrackForOffline(

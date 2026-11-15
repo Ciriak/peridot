@@ -59,6 +59,7 @@ import {
   updateManagedUser,
   updateMetadataProvider,
   updatePlaylist,
+  updateServerSettings,
   updateUserProfile,
 } from "../app/lib/peridot-client.ts";
 
@@ -242,7 +243,9 @@ test("metadata provider, source scan, and correction calls use authenticated end
     title: "Blue Hours",
     artist: "Elliot Lake",
     artists: ["Elliot Lake"],
+    albumArtists: ["Elliot Lake"],
     album: "Night Sessions",
+    genres: ["Electronic"],
     discNumber: 1,
     trackNumber: 2,
     sourceUrl: "https://musicbrainz.org/recording/recording-1",
@@ -1086,6 +1089,17 @@ test("authenticated admin calls send the bearer token and expected bodies", asyn
     if (init?.method === "POST" && url.endsWith("/api/admin/server/restart")) {
       return Response.json({ status: "restarting" }, { status: 202 });
     }
+    if (init?.method === "PUT" && url.endsWith("/api/admin/server")) {
+      return Response.json({
+        trackCount: 2,
+        availableTrackCount: 1,
+        sourceRefresh: {
+          enabled: true,
+          cron: "0 3 * * *",
+          nextRunAt: "2026-11-16T02:00:00.000Z",
+        },
+      });
+    }
     if (
       init?.method === "POST" &&
       url.endsWith("/api/admin/tasks/scan-1/stop")
@@ -1139,16 +1153,43 @@ test("authenticated admin calls send the bearer token and expected bodies", asyn
     return Response.json({
       trackCount: 2,
       availableTrackCount: 1,
+      sourceRefresh: {
+        enabled: true,
+        cron: "0 3 * * *",
+        nextRunAt: null,
+      },
     });
   };
 
   assert.deepEqual(await fetchServerSettings("http://127.0.0.1:17430", "s"), {
     trackCount: 2,
     availableTrackCount: 1,
+    sourceRefresh: {
+      enabled: true,
+      cron: "0 3 * * *",
+      nextRunAt: null,
+    },
   });
   assert.deepEqual(await requestServerRestart("http://127.0.0.1:17430", "s"), {
     status: "restarting",
   });
+  assert.deepEqual(
+    await updateServerSettings("http://127.0.0.1:17430", "s", {
+      sourceRefresh: {
+        enabled: true,
+        cron: "0 3 * * *",
+      },
+    }),
+    {
+      trackCount: 2,
+      availableTrackCount: 1,
+      sourceRefresh: {
+        enabled: true,
+        cron: "0 3 * * *",
+        nextRunAt: "2026-11-16T02:00:00.000Z",
+      },
+    },
+  );
   assert.deepEqual(await listSources("http://127.0.0.1:17430", "s"), {
     items: [],
   });
@@ -1197,6 +1238,7 @@ test("authenticated admin calls send the bearer token and expected bodies", asyn
     [
       "http://127.0.0.1:17430/api/admin/server",
       "http://127.0.0.1:17430/api/admin/server/restart",
+      "http://127.0.0.1:17430/api/admin/server",
       "http://127.0.0.1:17430/api/admin/sources",
       "http://127.0.0.1:17430/api/admin/sources",
       "http://127.0.0.1:17430/api/admin/sources/order",
@@ -1214,24 +1256,25 @@ test("authenticated admin calls send the bearer token and expected bodies", asyn
     assert.equal(headers.get("Authorization"), "Bearer s");
   }
   assert.equal(
-    new Headers(requests[3]?.init?.headers).get("Content-Type"),
-    "application/json",
-  );
-  assert.equal(
     new Headers(requests[4]?.init?.headers).get("Content-Type"),
     "application/json",
   );
-  assert.equal(requests[1]?.init?.method, "POST");
-  assert.equal(requests[3]?.init?.method, "POST");
-  assert.equal(requests[4]?.init?.method, "PUT");
-  assert.equal(requests[7]?.init?.method, "DELETE");
-  assert.equal(requests[8]?.init?.method, "DELETE");
   assert.equal(
-    new Headers(requests[7]?.init?.headers).get("Content-Type"),
+    new Headers(requests[5]?.init?.headers).get("Content-Type"),
+    "application/json",
+  );
+  assert.equal(requests[1]?.init?.method, "POST");
+  assert.equal(requests[2]?.init?.method, "PUT");
+  assert.equal(requests[4]?.init?.method, "POST");
+  assert.equal(requests[5]?.init?.method, "PUT");
+  assert.equal(requests[8]?.init?.method, "DELETE");
+  assert.equal(requests[9]?.init?.method, "DELETE");
+  assert.equal(
+    new Headers(requests[8]?.init?.headers).get("Content-Type"),
     null,
   );
   assert.equal(
-    new Headers(requests[8]?.init?.headers).get("Content-Type"),
+    new Headers(requests[9]?.init?.headers).get("Content-Type"),
     null,
   );
 });

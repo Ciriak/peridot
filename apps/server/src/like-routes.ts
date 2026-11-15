@@ -1,10 +1,12 @@
 import type {
   AlbumLikeResponse,
   ArtistLikeResponse,
+  AudiobookLikeResponse,
   LikeListResponse,
   LikeResponse,
   LikeTarget,
   PlaylistLikeResponse,
+  PodcastLikeResponse,
   TrackLikeResponse,
 } from "@peridot/contracts";
 import type { FastifyInstance } from "fastify";
@@ -62,6 +64,32 @@ function parseLikeTarget(body: unknown): LikeTarget | null {
       artist: value.artist.trim(),
     };
   }
+  if (
+    value.kind === "audiobook" &&
+    validTrackId(value.audiobookId) &&
+    validLabel(value.title) &&
+    validLabel(value.author)
+  ) {
+    return {
+      kind: "audiobook",
+      audiobookId: String(value.audiobookId).trim(),
+      title: value.title.trim(),
+      author: value.author.trim(),
+    };
+  }
+  if (
+    value.kind === "podcast" &&
+    validTrackId(value.podcastId) &&
+    validLabel(value.title) &&
+    validLabel(value.publisher)
+  ) {
+    return {
+      kind: "podcast",
+      podcastId: String(value.podcastId).trim(),
+      title: value.title.trim(),
+      publisher: value.publisher.trim(),
+    };
+  }
   if (value.kind === "artist" && validLabel(value.name)) {
     return { kind: "artist", name: value.name.trim() };
   }
@@ -91,6 +119,24 @@ function albumLikeResponse(like: AlbumLikeRow): AlbumLikeResponse {
     albumId: like.albumId,
     title: like.title,
     artist: like.artist,
+    likedAt: like.createdAt.toISOString(),
+  };
+}
+
+function audiobookLikeResponse(like: AlbumLikeRow): AudiobookLikeResponse {
+  return {
+    audiobookId: like.albumId,
+    title: like.title,
+    author: like.artist,
+    likedAt: like.createdAt.toISOString(),
+  };
+}
+
+function podcastLikeResponse(like: AlbumLikeRow): PodcastLikeResponse {
+  return {
+    podcastId: like.albumId,
+    title: like.title,
+    publisher: like.artist,
     likedAt: like.createdAt.toISOString(),
   };
 }
@@ -136,7 +182,15 @@ export async function registerLikeRoutes(
     ]);
     return {
       tracks: tracks.map(trackLikeResponse),
-      albums: albums.map(albumLikeResponse),
+      albums: albums
+        .filter((like) => like.albumId.startsWith("album_"))
+        .map(albumLikeResponse),
+      audiobooks: albums
+        .filter((like) => like.albumId.startsWith("audiobook_"))
+        .map(audiobookLikeResponse),
+      podcasts: albums
+        .filter((like) => like.albumId.startsWith("podcast_"))
+        .map(podcastLikeResponse),
       artists: artists.map(artistLikeResponse),
       playlists: playlists.map((like) =>
         playlistLikeResponse(like, like.playlist.name),
@@ -187,9 +241,10 @@ export async function registerLikeRoutes(
     }
 
     if (target.kind === "album") {
-      const album = await database.orm.CatalogAlbum.first({
+      const album = await database.orm.CatalogAlbum.where({
         id: target.albumId,
-      });
+        mediaType: "music",
+      }).first();
       if (!album || album.trackCount < 1) {
         return sendError(
           reply,
@@ -214,6 +269,50 @@ export async function registerLikeRoutes(
         kind: "album",
         ...albumLikeResponse(like),
       };
+      return response;
+    }
+
+    if (target.kind === "audiobook" || target.kind === "podcast") {
+      const collectionId =
+        target.kind === "audiobook" ? target.audiobookId : target.podcastId;
+      const collection = await database.orm.CatalogAlbum.where({
+        id: collectionId,
+        mediaType: target.kind,
+      }).first();
+      if (!collection || collection.trackCount < 1) {
+        return sendError(
+          reply,
+          404,
+          `${target.kind}_not_found`,
+          `${target.kind === "audiobook" ? "Audiobook" : "Podcast"} not found`,
+          message(
+            target.kind === "audiobook"
+              ? "api.message.audiobookNotFound"
+              : "api.message.podcastNotFound",
+          ),
+        );
+      }
+      const like =
+        (await database.orm.AlbumLike.where({
+          userId,
+          albumId: collection.id,
+        }).first()) ??
+        (await database.orm.AlbumLike.create({
+          userId,
+          albumId: collection.id,
+          title: collection.title,
+          artist: collection.artist,
+        }));
+      const response: LikeResponse =
+        target.kind === "audiobook"
+          ? {
+              kind: "audiobook",
+              ...audiobookLikeResponse(like),
+            }
+          : {
+              kind: "podcast",
+              ...podcastLikeResponse(like),
+            };
       return response;
     }
 
@@ -295,10 +394,20 @@ export async function registerLikeRoutes(
         userId,
         trackId: track.id,
       }).deleteAndCount();
-    } else if (target.kind === "album") {
+    } else if (
+      target.kind === "album" ||
+      target.kind === "audiobook" ||
+      target.kind === "podcast"
+    ) {
+      const albumId =
+        target.kind === "album"
+          ? target.albumId
+          : target.kind === "audiobook"
+            ? target.audiobookId
+            : target.podcastId;
       await database.orm.AlbumLike.where({
         userId,
-        albumId: target.albumId,
+        albumId,
       }).deleteAndCount();
     } else if (target.kind === "artist") {
       await database.orm.ArtistLike.where({

@@ -102,6 +102,7 @@ const {
   loadMore: loadMoreTracks,
 } = useCatalogTrackQuery(() => ({
   query: searchTerm.value,
+  mediaType: "all",
   sort: trackSort.value.field === "number" ? "track" : trackSort.value.field,
   direction: trackSort.value.direction,
 }));
