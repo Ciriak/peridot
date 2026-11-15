@@ -109,7 +109,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", handleKeydown));
     <template v-if="open">
       <div
         aria-hidden="true"
-        class="fixed inset-x-0 top-0 bottom-48 z-20 bg-background/80 md:bottom-28"
+        class="fixed inset-x-0 top-0 bottom-20 z-20 bg-background/80 md:bottom-28"
         @click="closeQueue"
       />
       <aside
@@ -120,7 +120,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", handleKeydown));
         aria-labelledby="queue-heading"
         aria-describedby="queue-description"
         tabindex="-1"
-        class="fixed top-0 right-0 bottom-48 z-40 flex w-4/5 max-w-lg flex-col border-l bg-card p-4 text-card-foreground shadow-lg outline-none md:bottom-28"
+        class="fixed top-0 right-0 bottom-20 z-40 flex w-4/5 max-w-lg flex-col border-l bg-card p-4 text-card-foreground shadow-lg outline-none md:bottom-28"
       >
         <div class="flex items-start justify-between gap-4">
           <div class="min-w-0">

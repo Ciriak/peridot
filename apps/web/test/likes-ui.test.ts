@@ -76,10 +76,13 @@ test("track, album, and artist likes share accessible persistent state wiring", 
   assert.match(button, /:title="actionLabel"/);
   assert.match(button, /icons\.heartFilled/);
   assert.match(button, /icons\.heart/);
-  assert.match(button, /class="hover:text-primary active:text-primary"/);
   assert.match(
     button,
-    /:class="\[compact \? 'size-3' : 'size-6', liked && 'text-primary'\]"/,
+    /:class="\['hover:text-primary active:text-primary', large && 'size-12'\]"/,
+  );
+  assert.match(
+    button,
+    /:class="\[\s*compact \? 'size-3' : large \? 'size-7' : 'size-6',\s*liked && 'text-primary',\s*\]"/,
     "Liked state colors the icon",
   );
   assert.doesNotMatch(

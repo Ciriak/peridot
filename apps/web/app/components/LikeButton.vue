@@ -12,8 +12,9 @@ const props = withDefaults(
     pending?: boolean;
     disabled?: boolean;
     compact?: boolean;
+    large?: boolean;
   }>(),
-  { pending: false, disabled: false, compact: false },
+  { pending: false, disabled: false, compact: false, large: false },
 );
 
 const emit = defineEmits<{ toggle: [] }>();
@@ -29,7 +30,7 @@ const actionLabel = computed(() =>
   <Button
     variant="ghost"
     :size="compact ? 'icon-xs' : 'icon-lg'"
-    class="hover:text-primary active:text-primary"
+    :class="['hover:text-primary active:text-primary', large && 'size-12']"
     :disabled="disabled || pending"
     :aria-label="actionLabel"
     :title="actionLabel"
@@ -41,7 +42,10 @@ const actionLabel = computed(() =>
       :icon="liked ? icons.heartFilled : icons.heart"
       aria-hidden="true"
       class="transition-colors"
-      :class="[compact ? 'size-3' : 'size-6', liked && 'text-primary']"
+      :class="[
+        compact ? 'size-3' : large ? 'size-7' : 'size-6',
+        liked && 'text-primary',
+      ]"
     />
   </Button>
 </template>

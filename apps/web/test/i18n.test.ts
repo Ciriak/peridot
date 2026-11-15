@@ -61,6 +61,8 @@ test("en-US messages interpolate and pluralize", () => {
     i18n.global.t("player.scanLibrary"),
     "Select a track to get started",
   );
+  assert.equal(i18n.global.t("player.openFullscreen"), "Open full player");
+  assert.equal(i18n.global.t("player.closeFullscreen"), "Close full player");
   assert.equal(
     i18n.global.t("settings.sources.path"),
     "Server internal folder",

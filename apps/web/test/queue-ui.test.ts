@@ -53,7 +53,7 @@ test("the player exposes randomize and a persistent right-side queue drawer", as
   assert.match(drawer, /role="dialog"/);
   assert.match(drawer, /aria-modal="false"/);
   assert.match(drawer, /event\.key !== "Escape"/);
-  assert.match(drawer, /fixed top-0 right-0 bottom-48/);
+  assert.match(drawer, /fixed top-0 right-0 bottom-20/);
   assert.match(drawer, /md:bottom-28/);
   assert.doesNotMatch(drawer, /\bh-dvh\b/);
   assert.doesNotMatch(drawer, /\bpb-52\b|\bpb-32\b/);

@@ -18,6 +18,7 @@ import {
 } from "vue";
 import FadeInImage from "../components/FadeInImage.vue";
 import LikeButton from "../components/LikeButton.vue";
+import MobilePlayer from "../components/MobilePlayer.vue";
 import QueueDrawer from "../components/QueueDrawer.vue";
 import SidebarQuickPicks from "../components/SidebarQuickPicks.vue";
 import TaskProgressIndicator from "../components/TaskProgressIndicator.vue";
@@ -49,6 +50,7 @@ const searchInput = ref<{ $el?: HTMLInputElement } | null>(null);
 const shortcutModifier = ref<SearchShortcutModifier>("ctrl");
 const mobileNavigation = ref(false);
 const queueOpen = ref(false);
+const mobilePlayerOpen = ref(false);
 const desktopRuntime = ref(false);
 const loadingRayAtRight = ref(false);
 let loadingRayFrame: number | undefined;
@@ -141,6 +143,10 @@ function toggleCurrentTrackLike() {
     void toggleLike({ kind: "track", trackId: currentTrackId.value });
 }
 
+function openQueueFromMobilePlayer() {
+  queueOpen.value = true;
+}
+
 function playActiveTrack() {
   if (active.value && !playing.value) togglePlayback();
 }
@@ -153,6 +159,7 @@ async function openSearch() {
 
 watch(currentPath, (path) => {
   mobileNavigation.value = false;
+  mobilePlayerOpen.value = false;
   if (path !== "/search") {
     searchQuery.value = "";
   } else {
@@ -224,14 +231,14 @@ onBeforeUnmount(stopLoadingRay);
     <a href="#main-content" class="sr-only focus:not-sr-only focus:p-4">{{
       t("navigation.skipToContent")
     }}</a>
-    <div class="flex min-h-0 flex-1 pb-48 md:pb-28">
+    <div class="flex min-h-0 flex-1 pb-20 md:pb-28">
       <aside
         id="sidebar"
         :aria-label="t('navigation.sidebar')"
         :class="[
           'w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground',
           mobileNavigation
-            ? 'absolute inset-y-0 left-0 z-20 flex pb-48 md:static md:pb-0'
+            ? 'absolute inset-y-0 left-0 z-20 flex pb-20 md:static md:pb-0'
             : 'hidden md:flex',
         ]"
       >
@@ -397,7 +404,7 @@ onBeforeUnmount(stopLoadingRay);
 
     <footer
       :aria-label="t('player.region')"
-      class="fixed inset-x-0 bottom-0 z-30 isolate flex h-48 flex-col justify-center gap-3 overflow-hidden border-t bg-card px-4 text-card-foreground md:h-28 md:flex-row md:items-center md:gap-6 md:px-6"
+      class="fixed inset-x-0 bottom-0 z-30 isolate h-20 overflow-hidden border-t bg-card text-card-foreground md:h-28"
     >
       <div
         v-if="loading"
@@ -441,261 +448,269 @@ onBeforeUnmount(stopLoadingRay);
         aria-hidden="true"
         class="pointer-events-none absolute inset-0 -z-10 bg-linear-to-r from-card/20 via-card/70 to-card"
       />
-      <div class="flex min-w-0 items-center gap-3 md:flex-1">
-        <div
-          aria-hidden="true"
-          class="relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted text-muted-foreground md:size-20"
-          :class="active && !currentTrackPlayable && 'opacity-60'"
-        >
-          <Icon
-            :icon="
-              active?.mediaType === 'audiobook'
-                ? icons.book
-                : active?.mediaType === 'podcast'
-                  ? icons.podcast
-                  : active?.albumId
-                    ? icons.album
-                    : icons.music
-            "
+      <MobilePlayer
+        v-model:open="mobilePlayerOpen"
+        @open-queue="openQueueFromMobilePlayer"
+      />
+      <div class="hidden h-full w-full min-w-0 items-center gap-6 px-6 md:flex">
+        <div class="flex min-w-0 items-center gap-3 md:flex-1">
+          <div
             aria-hidden="true"
-            class="size-8"
-          />
-          <FadeInImage
-            v-if="currentCoverImageUrl && !coverFailed"
-            :key="currentCoverImageUrl"
-            :src="currentCoverImageUrl"
-            loading="eager"
-            class="absolute inset-0"
-            @error="coverFailed = true"
-          />
-        </div>
-        <div class="min-w-0 flex-1">
-          <TrackContextMenu
-            v-if="active"
-            :track="active"
-            @play="playActiveTrack"
+            class="relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted text-muted-foreground md:size-20"
+            :class="active && !currentTrackPlayable && 'opacity-60'"
           >
-            <div class="min-w-0">
-              <ScrollingText
-                :key="`${active.id}:${active.title}`"
-                mode="always"
-                class="w-full"
-              >
-                <NuxtLink
-                  v-if="currentTrackTitleRoute"
-                  :to="currentTrackTitleRoute"
-                  class="inline-block rounded-sm text-sm font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  :class="!currentTrackPlayable && 'opacity-60'"
+            <Icon
+              :icon="
+                active?.mediaType === 'audiobook'
+                  ? icons.book
+                  : active?.mediaType === 'podcast'
+                    ? icons.podcast
+                    : active?.albumId
+                      ? icons.album
+                      : icons.music
+              "
+              aria-hidden="true"
+              class="size-8"
+            />
+            <FadeInImage
+              v-if="currentCoverImageUrl && !coverFailed"
+              :key="currentCoverImageUrl"
+              :src="currentCoverImageUrl"
+              loading="eager"
+              class="absolute inset-0"
+              @error="coverFailed = true"
+            />
+          </div>
+          <div class="min-w-0 flex-1">
+            <TrackContextMenu
+              v-if="active"
+              :track="active"
+              @play="playActiveTrack"
+            >
+              <div class="min-w-0">
+                <ScrollingText
+                  :key="`${active.id}:${active.title}`"
+                  mode="always"
+                  class="w-full"
                 >
-                  {{ active.title }}
-                </NuxtLink>
-                <p v-else class="select-none text-sm font-medium">
-                  {{ active.title }}
-                </p>
-              </ScrollingText>
+                  <NuxtLink
+                    v-if="currentTrackTitleRoute"
+                    :to="currentTrackTitleRoute"
+                    class="inline-block rounded-sm text-sm font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    :class="!currentTrackPlayable && 'opacity-60'"
+                  >
+                    {{ active.title }}
+                  </NuxtLink>
+                  <p v-else class="select-none text-sm font-medium">
+                    {{ active.title }}
+                  </p>
+                </ScrollingText>
+                <div class="flex min-w-0 items-center gap-1">
+                  <p
+                    v-if="error"
+                    role="alert"
+                    class="min-w-0 flex-1 truncate text-xs text-destructive"
+                  >
+                    {{ error }}
+                  </p>
+                  <ScrollingText
+                    v-else
+                    mode="always"
+                    class="min-w-0 flex-1 text-xs text-muted-foreground"
+                  >
+                    <TrackArtistLinks
+                      v-if="active.mediaType === 'music'"
+                      :artists="trackArtistNames(active)"
+                    />
+                    <template v-else>{{ active.artist }}</template>
+                  </ScrollingText>
+                  <LikeButton
+                    class="shrink-0"
+                    :liked="
+                      currentTrackLikeTarget
+                        ? likedTrackIds.includes(currentTrackLikeTarget.trackId)
+                        : false
+                    "
+                    :label="active.title"
+                    :pending="
+                      currentTrackLikeTarget
+                        ? isLikePending(currentTrackLikeTarget)
+                        : false
+                    "
+                    :disabled="!currentTrackId || !likesLoaded"
+                    @toggle="toggleCurrentTrackLike"
+                  />
+                </div>
+              </div>
+            </TrackContextMenu>
+            <template v-else>
+              <p class="select-none truncate text-sm font-medium">
+                {{ t("player.noTrack") }}
+              </p>
               <div class="flex min-w-0 items-center gap-1">
                 <p
-                  v-if="error"
-                  role="alert"
-                  class="min-w-0 flex-1 truncate text-xs text-destructive"
+                  class="min-w-0 flex-1 truncate text-xs text-muted-foreground"
                 >
-                  {{ error }}
+                  {{ t("player.scanLibrary") }}
                 </p>
-                <ScrollingText
-                  v-else
-                  mode="always"
-                  class="min-w-0 flex-1 text-xs text-muted-foreground"
-                >
-                  <TrackArtistLinks
-                    v-if="active.mediaType === 'music'"
-                    :artists="trackArtistNames(active)"
-                  />
-                  <template v-else>{{ active.artist }}</template>
-                </ScrollingText>
                 <LikeButton
                   class="shrink-0"
-                  :liked="
-                    currentTrackLikeTarget
-                      ? likedTrackIds.includes(currentTrackLikeTarget.trackId)
-                      : false
-                  "
-                  :label="active.title"
-                  :pending="
-                    currentTrackLikeTarget
-                      ? isLikePending(currentTrackLikeTarget)
-                      : false
-                  "
-                  :disabled="!currentTrackId || !likesLoaded"
+                  :liked="false"
+                  :label="t('player.currentTrack')"
+                  disabled
                   @toggle="toggleCurrentTrackLike"
                 />
               </div>
-            </div>
-          </TrackContextMenu>
-          <template v-else>
-            <p class="select-none truncate text-sm font-medium">
-              {{ t("player.noTrack") }}
-            </p>
-            <div class="flex min-w-0 items-center gap-1">
-              <p class="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-                {{ t("player.scanLibrary") }}
-              </p>
-              <LikeButton
-                class="shrink-0"
-                :liked="false"
-                :label="t('player.currentTrack')"
-                disabled
-                @toggle="toggleCurrentTrackLike"
-              />
-            </div>
-          </template>
+            </template>
+          </div>
         </div>
-      </div>
-      <div class="w-full space-y-1 md:max-w-lg md:flex-1">
-        <div class="flex items-center justify-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon-lg"
-            class="group"
-            :aria-label="
-              shuffleEnabled
-                ? t('player.disableShuffle')
-                : t('player.enableShuffle')
-            "
-            :aria-pressed="shuffleEnabled"
-            :disabled="!shuffleEnabled && (!active || queueTracks.length < 2)"
-            @click="toggleRandomization"
-            ><Icon
-              :icon="icons.shuffle"
-              aria-hidden="true"
-              class="size-6 transition-colors"
-              :class="
+        <div class="w-full space-y-1 md:max-w-lg md:flex-1">
+          <div class="flex items-center justify-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon-lg"
+              class="group"
+              :aria-label="
                 shuffleEnabled
-                  ? 'text-primary group-hover:text-primary group-active:text-primary'
-                  : 'text-muted-foreground'
+                  ? t('player.disableShuffle')
+                  : t('player.enableShuffle')
               "
-          /></Button>
+              :aria-pressed="shuffleEnabled"
+              :disabled="!shuffleEnabled && (!active || queueTracks.length < 2)"
+              @click="toggleRandomization"
+              ><Icon
+                :icon="icons.shuffle"
+                aria-hidden="true"
+                class="size-6 transition-colors"
+                :class="
+                  shuffleEnabled
+                    ? 'text-primary group-hover:text-primary group-active:text-primary'
+                    : 'text-muted-foreground'
+                "
+            /></Button>
+            <Button
+              variant="ghost"
+              size="icon-lg"
+              class="group"
+              :aria-label="t('player.previous')"
+              :disabled="!active"
+              @click="previous"
+              ><Icon
+                :icon="icons.previous"
+                aria-hidden="true"
+                class="size-6 transition-colors group-hover:text-primary group-active:text-primary"
+            /></Button>
+            <Button
+              size="icon-lg"
+              class="size-12 translate-y-1 rounded-full"
+              :disabled="!currentTrackPlayable"
+              :aria-label="playing ? t('player.pause') : t('player.play')"
+              :aria-busy="loading"
+              @click="togglePlayback"
+              ><Icon
+                :icon="playing ? icons.pause : icons.play"
+                aria-hidden="true"
+                class="size-6"
+            /></Button>
+            <Button
+              variant="ghost"
+              size="icon-lg"
+              class="group"
+              :aria-label="t('player.next')"
+              :disabled="!canGoNext"
+              @click="next()"
+              ><Icon
+                :icon="icons.next"
+                aria-hidden="true"
+                class="size-6 transition-colors group-hover:text-primary group-active:text-primary"
+            /></Button>
+            <Button
+              variant="ghost"
+              size="icon-lg"
+              class="group relative"
+              :aria-label="
+                repeatMode === 'off'
+                  ? t('player.enableRepeat')
+                  : repeatMode === 'all'
+                    ? t('player.repeatOne')
+                    : t('player.disableRepeat')
+              "
+              :aria-pressed="repeatMode !== 'off'"
+              :disabled="!active"
+              @click="cycleRepeatMode"
+            >
+              <Icon
+                :icon="repeatMode === 'one' ? icons.repeatOne : icons.repeat"
+                aria-hidden="true"
+                class="size-6 transition-colors"
+                :class="
+                  repeatMode === 'off'
+                    ? 'text-muted-foreground'
+                    : 'text-primary group-hover:text-primary group-active:text-primary'
+                "
+              />
+              <span
+                v-if="repeatMode === 'one'"
+                aria-hidden="true"
+                class="absolute right-1 top-1 text-xs font-semibold leading-none text-primary"
+                >1</span
+              >
+            </Button>
+          </div>
+          <div
+            class="flex items-center gap-3 text-xs tabular-nums text-muted-foreground"
+          >
+            <span>{{ clock(elapsed) }}</span
+            ><Slider
+              :model-value="[elapsed]"
+              :min="0"
+              :max="Math.max(durationSeconds, 1)"
+              :step="1"
+              :disabled="!currentTrackPlayable || durationSeconds <= 0"
+              :aria-busy="loading"
+              class="min-h-11 flex-1"
+              :thumb-label="t('player.position')"
+              @update:model-value="seek($event?.[0] ?? 0)"
+            /><span>{{ clock(durationSeconds) }}</span>
+          </div>
+        </div>
+        <div class="flex min-w-0 flex-1 items-center justify-end gap-3">
           <Button
             variant="ghost"
             size="icon-lg"
             class="group"
-            :aria-label="t('player.previous')"
-            :disabled="!active"
-            @click="previous"
-            ><Icon
-              :icon="icons.previous"
-              aria-hidden="true"
-              class="size-6 transition-colors group-hover:text-primary group-active:text-primary"
-          /></Button>
-          <Button
-            size="icon-lg"
-            class="size-12 translate-y-1 rounded-full"
-            :disabled="!currentTrackPlayable"
-            :aria-label="playing ? t('player.pause') : t('player.play')"
-            :aria-busy="loading"
-            @click="togglePlayback"
-            ><Icon
-              :icon="playing ? icons.pause : icons.play"
-              aria-hidden="true"
-              class="size-6"
-          /></Button>
-          <Button
-            variant="ghost"
-            size="icon-lg"
-            class="group"
-            :aria-label="t('player.next')"
-            :disabled="!canGoNext"
-            @click="next()"
-            ><Icon
-              :icon="icons.next"
-              aria-hidden="true"
-              class="size-6 transition-colors group-hover:text-primary group-active:text-primary"
-          /></Button>
-          <Button
-            variant="ghost"
-            size="icon-lg"
-            class="group relative"
             :aria-label="
-              repeatMode === 'off'
-                ? t('player.enableRepeat')
-                : repeatMode === 'all'
-                  ? t('player.repeatOne')
-                  : t('player.disableRepeat')
+              queueOpen ? t('player.closeQueue') : t('player.openQueue')
             "
-            :aria-pressed="repeatMode !== 'off'"
-            :disabled="!active"
-            @click="cycleRepeatMode"
+            aria-controls="queue-drawer"
+            :aria-expanded="queueOpen"
+            data-queue-toggle
+            @click="queueOpen = !queueOpen"
           >
             <Icon
-              :icon="repeatMode === 'one' ? icons.repeatOne : icons.repeat"
+              :icon="icons.queue"
               aria-hidden="true"
-              class="size-6 transition-colors"
-              :class="
-                repeatMode === 'off'
-                  ? 'text-muted-foreground'
-                  : 'text-primary group-hover:text-primary group-active:text-primary'
-              "
+              class="size-6 transition-colors group-hover:text-primary group-active:text-primary"
+              :class="queueOpen && 'text-primary'"
             />
-            <span
-              v-if="repeatMode === 'one'"
-              aria-hidden="true"
-              class="absolute right-1 top-1 text-xs font-semibold leading-none text-primary"
-              >1</span
-            >
           </Button>
-        </div>
-        <div
-          class="flex items-center gap-3 text-xs tabular-nums text-muted-foreground"
-        >
-          <span>{{ clock(elapsed) }}</span
-          ><Slider
-            :model-value="[elapsed]"
-            :min="0"
-            :max="Math.max(durationSeconds, 1)"
-            :step="1"
-            :disabled="!currentTrackPlayable || durationSeconds <= 0"
-            :aria-busy="loading"
-            class="min-h-11 flex-1"
-            :thumb-label="t('player.position')"
-            @update:model-value="seek($event?.[0] ?? 0)"
-          /><span>{{ clock(durationSeconds) }}</span>
-        </div>
-      </div>
-      <div class="flex min-w-0 flex-1 items-center justify-end gap-3">
-        <Button
-          variant="ghost"
-          size="icon-lg"
-          class="group"
-          :aria-label="
-            queueOpen ? t('player.closeQueue') : t('player.openQueue')
-          "
-          aria-controls="queue-drawer"
-          :aria-expanded="queueOpen"
-          data-queue-toggle
-          @click="queueOpen = !queueOpen"
-        >
-          <Icon
-            :icon="icons.queue"
-            aria-hidden="true"
-            class="size-6 transition-colors group-hover:text-primary group-active:text-primary"
-            :class="queueOpen && 'text-primary'"
-          />
-        </Button>
-        <div class="hidden items-center gap-3 lg:flex">
-          <Icon
-            :icon="icons.volume"
-            aria-hidden="true"
-            class="size-5 text-muted-foreground"
-          />
-          <Slider
-            id="volume"
-            :model-value="[volume]"
-            :min="0"
-            :max="100"
-            :step="1"
-            class="w-24"
-            :thumb-label="t('player.volume')"
-            @update:model-value="setVolume($event?.[0] ?? 0)"
-          />
+          <div class="hidden items-center gap-3 lg:flex">
+            <Icon
+              :icon="icons.volume"
+              aria-hidden="true"
+              class="size-5 text-muted-foreground"
+            />
+            <Slider
+              id="volume"
+              :model-value="[volume]"
+              :min="0"
+              :max="100"
+              :step="1"
+              class="w-24"
+              :thumb-label="t('player.volume')"
+              @update:model-value="setVolume($event?.[0] ?? 0)"
+            />
+          </div>
         </div>
       </div>
     </footer>

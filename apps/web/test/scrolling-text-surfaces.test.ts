@@ -10,6 +10,7 @@ test("catalog metadata uses overflow-aware scrolling wherever it can be clipped"
     ["../app/components/AlbumContextMenu.vue", 1],
     ["../app/components/ArtistCard.vue", 2],
     ["../app/components/ArtistContextMenu.vue", 3],
+    ["../app/components/MobilePlayer.vue", 4],
     ["../app/components/PlaylistCard.vue", 2],
     ["../app/components/PlaylistTrackList.vue", 4],
     ["../app/components/QueueDrawer.vue", 4],
