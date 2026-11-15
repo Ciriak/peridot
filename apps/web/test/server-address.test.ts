@@ -8,7 +8,7 @@ import {
 } from "../app/lib/server-address.ts";
 
 test("normalizes common self-hosted server addresses", () => {
-  assert.equal(DEFAULT_SERVER_ADDRESS, "http://127.0.0.1:17430");
+  assert.equal(DEFAULT_SERVER_ADDRESS, "http://127.0.0.1:17431");
   assert.equal(
     normalizeServerAddress(" 192.168.1.20:3001/ "),
     "http://192.168.1.20:3001",

@@ -4,7 +4,7 @@ import {
   type NetworkInterfaceInfoIPv4,
 } from "node:os";
 
-export const DEFAULT_DISCOVERY_PORT = 17430;
+export const DEFAULT_DISCOVERY_PORT = 17431;
 
 type InterfaceMap = NodeJS.Dict<NetworkInterfaceInfo[]>;
 type DiscoveryFetch = (

@@ -38,6 +38,7 @@ import {
   registerRealtimeSocket,
   registerRealtimeTicketRoute,
 } from "./realtime.js";
+import { UpdateService, type UpdateConfig } from "./updates.js";
 
 export interface BuildAppOptions {
   config?: ServerConfig;
@@ -52,10 +53,22 @@ export interface BuildAppOptions {
   jellyfinFetch?: typeof fetch;
   jellyfinRequestTimeoutMs?: number;
   enableSourceRefreshScheduler?: boolean;
+  updateService?: UpdateService;
 }
 
 export async function buildApp(options: BuildAppOptions = {}) {
   const config = options.config ?? (await loadServerConfig());
+  const updateService =
+    options.updateService ??
+    new UpdateService(
+      config.updates ??
+        ({
+          channel: "local",
+          repository: "Ciriak/peridot",
+          currentTag: null,
+          currentCommit: null,
+        } satisfies UpdateConfig),
+    );
   const database = options.database ?? createDatabase(config.databaseUrl);
   const ownsDatabase = options.database === undefined;
   let credentials: CredentialStore;
@@ -236,6 +249,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
         jellyfin,
         catalog,
         sourceRefreshScheduler,
+        updateService,
       );
     },
     (request) => playbackTokens.authorizeRequest(request.method, request.url),

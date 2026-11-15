@@ -1,5 +1,6 @@
 {
   "name": "@peridot/server",
+  "version": "0.0.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,6 +16,8 @@
   },
   "dependencies": {
     "@fastify/cors": "^11.4.1",
+    "@fastify/http-proxy": "11.6.8",
+    "@fastify/static": "10.1.11",
     "@fastify/websocket": "^11.3.7",
     "@peridot/contracts": "workspace:*",
     "@prisma/orm-sqlite": "8.0.0-rc.23",

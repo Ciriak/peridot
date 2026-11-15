@@ -1,6 +1,6 @@
 import { localizedError } from "./messages.ts";
 
-export const DEFAULT_SERVER_ADDRESS = "http://127.0.0.1:17430";
+export const DEFAULT_SERVER_ADDRESS = "http://127.0.0.1:17431";
 
 export function normalizeServerAddress(value: string): string {
   const trimmed = value.trim();

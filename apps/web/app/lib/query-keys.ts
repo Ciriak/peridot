@@ -61,6 +61,9 @@ export const queryKeys = {
   serverSettings(scope: PeridotQueryScope) {
     return [...peridotScopeKey(scope), "admin", "server"];
   },
+  updates(scope: PeridotQueryScope) {
+    return [...peridotScopeKey(scope), "admin", "updates"];
+  },
   metadataProviders(scope: PeridotQueryScope) {
     return [...peridotScopeKey(scope), "admin", "metadata-providers"];
   },

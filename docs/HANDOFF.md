@@ -33,6 +33,53 @@ was performed.
 Next: verify the search filters and section spacing with mixed music, audiobook,
 and podcast data, then exercise load-more in each paginated result group.
 
+## Docker deployment and embedded web runtime
+
+Added a production Docker image and Compose stack with the API on 17430 and the
+embedded Nuxt SPA on 17431. The second Fastify listener serves static/PWA files,
+uses the SPA fallback, and proxies API, ranged audio, and realtime WebSocket
+traffic to the API listener. Restart lifecycle handling now closes, rebuilds,
+and relistens both servers.
+
+Added build-channel update metadata and administrator Settings controls for
+checking and installing updates. `dev` follows development, `master` is beta,
+and `stable` (the default production channel) follows non-prerelease
+`vX.Y.Z` releases. CI publishes multi-architecture GHCR images for branches,
+commits, release tags, and stable. The maintained Watchtower fork polls every
+six hours and accepts private manual update requests.
+The container entrypoint generates the shared updater token automatically in
+`/data`; copying the Compose file does not require a separately supplied
+environment token.
+
+Synchronized all workspace packages to `0.0.1`. The root version is
+authoritative; `pnpm version:sync` updates package manifests and
+`pnpm version:check` is part of `pnpm check` and CI. Release tags must match the
+root version.
+
+The README now shows the concise Docker installation flow with production as
+the default channel.
+
+Checks completed:
+
+- `peridot:test` image built successfully with Node 24.15
+- Container startup migrated a fresh volume, became healthy, served the UI and
+  nested Settings route on 17431, and returned the proxied health response
+- Web tests: 202 passing
+- Server tests: 137 passing
+- Full workspace typecheck and cross-platform test suite passed
+- Server and web production builds passed
+- Compose configuration validated without a user-provided environment token
+- A copied Compose stack generated its updater token, started both services,
+  became healthy, and served the UI and proxied API on alternate test ports
+- Watchtower 1.24.0 image and required update/label flags were verified
+- Formatting, lint, version synchronization, schema validation, and
+  `git diff --check` passed
+
+Known limits: the GHCR publish job has not run until changes are pushed, and
+the updater cannot replace the container when Peridot is run outside the
+included Compose stack. Live GitHub update discovery and Watchtower container
+replacement were not exercised because this work was not pushed or deployed.
+
 ## Parallel CI test suites
 
 Fixed the Android test job's Linux checkout failure by tracking

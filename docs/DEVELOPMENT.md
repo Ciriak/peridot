@@ -14,7 +14,9 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Web: http://localhost:3000. Server health: http://127.0.0.1:17430/api/health.
+Development web: http://localhost:3000. API health:
+http://127.0.0.1:17430/api/health. A built server serves the production SPA on
+http://127.0.0.1:17431 and proxies `/api` to port 17430.
 Development startup synchronizes the local database with the Prisma 8 contract
 and, when the corresponding environment variables are unset, uses `apps/server/peridot.db` and creates
 `apps/server/music`. Set `DATABASE_URL` or `MUSIC_LIBRARY_PATH` before starting
@@ -25,7 +27,7 @@ in when the server already has users. The server address and expiring session
 are kept in same-site browser cookies. The server can be changed from Settings
 → Admin → Server by disconnecting first. Server selection continuously probes
 the typed address and scans the web host's private IPv4 networks for Peridot
-servers on port 17430; selecting a
+servers on port 17431; selecting a
 discovered server advances onboarding. Home surfaces bounded album and track
 suggestions from the authenticated catalog API, keeping liked records visible
 and prioritizing music by liked artists. It also shows the current playlist
@@ -121,6 +123,7 @@ while the mixed Quick pick list itself remains limited to tracks and albums.
 
 ```sh
 pnpm format:check
+pnpm version:check
 pnpm lint
 pnpm typecheck
 pnpm test
@@ -134,9 +137,11 @@ and requires the Android and Java toolchain described below. After linting, CI
 runs Web, Server, shared UI, Desktop, and Android tests in parallel jobs. Any
 failed test suite blocks the build jobs.
 
-Build output: `apps/web/.output` and `apps/server/dist`. Start the built server
-with `node apps/server/dist/index.js`, and the web app with
-`node apps/web/.output/server/index.mjs` (separate terminals).
+Build output: `apps/web/.output/public` and `apps/server/dist`. Start the built
+server with `node apps/server/dist/index.js`; it serves the API on 17430 and the
+embedded web application on 17431. Local development disables the embedded web
+listener so Nuxt HMR can run separately on 3000. Set `PERIDOT_SERVE_WEB=false`
+to intentionally run the built server without the web listener.
 
 ## Offline SPA
 
@@ -356,7 +361,9 @@ backoff, and checks public health only while the socket is unavailable.
 
 ## Configuration
 
-Server defaults to loopback port 17430. Set HOST and PORT in your shell to override.
+The API defaults to loopback port 17430; the embedded web listener defaults to 17431. `HOST` and `PORT` configure the API, while `WEB_HOST` and `WEB_PORT`
+configure the web listener. `PERIDOT_WEB_DIST` selects the generated static web
+directory and defaults to `apps/web/.output/public`.
 See apps/server/.env.example for variables required by built server startup.
 Environment files are not loaded automatically. The development command supplies
 the local defaults described in Quick start. `DATABASE_URL` selects the local SQLite file,
@@ -365,6 +372,14 @@ the local defaults described in Quick start. `DATABASE_URL` selects the local SQ
 defaults support the local web development server and Tauri's HTTP and custom
 scheme webview origins; add the exact web origin when accessing Peridot from
 another device.
+Channel build metadata uses `PERIDOT_UPDATE_CHANNEL`, `PERIDOT_BUILD_TAG`, and
+`PERIDOT_BUILD_COMMIT`. `PERIDOT_UPDATE_REPOSITORY` defaults to
+`Ciriak/peridot`. `PERIDOT_WATCHTOWER_URL` and either
+`PERIDOT_WATCHTOWER_TOKEN` or `PERIDOT_WATCHTOWER_TOKEN_FILE` enable the
+server-to-server install request; neither value is returned to browser code.
+The Docker entrypoint generates that file automatically in `/data`. Release
+channels are `dev`, `master`/beta, `stable`/production, and `local` for builds
+without update metadata.
 Discogs metadata uses an administrator-provided personal access token. Peridot
 encrypts provider credentials at rest with an automatically generated local key
 stored as `<database path>.key`, for example `peridot.db.key`, and reuses that
@@ -637,8 +652,20 @@ To check a message manually: `echo "feat: add library scanning" | pnpm commitlin
 
 - `dev`: active development; target ordinary pull requests here.
 - `master`: beta channel; promote reviewed changes from dev.
-- Git tags: releases. Use version tags such as `v0.1.0` for release candidates
-  approved by the owner. CI checks dev, master, and v-prefixed tags; it does not publish.
+- Git tags: production releases. The tag must match `v${root package version}`;
+  use `v0.0.1` while the synchronized workspace version is `0.0.1`.
+- CI publishes `dev`, `master`, commit, version-tag, and `stable` GHCR images
+  after all build and test gates pass.
+
+## Docker
+
+The root `Dockerfile` builds contracts, server output, and the static Nuxt
+application into one Node 24.15 image. Startup migrates `/data/peridot.db`
+before launching the server. `compose.yaml` exposes 17430 and 17431, persists
+`/data`, mounts music read-only at `/music`, and runs the maintained
+`nickfedor/watchtower` fork. The README contains the user-facing installation
+steps. The default Compose channel is `stable`, which is the production release
+channel.
 
 ## Continue the work
 

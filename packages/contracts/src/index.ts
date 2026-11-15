@@ -709,6 +709,26 @@ export interface RestartServerResponse {
   status: "restarting";
 }
 
+export type UpdateChannel = "dev" | "master" | "stable" | "local";
+
+export type UpdateState = "unchecked" | "current" | "available";
+
+export interface UpdateStatusResponse {
+  version: string;
+  channel: UpdateChannel;
+  currentTag: string | null;
+  currentCommit: string | null;
+  latestTag: string | null;
+  latestCommit: string | null;
+  state: UpdateState;
+  checkedAt: string | null;
+  installAvailable: boolean;
+}
+
+export interface InstallUpdateResponse {
+  status: "updating";
+}
+
 export interface LogEntryResponse {
   id: number;
   time: string;

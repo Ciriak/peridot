@@ -78,9 +78,9 @@ test("the standalone library route and navigation item are removed", async () =>
       "likedSongs",
       "playlists",
       "albums",
+      "artists",
       "audiobooks",
       "podcasts",
-      "artists",
     ],
   );
 });

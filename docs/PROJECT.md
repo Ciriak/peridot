@@ -40,6 +40,14 @@ The foundation uses SQLite as a provisional local development starting point.
 Desktop shell, production storage, authentication, plugin RPC/isolation, and
 marketplace trust/distribution protocols still require implementation decisions.
 
+Production deployment uses immutable multi-architecture GHCR images. The built
+Fastify server keeps the authenticated API on port 17430 and runs a second web
+listener on port 17431 that serves the generated Nuxt SPA and proxies API,
+audio, and realtime traffic. Persistent SQLite state and credentials live in
+`/data`; music remains a read-only mounted source. The maintained Watchtower
+fork follows the deployed image channel and may be triggered from administrator
+Settings for manual checks and installation.
+
 ## Visual identity
 
 Dark-first. The owner's supplied Tailwind hex theme is authoritative and
@@ -69,4 +77,7 @@ motion, visible keyboard focus, and accessible contrast.
 
 ## Branch policy
 
-Owner confirmed: dev = development; master = beta; tags = releases.
+Owner confirmed: dev = development; master = beta; tags = production releases.
+Docker publishes `dev`, `master`, version/commit tags, and a `stable` alias that
+advances only for non-prerelease `vX.Y.Z` tags. The stable/production channel is
+the default installation channel.

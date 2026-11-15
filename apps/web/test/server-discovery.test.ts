@@ -44,10 +44,10 @@ test("discovery only returns hosts with the Peridot health signature", async () 
     fetcher: async (input) => {
       const url = String(input);
       requested.push(url);
-      if (url === "http://192.168.50.42:17430/api/health") {
+      if (url === "http://192.168.50.42:17431/api/health") {
         return Response.json({ status: "ok", service: "peridot" });
       }
-      if (url === "http://192.168.50.43:17430/api/health") {
+      if (url === "http://192.168.50.43:17431/api/health") {
         return Response.json({ status: "ok", service: "another-service" });
       }
       return new Response(null, { status: 404 });
@@ -55,9 +55,9 @@ test("discovery only returns hosts with the Peridot health signature", async () 
   });
 
   assert.deepEqual(result, {
-    items: [{ address: "http://192.168.50.42:17430", host: "192.168.50.42" }],
+    items: [{ address: "http://192.168.50.42:17431", host: "192.168.50.42" }],
     scannedSubnets: ["192.168.50.0/24"],
   });
   assert.equal(requested.length, 255);
-  assert.ok(requested.includes("http://127.0.0.1:17430/api/health"));
+  assert.ok(requested.includes("http://127.0.0.1:17431/api/health"));
 });
