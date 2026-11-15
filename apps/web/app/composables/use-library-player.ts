@@ -58,6 +58,12 @@ import { localizedError } from "../lib/messages.ts";
 import { useServerConnection } from "./use-server-connection";
 import { queryKeys } from "../lib/query-keys";
 import { persistQueryKey } from "../lib/query-persister";
+import { isAndroidRuntime } from "../lib/android-runtime";
+import {
+  androidQueue,
+  PeridotMedia,
+  type AndroidPlaybackSnapshot,
+} from "../lib/android-playback";
 
 let queueWriteTail = Promise.resolve();
 let pendingQueueSave: {
@@ -89,6 +95,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
   const { status: serverStatus } = useServerConnection();
   const queryClient = useQueryClient();
   const { revision: catalogRevision } = useCatalogRevision();
+  const androidRuntime = isAndroidRuntime();
   const playing = useState("player-playing", () => false);
   const repeatMode = useState<RepeatMode>("player-repeat-mode", () => "off");
   const elapsed = useState("player-elapsed", () => 0);
@@ -139,6 +146,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
   let localStateChecked = false;
   let localPersistenceReady = false;
   let queueHydrationVersion = 0;
+  let applyingAndroidSnapshot = false;
   const resolvedQueueTracks = computed(() =>
     resolvePlayerQueue(queueTracks.value, queueTrackIds.value),
   );
@@ -200,7 +208,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
       !token.value ||
       !queueTrackIds.value.length
     ) {
-      queueTracks.value = [];
+      if (queueTracks.value.length) queueTracks.value = [];
       return;
     }
     const requestedIds = [...new Set(queueTrackIds.value)];
@@ -372,6 +380,117 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     }
   }
 
+  function syncAndroidSession() {
+    if (!androidRuntime) return;
+    const serverAddress = address.value;
+    const sessionToken = token.value;
+    const currentUser = user.value;
+    if (!serverAddress || !sessionToken || !currentUser?.id) {
+      void PeridotMedia.clearSession().catch(() => undefined);
+      return;
+    }
+    void PeridotMedia.initializeSession({
+      serverAddress,
+      token: sessionToken,
+      userId: currentUser.id,
+    }).catch(() => undefined);
+  }
+
+  function syncAndroidQueue() {
+    const serverAddress = address.value;
+    const sessionToken = token.value;
+    if (
+      !androidRuntime ||
+      applyingAndroidSnapshot ||
+      !serverAddress ||
+      !sessionToken ||
+      (!activeTrackId.value && !resolvedQueueTracks.value.length)
+    ) {
+      return;
+    }
+    void PeridotMedia.replaceQueue({
+      queue: androidQueue(
+        resolvedQueueTracks.value,
+        {
+          activeTrackId: activeTrackId.value,
+          positionSeconds: elapsed.value,
+          playing: playing.value,
+          volume: volume.value,
+          repeatMode: repeatMode.value,
+          shuffleEnabled: shuffleEnabled.value,
+          shuffleTrackIds: shuffleTrackIds.value,
+        },
+        serverAddress,
+      ),
+    }).catch((reason: unknown) => {
+      if (
+        isAuthenticationRedirectError(reason) ||
+        isPeridotNetworkError(reason)
+      ) {
+        return;
+      }
+      error.value = errorMessage(reason, "error.audioPrepare");
+    });
+  }
+
+  function syncAndroidPlaybackIntent() {
+    if (!androidRuntime) return;
+    void (playing.value ? PeridotMedia.play() : PeridotMedia.pause()).catch(
+      () => undefined,
+    );
+  }
+
+  function applyAndroidSnapshot(snapshot: AndroidPlaybackSnapshot) {
+    applyingAndroidSnapshot = true;
+    try {
+      const sameQueue =
+        snapshot.activeTrackId === activeTrackId.value &&
+        snapshot.shuffleEnabled === shuffleEnabled.value &&
+        snapshot.trackIds.length === queueTrackIds.value.length &&
+        snapshot.trackIds.every(
+          (trackId, index) => trackId === queueTrackIds.value[index],
+        ) &&
+        snapshot.shuffleTrackIds.length === shuffleTrackIds.value.length &&
+        snapshot.shuffleTrackIds.every(
+          (trackId, index) => trackId === shuffleTrackIds.value[index],
+        );
+      playing.value = snapshot.playing;
+      loading.value = snapshot.loading;
+      elapsed.value = Math.max(0, Math.floor(snapshot.positionMs / 1000));
+      mediaDuration.value = Math.max(0, Math.floor(snapshot.durationMs / 1000));
+      volume.value = Math.max(
+        0,
+        Math.min(100, Math.round(snapshot.volume * 100)),
+      );
+      repeatMode.value = snapshot.repeatMode;
+      shuffleEnabled.value = snapshot.shuffleEnabled;
+      shuffleTrackIds.value = [...snapshot.shuffleTrackIds];
+      error.value = snapshot.error;
+      if (snapshot.trackIds.length && !sameQueue) {
+        setQueueSnapshot(
+          {
+            trackIds: snapshot.trackIds,
+            activeTrackId: snapshot.activeTrackId,
+            shuffleEnabled: snapshot.shuffleEnabled,
+            shuffleTrackIds: snapshot.shuffleTrackIds,
+          },
+          true,
+          false,
+          false,
+        );
+      } else if (snapshot.trackIds.length) {
+        activeTrackId.value = snapshot.activeTrackId;
+        queueLoaded.value = true;
+      } else {
+        queueTrackIds.value = [];
+        activeTrackId.value = null;
+        queueLoaded.value = true;
+      }
+    } finally {
+      applyingAndroidSnapshot = false;
+    }
+  }
+
   function clearQueue() {
     queueTrackIds.value = [];
     activeTrackId.value = null;
@@ -484,6 +603,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     snapshot: QueueSnapshot,
     persist = true,
     rememberRepeatCycle = true,
+    syncToAndroid = true,
   ) {
     const normalizedTrackIds = normalizedQueue(snapshot.trackIds);
     const normalizedActiveTrackId =
@@ -525,6 +645,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
       void persistQueryKey(queueKey);
     }
     if (persist) saveQueue(normalized);
+    if (syncToAndroid) syncAndroidQueue();
     return normalized;
   }
 
@@ -589,6 +710,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     if (!isOfflineTrackPlayable(nextTrackId)) return;
     if (!restart && nextTrackId === currentTrackId.value && playing.value) {
       playing.value = false;
+      syncAndroidPlaybackIntent();
       return;
     }
     void loadQueue();
@@ -609,6 +731,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
       playbackRequest.value++;
     }
     playing.value = true;
+    syncAndroidPlaybackIntent();
   }
 
   function playCollection(
@@ -643,11 +766,16 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     elapsed.value = 0;
     playbackRequest.value++;
     playing.value = true;
+    syncAndroidPlaybackIntent();
   }
 
   function next() {
     const current = currentTrackId.value;
     if (!current) return;
+    if (androidRuntime) {
+      void PeridotMedia.next().catch(() => undefined);
+      return;
+    }
     queueHistory.value = [...queueHistory.value, current];
     if (shuffleEnabled.value) {
       const trackIds = playableQueueIds();
@@ -713,6 +841,10 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
   }
 
   function previous() {
+    if (androidRuntime) {
+      void PeridotMedia.previous().catch(() => undefined);
+      return;
+    }
     const available =
       serverStatus.value === "lost"
         ? new Set(playableQueueIds())
@@ -839,11 +971,17 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
 
   function cycleRepeatMode() {
     repeatMode.value = nextRepeatMode(repeatMode.value);
+    if (androidRuntime) {
+      void PeridotMedia.setRepeat({ mode: repeatMode.value }).catch(
+        () => undefined,
+      );
+    }
   }
 
   function togglePlayback() {
     if (!isOfflineTrackPlayable(currentTrackId.value)) return;
     playing.value = !playing.value;
+    syncAndroidPlaybackIntent();
   }
 
   function seek(seconds: number) {
@@ -853,10 +991,20 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
       Math.min(Math.floor(seconds), maximum > 0 ? maximum : seconds),
     );
     elapsed.value = Number.isFinite(bounded) ? bounded : 0;
+    if (androidRuntime) {
+      void PeridotMedia.seek({ positionSeconds: elapsed.value }).catch(
+        () => undefined,
+      );
+    }
   }
 
   function setVolume(nextVolume: number) {
     volume.value = Math.max(0, Math.min(100, Math.round(nextVolume)));
+    if (androidRuntime) {
+      void PeridotMedia.setVolume({ volume: volume.value / 100 }).catch(
+        () => undefined,
+      );
+    }
   }
 
   async function downloadTrack(trackId = currentTrackId.value) {
@@ -908,6 +1056,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
   watch([address, token], () => void hydrateQueueTracks());
   watch(queueTrackIds, () => void hydrateQueueTracks());
   watch(catalogRevision, () => void hydrateQueueTracks(true));
+  watch(queueTracks, syncAndroidQueue, { deep: true });
   watch(
     serverStatus,
     (status) => {
@@ -938,7 +1087,31 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     onUnmounted(stopLocalStateWatch);
   }
 
-  if (options.audio) {
+  if (options.audio && androidRuntime) {
+    let removeAndroidListener: (() => Promise<void>) | undefined;
+    if (import.meta.client) {
+      onMounted(() => {
+        syncAndroidSession();
+        void loadQueue();
+        void PeridotMedia.addListener("playbackStateChanged", ({ snapshot }) =>
+          applyAndroidSnapshot(snapshot),
+        ).then((handle) => {
+          removeAndroidListener = () => handle.remove();
+        });
+        void PeridotMedia.getSnapshot()
+          .then(({ snapshot }) => {
+            if (snapshot) applyAndroidSnapshot(snapshot);
+          })
+          .catch(() => undefined);
+      });
+      watch([address, token, () => user.value?.id], syncAndroidSession);
+    }
+    onUnmounted(() => {
+      void removeAndroidListener?.();
+    });
+  }
+
+  if (options.audio && !androidRuntime) {
     let audio: HTMLAudioElement | undefined;
     let loadedTrackId: string | null = null;
     let loadingTrackId: string | null = null;

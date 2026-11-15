@@ -197,6 +197,56 @@ still connects to a separately running Peridot server. Installer bundling,
 code signing, automatic updates, native secure credential storage, and an
 embedded server are not included in this prototype.
 
+## Android application
+
+`apps/android` packages the generated Nuxt client with Capacitor 8 and adds a
+native Kotlin Media3 service for background playback and Android Auto. The
+phone UI remains the shared Vue application; browser deployments continue to
+use the existing `HTMLAudioElement` adapter.
+
+The Android app requires Android Studio, Android SDK 36, build tools, and a
+JDK supported by AGP. The current project uses `minSdk 28`, Java 21, and the
+local Pixel AVD. Android Auto testing uses the SDK's Desktop Head Unit with a
+compatible physical device.
+
+```sh
+pnpm android:sync
+pnpm android:dev
+pnpm android:test
+pnpm android:instrument
+pnpm android:build
+pnpm android:bundle
+```
+
+`android:sync` generates the client with the service worker disabled and copies
+it into the Capacitor project. `android:test` runs Kotlin unit tests.
+`android:instrument` runs the MediaBrowser instrumentation test on a connected
+device or emulator. `android:build` creates the debug APK, while `android:bundle`
+creates signed release APK and AAB artifacts when
+`apps/android/android/signing.properties` is present.
+
+Generate the local upload key once and back it up before Play submission:
+
+```powershell
+keytool -genkeypair -keystore .peridot/android-release.keystore `
+  -alias peridot-upload -keyalg RSA -keysize 4096 -validity 10000
+```
+
+Store the path and passwords in the ignored
+`apps/android/android/signing.properties`. Never commit the keystore or
+properties file. The generated application ID is `app.peridot.android`.
+
+The native service exposes Android Auto roots for Queue, Liked songs, Albums,
+Artists, and Playlists plus media search. Auto access requires the server to be
+reachable; mobile offline playback is available in the phone UI. The Android
+WebView uses the exact origin `http://localhost`, which is added to the server's
+CORS and realtime allowlists. Android permits cleartext HTTP so users can
+connect to a self-hosted server on their LAN.
+
+The Capacitor bridge logs plugin payloads at verbose level when logging is
+enabled. Android builds therefore use `loggingBehavior: "none"` so session
+tokens are never printed to logcat.
+
 ## Windows package-manager setup
 
 If PowerShell cannot find pnpm, enable Corepack's pnpm shim in your existing
@@ -217,6 +267,8 @@ under Program Files. Turbo and nested scripts need pnpm itself on PATH.
 - `apps/web`: Nuxt 4 SPA/PWA application and TanStack Query cache.
 - `apps/server`: authenticated Fastify catalog/task/audio API and Prisma 8 SQLite storage.
 - `apps/desktop`: Tauri 2 desktop shell sharing the generated web client.
+- `apps/android`: Capacitor Android client, native Media3 playback, offline
+  cache, and Android Auto MediaLibraryService.
 - `packages/contracts`: shared API types.
 - `packages/ui`: shared brand tokens and reusable Button, Input, Badge, Slider, Gradient, ProgressCircle, PeridotSpinner, and classic Spinner components.
 - `packages/player`: shared playback state contract; the web app owns the browser audio adapter.

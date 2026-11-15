@@ -2,6 +2,7 @@ import type { TrackResponse } from "@peridot/contracts";
 import type { Ref } from "vue";
 import { onBeforeUnmount, watch } from "vue";
 import { isTauriRuntime } from "../lib/desktop-runtime";
+import { isAndroidRuntime } from "../lib/android-runtime";
 import { trackArtistNames, trackCoverUrl } from "../lib/library";
 import { configureWebMediaSession } from "../lib/web-media-session";
 import { useServer } from "./use-server";
@@ -37,7 +38,12 @@ function setPositionState(
 }
 
 export function useWebMediaSession(player: WebMediaSessionPlayer) {
-  if (!import.meta.client || isTauriRuntime() || !navigator.mediaSession) {
+  if (
+    !import.meta.client ||
+    isTauriRuntime() ||
+    isAndroidRuntime() ||
+    !navigator.mediaSession
+  ) {
     return;
   }
 

@@ -2,6 +2,50 @@
 
 Last updated: 2026-11-15.
 
+## Android client with Android Auto
+
+Added `apps/android`, a Capacitor 8 Android client that packages the shared
+Nuxt UI and includes a native Kotlin Media3 `MediaLibraryService`. The service
+owns background playback, lock-screen and media-button control, queue state,
+playback resumption, and Android Auto browsing for Queue, Liked songs, Albums,
+Artists, Playlists, and search.
+
+The shared Vue player now selects a native Android transport while retaining
+the browser audio adapter elsewhere. Android session tokens are stored in
+Keystore-backed native preferences, playback URLs resolve through short-lived
+server tokens, and offline phone playback uses app-private files. Android Auto
+remains online-only.
+
+Packaged Android builds disable the PWA service worker and use the server's
+exact `http://localhost` CORS origin. The app supports self-hosted HTTP servers
+through Android cleartext networking. A local upload key and ignored signing
+configuration were created for Play-ready APK/AAB builds.
+
+Checks completed:
+
+- Full workspace tests: web 198, server 132, shared UI 16, desktop 4, and
+  Android Kotlin 3
+- On-device MediaBrowser instrumentation test for the Android Auto root on the
+  Pixel 8 AVD
+- Pixel AVD onboarding, login, catalog load, native playback, media session,
+  native offline file creation, black system bars, and absence of browser
+  plugin/service-worker errors
+- Android `lintDebug`, workspace ESLint, full type checking, Prisma validation,
+  full production workspace build, and `git diff --check`
+- Signed release APK and AAB builds; APK v2 signature verification passed
+
+Android Auto Desktop Head Unit verification against a physical Android device
+was not completed because no physical device was connected. Play Console upload,
+publication, tagging, and deployment were not performed.
+
+`pnpm format:check` still reports only the pre-existing formatting issue in
+`README.md`. The local upload key is
+`.peridot/android-release.keystore`; signing values are in the ignored
+`apps/android/android/signing.properties`. Back up both before submitting to
+Play. The signed APK is
+`apps/android/android/app/build/outputs/apk/release/app-release.apk` and the AAB
+is `apps/android/android/app/build/outputs/bundle/release/app-release.aab`.
+
 ## Audiobooks and podcasts categories
 
 Audiobooks and podcasts are now first-class browse categories beside Albums,

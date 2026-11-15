@@ -1,5 +1,40 @@
 # Decisions
 
+## 2026-11-15: Android uses a shared Capacitor UI and native Media3 service
+
+The Android client packages the existing Nuxt application with Capacitor rather
+than creating a second React Native or Compose interface. This keeps catalog
+browsing, settings, playlist, queue, and metadata workflows in one Vue codebase
+while allowing Android-specific behavior through a small native bridge.
+
+Playback on Android is owned by a Kotlin `MediaLibraryService` backed by
+Media3/ExoPlayer. The browser and desktop continue to use `HTMLAudioElement`.
+The native service is authoritative for transport state, the active media item,
+position, duration, repeat, and shuffle while Android is active. Vue sends queue
+snapshots and commands and applies native playback events without writing the
+server queue for every position heartbeat.
+
+Android Auto uses the service's `MediaLibrarySession` tree with stable root,
+album, artist, playlist, and track media IDs. Queue, Liked songs, Albums,
+Artists, Playlists, and search are available. Android Auto is online-only in
+this release; the phone client retains native file-backed offline playback.
+
+The native session bearer is encrypted with an Android Keystore AES-GCM key.
+Playback URLs are resolved through the existing short-lived server playback
+token immediately before ExoPlayer opens them, so bearer credentials are not
+stored in MediaItems or audio URLs. The service persists only queue metadata,
+playback position, and encrypted authentication state needed for playback
+resumption.
+
+The Android WebView uses `http://localhost` with cleartext traffic enabled so
+self-hosted servers on private LAN HTTP addresses continue to work. The server
+adds that exact origin to CORS and realtime checks. Packaged Android builds
+disable the PWA service worker to prevent stale Capacitor assets.
+
+Android Auto v1 targets mobile Android Auto through the standard media-service
+contract. Standalone Android Automotive OS, templated Car App Library UI, and
+offline car browsing are deferred.
+
 ## 2026-11-15: Media type is explicit per source
 
 Peridot stores `music`, `audiobook`, or `podcast` on each source and copies that

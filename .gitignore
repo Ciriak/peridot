@@ -5,6 +5,9 @@
 !.env.*.example
 *.pem
 *.key
+*.jks
+*.keystore
+apps/android/android/signing.properties
 
 # Operating system files
 .DS_Store

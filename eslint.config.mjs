@@ -21,6 +21,7 @@ export default defineConfig([
     "**/generated/**",
     "**/src-tauri/gen/**",
     "**/src-tauri/target/**",
+    "apps/android/android/**",
     "**/src/prisma/contract.d.ts",
   ]),
   js.configs.recommended,
@@ -32,6 +33,10 @@ export default defineConfig([
   },
   {
     files: ["apps/server/**/*.ts", "**/*.config.{js,mjs,ts}"],
+    languageOptions: { globals: globals.node },
+  },
+  {
+    files: ["apps/android/**/*.{js,mjs,ts}"],
     languageOptions: { globals: globals.node },
   },
   {
