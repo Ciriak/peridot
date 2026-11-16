@@ -1,5 +1,26 @@
 # Decisions
 
+## 2026-11-16: Multi-architecture Docker images build on native runners
+
+The Docker publication workflow builds AMD64 and ARM64 images in separate
+jobs on matching native Ubuntu runners. Each job pushes an untagged image by
+digest and uploads that digest as a short-lived workflow artifact; a final job
+combines both digests into the branch, commit, release, and stable tags. Both
+image jobs have a 30-minute timeout, and the manifest merge has a 10-minute
+timeout.
+
+This replaces the single Buildx job that used QEMU for ARM64. In that job,
+AMD64 completed the image in 52 seconds while ARM64 completed installation,
+contracts, and server compilation but stalled in the Vite client bundle until
+GitHub cancelled the job at its six-hour default limit. The failed path exposed
+Vite 8's Rolldown and Tailwind CSS 4's native Oxide binding to ARM64
+emulation.
+
+The Dockerfile now separates dependency installation, contracts compilation,
+server compilation, and static client generation into individual layers. The
+runtime still includes target-native dependencies such as `better-sqlite3`, so
+build outputs and dependency trees must not be copied between architectures.
+
 ## 2026-11-16: One public Peridot port on 17430
 
 The built server uses one Fastify listener on 17430 for the SPA, authenticated

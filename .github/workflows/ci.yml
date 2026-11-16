@@ -187,14 +187,25 @@ jobs:
       - run: pnpm android:build
 
   publish-image:
-    name: Publish Docker image
+    name: Publish Docker image (${{ matrix.arch }})
     if: >-
       github.event_name == 'push' &&
       (github.ref == 'refs/heads/dev' ||
       github.ref == 'refs/heads/master' ||
       startsWith(github.ref, 'refs/tags/v'))
     needs: [build-web, build-server, build-desktop, build-android]
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
     permissions:
       contents: read
       packages: write
@@ -209,7 +220,6 @@ jobs:
         run: test "$GITHUB_REF_NAME" = "v$(node -p 'require("./package.json").version')"
       - id: version
         run: echo "value=$(node -p 'require("./package.json").version')" >> "$GITHUB_OUTPUT"
-      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -225,17 +235,84 @@ jobs:
             type=ref,event=tag
             type=sha,format=short
             type=raw,value=stable,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-      - uses: docker/build-push-action@v6
+      - id: build
+        uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.metadata.outputs.tags }}
+          platforms: ${{ matrix.platform }}
           labels: ${{ steps.metadata.outputs.labels }}
+          outputs: >-
+            type=image,name=ghcr.io/ciriak/peridot,push-by-digest=true,name-canonical=true,push=true
           build-args: |
             PERIDOT_BUILD_CHANNEL=${{ github.ref_type == 'tag' && 'stable' || github.ref_name }}
             PERIDOT_BUILD_TAG=${{ github.ref_type == 'tag' && github.ref_name || '' }}
             PERIDOT_BUILD_COMMIT=${{ github.sha }}
             PERIDOT_VERSION=${{ steps.version.outputs.value }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=peridot-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=peridot-${{ matrix.arch }}
+      - name: Record image digest
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          digest="${{ steps.build.outputs.digest }}"
+          test -n "$digest"
+          touch "$RUNNER_TEMP/digests/${digest#sha256:}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge-image:
+    name: Merge Docker image manifest
+    needs: publish-image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: metadata
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/ciriak/peridot
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=sha,format=short
+            type=raw,value=stable,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: digests-*
+          path: ${{ runner.temp }}/digests
+          merge-multiple: true
+      - name: Create multi-architecture manifest
+        shell: bash
+        run: |
+          tags=()
+          while IFS= read -r tag; do
+            if [[ -n "$tag" ]]; then
+              tags+=(--tag "$tag")
+            fi
+          done <<< "${{ steps.metadata.outputs.tags }}"
+
+          sources=()
+          for digest_file in "$RUNNER_TEMP"/digests/*; do
+            if [[ -f "$digest_file" ]]; then
+              sources+=("ghcr.io/ciriak/peridot@sha256:$(basename "$digest_file")")
+            fi
+          done
+          if (( ${#sources[@]} != 2 )); then
+            echo "Expected two platform digests, found ${#sources[@]}" >&2
+            exit 1
+          fi
+
+          docker buildx imagetools create "${tags[@]}" "${sources[@]}"

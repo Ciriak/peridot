@@ -676,6 +676,10 @@ before launching the server. `compose.yaml` exposes only 17430, persists
 `nickfedor/watchtower` fork. The README contains the user-facing installation
 steps. The default Compose channel is `stable`, which is the production release
 channel.
+CI builds AMD64 and ARM64 independently on native Ubuntu runners, pushes each
+image by digest, and merges the digests into the final tagged manifest. Keep
+target-native dependencies in their own architecture's build so runtime native
+modules such as `better-sqlite3` remain loadable.
 
 ## Continue the work
 

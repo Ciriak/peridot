@@ -2,6 +2,36 @@
 
 Last updated: 2026-11-16.
 
+## Native multi-architecture Docker publication
+
+Docker publication no longer builds ARM64 under QEMU. The workflow now runs
+AMD64 and ARM64 image builds in parallel on `ubuntu-24.04` and
+`ubuntu-24.04-arm`, pushes each image by digest, and merges the two digests
+into the normal branch, commit, release, and `stable` tags. The publication
+jobs stop after 30 minutes, and the manifest merge stops after 10 minutes.
+
+The previous combined Buildx job showed a platform-specific failure: AMD64
+completed the image in 52 seconds, while ARM64 finished dependency installation
+and server compilation before stalling in Vite's client bundle until GitHub
+cancelled the job after six hours. The Dockerfile now exposes install,
+contracts, server, and web generation as separate build steps.
+
+Checks completed:
+
+- `actionlint` 1.7.12 against `.github/workflows/ci.yml`
+- Prettier validation of the workflow
+- Contracts, server, and Nuxt production builds
+- `git diff --check`
+
+Known limits: Docker is unavailable in this checkout, so neither image nor the
+manifest merge has been exercised locally. The GitHub-hosted ARM64 runner path
+also requires the next workflow run to validate remotely. Changes remain
+uncommitted on `fix/docker-build`; no commit, push, tag, publication, or
+deployment was performed.
+
+Next: push the branch and confirm both platform jobs complete, upload two digest
+artifacts, and the merge job publishes a two-platform GHCR manifest.
+
 ## Single public Peridot port on 17430
 
 The built server now serves the web SPA and API from one Fastify listener on 17430. Static assets use the generated web root, unknown GET/HEAD routes fall

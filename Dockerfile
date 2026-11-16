@@ -16,10 +16,10 @@ ARG PERIDOT_VERSION=
 
 COPY . .
 
-RUN pnpm install --frozen-lockfile \
-  && pnpm --filter @peridot/contracts build \
-  && pnpm --filter @peridot/server build \
-  && pnpm --filter @peridot/web generate
+RUN pnpm install --frozen-lockfile
+RUN pnpm --filter @peridot/contracts build
+RUN pnpm --filter @peridot/server build
+RUN pnpm --filter @peridot/web generate
 
 FROM base AS runtime
 
