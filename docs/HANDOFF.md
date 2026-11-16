@@ -2,6 +2,26 @@
 
 Last updated: 2026-11-16.
 
+## Version-independent server update test
+
+The development update-check test no longer asserts the application package
+version. That assertion was unrelated to the behavior under test and required a
+test-only edit whenever the root version changed. The test still verifies the
+unchecked, current, and available commit transitions.
+
+Checks completed:
+
+- Full server suite: 152 passing
+- Targeted Prettier
+- `git diff --check`
+
+Known limits: none for this test-only change. The change remains uncommitted on
+`feature/clasicifation-update`; no commit, push, tag, publication, or deployment
+was performed.
+
+Next: continue version synchronization and releases without maintaining a
+duplicate package-version assertion in this test.
+
 ## Automatic pagination without load-more controls
 
 Paginated album, artist, audiobook, podcast, playlist, search, task-history, and

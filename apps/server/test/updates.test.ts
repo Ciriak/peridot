@@ -24,7 +24,6 @@ test("development update checks report current and available commits", async () 
     Response.json({ sha: remoteCommit }),
   );
   assert.equal(service.status().state, "unchecked");
-  assert.equal(service.status().version, "0.0.1");
 
   const current = await service.check();
   assert.equal(current.state, "current");
