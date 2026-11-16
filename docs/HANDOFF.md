@@ -2,6 +2,35 @@
 
 Last updated: 2026-11-16.
 
+## Android playback notification restored
+
+Android playback now declares the Android 13 notification permission and
+registers a dedicated `peridot_playback` channel before creating the Media3
+session. Media3 uses that channel with the Peridot monochrome status-bar icon,
+public lock-screen visibility, and localized English, French, and German
+channel copy. The native plugin requests notification permission once on the
+first playback action; denial does not block playback because media-session
+notifications are exempt.
+
+Checks completed:
+
+- Android Kotlin unit suite
+- Android instrumentation suite on the Android 36 emulator: 3 passing,
+  including real Media3 playback and an active media notification with
+  `POST_NOTIFICATIONS` not yet granted
+- Android `lintDebug`, including localized resources
+- Android debug build
+- `git diff --check`
+
+Known limits: the active notification was verified on the Android 36 emulator,
+not on the physical Android 13+ device that originally showed no Peridot
+notification entry. `dumpsys notification` confirmed the channel and app
+notification settings entry on the emulator.
+
+Next: install the rebuilt APK on the affected Android device, play a track, grant
+the one-time notification prompt, and verify the system media card on the lock
+screen, notification shade, and Quick Settings.
+
 ## Large-library catalog synchronization is bounded
 
 Automatic full offline catalog snapshots are now limited to libraries of at
