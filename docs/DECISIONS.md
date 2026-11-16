@@ -1,5 +1,19 @@
 # Decisions
 
+## 2026-11-16: Web UIs connect to the Peridot server that served them
+
+When onboarding has no saved server and is running as a browser UI, Peridot first
+probes the page's own origin for the exact public health signature. If it is a
+Peridot server, onboarding selects that origin and opens the account step
+without requiring LAN discovery or manual address entry.
+
+This makes Docker installations work when the UI is opened through the host's
+LAN address. Discovery executes inside the server, so it can only see localhost
+and the container's Docker networks; it cannot infer the host address visible to
+the browser. A separate web client whose origin is not a Peridot server still
+falls back to manual entry and network discovery. Android retains manual entry
+because its WebView origin is local to the device.
+
 ## 2026-11-16: Database upgrades use committed migrations and verified snapshots
 
 Peridot's server database now changes only through a committed Prisma 8

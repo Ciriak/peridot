@@ -2,6 +2,43 @@
 
 Last updated: 2026-11-16.
 
+## Docker web UI now recognizes its serving instance
+
+Reported behavior: opening a Docker installation at
+`http://192.168.1.5:17430` showed the web UI, but onboarding could not find the
+API. The live instance returned HTTP 200 with the Peridot signature from
+`/api/health`, so the API was reachable. Its discovery endpoint instead returned
+only Docker/container addresses: `10.0.9.1`, `10.0.9.2`, `127.0.0.1`, and
+`localhost`. Those names resolve differently in the viewer's browser.
+
+Onboarding now probes its own browser origin before starting the existing
+network scan when no server is already saved. A successful same-origin health
+check selects that origin and advances directly to setup or sign-in. Separately
+hosted web clients, Android, and manual server selection retain their existing
+fallback paths. Added coverage for exact same-origin selection and the
+same-origin-before-discovery flow.
+
+Checks completed:
+
+- Live Docker instance: root and `/api/health` returned 200 on
+  `192.168.1.5:17430`; auth status showed first-administrator setup required
+- Web suite: 216 passing
+- Workspace suite: server 158, shared UI 17, and Desktop 4 passing; no Android
+  package in the workspace test scope
+- Web typecheck, ESLint, Prettier, and production web build
+- `git diff --check`
+
+Known limits: Docker CLI is present but the daemon is not running, so the image
+was not rebuilt and the existing container still runs the previous UI bundle.
+The generated static/PWA build also requires a fresh image or browser update to
+replace the old service-worker assets. The README already has an unrelated
+uncommitted Compose port change, which was preserved.
+
+Next: rebuild and publish the image, pull it into the Docker host, reload the LAN
+URL, and verify the first-administrator flow. Until then, entering
+`192.168.1.5:17430` in manual server entry bypasses the container-local
+discovery result.
+
 ## Database upgrades now run through committed migrations
 
 The server database now has a committed Prisma 8 migration graph under
