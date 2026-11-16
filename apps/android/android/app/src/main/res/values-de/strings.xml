@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="app_name">Peridot</string>
+    <string name="title_activity_main">Peridot</string>
     <string name="playback_notification_channel_name">Wiedergabesteuerung</string>
     <string name="playback_notification_channel_description">Steuerung der in Peridot wiedergegebenen Musik.</string>
 </resources>
