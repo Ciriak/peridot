@@ -39,7 +39,21 @@ test("Nuxt pre-bundles dependencies discovered by the first onboarding render", 
 
   const packageJson = JSON.parse(packageSource) as {
     devDependencies?: Record<string, string>;
+    scripts?: Record<string, string>;
   };
+  assert.equal(
+    packageJson.scripts?.dev,
+    "nuxt dev --host 127.0.0.1 --port 17430",
+    "Nuxt development must use the public Peridot port",
+  );
+  assert.match(source, /devProxy:/);
+  assert.match(source, /"\/api":\s*\{/);
+  assert.match(source, /target: "http:\/\/127\.0\.0\.1:17431\/api"/);
+  assert.equal(
+    packageJson.scripts?.build,
+    "nuxt generate",
+    "The standard web build must emit the static shell served by the server",
+  );
   assert.equal(
     packageJson.devDependencies?.["@lucide/vue"],
     "^1.71.0",

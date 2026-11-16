@@ -56,6 +56,7 @@ test("Nuxt builds a client-rendered installable offline shell", async () => {
   assert.match(config, /navigateFallback: "\/"/);
   assert.match(config, /additionalManifestEntries/);
   assert.match(config, /rel: "manifest", href: "\/manifest.webmanifest"/);
+  assert.match(config, /orientation: "portrait"/);
   assert.doesNotMatch(config, /runtimeCaching:/);
   assert.equal(indexIcon, undefined);
   assert.equal(maskableIcon, undefined);

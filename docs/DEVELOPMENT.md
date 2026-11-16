@@ -14,9 +14,10 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Development web: http://localhost:3000. API health:
-http://127.0.0.1:17430/api/health. A built server serves the production SPA on
-http://127.0.0.1:17431 and proxies `/api` to port 17430.
+Development web: http://localhost:17430. Browser API health is available at
+http://127.0.0.1:17430/api/health through Nuxt's development proxy. A built
+server serves the production SPA, API, audio, and realtime traffic on the same
+port.
 Development startup synchronizes the local database with the Prisma 8 contract
 and, when the corresponding environment variables are unset, uses `apps/server/peridot.db` and creates
 `apps/server/music`. Set `DATABASE_URL` or `MUSIC_LIBRARY_PATH` before starting
@@ -26,9 +27,13 @@ It then creates the required first user with administrator privileges, or signs
 in when the server already has users. The server address and expiring session
 are kept in same-site browser cookies. The server can be changed from Settings
 → Admin → Server by disconnecting first. Server selection continuously probes
-the typed address and scans the web host's private IPv4 networks for Peridot
-servers on port 17431; selecting a
-discovered server advances onboarding. Home surfaces bounded album and track
+the typed address and scans the Peridot host's private IPv4 networks for Peridot
+servers on port 17430 over HTTP and HTTPS. Scheme-less IP addresses and
+hostnames try both protocols automatically, and host-only addresses also try
+the Peridot port. Selecting a discovered server advances onboarding. The public
+health response allows cross-origin reads so a separately hosted Peridot web
+client can verify a supplied IP address or URL. Authenticated cross-origin calls
+remain limited to `PERIDOT_WEB_ORIGINS`. Home surfaces bounded album and track
 suggestions from the authenticated catalog API, keeping liked records visible
 and prioritizing music by liked artists. It also shows the current playlist
 state. The focused Liked songs, Playlists, Albums, and Artists routes provide
@@ -138,10 +143,13 @@ runs Web, Server, shared UI, Desktop, and Android tests in parallel jobs. Any
 failed test suite blocks the build jobs.
 
 Build output: `apps/web/.output/public` and `apps/server/dist`. Start the built
-server with `node apps/server/dist/index.js`; it serves the API on 17430 and the
-embedded web application on 17431. Local development disables the embedded web
-listener so Nuxt HMR can run separately on 3000. Set `PERIDOT_SERVE_WEB=false`
-to intentionally run the built server without the web listener.
+server with `node apps/server/dist/index.js`; it serves the API and embedded web
+application from one Fastify listener on 17430. Local development runs Nuxt HMR
+on public port 17430 and proxies `/api` to a private Fastify listener on 17431.
+Set `PERIDOT_SERVE_WEB=false` to intentionally run the built server API without
+serving the web application.
+The web package's standard build runs `nuxt generate` so `.output/public`
+contains the SPA entry and fallback documents required by the embedded server.
 
 ## Offline SPA
 
@@ -361,14 +369,16 @@ backoff, and checks public health only while the socket is unavailable.
 
 ## Configuration
 
-The API defaults to loopback port 17430; the embedded web listener defaults to 17431. `HOST` and `PORT` configure the API, while `WEB_HOST` and `WEB_PORT`
-configure the web listener. `PERIDOT_WEB_DIST` selects the generated static web
-directory and defaults to `apps/web/.output/public`.
+The built server defaults to loopback port 17430. `HOST` and `PORT` configure
+the single Fastify listener; there is no separate web-listener port.
+`PERIDOT_WEB_DIST` selects the generated static web directory and defaults to
+`apps/web/.output/public`.
 See apps/server/.env.example for variables required by built server startup.
 Environment files are not loaded automatically. The development command supplies
 the local defaults described in Quick start. `DATABASE_URL` selects the local SQLite file,
 `MUSIC_LIBRARY_PATH` seeds the first local music source, and
-`PERIDOT_WEB_ORIGINS` lists web and desktop origins allowed to call the API. Its
+`PERIDOT_WEB_ORIGINS` lists web and desktop origins allowed to call authenticated
+API routes. Add the exact origin of a separately hosted Peridot web client. Its
 defaults support the local web development server and Tauri's HTTP and custom
 scheme webview origins; add the exact web origin when accessing Peridot from
 another device.
@@ -661,7 +671,7 @@ To check a message manually: `echo "feat: add library scanning" | pnpm commitlin
 
 The root `Dockerfile` builds contracts, server output, and the static Nuxt
 application into one Node 24.15 image. Startup migrates `/data/peridot.db`
-before launching the server. `compose.yaml` exposes 17430 and 17431, persists
+before launching the server. `compose.yaml` exposes only 17430, persists
 `/data`, mounts music read-only at `/music`, and runs the maintained
 `nickfedor/watchtower` fork. The README contains the user-facing installation
 steps. The default Compose channel is `stable`, which is the production release

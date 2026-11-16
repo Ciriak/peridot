@@ -1,5 +1,60 @@
 # Decisions
 
+## 2026-11-16: One public Peridot port on 17430
+
+The built server uses one Fastify listener on 17430 for the SPA, authenticated
+API, audio, artwork, and realtime WebSocket traffic. Static SPA files and their
+`200.html` fallback are registered in the API application itself, so production
+no longer has a second proxy listener or a separate `WEB_PORT`.
+
+Development keeps Nuxt HMR on the same public 17430 origin and proxies `/api`
+to a private Fastify listener on 17431. The API's development port is an
+implementation detail and does not need to be exposed for browser access. Tauri
+development uses 17430 as well.
+
+External Peridot web clients continue to discover servers by the exact supplied
+IP address or URL. Manual and bounded LAN discovery probe the single public port
+over HTTP and HTTPS. The unauthenticated `/api/health` response allows any
+origin to read its fixed Peridot health signature; authenticated cross-origin
+requests remain restricted to `PERIDOT_WEB_ORIGINS`. Compose publishes only 17430.
+
+This supersedes the earlier two-listener defaults of API 17430 and web 17431.
+
+## 2026-11-15: Fixed defaults use the API and web listener ports everywhere
+
+The API listener defaults to 17430 and the browser-facing web listener defaults
+to 17431. The built server serves the generated web application and proxies API,
+audio, and realtime traffic through 17431 by default. Nuxt development and the
+Tauri development window use 17431 too, so browser, desktop, onboarding,
+discovery, CORS defaults, Compose, and deployment all expose the same stable
+addresses. Explicit `PORT`, `WEB_PORT`, and related environment overrides remain
+available for deployments and tests.
+
+The standard web package build also runs `nuxt generate`. It must emit the static
+SPA entry and fallback documents rather than only client assets, because the
+built Fastify server serves those files on 17431 after the documented workspace
+build.
+
+## 2026-11-15: The mobile application stays in portrait
+
+The packaged Android activity declares portrait orientation so the shared
+Peridot interface remains upright on phones. The installable PWA manifest uses
+the same orientation, giving the standalone mobile web app consistent behavior.
+This does not change normal desktop browser layout or the Android media service
+used by Android Auto.
+
+## 2026-11-15: Onboarding probes both protocols on configured Peridot ports
+
+Onboarding uses the fixed public web and API listener ports, 17431 and 17430,
+rather than requiring users to remember the port. Automatic LAN discovery scans
+both ports over HTTP and HTTPS on its bounded private-subnet targets. A
+scheme-less IP address or hostname probes both protocols, including on an
+explicitly supplied port; a scheme-less host without a port also tries both
+protocols on both Peridot ports. If both listeners answer, the public web
+listener on 17431 is preferred so browser traffic remains same-origin. An
+explicitly supplied scheme or port is respected, and no caller-selected targets
+or arbitrary port range is accepted.
+
 ## 2026-11-15: Compose creates persistent state without setup directories
 
 The default Compose stack stores application state in a named `peridot-data`

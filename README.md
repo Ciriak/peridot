@@ -26,13 +26,14 @@
    Save this as `compose.yaml`.
 
    ```yaml
+   name: peridot
+
    services:
      peridot:
        image: ghcr.io/ciriak/peridot:${PERIDOT_CHANNEL:-stable}
        restart: unless-stopped
        ports:
-         - "${PERIDOT_API_PORT:-17430}:17430"
-         - "${PERIDOT_WEB_PORT:-17431}:17431"
+         - "${PERIDOT_PORT:-17430}:17430"
        volumes:
          - peridot-data:/data
          - ./music:/music:ro
@@ -71,7 +72,7 @@
 
 3. **Open Peridot**
 
-   Go to **http://YOUR_SERVER_IP:17431** in your browser.
+   Go to **http://YOUR_SERVER_IP:17430** in your browser.
 
 ## Features
 

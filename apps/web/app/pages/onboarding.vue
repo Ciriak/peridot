@@ -32,6 +32,7 @@ import {
 } from "../lib/peridot-client";
 import {
   DEFAULT_SERVER_ADDRESS,
+  findPeridotServerAddress,
   normalizeServerAddress,
   safeRedirectPath,
 } from "../lib/server-address";
@@ -112,20 +113,23 @@ function revealManualEntry() {
 
 async function scanAddress(value: string, select = false) {
   const sequence = ++addressScanSequence;
-  let normalized: string;
   try {
-    normalized = normalizeServerAddress(value);
+    normalizeServerAddress(value);
   } catch {
     addressScanState.value = "idle";
     return;
   }
   addressScanState.value = "checking";
   try {
-    await fetchAuthStatus(normalized);
+    const foundAddress = await findPeridotServerAddress(value);
     if (sequence !== addressScanSequence) return;
+    if (!foundAddress) {
+      addressScanState.value = "not-found";
+      return;
+    }
     addressScanState.value = "found";
     rememberServer(
-      { address: normalized, host: new URL(normalized).host },
+      { address: foundAddress, host: new URL(foundAddress).host },
       select,
     );
   } catch {
@@ -328,7 +332,7 @@ function changeServer() {
               type="text"
               inputmode="url"
               autocomplete="url"
-              placeholder="http://192.168.1.20:17431"
+              placeholder="my.server.ip:17430"
               :aria-invalid="Boolean(error)"
               :aria-describedby="error ? 'server-error' : undefined"
             />

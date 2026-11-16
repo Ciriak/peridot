@@ -324,7 +324,7 @@ test("startup backfills MusicBrainz without re-enabling a disabled provider", as
       config: {
         databaseUrl: context.databaseUrl,
         libraryRoot: context.libraryRoot,
-        webOrigins: ["http://127.0.0.1:3000"],
+        webOrigins: ["http://127.0.0.1:17430"],
       },
       database: context.database,
       logger: false,
@@ -346,7 +346,7 @@ test("startup backfills MusicBrainz without re-enabling a disabled provider", as
       config: {
         databaseUrl: context.databaseUrl,
         libraryRoot: context.libraryRoot,
-        webOrigins: ["http://127.0.0.1:3000"],
+        webOrigins: ["http://127.0.0.1:17430"],
       },
       database: context.database,
       logger: false,
@@ -374,7 +374,7 @@ test("metadata provider mutations allow the configured web origin", async () => 
         method: "OPTIONS",
         url: "/api/admin/metadata-providers/order",
         headers: {
-          origin: "http://127.0.0.1:3000",
+          origin: "http://127.0.0.1:17430",
           "access-control-request-method": method,
           "access-control-request-headers": "authorization,content-type",
         },
@@ -382,7 +382,7 @@ test("metadata provider mutations allow the configured web origin", async () => 
       assert.equal(response.statusCode, 204);
       assert.equal(
         response.headers["access-control-allow-origin"],
-        "http://127.0.0.1:3000",
+        "http://127.0.0.1:17430",
       );
     }
   } finally {

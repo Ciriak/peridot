@@ -140,7 +140,7 @@ test("playlists support owner CRUD and stay private", async () => {
       method: "OPTIONS",
       url: `/api/playlists/${created.id}`,
       headers: {
-        origin: "http://127.0.0.1:3000",
+        origin: "http://127.0.0.1:17430",
         "access-control-request-method": "PATCH",
       },
     });

@@ -87,6 +87,15 @@ export default defineNuxtConfig({
     },
   },
   modules: ["@nuxtjs/i18n", "@vite-pwa/nuxt"],
+  nitro: {
+    devProxy: {
+      "/api": {
+        target: "http://127.0.0.1:17431/api",
+        changeOrigin: true,
+        ws: true,
+      },
+    },
+  },
   i18n: {
     defaultLocale: "en-US",
     strategy: "no_prefix",
@@ -133,7 +142,7 @@ export default defineNuxtConfig({
           theme_color: "#0A0A0A",
           background_color: "#000000",
           display: "standalone",
-          orientation: "any",
+          orientation: "portrait",
           start_url: "/",
           scope: "/",
           icons: [

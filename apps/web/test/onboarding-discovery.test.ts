@@ -45,6 +45,16 @@ test("server selection detects and selects the first server before continuing", 
     /@click="connectToServer\(selectedServer\?\.address\)"/,
     "Continue connects to the selected server",
   );
+  assert.match(
+    source,
+    /const foundAddress = await findPeridotServerAddress\(value\)/,
+    "Manual entry probes all configured server ports",
+  );
+  assert.match(
+    source,
+    /rememberServer\(\s*\{ address: foundAddress, host: new URL\(foundAddress\)\.host \},/,
+    "The responsive endpoint is selected",
+  );
   assert.match(source, /t\("onboarding\.continue"\)/);
   assert.match(source, /class="h-12 w-full text-base"/);
   assert.match(
@@ -57,6 +67,11 @@ test("server selection detects and selects the first server before continuing", 
   assert.match(source, /aria-controls="manual-server-entry"/);
   assert.match(source, /<div v-else id="manual-server-entry"/);
   assert.match(source, /id="server-address"/);
+  assert.match(
+    source,
+    /placeholder="my\.server\.ip:17430"/,
+    "Manual server entry shows the default API address format",
+  );
   assert.match(
     source,
     /\(route\.query\.auth === "login" \|\| route\.query\.auth === "setup"\)/,
