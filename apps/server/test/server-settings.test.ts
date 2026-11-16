@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import test from "node:test";
 import { createMemberSession, createTestContext } from "./helpers.js";
 
@@ -24,6 +26,10 @@ test("administrators can update and validate the source refresh schedule", async
         enabled: false,
         cron: "15 4 * * *",
         nextRunAt: null,
+      },
+      fileLogging: {
+        enabled: false,
+        path: path.join(context.root, "peridot.log"),
       },
     });
 
@@ -58,6 +64,67 @@ test("administrators can update and validate the source refresh schedule", async
       ).sourceRefreshCron,
       "15 4 * * *",
     );
+  } finally {
+    await context.close();
+  }
+});
+
+test("administrators can enable and disable persistent file logging", async () => {
+  const context = await createTestContext();
+  const logPath = path.join(context.root, "peridot.log");
+  try {
+    const initial = await context.app.inject({
+      method: "GET",
+      url: "/api/admin/server",
+      headers: context.authorization,
+    });
+    assert.deepEqual(initial.json().fileLogging, {
+      enabled: false,
+      path: logPath,
+    });
+
+    const enabled = await context.app.inject({
+      method: "PUT",
+      url: "/api/admin/server",
+      headers: context.authorization,
+      payload: { fileLogging: { enabled: true } },
+    });
+    assert.equal(enabled.statusCode, 200);
+    assert.deepEqual(enabled.json().fileLogging, {
+      enabled: true,
+      path: logPath,
+    });
+    assert.equal(
+      (
+        await context.database.orm.ServerSetting.firstOrThrow({
+          id: "server",
+        })
+      ).fileLoggingEnabled,
+      1,
+    );
+
+    context.logBuffer.add("info", "persisted test entry");
+    let content = "";
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      content = await readFile(logPath, "utf8").catch(() => "");
+      if (content.includes("persisted test entry")) break;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.match(content, /persisted test entry/);
+
+    const disabled = await context.app.inject({
+      method: "PUT",
+      url: "/api/admin/server",
+      headers: context.authorization,
+      payload: { fileLogging: { enabled: false } },
+    });
+    assert.equal(disabled.statusCode, 200);
+    assert.equal(disabled.json().fileLogging.enabled, false);
+    context.logBuffer.add("info", "not persisted after disable");
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    const finalContent = await readFile(logPath, "utf8");
+    assert.match(finalContent, /persisted test entry/);
+    assert.doesNotMatch(finalContent, /not persisted after disable/);
   } finally {
     await context.close();
   }

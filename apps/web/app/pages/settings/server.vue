@@ -12,6 +12,7 @@ import {
 import { Icon } from "@iconify/vue/offline";
 import { Button } from "@peridot/ui/components/ui/button";
 import { Input } from "@peridot/ui/components/ui/input";
+import { Switch } from "@peridot/ui/components/ui/switch";
 import {
   AlertDialogAction,
   AlertDialogCancel,
@@ -30,6 +31,7 @@ import {
 import { useServer } from "../../composables/use-server";
 import {
   useServerLogsQuery,
+  useServerSettingsQuery,
   useUpdatesQuery,
 } from "../../composables/use-admin-queries";
 import { useLocalizedMessage } from "../../composables/use-localized-message";
@@ -56,6 +58,7 @@ const { token } = useSession();
 const { user } = useUser();
 const realtime = useRealtime();
 const logsQuery = useServerLogsQuery();
+const serverSettings = useServerSettingsQuery();
 const updates = useUpdatesQuery();
 const logs = logsQuery.items;
 let logAfter = 0;
@@ -71,6 +74,10 @@ let restartSawDisconnect = false;
 const disconnectOpen = ref(false);
 const disconnecting = ref(false);
 const logError = ref("");
+const fileLoggingEnabled = ref(false);
+const fileLoggingSaving = ref(false);
+const fileLoggingNotice = ref("");
+const fileLoggingError = ref("");
 const updateChecking = ref(false);
 const updateCheckingNotice = ref("");
 const updateCheckingError = ref("");
@@ -99,6 +106,20 @@ const updateCheckTime = computed(() => {
   const checkedAt = updateStatus.value?.checkedAt;
   return checkedAt ? d(new Date(checkedAt), "medium") : null;
 });
+
+watch(
+  serverSettings.settings,
+  (settings) => {
+    if (settings) {
+      fileLoggingEnabled.value = settings.fileLogging?.enabled ?? false;
+    }
+  },
+  { immediate: true },
+);
+
+const logFilePath = computed(
+  () => serverSettings.settings.value?.fileLogging?.path ?? "",
+);
 
 async function refreshLogs() {
   logError.value = "";
@@ -181,6 +202,32 @@ async function checkUpdates() {
   }
 }
 
+async function saveFileLogging() {
+  if (fileLoggingSaving.value) return;
+  fileLoggingSaving.value = true;
+  fileLoggingNotice.value = "";
+  fileLoggingError.value = "";
+  try {
+    await serverSettings.save({
+      fileLogging: { enabled: fileLoggingEnabled.value },
+    });
+    fileLoggingNotice.value = t("settings.server.fileLogging.saved");
+  } catch (reason) {
+    if (isAuthenticationRedirectError(reason)) return;
+    fileLoggingError.value = errorMessage(
+      reason,
+      "settings.server.fileLogging.saveError",
+    );
+  } finally {
+    fileLoggingSaving.value = false;
+  }
+}
+
+function changeFileLogging(enabled: boolean) {
+  fileLoggingEnabled.value = enabled;
+  void saveFileLogging();
+}
+
 function requestInstall() {
   installNotice.value = "";
   installError.value = "";
@@ -238,6 +285,7 @@ onMounted(() => {
     return;
   }
   void refreshLogs();
+  void serverSettings.load();
   void updates.load();
   unsubscribeLogs = realtime.subscribe(["logs"], (message) => {
     if (message.type === "log.appended") {
@@ -558,6 +606,53 @@ watch(connectionStatus, (status) => {
         </AlertDialogContent>
       </AlertDialogPortal>
     </AlertDialogRoot>
+
+    <section aria-labelledby="log-file-heading" class="space-y-4">
+      <h3 id="log-file-heading" class="text-lg font-semibold">
+        {{ t("settings.server.fileLogging.title") }}
+      </h3>
+      <div class="space-y-5 rounded-lg border bg-card p-6 text-card-foreground">
+        <div class="flex items-start justify-between gap-4">
+          <div class="space-y-1">
+            <p class="text-sm font-medium">
+              {{ t("settings.server.fileLogging.enabled") }}
+            </p>
+            <p class="text-sm text-muted-foreground">
+              {{ t("settings.server.fileLogging.enabledHelp") }}
+            </p>
+          </div>
+          <Switch
+            :model-value="fileLoggingEnabled"
+            :disabled="fileLoggingSaving || connectionStatus === 'lost'"
+            :aria-label="t('settings.server.fileLogging.enabled')"
+            @update:model-value="changeFileLogging"
+          />
+        </div>
+        <div class="space-y-1 border-t pt-4">
+          <p class="text-sm font-medium">
+            {{ t("settings.server.fileLogging.path") }}
+          </p>
+          <p class="break-all font-mono text-xs text-muted-foreground">
+            {{ logFilePath || t("settings.server.fileLogging.pathPending") }}
+          </p>
+        </div>
+        <p
+          v-if="fileLoggingNotice"
+          role="status"
+          aria-live="polite"
+          class="text-sm text-muted-foreground"
+        >
+          {{ fileLoggingNotice }}
+        </p>
+        <p
+          v-if="fileLoggingError || serverSettings.error.value"
+          role="alert"
+          class="text-sm text-destructive"
+        >
+          {{ fileLoggingError || serverSettings.error.value }}
+        </p>
+      </div>
+    </section>
 
     <section aria-labelledby="server-log-heading" class="space-y-4">
       <div class="flex items-center justify-between gap-4">

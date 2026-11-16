@@ -47,7 +47,6 @@ import {
   ServerSettingsError,
   updateServerSettings,
   validateFileLoggingSettings,
-  validateSourceRefreshSettings,
 } from "./server-settings.js";
 import type { SourceRefreshScheduler } from "./source-refresh-scheduler.js";
 import { UpdateError, type UpdateService } from "./updates.js";
@@ -136,9 +135,6 @@ export async function registerAdminRoutes(
       async (request, reply): Promise<ServerSettingsResponse | undefined> => {
         const previousFileLogging = await readFileLoggingSettings(database);
         try {
-          const requestedSourceRefresh = request.body?.sourceRefresh
-            ? validateSourceRefreshSettings(request.body.sourceRefresh)
-            : undefined;
           const requestedFileLogging = request.body?.fileLogging
             ? validateFileLoggingSettings(request.body.fileLogging)
             : undefined;
@@ -153,8 +149,7 @@ export async function registerAdminRoutes(
                 ...settings.sourceRefresh,
                 nextRunAt: null,
               })
-            : (sourceRefreshScheduler?.status() ??
-              {
+            : (sourceRefreshScheduler?.status() ?? {
                 ...(await readSourceRefreshSettings(database)),
                 nextRunAt: null,
               });

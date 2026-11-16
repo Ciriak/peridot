@@ -1143,6 +1143,10 @@ test("authenticated admin calls send the bearer token and expected bodies", asyn
           cron: "0 3 * * *",
           nextRunAt: "2026-11-16T02:00:00.000Z",
         },
+        fileLogging: {
+          enabled: false,
+          path: "/data/peridot.log",
+        },
       });
     }
     if (
@@ -1203,6 +1207,10 @@ test("authenticated admin calls send the bearer token and expected bodies", asyn
         cron: "0 3 * * *",
         nextRunAt: null,
       },
+      fileLogging: {
+        enabled: false,
+        path: "/data/peridot.log",
+      },
     });
   };
 
@@ -1213,6 +1221,10 @@ test("authenticated admin calls send the bearer token and expected bodies", asyn
       enabled: true,
       cron: "0 3 * * *",
       nextRunAt: null,
+    },
+    fileLogging: {
+      enabled: false,
+      path: "/data/peridot.log",
     },
   });
   assert.deepEqual(await requestServerRestart("http://127.0.0.1:17430", "s"), {
@@ -1232,6 +1244,10 @@ test("authenticated admin calls send the bearer token and expected bodies", asyn
         enabled: true,
         cron: "0 3 * * *",
         nextRunAt: "2026-11-16T02:00:00.000Z",
+      },
+      fileLogging: {
+        enabled: false,
+        path: "/data/peridot.log",
       },
     },
   );

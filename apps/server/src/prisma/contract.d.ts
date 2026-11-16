@@ -19,7 +19,7 @@ import type {
 } from '@prisma/orm-sqlite/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'22eaa382ca7613035403a641859f5bee7e22cd5125f1f628bdbfc85d296a9ae2'>;
+  StorageHashBase<'4e95e705bb64da3502c63812c1276da93b77815295ef507f0ffabcf2225fc0a1'>;
 export type ExecutionHash =
   ExecutionHashBase<'69abe59ddf12aaa78738519fa294ac279958f3b4caa4e85b2cb8fd0effde430a'>;
 export type ProfileHash =
@@ -421,6 +421,7 @@ export namespace Models {
     readonly [RelationKeys]?: 'activeTrack' | 'user';
   };
   export type ServerSetting = {
+    fileLoggingEnabled: FieldOutputTypes['__unbound__']['ServerSetting']['fileLoggingEnabled'];
     id: FieldOutputTypes['__unbound__']['ServerSetting']['id'];
     libraryRoot: FieldOutputTypes['__unbound__']['ServerSetting']['libraryRoot'];
     sourceRefreshCron: FieldOutputTypes['__unbound__']['ServerSetting']['sourceRefreshCron'];
@@ -2048,6 +2049,16 @@ type ContractBase = Omit<
             };
             readonly ServerSetting: {
               columns: {
+                readonly fileLoggingEnabled: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
+                  };
+                  readonly many: false;
+                };
                 readonly id: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
@@ -4251,6 +4262,10 @@ type ContractBase = Omit<
           };
           readonly ServerSetting: {
             readonly fields: {
+              readonly fileLoggingEnabled: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
               readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
@@ -4277,6 +4292,7 @@ type ContractBase = Omit<
               readonly table: 'ServerSetting';
               readonly namespaceId: '__unbound__';
               readonly fields: {
+                readonly fileLoggingEnabled: { readonly column: 'fileLoggingEnabled' };
                 readonly id: { readonly column: 'id' };
                 readonly libraryRoot: { readonly column: 'libraryRoot' };
                 readonly sourceRefreshCron: { readonly column: 'sourceRefreshCron' };

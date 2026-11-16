@@ -174,5 +174,8 @@ export async function updateServerSettings(
       });
     }
   });
-  return { sourceRefresh, fileLogging };
+  return {
+    ...(sourceRefresh ? { sourceRefresh } : {}),
+    ...(fileLogging ? { fileLogging } : {}),
+  };
 }

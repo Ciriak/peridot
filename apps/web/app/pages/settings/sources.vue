@@ -509,6 +509,11 @@ async function saveSourceRefresh() {
   }
 }
 
+function changeSourceRefreshEnabled(enabled: boolean) {
+  sourceRefreshEnabled.value = enabled;
+  void saveSourceRefresh();
+}
+
 onMounted(() => {
   void loadSources();
   void serverSettings.load();
@@ -795,9 +800,10 @@ onMounted(() => {
             </p>
           </div>
           <Switch
-            v-model="sourceRefreshEnabled"
+            :model-value="sourceRefreshEnabled"
             :disabled="sourceRefreshSaving || serverLost"
             :aria-label="t('settings.server.scheduleEnabled')"
+            @update:model-value="changeSourceRefreshEnabled"
           />
         </div>
         <div class="space-y-2">
@@ -813,6 +819,8 @@ onMounted(() => {
             :placeholder="t('settings.server.scheduleCronPlaceholder')"
             autocomplete="off"
             spellcheck="false"
+            @blur="saveSourceRefresh"
+            @keydown.enter.prevent="saveSourceRefresh"
           />
           <p class="text-sm text-muted-foreground">
             {{ t("settings.server.scheduleCronHelp") }}
@@ -849,18 +857,6 @@ onMounted(() => {
               {{ t("settings.server.schedulePending") }}
             </template>
           </p>
-          <Button
-            type="button"
-            size="sm"
-            :disabled="sourceRefreshSaving || serverLost"
-            @click="saveSourceRefresh"
-          >
-            {{
-              sourceRefreshSaving
-                ? t("common.saving")
-                : t("settings.server.scheduleSave")
-            }}
-          </Button>
         </div>
         <p
           v-if="sourceRefreshNotice"

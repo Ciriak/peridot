@@ -247,6 +247,9 @@ test("sources are managed on their own page with row action menus", async () => 
   assert.match(page, /sourceRefreshEnabled/);
   assert.match(page, /sourceRefreshCron/);
   assert.match(page, /saveSourceRefresh/);
+  assert.match(page, /@update:model-value="changeSourceRefreshEnabled"/);
+  assert.match(page, /@blur="saveSourceRefresh"/);
+  assert.doesNotMatch(page, /@click="saveSourceRefresh"/);
   assert.match(page, /settings\.server\.scheduleTitle/);
   assert.match(page, /settings\.server\.scheduleCronHelp/);
   assert.match(page, /https:\/\/crontab\.guru\//);
@@ -532,7 +535,7 @@ test("server settings leave source refresh without library status management", a
   assert.doesNotMatch(page, /Library status/);
   assert.doesNotMatch(page, /Rescan library/);
   assert.doesNotMatch(page, /listSources/);
-  assert.doesNotMatch(page, /useServerSettingsQuery/);
+  assert.match(page, /useServerSettingsQuery/);
   assert.doesNotMatch(page, /sourceRefreshEnabled/);
   assert.doesNotMatch(page, /sourceRefreshCron/);
   assert.doesNotMatch(page, /saveSourceRefresh/);
@@ -544,6 +547,12 @@ test("server settings leave source refresh without library status management", a
   assert.match(page, /settings\.server\.log/);
   assert.match(page, /settings\.server\.search/);
   assert.match(page, /settings\.server\.categories/);
+  assert.match(page, /settings\.server\.fileLogging\.enabled/);
+  assert.match(page, /settings\.server\.fileLogging\.enabledHelp/);
+  assert.match(page, /settings\.server\.fileLogging\.path/);
+  assert.match(page, /@update:model-value="changeFileLogging"/);
+  assert.doesNotMatch(page, /@click="saveFileLogging"/);
+  assert.match(page, /fileLogging: \{ enabled: fileLoggingEnabled\.value \}/);
 });
 
 test("server settings confirm before restarting the connected server", async () => {
@@ -658,7 +667,8 @@ test("profile settings omit email and update the editable display name", async (
   assert.match(page, /user\.value = updated/);
   assert.match(page, /settings\.account\.updated/);
   assert.match(page, /@submit\.prevent="saveProfile"/);
-  assert.match(page, /:disabled="saving \|\| !displayNameValid"/);
+  assert.match(page, /@blur="saveProfile"/);
+  assert.doesNotMatch(page, /common\.saveChanges/);
   assert.doesNotMatch(page, /username|Username/);
 });
 
