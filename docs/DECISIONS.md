@@ -1,5 +1,19 @@
 # Decisions
 
+## 2026-11-16: Source removal is optimistic after durable bulk deletion
+
+Source removal updates the shared web query cache as soon as the administrator
+confirms, then sends the authenticated DELETE request in the background. This
+keeps the confirmation and toast responsive even when removing a large
+Jellyfin library. The queued source remains filtered out during a refetch, and
+a failed request restores it at its previous list position.
+
+For Jellyfin, the server removes all raw tracks and the source row in one SQLite
+transaction before catalog search-index cleanup. A normal source-list refresh
+therefore reflects the removal immediately rather than exposing the underlying
+catalog-maintenance duration. Catalogs are cleaned afterward because collection
+and artist projections require per-track reindexing.
+
 ## 2026-11-16: Paginated collections load automatically
 
 Paginated cards, shared track tables, search result groups, and task history use

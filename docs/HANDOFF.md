@@ -2,6 +2,37 @@
 
 Last updated: 2026-11-16.
 
+## Source removal responds immediately
+
+Removing a source now updates the web query cache before the API request
+finishes. The confirmation closes, the source row disappears, and the existing
+success toast is shown immediately. A failed background deletion restores the
+source in its previous position and displays the existing removal error.
+
+Jellyfin source deletion now removes the source and all tracks in one SQLite
+transaction. This makes the source disappear from subsequent list requests
+without waiting for catalog search-index cleanup, which continues in the same
+request afterward. Bulk deletion reduces the live Jellyfin case from thousands
+of individual source-track deletes to one transaction.
+
+Checks completed:
+
+- Full web suite: 210 passing, including optimistic removal and rollback
+- Full server suite: 152 passing
+- Web and server type checks
+- Workspace ESLint
+- Web and server production builds
+- Targeted Prettier checks and `git diff --check`
+
+Known limits: catalog search-index cleanup still runs after the durable source
+and track deletion and can keep the DELETE request active for a large Jellyfin
+library. Cleanup failures are logged after the source is already durably
+removed. The change remains uncommitted on `feature/clasicifation-update`; no
+commit, push, tag, publication, or deployment was performed.
+
+Next: remove a configured Jellyfin source in the hot-reloaded app and confirm
+the row and toast update immediately while a normal refresh keeps it absent.
+
 ## Node 24 CI actions
 
 Every CI job now uses `actions/checkout@v7`, `actions/setup-node@v7`, and

@@ -438,18 +438,6 @@ function normalizeIntegrationUrl(value: unknown): string | null {
   return url.toString();
 }
 
-export async function deleteSource(
-  database: Database,
-  id: string,
-): Promise<boolean> {
-  try {
-    await database.orm.Source.where({ id }).delete();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export async function reorderSources(
   database: Database,
   ids: unknown,

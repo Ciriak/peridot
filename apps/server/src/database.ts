@@ -8,7 +8,7 @@ export type Database = SqliteClient<Contract>;
 
 const contract = contractFromJson<Contract>(contractJson);
 
-function sqlitePath(databaseUrl: string): string {
+export function sqliteFilePath(databaseUrl: string): string {
   if (!databaseUrl.startsWith("file:")) {
     throw new Error("DATABASE_URL must be a file: URL for SQLite");
   }
@@ -20,5 +20,5 @@ function sqlitePath(databaseUrl: string): string {
 }
 
 export function createDatabase(databaseUrl: string): Database {
-  return sqlite({ contract, path: sqlitePath(databaseUrl) });
+  return sqlite({ contract, path: sqliteFilePath(databaseUrl) });
 }

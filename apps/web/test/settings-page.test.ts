@@ -220,6 +220,9 @@ test("sources are managed on their own page with row action menus", async () => 
   assert.match(page, /useAdminSourcesQuery/);
   assert.match(page, /createSource/);
   assert.match(page, /deleteSource/);
+  assert.match(page, /removeOptimistically/);
+  assert.match(page, /void deleteSource\(/);
+  assert.doesNotMatch(page, /await deleteSource\(/);
   assert.match(page, /reorderSources/);
   assert.match(page, /useSortable/);
   assert.match(page, /handle: "\.drag-handle"/);

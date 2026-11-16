@@ -115,6 +115,7 @@ const adding = ref(false);
 const addError = ref("");
 const removeOpen = ref(false);
 const pendingDelete = ref<SourceResponse | null>(null);
+const pendingSourceDeletions = ref<Set<string>>(new Set());
 const sourceRefreshEnabled = ref(true);
 const sourceRefreshCron = ref("0 3 * * *");
 const sourceRefreshSaving = ref(false);
@@ -212,7 +213,9 @@ async function loadSources() {
 watch(
   sourcesQuery.items,
   (items) => {
-    sources.value = [...items];
+    sources.value = items.filter(
+      (source) => !pendingSourceDeletions.value.has(source.id),
+    );
   },
   { immediate: true },
 );
@@ -432,23 +435,41 @@ function askRemove(source: SourceResponse) {
   removeOpen.value = true;
 }
 
-async function confirmRemove() {
+function confirmRemove() {
   if (!pendingDelete.value) return;
   const removedSource = pendingDelete.value;
-  pageError.value = "";
-  try {
-    await deleteSource(
-      address.value ?? "",
-      token.value ?? "",
-      removedSource.id,
-    );
-    notifySourceMutation("removed", sourceLabel(removedSource));
-    pendingDelete.value = null;
-    await loadSources();
-  } catch (reason) {
-    if (isAuthenticationRedirectError(reason)) return;
-    pageError.value = errorMessage(reason, "settings.sources.removeError");
+  const rollback = sourcesQuery.removeOptimistically(removedSource.id);
+  if (!rollback) {
+    pageError.value = t("settings.sources.removeError");
+    return;
   }
+
+  pendingSourceDeletions.value = new Set([
+    ...pendingSourceDeletions.value,
+    removedSource.id,
+  ]);
+  sources.value = sources.value.filter(
+    (source) => source.id !== removedSource.id,
+  );
+  pendingDelete.value = null;
+  removeOpen.value = false;
+  pageError.value = "";
+  notifySourceMutation("removed", sourceLabel(removedSource));
+
+  let removalFailed = false;
+  void deleteSource(address.value ?? "", token.value ?? "", removedSource.id)
+    .catch((reason) => {
+      if (isAuthenticationRedirectError(reason)) return;
+      removalFailed = true;
+      pageError.value = errorMessage(reason, "settings.sources.removeError");
+    })
+    .finally(() => {
+      const remaining = new Set(pendingSourceDeletions.value);
+      remaining.delete(removedSource.id);
+      pendingSourceDeletions.value = remaining;
+
+      if (removalFailed) rollback();
+    });
 }
 
 async function persistOrder() {
