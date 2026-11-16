@@ -319,9 +319,7 @@ onMounted(() => {
           }}
         </Badge>
       </div>
-      <div
-        class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
-      >
+      <div class="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-5">
         <AlbumCard v-for="album in albums" :key="album.id" :album="album" />
         <div v-if="hasMoreAlbums" class="col-span-full flex justify-center">
           <Button

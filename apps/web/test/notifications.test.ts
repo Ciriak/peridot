@@ -1,11 +1,17 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import test from "node:test";
+import test, { mock } from "node:test";
 import {
   isPeridotServerReachable,
   serverConnectionRestored,
   topbarStatus,
 } from "../app/lib/server-connection.ts";
+import {
+  reportServerReachability,
+  resetServerReachability,
+  SERVER_OFFLINE_COOLDOWN_MS,
+  serverReachability,
+} from "../app/lib/server-connectivity.ts";
 import { offlineSaveSuccessToast } from "../app/lib/offline-toast.ts";
 import { sourceMutationToast } from "../app/lib/source-toast.ts";
 import { TOAST_VIEWPORT_CLASS } from "../app/lib/toast-position.ts";
@@ -110,6 +116,30 @@ test("only a lost connection becoming healthy is treated as back online", () => 
   assert.equal(serverConnectionRestored("connected", "connected"), false);
   assert.equal(serverConnectionRestored("lost", "unknown"), false);
   assert.equal(serverConnectionRestored(undefined, "connected"), false);
+});
+
+test("brief connection loss is hidden until the offline cooldown expires", () => {
+  mock.timers.enable({ apis: ["setTimeout"], now: 0 });
+  try {
+    resetServerReachability();
+    reportServerReachability(true);
+    reportServerReachability(false);
+
+    assert.equal(serverReachability.value, true);
+    mock.timers.tick(SERVER_OFFLINE_COOLDOWN_MS - 1);
+    assert.equal(serverReachability.value, true);
+
+    reportServerReachability(true);
+    mock.timers.tick(1);
+    assert.equal(serverReachability.value, true);
+
+    reportServerReachability(false);
+    mock.timers.tick(SERVER_OFFLINE_COOLDOWN_MS);
+    assert.equal(serverReachability.value, false);
+  } finally {
+    resetServerReachability();
+    mock.timers.reset();
+  }
 });
 
 test("task and log updates use the shared realtime subscription", async () => {

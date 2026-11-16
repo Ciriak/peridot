@@ -68,7 +68,7 @@ onMounted(() => {
     </div>
     <div
       v-else-if="albums.length"
-      class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+      class="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-5"
       :aria-busy="loading"
     >
       <AlbumCard v-for="album in albums" :key="album.id" :album="album" />

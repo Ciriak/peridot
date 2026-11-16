@@ -48,8 +48,7 @@ test("home suggests albums and tracks from the catalog", async () => {
   assert.doesNotMatch(homePage, /library-search/);
   assert.doesNotMatch(homePage, /<LibraryScreen/);
 
-  const gridClass =
-    /grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5/;
+  const gridClass = /grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-5/;
   assert.match(homePage, gridClass);
   assert.match(albumPage, gridClass);
 });
