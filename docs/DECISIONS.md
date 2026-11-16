@@ -1,5 +1,34 @@
 # Decisions
 
+## 2026-11-16: Paginated collections load automatically
+
+Paginated cards, shared track tables, search result groups, and task history use
+one shared viewport sentinel instead of rendering a manual load-more button.
+When the sentinel approaches the viewport, it requests the next page if more
+data exists and no request is active. A changed item count allows the sentinel
+to request again while it remains visible, so a short first page fills a tall
+viewport without user action, while an unchanged item count after a failed
+request avoids an automatic retry loop.
+
+The trigger renders no visible control. Its loading state is exposed only to
+assistive technology. Track tables retain their page-flow progressive row
+mounting; the same sentinel first reveals another mounted row batch and then
+fetches another server page when all loaded rows are visible. This supersedes
+the earlier visible load-more fallback decisions.
+
+## 2026-11-16: Brief server disconnects keep the connected state
+
+The shared server reachability state waits five seconds before changing from
+connected to offline. A successful API response or realtime connection during
+that window cancels the pending offline transition. A sustained outage still
+shows the offline state after the cooldown expires.
+
+Realtime socket retries and independent API failures can otherwise alternate
+the shared state within seconds. Each connected transition emits the existing
+`Back online` toast, so the cooldown prevents transient retry churn from
+spamming the user while preserving the actual connection-loss indicator for
+real outages.
+
 ## 2026-11-16: Multi-architecture Docker images build on native runners
 
 The Docker publication workflow builds AMD64 and ARM64 images in separate

@@ -2,6 +2,59 @@
 
 Last updated: 2026-11-16.
 
+## Automatic pagination without load-more controls
+
+Paginated album, artist, audiobook, podcast, playlist, search, task-history, and
+shared track surfaces now request their next page automatically when their
+shared sentinel approaches the viewport. The manual load-more buttons are
+removed. The trigger remains silent visually and exposes only a screen-reader
+loading status.
+
+The sentinel can request again while it stays visible, so short initial pages
+continue filling a tall viewport. It does not repeat a request until the item
+count changes, which avoids an automatic retry loop after a failed page.
+Shared track tables still reveal mounted rows in progressive batches and then
+fetch additional server pages through the same trigger.
+
+Checks completed:
+
+- Full web suite: 208 passing
+- Web typecheck
+- Targeted ESLint
+
+Known limits: browser scrolling and live viewport behavior have not yet been
+visually exercised. Changes remain uncommitted on `dev` alongside pre-existing
+working-tree edits; no commit, push, tag, publication, or deployment was
+performed.
+
+Next: run the production web build and visually confirm automatic prefetch in a
+tall and narrow viewport, including the final page where the trigger disappears.
+
+## Server reconnect notification cooldown
+
+The shared server reachability state now delays an offline transition for five
+seconds. Transient realtime retries and API failures therefore do not alternate
+the toolbar between connected and offline or emit repeated `Back online`
+toasts. A successful request or realtime connection during the cooldown cancels
+the pending transition, while a sustained outage still becomes offline when the
+cooldown expires.
+
+Checks completed:
+
+- Focused notification tests, including fake-timer cooldown and recovery cases
+- Full web suite: 205 passing
+- Web typecheck, targeted ESLint, and targeted Prettier
+- Web production build (`nuxt generate`)
+
+Known limits: the cooldown is covered by deterministic fake-timer tests, but a
+live browser session with an intermittently failing realtime server was not
+exercised. The cooldown source and test changes are in local commit `b463469`;
+this handoff and decision entry remain uncommitted. No push, tag, publication,
+or deployment was performed.
+
+Next: interrupt and restore a real server connection repeatedly in the browser
+to confirm the toolbar and toast behavior during retry churn.
+
 ## Native multi-architecture Docker publication
 
 Docker publication no longer builds ARM64 under QEMU. The workflow now runs

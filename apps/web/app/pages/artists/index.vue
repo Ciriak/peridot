@@ -5,6 +5,7 @@ import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { onMounted } from "vue";
 import ArtistCard from "../../components/ArtistCard.vue";
+import AutoLoadMore from "../../components/AutoLoadMore.vue";
 import { useCatalogArtistQuery } from "../../composables/use-catalog-query";
 import { useLikes } from "../../composables/use-likes";
 
@@ -72,20 +73,14 @@ onMounted(() => {
       :aria-busy="loading"
     >
       <ArtistCard v-for="artist in artists" :key="artist.id" :artist="artist" />
-      <div v-if="hasMore" class="col-span-full flex justify-center">
-        <Button
-          type="button"
-          variant="outline"
-          :disabled="loadingMore"
-          @click="loadMore"
-        >
-          {{
-            loadingMore
-              ? t("page.artists.loadingMore")
-              : t("page.artists.loadMore")
-          }}
-        </Button>
-      </div>
+      <AutoLoadMore
+        class="col-span-full"
+        :enabled="hasMore"
+        :loading="loadingMore"
+        :item-count="artists.length"
+        :label="t('page.artists.loadingMore')"
+        @load="loadMore"
+      />
     </div>
     <p
       v-else

@@ -10,6 +10,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import AlbumCard from "../../components/AlbumCard.vue";
 import ArtistArtwork from "../../components/ArtistArtwork.vue";
 import ArtistContextMenu from "../../components/ArtistContextMenu.vue";
+import AutoLoadMore from "../../components/AutoLoadMore.vue";
 import LikeButton from "../../components/LikeButton.vue";
 import TrackTable from "../../components/TrackTable.vue";
 import {
@@ -321,20 +322,14 @@ onMounted(() => {
       </div>
       <div class="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-5">
         <AlbumCard v-for="album in albums" :key="album.id" :album="album" />
-        <div v-if="hasMoreAlbums" class="col-span-full flex justify-center">
-          <Button
-            type="button"
-            variant="outline"
-            :disabled="albumsLoadingMore"
-            @click="loadMoreAlbums"
-          >
-            {{
-              albumsLoadingMore
-                ? t("page.albums.loadingMore")
-                : t("page.albums.loadMore")
-            }}
-          </Button>
-        </div>
+        <AutoLoadMore
+          class="col-span-full"
+          :enabled="hasMoreAlbums"
+          :loading="albumsLoadingMore"
+          :item-count="albums.length"
+          :label="t('page.albums.loadingMore')"
+          @load="loadMoreAlbums"
+        />
       </div>
     </section>
 

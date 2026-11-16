@@ -102,88 +102,103 @@ function openQueue() {
 
 <template>
   <DialogRoot v-model:open="open">
-    <div data-mobile-player class="flex h-full w-full md:hidden">
-      <DialogTrigger as-child>
-        <Button
-          variant="ghost"
-          class="h-full min-w-0 flex-1 justify-start gap-3 px-3 text-left"
-          :aria-label="t('player.openFullscreen')"
-          aria-haspopup="dialog"
-        >
-          <span
-            aria-hidden="true"
-            class="relative flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted text-muted-foreground"
-            :class="active && !currentTrackPlayable && 'opacity-60'"
-          >
-            <Icon :icon="placeholderIcon" aria-hidden="true" class="size-7" />
-            <FadeInImage
-              v-if="currentCoverImageUrl && !coverFailed"
-              :key="currentCoverImageUrl"
-              :src="currentCoverImageUrl"
-              loading="eager"
-              class="absolute inset-0"
-              @error="coverFailed = true"
-            />
-          </span>
-          <span class="min-w-0 flex-1">
-            <ScrollingText
-              v-if="active"
-              :key="`${active.id}:${active.title}`"
-              mode="always"
-              class="w-full text-sm font-medium"
-            >
-              {{ active.title }}
-            </ScrollingText>
-            <span v-else class="block truncate text-sm font-medium">
-              {{ t("player.noTrack") }}
-            </span>
-            <ScrollingText
-              v-if="active"
-              mode="always"
-              class="w-full text-xs text-muted-foreground"
-            >
-              <template v-if="active.mediaType === 'music'">
-                {{ trackArtistNames(active).join(", ") }}
-              </template>
-              <template v-else>{{ active.artist }}</template>
-            </ScrollingText>
-            <span v-else class="block truncate text-xs text-muted-foreground">
-              {{ t("player.scanLibrary") }}
-            </span>
-          </span>
-        </Button>
-      </DialogTrigger>
-
-      <div class="flex shrink-0 items-center gap-2 pr-3">
-        <LikeButton
-          :liked="
-            currentTrackLikeTarget
-              ? likedTrackIds.includes(currentTrackLikeTarget.trackId)
-              : false
-          "
-          :label="active?.title ?? t('player.currentTrack')"
-          :pending="
-            currentTrackLikeTarget
-              ? isLikePending(currentTrackLikeTarget)
-              : false
-          "
-          :disabled="!currentTrackId || !likesLoaded"
-          @toggle="toggleCurrentTrackLike"
-        />
-        <Button
-          size="icon-lg"
-          class="size-12 rounded-full"
-          :disabled="!currentTrackPlayable"
-          :aria-label="playing ? t('player.pause') : t('player.play')"
+    <div data-mobile-player class="flex h-full w-full flex-col md:hidden">
+      <div class="flex h-6 shrink-0 items-center px-2">
+        <Slider
+          :model-value="[elapsed]"
+          :min="0"
+          :max="Math.max(durationSeconds, 1)"
+          :step="1"
+          :disabled="!currentTrackPlayable || durationSeconds <= 0"
           :aria-busy="loading"
-          @click="togglePlayback"
-        >
-          <Icon
-            :icon="playing ? icons.pause : icons.play"
-            aria-hidden="true"
-            class="size-6"
+          class="h-full w-full"
+          :thumb-label="t('player.position')"
+          @update:model-value="seek($event?.[0] ?? 0)"
+        />
+      </div>
+      <div class="flex min-h-0 flex-1">
+        <DialogTrigger as-child>
+          <Button
+            variant="ghost"
+            class="h-full min-w-0 flex-1 justify-start gap-3 px-3 text-left"
+            :aria-label="t('player.openFullscreen')"
+            aria-haspopup="dialog"
+          >
+            <span
+              aria-hidden="true"
+              class="relative flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted text-muted-foreground"
+              :class="active && !currentTrackPlayable && 'opacity-60'"
+            >
+              <Icon :icon="placeholderIcon" aria-hidden="true" class="size-7" />
+              <FadeInImage
+                v-if="currentCoverImageUrl && !coverFailed"
+                :key="currentCoverImageUrl"
+                :src="currentCoverImageUrl"
+                loading="eager"
+                class="absolute inset-0"
+                @error="coverFailed = true"
+              />
+            </span>
+            <span class="min-w-0 flex-1">
+              <ScrollingText
+                v-if="active"
+                :key="`${active.id}:${active.title}`"
+                mode="always"
+                class="w-full text-sm font-medium"
+              >
+                {{ active.title }}
+              </ScrollingText>
+              <span v-else class="block truncate text-sm font-medium">
+                {{ t("player.noTrack") }}
+              </span>
+              <ScrollingText
+                v-if="active"
+                mode="always"
+                class="w-full text-xs text-muted-foreground"
+              >
+                <template v-if="active.mediaType === 'music'">
+                  {{ trackArtistNames(active).join(", ") }}
+                </template>
+                <template v-else>{{ active.artist }}</template>
+              </ScrollingText>
+              <span v-else class="block truncate text-xs text-muted-foreground">
+                {{ t("player.scanLibrary") }}
+              </span>
+            </span>
+          </Button>
+        </DialogTrigger>
+
+        <div class="flex shrink-0 items-center gap-2 pr-3">
+          <LikeButton
+            :liked="
+              currentTrackLikeTarget
+                ? likedTrackIds.includes(currentTrackLikeTarget.trackId)
+                : false
+            "
+            :label="active?.title ?? t('player.currentTrack')"
+            :pending="
+              currentTrackLikeTarget
+                ? isLikePending(currentTrackLikeTarget)
+                : false
+            "
+            :disabled="!currentTrackId || !likesLoaded"
+            @toggle="toggleCurrentTrackLike"
           />
-        </Button>
+          <Button
+            size="icon-lg"
+            class="size-12 rounded-full"
+            :disabled="!currentTrackPlayable"
+            :aria-label="playing ? t('player.pause') : t('player.play')"
+            :aria-busy="loading"
+            @click="togglePlayback"
+          >
+            <Icon
+              :icon="playing ? icons.pause : icons.play"
+              aria-hidden="true"
+              class="size-6"
+            />
+          </Button>
+        </div>
       </div>
     </div>
 

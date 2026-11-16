@@ -29,6 +29,13 @@ test("the compact mobile player anchors metadata and actions separately", async 
   const triggerStart = player.indexOf("<DialogTrigger as-child>");
   const triggerEnd = player.indexOf("</DialogTrigger>");
   assert.ok(triggerStart >= 0 && triggerEnd > triggerStart);
+  const compactStart = player.indexOf("<div data-mobile-player");
+  const compactProgress = player.slice(compactStart, triggerStart);
+  assert.match(
+    compactProgress,
+    /<Slider[\s\S]*:model-value="\[elapsed\]"[\s\S]*:disabled="!currentTrackPlayable \|\| durationSeconds <= 0"[\s\S]*:aria-busy="loading"[\s\S]*:thumb-label="t\('player\.position'\)"[\s\S]*@update:model-value="seek\(\$event\?\.\[0\] \?\? 0\)"/,
+    "the compact player places an interactive progress slider above its metadata",
+  );
   const trigger = player.slice(triggerStart, triggerEnd);
   assert.match(trigger, /t\('player\.openFullscreen'\)/);
   assert.match(trigger, /class="relative flex size-14 shrink-0/);

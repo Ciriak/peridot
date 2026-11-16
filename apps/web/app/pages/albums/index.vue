@@ -5,6 +5,7 @@ import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { onMounted } from "vue";
 import AlbumCard from "../../components/AlbumCard.vue";
+import AutoLoadMore from "../../components/AutoLoadMore.vue";
 import { useCatalogAlbumQuery } from "../../composables/use-catalog-query";
 import { useLikes } from "../../composables/use-likes";
 
@@ -72,20 +73,14 @@ onMounted(() => {
       :aria-busy="loading"
     >
       <AlbumCard v-for="album in albums" :key="album.id" :album="album" />
-      <div v-if="hasMore" class="col-span-full flex justify-center">
-        <Button
-          type="button"
-          variant="outline"
-          :disabled="loadingMore"
-          @click="loadMore"
-        >
-          {{
-            loadingMore
-              ? t("page.albums.loadingMore")
-              : t("page.albums.loadMore")
-          }}
-        </Button>
-      </div>
+      <AutoLoadMore
+        class="col-span-full"
+        :enabled="hasMore"
+        :loading="loadingMore"
+        :item-count="albums.length"
+        :label="t('page.albums.loadingMore')"
+        @load="loadMore"
+      />
     </div>
     <p
       v-else

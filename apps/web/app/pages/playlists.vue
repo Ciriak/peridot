@@ -5,6 +5,7 @@ import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { onMounted, ref } from "vue";
+import AutoLoadMore from "../components/AutoLoadMore.vue";
 import PlaylistCard from "../components/PlaylistCard.vue";
 import PlaylistNameDialog from "../components/PlaylistNameDialog.vue";
 import {
@@ -98,15 +99,14 @@ onMounted(() => void load());
         :key="playlist.id"
         :playlist="playlist"
       />
-      <div v-if="hasMore" class="col-span-full flex justify-center">
-        <Button variant="outline" :disabled="loadingMore" @click="loadMore">
-          {{
-            loadingMore
-              ? t("page.playlists.loadingMore")
-              : t("page.playlists.loadMore")
-          }}
-        </Button>
-      </div>
+      <AutoLoadMore
+        class="col-span-full"
+        :enabled="hasMore"
+        :loading="loadingMore"
+        :item-count="items.length"
+        :label="t('page.playlists.loadingMore')"
+        @load="loadMore"
+      />
     </div>
     <div
       v-else-if="loaded"

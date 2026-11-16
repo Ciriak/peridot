@@ -17,6 +17,7 @@ import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { ProgressCircle } from "@peridot/ui/components/ui/progress-circle";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
+import AutoLoadMore from "../../components/AutoLoadMore.vue";
 import { useServer } from "../../composables/use-server";
 import { useServerConnection } from "../../composables/use-server-connection";
 import { useSession } from "../../composables/use-session";
@@ -371,19 +372,13 @@ onMounted(() => {
           </time>
         </article>
 
-        <Button
-          v-if="historyHasMore"
-          type="button"
-          variant="outline"
-          :disabled="historyLoading"
-          @click="loadMoreHistory"
-        >
-          {{
-            historyLoading
-              ? t("settings.tasks.loadingOlder")
-              : t("settings.tasks.loadOlder")
-          }}
-        </Button>
+        <AutoLoadMore
+          :enabled="historyHasMore"
+          :loading="historyLoading"
+          :item-count="history.length"
+          :label="t('settings.tasks.loadingOlder')"
+          @load="loadMoreHistory"
+        />
       </div>
       <p
         v-else-if="historyError"

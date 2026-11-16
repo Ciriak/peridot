@@ -208,10 +208,11 @@ test("shared track tables keep the main content as the only scroll owner", async
 
   assert.match(table, /const TRACK_BATCH_SIZE = 30/);
   assert.match(table, /v-for="item in visibleRows"/);
-  assert.match(table, /useIntersectionObserver/);
-  assert.match(table, /ref="loadMoreTarget"/);
-  assert.match(table, /@click="loadMoreRows"/);
-  assert.match(table, /trackTable\.loadMore/);
+  assert.match(table, /<AutoLoadMore/);
+  assert.match(table, /:item-count="autoLoadProgress"/);
+  assert.match(table, /@load="loadMoreRows"/);
+  assert.doesNotMatch(table, /@click="loadMoreRows"/);
+  assert.doesNotMatch(table, /t\("trackTable\.loadMore"\)/);
   assert.match(table, /role="table"/);
   assert.match(table, /:aria-rowcount="tracks\.length \+ 1"/);
   assert.match(table, /:aria-rowindex="item\.index \+ 2"/);
