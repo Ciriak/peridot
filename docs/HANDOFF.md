@@ -2,6 +2,27 @@
 
 Last updated: 2026-11-16.
 
+## Node 24 CI actions
+
+Every CI job now uses `actions/checkout@v7`, `actions/setup-node@v7`, and
+`pnpm/action-setup@v6`. These major releases declare Node 24 as their action
+runtime, removing GitHub Actions' warning about Node 20 actions being forced to
+run on Node 24. Node and pnpm versions configured for repository commands are
+unchanged.
+
+Checks completed:
+
+- `actionlint` 1.7.12 against `.github/workflows/ci.yml`
+- Targeted Prettier
+- `git diff --check`
+
+Known limits: the workflow has not run on GitHub since the action upgrades.
+The change remains uncommitted on `feature/clasicifation-update`; no commit,
+push, tag, publication, or deployment was performed.
+
+Next: run the workflow on GitHub and confirm the deprecation warning is absent
+from every job.
+
 ## Version-independent server update test
 
 The development update-check test no longer asserts the application package
