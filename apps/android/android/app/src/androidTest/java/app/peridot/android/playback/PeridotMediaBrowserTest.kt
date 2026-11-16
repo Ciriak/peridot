@@ -99,7 +99,10 @@ class PeridotMediaBrowserTest {
         val offlineStore = OfflineStore(context)
         val trackId = "notification-test-track"
         sessions.save(session.serverAddress, session.token, session.userId)
-        offlineStore.audioFile(session, trackId).writeBytes(silentWav())
+        offlineStore.audioFile(session, trackId).apply {
+            parentFile?.mkdirs()
+            writeBytes(silentWav())
+        }
         val item = MediaItem.Builder()
             .setMediaId("track:$trackId")
             .setUri(
