@@ -128,6 +128,8 @@ test("the Library setting persists and drives automatic liked-track saving", asy
   assert.match(pageSource, /<Switch[\s\S]*v-model="likedTitlesOfflineModel"/);
   assert.match(pageSource, /aria-labelledby="liked-titles-offline-label"/);
   assert.match(pageSource, /:icon="icons\.cloudDownload"/);
+  assert.match(pageSource, /settings\.library\.largeCatalogOfflineUnavailable/);
+  assert.match(pageSource, /syncStatus === 'too-large'/);
   assert.match(syncSource, /liked: true/);
   assert.match(syncSource, /loadAllLikedTracks/);
   assert.match(syncSource, /saveOfflineCollection/);

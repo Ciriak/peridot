@@ -811,7 +811,7 @@ export interface RealtimeCatalogChangedEvent {
   occurredAt: string;
   revision: number;
   sourceId: string | null;
-  reason: "scan" | "metadata" | "reset" | "source";
+  reason: "scan" | "metadata" | "reset" | "source" | "source-removal";
   changedCount: number;
 }
 

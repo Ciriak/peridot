@@ -51,6 +51,7 @@ import {
 import { useServer } from "../../composables/use-server";
 import { useServerConnection } from "../../composables/use-server-connection";
 import { useSession } from "../../composables/use-session";
+import { useCatalogRevision } from "../../composables/use-catalog-query";
 import {
   useAdminSourcesQuery,
   useServerSettingsQuery,
@@ -95,6 +96,8 @@ const serverLost = computed(() => serverStatus.value === "lost");
 
 const sourcesQuery = useAdminSourcesQuery();
 const serverSettings = useServerSettingsQuery();
+const { invalidate: invalidateCatalog, resetOfflineCatalog } =
+  useCatalogRevision();
 const sources = ref<SourceResponse[]>([]);
 const sourceList = ref<HTMLElement | null>(null);
 const mediaTypes: MediaType[] = ["music", "audiobook", "podcast"];
@@ -458,6 +461,10 @@ function confirmRemove() {
 
   let removalFailed = false;
   void deleteSource(address.value ?? "", token.value ?? "", removedSource.id)
+    .then(async () => {
+      await resetOfflineCatalog();
+      invalidateCatalog();
+    })
     .catch((reason) => {
       if (isAuthenticationRedirectError(reason)) return;
       removalFailed = true;

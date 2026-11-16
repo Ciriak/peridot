@@ -2,6 +2,55 @@
 
 Last updated: 2026-11-16.
 
+## Large-library catalog synchronization is bounded
+
+Automatic full offline catalog snapshots are now limited to libraries of at
+most 10,000 tracks. Track pages use the server's 200-item limit, while album,
+artist, audiobook, and podcast pages use their 100-item limit. Track traversal
+stops as soon as the limit is exceeded, so oversized libraries no longer fan
+out into the remaining card endpoints. A combined 25,000-record cap protects
+browser memory.
+
+Successful snapshots and oversized-library decisions are persisted per server
+and user for seven days. Catalog revisions are debounced until the catalog has
+been quiet for 30 seconds, and revisions during a sync no longer restart the
+sync immediately. Oversized libraries clear the obsolete full snapshot while
+retaining explicitly downloaded tracks, playlists, and previously persisted
+query pages. Settings → Library explains when automatic full offline browsing
+is paused.
+
+Catalog-event query invalidation is coalesced to at most once every 10 seconds.
+Player queue metadata is no longer force-resolved in full on every catalog
+revision; revision hydration requests only missing rows. Eager whole-catalog
+artwork warming was removed so artwork is cached as users view it.
+
+Source deletion now emits a `source-removal` catalog event. Connected clients
+clear the full offline snapshot immediately, invalidate catalog queries without
+waiting for the normal revision throttle, and schedule a fresh bounded rebuild.
+Missed realtime events also clear the snapshot during `resync.required`. The
+source deletion page performs the same reset directly after a successful DELETE
+so stale offline rows disappear even when realtime delivery is unavailable.
+Sync-state version 2 invalidates snapshots created before this correction and
+forces one bounded refresh on the next client load.
+
+Checks completed:
+
+- Full web suite: 215 passing, including page limits, 10,000-track abort,
+  25,000-record cap, seven-day gating, and coalesced revision handling
+- Full server suite: 154 passing, including the source-removal realtime event
+- Web type check
+- Server type check
+- Targeted ESLint and Prettier
+- Web and server production builds
+- `git diff --check`
+
+Known limits: libraries above 10,000 tracks intentionally do not receive an
+automatic full offline catalog snapshot. The threshold is checked again after
+seven days. No API or database schema changed.
+
+Next: delete a source that previously populated the offline snapshot and verify
+its tracks disappear immediately while offline and after reconnecting.
+
 ## Persistent server log file and automatic settings saves
 
 Settings → Server now includes a disabled-by-default `Keep server logs in a

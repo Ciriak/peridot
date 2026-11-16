@@ -23,6 +23,8 @@ import {
   type CardListOptions,
   type TrackListOptions,
 } from "../lib/peridot-client";
+import { removesOfflineCatalogSnapshot } from "../lib/catalog-revision-policy";
+import { clearOfflineCatalog } from "../lib/offline-catalog";
 import {
   offlineAlbums,
   offlineArtists,
@@ -42,10 +44,19 @@ import {
   visibleQueryError,
 } from "../lib/query-view-state";
 import { useLocalizedMessage } from "./use-localized-message";
+import {
+  setOfflineCatalogSnapshot,
+  setOfflineCatalogSyncStatus,
+} from "./use-offline-catalog";
 import { useOfflineCatalog } from "./use-offline-catalog";
 import { useQueryScope } from "./use-query-scope";
 import { useServerConnection } from "./use-server-connection";
 import { useSession } from "./use-session";
+
+export const CATALOG_INVALIDATION_THROTTLE_MS = 10_000;
+let pendingCatalogInvalidation: (() => void) | null = null;
+let catalogInvalidationTimer: ReturnType<typeof setTimeout> | undefined;
+let lastCatalogInvalidationAt = 0;
 
 export function useCatalogRevision() {
   const revision = useState("catalog-revision", () => 0);
@@ -53,7 +64,7 @@ export function useCatalogRevision() {
   const queryClient = useQueryClient();
   const { scope } = useQueryScope();
 
-  function invalidate() {
+  function invalidateNow() {
     revision.value += 1;
     if (!scope.value) return;
     void queryClient.invalidateQueries({
@@ -64,9 +75,52 @@ export function useCatalogRevision() {
     });
   }
 
-  function applyRevision(value: number) {
+  function invalidate() {
+    if (catalogInvalidationTimer) {
+      clearTimeout(catalogInvalidationTimer);
+      catalogInvalidationTimer = undefined;
+    }
+    pendingCatalogInvalidation = null;
+    lastCatalogInvalidationAt = Date.now();
+    invalidateNow();
+  }
+
+  function scheduleInvalidation() {
+    pendingCatalogInvalidation = invalidateNow;
+    if (catalogInvalidationTimer) return;
+    const remaining =
+      CATALOG_INVALIDATION_THROTTLE_MS -
+      (Date.now() - lastCatalogInvalidationAt);
+    catalogInvalidationTimer = setTimeout(
+      () => {
+        catalogInvalidationTimer = undefined;
+        const callback = pendingCatalogInvalidation;
+        pendingCatalogInvalidation = null;
+        if (!callback) return;
+        lastCatalogInvalidationAt = Date.now();
+        callback();
+      },
+      Math.max(0, remaining),
+    );
+  }
+
+  async function resetOfflineCatalog() {
+    await clearOfflineCatalog().catch(() => undefined);
+    setOfflineCatalogSnapshot(null);
+    setOfflineCatalogSyncStatus("idle", scope.value);
+  }
+
+  function applyRevision(
+    value: number,
+    reason: "scan" | "metadata" | "reset" | "source" | "source-removal",
+  ) {
     revision.value = Math.max(revision.value, value);
-    invalidate();
+    if (removesOfflineCatalogSnapshot(reason)) {
+      void resetOfflineCatalog();
+      invalidate();
+    } else {
+      scheduleInvalidation();
+    }
   }
 
   function requestResync() {
@@ -83,6 +137,7 @@ export function useCatalogRevision() {
     revision,
     resyncVersion,
     applyRevision,
+    resetOfflineCatalog,
     requestResync,
     invalidate,
     reset,

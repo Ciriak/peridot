@@ -1,5 +1,32 @@
 # Decisions
 
+## 2026-11-16: Large libraries do not auto-build complete offline snapshots
+
+Automatic full offline catalog synchronization stops at 10,000 tracks. Above
+that size the client aborts after the first page beyond the limit, before
+requesting albums, artists, audiobooks, or podcasts, and suppresses another
+automatic check for seven days. A 25,000-record combined materialization cap
+protects browser memory even below the track threshold.
+
+Eligible libraries rebuild the complete snapshot at most weekly. Catalog
+revisions only schedule a sync after 30 seconds without another revision.
+Successful and oversized decisions are persisted per server and user. Explicit
+downloads and persisted query pages continue to provide offline access when the
+full snapshot is unavailable.
+
+Catalog revision events coalesce active query invalidation to a ten-second
+trailing refresh. Player revision hydration fills missing queue rows instead of
+resolving the complete queue, and catalog artwork is cached lazily rather than
+preloaded during synchronization.
+
+Source removal is a structural catalog change, not an ordinary scan or metadata
+revision. The server publishes a dedicated `source-removal` reason. Clients
+clear the complete offline snapshot immediately, invalidate catalog queries
+without the trailing revision delay, and schedule a new bounded snapshot.
+Missed realtime events clear the snapshot during resynchronization because the
+client cannot know which structural changes it missed. Sync-state versioning
+forces existing stale snapshots to be discarded once when this behavior ships.
+
 ## 2026-11-16: Persistent logs are opt-in beside the database
 
 Server log files are disabled by default. When enabled, the runtime appends

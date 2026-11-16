@@ -1,38 +1,21 @@
 import { defineNuxtPlugin, useState } from "#imports";
-import { onBeforeUnmount, onMounted, watch } from "vue";
+import { onBeforeUnmount, watch } from "vue";
 import type { PeridotQueryScope } from "../lib/query-keys";
 import {
   clearOfflineCatalog,
+  OFFLINE_CATALOG_QUIET_INTERVAL_MS,
+  readOfflineCatalogSyncState,
+  recordOfflineCatalogAttempt,
+  shouldSyncOfflineCatalog,
   syncOfflineCatalog,
-  type OfflineCatalogSnapshot,
 } from "../lib/offline-catalog";
-import { trackCoverUrl } from "../lib/library";
-import { warmOfflineArtwork } from "../lib/offline-artwork";
-import { setOfflineCatalogSnapshot } from "../composables/use-offline-catalog";
+import {
+  setOfflineCatalogSnapshot,
+  setOfflineCatalogSyncStatus,
+} from "../composables/use-offline-catalog";
 import { useQueryScope } from "../composables/use-query-scope";
 import { useServerConnection } from "../composables/use-server-connection";
 import { useSession } from "../composables/use-session";
-
-function artworkUrls(snapshot: OfflineCatalogSnapshot): string[] {
-  const urls = [
-    ...snapshot.tracks.flatMap((track) =>
-      track.coverUrl
-        ? [trackCoverUrl(snapshot.scope.serverAddress, track.coverUrl)]
-        : [],
-    ),
-    ...snapshot.albums.flatMap((album) =>
-      album.coverUrl
-        ? [trackCoverUrl(snapshot.scope.serverAddress, album.coverUrl)]
-        : [],
-    ),
-    ...snapshot.artists.flatMap((artist) =>
-      artist.imageUrl
-        ? [trackCoverUrl(snapshot.scope.serverAddress, artist.imageUrl)]
-        : [],
-    ),
-  ];
-  return [...new Set(urls.filter((url): url is string => Boolean(url)))];
-}
 
 function sameScope(
   left: PeridotQueryScope | null,
@@ -64,21 +47,42 @@ export default defineNuxtPlugin(() => {
 
     running = true;
     try {
+      const syncState = await readOfflineCatalogSyncState(currentScope);
+      if (!shouldSyncOfflineCatalog(syncState)) {
+        setOfflineCatalogSyncStatus(
+          syncState?.tooLargeUntil &&
+            new Date(syncState.tooLargeUntil).getTime() > Date.now()
+            ? "too-large"
+            : "idle",
+          currentScope,
+        );
+        return;
+      }
+      setOfflineCatalogSyncStatus("syncing", currentScope);
+      await recordOfflineCatalogAttempt(currentScope);
       if (navigator.storage?.persist) {
         await navigator.storage.persist().catch(() => false);
       }
-      const snapshot = await syncOfflineCatalog(currentScope, currentToken);
+      const result = await syncOfflineCatalog(currentScope, currentToken);
       if (
         !sameScope(scope.value, currentScope) ||
         token.value !== currentToken
       ) {
         await clearOfflineCatalog();
+        setOfflineCatalogSnapshot(null);
+        setOfflineCatalogSyncStatus("idle", currentScope);
         return;
       }
-      setOfflineCatalogSnapshot(snapshot);
-      await warmOfflineArtwork(currentScope, artworkUrls(snapshot));
+      if (result.status === "too-large") {
+        setOfflineCatalogSnapshot(null);
+        setOfflineCatalogSyncStatus("too-large", currentScope);
+        return;
+      }
+      setOfflineCatalogSnapshot(result.snapshot);
+      setOfflineCatalogSyncStatus("idle", currentScope);
     } catch {
       // Keep the last complete snapshot when a refresh is interrupted.
+      setOfflineCatalogSyncStatus("idle", currentScope);
     } finally {
       running = false;
       if (dirty) {
@@ -93,14 +97,18 @@ export default defineNuxtPlugin(() => {
     timer = setTimeout(() => {
       timer = undefined;
       void synchronize();
-    }, 100);
+    }, OFFLINE_CATALOG_QUIET_INTERVAL_MS);
   }
 
-  onMounted(schedule);
   watch(
     [scope, token, status, revision],
     () => {
-      if (status.value === "connected") schedule();
+      if (status.value === "connected") {
+        schedule();
+      } else if (timer) {
+        clearTimeout(timer);
+        timer = undefined;
+      }
     },
     { immediate: true },
   );

@@ -520,6 +520,16 @@ export async function registerAdminRoutes(
             );
           }
         }
+        if (catalog) {
+          try {
+            await catalog.markSourceRemoval(source.id);
+          } catch (error) {
+            request.log.error(
+              { err: error, sourceId: source.id },
+              "Could not publish the removed source catalog change",
+            );
+          }
+        }
         return reply.code(204).send();
       },
     );

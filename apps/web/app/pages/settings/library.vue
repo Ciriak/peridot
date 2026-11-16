@@ -4,11 +4,14 @@ import { Icon } from "@iconify/vue/offline";
 import { Switch } from "@peridot/ui/components/ui/switch";
 import { computed } from "vue";
 import { useLibrarySettings } from "../../composables/use-library-settings";
+import { useOfflineCatalog } from "../../composables/use-offline-catalog";
 import { icons } from "../../lib/icons";
+import { OFFLINE_CATALOG_MAX_TRACKS } from "../../lib/offline-catalog";
 
 definePageMeta({ layout: "settings" });
-const { t } = useI18n();
+const { t, n } = useI18n();
 const { likedTitlesOffline, setLikedTitlesOffline } = useLibrarySettings();
+const { syncStatus } = useOfflineCatalog();
 const likedTitlesOfflineModel = computed({
   get: () => likedTitlesOffline.value,
   set: setLikedTitlesOffline,
@@ -45,5 +48,16 @@ const likedTitlesOfflineModel = computed({
         />
       </div>
     </section>
+    <p
+      v-if="syncStatus === 'too-large'"
+      role="status"
+      class="rounded-lg border bg-card p-4 text-sm text-muted-foreground"
+    >
+      {{
+        t("settings.library.largeCatalogOfflineUnavailable", {
+          limit: n(OFFLINE_CATALOG_MAX_TRACKS, "integer"),
+        })
+      }}
+    </p>
   </div>
 </template>
