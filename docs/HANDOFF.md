@@ -2,6 +2,49 @@
 
 Last updated: 2026-11-16.
 
+## Local scans use configurable worker threads
+
+Library scans now use a bounded Node worker-thread pool for local directory
+discovery and audio metadata extraction. The main thread remains the sole writer
+for SQLite track, cover, progress, and catalog projection updates. Progress is
+written at most every 250 ms plus completion, and file processing yields between
+bounded batches.
+
+Administrators configure the worker count in Settings → Admin → Server. The
+default is 3, values from 1 through 32 are accepted, and values above 4 save with
+an inline warning. Changes apply to subsequent scans; an active scan retains the
+count with which it started. A migration adds `ServerSetting.scanWorkerCount`
+with a default of 3.
+
+Performance checks completed:
+
+- Existing directory search: 6,400 directories in 780 ms; event-loop maximum
+  14.07 ms
+- Metadata parsing: 500 generated WAV files improved from about 1.93 seconds at
+  concurrency 1 to 0.41 seconds at 3 and 0.24 seconds at 4
+- Initial full-path scan: 300 generated WAV files took about 39 seconds and
+  exposed a 5.2-second event-loop stall during the post-scan metadata task
+- Scan-only benchmark excluding metadata matching: 300 generated WAV files with
+  3 workers completed in 34.3 seconds, with 0.48 ms p95 health latency, 80.61 ms
+  p99 event-loop delay, and a 131.4 ms maximum event-loop delay
+
+Checks completed:
+
+- Workspace tests: server 161, web 216, shared UI 17, and Desktop 4 passing
+- Full workspace type check, ESLint, Prettier, version check, migration check,
+  and production build
+- Production worker entrypoint smoke test: directory discovery and WAV parsing
+  from compiled JavaScript
+- Worker discovery, parsing, and cancellation tests passed
+
+Known limits: the benchmark is synthetic and hardware-dependent. Jellyfin
+traversal and metadata-provider matching remain separate serial workloads and
+may still create the observed post-scan event-loop stall. No push, tag,
+publication, or deployment was performed.
+
+Next: exercise a real large library in the running web application and profile
+metadata-provider matching separately if post-scan stalls remain noticeable.
+
 ## Docker web UI now recognizes its serving instance
 
 Reported behavior: opening a Docker installation at

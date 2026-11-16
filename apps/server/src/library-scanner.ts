@@ -1,8 +1,6 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
-import { opendir, readdir, readFile, stat } from "node:fs/promises";
 import { and, or } from "@prisma/orm-sqlite/orm-client";
-import { parseFile } from "music-metadata";
 import type {
   MediaType,
   SourceClassificationMode,
@@ -29,6 +27,7 @@ import {
   mediaTypeValue,
   sourceClassificationMode,
   type DetectedMediaType,
+  type EffectiveMediaType,
 } from "./media-classification.js";
 import {
   collectionFallbackTitle,
@@ -38,6 +37,12 @@ import {
 import { message } from "./messages.js";
 import type { SourceRow, TaskRow, TrackRow } from "./prisma/models.js";
 import {
+  type ScanWorkerCover,
+  type ScanWorkerMetadata,
+} from "./scan-worker-protocol.js";
+import { ScanWorkerPool } from "./scan-worker-pool.js";
+import { readScanWorkerSettings } from "./server-settings.js";
+import {
   queueMetadataFetch,
   scanDetails,
   TaskExecutionError,
@@ -45,43 +50,9 @@ import {
   type TaskService,
 } from "./tasks.js";
 
-const AUDIO_MIME_TYPES = new Map([
-  [".mp3", "audio/mpeg"],
-  [".m4a", "audio/mp4"],
-  [".m4b", "audio/mp4"],
-  [".aac", "audio/aac"],
-  [".ogg", "audio/ogg"],
-  [".opus", "audio/ogg"],
-  [".wav", "audio/wav"],
-  [".flac", "audio/flac"],
-]);
-
-// SQLite has a single-writer model. Keep catalog mutations serialized so
-// concurrent file workers cannot fail a scan with SQLITE_BUSY.
-const SCAN_CONCURRENCY = 1;
 const CURRENT_METADATA_VERSION = 7;
-const MAX_COVER_BYTES = 5 * 1024 * 1024;
-const FOLDER_COVER_NAMES = new Set([
-  "albumart.jpg",
-  "albumart.jpeg",
-  "albumart.png",
-  "cover.jpg",
-  "cover.jpeg",
-  "cover.png",
-  "cover.webp",
-  "folder.jpg",
-  "folder.jpeg",
-  "folder.png",
-  "front.jpg",
-  "front.jpeg",
-  "front.png",
-]);
-const COVER_MIME_TYPES = new Map([
-  [".jpg", "image/jpeg"],
-  [".jpeg", "image/jpeg"],
-  [".png", "image/png"],
-  [".webp", "image/webp"],
-]);
+const PROGRESS_WRITE_INTERVAL_MS = 250;
+const EVENT_LOOP_YIELD_INTERVAL_MS = 25;
 
 interface DiscoveredFile {
   absolutePath: string;
@@ -124,6 +95,27 @@ interface CoverImage {
   data: Buffer;
   mimeType: string;
 }
+
+type PreparedFile =
+  | {
+      kind: "unchanged";
+      file: SourceFile;
+      existing: TrackRow;
+      classificationUnchanged: boolean;
+      effective: EffectiveMediaType;
+      wasUnavailable: boolean;
+    }
+  | {
+      kind: "parsed";
+      file: SourceFile;
+      existing: TrackRow | null;
+      metadata: ScanWorkerMetadata;
+    }
+  | {
+      kind: "failed";
+      file: SourceFile;
+      existing: TrackRow | null;
+    };
 
 function detectedMediaType(track: TrackRow): DetectedMediaType {
   const origin =
@@ -169,43 +161,96 @@ function throwIfAborted(signal: AbortSignal): void {
 
 async function discoverAudioFiles(
   root: string,
+  workerPool: ScanWorkerPool,
+  workerCount: number,
   signal: AbortSignal,
 ): Promise<DiscoveredFile[]> {
   const files: DiscoveredFile[] = [];
-
-  async function visit(directory: string): Promise<void> {
+  const directories = [root];
+  let cursor = 0;
+  while (cursor < directories.length) {
     throwIfAborted(signal);
-    const entries = await opendir(directory);
-    for await (const entry of entries) {
-      throwIfAborted(signal);
-      const absolutePath = path.join(directory, entry.name);
-      if (entry.isSymbolicLink()) continue;
-      if (entry.isDirectory()) {
-        await visit(absolutePath);
-        continue;
+    const batch = directories.slice(cursor, cursor + workerCount);
+    cursor += batch.length;
+    const results = await Promise.all(
+      batch.map((directory) => workerPool.listDirectory(directory)),
+    );
+    for (const result of results) {
+      directories.push(...result.directories);
+      for (const file of result.audioFiles) {
+        files.push({
+          absolutePath: file.absolutePath,
+          relativePath: path.relative(root, file.absolutePath),
+          mimeType: file.mimeType,
+          size: BigInt(file.size),
+          modifiedAt: new Date(file.modifiedAtMs),
+        });
       }
-      if (!entry.isFile()) continue;
-      const mimeType = AUDIO_MIME_TYPES.get(
-        path.extname(entry.name).toLowerCase(),
-      );
-      if (!mimeType) continue;
-      const fileStat = await stat(absolutePath, { bigint: true });
-      files.push({
-        absolutePath,
-        relativePath: path.relative(root, absolutePath),
-        mimeType,
-        size: fileStat.size,
-        modifiedAt: new Date(Number(fileStat.mtimeMs)),
-      });
     }
+    await new Promise<void>((resolve) => setImmediate(resolve));
   }
-
-  await visit(root);
   return files;
 }
 
+function coverImage(cover: ScanWorkerCover | null): CoverImage | null {
+  return cover
+    ? {
+        data: Buffer.from(cover.data),
+        mimeType: cover.mimeType,
+      }
+    : null;
+}
+
+async function* prepareFiles(
+  scanner: LibraryScanner,
+  files: readonly SourceFile[],
+  workerPool: ScanWorkerPool,
+  concurrency: number,
+  signal: AbortSignal,
+): AsyncGenerator<PreparedFile> {
+  let nextFile = 0;
+  const pending = new Map<number, Promise<PreparedFile>>();
+  while (nextFile < files.length || pending.size) {
+    throwIfAborted(signal);
+    while (nextFile < files.length && pending.size < Math.max(1, concurrency)) {
+      const index = nextFile;
+      const file = files[nextFile++];
+      if (!file) break;
+      pending.set(
+        index,
+        scanner.prepareFile(file, workerPool, signal).catch((error) => {
+          if (signal.aborted) throw error;
+          return {
+            kind: "failed",
+            file,
+            existing: null,
+          } satisfies PreparedFile;
+        }),
+      );
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+    if (!pending.size) break;
+    const completed = await Promise.race(
+      [...pending].map(async ([index, promise]) => ({
+        index,
+        prepared: await promise,
+      })),
+    );
+    pending.delete(completed.index);
+    yield completed.prepared;
+    if (signal.aborted) return;
+  }
+}
+
+function shouldYield(lastYieldAt: number): boolean {
+  return Date.now() - lastYieldAt >= EVENT_LOOP_YIELD_INTERVAL_MS;
+}
+
+async function yieldToEventLoop(): Promise<void> {
+  await new Promise<void>((resolve) => setImmediate(resolve));
+}
+
 export class LibraryScanner {
-  private folderCoverCache = new Map<string, CoverImage | null>();
   private jellyfinCoverCache = new Map<string, CoverImage | null>();
 
   constructor(
@@ -215,6 +260,51 @@ export class LibraryScanner {
     private readonly jellyfin?: JellyfinClient,
     private readonly credentials?: CredentialStore,
   ) {}
+
+  async prepareFile(
+    file: SourceFile,
+    workerPool: ScanWorkerPool,
+    signal: AbortSignal,
+  ): Promise<PreparedFile> {
+    throwIfAborted(signal);
+    const existing = await this.database.orm.Track.where({
+      sourceId: file.sourceId,
+      relativePath: file.relativePath,
+    }).first();
+    const fileUnchanged =
+      existing?.fileSizeBytes === file.size &&
+      existing.fileModifiedAt.getTime() === file.modifiedAt.getTime() &&
+      existing.metadataVersion >= CURRENT_METADATA_VERSION;
+    if (existing && fileUnchanged) {
+      const detected = detectedMediaType(existing);
+      const effective = effectiveMediaType(detected, {
+        override: existing.mediaTypeOverride,
+        classificationMode: file.classificationMode,
+        fixedMediaType: file.fixedMediaType,
+      });
+      return {
+        kind: "unchanged",
+        file,
+        existing,
+        classificationUnchanged:
+          mediaType(existing.mediaType) === effective.mediaType &&
+          trackMediaTypeOrigin(existing.mediaTypeOrigin) === effective.origin,
+        effective,
+        wasUnavailable: !existing.available,
+      };
+    }
+    try {
+      return {
+        kind: "parsed",
+        file,
+        existing,
+        metadata: await workerPool.parseFile(file.absolutePath),
+      };
+    } catch (error) {
+      if (signal.aborted) throw error;
+      return { kind: "failed", file, existing };
+    }
+  }
 
   async runTask(
     task: TaskRow,
@@ -227,11 +317,19 @@ export class LibraryScanner {
       unchangedCount: 0,
       errorCount: 0,
     };
+    let workerPool: ScanWorkerPool | undefined;
+    let closeWorkersOnAbort: (() => void) | undefined;
 
     try {
       throwIfAborted(signal);
-      this.folderCoverCache.clear();
       this.jellyfinCoverCache.clear();
+      const { workerCount } = await readScanWorkerSettings(this.database);
+      const activeWorkerPool = new ScanWorkerPool(workerCount);
+      workerPool = activeWorkerPool;
+      closeWorkersOnAbort = () => {
+        void activeWorkerPool.close();
+      };
+      signal.addEventListener("abort", closeWorkersOnAbort, { once: true });
       let requestedSource: SourceRow | undefined;
       if (task.sourceId) {
         const source = await this.database.orm.Source.first({
@@ -293,7 +391,12 @@ export class LibraryScanner {
               message("api.message.sourceUnavailable"),
             );
           }
-          for (const file of await discoverAudioFiles(source.path, signal)) {
+          for (const file of await discoverAudioFiles(
+            source.path,
+            activeWorkerPool,
+            workerCount,
+            signal,
+          )) {
             files.push({
               ...file,
               sourceId: source.id,
@@ -344,48 +447,51 @@ export class LibraryScanner {
       let processedItems = 0;
       let unsupportedCount = 0;
       let completedRemoteTotal = 0;
-      await tasks.updateProgress(
-        task.id,
-        0,
-        jellyfinSources.length ? null : files.length,
-        scanDetails({
-          source: sourceName,
-          discovered: discoveredCount,
-          created: 0,
-          updated: 0,
-          unchanged: 0,
-          unavailable: 0,
-          errors: unsupportedCount,
-        }),
-      );
+      let lastProgressAt = 0;
+      let lastYieldAt = Date.now();
+      const updateProgress = async (force = false) => {
+        if (
+          !force &&
+          Date.now() - lastProgressAt < PROGRESS_WRITE_INTERVAL_MS
+        ) {
+          return;
+        }
+        lastProgressAt = Date.now();
+        await tasks.updateProgress(
+          task.id,
+          processedItems,
+          jellyfinSources.length ? null : discoveredCount,
+          scanDetails({
+            source: sourceName,
+            discovered: discoveredCount,
+            created: counts.createdCount,
+            updated: counts.updatedCount,
+            unchanged: counts.unchangedCount,
+            unavailable: 0,
+            errors: counts.errorCount + unsupportedCount,
+          }),
+        );
+      };
+      await updateProgress(true);
 
-      let nextFile = 0;
-      const workers = Array.from(
-        { length: Math.min(SCAN_CONCURRENCY, files.length) },
-        async () => {
-          while (nextFile < files.length) {
-            throwIfAborted(signal);
-            const file = files[nextFile++];
-            if (file) await this.processFile(file, task.id, counts, signal);
-            processedItems += 1;
-            await tasks.updateProgress(
-              task.id,
-              processedItems,
-              jellyfinSources.length ? null : discoveredCount,
-              scanDetails({
-                source: sourceName,
-                discovered: discoveredCount,
-                created: counts.createdCount,
-                updated: counts.updatedCount,
-                unchanged: counts.unchangedCount,
-                unavailable: 0,
-                errors: counts.errorCount + unsupportedCount,
-              }),
-            );
-          }
-        },
+      const pendingFiles = prepareFiles(
+        this,
+        files,
+        activeWorkerPool,
+        workerCount,
+        signal,
       );
-      await Promise.all(workers);
+      for await (const prepared of pendingFiles) {
+        throwIfAborted(signal);
+        await this.applyPreparedFile(prepared, task.id, counts, signal);
+        processedItems += 1;
+        if (shouldYield(lastYieldAt)) {
+          await yieldToEventLoop();
+          lastYieldAt = Date.now();
+        }
+        await updateProgress();
+      }
+      await updateProgress(true);
       for (const source of jellyfinSources) {
         throwIfAborted(signal);
         let sourceTotal: number | null = null;
@@ -409,6 +515,10 @@ export class LibraryScanner {
                 counts,
                 signal,
               );
+              if (shouldYield(lastYieldAt)) {
+                await yieldToEventLoop();
+                lastYieldAt = Date.now();
+              }
             }
             sourceTotal = page.totalCount ?? sourceTotal;
             unsupportedCount += page.unsupportedCount;
@@ -454,6 +564,10 @@ export class LibraryScanner {
           available: 0,
         });
         await this.catalog?.reindexTrack(track.id, "scan");
+        if (shouldYield(lastYieldAt)) {
+          await yieldToEventLoop();
+          lastYieldAt = Date.now();
+        }
       }
       const syncedAt = new Date();
       for (const source of sources) {
@@ -516,89 +630,77 @@ export class LibraryScanner {
           databaseBusy ? "api.message.databaseBusy" : "api.message.scanFailed",
         ),
       );
+    } finally {
+      if (closeWorkersOnAbort) {
+        signal.removeEventListener("abort", closeWorkersOnAbort);
+      }
+      await workerPool?.close();
     }
   }
 
-  private async processFile(
-    file: SourceFile,
+  private async applyPreparedFile(
+    prepared: PreparedFile,
     scanId: string,
     counts: ScanCounts,
     signal: AbortSignal,
   ): Promise<void> {
-    let existing: TrackRow | null = null;
-    try {
-      throwIfAborted(signal);
-      const unique = {
-        sourceId: file.sourceId,
-        relativePath: file.relativePath,
-      };
-      existing = await this.database.orm.Track.where(unique).first();
-      const fileUnchanged =
-        existing?.fileSizeBytes === file.size &&
-        existing.fileModifiedAt.getTime() === file.modifiedAt.getTime() &&
-        existing.metadataVersion >= CURRENT_METADATA_VERSION;
-
-      if (existing && fileUnchanged) {
-        const detected = detectedMediaType(existing);
-        const effective = effectiveMediaType(detected, {
-          override: existing.mediaTypeOverride,
-          classificationMode: file.classificationMode,
-          fixedMediaType: file.fixedMediaType,
-        });
-        const classificationUnchanged =
-          mediaType(existing.mediaType) === effective.mediaType &&
-          trackMediaTypeOrigin(existing.mediaTypeOrigin) === effective.origin;
-        if (classificationUnchanged) {
-          const wasUnavailable = !existing.available;
-          await this.database.orm.Track.where({ id: existing.id }).update({
-            available: 1,
-            lastSeenScanId: scanId,
-          });
-          if (wasUnavailable) {
-            await this.catalog?.reindexTrack(existing.id, "scan");
-          }
-          counts.unchangedCount += 1;
-          return;
-        }
-
-        await this.database.orm.Track.where({ id: existing.id }).update({
-          mediaType: effective.mediaType,
-          mediaTypeOrigin: effective.origin,
+    throwIfAborted(signal);
+    if (prepared.kind === "unchanged") {
+      if (prepared.classificationUnchanged) {
+        await this.database.orm.Track.where({
+          id: prepared.existing.id,
+        }).update({
           available: 1,
           lastSeenScanId: scanId,
         });
-        await this.catalog?.reindexTrack(existing.id, "scan");
-        counts.updatedCount += 1;
+        if (prepared.wasUnavailable) {
+          await this.catalog?.reindexTrack(prepared.existing.id, "scan");
+        }
+        counts.unchangedCount += 1;
         return;
       }
-
-      const metadata = await parseFile(file.absolutePath, {
-        duration: true,
-        skipCovers: false,
+      await this.database.orm.Track.where({ id: prepared.existing.id }).update({
+        mediaType: prepared.effective.mediaType,
+        mediaTypeOrigin: prepared.effective.origin,
+        available: 1,
+        lastSeenScanId: scanId,
       });
-      if (!metadata.format.container) {
+      await this.catalog?.reindexTrack(prepared.existing.id, "scan");
+      counts.updatedCount += 1;
+      return;
+    }
+
+    if (prepared.kind === "failed") {
+      counts.errorCount += 1;
+      if (prepared.existing) {
+        await this.markFileError(prepared.file, prepared.existing, scanId);
+      }
+      return;
+    }
+
+    const { file, existing, metadata } = prepared;
+    try {
+      if (!metadata.container) {
         throw new Error("Audio format was not recognized");
       }
       const title =
-        metadata.common.title?.trim() || path.parse(file.relativePath).name;
+        metadata.title?.trim() || path.parse(file.relativePath).name;
       const artistCredits = normalizeArtistCredits(
-        metadata.common.artists?.length
-          ? metadata.common.artists
-          : [metadata.common.artist],
+        metadata.artists.length ? metadata.artists : [metadata.artist],
       );
       const artist = artistCredits.join(", ");
       const albumArtistCredits = normalizeOptionalArtistCredits(
-        metadata.common.albumartists?.length
-          ? metadata.common.albumartists
-          : [metadata.common.albumartist],
+        metadata.albumArtists.length
+          ? metadata.albumArtists
+          : [metadata.albumArtist],
       );
       const detected = detectMediaType({
         extension: path.extname(file.relativePath),
-        podcast: metadata.common.podcast === true,
-        podcastId: metadata.common.podcastId ?? null,
-        podcastUrl: metadata.common.podcasturl ?? null,
-        releaseTypes: metadata.common.releasetype ?? [],
-        iTunesMediaType: metadata.common.stik ?? 0,
+        podcast: metadata.podcast,
+        podcastId: metadata.podcastId,
+        podcastUrl: metadata.podcastUrl,
+        releaseTypes: metadata.releaseTypes,
+        iTunesMediaType: metadata.iTunesMediaType,
       });
       const effective = effectiveMediaType(detected, {
         override: existing?.mediaTypeOverride ?? null,
@@ -613,28 +715,28 @@ export class LibraryScanner {
         ? creatorCredits.join(", ")
         : null;
       const album =
-        metadata.common.album?.trim() ||
+        metadata.album?.trim() ||
         (effective.mediaType === "music"
           ? null
           : collectionFallbackTitle(file.relativePath));
-      const genres = serializeGenres(metadata.common.genre);
-      const discNumber = positiveInteger(metadata.common.disk.no);
-      const trackNumber = positiveInteger(metadata.common.track.no);
-      const durationMs = Number.isFinite(metadata.format.duration)
-        ? Math.round(metadata.format.duration! * 1000)
-        : null;
+      const genres = serializeGenres(metadata.genres);
+      const discNumber = positiveInteger(metadata.discNumber);
+      const trackNumber = positiveInteger(metadata.trackNumber);
+      const durationMs =
+        metadata.durationSeconds !== null &&
+        Number.isFinite(metadata.durationSeconds)
+          ? Math.round(metadata.durationSeconds * 1000)
+          : null;
       const taggedPublishedAt = parsePublishedAt(
-        metadata.common.releasedate,
-        metadata.common.originaldate,
-        metadata.common.date,
-        metadata.common.year,
+        metadata.releasedate,
+        metadata.originaldate,
+        metadata.date,
+        metadata.year,
       );
       const publishedAt =
         taggedPublishedAt ??
         (effective.mediaType === "podcast" ? file.modifiedAt : null);
-      const coverId = await this.storeCover(
-        await this.coverFor(file.absolutePath, metadata.common.picture),
-      );
+      const coverId = await this.storeCover(coverImage(metadata.cover));
 
       const trackData = {
         mediaType: effective.mediaType,
@@ -681,19 +783,27 @@ export class LibraryScanner {
       if (signal.aborted) throw error;
       counts.errorCount += 1;
       if (existing) {
-        try {
-          await this.database.orm.Track.where({ id: existing.id }).update({
-            fileSizeBytes: file.size,
-            fileModifiedAt: file.modifiedAt,
-            available: 1,
-            lastSeenScanId: scanId,
-          });
-          await this.catalog?.reindexTrack(existing.id, "scan");
-        } catch {
-          // The file remains counted as an error if even the fallback write
-          // cannot acquire SQLite's write lock.
-        }
+        await this.markFileError(file, existing, scanId);
       }
+    }
+  }
+
+  private async markFileError(
+    file: SourceFile,
+    existing: TrackRow,
+    scanId: string,
+  ): Promise<void> {
+    try {
+      await this.database.orm.Track.where({ id: existing.id }).update({
+        fileSizeBytes: file.size,
+        fileModifiedAt: file.modifiedAt,
+        available: 1,
+        lastSeenScanId: scanId,
+      });
+      await this.catalog?.reindexTrack(existing.id, "scan");
+    } catch {
+      // The file remains counted as an error if even the fallback write
+      // cannot acquire SQLite's write lock.
     }
   }
 
@@ -843,66 +953,6 @@ export class LibraryScanner {
         }
       }
     }
-  }
-
-  private async coverFor(
-    absolutePath: string,
-    pictures:
-      | readonly {
-          data: Uint8Array;
-          format: string;
-          type?: string;
-        }[]
-      | undefined,
-  ): Promise<CoverImage | null> {
-    const ordered = [...(pictures ?? [])].sort((left, right) => {
-      const leftFront = /cover\s*\(front\)/i.test(left.type ?? "");
-      const rightFront = /cover\s*\(front\)/i.test(right.type ?? "");
-      return Number(rightFront) - Number(leftFront);
-    });
-    for (const picture of ordered) {
-      const data = Buffer.from(picture.data);
-      if (data.length && data.length <= MAX_COVER_BYTES) {
-        return {
-          data,
-          mimeType: picture.format.startsWith("image/")
-            ? picture.format
-            : "image/jpeg",
-        };
-      }
-    }
-    return this.folderCover(path.dirname(absolutePath));
-  }
-
-  private async folderCover(directory: string): Promise<CoverImage | null> {
-    if (this.folderCoverCache.has(directory)) {
-      return this.folderCoverCache.get(directory) ?? null;
-    }
-    try {
-      const entries = await readdir(directory, { withFileTypes: true });
-      for (const entry of entries) {
-        if (
-          !entry.isFile() ||
-          entry.isSymbolicLink() ||
-          !FOLDER_COVER_NAMES.has(entry.name.toLocaleLowerCase())
-        ) {
-          continue;
-        }
-        const mimeType = COVER_MIME_TYPES.get(
-          path.extname(entry.name).toLocaleLowerCase(),
-        );
-        if (!mimeType) continue;
-        const data = await readFile(path.join(directory, entry.name));
-        if (!data.length || data.length > MAX_COVER_BYTES) continue;
-        const cover = { data, mimeType };
-        this.folderCoverCache.set(directory, cover);
-        return cover;
-      }
-    } catch {
-      // Missing or unreadable artwork leaves the album placeholder in place.
-    }
-    this.folderCoverCache.set(directory, null);
-    return null;
   }
 
   private async storeCover(cover: CoverImage | null): Promise<string | null> {

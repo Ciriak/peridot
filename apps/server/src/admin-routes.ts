@@ -43,6 +43,7 @@ import type { MetadataResolverRegistry } from "./metadata-resolver.js";
 import type { ServerLogBuffer } from "./server-log.js";
 import {
   readFileLoggingSettings,
+  readScanWorkerSettings,
   readSourceRefreshSettings,
   ServerSettingsError,
   updateServerSettings,
@@ -117,6 +118,7 @@ export async function registerAdminRoutes(
         return {
           trackCount: trackCount.count,
           availableTrackCount: availableTrackCount.count,
+          scanning: await readScanWorkerSettings(database),
           sourceRefresh: sourceRefreshScheduler?.status() ?? {
             enabled: false,
             cron: "",
@@ -164,6 +166,9 @@ export async function registerAdminRoutes(
           return {
             trackCount: trackCount.count,
             availableTrackCount: availableTrackCount.count,
+            scanning: settings.scanning
+              ? settings.scanning
+              : await readScanWorkerSettings(database),
             sourceRefresh,
             fileLogging: {
               ...(await readFileLoggingSettings(database)),

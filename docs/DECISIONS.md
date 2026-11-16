@@ -1,5 +1,26 @@
 # Decisions
 
+## 2026-11-16: Local scans use a configurable worker pool
+
+Source discovery and local audio metadata extraction now run through a bounded
+worker-thread pool. Administrators set the pool size in Settings → Admin →
+Server. The default and database default are three workers, values from five
+through 32 remain valid but show a performance warning, and values outside one
+through 32 are rejected.
+
+The scanner reads the setting when a scan starts, so changes apply to subsequent
+scans without changing or restarting active work. All track, cover, task
+progress, and catalog projection writes remain serialized on the main thread
+because SQLite has a single writer. Progress writes are limited to four per
+second plus completion, and processing yields to the event loop between bounded
+batches. Catalog reindexing also yields after roughly five milliseconds of
+continuous projection work. This prevents worker throughput from starving
+Fastify requests.
+
+Jellyfin page traversal and metadata-provider matching keep their existing
+scheduling. The folder picker also retains its separate bounded search
+concurrency rather than competing with background scans for the worker pool.
+
 ## 2026-11-16: Web UIs connect to the Peridot server that served them
 
 When onboarding has no saved server and is running as a browser UI, Peridot first

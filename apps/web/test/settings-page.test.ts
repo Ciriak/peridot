@@ -553,6 +553,12 @@ test("server settings leave source refresh without library status management", a
   assert.match(page, /@update:model-value="changeFileLogging"/);
   assert.doesNotMatch(page, /@click="saveFileLogging"/);
   assert.match(page, /fileLogging: \{ enabled: fileLoggingEnabled\.value \}/);
+  assert.match(page, /settings\.server\.scanning\.workerCount/);
+  assert.match(page, /settings\.server\.scanning\.warning/);
+  assert.match(page, /scanning: \{ workerCount \}/);
+  assert.match(page, /@blur="saveScanWorkerCount"/);
+  assert.match(page, /@keydown\.enter\.prevent="saveScanWorkerCount"/);
+  assert.doesNotMatch(page, /@click="saveScanWorkerCount"/);
 });
 
 test("server settings confirm before restarting the connected server", async () => {

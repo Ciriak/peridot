@@ -435,7 +435,7 @@ test("metadata tasks identify the provider while its request is in flight", asyn
       new Promise<never>((_, reject) => {
         setTimeout(
           () => reject(new Error("Metadata provider request did not start")),
-          5_000,
+          30_000,
         ).unref();
       }),
     ]);

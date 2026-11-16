@@ -10,6 +10,11 @@ import {
   watch,
 } from "#imports";
 import { Icon } from "@iconify/vue/offline";
+import {
+  DEFAULT_SCAN_WORKER_COUNT,
+  MAX_SCAN_WORKER_COUNT,
+  SCAN_WORKER_WARNING_THRESHOLD,
+} from "@peridot/contracts";
 import { Button } from "@peridot/ui/components/ui/button";
 import { Input } from "@peridot/ui/components/ui/input";
 import { Switch } from "@peridot/ui/components/ui/switch";
@@ -78,6 +83,11 @@ const fileLoggingEnabled = ref(false);
 const fileLoggingSaving = ref(false);
 const fileLoggingNotice = ref("");
 const fileLoggingError = ref("");
+const scanWorkerCount = ref<string | number>(String(DEFAULT_SCAN_WORKER_COUNT));
+const savedScanWorkerCount = ref(DEFAULT_SCAN_WORKER_COUNT);
+const scanWorkerSaving = ref(false);
+const scanWorkerNotice = ref("");
+const scanWorkerError = ref("");
 const updateChecking = ref(false);
 const updateCheckingNotice = ref("");
 const updateCheckingError = ref("");
@@ -112,9 +122,29 @@ watch(
   (settings) => {
     if (settings) {
       fileLoggingEnabled.value = settings.fileLogging?.enabled ?? false;
+      const workerCount =
+        settings.scanning?.workerCount ?? DEFAULT_SCAN_WORKER_COUNT;
+      scanWorkerCount.value = String(workerCount);
+      savedScanWorkerCount.value = workerCount;
     }
   },
   { immediate: true },
+);
+
+const parsedScanWorkerCount = computed(() => {
+  const text = String(scanWorkerCount.value).trim();
+  if (!/^\d+$/.test(text)) return null;
+  const count = Number(text);
+  return Number.isSafeInteger(count) &&
+    count >= 1 &&
+    count <= MAX_SCAN_WORKER_COUNT
+    ? count
+    : null;
+});
+const scanWorkerWarning = computed(
+  () =>
+    parsedScanWorkerCount.value !== null &&
+    parsedScanWorkerCount.value > SCAN_WORKER_WARNING_THRESHOLD,
 );
 
 const logFilePath = computed(
@@ -226,6 +256,35 @@ async function saveFileLogging() {
 function changeFileLogging(enabled: boolean) {
   fileLoggingEnabled.value = enabled;
   void saveFileLogging();
+}
+
+async function saveScanWorkerCount() {
+  if (scanWorkerSaving.value) return;
+  const workerCount = parsedScanWorkerCount.value;
+  scanWorkerNotice.value = "";
+  scanWorkerError.value = "";
+  if (workerCount === null) {
+    scanWorkerError.value = t("settings.server.scanning.invalid");
+    return;
+  }
+  if (workerCount === savedScanWorkerCount.value) return;
+
+  scanWorkerSaving.value = true;
+  try {
+    await serverSettings.save({
+      scanning: { workerCount },
+    });
+    savedScanWorkerCount.value = workerCount;
+    scanWorkerNotice.value = t("settings.server.scanning.saved");
+  } catch (reason) {
+    if (isAuthenticationRedirectError(reason)) return;
+    scanWorkerError.value = errorMessage(
+      reason,
+      "settings.server.scanning.saveError",
+    );
+  } finally {
+    scanWorkerSaving.value = false;
+  }
 }
 
 function requestInstall() {
@@ -606,6 +665,72 @@ watch(connectionStatus, (status) => {
         </AlertDialogContent>
       </AlertDialogPortal>
     </AlertDialogRoot>
+
+    <section aria-labelledby="scan-performance-heading" class="space-y-4">
+      <h3 id="scan-performance-heading" class="text-lg font-semibold">
+        {{ t("settings.server.scanning.title") }}
+      </h3>
+      <div class="space-y-4 rounded-lg border bg-card p-6 text-card-foreground">
+        <div class="space-y-2">
+          <label for="scan-worker-count" class="text-sm font-medium">
+            {{ t("settings.server.scanning.workerCount") }}
+          </label>
+          <Input
+            id="scan-worker-count"
+            v-model="scanWorkerCount"
+            type="number"
+            min="1"
+            :max="MAX_SCAN_WORKER_COUNT"
+            step="1"
+            :disabled="scanWorkerSaving || connectionStatus === 'lost'"
+            :aria-invalid="
+              String(scanWorkerCount).trim() !== '' &&
+              parsedScanWorkerCount === null
+            "
+            :aria-describedby="
+              scanWorkerWarning
+                ? 'scan-worker-help scan-worker-warning'
+                : 'scan-worker-help'
+            "
+            class="max-w-32"
+            @blur="saveScanWorkerCount"
+            @keydown.enter.prevent="saveScanWorkerCount"
+          />
+        </div>
+        <p id="scan-worker-help" class="text-sm text-muted-foreground">
+          {{ t("settings.server.scanning.workerCountHelp") }}
+          {{ t("settings.server.scanning.defaultHelp") }}
+        </p>
+        <p
+          v-if="scanWorkerWarning"
+          id="scan-worker-warning"
+          role="status"
+          class="flex items-start gap-2 text-sm text-destructive"
+        >
+          <Icon
+            :icon="icons.warning"
+            aria-hidden="true"
+            class="mt-0.5 size-4"
+          />
+          {{ t("settings.server.scanning.warning") }}
+        </p>
+        <p
+          v-if="scanWorkerNotice"
+          role="status"
+          aria-live="polite"
+          class="text-sm text-muted-foreground"
+        >
+          {{ scanWorkerNotice }}
+        </p>
+        <p
+          v-if="scanWorkerError || serverSettings.error.value"
+          role="alert"
+          class="text-sm text-destructive"
+        >
+          {{ scanWorkerError || serverSettings.error.value }}
+        </p>
+      </div>
+    </section>
 
     <section aria-labelledby="log-file-heading" class="space-y-4">
       <h3 id="log-file-heading" class="text-lg font-semibold">

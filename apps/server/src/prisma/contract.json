@@ -1949,6 +1949,13 @@
                   "kind": "scalar"
                 }
               },
+              "scanWorkerCount": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
               "sourceRefreshCron": {
                 "nullable": false,
                 "type": {
@@ -1982,6 +1989,9 @@
                 },
                 "libraryRoot": {
                   "column": "libraryRoot"
+                },
+                "scanWorkerCount": {
+                  "column": "scanWorkerCount"
                 },
                 "sourceRefreshCron": {
                   "column": "sourceRefreshCron"
@@ -4962,6 +4972,15 @@
                   "dataType": "sqlite/text",
                   "nullable": false
                 },
+                "scanWorkerCount": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "default": {
+                    "kind": "literal",
+                    "value": "3"
+                  },
+                  "nullable": false
+                },
                 "sourceRefreshCron": {
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
@@ -6061,7 +6080,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "4e95e705bb64da3502c63812c1276da93b77815295ef507f0ffabcf2225fc0a1"
+    "storageHash": "5e5cd62452bcf2b23307a87be75af60e40feb17f74db5bb4e4093dc3a1a4219a"
   },
   "execution": {
     "executionHash": "69abe59ddf12aaa78738519fa294ac279958f3b4caa4e85b2cb8fd0effde430a",
