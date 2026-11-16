@@ -2,6 +2,7 @@
 import { useI18n } from "#imports";
 import type {
   ApplyTrackMetadataRequest,
+  MediaType,
   MetadataCandidateResponse,
   TrackResponse,
 } from "@peridot/contracts";
@@ -41,6 +42,7 @@ import { useQueryScope } from "../composables/use-query-scope";
 import { useServer } from "../composables/use-server";
 import { useServerConnection } from "../composables/use-server-connection";
 import { useSession } from "../composables/use-session";
+import { useUser } from "../composables/use-user";
 import { icons } from "../lib/icons";
 import { artistRoute, trackAlbumRoute, trackArtistNames } from "../lib/library";
 import { isTrackPlayable } from "../lib/offline-playback";
@@ -49,10 +51,14 @@ import {
   applyTrackMetadata,
   isAuthenticationRedirectError,
   listMetadataCandidates,
+  resetTrackMediaType,
   revertTrackMetadata,
+  updateTrackMediaType,
 } from "../lib/peridot-client";
 import {
   notifyAddedToQueue,
+  notifyMediaTypeUpdated,
+  notifyMediaTypeUpdateFailed,
   notifyMetadataMatched,
   notifyMetadataReverted,
   notifyMetadataUpdateFailed,
@@ -68,10 +74,12 @@ const { translate, errorMessage } = useLocalizedMessage();
 const { addToQueue, downloadTrack, queueLoaded } = useLibraryPlayer();
 const { invalidate: invalidateCatalog } = useCatalogRevision();
 const { address } = useServer();
+const { user } = useUser();
 const { scope } = useQueryScope();
 const queryClient = useQueryClient();
 const { status: serverStatus } = useServerConnection();
 const serverLost = computed(() => serverStatus.value === "lost");
+const admin = computed(() => user.value?.role === "admin");
 const {
   savedTracks,
   canSave: canSaveOffline,
@@ -105,6 +113,7 @@ const metadataLoading = ref(false);
 const metadataError = ref("");
 const applyingMetadataId = ref("");
 const revertingMetadata = ref(false);
+const changingMediaType = ref(false);
 const artists = computed(() => trackArtistNames(props.track));
 const music = computed(() => props.track.mediaType === "music");
 const albumRouteValue = computed(() =>
@@ -112,6 +121,65 @@ const albumRouteValue = computed(() =>
     ? trackAlbumRoute(props.track)
     : null,
 );
+const mediaTypes: MediaType[] = ["music", "audiobook", "podcast"];
+
+function mediaTypeLabel(mediaType: MediaType): string {
+  return t(
+    mediaType === "music"
+      ? "settings.sources.media.music"
+      : mediaType === "audiobook"
+        ? "settings.sources.media.audiobook"
+        : "settings.sources.media.podcast",
+  );
+}
+
+async function changeTrackMediaType(mediaType: MediaType) {
+  if (changingMediaType.value || serverLost.value) return;
+  changingMediaType.value = true;
+  try {
+    await updateTrackMediaType(
+      address.value ?? "",
+      token.value ?? "",
+      props.track.id,
+      mediaType,
+    );
+    notifyMediaTypeUpdated(props.track.title, mediaTypeLabel(mediaType));
+    invalidateCatalog();
+  } catch (reason) {
+    if (isAuthenticationRedirectError(reason)) return;
+    notifyMediaTypeUpdateFailed(
+      props.track.title,
+      errorMessage(reason, "components.mediaType.updateError"),
+    );
+  } finally {
+    changingMediaType.value = false;
+  }
+}
+
+async function restoreDetectedMediaType() {
+  if (changingMediaType.value || serverLost.value) return;
+  changingMediaType.value = true;
+  try {
+    await resetTrackMediaType(
+      address.value ?? "",
+      token.value ?? "",
+      props.track.id,
+    );
+    notifyMediaTypeUpdated(
+      props.track.title,
+      t("components.mediaType.automatic"),
+    );
+    invalidateCatalog();
+  } catch (reason) {
+    if (isAuthenticationRedirectError(reason)) return;
+    notifyMediaTypeUpdateFailed(
+      props.track.title,
+      errorMessage(reason, "components.mediaType.updateError"),
+    );
+  } finally {
+    changingMediaType.value = false;
+  }
+}
 
 async function download() {
   if (downloading.value) return;
@@ -386,6 +454,58 @@ async function revertMetadata() {
         <Icon :icon="icons.user" aria-hidden="true" />
         {{ t("context.goToArtist") }}
       </ContextMenuItem>
+      <ContextMenuSub v-if="admin">
+        <ContextMenuSubTrigger :disabled="changingMediaType || serverLost">
+          <Icon
+            :icon="
+              track.mediaType === 'music'
+                ? icons.music
+                : track.mediaType === 'audiobook'
+                  ? icons.book
+                  : icons.podcast
+            "
+            aria-hidden="true"
+          />
+          {{ t("context.mediaType") }}
+          <Icon :icon="icons.caretRight" aria-hidden="true" class="ml-auto" />
+        </ContextMenuSubTrigger>
+        <ContextMenuSubContent>
+          <ContextMenuItem
+            v-for="mediaType in mediaTypes"
+            :key="mediaType"
+            :disabled="
+              changingMediaType ||
+              (track.mediaType === mediaType &&
+                track.mediaTypeOrigin === 'manual')
+            "
+            @select="changeTrackMediaType(mediaType)"
+          >
+            <Icon
+              :icon="
+                mediaType === 'music'
+                  ? icons.music
+                  : mediaType === 'audiobook'
+                    ? icons.book
+                    : icons.podcast
+              "
+              aria-hidden="true"
+            />
+            {{ mediaTypeLabel(mediaType) }}
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem
+            :disabled="
+              changingMediaType ||
+              serverLost ||
+              track.mediaTypeOrigin !== 'manual'
+            "
+            @select="restoreDetectedMediaType"
+          >
+            <Icon :icon="icons.restart" aria-hidden="true" />
+            {{ t("context.restoreDetectedMediaType") }}
+          </ContextMenuItem>
+        </ContextMenuSubContent>
+      </ContextMenuSub>
       <ContextMenuSeparator />
       <ContextMenuLabel v-if="music && track.metadata" class="text-xs">
         {{

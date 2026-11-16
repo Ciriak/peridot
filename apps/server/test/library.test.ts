@@ -82,6 +82,7 @@ test("scans catalog supported regular files, reconcile availability, and persist
     assert.deepEqual(list.items[0], {
       id: list.items[0]?.id,
       mediaType: "music",
+      mediaTypeOrigin: "fallback",
       title: "Song",
       artist: "Unknown Artist",
       artists: ["Unknown Artist"],
@@ -168,7 +169,7 @@ test("scans track, disc, and album tags and backfills legacy metadata once", asy
     assert.equal(firstTrack.mimeType, "audio/mpeg");
     assert.equal(firstTrack.discNumber, 2);
     assert.equal(firstTrack.trackNumber, 5);
-    assert.equal(firstTrack.metadataVersion, 6);
+    assert.equal(firstTrack.metadataVersion, 7);
 
     await context.database.orm.Track.where({ id: firstTrack.id }).update({
       metadataVersion: 0,
@@ -182,7 +183,7 @@ test("scans track, disc, and album tags and backfills legacy metadata once", asy
     });
     assert.equal(backfilledTrack.discNumber, 2);
     assert.equal(backfilledTrack.trackNumber, 5);
-    assert.equal(backfilledTrack.metadataVersion, 6);
+    assert.equal(backfilledTrack.metadataVersion, 7);
 
     const unchangedScan = await startScan(context);
     assert.equal(unchangedScan.unchangedCount, 1);

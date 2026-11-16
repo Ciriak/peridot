@@ -12,11 +12,22 @@ import {
 } from "reka-ui";
 
 const props = defineProps<
-  SliderRootProps & { class?: HTMLAttributes["class"]; thumbLabel?: string }
+  SliderRootProps & {
+    class?: HTMLAttributes["class"];
+    thumbLabel?: string;
+    trackClass?: HTMLAttributes["class"];
+    hideThumb?: boolean;
+  }
 >();
 const emits = defineEmits<SliderRootEmits>();
 
-const delegatedProps = reactiveOmit(props, "class", "thumbLabel");
+const delegatedProps = reactiveOmit(
+  props,
+  "class",
+  "thumbLabel",
+  "trackClass",
+  "hideThumb",
+);
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits);
 </script>
@@ -35,7 +46,12 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits);
   >
     <SliderTrack
       data-slot="slider-track"
-      class="bg-muted relative grow overflow-hidden rounded-full data-[orientation=horizontal]:h-1.5 data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-1.5"
+      :class="
+        cn(
+          'bg-muted relative grow overflow-hidden rounded-full data-[orientation=horizontal]:h-1.5 data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-1.5',
+          props.trackClass,
+        )
+      "
     >
       <SliderRange
         data-slot="slider-range"
@@ -48,7 +64,12 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits);
       :key="key"
       data-slot="slider-thumb"
       :aria-label="thumbLabel"
-      class="bg-white border-primary ring-ring/50 block size-4 shrink-0 rounded-full border shadow-sm transition-[color,box-shadow] hover:ring-4 focus-visible:ring-4 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50"
+      :class="
+        cn(
+          'bg-white border-primary ring-ring/50 block size-4 shrink-0 rounded-full border shadow-sm transition-[color,box-shadow] hover:ring-4 focus-visible:ring-4 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50',
+          props.hideThumb && 'pointer-events-none opacity-0',
+        )
+      "
     />
   </SliderRoot>
 </template>

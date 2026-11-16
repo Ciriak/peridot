@@ -203,6 +203,8 @@ export function createTaggedMp3(tags: {
   album: string;
   genres?: string[];
   date?: string;
+  podcast?: boolean;
+  releaseTypes?: string[];
   discNumber: number;
   trackNumber: number;
   cover?: {
@@ -219,6 +221,20 @@ export function createTaggedMp3(tags: {
       ? [id3TextFrame("TCON", tags.genres.join("\0"))]
       : []),
     ...(tags.date ? [id3TextFrame("TDRC", tags.date)] : []),
+    ...(tags.podcast ? [id3TextFrame("PCST", "")] : []),
+    ...(tags.releaseTypes?.length
+      ? [
+          id3Frame(
+            "TXXX",
+            Buffer.concat([
+              Buffer.from([3]),
+              Buffer.from("MusicBrainz Album Type", "utf8"),
+              Buffer.from([0]),
+              Buffer.from(tags.releaseTypes.join("\0"), "utf8"),
+            ]),
+          ),
+        ]
+      : []),
     id3TextFrame("TRCK", String(tags.trackNumber)),
     id3TextFrame("TPOS", String(tags.discNumber)),
   ];

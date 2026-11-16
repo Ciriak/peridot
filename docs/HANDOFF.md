@@ -2,6 +2,100 @@
 
 Last updated: 2026-11-16.
 
+## Node 24 CI actions
+
+Every CI job now uses `actions/checkout@v7`, `actions/setup-node@v7`, and
+`pnpm/action-setup@v6`. These major releases declare Node 24 as their action
+runtime, removing GitHub Actions' warning about Node 20 actions being forced to
+run on Node 24. Node and pnpm versions configured for repository commands are
+unchanged.
+
+Checks completed:
+
+- `actionlint` 1.7.12 against `.github/workflows/ci.yml`
+- Targeted Prettier
+- `git diff --check`
+
+Known limits: the workflow has not run on GitHub since the action upgrades.
+The change remains uncommitted on `feature/clasicifation-update`; no commit,
+push, tag, publication, or deployment was performed.
+
+Next: run the workflow on GitHub and confirm the deprecation warning is absent
+from every job.
+
+## Version-independent server update test
+
+The development update-check test no longer asserts the application package
+version. That assertion was unrelated to the behavior under test and required a
+test-only edit whenever the root version changed. The test still verifies the
+unchecked, current, and available commit transitions.
+
+Checks completed:
+
+- Full server suite: 152 passing
+- Targeted Prettier
+- `git diff --check`
+
+Known limits: none for this test-only change. The change remains uncommitted on
+`feature/clasicifation-update`; no commit, push, tag, publication, or deployment
+was performed.
+
+Next: continue version synchronization and releases without maintaining a
+duplicate package-version assertion in this test.
+
+## Automatic pagination without load-more controls
+
+Paginated album, artist, audiobook, podcast, playlist, search, task-history, and
+shared track surfaces now request their next page automatically when their
+shared sentinel approaches the viewport. The manual load-more buttons are
+removed. The trigger remains silent visually and exposes only a screen-reader
+loading status.
+
+The sentinel can request again while it stays visible, so short initial pages
+continue filling a tall viewport. It does not repeat a request until the item
+count changes, which avoids an automatic retry loop after a failed page.
+Shared track tables still reveal mounted rows in progressive batches and then
+fetch additional server pages through the same trigger.
+
+Checks completed:
+
+- Full web suite: 208 passing
+- Web typecheck
+- Targeted ESLint
+
+Known limits: browser scrolling and live viewport behavior have not yet been
+visually exercised. Changes remain uncommitted on `dev` alongside pre-existing
+working-tree edits; no commit, push, tag, publication, or deployment was
+performed.
+
+Next: run the production web build and visually confirm automatic prefetch in a
+tall and narrow viewport, including the final page where the trigger disappears.
+
+## Server reconnect notification cooldown
+
+The shared server reachability state now delays an offline transition for five
+seconds. Transient realtime retries and API failures therefore do not alternate
+the toolbar between connected and offline or emit repeated `Back online`
+toasts. A successful request or realtime connection during the cooldown cancels
+the pending transition, while a sustained outage still becomes offline when the
+cooldown expires.
+
+Checks completed:
+
+- Focused notification tests, including fake-timer cooldown and recovery cases
+- Full web suite: 205 passing
+- Web typecheck, targeted ESLint, and targeted Prettier
+- Web production build (`nuxt generate`)
+
+Known limits: the cooldown is covered by deterministic fake-timer tests, but a
+live browser session with an intermittently failing realtime server was not
+exercised. The cooldown source and test changes are in local commit `b463469`;
+this handoff and decision entry remain uncommitted. No push, tag, publication,
+or deployment was performed.
+
+Next: interrupt and restore a real server connection repeatedly in the browser
+to confirm the toolbar and toast behavior during retry churn.
+
 ## Native multi-architecture Docker publication
 
 Docker publication no longer builds ARM64 under QEMU. The workflow now runs
@@ -31,6 +125,47 @@ deployment was performed.
 
 Next: push the branch and confirm both platform jobs complete, upload two digest
 artifacts, and the merge job publishes a two-platform GHCR manifest.
+
+## Per-track media auto-detection
+
+Media classification is now automatic per track. A local folder or selected
+Jellyfin library can contain music, audiobooks, and podcasts without separate
+sources. Sources default to automatic mode and retain an optional fixed-type
+override. Jellyfin `AudioBook` item types, `books` library types, podcast tags,
+iTunes audiobook media type, audiobook release types, and `.m4b` extensions are
+supported classification evidence. Tracks without a reliable signal remain
+music.
+
+Administrators can override an individual track or complete book/show collection
+and can restore the stored automatic detection result. The server reindexes
+affected catalog rows immediately. Manual overrides take precedence over fixed
+source modes and survive rescans. Source and Jellyfin unchanged-item checks now
+include classification state.
+
+The Prisma 8 contract replaces source-level `mediaType` with
+`classificationMode`, `fixedMediaType`, and the selected Jellyfin library's
+collection type. Tracks store effective, detected, and override media types with
+detection provenance. Existing source classification data is intentionally
+discarded; there is no compatibility migration.
+
+Checks completed:
+
+- Full workspace tests: server 151, web 204, shared UI 16, desktop 4
+- Full workspace type check, workspace ESLint, Prettier, and version check
+- Prisma 8 contract emit and local `db update` (23 additive operations)
+- Prisma migration status: no migration packages in this development setup
+- Server production build
+- Web production build, including 142 PWA precache entries
+- `git diff --check`
+
+Known limits: Jellyfin behavior uses mocked API responses; a live mixed Jellyfin
+library and browser interaction QA were not run. Existing source classification
+data has no compatibility path. All work remains uncommitted on
+`feature/clasicifation-update`; no commit, push, tag, publication, or deployment
+was performed.
+
+Next: scan a real mixed library, verify the source and collection correction
+menus at desktop and mobile widths, then commit the completed change.
 
 ## Single public Peridot port on 17430
 

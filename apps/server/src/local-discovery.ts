@@ -80,6 +80,7 @@ export async function discoverLocalPeridotServers(
       : DISCOVERY_PORT;
   const prefixes = localPrivateSubnetPrefixes(options.interfaces);
   const hosts = [
+    "localhost",
     "127.0.0.1",
     ...prefixes.flatMap((prefix) =>
       Array.from({ length: 254 }, (_, index) => `${prefix}.${index + 1}`),

@@ -77,6 +77,10 @@ model Session {
 model Track {
   id                         String     @id @onCreate(cuid(2))
   mediaType                  String     @default("music")
+  mediaTypeOrigin            String     @default("fallback")
+  detectedMediaType          String     @default("music")
+  detectedMediaTypeOrigin    String     @default("fallback")
+  mediaTypeOverride          String?
   title                      String
   artist                     String
   artistCredits              String?
@@ -253,12 +257,14 @@ model ServerSetting {
 model Source {
   id                   String   @id @onCreate(cuid(2))
   kind                 String
-  mediaType            String   @default("music")
+  classificationMode   String   @default("auto")
+  fixedMediaType       String?
   name                 String?
   path                 String?
   url                  String?
   integration          String?
   externalLibraryId    String?
+  externalLibraryCollectionType String?
   credentialCiphertext String?
   lastSyncedAt         DateTime?
   position             Int      @default(0)
@@ -266,7 +272,7 @@ model Source {
   updatedAt            DateTime @onCreate(now()) @onUpdate(now())
 
   @@index([kind])
-  @@index([mediaType])
+  @@index([classificationMode])
   @@index([position])
 }
 

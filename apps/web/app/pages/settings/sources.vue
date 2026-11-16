@@ -12,6 +12,7 @@ import type {
   CreateSourceRequest,
   JellyfinLibraryResponse,
   MediaType,
+  SourceClassificationMode,
   SourceKind,
   SourceResponse,
 } from "@peridot/contracts";
@@ -105,7 +106,8 @@ const newKind = ref<SourceChoice | null>(null);
 const newPath = ref("");
 const newUrl = ref("");
 const newApiKey = ref("");
-const newMediaType = ref<MediaType>("music");
+const newClassificationMode = ref<SourceClassificationMode>("auto");
+const newFixedMediaType = ref<MediaType>("music");
 const newLibraryId = ref("");
 const jellyfinLibraries = ref<JellyfinLibraryResponse[]>([]);
 const discoveringLibraries = ref(false);
@@ -224,7 +226,8 @@ function openAddDialog() {
   newPath.value = "";
   newUrl.value = "";
   newApiKey.value = "";
-  newMediaType.value = "music";
+  newClassificationMode.value = "auto";
+  newFixedMediaType.value = "music";
   newLibraryId.value = "";
   jellyfinLibraries.value = [];
   addOpen.value = true;
@@ -241,7 +244,8 @@ function closeAddDialog() {
   newPath.value = "";
   newUrl.value = "";
   newApiKey.value = "";
-  newMediaType.value = "music";
+  newClassificationMode.value = "auto";
+  newFixedMediaType.value = "music";
   newLibraryId.value = "";
   jellyfinLibraries.value = [];
 }
@@ -252,7 +256,8 @@ function handleDialogBack() {
     newPath.value = "";
     newUrl.value = "";
     newApiKey.value = "";
-    newMediaType.value = "music";
+    newClassificationMode.value = "auto";
+    newFixedMediaType.value = "music";
     newLibraryId.value = "";
     jellyfinLibraries.value = [];
     addError.value = "";
@@ -282,7 +287,11 @@ async function addSource() {
     body = {
       kind: "path",
       path: newPath.value,
-      mediaType: newMediaType.value,
+      classificationMode: newClassificationMode.value,
+      fixedMediaType:
+        newClassificationMode.value === "fixed"
+          ? newFixedMediaType.value
+          : null,
     };
   } else {
     body = {
@@ -290,7 +299,11 @@ async function addSource() {
       integration: "jellyfin",
       url: newUrl.value,
       apiKey: newApiKey.value,
-      mediaType: newMediaType.value,
+      classificationMode: newClassificationMode.value,
+      fixedMediaType:
+        newClassificationMode.value === "fixed"
+          ? newFixedMediaType.value
+          : null,
       libraryId: newLibraryId.value,
     };
   }
@@ -356,15 +369,34 @@ function mediaTypeLabel(mediaType: MediaType): string {
   );
 }
 
-async function changeMediaType(source: SourceResponse, mediaType: MediaType) {
-  if (source.mediaType === mediaType || serverLost.value) return;
+function sourceClassificationLabel(source: SourceResponse): string {
+  return source.classificationMode === "auto"
+    ? t("settings.sources.classification.auto")
+    : t("settings.sources.classification.fixed", {
+        mediaType: mediaTypeLabel(source.fixedMediaType ?? "music"),
+      });
+}
+
+async function changeClassification(
+  source: SourceResponse,
+  classificationMode: SourceClassificationMode,
+  fixedMediaType: MediaType = "music",
+) {
+  if (
+    serverLost.value ||
+    (source.classificationMode === classificationMode &&
+      (classificationMode === "auto" ||
+        source.fixedMediaType === fixedMediaType))
+  ) {
+    return;
+  }
   pageError.value = "";
   try {
     const updated = await updateSource(
       address.value ?? "",
       token.value ?? "",
       source.id,
-      { mediaType },
+      { classificationMode, fixedMediaType },
     );
     if (updated.task) trackTask(updated.task);
     await loadSources();
@@ -574,7 +606,7 @@ onMounted(() => {
               }}</span>
               <span aria-hidden="true">·</span>
               <span class="font-medium text-foreground">{{
-                mediaTypeLabel(source.mediaType)
+                sourceClassificationLabel(source)
               }}</span>
               <span aria-hidden="true">·</span>
               <time v-if="source.lastSyncedAt" :datetime="source.lastSyncedAt">
@@ -666,15 +698,32 @@ onMounted(() => {
                   {{ t("settings.sources.rescan") }}
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  v-for="mediaType in mediaTypes"
-                  :key="mediaType"
                   :disabled="
-                    source.mediaType === mediaType ||
+                    source.classificationMode === 'auto' ||
                     serverLost ||
                     (source.kind !== 'path' && !isJellyfin(source))
                   "
                   class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none data-disabled:cursor-default data-disabled:opacity-50"
-                  @select="changeMediaType(source, mediaType)"
+                  @select="changeClassification(source, 'auto')"
+                >
+                  <Icon
+                    :icon="icons.search"
+                    aria-hidden="true"
+                    class="size-4"
+                  />
+                  {{ t("settings.sources.classification.detect") }}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  v-for="mediaType in mediaTypes"
+                  :key="mediaType"
+                  :disabled="
+                    (source.classificationMode === 'fixed' &&
+                      source.fixedMediaType === mediaType) ||
+                    serverLost ||
+                    (source.kind !== 'path' && !isJellyfin(source))
+                  "
+                  class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none data-disabled:cursor-default data-disabled:opacity-50"
+                  @select="changeClassification(source, 'fixed', mediaType)"
                 >
                   <Icon
                     :icon="
@@ -688,7 +737,7 @@ onMounted(() => {
                     class="size-4"
                   />
                   {{
-                    t("settings.sources.setMediaType", {
+                    t("settings.sources.classification.treatAs", {
                       mediaType: mediaTypeLabel(mediaType),
                     })
                   }}
@@ -848,16 +897,48 @@ onMounted(() => {
         <div v-else class="mt-4 space-y-4">
           <div class="space-y-2">
             <p class="text-sm font-medium">
-              {{ t("settings.sources.mediaType") }}
+              {{ t("settings.sources.classification.title") }}
             </p>
-            <div class="grid grid-cols-3 gap-2">
+            <div class="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                :variant="
+                  newClassificationMode === 'auto' ? 'default' : 'outline'
+                "
+                size="sm"
+                @click="newClassificationMode = 'auto'"
+              >
+                <Icon :icon="icons.search" aria-hidden="true" class="size-4" />
+                {{ t("settings.sources.classification.auto") }}
+              </Button>
+              <Button
+                type="button"
+                :variant="
+                  newClassificationMode === 'fixed' ? 'default' : 'outline'
+                "
+                size="sm"
+                @click="newClassificationMode = 'fixed'"
+              >
+                <Icon :icon="icons.music" aria-hidden="true" class="size-4" />
+                {{ t("settings.sources.classification.fixedLabel") }}
+              </Button>
+            </div>
+            <p class="text-sm text-muted-foreground">
+              {{ t("settings.sources.classification.autoHelp") }}
+            </p>
+            <div
+              v-if="newClassificationMode === 'fixed'"
+              class="grid grid-cols-3 gap-2"
+            >
               <Button
                 v-for="mediaType in mediaTypes"
                 :key="mediaType"
                 type="button"
-                :variant="newMediaType === mediaType ? 'default' : 'outline'"
+                :variant="
+                  newFixedMediaType === mediaType ? 'default' : 'outline'
+                "
                 size="sm"
-                @click="newMediaType = mediaType"
+                @click="newFixedMediaType = mediaType"
               >
                 <Icon
                   :icon="

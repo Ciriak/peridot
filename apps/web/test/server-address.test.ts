@@ -52,6 +52,7 @@ test("scheme-less addresses probe HTTP and HTTPS on configured Peridot ports", (
   assert.deepEqual(serverAddressCandidates("192.168.1.20"), [
     "http://192.168.1.20",
     "https://192.168.1.20",
+    "https://192.168.1.20:80",
     "http://192.168.1.20:17430",
     "https://192.168.1.20:17430",
   ]);
@@ -59,6 +60,7 @@ test("scheme-less addresses probe HTTP and HTTPS on configured Peridot ports", (
     serverAddressCandidates("https://music.example.com/peridot"),
     [
       "https://music.example.com/peridot",
+      "https://music.example.com:80/peridot",
       "https://music.example.com:17430/peridot",
     ],
   );
@@ -91,6 +93,7 @@ test("manual address probing selects the Peridot port", async () => {
     "http://192.168.1.20:17430/api/health",
     "https://192.168.1.20/api/health",
     "https://192.168.1.20:17430/api/health",
+    "https://192.168.1.20:80/api/health",
   ]);
 });
 

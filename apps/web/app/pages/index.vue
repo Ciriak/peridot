@@ -161,7 +161,7 @@ onBeforeUnmount(() => {
       <div v-else-if="suggestionCount" class="space-y-6">
         <div
           v-if="suggestedAlbums.length"
-          class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+          class="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-5"
         >
           <AlbumCard
             v-for="album in suggestedAlbums"

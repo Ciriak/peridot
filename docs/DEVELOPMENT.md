@@ -103,11 +103,14 @@ Tracks, albums, artists, and playlists can be liked independently from their
 rows, cards, and detail headers. Likes are private to the signed-in user and persist across
 reloads, sessions, and server restarts. The server requires an initialized local
 SQLite database and a music folder, but no API key or hosted service.
-Sources are explicitly classified as music, audiobooks, or podcasts. Existing
-sources and tracks default to music. Audiobooks are grouped into books by album
-title and author, with chapters ordered by disc and track number. Podcast audio
-is grouped into shows by album title and publisher, with episodes newest first
-using published metadata and file-date fallback. The Audiobooks and Podcasts
+Sources detect music, audiobooks, and podcasts per track from embedded tags and
+Jellyfin item/library metadata. One source may contain all three kinds. A source
+can optionally use one fixed media type, while administrator overrides can
+correct an individual track or complete collection. Unmatched tracks default to
+music. Audiobooks are grouped into books by album title and author, with chapters
+ordered by disc and track number. Podcast audio is grouped into shows by album
+title and publisher, with episodes newest first using published metadata and
+file-date fallback. The Audiobooks and Podcasts
 routes provide collection cards, detail pages, collection playback, likes, and
 offline saving. Music Albums, Artists, Home suggestions, metadata providers, and
 Quick picks remain music-only. Jellyfin sources select one discovered library;
@@ -430,9 +433,10 @@ three-dot action menu for a source-scoped rescan or confirmed removal. Source
 removal remains available while work is active; the server first stops running
 or queued work for that source and stops unscoped all-source work that could
 access it. Unrelated source-specific tasks continue.
-Jellyfin scans request only `Audio` items, page through the complete result set,
-import Peridot-supported original audio containers, and cache bounded album
-artwork. Item IDs and ETags provide stable identity and change detection. Static
+Jellyfin scans request `Audio` and `AudioBook` items, page through the complete
+result set, import Peridot-supported original audio containers, and cache
+bounded album artwork. Item IDs and ETags provide stable identity and change
+detection. Static
 audio and byte-range requests are proxied through Peridot with the encrypted API
 key remaining server-side. Unsupported Jellyfin audio containers are skipped and
 reported in the scan error count. Pages are processed incrementally so large
@@ -568,7 +572,7 @@ determinate or indeterminate progress. Active tasks can be stopped from
 Settings → Admin → Tasks; stopping a queued task prevents it from starting,
 while stopping running core work aborts the scan or metadata executor before the
 request completes. Finished task history is retained for 30 days, capped at the
-newest 500 terminal tasks. MP3, M4A/AAC, OGG/Opus, WAV, and FLAC files are
+newest 500 terminal tasks. MP3, M4A/M4B/AAC, OGG/Opus, WAV, and FLAC files are
 cataloged; originals are streamed without transcoding. Catalog responses include
 nullable disc and track numbers used for album ordering and an effective genre
 array. A metadata-version marker makes the next scan backfill those fields once
@@ -605,12 +609,17 @@ tracks from that source and queues metadata matching for that source. Requests
 are queued behind active work, and equivalent requests that are still queued
 coalesce into the existing task. Administrators stop an active task with
 `POST /api/admin/tasks/:id/stop`.
-Source creation accepts `mediaType`, and Jellyfin creation also accepts the
-selected `libraryId`. Administrators discover Jellyfin libraries through
+Source creation accepts `classificationMode` and optional `fixedMediaType`;
+Jellyfin creation requires the selected `libraryId`. Administrators discover
+Jellyfin libraries through
 `POST /api/admin/integrations/jellyfin/libraries` using write-only connection
-credentials. `PATCH /api/admin/sources/:id` changes a source's media type; the
-server stops source-scoped operations and queues a rescan that reclassifies
-unchanged tracks.
+credentials. `PATCH /api/admin/sources/:id` changes a source's classification
+mode or fixed type; the server stops source-scoped operations and queues a
+rescan that reclassifies unchanged tracks. Administrators can override a track
+or complete book/show collection with
+`PUT /api/admin/tracks/:id/media-type` or
+`PUT /api/admin/media-collections/:id/media-type`; the corresponding `DELETE`
+routes restore the stored detected type.
 Administrators manage metadata providers through
 `GET/POST /api/admin/metadata-providers`,
 `GET /api/admin/metadata-providers/definitions`,

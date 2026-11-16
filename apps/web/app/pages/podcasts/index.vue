@@ -4,6 +4,7 @@ import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { onMounted } from "vue";
+import AutoLoadMore from "../../components/AutoLoadMore.vue";
 import MediaCollectionCard from "../../components/MediaCollectionCard.vue";
 import { useCatalogPodcastQuery } from "../../composables/use-catalog-query";
 import { useLikes } from "../../composables/use-likes";
@@ -76,20 +77,14 @@ onMounted(() => {
         :key="podcast.id"
         :collection="podcast"
       />
-      <div v-if="hasMore" class="col-span-full flex justify-center">
-        <Button
-          type="button"
-          variant="outline"
-          :disabled="loadingMore"
-          @click="loadMore"
-        >
-          {{
-            loadingMore
-              ? t("page.podcasts.loadingMore")
-              : t("page.podcasts.loadMore")
-          }}
-        </Button>
-      </div>
+      <AutoLoadMore
+        class="col-span-full"
+        :enabled="hasMore"
+        :loading="loadingMore"
+        :item-count="podcasts.length"
+        :label="t('page.podcasts.loadingMore')"
+        @load="loadMore"
+      />
     </div>
     <p
       v-else

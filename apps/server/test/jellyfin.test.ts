@@ -8,6 +8,13 @@ const AUDIO_ID = "11111111-1111-1111-1111-111111111111";
 const ALBUM_ID = "22222222-2222-2222-2222-222222222222";
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
 const AUDIO = Buffer.from("jellyfin-audio-bytes");
+const LIBRARIES = [
+  {
+    ItemId: "music-library-id",
+    Name: "Music",
+    CollectionType: "music",
+  },
+];
 
 function jellyfinResponse(input: string | URL | Request): Response {
   const request = input instanceof Request ? input : null;
@@ -97,7 +104,7 @@ function jellyfinResponse(input: string | URL | Request): Response {
   return new Response("not found", { status: 404 });
 }
 
-test("Jellyfin library discovery creates one typed source per selected library", async () => {
+test("Jellyfin library discovery creates one auto-detected source per selected library", async () => {
   const requestedUrls: string[] = [];
   const jellyfinFetch: typeof fetch = async (input, init) => {
     const request =
@@ -131,7 +138,6 @@ test("Jellyfin library discovery creates one typed source per selected library",
       payload: {
         kind: "integration",
         integration: "jellyfin",
-        mediaType: "audiobook",
         libraryId: "audio-library-id",
         url: "http://jellyfin.local:8096",
         apiKey: API_KEY,
@@ -140,11 +146,15 @@ test("Jellyfin library discovery creates one typed source per selected library",
     assert.equal(create.statusCode, 201, create.body);
     const source = create.json<{
       id: string;
-      mediaType: string;
+      classificationMode: string;
+      fixedMediaType: string | null;
+      externalLibraryCollectionType: string | null;
       externalLibraryId: string;
       task: TaskResponse;
     }>();
-    assert.equal(source.mediaType, "audiobook");
+    assert.equal(source.classificationMode, "auto");
+    assert.equal(source.fixedMediaType, null);
+    assert.equal(source.externalLibraryCollectionType, "books");
     assert.equal(source.externalLibraryId, "audio-library-id");
     await waitForScan(context, source.task.id);
 
@@ -164,6 +174,119 @@ test("Jellyfin library discovery creates one typed source per selected library",
       books.json<{ items: Array<{ title: string }> }>().items[0]?.title,
       "Night Album",
     );
+  } finally {
+    await context.close();
+  }
+});
+
+test("Jellyfin auto-detects audiobooks, podcasts, and music within one library", async () => {
+  const requestedUrls: string[] = [];
+  const context = await createTestContext({
+    jellyfinFetch: async (input) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      requestedUrls.push(url.toString());
+      if (url.pathname.endsWith("/System/Info")) {
+        return Response.json({ ServerName: "Mixed Jellyfin" });
+      }
+      if (url.pathname.endsWith("/Library/VirtualFolders")) {
+        return Response.json(LIBRARIES);
+      }
+      if (url.pathname.endsWith("/Items")) {
+        return Response.json({
+          Items: [
+            {
+              Id: "audio-book",
+              Type: "AudioBook",
+              Name: "Chapter One",
+              Container: "m4b",
+              Album: "Mixed Book",
+              AlbumId: "mixed-book-album",
+              Artists: ["Book Author"],
+              MediaSources: [{ Container: "m4b", Size: 10 }],
+            },
+            {
+              Id: "podcast-episode",
+              Type: "Audio",
+              Name: "Episode One",
+              Container: "mp3",
+              Album: "Mixed Show",
+              AlbumId: "mixed-show-album",
+              Artists: ["Show Publisher"],
+              Tags: ["Podcast"],
+              MediaSources: [{ Container: "mp3", Size: 10 }],
+            },
+            {
+              Id: "music-track",
+              Type: "Audio",
+              Name: "Song One",
+              Container: "mp3",
+              Album: "Mixed Music",
+              AlbumId: "mixed-music-album",
+              Artists: ["Music Artist"],
+              MediaSources: [{ Container: "mp3", Size: 10 }],
+            },
+          ],
+          TotalRecordCount: 3,
+        });
+      }
+      return new Response("not found", { status: 404 });
+    },
+  });
+  try {
+    const created = await context.app.inject({
+      method: "POST",
+      url: "/api/admin/sources",
+      headers: context.authorization,
+      payload: {
+        kind: "integration",
+        integration: "jellyfin",
+        libraryId: "music-library-id",
+        url: "http://jellyfin.example.test",
+        apiKey: API_KEY,
+      },
+    });
+    assert.equal(created.statusCode, 201, created.body);
+    const source = created.json<{ id: string; task: TaskResponse }>();
+    await waitForScan(context, source.task.id);
+
+    const tracks = await context.database.orm.Track.all();
+    const byTitle = new Map(tracks.map((track) => [track.title, track]));
+    assert.equal(byTitle.get("Chapter One")?.mediaType, "audiobook");
+    assert.equal(byTitle.get("Chapter One")?.mediaTypeOrigin, "jellyfin");
+    assert.equal(byTitle.get("Episode One")?.mediaType, "podcast");
+    assert.equal(byTitle.get("Episode One")?.mediaTypeOrigin, "jellyfin");
+    assert.equal(byTitle.get("Song One")?.mediaType, "music");
+    assert.equal(byTitle.get("Song One")?.mediaTypeOrigin, "fallback");
+
+    const fixedResponse = await context.app.inject({
+      method: "PATCH",
+      url: `/api/admin/sources/${source.id}`,
+      headers: context.authorization,
+      payload: { classificationMode: "fixed", fixedMediaType: "audiobook" },
+    });
+    assert.equal(fixedResponse.statusCode, 200);
+    const fixedSource = fixedResponse.json<{
+      task: TaskResponse | null;
+    }>();
+    assert.ok(fixedSource.task);
+    await waitForScan(context, fixedSource.task.id);
+    const reclassifiedSong = await context.database.orm.Track.firstOrThrow({
+      id: byTitle.get("Song One")!.id,
+    });
+    assert.equal(reclassifiedSong.mediaType, "audiobook");
+    assert.equal(reclassifiedSong.mediaTypeOrigin, "source");
+
+    const itemsRequest = requestedUrls.find(
+      (value) => new URL(value).pathname === "/Items",
+    );
+    assert.ok(itemsRequest);
+    const itemsUrl = new URL(itemsRequest);
+    assert.equal(
+      itemsUrl.searchParams.get("includeItemTypes"),
+      "Audio,AudioBook",
+    );
+    assert.match(itemsUrl.searchParams.get("fields") ?? "", /Tags/);
+    assert.match(itemsUrl.searchParams.get("fields") ?? "", /ProviderIds/);
   } finally {
     await context.close();
   }
@@ -190,6 +313,7 @@ test("Jellyfin sources validate, import audio only, encrypt credentials, proxy p
       payload: {
         kind: "integration",
         integration: "jellyfin",
+        libraryId: "music-library-id",
         url: "http://jellyfin.local:8096",
         apiKey: API_KEY,
       },
@@ -205,7 +329,7 @@ test("Jellyfin sources validate, import audio only, encrypt credentials, proxy p
       credentialCiphertext?: unknown;
       task: TaskResponse;
     }>();
-    assert.equal(source.name, "Living Room Jellyfin");
+    assert.equal(source.name, "Music");
     assert.equal(source.url, "http://jellyfin.local:8096/");
     assert.equal(source.integration, "jellyfin");
     assert.equal(source.fileCount, 0);
@@ -353,6 +477,7 @@ test("Jellyfin source validation rejects invalid keys without persisting a sourc
       payload: {
         kind: "integration",
         integration: "jellyfin",
+        libraryId: "music-library-id",
         url: "https://media.example.test/jellyfin",
         apiKey: "bad-key",
       },
@@ -388,6 +513,9 @@ test("multiple Jellyfin instances are supported while normalized duplicate URLs 
       if (url.pathname.endsWith("/Items")) {
         return Response.json({ Items: [], TotalRecordCount: 0 });
       }
+      if (url.pathname.endsWith("/Library/VirtualFolders")) {
+        return Response.json(LIBRARIES);
+      }
       return new Response("not found", { status: 404 });
     },
   });
@@ -399,6 +527,7 @@ test("multiple Jellyfin instances are supported while normalized duplicate URLs 
       payload: {
         kind: "integration",
         integration: "jellyfin",
+        libraryId: "music-library-id",
         url: "https://media.example.test/jellyfin",
         apiKey: "first-key",
       },
@@ -414,6 +543,7 @@ test("multiple Jellyfin instances are supported while normalized duplicate URLs 
       payload: {
         kind: "integration",
         integration: "jellyfin",
+        libraryId: "music-library-id",
         url: "https://media.example.test/jellyfin/",
         apiKey: "different-key",
       },
@@ -431,6 +561,7 @@ test("multiple Jellyfin instances are supported while normalized duplicate URLs 
       payload: {
         kind: "integration",
         integration: "jellyfin",
+        libraryId: "music-library-id",
         url: "https://media.example.test/other",
         apiKey: "second-key",
       },
@@ -496,6 +627,9 @@ test("Jellyfin rescans use item versions and mark remotely deleted audio unavail
           TotalRecordCount: items.length,
         });
       }
+      if (url.pathname.endsWith("/Library/VirtualFolders")) {
+        return Response.json(LIBRARIES);
+      }
       return new Response("not found", { status: 404 });
     },
   });
@@ -507,6 +641,7 @@ test("Jellyfin rescans use item versions and mark remotely deleted audio unavail
       payload: {
         kind: "integration",
         integration: "jellyfin",
+        libraryId: "music-library-id",
         url: "http://jellyfin.example.test",
         apiKey: API_KEY,
       },
@@ -568,6 +703,9 @@ test("a failed Jellyfin scan writes an error to the administrator log", async ()
       if (url.pathname.endsWith("/Items")) {
         return new Response("library unavailable", { status: 503 });
       }
+      if (url.pathname.endsWith("/Library/VirtualFolders")) {
+        return Response.json(LIBRARIES);
+      }
       return new Response("not found", { status: 404 });
     },
   });
@@ -579,6 +717,7 @@ test("a failed Jellyfin scan writes an error to the administrator log", async ()
       payload: {
         kind: "integration",
         integration: "jellyfin",
+        libraryId: "music-library-id",
         url: "http://jellyfin-logging.example.test",
         apiKey: API_KEY,
       },
@@ -602,7 +741,7 @@ test("a failed Jellyfin scan writes an error to the administrator log", async ()
         (entry) =>
           entry.level === "error" &&
           entry.message.includes(
-            "Task failed: Logging Jellyfin scan. Jellyfin could not list its audio library.",
+            "Task failed: Music scan. Jellyfin could not list its audio library.",
           ),
       ),
     );

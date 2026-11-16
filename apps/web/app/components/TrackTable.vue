@@ -5,8 +5,8 @@ import { Icon } from "@iconify/vue/offline";
 import { Button } from "@peridot/ui/components/ui/button";
 import { ProgressCircle } from "@peridot/ui/components/ui/progress-circle";
 import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
-import { useIntersectionObserver } from "@vueuse/core";
 import { computed, nextTick, ref, watch } from "vue";
+import AutoLoadMore from "./AutoLoadMore.vue";
 import LikeButton from "./LikeButton.vue";
 import TrackArtwork from "./TrackArtwork.vue";
 import TrackArtistLinks from "./TrackArtistLinks.vue";
@@ -84,23 +84,8 @@ const rows = computed(() =>
 const visibleCount = ref(TRACK_BATCH_SIZE);
 const visibleRows = computed(() => rows.value.slice(0, visibleCount.value));
 const hasHiddenRows = computed(() => visibleCount.value < rows.value.length);
-const loadMoreTarget = ref<HTMLElement | null>(null);
-useIntersectionObserver(
-  loadMoreTarget,
-  ([entry]) => {
-    if (!entry?.isIntersecting) return;
-    if (hasHiddenRows.value) {
-      visibleCount.value = Math.min(
-        rows.value.length,
-        visibleCount.value + TRACK_BATCH_SIZE,
-      );
-      return;
-    }
-    if (props.hasMore && !props.loadingMore) {
-      emit("load-more");
-    }
-  },
-  { rootMargin: "300px 0px", threshold: 0 },
+const autoLoadProgress = computed(
+  () => rows.value.length + visibleRows.value.length,
 );
 
 function toggleSort(field: TrackSortField) {
@@ -154,7 +139,7 @@ function loadMoreRows() {
     );
     return;
   }
-  emit("load-more");
+  if (props.hasMore && !props.loadingMore) emit("load-more");
 }
 
 function playFromList(track: TrackResponse, restart = false) {
@@ -514,26 +499,16 @@ watch(
       </TrackContextMenu>
     </div>
     <div v-if="hasHiddenRows || hasMore" role="rowgroup">
-      <div
-        ref="loadMoreTarget"
-        role="row"
-        :aria-rowindex="tracks.length + 2"
-        class="flex min-w-full justify-center border-t p-3"
-      >
-        <div role="cell">
-          <Button
-            type="button"
-            variant="outline"
-            :disabled="loadingMore && !hasHiddenRows"
-            @click="loadMoreRows"
-          >
-            {{
-              loadingMore && !hasHiddenRows
-                ? t("trackTable.loadingMore")
-                : t("trackTable.loadMore")
-            }}
-          </Button>
-        </div>
+      <div role="row" :aria-rowindex="tracks.length + 2">
+        <AutoLoadMore
+          role="cell"
+          class="min-w-full"
+          :enabled="hasHiddenRows || Boolean(hasMore)"
+          :loading="Boolean(loadingMore) && !hasHiddenRows"
+          :item-count="autoLoadProgress"
+          :label="t('trackTable.loadingMore')"
+          @load="loadMoreRows"
+        />
       </div>
     </div>
   </div>

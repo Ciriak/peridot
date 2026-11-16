@@ -11,6 +11,7 @@ const AUDIO_TYPES = new Map<string, { extension: string; mimeType: string }>([
   ["aac", { extension: "aac", mimeType: "audio/aac" }],
   ["flac", { extension: "flac", mimeType: "audio/flac" }],
   ["m4a", { extension: "m4a", mimeType: "audio/mp4" }],
+  ["m4b", { extension: "m4b", mimeType: "audio/mp4" }],
   ["mp3", { extension: "mp3", mimeType: "audio/mpeg" }],
   ["mp4", { extension: "m4a", mimeType: "audio/mp4" }],
   ["ogg", { extension: "ogg", mimeType: "audio/ogg" }],
@@ -31,6 +32,7 @@ interface JellyfinMediaSource {
 interface JellyfinItem {
   Id?: string | null;
   Name?: string | null;
+  Type?: string | null;
   Etag?: string | null;
   Container?: string | null;
   RunTimeTicks?: number | null;
@@ -48,6 +50,8 @@ interface JellyfinItem {
   ImageTags?: Record<string, string | null> | null;
   Genres?: string[] | null;
   GenreItems?: JellyfinNameId[] | null;
+  Tags?: string[] | null;
+  ProviderIds?: Record<string, string | null> | null;
   MediaSources?: JellyfinMediaSource[] | null;
 }
 
@@ -86,6 +90,9 @@ export interface JellyfinAudioItem {
   album: string | null;
   albumId: string | null;
   genres: string[];
+  jellyfinItemType: string | null;
+  jellyfinTags: string[];
+  jellyfinProviderIds: Record<string, string | null>;
   discNumber: number | null;
   trackNumber: number | null;
   durationMs: number | null;
@@ -233,6 +240,11 @@ function toAudioItem(item: JellyfinItem): {
           (item.Artists ?? []).join("|"),
           item.Album ?? "",
           genres.join("|"),
+          item.Type ?? "",
+          (item.Tags ?? []).join("|"),
+          Object.keys(item.ProviderIds ?? {})
+            .sort()
+            .join("|"),
           item.RunTimeTicks ?? "",
           coverTag ?? "",
         ].join(":"),
@@ -243,6 +255,9 @@ function toAudioItem(item: JellyfinItem): {
       album,
       albumId,
       genres,
+      jellyfinItemType: item.Type?.trim() || null,
+      jellyfinTags: uniqueValues(item.Tags ?? []),
+      jellyfinProviderIds: item.ProviderIds ?? {},
       discNumber: positiveInteger(item.ParentIndexNumber),
       trackNumber: positiveInteger(item.IndexNumber),
       durationMs,
@@ -351,10 +366,10 @@ export class JellyfinClient {
       const url = endpoint(baseUrl, "Items");
       url.search = new URLSearchParams({
         recursive: "true",
-        includeItemTypes: "Audio",
+        includeItemTypes: "Audio,AudioBook",
         mediaTypes: "Audio",
         ...(libraryId ? { parentId: libraryId } : {}),
-        fields: "MediaSources,Genres,PremiereDate,DateCreated",
+        fields: "MediaSources,Genres,PremiereDate,DateCreated,Tags,ProviderIds",
         enableImages: "true",
         enableTotalRecordCount: "true",
         sortBy: "SortName",

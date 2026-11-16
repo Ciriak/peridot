@@ -58,6 +58,11 @@ test("artists have list and detail routes with artist-scoped content", async () 
   assert.match(detailPage, /artistId: artist\.value\?\.id/);
   assert.match(detailPage, /<AlbumCard/);
   assert.match(detailPage, /:album="album"/);
+  assert.match(
+    detailPage,
+    /grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-5/,
+    "Artist albums use a two-column mobile grid",
+  );
   assert.match(detailPage, /playCollection\(/);
   assert.match(detailPage, /t\("context\.playArtist"\)/);
   assert.match(detailPage, /<LikeButton/);

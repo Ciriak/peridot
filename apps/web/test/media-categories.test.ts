@@ -8,7 +8,9 @@ import {
   listAudiobooks,
   listPodcastEpisodes,
   listPodcasts,
+  updateMediaCollectionType,
   updateSource,
+  updateTrackMediaType,
 } from "../app/lib/peridot-client.ts";
 
 test("audiobook and podcast navigation, pages, and source settings are wired", async () => {
@@ -21,6 +23,7 @@ test("audiobook and podcast navigation, pages, and source settings are wired", a
     card,
     detail,
     sources,
+    trackMenu,
   ] = await Promise.all([
     readFile(new URL("../app/layouts/default.vue", import.meta.url), "utf8"),
     readFile(
@@ -51,6 +54,10 @@ test("audiobook and podcast navigation, pages, and source settings are wired", a
       new URL("../app/pages/settings/sources.vue", import.meta.url),
       "utf8",
     ),
+    readFile(
+      new URL("../app/components/TrackContextMenu.vue", import.meta.url),
+      "utf8",
+    ),
   ]);
 
   assert.match(layout, /labelKey: "navigation\.audiobooks"/);
@@ -68,14 +75,21 @@ test("audiobook and podcast navigation, pages, and source settings are wired", a
   assert.match(detail, /page\.podcast\.episodes/);
   assert.match(detail, /allow-track-like="false"/);
   assert.match(sources, /discoverJellyfinLibraries/);
-  assert.match(sources, /newMediaType/);
-  assert.match(sources, /changeMediaType/);
+  assert.match(sources, /newClassificationMode/);
+  assert.match(sources, /changeClassification/);
+  assert.match(sources, /classification\.autoHelp/);
+  assert.match(detail, /changeCollectionMediaType/);
+  assert.match(detail, /v-if="admin"/);
+  assert.match(trackMenu, /changeTrackMediaType/);
+  assert.match(trackMenu, /restoreDetectedMediaType/);
+  assert.match(trackMenu, /v-if="admin"/);
 });
 
 test("track collection routes follow the normalized media type", () => {
   const base: TrackResponse = {
     id: "track-id",
     mediaType: "music",
+    mediaTypeOrigin: "fallback",
     title: "Part One",
     artist: "Creator",
     artists: ["Creator"],
@@ -150,8 +164,21 @@ test("category and source client calls use authenticated typed endpoints", async
     "podcast-id",
   );
   await updateSource("http://peridot.local:17430", "token", "source-id", {
-    mediaType: "audiobook",
+    classificationMode: "fixed",
+    fixedMediaType: "audiobook",
   });
+  await updateTrackMediaType(
+    "http://peridot.local:17430",
+    "token",
+    "track-id",
+    "podcast",
+  );
+  await updateMediaCollectionType(
+    "http://peridot.local:17430",
+    "token",
+    "collection-id",
+    "audiobook",
+  );
   await discoverJellyfinLibraries("http://peridot.local:17430", "token", {
     url: "http://jellyfin.local:8096",
     apiKey: "secret",
@@ -173,6 +200,28 @@ test("category and source client calls use authenticated typed endpoints", async
       (request) =>
         request.url.endsWith("/api/admin/sources/source-id") &&
         request.method === "PATCH" &&
+        request.body ===
+          JSON.stringify({
+            classificationMode: "fixed",
+            fixedMediaType: "audiobook",
+          }),
+    ),
+  );
+  assert.ok(
+    requests.some(
+      (request) =>
+        request.url.endsWith("/api/admin/tracks/track-id/media-type") &&
+        request.method === "PUT" &&
+        request.body === JSON.stringify({ mediaType: "podcast" }),
+    ),
+  );
+  assert.ok(
+    requests.some(
+      (request) =>
+        request.url.endsWith(
+          "/api/admin/media-collections/collection-id/media-type",
+        ) &&
+        request.method === "PUT" &&
         request.body === JSON.stringify({ mediaType: "audiobook" }),
     ),
   );

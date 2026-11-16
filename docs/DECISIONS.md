@@ -1,5 +1,34 @@
 # Decisions
 
+## 2026-11-16: Paginated collections load automatically
+
+Paginated cards, shared track tables, search result groups, and task history use
+one shared viewport sentinel instead of rendering a manual load-more button.
+When the sentinel approaches the viewport, it requests the next page if more
+data exists and no request is active. A changed item count allows the sentinel
+to request again while it remains visible, so a short first page fills a tall
+viewport without user action, while an unchanged item count after a failed
+request avoids an automatic retry loop.
+
+The trigger renders no visible control. Its loading state is exposed only to
+assistive technology. Track tables retain their page-flow progressive row
+mounting; the same sentinel first reveals another mounted row batch and then
+fetches another server page when all loaded rows are visible. This supersedes
+the earlier visible load-more fallback decisions.
+
+## 2026-11-16: Brief server disconnects keep the connected state
+
+The shared server reachability state waits five seconds before changing from
+connected to offline. A successful API response or realtime connection during
+that window cancels the pending offline transition. A sustained outage still
+shows the offline state after the cooldown expires.
+
+Realtime socket retries and independent API failures can otherwise alternate
+the shared state within seconds. Each connected transition emits the existing
+`Back online` toast, so the cooldown prevents transient retry churn from
+spamming the user while preserving the actual connection-loss indicator for
+real outages.
+
 ## 2026-11-16: Multi-architecture Docker images build on native runners
 
 The Docker publication workflow builds AMD64 and ARM64 images in separate
@@ -20,6 +49,26 @@ The Dockerfile now separates dependency installation, contracts compilation,
 server compilation, and static client generation into individual layers. The
 runtime still includes target-native dependencies such as `better-sqlite3`, so
 build outputs and dependency trees must not be copied between architectures.
+
+## 2026-11-16: Media type is detected per track
+
+Peridot classifies each track independently so one local folder or Jellyfin
+library can contain music, audiobooks, and podcasts without requiring separate
+sources. Jellyfin item type, Jellyfin library collection type, podcast tags,
+iTunes audiobook media type, audiobook release type, and `.m4b` are the accepted
+signals. Title, containing folder, duration, and genre are not classification
+signals.
+
+A source defaults to automatic detection and may optionally use one fixed type.
+For each track, an administrator override takes precedence over the fixed source
+type, detected metadata, and the music fallback. The detected type and its origin
+are stored separately from the override so resetting a correction restores the
+last detection without rereading the media. Ambiguous tracks default to music.
+
+All-source rescans compare the effective type during unchanged-item checks, so
+changing source mode or detection evidence reindexes category and collection
+projections. Music metadata providers remain music-only. This supersedes the
+explicit per-source decision below.
 
 ## 2026-11-16: One public Peridot port on 17430
 

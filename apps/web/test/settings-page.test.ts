@@ -465,8 +465,10 @@ test("tasks have a settings view for active work and paginated history", async (
   assert.match(page, /taskStatusMessage\(task\)/);
   assert.match(page, /task\.failureMessage/);
   assert.match(page, /TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY/);
-  assert.match(page, /settings\.tasks\.loadOlder/);
-  assert.match(page, /@click="loadMoreHistory"/);
+  assert.match(page, /settings\.tasks\.loadingOlder/);
+  assert.match(page, /<AutoLoadMore/);
+  assert.match(page, /@load="loadMoreHistory"/);
+  assert.doesNotMatch(page, /@click="loadMoreHistory"/);
   assert.match(page, /visibleDetails\(task\)/);
   assert.match(page, /taskTimeLabel\(task\)/);
   assert.match(page, /formatTimeAgo/);

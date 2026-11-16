@@ -10,6 +10,7 @@ import { watchDebounced } from "@vueuse/core";
 import { computed, onMounted, ref, watch } from "vue";
 import AlbumCard from "../components/AlbumCard.vue";
 import ArtistCard from "../components/ArtistCard.vue";
+import AutoLoadMore from "../components/AutoLoadMore.vue";
 import MediaCollectionCard from "../components/MediaCollectionCard.vue";
 import TrackTable from "../components/TrackTable.vue";
 import {
@@ -343,20 +344,14 @@ onMounted(() => {
             :key="artist.id"
             :artist="artist"
           />
-          <div v-if="hasMoreArtists" class="col-span-full flex justify-center">
-            <Button
-              type="button"
-              variant="outline"
-              :disabled="artistsLoadingMore"
-              @click="loadMoreArtists"
-            >
-              {{
-                artistsLoadingMore
-                  ? t("page.search.loadingMoreArtists")
-                  : t("page.search.loadMoreArtists")
-              }}
-            </Button>
-          </div>
+          <AutoLoadMore
+            class="col-span-full"
+            :enabled="hasMoreArtists"
+            :loading="artistsLoadingMore"
+            :item-count="artistResults.length"
+            :label="t('page.search.loadingMoreArtists')"
+            @load="loadMoreArtists"
+          />
         </div>
         <p
           v-else
@@ -397,20 +392,14 @@ onMounted(() => {
             compact
             @open="openAlbum(album)"
           />
-          <div v-if="hasMoreAlbums" class="col-span-full flex justify-center">
-            <Button
-              type="button"
-              variant="outline"
-              :disabled="albumsLoadingMore"
-              @click="loadMoreAlbums"
-            >
-              {{
-                albumsLoadingMore
-                  ? t("page.search.loadingMoreAlbums")
-                  : t("page.search.loadMoreAlbums")
-              }}
-            </Button>
-          </div>
+          <AutoLoadMore
+            class="col-span-full"
+            :enabled="hasMoreAlbums"
+            :loading="albumsLoadingMore"
+            :item-count="albumResults.length"
+            :label="t('page.search.loadingMoreAlbums')"
+            @load="loadMoreAlbums"
+          />
         </div>
         <p
           v-else
@@ -487,23 +476,14 @@ onMounted(() => {
             :key="audiobook.id"
             :collection="audiobook"
           />
-          <div
-            v-if="hasMoreAudiobooks"
-            class="col-span-full flex justify-center"
-          >
-            <Button
-              type="button"
-              variant="outline"
-              :disabled="audiobooksLoadingMore"
-              @click="loadMoreAudiobooks"
-            >
-              {{
-                audiobooksLoadingMore
-                  ? t("page.search.loadingMoreAudiobooks")
-                  : t("page.search.loadMoreAudiobooks")
-              }}
-            </Button>
-          </div>
+          <AutoLoadMore
+            class="col-span-full"
+            :enabled="hasMoreAudiobooks"
+            :loading="audiobooksLoadingMore"
+            :item-count="audiobookResults.length"
+            :label="t('page.search.loadingMoreAudiobooks')"
+            @load="loadMoreAudiobooks"
+          />
         </div>
         <p
           v-else
@@ -542,20 +522,14 @@ onMounted(() => {
             :key="podcast.id"
             :collection="podcast"
           />
-          <div v-if="hasMorePodcasts" class="col-span-full flex justify-center">
-            <Button
-              type="button"
-              variant="outline"
-              :disabled="podcastsLoadingMore"
-              @click="loadMorePodcasts"
-            >
-              {{
-                podcastsLoadingMore
-                  ? t("page.search.loadingMorePodcasts")
-                  : t("page.search.loadMorePodcasts")
-              }}
-            </Button>
-          </div>
+          <AutoLoadMore
+            class="col-span-full"
+            :enabled="hasMorePodcasts"
+            :loading="podcastsLoadingMore"
+            :item-count="podcastResults.length"
+            :label="t('page.search.loadingMorePodcasts')"
+            @load="loadMorePodcasts"
+          />
         </div>
         <p
           v-else

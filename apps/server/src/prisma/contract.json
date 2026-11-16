@@ -2067,6 +2067,13 @@
           },
           "Source": {
             "fields": {
+              "classificationMode": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
               "createdAt": {
                 "nullable": false,
                 "type": {
@@ -2081,7 +2088,21 @@
                   "kind": "scalar"
                 }
               },
+              "externalLibraryCollectionType": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
               "externalLibraryId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "fixedMediaType": {
                 "nullable": true,
                 "type": {
                   "codecId": "sqlite/text@1",
@@ -2113,13 +2134,6 @@
                 "nullable": true,
                 "type": {
                   "codecId": "sqlite/datetime@1",
-                  "kind": "scalar"
-                }
-              },
-              "mediaType": {
-                "nullable": false,
-                "type": {
-                  "codecId": "sqlite/text@1",
                   "kind": "scalar"
                 }
               },
@@ -2162,14 +2176,23 @@
             "relations": {},
             "storage": {
               "fields": {
+                "classificationMode": {
+                  "column": "classificationMode"
+                },
                 "createdAt": {
                   "column": "createdAt"
                 },
                 "credentialCiphertext": {
                   "column": "credentialCiphertext"
                 },
+                "externalLibraryCollectionType": {
+                  "column": "externalLibraryCollectionType"
+                },
                 "externalLibraryId": {
                   "column": "externalLibraryId"
+                },
+                "fixedMediaType": {
+                  "column": "fixedMediaType"
                 },
                 "id": {
                   "column": "id"
@@ -2182,9 +2205,6 @@
                 },
                 "lastSyncedAt": {
                   "column": "lastSyncedAt"
-                },
-                "mediaType": {
-                  "column": "mediaType"
                 },
                 "name": {
                   "column": "name"
@@ -2455,6 +2475,20 @@
                   "kind": "scalar"
                 }
               },
+              "detectedMediaType": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "detectedMediaTypeOrigin": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
               "discNumber": {
                 "nullable": true,
                 "type": {
@@ -2527,6 +2561,20 @@
               },
               "mediaType": {
                 "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "mediaTypeOrigin": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "mediaTypeOverride": {
+                "nullable": true,
                 "type": {
                   "codecId": "sqlite/text@1",
                   "kind": "scalar"
@@ -2766,6 +2814,12 @@
                 "createdAt": {
                   "column": "createdAt"
                 },
+                "detectedMediaType": {
+                  "column": "detectedMediaType"
+                },
+                "detectedMediaTypeOrigin": {
+                  "column": "detectedMediaTypeOrigin"
+                },
                 "discNumber": {
                   "column": "discNumber"
                 },
@@ -2798,6 +2852,12 @@
                 },
                 "mediaType": {
                   "column": "mediaType"
+                },
+                "mediaTypeOrigin": {
+                  "column": "mediaTypeOrigin"
+                },
+                "mediaTypeOverride": {
+                  "column": "mediaTypeOverride"
                 },
                 "metadataAlbum": {
                   "column": "metadataAlbum"
@@ -5003,6 +5063,15 @@
             },
             "Source": {
               "columns": {
+                "classificationMode": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "default": {
+                    "kind": "literal",
+                    "value": "auto"
+                  },
+                  "nullable": false
+                },
                 "createdAt": {
                   "codecId": "sqlite/datetime@1",
                   "dataType": "sqlite/datetime",
@@ -5017,7 +5086,17 @@
                   "dataType": "sqlite/text",
                   "nullable": true
                 },
+                "externalLibraryCollectionType": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
                 "externalLibraryId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "fixedMediaType": {
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
                   "nullable": true
@@ -5041,15 +5120,6 @@
                   "codecId": "sqlite/datetime@1",
                   "dataType": "sqlite/datetime",
                   "nullable": true
-                },
-                "mediaType": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
-                  "default": {
-                    "kind": "literal",
-                    "value": "music"
-                  },
-                  "nullable": false
                 },
                 "name": {
                   "codecId": "sqlite/text@1",
@@ -5085,18 +5155,18 @@
               "indexes": [
                 {
                   "columns": [
-                    "kind"
+                    "classificationMode"
                   ],
-                  "name": "Source_kind_idx_c9ca668f",
-                  "prefix": "Source_kind_idx",
+                  "name": "Source_classificationMode_idx_d9eab081",
+                  "prefix": "Source_classificationMode_idx",
                   "unique": false
                 },
                 {
                   "columns": [
-                    "mediaType"
+                    "kind"
                   ],
-                  "name": "Source_mediaType_idx_c1745d97",
-                  "prefix": "Source_mediaType_idx",
+                  "name": "Source_kind_idx_c9ca668f",
+                  "prefix": "Source_kind_idx",
                   "unique": false
                 },
                 {
@@ -5306,6 +5376,24 @@
                   },
                   "nullable": false
                 },
+                "detectedMediaType": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "default": {
+                    "kind": "literal",
+                    "value": "music"
+                  },
+                  "nullable": false
+                },
+                "detectedMediaTypeOrigin": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "default": {
+                    "kind": "literal",
+                    "value": "fallback"
+                  },
+                  "nullable": false
+                },
                 "discNumber": {
                   "codecId": "sqlite/integer@1",
                   "dataType": "sqlite/integer",
@@ -5364,6 +5452,20 @@
                     "value": "music"
                   },
                   "nullable": false
+                },
+                "mediaTypeOrigin": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "default": {
+                    "kind": "literal",
+                    "value": "fallback"
+                  },
+                  "nullable": false
+                },
+                "mediaTypeOverride": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
                 },
                 "metadataAlbum": {
                   "codecId": "sqlite/text@1",
@@ -5940,7 +6042,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "3853caf909819c8979d24f4601cbb5756faf8898b0e5a6b6b64128610fc2efd5"
+    "storageHash": "22eaa382ca7613035403a641859f5bee7e22cd5125f1f628bdbfc85d296a9ae2"
   },
   "execution": {
     "executionHash": "69abe59ddf12aaa78738519fa294ac279958f3b4caa4e85b2cb8fd0effde430a",

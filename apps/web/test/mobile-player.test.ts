@@ -29,8 +29,21 @@ test("the compact mobile player anchors metadata and actions separately", async 
   const triggerStart = player.indexOf("<DialogTrigger as-child>");
   const triggerEnd = player.indexOf("</DialogTrigger>");
   assert.ok(triggerStart >= 0 && triggerEnd > triggerStart);
+  const compactStart = player.indexOf("<div data-mobile-player");
+  const compactProgress = player.slice(compactStart, triggerStart);
+  assert.match(
+    compactProgress,
+    /<Slider[\s\S]*:model-value="\[elapsed\]"[\s\S]*:disabled="!currentTrackPlayable \|\| durationSeconds <= 0"[\s\S]*:aria-busy="loading"[\s\S]*class="absolute inset-x-0 top-0 z-10 h-5 items-start"[\s\S]*track-class="rounded-none"[\s\S]*hide-thumb[\s\S]*@update:model-value="seek\(\$event\?\.\[0\] \?\? 0\)"/,
+    "the compact player places an edge-to-edge interactive progress line at its top",
+  );
+  assert.doesNotMatch(compactProgress, /\bpx-\d|\bpy-\d/);
   const trigger = player.slice(triggerStart, triggerEnd);
   assert.match(trigger, /t\('player\.openFullscreen'\)/);
+  assert.match(
+    trigger,
+    /class="h-full min-w-0 flex-1 justify-start gap-3 px-3 text-left transition-none hover:bg-transparent hover:text-current active:bg-transparent active:text-current dark:hover:bg-transparent dark:active:bg-transparent"/,
+    "the compact metadata trigger does not show a hover or touch background",
+  );
   assert.match(trigger, /class="relative flex size-14 shrink-0/);
   assert.match(trigger, /active\.title/);
   assert.match(trigger, /trackArtistNames\(active\)\.join/);
@@ -43,10 +56,16 @@ test("the compact mobile player anchors metadata and actions separately", async 
   assert.ok(actionsStart >= 0 && actionsEnd > actionsStart);
   const actions = player.slice(actionsStart, actionsEnd);
   assert.ok(
-    actions.indexOf("<LikeButton") >= 0 &&
+    actions.indexOf("t('player.next')") >= 0 &&
+      actions.indexOf("t('player.next')") < actions.indexOf("<LikeButton") &&
       actions.indexOf("<LikeButton") <
         actions.indexOf('@click="togglePlayback"'),
-    "the compact actions place like before play/pause",
+    "the compact actions place next before like and play/pause",
+  );
+  assert.match(
+    actions,
+    /class="size-12 transition-none hover:bg-transparent hover:text-current active:bg-transparent active:text-current dark:hover:bg-transparent dark:active:bg-transparent"[\s\S]*class="-ml-1\.5 transition-none hover:bg-transparent hover:text-current active:bg-transparent active:text-current dark:hover:bg-transparent dark:active:bg-transparent"[\s\S]*class="size-12 rounded-full transition-none hover:bg-primary active:bg-primary"/,
+    "the compact action buttons keep their resting appearance on hover and touch and tighten next-to-like spacing",
   );
 });
 
