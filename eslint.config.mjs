@@ -23,6 +23,7 @@ export default defineConfig([
     "**/src-tauri/target/**",
     "apps/android/android/**",
     "**/src/prisma/contract.d.ts",
+    "apps/server/migrations/snapshots/**",
   ]),
   js.configs.recommended,
   tseslint.configs.recommended,

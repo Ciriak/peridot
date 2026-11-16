@@ -1,32 +1,17 @@
-import { execFile, spawn } from "node:child_process";
-import { createRequire } from "node:module";
+import { spawn } from "node:child_process";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { promisify } from "node:util";
-
-const execFileAsync = promisify(execFile);
-const require = createRequire(import.meta.url);
+import { runPendingMigrations } from "./migrate-database.js";
 
 const root = await mkdtemp(path.join(tmpdir(), "peridot-test-schema-"));
 const templatePath = path.join(root, "template.db");
 const databaseUrl = `file:${templatePath.replaceAll("\\", "/")}`;
-const prismaCli = path.join(
-  path.dirname(require.resolve("prisma/package.json")),
-  "dist",
-  "prisma.js",
-);
-
 try {
-  await execFileAsync(
-    process.execPath,
-    [prismaCli, "db", "update", "--db", databaseUrl, "--no-interactive"],
-    {
-      cwd: process.cwd(),
-      env: process.env,
-      maxBuffer: 10 * 1024 * 1024,
-    },
-  );
+  await runPendingMigrations({
+    databaseUrl,
+    info: () => undefined,
+  });
 
   const testDirectory = path.resolve(process.cwd(), "test");
   const testFiles = (await readdir(testDirectory))

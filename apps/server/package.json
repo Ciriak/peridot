@@ -8,11 +8,13 @@
     "build": "pnpm db:generate && tsc -p tsconfig.json",
     "typecheck": "pnpm db:generate && tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
     "test": "pnpm db:generate && tsx scripts/run-tests.ts",
-    "db:validate": "prisma contract emit",
+    "db:validate": "prisma contract emit && tsx scripts/check-migrations.ts",
     "db:generate": "prisma contract emit",
-    "db:ensure": "tsx scripts/ensure-database-file.ts",
-    "db:update": "pnpm db:ensure && prisma db update --no-interactive",
-    "db:reset": "pnpm db:ensure && tsx scripts/reset-database.ts && prisma db update --no-interactive"
+    "db:migrate": "tsx scripts/migrate-database.ts",
+    "db:migrate:dev": "tsx scripts/migrate-database.ts --advance-ref db",
+    "db:migration:plan": "prisma contract emit && prisma migration plan",
+    "db:migration:check": "tsx scripts/check-migrations.ts",
+    "db:reset": "tsx scripts/reset-database.ts && pnpm db:migrate"
   },
   "dependencies": {
     "@fastify/cors": "^11.4.1",

@@ -7,5 +7,5 @@ if [ ! -s "$updater_token_file" ]; then
   head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > "$updater_token_file"
 fi
 
-pnpm --filter @peridot/server db:update
+pnpm --filter @peridot/server db:migrate
 exec node apps/server/dist/index.js

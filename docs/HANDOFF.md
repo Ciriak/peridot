@@ -2,6 +2,56 @@
 
 Last updated: 2026-11-16.
 
+## Database upgrades now run through committed migrations
+
+The server database now has a committed Prisma 8 migration graph under
+`apps/server/migrations`. `initial_schema` baselines the contract already used
+by current databases at storage hash `4e95e705…`; its tracked `db` ref points
+at that contract. Fresh databases apply all 84 baseline operations, while the
+existing current-schema development database is recognized as already at the
+baseline and performs no DDL.
+
+`pnpm db:migrate` is the safe application path used by Docker, `pnpm start`, and
+development startup. It checks pending migrations first, creates a consistent
+`node:sqlite` snapshot for a non-empty database, verifies the snapshot with
+`PRAGMA integrity_check`, and applies `prisma db migrate` before the server
+starts. Snapshots live beside the database in `backups/` (`/data/backups` in
+Docker), are owner-only, and retain the five newest files. Failed backup,
+verification, or migration work exits without starting Fastify.
+
+Development and CI now use the formal graph. `pnpm db:migrate:dev` applies
+pending migrations and advances `migrations/app/refs/db.json`;
+`pnpm db:migration:check` requires the ref and contract head to match and is part
+of `pnpm db:validate`. Server tests build their disposable database from the
+migrations rather than `db update`, and `pnpm db:reset` now rebuilds from the
+baseline.
+
+Checks completed:
+
+- Full server suite: 158 passing, including fresh baseline application,
+  current-schema adoption, failed-apply backup preservation, and five-file
+  retention
+- Web 215 passing, shared UI 17 passing, and Desktop 4 passing
+- Workspace type check, `pnpm check`, and workspace build
+- `pnpm db:validate` and `pnpm db:migration:check`
+- `pnpm db:migrate` against the existing database reported no pending work and
+  created no backup directory
+- `pnpm exec prisma migration show 20261116T1754_initial_schema`
+- `docker compose config`
+- `git diff --check`
+
+Known limits: Docker CLI and Compose are installed, but the Docker daemon is not
+running, so the image build and fresh/current-volume container smoke tests were
+not run. The baseline intentionally supports databases already at the current
+schema; older pre-baseline schemas fail closed and require explicit adoption.
+The `pnpm` commands emit Prisma CLI's non-failing notice that its bundled agent
+skill is not synced to the repository.
+
+All work is uncommitted on `dev`; no commit, push, tag, publication, or
+deployment was performed. Next, build the image with Docker running and verify
+one new volume and one current-schema `/data` volume, then exercise a real
+post-baseline migration before the next schema-changing release.
+
 ## Android playback notification restored
 
 Android playback now declares the Android 13 notification permission and

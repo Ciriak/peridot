@@ -18,8 +18,9 @@ Development web: http://localhost:17430. Browser API health is available at
 http://127.0.0.1:17430/api/health through Nuxt's development proxy. A built
 server serves the production SPA, API, audio, and realtime traffic on the same
 port.
-Development startup synchronizes the local database with the Prisma 8 contract
-and, when the corresponding environment variables are unset, uses `apps/server/peridot.db` and creates
+Development startup applies the committed Prisma 8 migrations and, when the
+corresponding environment variables are unset, uses `apps/server/peridot.db`
+and creates
 `apps/server/music`. Set `DATABASE_URL` or `MUSIC_LIBRARY_PATH` before starting
 to use different development locations.
 On first launch, the web app asks for the address of the user's Peridot server.
@@ -146,11 +147,11 @@ runs Web, Server, shared UI, Desktop, and Android tests in parallel jobs. Any
 failed test suite blocks the build jobs.
 
 Build output: `apps/web/.output/public` and `apps/server/dist`. Start the built
-server with `node apps/server/dist/index.js`; it serves the API and embedded web
-application from one Fastify listener on 17430. Local development runs Nuxt HMR
-on public port 17430 and proxies `/api` to a private Fastify listener on 17431.
-Set `PERIDOT_SERVE_WEB=false` to intentionally run the built server API without
-serving the web application.
+server with `pnpm start`, which applies pending database migrations before
+running `node apps/server/dist/index.js`. The server serves the API and embedded
+web application from one Fastify listener on 17430. Local development runs Nuxt
+HMR on public port 17430 and proxies `/api` to a private Fastify listener on 17431. Set `PERIDOT_SERVE_WEB=false` to intentionally run the built server API
+without serving the web application.
 The web package's standard build runs `nuxt generate` so `.output/public`
 contains the SPA entry and fallback documents required by the embedded server.
 
@@ -491,14 +492,57 @@ context menus provide the equivalent profile correction and local-metadata
 restore actions. Reset metadata clears track and artist matches and removes
 cached artist portraits. Peridot never rewrites the audio files.
 
-Synchronize an existing local database with the current Prisma 8 contract:
+## Database migrations
+
+`apps/server/migrations` is the committed Prisma 8 migration graph. The
+`initial_schema` baseline ends at contract storage hash
+`4e95e705bb64da3502c63812c1276da93b77815295ef507f0ffabcf2225fc0a1`.
+Databases already at that contract use the baseline as their starting graph node
+without replaying its table creation. Fresh databases apply the baseline.
+
+Apply pending migrations through the safe runner:
 
 ```sh
-pnpm db:update
+pnpm db:migrate
 ```
 
+The runner checks Prisma's migration status first. When migrations are pending
+for a non-empty database, it creates a consistent snapshot under the `backups`
+directory beside `DATABASE_URL`, verifies it with `PRAGMA integrity_check`, and
+keeps the five newest snapshots. A new empty database is migrated without a
+snapshot. Backup or migration failure stops before the server starts. The `db`
+ref is advanced only by `db:migrate:dev`; deployment applies never modify
+tracked refs.
+
+Make a schema change through the migration graph:
+
+```sh
+pnpm db:migration:plan -- --name add_feature
+pnpm db:migrate:dev
+pnpm db:migration:check
+```
+
+Review the generated package before applying it. For data backfills or value
+conversions, use Prisma's `--backfill` or `--convert` planning options, fill the
+generated `migration.ts` slots, and self-emit with
+`node apps/server/migrations/app/<migration>/migration.ts`. Do not edit
+`ops.json` directly. Commit the migration package, its snapshots, and
+`migrations/app/refs/db.json` together with the contract change.
+
+`pnpm db:migration:check` is part of `pnpm db:validate`. It verifies that the
+tracked `db` ref equals the emitted contract and that a migration path reaches
+the contract head. Server tests build their disposable database from the same
+migration graph.
+
+Keep database snapshots together with `peridot.db.key` or
+`PERIDOT_CREDENTIAL_KEY`. Database snapshots contain encrypted provider
+credentials, and the matching key is required to decrypt them. Automatic
+rollback is intentionally not performed: after a failed upgrade, stop the
+service, restore the selected snapshot and matching key, and run the previous
+image.
+
 To intentionally discard local catalog, account, server queue, and settings data
-and start from an empty database:
+and rebuild the development database from the migration baseline:
 
 ```sh
 pnpm db:reset
@@ -679,9 +723,10 @@ To check a message manually: `echo "feat: add library scanning" | pnpm commitlin
 ## Docker
 
 The root `Dockerfile` builds contracts, server output, and the static Nuxt
-application into one Node 24.15 image. Startup migrates `/data/peridot.db`
-before launching the server. `compose.yaml` exposes only 17430, persists
-`/data`, mounts music read-only at `/music`, and runs the maintained
+application into one Node 24.15 image. Startup applies committed migrations to
+`/data/peridot.db`, with snapshots in `/data/backups`, before launching the
+server. `compose.yaml` exposes only 17430, persists `/data`, mounts music
+read-only at `/music`, and runs the maintained
 `nickfedor/watchtower` fork. The README contains the user-facing installation
 steps. The default Compose channel is `stable`, which is the production release
 channel.

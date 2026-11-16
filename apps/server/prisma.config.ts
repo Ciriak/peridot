@@ -8,7 +8,7 @@ export default definePrismaConfig({
       connection: process.env.DATABASE_URL ?? "file:./peridot.db",
     },
     migrations: {
-      dir: ".peridot/prisma",
+      dir: "./migrations",
     },
   }),
 });

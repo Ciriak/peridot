@@ -1,5 +1,31 @@
 # Decisions
 
+## 2026-11-16: Database upgrades use committed migrations and verified snapshots
+
+Peridot's server database now changes only through a committed Prisma 8
+migration graph under `apps/server/migrations`. The `initial_schema` baseline
+ends at the contract already deployed at storage hash
+`4e95e705bb64da3502c63812c1276da93b77815295ef507f0ffabcf2225fc0a1`.
+Fresh databases apply that baseline; current-schema databases whose marker is
+already at the baseline contract use it as their graph origin without replaying
+table creation.
+
+Production startup and the supported `pnpm start` path run `pnpm db:migrate`
+before Fastify binds. If migrations are pending for a non-empty database, the
+runner creates a consistent SQLite snapshot beside the database, verifies it
+with `PRAGMA integrity_check`, and retains the five newest snapshots. Backup,
+integrity, or migration failure stops startup. Automatic restore is excluded
+because newer schema state must remain visible for operator recovery; recovery
+uses the reported snapshot, its matching credential key, and the previous image.
+
+Development and CI use the same graph. `pnpm db:migrate:dev` applies migrations
+and advances the tracked `db` ref, while `pnpm db:migration:check` rejects a
+contract change without a matching migration path. Direct `db update` is no
+longer part of normal startup or development workflows. Databases behind the
+current baseline schema are not inferred or reset automatically and fail closed
+until an administrator advances or adopts them explicitly. This supersedes the
+2026-11-11 decision to keep no migration history.
+
 ## 2026-11-16: Android playback uses a dedicated media notification channel
 
 The Android client declares `POST_NOTIFICATIONS`, registers a dedicated
