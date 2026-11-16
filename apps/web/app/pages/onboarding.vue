@@ -139,6 +139,23 @@ async function scanAddress(value: string, select = false) {
   }
 }
 
+async function connectToCurrentOrigin(): Promise<boolean> {
+  if (androidRuntime || !import.meta.client) return false;
+  try {
+    const foundAddress = await findPeridotServerAddress(window.location.origin);
+    if (!foundAddress) return false;
+    serverAddress.value = foundAddress;
+    rememberServer(
+      { address: foundAddress, host: new URL(foundAddress).host },
+      true,
+    );
+    await openAccountStep(foundAddress);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 watch(
   serverAddress,
   (value) => {
@@ -168,11 +185,13 @@ async function scanLocalNetwork() {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   if (opensAccountStep) {
-    void connectToServer();
+    await connectToServer();
+  } else if (!androidRuntime && !address.value) {
+    await connectToCurrentOrigin();
   }
-  if (!androidRuntime) void scanLocalNetwork();
+  if (!androidRuntime && step.value === "server") void scanLocalNetwork();
 });
 onBeforeUnmount(() => {
   if (addressScanTimer) clearTimeout(addressScanTimer);
@@ -180,19 +199,23 @@ onBeforeUnmount(() => {
   addressScanSequence += 1;
 });
 
+async function openAccountStep(serverAddressValue: string) {
+  selectedAddress.value = normalizeServerAddress(serverAddressValue);
+  const status = await fetchAuthStatus(selectedAddress.value);
+  requiresAdminUser.value = status.requiresAdminUser;
+  step.value = "account";
+  if (networkScanTimer) clearTimeout(networkScanTimer);
+}
+
 async function connectToServer(serverAddressOverride?: string) {
   error.value = "";
   loading.value = true;
   try {
-    selectedAddress.value = normalizeServerAddress(
+    await openAccountStep(
       serverAddressOverride ??
         selectedServer.value?.address ??
         serverAddress.value,
     );
-    const status = await fetchAuthStatus(selectedAddress.value);
-    requiresAdminUser.value = status.requiresAdminUser;
-    step.value = "account";
-    if (networkScanTimer) clearTimeout(networkScanTimer);
   } catch (reason) {
     step.value = "server";
     error.value = errorMessage(reason, "onboarding.connectError");

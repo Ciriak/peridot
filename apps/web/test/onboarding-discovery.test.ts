@@ -82,11 +82,25 @@ test("server selection detects and selects the first server before continuing", 
     /const step = ref<"server" \| "account">\(/,
     "The sign-in step is selected before the first render",
   );
-  assert.match(source, /void connectToServer\(\);/);
+  assert.match(source, /await connectToServer\(\);/);
   assert.doesNotMatch(source, /No servers found\./);
   assert.doesNotMatch(source, /Scan again/);
   assert.match(source, /manualEntryOpen = ref\(androidRuntime\)/);
-  assert.match(source, /if \(!androidRuntime\) void scanLocalNetwork\(\)/);
+  assert.match(
+    source,
+    /window\.location\.origin[\s\S]*?await openAccountStep\(foundAddress\)/,
+    "A web UI served by Peridot connects to its own origin before network discovery",
+  );
+  assert.match(
+    source,
+    /else if \(!androidRuntime && !address\.value\)[\s\S]*?await connectToCurrentOrigin\(\)/,
+    "Same-origin detection only runs before a server has been saved",
+  );
+  assert.match(
+    source,
+    /step\.value === "server"\) void scanLocalNetwork\(\)/,
+    "Network discovery only runs when same-origin connection is unavailable",
+  );
 });
 
 test("administrator setup collects a display name while sign-in is email-only", async () => {

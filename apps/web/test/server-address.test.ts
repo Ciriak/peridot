@@ -97,6 +97,19 @@ test("manual address probing selects the Peridot port", async () => {
   ]);
 });
 
+test("same-origin web clients select the origin that served the app", async () => {
+  const requests: string[] = [];
+  const found = await findPeridotServerAddress("http://192.168.1.5:17430", {
+    fetcher: async (input) => {
+      requests.push(String(input));
+      return Response.json({ status: "ok", service: "peridot" });
+    },
+  });
+
+  assert.equal(found, "http://192.168.1.5:17430");
+  assert.deepEqual(requests, ["http://192.168.1.5:17430/api/health"]);
+});
+
 test("scheme-less addresses discover an HTTPS-only server", async () => {
   const found = await findPeridotServerAddress("192.168.1.20", {
     fetcher: async (input) => {
