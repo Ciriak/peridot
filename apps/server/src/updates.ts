@@ -46,6 +46,7 @@ export class UpdateError extends Error {
 export class UpdateService {
   private checked: UpdateStatusResponse | null = null;
   private installRequested = false;
+  private checkInFlight: Promise<UpdateStatusResponse> | null = null;
 
   constructor(
     private readonly config: UpdateConfig,
@@ -68,7 +69,15 @@ export class UpdateService {
     );
   }
 
-  async check(): Promise<UpdateStatusResponse> {
+  check(): Promise<UpdateStatusResponse> {
+    if (this.checkInFlight) return this.checkInFlight;
+    this.checkInFlight = this.performCheck().finally(() => {
+      this.checkInFlight = null;
+    });
+    return this.checkInFlight;
+  }
+
+  private async performCheck(): Promise<UpdateStatusResponse> {
     if (this.config.channel === "local") {
       throw new UpdateError(
         400,

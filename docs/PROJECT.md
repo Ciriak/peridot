@@ -46,8 +46,13 @@ Fastify server serves the authenticated API and generated Nuxt SPA together on
 port 17430, including audio and realtime traffic. External web clients discover
 and connect to the same server address. Persistent SQLite state and credentials
 live in `/data`; music remains a read-only mounted source. The maintained
-Watchtower fork follows the deployed image channel and may be triggered from
-administrator Settings for manual checks and installation.
+Watchtower fork watches the deployed image channel but applies images only when
+an administrator explicitly installs an available update from Settings.
+
+Public GitHub release data drives automatic update checks without requiring a
+GitHub account. Browser and desktop clients update silently in the background.
+The Android web bundle updates independently through a signed, encrypted
+bundle; native APK distribution remains outside the in-app updater.
 
 ## Visual identity
 

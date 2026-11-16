@@ -40,6 +40,10 @@ import {
   registerRealtimeTicketRoute,
 } from "./realtime.js";
 import { UpdateService, type UpdateConfig } from "./updates.js";
+import {
+  UpdateCheckScheduler,
+  type UpdateCheckSchedulerOptions,
+} from "./update-check-scheduler.js";
 import { registerWebApplication } from "./web-server.js";
 
 export interface BuildAppOptions {
@@ -55,6 +59,8 @@ export interface BuildAppOptions {
   jellyfinFetch?: typeof fetch;
   jellyfinRequestTimeoutMs?: number;
   enableSourceRefreshScheduler?: boolean;
+  enableUpdateCheckScheduler?: boolean;
+  updateCheckSchedulerOptions?: UpdateCheckSchedulerOptions;
   updateService?: UpdateService;
   webRoot?: string;
 }
@@ -140,6 +146,11 @@ export async function buildApp(options: BuildAppOptions = {}) {
   const logBuffer =
     options.logBuffer ??
     new ServerLogBuffer(serverLogFilePath(config.databaseUrl));
+  const updateCheckScheduler = new UpdateCheckScheduler(
+    updateService,
+    (message) => logBuffer.add("warn", message),
+    options.updateCheckSchedulerOptions,
+  );
   const tasks = new TaskService(
     database,
     (task) => realtime.publishTask(task),
@@ -169,6 +180,9 @@ export async function buildApp(options: BuildAppOptions = {}) {
   });
   let backfillImmediate: ReturnType<typeof setImmediate> | undefined;
   app.addHook("onListen", async () => {
+    if (options.enableUpdateCheckScheduler ?? false) {
+      updateCheckScheduler.start();
+    }
     backfillImmediate = setImmediate(() => {
       backfillImmediate = undefined;
       void catalog.startBackfill();
@@ -274,6 +288,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
     await registerWebApplication(app, { webRoot: options.webRoot });
   }
   app.addHook("onClose", async () => {
+    updateCheckScheduler.close();
     sourceRefreshScheduler.close();
     if (backfillImmediate) {
       clearImmediate(backfillImmediate);

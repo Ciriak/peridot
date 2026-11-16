@@ -2,6 +2,49 @@
 
 Last updated: 2026-11-16.
 
+## Update discovery is automatic but installation is explicit
+
+The API now checks the public GitHub repository shortly after startup and every
+six hours with jitter. It coalesces manual and automatic checks, logs failures,
+and never installs automatically. Watchtower no longer performs periodic
+updates; its authenticated endpoint remains available only through the
+administrator Install action.
+
+Client updates are silent. The PWA keeps its automatic service-worker update.
+Desktop uses signed Tauri update artifacts and restarts after playback stops.
+Android web assets use an encrypted and signed Capgo update bundle downloaded
+from public GitHub releases, queued for the next launch, with Capgo Cloud,
+telemetry, native APK prompts, and update notifications disabled.
+
+CI now generates dev, master, and stable client artifacts. Desktop builds are
+produced for Linux x86_64, Windows x86_64, and universal macOS, then assembled
+into per-channel GitHub releases with `latest.json`. Android bundle packaging
+was exercised locally with the generated OTA key and produced encrypted
+`android-web.zip` plus `android-web-manifest.json`.
+
+Checks completed:
+
+- Server suite: 164 passing, including auto-check scheduling and coalescing
+- Web suite: 222 passing, including silent updater and anonymous GitHub API tests
+- Android typecheck and Kotlin unit suite after syncing the updater plugin
+- Desktop Rust check and 5 tests with updater/process plugins
+- Signed Windows Tauri release build produced MSI/NSIS installers and two
+  updater signatures
+- Android web bundle packaging and signed manifest generation
+- Version synchronization includes Tauri and Android native versions
+- `actionlint`, Docker Compose rendering, repository lint/format, and the full
+  workspace type check and production build
+
+Known limits: the new cross-platform Tauri release matrix and GitHub release
+publication have not run in hosted CI. Private updater keys are stored outside
+the repository, and the three required GitHub Actions signing secrets are
+configured. Client updates have not been exercised from a published public
+release.
+
+Next: add the signing secrets, run the branch workflow, install one published
+desktop and Android update, and verify silent next-launch or idle-restart
+activation.
+
 ## Local scans use configurable worker threads
 
 Library scans now use a bounded Node worker-thread pool for local directory

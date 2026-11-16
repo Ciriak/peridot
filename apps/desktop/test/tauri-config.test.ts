@@ -74,7 +74,35 @@ test("desktop window keeps a restricted capability surface", async () => {
     "core:default",
     "global-shortcut:allow-register",
     "global-shortcut:allow-unregister",
+    "updater:default",
+    "process:allow-restart",
   ]);
+});
+
+test("Tauri uses the public signed updater channel", async () => {
+  const [config, cargo, source] = await Promise.all([
+    readJson<{
+      bundle: { createUpdaterArtifacts: boolean };
+      plugins: {
+        updater: {
+          pubkey: string;
+          endpoints: string[];
+        };
+      };
+    }>("src-tauri/tauri.conf.json"),
+    readFile(path.join(desktopRoot, "src-tauri/Cargo.toml"), "utf8"),
+    readFile(path.join(desktopRoot, "src-tauri/src/lib.rs"), "utf8"),
+  ]);
+  assert.equal(config.bundle.createUpdaterArtifacts, true);
+  assert.ok(config.plugins.updater.pubkey.length > 20);
+  assert.deepEqual(config.plugins.updater.endpoints, [
+    "https://github.com/Ciriak/peridot/releases/latest/download/latest.json",
+  ]);
+  assert.match(cargo, /tauri-plugin-updater = "2\.14\.1"/);
+  assert.match(cargo, /tauri-plugin-process = "2\.4\.0"/);
+  assert.match(source, /tauri_plugin_updater::Builder::new\(\)\.build\(\)/);
+  assert.match(source, /tauri_plugin_process::init\(\)/);
+  assert.doesNotMatch(source, /github.*token|oauth/i);
 });
 
 test("Tauri hosts native media-key shortcuts through the official plugin", async () => {

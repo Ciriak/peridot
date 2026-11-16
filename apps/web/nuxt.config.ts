@@ -8,6 +8,18 @@ const appEnvironment =
   process.env.PERIDOT_ENVIRONMENT?.trim() ||
   (process.env.NODE_ENV === "production" ? "production" : "development");
 const capacitorBuild = process.env.PERIDOT_CAPACITOR === "1";
+const clientUpdateChannel =
+  process.env.PERIDOT_CLIENT_CHANNEL?.trim() || "local";
+const clientVersion =
+  process.env.PERIDOT_CLIENT_VERSION?.trim() ||
+  `${rootPackage.version}-local.0`;
+const releaseRepository = "Ciriak/peridot";
+const releaseAssetBase =
+  clientUpdateChannel === "stable"
+    ? `https://github.com/${releaseRepository}/releases/latest/download`
+    : clientUpdateChannel === "dev" || clientUpdateChannel === "master"
+      ? `https://github.com/${releaseRepository}/releases/download/client-${clientUpdateChannel}`
+      : "";
 
 const optimizedDependencies = [
   "@iconify-icons/akar-icons/drag-vertical",
@@ -84,6 +96,17 @@ export default defineNuxtConfig({
     public: {
       appVersion: rootPackage.version,
       environment: appEnvironment,
+      clientVersion,
+      clientUpdateChannel,
+      androidWebReleaseApiUrl:
+        clientUpdateChannel === "stable"
+          ? `https://api.github.com/repos/${releaseRepository}/releases/latest`
+          : clientUpdateChannel === "dev" || clientUpdateChannel === "master"
+            ? `https://api.github.com/repos/${releaseRepository}/releases/tags/client-${clientUpdateChannel}`
+            : "",
+      desktopUpdateManifestUrl: releaseAssetBase
+        ? `${releaseAssetBase}/latest.json`
+        : "",
     },
   },
   modules: ["@nuxtjs/i18n", "@vite-pwa/nuxt"],

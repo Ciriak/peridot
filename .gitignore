@@ -8,6 +8,8 @@
 *.jks
 *.keystore
 apps/android/android/signing.properties
+apps/android/.capgo_key_v2
+apps/android/.capgo_key_v2.pub
 
 # Operating system files
 .DS_Store
@@ -31,6 +33,8 @@ node_modules/
 dist/
 coverage/
 generated/
+apps/android/dist-update/
+apps/android/*.zip
 .peridot/
 .agents/skills/
 .claude/skills/

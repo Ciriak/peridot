@@ -1,5 +1,29 @@
 # Decisions
 
+## 2026-11-16: Update checks are public, silent, and client-specific
+
+Peridot uses public GitHub repository and release data for update discovery. No
+GitHub OAuth flow, personal access token, or user sign-in is required.
+
+The backend checks its configured image channel shortly after startup and every
+six hours with jitter. It never applies an image automatically. Compose removes
+Watchtower's periodic polling flags, leaving the authenticated HTTP update
+endpoint available only for the explicit Install action in administrator
+Settings.
+
+Browser/PWA updates continue to activate on a later reload. Desktop release
+channels use Tauri's signed updater and restart only when playback is inactive.
+Android web assets use the Capgo native updater in manual mode with fixed
+Peridot public keys, no hosted Capgo service, no telemetry, and no browser
+notification. A newer encrypted bundle is queued for the next launch; native APK
+updates are not performed by the app.
+
+Client update success and failure remain silent. Desktop artifacts are published
+for dev, master, and stable builds from public GitHub releases, with dev and
+master using rolling prereleases. Android web bundles are signed in CI, embedded
+in release metadata, retained as workflow artifacts, and published beside the
+matching client release.
+
 ## 2026-11-16: Local scans use a configurable worker pool
 
 Source discovery and local audio metadata extraction now run through a bounded

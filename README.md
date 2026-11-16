@@ -44,9 +44,7 @@
        command: >-
          --label-enable
          --http-api-endpoints update
-         --http-api-periodic-polls
          --cleanup
-         --interval 21600
        depends_on:
          peridot:
            condition: service_healthy
@@ -75,6 +73,11 @@
    Go to **http://YOUR_SERVER_IP:17430** in your browser.
 
 ## Updates and database backups
+
+Peridot checks the public GitHub repository automatically every six hours, but
+server images are installed only when an administrator selects **Install
+update** in Settings → Server. Browser, desktop, and Android web assets update
+silently in the background without a GitHub sign-in.
 
 Peridot applies committed database migrations automatically before the server
 starts after an image update. When migrations are pending, it first writes a

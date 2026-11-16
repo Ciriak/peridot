@@ -52,6 +52,7 @@ export async function startServer(
     app = await buildApp({
       restartServer: requestRestart,
       enableSourceRefreshScheduler: true,
+      enableUpdateCheckScheduler: true,
       ...(serveWeb ? { webRoot } : {}),
     });
     await app.listen({ port, host });
