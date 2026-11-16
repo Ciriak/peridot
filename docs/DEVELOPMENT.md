@@ -227,8 +227,11 @@ pnpm desktop:build
 
 The executable is written under `apps/desktop/src-tauri/target/release/` and
 still connects to a separately running Peridot server. Installer bundling,
-code signing, automatic updates, native secure credential storage, and an
-embedded server are not included in this prototype.
+automatic updates, native secure credential storage, and an embedded server are
+not included in the default development build. Release tags and dev/master
+branch pushes publish signed Tauri updater artifacts through the public GitHub
+release channels. The updater checks in the background and restarts only after
+playback has stopped. Client update events are intentionally silent.
 
 ## Android application
 
@@ -258,6 +261,13 @@ the service worker disabled, and copies it into the Capacitor project.
 device or emulator. `android:build` creates the debug APK, while `android:bundle`
 creates signed release APK and AAB artifacts when
 `apps/android/android/signing.properties` is present.
+
+Android web assets update independently from the APK through
+`@capgo/capacitor-updater` in manual mode. Capgo Cloud, Capgo telemetry, and
+Capgo channels are disabled. CI creates an encrypted bundle and signed manifest,
+publishes them to the public GitHub release channel, and the app downloads them
+after launch without requiring GitHub sign-in. The bundle is queued for the next
+safe launch. Native APK updates remain outside this mechanism.
 
 Generate the local upload key once and back it up before Play submission:
 
@@ -745,13 +755,26 @@ application into one Node 24.15 image. Startup applies committed migrations to
 `/data/peridot.db`, with snapshots in `/data/backups`, before launching the
 server. `compose.yaml` exposes only 17430, persists `/data`, mounts music
 read-only at `/music`, and runs the maintained
-`nickfedor/watchtower` fork. The README contains the user-facing installation
+`nickfedor/watchtower` fork with automatic polling disabled. The API checks the
+public GitHub repository every six hours, but Watchtower is called only when an
+administrator presses Install. The README contains the user-facing installation
 steps. The default Compose channel is `stable`, which is the production release
 channel.
 CI builds AMD64 and ARM64 independently on native Ubuntu runners, pushes each
 image by digest, and merges the digests into the final tagged manifest. Keep
 target-native dependencies in their own architecture's build so runtime native
 modules such as `better-sqlite3` remain loadable.
+
+Client release signing requires these repository secrets:
+
+- `TAURI_SIGNING_PRIVATE_KEY`
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+- `CAPGO_UPDATE_PRIVATE_KEY`
+
+Only the corresponding public keys are committed. Release jobs create or update
+`client-dev`, `client-master`, and version-tag GitHub releases containing
+platform bundles, signatures, and `latest.json`. Android bundles and manifests
+are also retained as workflow artifacts.
 
 ## Continue the work
 

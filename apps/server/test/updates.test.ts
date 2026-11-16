@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { UpdateService, type UpdateConfig } from "../src/updates.js";
+import { UpdateCheckScheduler } from "../src/update-check-scheduler.js";
 import { createMemberSession, createTestContext } from "./helpers.js";
 
 const commit = "a".repeat(40);
@@ -56,6 +57,69 @@ test("stable update checks use the highest non-prerelease version tag", async ()
   assert.equal(result.state, "available");
   assert.equal(result.latestTag, "v0.0.2");
   assert.equal(result.latestCommit, nextCommit);
+});
+
+test("concurrent update checks share one GitHub request", async () => {
+  let requests = 0;
+  let release!: () => void;
+  const response = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const service = new UpdateService(updateConfig(), async () => {
+    requests += 1;
+    await response;
+    return Response.json({ sha: nextCommit });
+  });
+
+  const first = service.check();
+  const second = service.check();
+  assert.equal(first, second);
+  release();
+  await Promise.all([first, second]);
+  assert.equal(requests, 1);
+});
+
+test("automatic checks query the public GitHub repository without updating", async () => {
+  const requests: string[] = [];
+  const service = new UpdateService(updateConfig(), async (input) => {
+    requests.push(String(input));
+    return Response.json({ sha: nextCommit });
+  });
+  const scheduler = new UpdateCheckScheduler(service, () => undefined, {
+    initialDelayMs: 1,
+    initialJitterMs: 0,
+    intervalMs: 60_000,
+    jitterMs: 0,
+  });
+  scheduler.start();
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.deepEqual(requests, [
+      "https://api.github.com/repos/Ciriak/peridot/commits/dev",
+    ]);
+    assert.equal(service.status().state, "available");
+  } finally {
+    scheduler.close();
+  }
+});
+
+test("automatic checks skip local builds", async () => {
+  let requests = 0;
+  const service = new UpdateService(
+    updateConfig({ channel: "local", currentCommit: null }),
+    async () => {
+      requests += 1;
+      return Response.json({});
+    },
+  );
+  const scheduler = new UpdateCheckScheduler(service, () => undefined, {
+    initialDelayMs: 1,
+    initialJitterMs: 0,
+  });
+  scheduler.start();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  scheduler.close();
+  assert.equal(requests, 0);
 });
 
 test("administrator update endpoints reject members and trigger Watchtower privately", async () => {

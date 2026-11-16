@@ -1,6 +1,6 @@
 {
   "name": "@peridot/android",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,21 +8,25 @@
     "sync": "pnpm generate && cap sync android",
     "dev": "pnpm sync && cap run android",
     "open": "pnpm sync && cap open android",
+    "update:bundle": "node scripts/package-update.mjs",
     "test": "node scripts/gradle.mjs testDebugUnitTest",
     "lint": "node scripts/gradle.mjs lintDebug",
     "instrument": "node scripts/gradle.mjs connectedDebugAndroidTest",
-    "build": "node scripts/gradle.mjs assembleDebug",
-    "bundle": "node scripts/gradle.mjs bundleRelease assembleRelease",
+    "build": "pnpm sync && node scripts/gradle.mjs assembleDebug",
+    "bundle": "pnpm sync && node scripts/gradle.mjs bundleRelease assembleRelease",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@capacitor/android": "8.6.2",
     "@capacitor/app": "8.1.2",
     "@capacitor/core": "8.6.2",
-    "@capacitor/status-bar": "8.0.4"
+    "@capacitor/status-bar": "8.0.4",
+    "@capgo/capacitor-updater": "8.54.2",
+    "@peridot/web": "workspace:*"
   },
   "devDependencies": {
     "@capacitor/cli": "8.6.2",
+    "@capgo/cli": "8.108.0",
     "cross-env": "^10.1.0",
     "typescript": "5.9.3"
   },

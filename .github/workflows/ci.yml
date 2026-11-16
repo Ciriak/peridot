@@ -184,7 +184,246 @@ jobs:
           packages: platform-tools
       - run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
       - run: pnpm install --frozen-lockfile
+      - id: client
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF_TYPE" = "tag" ]]; then
+            channel=stable
+            version="$(node -p 'require("./package.json").version')"
+          elif [[ "$GITHUB_REF_NAME" = "dev" || "$GITHUB_REF_NAME" = "master" ]]; then
+            channel="$GITHUB_REF_NAME"
+            version="0.0.${GITHUB_RUN_NUMBER}"
+          else
+            channel=local
+            version="$(node -p 'require("./package.json").version')"
+          fi
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - run: pnpm android:build
+        env:
+          PERIDOT_CLIENT_CHANNEL: ${{ steps.client.outputs.channel }}
+          PERIDOT_CLIENT_VERSION: ${{ steps.client.outputs.version }}
+
+  prepare-client-release:
+    name: Prepare client release
+    if: >-
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/dev' ||
+      github.ref == 'refs/heads/master' ||
+      startsWith(github.ref, 'refs/tags/v'))
+    needs: [test, test-android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      channel: ${{ steps.version.outputs.channel }}
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24.15.0"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - id: version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF_TYPE" = "tag" ]]; then
+            channel=stable
+            version="$(node -p 'require("./package.json").version')"
+            release_tag="$GITHUB_REF_NAME"
+          else
+            channel="$GITHUB_REF_NAME"
+            version="0.0.${GITHUB_RUN_NUMBER}"
+            release_tag="client-${channel}"
+          fi
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$release_tag" >> "$GITHUB_OUTPUT"
+          if ! gh release view "$release_tag" >/dev/null 2>&1; then
+            if [[ "$channel" = "stable" ]]; then
+              gh release create "$release_tag" --verify-tag \
+                --title "Peridot ${release_tag}" \
+                --notes "Peridot ${release_tag}"
+            else
+              gh release create "$release_tag" --target "$GITHUB_SHA" \
+                --prerelease --title "Peridot ${channel} builds" \
+                --notes "Rolling ${channel} client builds."
+            fi
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  package-android-web:
+    name: Package Android web update
+    if: >-
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/dev' ||
+      github.ref == 'refs/heads/master' ||
+      startsWith(github.ref, 'refs/tags/v'))
+    needs: prepare-client-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24.15.0"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Generate Android web bundle
+        run: pnpm android:generate
+        env:
+          PERIDOT_CLIENT_CHANNEL: ${{ needs.prepare-client-release.outputs.channel }}
+          PERIDOT_CLIENT_VERSION: ${{ needs.prepare-client-release.outputs.version }}
+      - name: Package and sign update
+        run: |
+          umask 077
+          printf '%s' "$CAPGO_UPDATE_PRIVATE_KEY" > "$RUNNER_TEMP/capgo-v2.key"
+          export CAPGO_UPDATE_PRIVATE_KEY_PATH="$RUNNER_TEMP/capgo-v2.key"
+          pnpm --filter @peridot/android update:bundle
+        env:
+          CAPGO_UPDATE_PRIVATE_KEY: ${{ secrets.CAPGO_UPDATE_PRIVATE_KEY }}
+          PERIDOT_CLIENT_CHANNEL: ${{ needs.prepare-client-release.outputs.channel }}
+          PERIDOT_CLIENT_VERSION: ${{ needs.prepare-client-release.outputs.version }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-web-update
+          path: apps/android/dist-update/*
+          if-no-files-found: error
+          retention-days: 90
+      - name: Publish Android web update
+        shell: bash
+        run:
+          gh release upload "${{ needs.prepare-client-release.outputs.tag }}" \
+          apps/android/dist-update/* --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  publish-desktop:
+    name: Publish desktop (${{ matrix.target }})
+    if: >-
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/dev' ||
+      github.ref == 'refs/heads/master' ||
+      startsWith(github.ref, 'refs/tags/v'))
+    needs: prepare-client-release
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x86_64
+            runner: ubuntu-24.04
+            tauriTarget: ""
+          - target: windows-x86_64
+            runner: windows-latest
+            tauriTarget: ""
+          - target: darwin-universal
+            runner: macos-14
+            tauriTarget: universal-apple-darwin
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24.15.0"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            build-essential \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            patchelf
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install macOS universal targets
+        if: runner.os == 'macOS'
+        run: rustup target add x86_64-apple-darwin aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+      - name: Prepare signed channel config
+        shell: bash
+        run: |
+          export PERIDOT_CLIENT_CHANNEL="${{ needs.prepare-client-release.outputs.channel }}"
+          export PERIDOT_CLIENT_VERSION="${{ needs.prepare-client-release.outputs.version }}"
+          node scripts/prepare-desktop-release.mjs
+        env:
+          PERIDOT_DESKTOP_CONFIG_PATH: .peridot/desktop-release.json
+      - name: Build signed desktop bundles
+        shell: bash
+        run: |
+          if [[ -n "${{ matrix.tauriTarget }}" ]]; then
+            pnpm --filter @peridot/desktop exec tauri build \
+              --config .peridot/desktop-release.json \
+              --target "${{ matrix.tauriTarget }}"
+          else
+            pnpm --filter @peridot/desktop exec tauri build \
+              --config .peridot/desktop-release.json
+          fi
+        env:
+          PERIDOT_CLIENT_CHANNEL: ${{ needs.prepare-client-release.outputs.channel }}
+          PERIDOT_CLIENT_VERSION: ${{ needs.prepare-client-release.outputs.version }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.target }}
+          path: apps/desktop/src-tauri/target/**/release/bundle/**
+          if-no-files-found: error
+          retention-days: 1
+
+  publish-desktop-release:
+    name: Publish desktop update manifest
+    if: >-
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/dev' ||
+      github.ref == 'refs/heads/master' ||
+      startsWith(github.ref, 'refs/tags/v'))
+    needs: [prepare-client-release, publish-desktop]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24.15.0"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          path: release-assets
+      - name: Build updater manifest
+        shell: bash
+        run: |
+          node scripts/desktop-updater-manifest.mjs \
+            --input release-assets \
+            --output release-assets/latest.json \
+            --tag "${{ needs.prepare-client-release.outputs.tag }}"
+        env:
+          PERIDOT_CLIENT_VERSION: ${{ needs.prepare-client-release.outputs.version }}
+      - name: Upload desktop release assets
+        shell: bash
+        run: |
+          mapfile -d '' assets < <(find release-assets -type f -print0)
+          gh release upload "${{ needs.prepare-client-release.outputs.tag }}" \
+            "${assets[@]}" --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
 
   publish-image:
     name: Publish Docker image (${{ matrix.arch }})

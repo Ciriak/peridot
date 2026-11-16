@@ -6,6 +6,9 @@ allowBuilds:
   "@prisma/engines": true
   better-sqlite3: true
   esbuild: true
+  node-pty: false
   prisma: true
   vue-demi: true
   workerd: false
+minimumReleaseAgeExclude:
+  - "@capgo/cli@8.108.0"

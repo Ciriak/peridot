@@ -16,9 +16,7 @@ services:
     command: >-
       --label-enable
       --http-api-endpoints update
-      --http-api-periodic-polls
       --cleanup
-      --interval 21600
     depends_on:
       peridot:
         condition: service_healthy

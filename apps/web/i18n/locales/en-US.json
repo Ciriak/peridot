@@ -585,7 +585,7 @@
   "settings.server.updates.availableDetail": "A newer build is ready on this release channel.",
   "settings.server.updates.currentDetail": "This server is running the latest build on its channel.",
   "settings.server.updates.checkedAt": " Last checked {date}.",
-  "settings.server.updates.automaticHelp": "Automatic checks run every six hours. Installing an update briefly disconnects everyone.",
+  "settings.server.updates.automaticHelp": "Peridot checks automatically every six hours. An update is installed only when you choose Install.",
   "settings.server.updates.localHelp": "This is a local build, so channel update checks are unavailable.",
   "settings.server.updates.check": "Check for updates",
   "settings.server.updates.checking": "Checking",
