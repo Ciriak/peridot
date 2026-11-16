@@ -362,18 +362,19 @@ jobs:
           export PERIDOT_CLIENT_CHANNEL="${{ needs.prepare-client-release.outputs.channel }}"
           export PERIDOT_CLIENT_VERSION="${{ needs.prepare-client-release.outputs.version }}"
           node scripts/prepare-desktop-release.mjs
+          echo "PERIDOT_DESKTOP_CONFIG_PATH=$PERIDOT_DESKTOP_CONFIG_PATH" >> "$GITHUB_ENV"
         env:
-          PERIDOT_DESKTOP_CONFIG_PATH: .peridot/desktop-release.json
+          PERIDOT_DESKTOP_CONFIG_PATH: ${{ runner.temp }}/peridot-desktop-release.json
       - name: Build signed desktop bundles
         shell: bash
         run: |
           if [[ -n "${{ matrix.tauriTarget }}" ]]; then
             pnpm --filter @peridot/desktop exec tauri build \
-              --config .peridot/desktop-release.json \
+              --config "$PERIDOT_DESKTOP_CONFIG_PATH" \
               --target "${{ matrix.tauriTarget }}"
           else
             pnpm --filter @peridot/desktop exec tauri build \
-              --config .peridot/desktop-release.json
+              --config "$PERIDOT_DESKTOP_CONFIG_PATH"
           fi
         env:
           PERIDOT_CLIENT_CHANNEL: ${{ needs.prepare-client-release.outputs.channel }}
