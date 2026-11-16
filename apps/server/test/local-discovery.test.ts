@@ -79,11 +79,28 @@ test("discovery only returns hosts with the Peridot health signature on 17430", 
     ],
     scannedSubnets: ["192.168.50.0/24"],
   });
-  assert.equal(requested.length, 510);
+  assert.equal(requested.length, 512);
+  assert.ok(requested.includes("http://localhost:17430/api/health"));
+  assert.ok(requested.includes("https://localhost:17430/api/health"));
   assert.ok(requested.includes("http://127.0.0.1:17430/api/health"));
   assert.ok(requested.includes("https://127.0.0.1:17430/api/health"));
   assert.equal(
     requested.some((url) => url.includes(":17431/")),
     false,
   );
+});
+
+test("discovery includes localhost alongside loopback", async () => {
+  const result = await discoverLocalPeridotServers({
+    interfaces: {},
+    fetcher: async (input) =>
+      String(input) === "http://localhost:17430/api/health"
+        ? Response.json({ status: "ok", service: "peridot" })
+        : new Response(null, { status: 404 }),
+  });
+
+  assert.deepEqual(result, {
+    items: [{ address: "http://localhost:17430", host: "localhost" }],
+    scannedSubnets: [],
+  });
 });
