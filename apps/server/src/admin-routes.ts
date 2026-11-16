@@ -42,14 +42,16 @@ import {
 import type { MetadataResolverRegistry } from "./metadata-resolver.js";
 import type { ServerLogBuffer } from "./server-log.js";
 import {
+  readFileLoggingSettings,
+  readSourceRefreshSettings,
   ServerSettingsError,
-  updateSourceRefreshSettings,
+  updateServerSettings,
+  validateFileLoggingSettings,
 } from "./server-settings.js";
 import type { SourceRefreshScheduler } from "./source-refresh-scheduler.js";
 import { UpdateError, type UpdateService } from "./updates.js";
 import {
   createSource,
-  deleteSource,
   listDirectoryEntries,
   listJellyfinLibraries,
   listSources,
@@ -120,6 +122,10 @@ export async function registerAdminRoutes(
             cron: "",
             nextRunAt: null,
           },
+          fileLogging: {
+            ...(await readFileLoggingSettings(database)),
+            path: logBuffer.filePath,
+          },
         };
       },
     );
@@ -127,17 +133,26 @@ export async function registerAdminRoutes(
     admin.put<{ Body: UpdateServerSettingsRequest }>(
       "/api/admin/server",
       async (request, reply): Promise<ServerSettingsResponse | undefined> => {
+        const previousFileLogging = await readFileLoggingSettings(database);
         try {
-          const settings = await updateSourceRefreshSettings(
-            database,
-            request.body?.sourceRefresh,
-          );
-          const sourceRefresh = (await sourceRefreshScheduler?.reconfigure(
-            settings,
-          )) ?? {
-            ...settings,
-            nextRunAt: null,
-          };
+          const requestedFileLogging = request.body?.fileLogging
+            ? validateFileLoggingSettings(request.body.fileLogging)
+            : undefined;
+          if (requestedFileLogging) {
+            await logBuffer.configureFileLogging(requestedFileLogging.enabled);
+          }
+          const settings = await updateServerSettings(database, request.body);
+          const sourceRefresh = settings.sourceRefresh
+            ? ((await sourceRefreshScheduler?.reconfigure(
+                settings.sourceRefresh,
+              )) ?? {
+                ...settings.sourceRefresh,
+                nextRunAt: null,
+              })
+            : (sourceRefreshScheduler?.status() ?? {
+                ...(await readSourceRefreshSettings(database)),
+                nextRunAt: null,
+              });
           const [trackCount, availableTrackCount] = await Promise.all([
             database.orm.Track.aggregate((aggregate) => ({
               count: aggregate.count(),
@@ -150,8 +165,15 @@ export async function registerAdminRoutes(
             trackCount: trackCount.count,
             availableTrackCount: availableTrackCount.count,
             sourceRefresh,
+            fileLogging: {
+              ...(await readFileLoggingSettings(database)),
+              path: logBuffer.filePath,
+            },
           };
         } catch (error) {
+          await logBuffer
+            .configureFileLogging(previousFileLogging.enabled)
+            .catch(() => undefined);
           if (error instanceof ServerSettingsError) {
             return sendError(
               reply,
@@ -464,30 +486,49 @@ export async function registerAdminRoutes(
           );
         }
         await tasks.stopForSource(source.id);
+        let removedTrackIds: string[] = [];
         if (
           source.kind === "integration" &&
           source.integration === "jellyfin"
         ) {
-          const tracks = await database.orm.Track.where({
-            sourceId: source.id,
-          })
-            .select("id")
-            .all();
-          for (const track of tracks) {
-            await database.orm.Track.where({ id: track.id }).delete();
-            await catalog?.removeTrack(track.id);
-          }
-          await catalog?.flushChanges();
+          removedTrackIds = (
+            await database.orm.Track.where({
+              sourceId: source.id,
+            })
+              .select("id")
+              .all()
+          ).map((track) => track.id);
         }
-        const removed = await deleteSource(database, request.params.id);
-        if (!removed) {
-          return sendError(
-            reply,
-            404,
-            "source_not_found",
-            "Source not found",
-            message("api.message.sourceNotFound"),
-          );
+        await database.transaction(async (transaction) => {
+          if (removedTrackIds.length) {
+            await transaction.orm.Track.where({
+              sourceId: source.id,
+            }).delete();
+          }
+          await transaction.orm.Source.where({ id: source.id }).delete();
+        });
+        if (removedTrackIds.length && catalog) {
+          try {
+            for (const trackId of removedTrackIds) {
+              await catalog.removeTrack(trackId);
+            }
+            await catalog.flushChanges();
+          } catch (error) {
+            request.log.error(
+              { err: error, sourceId: source.id },
+              "Could not clean up the removed source catalog",
+            );
+          }
+        }
+        if (catalog) {
+          try {
+            await catalog.markSourceRemoval(source.id);
+          } catch (error) {
+            request.log.error(
+              { err: error, sourceId: source.id },
+              "Could not publish the removed source catalog change",
+            );
+          }
         }
         return reply.code(204).send();
       },

@@ -19,6 +19,7 @@ const { refresh, upsert } = useTasks();
 const {
   applyRevision,
   requestResync,
+  resetOfflineCatalog,
   reset: resetCatalogRevision,
 } = useCatalogRevision();
 const realtime = useRealtime();
@@ -31,11 +32,12 @@ function onRealtimeMessage(message: RealtimeServerMessage) {
     return;
   }
   if (message.type === "catalog.changed") {
-    applyRevision(message.revision);
+    applyRevision(message.revision, message.reason);
     return;
   }
   if (message.type === "resync.required") {
     void refresh().catch(() => undefined);
+    void resetOfflineCatalog();
     requestResync();
   }
 }

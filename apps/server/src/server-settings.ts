@@ -1,4 +1,7 @@
-import type { UpdateServerSettingsRequest } from "@peridot/contracts";
+import type {
+  MessageDescriptor,
+  UpdateServerSettingsRequest,
+} from "@peridot/contracts";
 import { CronPattern } from "croner";
 import type { Database } from "./database.js";
 import { message } from "./messages.js";
@@ -11,14 +14,20 @@ export interface SourceRefreshSettings {
   cron: string;
 }
 
-export class ServerSettingsError extends Error {
-  readonly messageDescriptor = message(
-    "api.message.invalidSourceRefreshSettings",
-  );
+export interface FileLoggingSettings {
+  enabled: boolean;
+}
 
-  constructor(message: string) {
-    super(message);
+export class ServerSettingsError extends Error {
+  readonly messageDescriptor: MessageDescriptor;
+
+  constructor(
+    messageText: string,
+    messageDescriptor = message("api.message.invalidServerSettings"),
+  ) {
+    super(messageText);
     this.name = "ServerSettingsError";
+    this.messageDescriptor = messageDescriptor;
   }
 }
 
@@ -28,24 +37,45 @@ export function validateSourceRefreshSettings(
   if (!input || typeof input.enabled !== "boolean") {
     throw new ServerSettingsError(
       "Choose whether automatic source refresh is enabled.",
+      message("api.message.invalidSourceRefreshSettings"),
     );
   }
   const cron = typeof input.cron === "string" ? input.cron.trim() : "";
   if (!cron || cron.length > 100) {
-    throw new ServerSettingsError("Enter a valid cron expression.");
+    throw new ServerSettingsError(
+      "Enter a valid cron expression.",
+      message("api.message.invalidSourceRefreshSettings"),
+    );
   }
   try {
     new CronPattern(cron, undefined, { mode: "5-or-6-parts" });
   } catch {
-    throw new ServerSettingsError("Enter a valid cron expression.");
+    throw new ServerSettingsError(
+      "Enter a valid cron expression.",
+      message("api.message.invalidSourceRefreshSettings"),
+    );
   }
   return { enabled: input.enabled, cron };
+}
+
+export function validateFileLoggingSettings(
+  input: UpdateServerSettingsRequest["fileLogging"] | undefined,
+): FileLoggingSettings {
+  if (!input || typeof input.enabled !== "boolean") {
+    throw new ServerSettingsError(
+      "Choose whether server logs are kept in a file.",
+    );
+  }
+  return { enabled: input.enabled };
 }
 
 export async function ensureServerSettings(
   database: Database,
   seedLibraryRoot: string,
-): Promise<SourceRefreshSettings> {
+): Promise<{
+  sourceRefresh: SourceRefreshSettings;
+  fileLogging: FileLoggingSettings;
+}> {
   let existing = await database.orm.ServerSetting.first({
     id: SERVER_SETTING_ID,
   });
@@ -56,8 +86,13 @@ export async function ensureServerSettings(
     });
   }
   return {
-    enabled: Boolean(existing.sourceRefreshEnabled),
-    cron: existing.sourceRefreshCron,
+    sourceRefresh: {
+      enabled: Boolean(existing.sourceRefreshEnabled),
+      cron: existing.sourceRefreshCron,
+    },
+    fileLogging: {
+      enabled: Boolean(existing.fileLoggingEnabled),
+    },
   };
 }
 
@@ -83,4 +118,64 @@ export async function updateSourceRefreshSettings(
     sourceRefreshCron: settings.cron,
   });
   return settings;
+}
+
+export async function readFileLoggingSettings(
+  database: Database,
+): Promise<FileLoggingSettings> {
+  const settings = await database.orm.ServerSetting.firstOrThrow({
+    id: SERVER_SETTING_ID,
+  });
+  return { enabled: Boolean(settings.fileLoggingEnabled) };
+}
+
+export async function updateFileLoggingSettings(
+  database: Database,
+  input: UpdateServerSettingsRequest["fileLogging"] | undefined,
+): Promise<FileLoggingSettings> {
+  const settings = validateFileLoggingSettings(input);
+  await database.orm.ServerSetting.where({ id: SERVER_SETTING_ID }).update({
+    fileLoggingEnabled: settings.enabled ? 1 : 0,
+  });
+  return settings;
+}
+
+export async function updateServerSettings(
+  database: Database,
+  input: UpdateServerSettingsRequest | undefined,
+): Promise<{
+  sourceRefresh?: SourceRefreshSettings;
+  fileLogging?: FileLoggingSettings;
+}> {
+  const sourceRefresh = input?.sourceRefresh
+    ? validateSourceRefreshSettings(input.sourceRefresh)
+    : undefined;
+  const fileLogging = input?.fileLogging
+    ? validateFileLoggingSettings(input.fileLogging)
+    : undefined;
+  if (!sourceRefresh && !fileLogging) {
+    throw new ServerSettingsError("Choose a server setting to update.");
+  }
+
+  await database.transaction(async (transaction) => {
+    if (sourceRefresh) {
+      await transaction.orm.ServerSetting.where({
+        id: SERVER_SETTING_ID,
+      }).update({
+        sourceRefreshEnabled: sourceRefresh.enabled ? 1 : 0,
+        sourceRefreshCron: sourceRefresh.cron,
+      });
+    }
+    if (fileLogging) {
+      await transaction.orm.ServerSetting.where({
+        id: SERVER_SETTING_ID,
+      }).update({
+        fileLoggingEnabled: fileLogging.enabled ? 1 : 0,
+      });
+    }
+  });
+  return {
+    ...(sourceRefresh ? { sourceRefresh } : {}),
+    ...(fileLogging ? { fileLogging } : {}),
+  };
 }

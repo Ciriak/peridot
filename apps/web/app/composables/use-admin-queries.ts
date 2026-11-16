@@ -28,6 +28,7 @@ import {
   listUsers,
   updateServerSettings,
 } from "../lib/peridot-client";
+import { removeSourceFromQueryCache } from "../lib/optimistic-source-removal";
 import { queryKeys } from "../lib/query-keys";
 import {
   blockingQueryLoading,
@@ -195,6 +196,7 @@ export function useAdminSourcesQuery() {
   const { token } = useSession();
   const { user } = useUser();
   const { errorMessage } = useLocalizedMessage();
+  const queryClient = useQueryClient();
   const enabled = computed(() =>
     Boolean(scope.value && token.value && user.value?.role === "admin"),
   );
@@ -235,6 +237,14 @@ export function useAdminSourcesQuery() {
     ),
     load: async (force = false) => {
       if (force || !query.data.value) await query.refetch();
+    },
+    removeOptimistically: (sourceId: string) => {
+      if (!scope.value) return null;
+      return removeSourceFromQueryCache(
+        queryClient,
+        queryKeys.sources(scope.value),
+        sourceId,
+      );
     },
   };
 }

@@ -32,7 +32,7 @@ import { TaskService } from "./tasks.js";
 import { ensureServerSettings } from "./server-settings.js";
 import { SourceRefreshScheduler } from "./source-refresh-scheduler.js";
 import { ensureDefaultSource } from "./sources.js";
-import { ServerLogBuffer } from "./server-log.js";
+import { ServerLogBuffer, serverLogFilePath } from "./server-log.js";
 import {
   RealtimeHub,
   redactRealtimeTicket,
@@ -137,7 +137,9 @@ export async function buildApp(options: BuildAppOptions = {}) {
     catalog,
     options.discogsFetch ?? fetch,
   );
-  const logBuffer = options.logBuffer ?? new ServerLogBuffer();
+  const logBuffer =
+    options.logBuffer ??
+    new ServerLogBuffer(serverLogFilePath(config.databaseUrl));
   const tasks = new TaskService(
     database,
     (task) => realtime.publishTask(task),
@@ -207,7 +209,13 @@ export async function buildApp(options: BuildAppOptions = {}) {
   await registerRealtimeSocket(app, realtime, config.webOrigins);
   await registerAuthRoutes(app, database);
   await catalog.initialize();
-  await ensureServerSettings(database, config.libraryRoot);
+  const initialServerSettings = await ensureServerSettings(
+    database,
+    config.libraryRoot,
+  );
+  await logBuffer.configureFileLogging(
+    initialServerSettings.fileLogging.enabled,
+  );
   await ensureDefaultSource(database, config.libraryRoot);
   await ensureDefaultMetadataProvider(database);
   await tasks.initialize();
@@ -274,6 +282,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
     metadataEnrichment.close();
     await tasks.close();
     await catalog.close();
+    await logBuffer.close();
     logBuffer.onEntry(null);
     realtime.close();
     if (ownsDatabase) await database.close();

@@ -1055,7 +1055,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
 
   watch([address, token], () => void hydrateQueueTracks());
   watch(queueTrackIds, () => void hydrateQueueTracks());
-  watch(catalogRevision, () => void hydrateQueueTracks(true));
+  watch(catalogRevision, () => void hydrateQueueTracks());
   watch(queueTracks, syncAndroidQueue, { deep: true });
   watch(
     serverStatus,

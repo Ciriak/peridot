@@ -27,6 +27,10 @@ test("administrators can read server counts and the default source", async () =>
         cron: "0 3 * * *",
         nextRunAt: null,
       },
+      fileLogging: {
+        enabled: false,
+        path: path.join(context.root, "peridot.log"),
+      },
     });
 
     const sources = await context.app.inject({

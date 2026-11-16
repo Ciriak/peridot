@@ -1,5 +1,63 @@
 # Decisions
 
+## 2026-11-16: Large libraries do not auto-build complete offline snapshots
+
+Automatic full offline catalog synchronization stops at 10,000 tracks. Above
+that size the client aborts after the first page beyond the limit, before
+requesting albums, artists, audiobooks, or podcasts, and suppresses another
+automatic check for seven days. A 25,000-record combined materialization cap
+protects browser memory even below the track threshold.
+
+Eligible libraries rebuild the complete snapshot at most weekly. Catalog
+revisions only schedule a sync after 30 seconds without another revision.
+Successful and oversized decisions are persisted per server and user. Explicit
+downloads and persisted query pages continue to provide offline access when the
+full snapshot is unavailable.
+
+Catalog revision events coalesce active query invalidation to a ten-second
+trailing refresh. Player revision hydration fills missing queue rows instead of
+resolving the complete queue, and catalog artwork is cached lazily rather than
+preloaded during synchronization.
+
+Source removal is a structural catalog change, not an ordinary scan or metadata
+revision. The server publishes a dedicated `source-removal` reason. Clients
+clear the complete offline snapshot immediately, invalidate catalog queries
+without the trailing revision delay, and schedule a new bounded snapshot.
+Missed realtime events clear the snapshot during resynchronization because the
+client cannot know which structural changes it missed. Sync-state versioning
+forces existing stale snapshots to be discarded once when this behavior ships.
+
+## 2026-11-16: Persistent logs are opt-in beside the database
+
+Server log files are disabled by default. When enabled, the runtime appends
+JSON lines to `peridot.log` in the same directory as the SQLite database. This
+places Docker logs in `/data`, which is already backed by the persistent
+Peridot volume, while keeping local development logs at
+`apps/server/peridot.log`.
+
+The setting is stored in SQLite and applied immediately. Disabling file output
+closes the sink but does not delete existing logs. The in-memory 500-entry log
+view remains separate from the append-only file.
+
+Settings cards use auto-save rather than explicit save buttons: switches persist
+immediately, and text settings persist on blur or Enter. Account and provider
+creation/credential dialogs remain explicit submissions because they create
+records or transmit secrets.
+
+## 2026-11-16: Source removal is optimistic after durable bulk deletion
+
+Source removal updates the shared web query cache as soon as the administrator
+confirms, then sends the authenticated DELETE request in the background. This
+keeps the confirmation and toast responsive even when removing a large
+Jellyfin library. The queued source remains filtered out during a refetch, and
+a failed request restores it at its previous list position.
+
+For Jellyfin, the server removes all raw tracks and the source row in one SQLite
+transaction before catalog search-index cleanup. A normal source-list refresh
+therefore reflects the removal immediately rather than exposing the underlying
+catalog-maintenance duration. Catalogs are cleaned afterward because collection
+and artist projections require per-track reindexing.
+
 ## 2026-11-16: Paginated collections load automatically
 
 Paginated cards, shared track tables, search result groups, and task history use

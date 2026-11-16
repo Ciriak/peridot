@@ -5,7 +5,7 @@ import type {
   PodcastSummaryResponse,
   TrackResponse,
 } from "@peridot/contracts";
-import { clear, createStore, get, set } from "idb-keyval";
+import { clear, createStore, del, get, set } from "idb-keyval";
 import {
   listAlbums,
   listArtists,
@@ -19,10 +19,17 @@ import type { PeridotQueryScope } from "./query-keys";
 import { sortTracks, trackArtistNames } from "./library.ts";
 
 export const OFFLINE_CATALOG_VERSION = 2 as const;
+export const OFFLINE_CATALOG_SYNC_STATE_VERSION = 2 as const;
 export const OFFLINE_DATABASE = "peridot-web-offline-catalog-v2";
+export const OFFLINE_CATALOG_TRACK_PAGE_SIZE = 200;
+export const OFFLINE_CATALOG_CARD_PAGE_SIZE = 100;
+export const OFFLINE_CATALOG_MAX_TRACKS = 10_000;
+export const OFFLINE_CATALOG_MAX_ITEMS = 25_000;
+export const OFFLINE_CATALOG_REFRESH_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000;
+export const OFFLINE_CATALOG_QUIET_INTERVAL_MS = 30_000;
 const OFFLINE_CATALOG_STORE = "offline-catalog";
 const OFFLINE_CATALOG_KEY = "catalog-snapshot";
-const OFFLINE_PAGE_SIZE = 200;
+const OFFLINE_CATALOG_STATE_KEY = "catalog-sync-state";
 
 export interface OfflineCatalogSnapshot {
   version: typeof OFFLINE_CATALOG_VERSION;
@@ -35,6 +42,64 @@ export interface OfflineCatalogSnapshot {
   catalogRevision: number;
   syncedAt: string;
 }
+
+export interface OfflineCatalogSyncState {
+  version: typeof OFFLINE_CATALOG_SYNC_STATE_VERSION;
+  scope: PeridotQueryScope;
+  lastAttemptAt: string | null;
+  lastSuccessAt: string | null;
+  tooLargeUntil: string | null;
+}
+
+export type OfflineCatalogSyncResult =
+  | { status: "synced"; snapshot: OfflineCatalogSnapshot }
+  | {
+      status: "too-large";
+      trackCount: number;
+      itemCount: number;
+    };
+
+interface OfflineCatalogPage<T> {
+  items: T[];
+  nextCursor: string | null;
+  catalogRevision: number;
+}
+
+export interface OfflineCatalogClient {
+  listTracks: (
+    serverAddress: string,
+    token: string,
+    options: TrackListOptions,
+  ) => Promise<OfflineCatalogPage<TrackResponse>>;
+  listAlbums: (
+    serverAddress: string,
+    token: string,
+    options: CardListOptions,
+  ) => Promise<OfflineCatalogPage<AlbumSummaryResponse>>;
+  listArtists: (
+    serverAddress: string,
+    token: string,
+    options: CardListOptions,
+  ) => Promise<OfflineCatalogPage<ArtistSummaryResponse>>;
+  listAudiobooks: (
+    serverAddress: string,
+    token: string,
+    options: CardListOptions,
+  ) => Promise<OfflineCatalogPage<AudiobookSummaryResponse>>;
+  listPodcasts: (
+    serverAddress: string,
+    token: string,
+    options: CardListOptions,
+  ) => Promise<OfflineCatalogPage<PodcastSummaryResponse>>;
+}
+
+const defaultOfflineCatalogClient: OfflineCatalogClient = {
+  listTracks,
+  listAlbums,
+  listArtists,
+  listAudiobooks,
+  listPodcasts,
+};
 
 function offlineCatalogStore() {
   return createStore(OFFLINE_DATABASE, OFFLINE_CATALOG_STORE);
@@ -252,13 +317,73 @@ export async function readOfflineCatalog(
   return snapshot;
 }
 
+export async function readOfflineCatalogSyncState(
+  scope: PeridotQueryScope,
+): Promise<OfflineCatalogSyncState | null> {
+  if (typeof indexedDB === "undefined") return null;
+  const state = await get<OfflineCatalogSyncState>(
+    OFFLINE_CATALOG_STATE_KEY,
+    offlineCatalogStore(),
+  );
+  if (
+    !state ||
+    state.version !== OFFLINE_CATALOG_SYNC_STATE_VERSION ||
+    normalize(state.scope.serverAddress) !== normalize(scope.serverAddress) ||
+    state.scope.userId !== scope.userId
+  ) {
+    return null;
+  }
+  return state;
+}
+
+export async function recordOfflineCatalogAttempt(
+  scope: PeridotQueryScope,
+  now = new Date(),
+): Promise<void> {
+  if (typeof indexedDB === "undefined") return;
+  const current = await readOfflineCatalogSyncState(scope);
+  await set(
+    OFFLINE_CATALOG_STATE_KEY,
+    {
+      version: OFFLINE_CATALOG_SYNC_STATE_VERSION,
+      scope,
+      lastAttemptAt: now.toISOString(),
+      lastSuccessAt: current?.lastSuccessAt ?? null,
+      tooLargeUntil: current?.tooLargeUntil ?? null,
+    } satisfies OfflineCatalogSyncState,
+    offlineCatalogStore(),
+  );
+}
+
+export function shouldSyncOfflineCatalog(
+  state: OfflineCatalogSyncState | null,
+  now = new Date(),
+): boolean {
+  const nowMs = now.getTime();
+  if (state?.tooLargeUntil && new Date(state.tooLargeUntil).getTime() > nowMs) {
+    return false;
+  }
+  if (state?.lastSuccessAt) {
+    return (
+      nowMs - new Date(state.lastSuccessAt).getTime() >=
+      OFFLINE_CATALOG_REFRESH_INTERVAL_MS
+    );
+  }
+  return true;
+}
+
 async function collectPages<T>(
   fetchPage: (cursor: string | null) => Promise<{
     items: T[];
     nextCursor: string | null;
     catalogRevision: number;
   }>,
-): Promise<{ items: T[]; catalogRevision: number }> {
+  maxItems?: number,
+): Promise<{
+  items: T[];
+  catalogRevision: number;
+  exceededLimit: boolean;
+}> {
   const items: T[] = [];
   const seenCursors = new Set<string>();
   let cursor: string | null = null;
@@ -267,6 +392,9 @@ async function collectPages<T>(
     const page = await fetchPage(cursor);
     items.push(...page.items);
     catalogRevision = Math.max(catalogRevision, page.catalogRevision);
+    if (maxItems !== undefined && items.length > maxItems) {
+      return { items, catalogRevision, exceededLimit: true };
+    }
     const nextCursor: string | null = page.nextCursor;
     if (nextCursor && seenCursors.has(nextCursor)) {
       throw new Error("The catalog returned a repeated cursor.");
@@ -274,80 +402,152 @@ async function collectPages<T>(
     if (nextCursor) seenCursors.add(nextCursor);
     cursor = nextCursor;
   } while (cursor);
-  return { items, catalogRevision };
+  return { items, catalogRevision, exceededLimit: false };
+}
+
+export async function collectOfflineCatalog(
+  scope: PeridotQueryScope,
+  token: string,
+  client: OfflineCatalogClient = defaultOfflineCatalogClient,
+): Promise<OfflineCatalogSyncResult> {
+  const trackPage = await collectPages(
+    (cursor) =>
+      client.listTracks(scope.serverAddress, token, {
+        availability: "all",
+        mediaType: "all",
+        limit: OFFLINE_CATALOG_TRACK_PAGE_SIZE,
+        sort: "title",
+        direction: "asc",
+        ...(cursor ? { cursor } : {}),
+      }),
+    OFFLINE_CATALOG_MAX_TRACKS,
+  );
+  if (trackPage.exceededLimit) {
+    return {
+      status: "too-large",
+      trackCount: trackPage.items.length,
+      itemCount: trackPage.items.length,
+    };
+  }
+
+  const [albumPage, artistPage, audiobookPage, podcastPage] = await Promise.all(
+    [
+      collectPages((cursor) =>
+        client.listAlbums(scope.serverAddress, token, {
+          limit: OFFLINE_CATALOG_CARD_PAGE_SIZE,
+          sort: "title",
+          direction: "asc",
+          ...(cursor ? { cursor } : {}),
+        }),
+      ),
+      collectPages((cursor) =>
+        client.listArtists(scope.serverAddress, token, {
+          limit: OFFLINE_CATALOG_CARD_PAGE_SIZE,
+          ...(cursor ? { cursor } : {}),
+        }),
+      ),
+      collectPages((cursor) =>
+        client.listAudiobooks(scope.serverAddress, token, {
+          limit: OFFLINE_CATALOG_CARD_PAGE_SIZE,
+          sort: "title",
+          direction: "asc",
+          ...(cursor ? { cursor } : {}),
+        }),
+      ),
+      collectPages((cursor) =>
+        client.listPodcasts(scope.serverAddress, token, {
+          limit: OFFLINE_CATALOG_CARD_PAGE_SIZE,
+          sort: "title",
+          direction: "asc",
+          ...(cursor ? { cursor } : {}),
+        }),
+      ),
+    ],
+  );
+
+  const itemCount =
+    trackPage.items.length +
+    albumPage.items.length +
+    artistPage.items.length +
+    audiobookPage.items.length +
+    podcastPage.items.length;
+  if (itemCount > OFFLINE_CATALOG_MAX_ITEMS) {
+    return {
+      status: "too-large",
+      trackCount: trackPage.items.length,
+      itemCount,
+    };
+  }
+
+  return {
+    status: "synced",
+    snapshot: {
+      version: OFFLINE_CATALOG_VERSION,
+      scope,
+      tracks: trackPage.items,
+      albums: albumPage.items,
+      artists: artistPage.items,
+      audiobooks: audiobookPage.items,
+      podcasts: podcastPage.items,
+      catalogRevision: Math.max(
+        trackPage.catalogRevision,
+        albumPage.catalogRevision,
+        artistPage.catalogRevision,
+        audiobookPage.catalogRevision,
+        podcastPage.catalogRevision,
+      ),
+      syncedAt: new Date().toISOString(),
+    },
+  };
 }
 
 export async function syncOfflineCatalog(
   scope: PeridotQueryScope,
   token: string,
-): Promise<OfflineCatalogSnapshot> {
+): Promise<OfflineCatalogSyncResult> {
   if (typeof indexedDB === "undefined") {
     throw new Error("Offline catalog storage is unavailable.");
   }
 
-  const [trackPage, albumPage, artistPage, audiobookPage, podcastPage] =
-    await Promise.all([
-      collectPages((cursor) =>
-        listTracks(scope.serverAddress, token, {
-          availability: "all",
-          mediaType: "all",
-          limit: OFFLINE_PAGE_SIZE,
-          sort: "title",
-          direction: "asc",
-          ...(cursor ? { cursor } : {}),
-        }),
-      ),
-      collectPages((cursor) =>
-        listAlbums(scope.serverAddress, token, {
-          limit: OFFLINE_PAGE_SIZE,
-          sort: "title",
-          direction: "asc",
-          ...(cursor ? { cursor } : {}),
-        }),
-      ),
-      collectPages((cursor) =>
-        listArtists(scope.serverAddress, token, {
-          limit: OFFLINE_PAGE_SIZE,
-          ...(cursor ? { cursor } : {}),
-        }),
-      ),
-      collectPages((cursor) =>
-        listAudiobooks(scope.serverAddress, token, {
-          limit: OFFLINE_PAGE_SIZE,
-          sort: "title",
-          direction: "asc",
-          ...(cursor ? { cursor } : {}),
-        }),
-      ),
-      collectPages((cursor) =>
-        listPodcasts(scope.serverAddress, token, {
-          limit: OFFLINE_PAGE_SIZE,
-          sort: "title",
-          direction: "asc",
-          ...(cursor ? { cursor } : {}),
-        }),
-      ),
-    ]);
+  const result = await collectOfflineCatalog(scope, token);
+  const now = new Date();
+  if (result.status === "too-large") {
+    await clearOfflineCatalogSnapshot();
+    await set(
+      OFFLINE_CATALOG_STATE_KEY,
+      {
+        version: OFFLINE_CATALOG_SYNC_STATE_VERSION,
+        scope,
+        lastAttemptAt: now.toISOString(),
+        lastSuccessAt: null,
+        tooLargeUntil: new Date(
+          now.getTime() + OFFLINE_CATALOG_REFRESH_INTERVAL_MS,
+        ).toISOString(),
+      } satisfies OfflineCatalogSyncState,
+      offlineCatalogStore(),
+    );
+    return result;
+  }
 
-  const snapshot: OfflineCatalogSnapshot = {
-    version: OFFLINE_CATALOG_VERSION,
-    scope,
-    tracks: trackPage.items,
-    albums: albumPage.items,
-    artists: artistPage.items,
-    audiobooks: audiobookPage.items,
-    podcasts: podcastPage.items,
-    catalogRevision: Math.max(
-      trackPage.catalogRevision,
-      albumPage.catalogRevision,
-      artistPage.catalogRevision,
-      audiobookPage.catalogRevision,
-      podcastPage.catalogRevision,
-    ),
-    syncedAt: new Date().toISOString(),
-  };
-  await set(OFFLINE_CATALOG_KEY, snapshot, offlineCatalogStore());
-  return snapshot;
+  await set(OFFLINE_CATALOG_KEY, result.snapshot, offlineCatalogStore());
+  await set(
+    OFFLINE_CATALOG_STATE_KEY,
+    {
+      version: OFFLINE_CATALOG_SYNC_STATE_VERSION,
+      scope,
+      lastAttemptAt: now.toISOString(),
+      lastSuccessAt: now.toISOString(),
+      tooLargeUntil: null,
+    } satisfies OfflineCatalogSyncState,
+    offlineCatalogStore(),
+  );
+  return result;
+}
+
+export async function clearOfflineCatalogSnapshot(): Promise<void> {
+  if (typeof indexedDB !== "undefined") {
+    await del(OFFLINE_CATALOG_KEY, offlineCatalogStore());
+  }
 }
 
 export async function clearOfflineCatalog(): Promise<void> {

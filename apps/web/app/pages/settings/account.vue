@@ -150,6 +150,7 @@ async function confirmLogout() {
           :aria-describedby="
             error ? 'account-profile-error' : 'account-display-name-help'
           "
+          @blur="saveProfile"
         />
         <p id="account-display-name-help" class="text-xs text-muted-foreground">
           {{ t("settings.account.displayNameHelp") }}
@@ -167,13 +168,9 @@ async function confirmLogout() {
         </p>
       </div>
 
-      <Button
-        type="submit"
-        :disabled="saving || !displayNameValid"
-        :aria-busy="saving"
-      >
-        {{ saving ? t("common.saving") : t("common.saveChanges") }}
-      </Button>
+      <p v-if="saving" role="status" class="text-sm text-muted-foreground">
+        {{ t("common.saving") }}
+      </p>
     </form>
 
     <div class="mt-auto flex justify-end">

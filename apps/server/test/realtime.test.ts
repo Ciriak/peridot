@@ -180,6 +180,50 @@ test("catalog events are constant-size revision markers", async () => {
   }
 });
 
+test("source removal emits a structural catalog event", async () => {
+  const context = await createTestContext();
+  try {
+    const created = await context.app.inject({
+      method: "POST",
+      url: "/api/admin/sources",
+      headers: context.authorization,
+      payload: {
+        kind: "url",
+        url: "https://example.com/source-to-remove",
+      },
+    });
+    assert.equal(created.statusCode, 201);
+    const sourceId = created.json<{ id: string }>().id;
+
+    const issued = await ticket(context);
+    const socket = await context.app.injectWS(
+      `/api/realtime?ticket=${issued.ticket}`,
+      { headers: { origin: "http://127.0.0.1:17430" } },
+    );
+    try {
+      const nextMessage = messageQueue(socket);
+      socket.send(JSON.stringify({ type: "subscribe", topics: ["catalog"] }));
+      await nextMessage();
+      await nextMessage();
+
+      const removed = await context.app.inject({
+        method: "DELETE",
+        url: `/api/admin/sources/${sourceId}`,
+        headers: context.authorization,
+      });
+      assert.equal(removed.statusCode, 204);
+      const event = (await nextMessage()) as RealtimeCatalogChangedEvent;
+      assert.equal(event.type, "catalog.changed");
+      assert.equal(event.reason, "source-removal");
+      assert.equal(event.sourceId, sourceId);
+    } finally {
+      socket.terminate();
+    }
+  } finally {
+    await context.close();
+  }
+});
+
 test("task events follow authenticated task transitions", async () => {
   const context = await createTestContext();
   try {

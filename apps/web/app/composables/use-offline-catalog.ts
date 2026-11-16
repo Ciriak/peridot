@@ -4,17 +4,34 @@ import {
   readOfflineCatalog,
   type OfflineCatalogSnapshot,
 } from "../lib/offline-catalog";
+import type { PeridotQueryScope } from "../lib/query-keys";
 import { useQueryScope } from "./use-query-scope";
 import { useServerConnection } from "./use-server-connection";
 
 const snapshot = shallowRef<OfflineCatalogSnapshot | null>(null);
 const loading = shallowRef(false);
 const loaded = shallowRef(false);
+const syncStatus = shallowRef<"idle" | "syncing" | "too-large">("idle");
+const syncStatusScope = shallowRef<string | null>(null);
 let requestVersion = 0;
+
+function scopeKey(scope: PeridotQueryScope | null): string | null {
+  return scope
+    ? `${scope.serverAddress.trim().toLowerCase()}|${scope.userId}`
+    : null;
+}
 
 export function setOfflineCatalogSnapshot(next: OfflineCatalogSnapshot | null) {
   snapshot.value = next;
   loaded.value = true;
+}
+
+export function setOfflineCatalogSyncStatus(
+  next: "idle" | "syncing" | "too-large",
+  scope: PeridotQueryScope | null,
+) {
+  syncStatus.value = next;
+  syncStatusScope.value = scopeKey(scope);
 }
 
 export function useOfflineCatalog() {
@@ -48,7 +65,13 @@ export function useOfflineCatalog() {
         snapshot.value = null;
         loaded.value = true;
         loading.value = false;
+        syncStatus.value = "idle";
+        syncStatusScope.value = null;
         return;
+      }
+      if (scopeKey(nextScope) !== syncStatusScope.value) {
+        syncStatus.value = "idle";
+        syncStatusScope.value = null;
       }
       if (
         !snapshot.value ||
@@ -61,5 +84,5 @@ export function useOfflineCatalog() {
     { immediate: true },
   );
 
-  return { snapshot, loading, loaded, reload };
+  return { snapshot, loading, loaded, syncStatus, reload };
 }

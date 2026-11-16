@@ -7,7 +7,7 @@ import type { TaskResponse } from "@peridot/contracts";
 import { buildApp } from "../src/app.js";
 import { localCredentialKeyFile } from "../src/credential-store.js";
 import { createDatabase, type Database } from "../src/database.js";
-import { ServerLogBuffer } from "../src/server-log.js";
+import { ServerLogBuffer, serverLogFilePath } from "../src/server-log.js";
 import type { UpdateService } from "../src/updates.js";
 
 export interface TestContext {
@@ -57,7 +57,7 @@ export async function createTestContext(
   }
   await copyFile(templatePath, databasePath);
   const database = createDatabase(databaseUrl);
-  const logBuffer = new ServerLogBuffer();
+  const logBuffer = new ServerLogBuffer(serverLogFilePath(databaseUrl));
   const metadataFetch =
     options.metadataFetch ??
     (async () => Response.json({ releases: [], recordings: [] }));

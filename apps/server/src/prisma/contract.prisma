@@ -251,6 +251,7 @@ model ServerSetting {
   libraryRoot          String
   sourceRefreshEnabled Int      @default(1)
   sourceRefreshCron    String   @default("0 3 * * *")
+  fileLoggingEnabled   Int      @default(0)
   updatedAt            DateTime @onCreate(now()) @onUpdate(now())
 }
 

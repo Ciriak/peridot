@@ -704,6 +704,7 @@ export interface ServerSettingsResponse {
   trackCount: number;
   availableTrackCount: number;
   sourceRefresh: SourceRefreshSettingsResponse;
+  fileLogging: FileLoggingSettingsResponse;
 }
 
 export interface SourceRefreshSettingsResponse {
@@ -712,10 +713,18 @@ export interface SourceRefreshSettingsResponse {
   nextRunAt: string | null;
 }
 
+export interface FileLoggingSettingsResponse {
+  enabled: boolean;
+  path: string;
+}
+
 export interface UpdateServerSettingsRequest {
-  sourceRefresh: {
+  sourceRefresh?: {
     enabled: boolean;
     cron: string;
+  };
+  fileLogging?: {
+    enabled: boolean;
   };
 }
 
@@ -802,7 +811,7 @@ export interface RealtimeCatalogChangedEvent {
   occurredAt: string;
   revision: number;
   sourceId: string | null;
-  reason: "scan" | "metadata" | "reset" | "source";
+  reason: "scan" | "metadata" | "reset" | "source" | "source-removal";
   changedCount: number;
 }
 

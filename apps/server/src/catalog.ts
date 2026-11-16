@@ -99,7 +99,7 @@ interface CursorPayload {
 interface CatalogChange {
   revision: number;
   sourceId: string | null;
-  reason: "scan" | "metadata" | "reset" | "source";
+  reason: "scan" | "metadata" | "reset" | "source" | "source-removal";
   changedCount: number;
 }
 
@@ -784,6 +784,13 @@ export class CatalogService {
   async markReset(): Promise<number> {
     this.pendingReason = "reset";
     this.pendingSourceId = null;
+    this.pendingChangedCount += 1;
+    return this.flushChanges();
+  }
+
+  async markSourceRemoval(sourceId: string): Promise<number> {
+    this.pendingReason = "source-removal";
+    this.pendingSourceId = sourceId;
     this.pendingChangedCount += 1;
     return this.flushChanges();
   }

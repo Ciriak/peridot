@@ -51,6 +51,7 @@ import {
 import { useServer } from "../../composables/use-server";
 import { useServerConnection } from "../../composables/use-server-connection";
 import { useSession } from "../../composables/use-session";
+import { useCatalogRevision } from "../../composables/use-catalog-query";
 import {
   useAdminSourcesQuery,
   useServerSettingsQuery,
@@ -95,6 +96,8 @@ const serverLost = computed(() => serverStatus.value === "lost");
 
 const sourcesQuery = useAdminSourcesQuery();
 const serverSettings = useServerSettingsQuery();
+const { invalidate: invalidateCatalog, resetOfflineCatalog } =
+  useCatalogRevision();
 const sources = ref<SourceResponse[]>([]);
 const sourceList = ref<HTMLElement | null>(null);
 const mediaTypes: MediaType[] = ["music", "audiobook", "podcast"];
@@ -115,6 +118,7 @@ const adding = ref(false);
 const addError = ref("");
 const removeOpen = ref(false);
 const pendingDelete = ref<SourceResponse | null>(null);
+const pendingSourceDeletions = ref<Set<string>>(new Set());
 const sourceRefreshEnabled = ref(true);
 const sourceRefreshCron = ref("0 3 * * *");
 const sourceRefreshSaving = ref(false);
@@ -212,7 +216,9 @@ async function loadSources() {
 watch(
   sourcesQuery.items,
   (items) => {
-    sources.value = [...items];
+    sources.value = items.filter(
+      (source) => !pendingSourceDeletions.value.has(source.id),
+    );
   },
   { immediate: true },
 );
@@ -432,23 +438,45 @@ function askRemove(source: SourceResponse) {
   removeOpen.value = true;
 }
 
-async function confirmRemove() {
+function confirmRemove() {
   if (!pendingDelete.value) return;
   const removedSource = pendingDelete.value;
-  pageError.value = "";
-  try {
-    await deleteSource(
-      address.value ?? "",
-      token.value ?? "",
-      removedSource.id,
-    );
-    notifySourceMutation("removed", sourceLabel(removedSource));
-    pendingDelete.value = null;
-    await loadSources();
-  } catch (reason) {
-    if (isAuthenticationRedirectError(reason)) return;
-    pageError.value = errorMessage(reason, "settings.sources.removeError");
+  const rollback = sourcesQuery.removeOptimistically(removedSource.id);
+  if (!rollback) {
+    pageError.value = t("settings.sources.removeError");
+    return;
   }
+
+  pendingSourceDeletions.value = new Set([
+    ...pendingSourceDeletions.value,
+    removedSource.id,
+  ]);
+  sources.value = sources.value.filter(
+    (source) => source.id !== removedSource.id,
+  );
+  pendingDelete.value = null;
+  removeOpen.value = false;
+  pageError.value = "";
+  notifySourceMutation("removed", sourceLabel(removedSource));
+
+  let removalFailed = false;
+  void deleteSource(address.value ?? "", token.value ?? "", removedSource.id)
+    .then(async () => {
+      await resetOfflineCatalog();
+      invalidateCatalog();
+    })
+    .catch((reason) => {
+      if (isAuthenticationRedirectError(reason)) return;
+      removalFailed = true;
+      pageError.value = errorMessage(reason, "settings.sources.removeError");
+    })
+    .finally(() => {
+      const remaining = new Set(pendingSourceDeletions.value);
+      remaining.delete(removedSource.id);
+      pendingSourceDeletions.value = remaining;
+
+      if (removalFailed) rollback();
+    });
 }
 
 async function persistOrder() {
@@ -486,6 +514,11 @@ async function saveSourceRefresh() {
   } finally {
     sourceRefreshSaving.value = false;
   }
+}
+
+function changeSourceRefreshEnabled(enabled: boolean) {
+  sourceRefreshEnabled.value = enabled;
+  void saveSourceRefresh();
 }
 
 onMounted(() => {
@@ -774,9 +807,10 @@ onMounted(() => {
             </p>
           </div>
           <Switch
-            v-model="sourceRefreshEnabled"
+            :model-value="sourceRefreshEnabled"
             :disabled="sourceRefreshSaving || serverLost"
             :aria-label="t('settings.server.scheduleEnabled')"
+            @update:model-value="changeSourceRefreshEnabled"
           />
         </div>
         <div class="space-y-2">
@@ -792,6 +826,8 @@ onMounted(() => {
             :placeholder="t('settings.server.scheduleCronPlaceholder')"
             autocomplete="off"
             spellcheck="false"
+            @blur="saveSourceRefresh"
+            @keydown.enter.prevent="saveSourceRefresh"
           />
           <p class="text-sm text-muted-foreground">
             {{ t("settings.server.scheduleCronHelp") }}
@@ -828,18 +864,6 @@ onMounted(() => {
               {{ t("settings.server.schedulePending") }}
             </template>
           </p>
-          <Button
-            type="button"
-            size="sm"
-            :disabled="sourceRefreshSaving || serverLost"
-            @click="saveSourceRefresh"
-          >
-            {{
-              sourceRefreshSaving
-                ? t("common.saving")
-                : t("settings.server.scheduleSave")
-            }}
-          </Button>
         </div>
         <p
           v-if="sourceRefreshNotice"

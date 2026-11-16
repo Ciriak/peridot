@@ -2,6 +2,124 @@
 
 Last updated: 2026-11-16.
 
+## Large-library catalog synchronization is bounded
+
+Automatic full offline catalog snapshots are now limited to libraries of at
+most 10,000 tracks. Track pages use the server's 200-item limit, while album,
+artist, audiobook, and podcast pages use their 100-item limit. Track traversal
+stops as soon as the limit is exceeded, so oversized libraries no longer fan
+out into the remaining card endpoints. A combined 25,000-record cap protects
+browser memory.
+
+Successful snapshots and oversized-library decisions are persisted per server
+and user for seven days. Catalog revisions are debounced until the catalog has
+been quiet for 30 seconds, and revisions during a sync no longer restart the
+sync immediately. Oversized libraries clear the obsolete full snapshot while
+retaining explicitly downloaded tracks, playlists, and previously persisted
+query pages. Settings → Library explains when automatic full offline browsing
+is paused.
+
+Catalog-event query invalidation is coalesced to at most once every 10 seconds.
+Player queue metadata is no longer force-resolved in full on every catalog
+revision; revision hydration requests only missing rows. Eager whole-catalog
+artwork warming was removed so artwork is cached as users view it.
+
+Source deletion now emits a `source-removal` catalog event. Connected clients
+clear the full offline snapshot immediately, invalidate catalog queries without
+waiting for the normal revision throttle, and schedule a fresh bounded rebuild.
+Missed realtime events also clear the snapshot during `resync.required`. The
+source deletion page performs the same reset directly after a successful DELETE
+so stale offline rows disappear even when realtime delivery is unavailable.
+Sync-state version 2 invalidates snapshots created before this correction and
+forces one bounded refresh on the next client load.
+
+Checks completed:
+
+- Full web suite: 215 passing, including page limits, 10,000-track abort,
+  25,000-record cap, seven-day gating, and coalesced revision handling
+- Full server suite: 154 passing, including the source-removal realtime event
+- Web type check
+- Server type check
+- Targeted ESLint and Prettier
+- Web and server production builds
+- `git diff --check`
+
+Known limits: libraries above 10,000 tracks intentionally do not receive an
+automatic full offline catalog snapshot. The threshold is checked again after
+seven days. No API or database schema changed.
+
+Next: delete a source that previously populated the offline snapshot and verify
+its tracks disappear immediately while offline and after reconnecting.
+
+## Persistent server log file and automatic settings saves
+
+Settings → Server now includes a disabled-by-default `Keep server logs in a
+file` option. When enabled, Fastify/pino request logs and task warning/error
+entries are appended as JSON lines to `peridot.log` beside the SQLite database.
+For the container deployment that path is `/data/peridot.log`, inside the
+persistent `peridot-data` volume. Disabling the option stops new writes and
+leaves the existing file in place.
+
+The setting applies without a server restart and is persisted in
+`ServerSetting.fileLoggingEnabled`. The Settings UI displays the resolved file
+path. The local development file is `apps/server/peridot.log`.
+
+Server-backed settings cards now save automatically. Toggles save immediately;
+the source-refresh cron and profile display name save on blur or Enter. The
+corresponding save buttons were removed. User creation, metadata-provider
+configuration, and other dialogs that submit credentials or create records keep
+their explicit actions.
+
+Checks completed:
+
+- Full server suite: 153 passing, including enabling, writing, and disabling
+  file logging
+- Full web suite: 210 passing
+- Server and web type checks
+- Workspace ESLint and targeted Prettier checks
+- Server and web production builds
+- Prisma contract emission and additive database update
+- Live development verification: `apps/server/peridot.log` is receiving entries
+
+Known limits: the log file is append-only and has no built-in rotation or size
+cap. Existing file contents are not imported into the in-memory Settings log.
+The current commits are on `fix/source-deletion`; no additional push, tag,
+publication, or deployment was performed by this work.
+
+Next: decide whether persistent file logs need a maximum size or rotation policy
+before production use.
+
+## Source removal responds immediately
+
+Removing a source now updates the web query cache before the API request
+finishes. The confirmation closes, the source row disappears, and the existing
+success toast is shown immediately. A failed background deletion restores the
+source in its previous position and displays the existing removal error.
+
+Jellyfin source deletion now removes the source and all tracks in one SQLite
+transaction. This makes the source disappear from subsequent list requests
+without waiting for catalog search-index cleanup, which continues in the same
+request afterward. Bulk deletion reduces the live Jellyfin case from thousands
+of individual source-track deletes to one transaction.
+
+Checks completed:
+
+- Full web suite: 210 passing, including optimistic removal and rollback
+- Full server suite: 152 passing
+- Web and server type checks
+- Workspace ESLint
+- Web and server production builds
+- Targeted Prettier checks and `git diff --check`
+
+Known limits: catalog search-index cleanup still runs after the durable source
+and track deletion and can keep the DELETE request active for a large Jellyfin
+library. Cleanup failures are logged after the source is already durably
+removed. The change remains uncommitted on `feature/clasicifation-update`; no
+commit, push, tag, publication, or deployment was performed.
+
+Next: remove a configured Jellyfin source in the hot-reloaded app and confirm
+the row and toast update immediately while a normal refresh keeps it absent.
+
 ## Node 24 CI actions
 
 Every CI job now uses `actions/checkout@v7`, `actions/setup-node@v7`, and
