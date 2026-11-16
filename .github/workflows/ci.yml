@@ -298,9 +298,11 @@ jobs:
           retention-days: 90
       - name: Publish Android web update
         shell: bash
-        run:
+        run: |
           gh release upload "${{ needs.prepare-client-release.outputs.tag }}" \
-          apps/android/dist-update/* --clobber
+            apps/android/dist-update/android-web.zip \
+            apps/android/dist-update/android-web-manifest.json \
+            --clobber
         env:
           GH_TOKEN: ${{ github.token }}
 
