@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  DISCOVERY_PORT,
   discoverLocalPeridotServers,
   localPrivateSubnetPrefixes,
   privateIpv4Prefix,
-} from "../server/utils/server-discovery.ts";
+} from "../src/local-discovery.js";
 
 const interfaceEntry = (address: string, internal = false) =>
   ({
@@ -17,6 +18,7 @@ const interfaceEntry = (address: string, internal = false) =>
   }) as const;
 
 test("discovery limits scans to private IPv4 interface subnets", () => {
+  assert.equal(DISCOVERY_PORT, 17430);
   assert.equal(privateIpv4Prefix("192.168.20.4"), "192.168.20");
   assert.equal(privateIpv4Prefix("10.42.7.9"), "10.42.7");
   assert.equal(privateIpv4Prefix("172.31.8.2"), "172.31.8");
@@ -36,7 +38,7 @@ test("discovery limits scans to private IPv4 interface subnets", () => {
   );
 });
 
-test("discovery only returns hosts with the Peridot health signature", async () => {
+test("discovery only returns hosts with the Peridot health signature on 17430", async () => {
   const requested: string[] = [];
   const result = await discoverLocalPeridotServers({
     interfaces: { lan: [interfaceEntry("192.168.50.10")] },
@@ -44,19 +46,16 @@ test("discovery only returns hosts with the Peridot health signature", async () 
     fetcher: async (input) => {
       const url = String(input);
       requested.push(url);
-      if (url === "http://192.168.50.42:17431/api/health") {
-        return Response.json({ status: "ok", service: "peridot" });
-      }
       if (url === "http://192.168.50.42:17430/api/health") {
         return Response.json({ status: "ok", service: "peridot" });
       }
       if (url === "http://192.168.50.43:17430/api/health") {
         return Response.json({ status: "ok", service: "peridot" });
       }
-      if (url === "http://192.168.50.44:17431/api/health") {
+      if (url === "https://192.168.50.44:17430/api/health") {
         return Response.json({ status: "ok", service: "another-service" });
       }
-      if (url === "https://192.168.50.45:17431/api/health") {
+      if (url === "https://192.168.50.45:17430/api/health") {
         return Response.json({ status: "ok", service: "peridot" });
       }
       return new Response(null, { status: 404 });
@@ -66,7 +65,7 @@ test("discovery only returns hosts with the Peridot health signature", async () 
   assert.deepEqual(result, {
     items: [
       {
-        address: "http://192.168.50.42:17431",
+        address: "http://192.168.50.42:17430",
         host: "192.168.50.42",
       },
       {
@@ -74,15 +73,17 @@ test("discovery only returns hosts with the Peridot health signature", async () 
         host: "192.168.50.43",
       },
       {
-        address: "https://192.168.50.45:17431",
+        address: "https://192.168.50.45:17430",
         host: "192.168.50.45",
       },
     ],
     scannedSubnets: ["192.168.50.0/24"],
   });
-  assert.equal(requested.length, 1020);
-  assert.ok(requested.includes("http://127.0.0.1:17431/api/health"));
-  assert.ok(requested.includes("https://127.0.0.1:17431/api/health"));
+  assert.equal(requested.length, 510);
   assert.ok(requested.includes("http://127.0.0.1:17430/api/health"));
   assert.ok(requested.includes("https://127.0.0.1:17430/api/health"));
+  assert.equal(
+    requested.some((url) => url.includes(":17431/")),
+    false,
+  );
 });

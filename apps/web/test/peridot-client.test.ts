@@ -1099,7 +1099,7 @@ test("update checks and installs use authenticated administrator endpoints", asy
       : Response.json(status);
   };
 
-  const server = "http://127.0.0.1:17431";
+  const server = "http://127.0.0.1:17430";
   assert.deepEqual(await fetchUpdateStatus(server, "s"), status);
   assert.deepEqual(await checkForUpdates(server, "s"), status);
   assert.deepEqual(await installUpdate(server, "s"), { status: "updating" });

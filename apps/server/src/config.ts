@@ -1,8 +1,7 @@
 import { readFile, realpath, stat } from "node:fs/promises";
 import type { UpdateChannel } from "@peridot/contracts";
 
-export const DEFAULT_SERVER_PORT = 17430;
-export const DEFAULT_WEB_PORT = 17431;
+export const DEFAULT_PORT = 17430;
 
 export const DESKTOP_WEB_ORIGINS = [
   "http://tauri.localhost",
@@ -59,8 +58,8 @@ export async function loadServerConfig(
   const baseOrigins = configuredOrigins.length
     ? configuredOrigins.map(normalizeOrigin)
     : [
-        "http://127.0.0.1:17431",
-        "http://localhost:17431",
+        "http://127.0.0.1:17430",
+        "http://localhost:17430",
         ...DESKTOP_WEB_ORIGINS,
       ];
   const webOrigins = [...new Set([...baseOrigins, ...MOBILE_WEB_ORIGINS])];

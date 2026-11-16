@@ -43,9 +43,12 @@ test("Nuxt pre-bundles dependencies discovered by the first onboarding render", 
   };
   assert.equal(
     packageJson.scripts?.dev,
-    "nuxt dev --host 127.0.0.1 --port 17431",
-    "Nuxt development must use the default web application port",
+    "nuxt dev --host 127.0.0.1 --port 17430",
+    "Nuxt development must use the public Peridot port",
   );
+  assert.match(source, /devProxy:/);
+  assert.match(source, /"\/api":\s*\{/);
+  assert.match(source, /target: "http:\/\/127\.0\.0\.1:17431\/api"/);
   assert.equal(
     packageJson.scripts?.build,
     "nuxt generate",

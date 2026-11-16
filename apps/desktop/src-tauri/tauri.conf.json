@@ -5,7 +5,7 @@
   "identifier": "app.peridot.desktop",
   "build": {
     "beforeDevCommand": "pnpm --dir ../.. dev",
-    "devUrl": "http://127.0.0.1:17431",
+    "devUrl": "http://127.0.0.1:17430",
     "beforeBuildCommand": "pnpm --dir ../web generate",
     "frontendDist": "../../web/.output/public"
   },

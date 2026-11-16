@@ -41,12 +41,12 @@ Desktop shell, production storage, authentication, plugin RPC/isolation, and
 marketplace trust/distribution protocols still require implementation decisions.
 
 Production deployment uses immutable multi-architecture GHCR images. The built
-Fastify server keeps the authenticated API on port 17430 and runs a second web
-listener on port 17431 that serves the generated Nuxt SPA and proxies API,
-audio, and realtime traffic. Persistent SQLite state and credentials live in
-`/data`; music remains a read-only mounted source. The maintained Watchtower
-fork follows the deployed image channel and may be triggered from administrator
-Settings for manual checks and installation.
+Fastify server serves the authenticated API and generated Nuxt SPA together on
+port 17430, including audio and realtime traffic. External web clients discover
+and connect to the same server address. Persistent SQLite state and credentials
+live in `/data`; music remains a read-only mounted source. The maintained
+Watchtower fork follows the deployed image channel and may be triggered from
+administrator Settings for manual checks and installation.
 
 ## Visual identity
 

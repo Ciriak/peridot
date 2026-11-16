@@ -1,5 +1,25 @@
 # Decisions
 
+## 2026-11-16: One public Peridot port on 17430
+
+The built server uses one Fastify listener on 17430 for the SPA, authenticated
+API, audio, artwork, and realtime WebSocket traffic. Static SPA files and their
+`200.html` fallback are registered in the API application itself, so production
+no longer has a second proxy listener or a separate `WEB_PORT`.
+
+Development keeps Nuxt HMR on the same public 17430 origin and proxies `/api`
+to a private Fastify listener on 17431. The API's development port is an
+implementation detail and does not need to be exposed for browser access. Tauri
+development uses 17430 as well.
+
+External Peridot web clients continue to discover servers by the exact supplied
+IP address or URL. Manual and bounded LAN discovery probe the single public port
+over HTTP and HTTPS. The unauthenticated `/api/health` response allows any
+origin to read its fixed Peridot health signature; authenticated cross-origin
+requests remain restricted to `PERIDOT_WEB_ORIGINS`. Compose publishes only 17430.
+
+This supersedes the earlier two-listener defaults of API 17430 and web 17431.
+
 ## 2026-11-15: Fixed defaults use the API and web listener ports everywhere
 
 The API listener defaults to 17430 and the browser-facing web listener defaults
