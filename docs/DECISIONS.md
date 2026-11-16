@@ -1,5 +1,20 @@
 # Decisions
 
+## 2026-11-16: Android playback uses a dedicated media notification channel
+
+The Android client declares `POST_NOTIFICATIONS`, registers a dedicated
+`peridot_playback` channel when the Media3 service starts, and configures
+Media3's default notification provider with that channel and a monochrome
+Peridot status-bar icon. This ensures Peridot appears in Android's notification
+settings and gives media controls a stable channel without replacing the
+native `MediaLibraryService`.
+
+Android exempts media-session notifications from the Android 13 runtime
+permission requirement, so playback continues if permission is denied. The
+native plugin requests the permission once on the first user-initiated
+playback, not at app launch, to cover OEM and system notification surfaces.
+Channel names and descriptions are localized in English, French, and German.
+
 ## 2026-11-16: Large libraries do not auto-build complete offline snapshots
 
 Automatic full offline catalog synchronization stops at 10,000 tracks. Above

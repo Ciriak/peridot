@@ -1,5 +1,10 @@
 package app.peridot.android.playback
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.app.ActivityCompat
+import androidx.core.content.edit
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
@@ -93,8 +98,32 @@ class PeridotMediaPlugin : Plugin() {
 
     @PluginMethod
     fun play(call: PluginCall) {
+        requestPlaybackNotificationPermission()
         PeridotPlaybackService.command(context, PeridotPlaybackService.ACTION_PLAY)
         call.resolve()
+    }
+
+    private fun requestPlaybackNotificationPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        if (
+            ActivityCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) == PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        val preferences = context.getSharedPreferences(
+            "peridot-notifications",
+            android.content.Context.MODE_PRIVATE,
+        )
+        if (preferences.getBoolean(NOTIFICATION_PERMISSION_REQUESTED, false)) return
+        preferences.edit { putBoolean(NOTIFICATION_PERMISSION_REQUESTED, true) }
+        ActivityCompat.requestPermissions(
+            activity,
+            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+            PLAYBACK_NOTIFICATION_REQUEST_CODE,
+        )
     }
 
     @PluginMethod
@@ -250,5 +279,11 @@ class PeridotMediaPlugin : Plugin() {
     fun clearOfflineTracks(call: PluginCall) {
         sessions.read()?.let(offlineStore::clear)
         call.resolve()
+    }
+
+    private companion object {
+        const val NOTIFICATION_PERMISSION_REQUESTED =
+            "playback-notification-permission-requested"
+        const val PLAYBACK_NOTIFICATION_REQUEST_CODE = 7404
     }
 }
