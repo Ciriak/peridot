@@ -77,7 +77,7 @@ test("realtime tickets authenticate, subscribe, replay, and authorize logs", asy
     const issued = await ticket(context);
     const socket = await context.app.injectWS(
       `/api/realtime?ticket=${issued.ticket}`,
-      { headers: { origin: "http://127.0.0.1:17431" } },
+      { headers: { origin: "http://127.0.0.1:17430" } },
     );
     try {
       const nextMessage = messageQueue(socket);
@@ -110,7 +110,7 @@ test("realtime tickets authenticate, subscribe, replay, and authorize logs", asy
 
     const reused = await context.app.injectWS(
       `/api/realtime?ticket=${issued.ticket}`,
-      { headers: { origin: "http://127.0.0.1:17431" } },
+      { headers: { origin: "http://127.0.0.1:17430" } },
     );
     assert.equal(await waitForClose(reused), 4401);
   } finally {
@@ -132,7 +132,7 @@ test("realtime rejects origins and member log subscriptions", async () => {
     const memberTicket = await ticket(context, member);
     const socket = await context.app.injectWS(
       `/api/realtime?ticket=${memberTicket.ticket}`,
-      { headers: { origin: "http://127.0.0.1:17431" } },
+      { headers: { origin: "http://127.0.0.1:17430" } },
     );
     try {
       const nextMessage = messageQueue(socket);
@@ -154,7 +154,7 @@ test("catalog events are constant-size revision markers", async () => {
     const issued = await ticket(context);
     const socket = await context.app.injectWS(
       `/api/realtime?ticket=${issued.ticket}`,
-      { headers: { origin: "http://127.0.0.1:17431" } },
+      { headers: { origin: "http://127.0.0.1:17430" } },
     );
     try {
       const nextMessage = messageQueue(socket);
@@ -186,7 +186,7 @@ test("task events follow authenticated task transitions", async () => {
     const issued = await ticket(context);
     const socket = await context.app.injectWS(
       `/api/realtime?ticket=${issued.ticket}`,
-      { headers: { origin: "http://127.0.0.1:17431" } },
+      { headers: { origin: "http://127.0.0.1:17430" } },
     );
     try {
       const nextMessage = messageQueue(socket);
@@ -217,7 +217,7 @@ test("revoking a session closes its realtime connection", async () => {
     const issued = await ticket(context);
     const socket = await context.app.injectWS(
       `/api/realtime?ticket=${issued.ticket}`,
-      { headers: { origin: "http://127.0.0.1:17431" } },
+      { headers: { origin: "http://127.0.0.1:17430" } },
     );
     const nextMessage = messageQueue(socket);
     socket.send(JSON.stringify({ type: "subscribe", topics: ["tasks"] }));

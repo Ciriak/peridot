@@ -1,6 +1,50 @@
 # Handoff
 
-Last updated: 2026-11-15.
+Last updated: 2026-11-16.
+
+## Single public Peridot port on 17430
+
+The built server now serves the web SPA and API from one Fastify listener on 17430. Static assets use the generated web root, unknown GET/HEAD routes fall
+back to `200.html`, and API routes remain owned by the same Fastify instance.
+The second web listener and `WEB_PORT` configuration were removed.
+
+Nuxt and Tauri development now load 17430. Nuxt proxies `/api` and WebSockets to
+a private Fastify development listener on 17431, so browser development also
+uses one public origin. Onboarding defaults and fallback probing use 17430 only.
+Bounded LAN discovery moved from Nuxt into the Fastify server so the public
+development proxy does not hide the discovery endpoint.
+
+External web deployments can still probe a supplied IP address or URL at
+`/api/health`. That public response now permits cross-origin reads; authenticated
+cross-origin API access still requires the external web origin in
+`PERIDOT_WEB_ORIGINS`. Compose and the Docker image publish only 17430.
+
+Checks completed:
+
+- Server type check and full server suite: 142 passing
+- Web type check and full web suite: 204 passing
+- Desktop type check and tests: 4 passing
+- Shared UI tests: 16 passing
+- Prisma contract validation
+- `pnpm check` across version synchronization, ESLint, and Prettier
+- `git diff --check`
+- Server and static web production builds
+- Live built-server smoke test: root and nested SPA routes returned 200, health
+  returned the Peridot signature with external-origin CORS, and unknown API
+  routes returned JSON 404
+- Live Nuxt development proxy test: page and `/api/health` both worked through
+  public port 17430 while Fastify remained private on 17431
+
+Known limits: the full workspace build stopped at the Android package because
+`JAVA_HOME` and Java are unavailable in this shell. Docker is also unavailable,
+so image, Compose, and published-channel checks were not exercised. Live
+cross-origin authenticated traffic from a separately hosted Peridot web client
+has not been exercised. No commit, push, tag, publication, or deployment was
+performed.
+
+Next: rebuild the image, verify the Compose stack on 17430, then configure an
+external web origin and exercise onboarding discovery, sign-in, realtime, and
+audio playback against a LAN server.
 
 ## Fixed API and web defaults on 17430 and 17431
 

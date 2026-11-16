@@ -35,6 +35,7 @@ export interface TestContextOptions {
   credentialEncryptionKey?: string;
   enableSourceRefreshScheduler?: boolean;
   updateService?: UpdateService;
+  webRoot?: string;
 }
 
 export async function createTestContext(
@@ -72,7 +73,7 @@ export async function createTestContext(
     config: {
       databaseUrl,
       libraryRoot,
-      webOrigins: options.webOrigins ?? ["http://127.0.0.1:17431"],
+      webOrigins: options.webOrigins ?? ["http://127.0.0.1:17430"],
       ...(options.credentialEncryptionKey
         ? { credentialEncryptionKey: options.credentialEncryptionKey }
         : {}),
@@ -95,6 +96,7 @@ export async function createTestContext(
       ? { enableSourceRefreshScheduler: true }
       : {}),
     ...(options.updateService ? { updateService: options.updateService } : {}),
+    ...(options.webRoot ? { webRoot: options.webRoot } : {}),
   });
   const bootstrap = await app.inject({
     method: "POST",

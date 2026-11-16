@@ -14,6 +14,7 @@ import { registerLibraryRoutes } from "./library-routes.js";
 import { registerLikeRoutes } from "./like-routes.js";
 import { registerPlaylistRoutes } from "./playlist-routes.js";
 import { LibraryScanner } from "./library-scanner.js";
+import { registerLocalDiscoveryRoute } from "./local-discovery.js";
 import { MetadataEnrichment } from "./metadata-enrichment.js";
 import { ensureDefaultMetadataProvider } from "./metadata-providers.js";
 import { MetadataResolverRegistry } from "./metadata-resolver.js";
@@ -39,6 +40,7 @@ import {
   registerRealtimeTicketRoute,
 } from "./realtime.js";
 import { UpdateService, type UpdateConfig } from "./updates.js";
+import { registerWebApplication } from "./web-server.js";
 
 export interface BuildAppOptions {
   config?: ServerConfig;
@@ -54,6 +56,7 @@ export interface BuildAppOptions {
   jellyfinRequestTimeoutMs?: number;
   enableSourceRefreshScheduler?: boolean;
   updateService?: UpdateService;
+  webRoot?: string;
 }
 
 export async function buildApp(options: BuildAppOptions = {}) {
@@ -193,10 +196,14 @@ export async function buildApp(options: BuildAppOptions = {}) {
     allowedHeaders: ["Authorization", "Content-Type", "Range"],
     exposedHeaders: ["Accept-Ranges", "Content-Length", "Content-Range"],
   });
-  app.get("/api/health", async (): Promise<HealthResponse> => ({
-    status: "ok",
-    service: "peridot",
-  }));
+  app.get("/api/health", async (_request, reply): Promise<HealthResponse> => {
+    reply.header("access-control-allow-origin", "*");
+    return {
+      status: "ok",
+      service: "peridot",
+    };
+  });
+  await registerLocalDiscoveryRoute(app);
   await registerRealtimeSocket(app, realtime, config.webOrigins);
   await registerAuthRoutes(app, database);
   await catalog.initialize();
@@ -255,6 +262,9 @@ export async function buildApp(options: BuildAppOptions = {}) {
     (request) => playbackTokens.authorizeRequest(request.method, request.url),
     (sessionId) => realtime.disconnectSession(sessionId),
   );
+  if (options.webRoot) {
+    await registerWebApplication(app, { webRoot: options.webRoot });
+  }
   app.addHook("onClose", async () => {
     sourceRefreshScheduler.close();
     if (backfillImmediate) {

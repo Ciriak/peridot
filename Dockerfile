@@ -37,8 +37,6 @@ ARG PERIDOT_VERSION=
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=17430 \
-    WEB_HOST=0.0.0.0 \
-    WEB_PORT=17431 \
     PERIDOT_SERVE_WEB=true \
     PERIDOT_WEB_DIST=/app/apps/web/.output/public \
     PERIDOT_WATCHTOWER_URL=http://watchtower:8080 \
@@ -61,9 +59,9 @@ COPY --from=builder --chown=node:node /app /app
 COPY --chmod=755 scripts/docker-entrypoint.sh /usr/local/bin/peridot-entrypoint
 
 USER node
-EXPOSE 17430 17431
+EXPOSE 17430
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:17431/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:17430/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
 
 ENTRYPOINT ["dumb-init", "--", "/usr/local/bin/peridot-entrypoint"]

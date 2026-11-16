@@ -87,6 +87,15 @@ export default defineNuxtConfig({
     },
   },
   modules: ["@nuxtjs/i18n", "@vite-pwa/nuxt"],
+  nitro: {
+    devProxy: {
+      "/api": {
+        target: "http://127.0.0.1:17431/api",
+        changeOrigin: true,
+        ws: true,
+      },
+    },
+  },
   i18n: {
     defaultLocale: "en-US",
     strategy: "no_prefix",

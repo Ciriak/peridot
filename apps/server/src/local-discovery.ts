@@ -3,8 +3,9 @@ import {
   type NetworkInterfaceInfo,
   type NetworkInterfaceInfoIPv4,
 } from "node:os";
+import type { FastifyInstance } from "fastify";
 
-export const DISCOVERY_PORTS = [17431, 17430] as const;
+export const DISCOVERY_PORT = 17430;
 export const DISCOVERY_PROTOCOLS = ["http", "https"] as const;
 
 type InterfaceMap = NodeJS.Dict<NetworkInterfaceInfo[]>;
@@ -65,19 +66,18 @@ export async function discoverLocalPeridotServers(
   options: {
     fetcher?: DiscoveryFetch;
     interfaces?: InterfaceMap;
-    ports?: readonly number[];
+    port?: number;
     concurrency?: number;
     timeoutMs?: number;
   } = {},
 ): Promise<DiscoveryResult> {
   const fetcher = options.fetcher ?? fetch;
-  const ports = [
-    ...new Set(
-      (options.ports ?? DISCOVERY_PORTS).filter(
-        (port) => Number.isInteger(port) && port > 0 && port <= 65_535,
-      ),
-    ),
-  ];
+  const port =
+    Number.isInteger(options.port) &&
+    (options.port ?? 0) > 0 &&
+    (options.port ?? 0) <= 65_535
+      ? (options.port as number)
+      : DISCOVERY_PORT;
   const prefixes = localPrivateSubnetPrefixes(options.interfaces);
   const hosts = [
     "127.0.0.1",
@@ -86,21 +86,17 @@ export async function discoverLocalPeridotServers(
     ),
   ];
   const targets = hosts.flatMap((host) =>
-    ports.flatMap((port) =>
-      DISCOVERY_PROTOCOLS.map((protocol) => ({
-        address: `${protocol}://${host}:${port}`,
-        host,
-        port,
-        protocol,
-      })),
-    ),
+    DISCOVERY_PROTOCOLS.map((protocol) => ({
+      address: `${protocol}://${host}:${port}`,
+      host,
+      protocol,
+    })),
   );
   const foundByHost = new Map<
     string,
     {
       address: string;
       host: string;
-      port: number;
       protocol: (typeof DISCOVERY_PROTOCOLS)[number];
     }
   >();
@@ -124,10 +120,8 @@ export async function discoverLocalPeridotServers(
           const existing = foundByHost.get(target.host);
           if (
             !existing ||
-            ports.indexOf(target.port) < ports.indexOf(existing.port) ||
-            (target.port === existing.port &&
-              DISCOVERY_PROTOCOLS.indexOf(target.protocol) <
-                DISCOVERY_PROTOCOLS.indexOf(existing.protocol))
+            DISCOVERY_PROTOCOLS.indexOf(target.protocol) <
+              DISCOVERY_PROTOCOLS.indexOf(existing.protocol)
           ) {
             foundByHost.set(target.host, target);
           }
@@ -152,4 +146,22 @@ export async function discoverLocalPeridotServers(
       ),
     scannedSubnets: prefixes.map((prefix) => `${prefix}.0/24`),
   };
+}
+
+let cachedDiscovery: Promise<DiscoveryResult> | null = null;
+let cacheExpiresAt = 0;
+
+export async function registerLocalDiscoveryRoute(app: FastifyInstance) {
+  app.get("/api/discovery/servers", async (_request, reply) => {
+    reply.header("cache-control", "no-store");
+    if (!cachedDiscovery || Date.now() >= cacheExpiresAt) {
+      cachedDiscovery = discoverLocalPeridotServers();
+      cacheExpiresAt = Date.now() + 10_000;
+      cachedDiscovery.catch(() => {
+        cachedDiscovery = null;
+        cacheExpiresAt = 0;
+      });
+    }
+    return cachedDiscovery;
+  });
 }

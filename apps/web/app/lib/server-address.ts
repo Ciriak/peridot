@@ -1,8 +1,8 @@
 import { localizedError } from "./messages.ts";
 
-export const DEFAULT_SERVER_PORT = 17431;
+export const DEFAULT_SERVER_PORT = 17430;
 export const DEFAULT_SERVER_ADDRESS = `http://127.0.0.1:${DEFAULT_SERVER_PORT}`;
-export const FALLBACK_SERVER_PORTS = [17431, 17430] as const;
+export const FALLBACK_SERVER_PORTS = [17430] as const;
 const SERVER_PROTOCOLS = ["http", "https"] as const;
 
 type ServerProbeFetcher = (

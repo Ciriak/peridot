@@ -263,14 +263,14 @@ test("the configured web origin can call onboarding endpoints", async () => {
       method: "OPTIONS",
       url: "/api/auth/status",
       headers: {
-        origin: "http://127.0.0.1:17431",
+        origin: "http://127.0.0.1:17430",
         "access-control-request-method": "GET",
       },
     });
     assert.equal(response.statusCode, 204);
     assert.equal(
       response.headers["access-control-allow-origin"],
-      "http://127.0.0.1:17431",
+      "http://127.0.0.1:17430",
     );
   } finally {
     await context.close();
