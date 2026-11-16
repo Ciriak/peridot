@@ -32,6 +32,7 @@
     "desktop:dev": "pnpm --filter @peridot/desktop dev",
     "desktop:build": "pnpm --filter @peridot/desktop package",
     "android:sync": "pnpm --filter @peridot/android sync",
+    "android:generate": "pnpm --filter @peridot/android generate",
     "android:dev": "pnpm --filter @peridot/android dev",
     "android:open": "pnpm --filter @peridot/android open",
     "android:test": "pnpm --filter @peridot/android sync && pnpm --filter @peridot/android test",
