@@ -1138,6 +1138,9 @@ test("authenticated admin calls send the bearer token and expected bodies", asyn
       return Response.json({
         trackCount: 2,
         availableTrackCount: 1,
+        scanning: {
+          workerCount: 3,
+        },
         sourceRefresh: {
           enabled: true,
           cron: "0 3 * * *",
@@ -1202,6 +1205,9 @@ test("authenticated admin calls send the bearer token and expected bodies", asyn
     return Response.json({
       trackCount: 2,
       availableTrackCount: 1,
+      scanning: {
+        workerCount: 3,
+      },
       sourceRefresh: {
         enabled: true,
         cron: "0 3 * * *",
@@ -1217,6 +1223,9 @@ test("authenticated admin calls send the bearer token and expected bodies", asyn
   assert.deepEqual(await fetchServerSettings("http://127.0.0.1:17430", "s"), {
     trackCount: 2,
     availableTrackCount: 1,
+    scanning: {
+      workerCount: 3,
+    },
     sourceRefresh: {
       enabled: true,
       cron: "0 3 * * *",
@@ -1240,6 +1249,9 @@ test("authenticated admin calls send the bearer token and expected bodies", asyn
     {
       trackCount: 2,
       availableTrackCount: 1,
+      scanning: {
+        workerCount: 3,
+      },
       sourceRefresh: {
         enabled: true,
         cron: "0 3 * * *",

@@ -22,6 +22,9 @@ test("administrators can update and validate the source refresh schedule", async
     assert.deepEqual(updated.json(), {
       trackCount: 0,
       availableTrackCount: 0,
+      scanning: {
+        workerCount: 3,
+      },
       sourceRefresh: {
         enabled: false,
         cron: "15 4 * * *",
@@ -64,6 +67,53 @@ test("administrators can update and validate the source refresh schedule", async
       ).sourceRefreshCron,
       "15 4 * * *",
     );
+  } finally {
+    await context.close();
+  }
+});
+
+test("administrators can update and validate scan worker threads", async () => {
+  const context = await createTestContext();
+  try {
+    const updated = await context.app.inject({
+      method: "PUT",
+      url: "/api/admin/server",
+      headers: context.authorization,
+      payload: {
+        scanning: {
+          workerCount: 5,
+        },
+      },
+    });
+    assert.equal(updated.statusCode, 200);
+    assert.deepEqual(updated.json().scanning, { workerCount: 5 });
+    assert.equal(
+      (
+        await context.database.orm.ServerSetting.firstOrThrow({
+          id: "server",
+        })
+      ).scanWorkerCount,
+      5,
+    );
+
+    for (const workerCount of [0, 1.5, 33]) {
+      const invalid = await context.app.inject({
+        method: "PUT",
+        url: "/api/admin/server",
+        headers: context.authorization,
+        payload: {
+          scanning: {
+            workerCount,
+          },
+        },
+      });
+      assert.equal(invalid.statusCode, 400);
+      assert.equal(invalid.json().error.code, "invalid_server_settings");
+      assert.equal(
+        invalid.json().error.messageDescriptor.key,
+        "api.message.invalidScanWorkerSettings",
+      );
+    }
   } finally {
     await context.close();
   }

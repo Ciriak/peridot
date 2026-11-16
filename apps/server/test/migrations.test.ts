@@ -32,7 +32,7 @@ test("fresh databases apply the baseline without a backup", async () => {
       info: () => undefined,
     });
 
-    assert.equal(result.pendingCount, 1);
+    assert.equal(result.pendingCount, 2);
     assert.equal(result.backupPath, null);
 
     const database = new DatabaseSync(databasePath, { readOnly: true });
@@ -43,6 +43,12 @@ test("fresh databases apply the baseline without a backup", async () => {
         )
         .get() as { name?: string } | undefined;
       assert.equal(table?.name, "User");
+      const scanWorkerColumn = database
+        .prepare(
+          "SELECT name FROM pragma_table_info('ServerSetting') WHERE name = 'scanWorkerCount'",
+        )
+        .get() as { name?: string } | undefined;
+      assert.equal(scanWorkerColumn?.name, "scanWorkerCount");
     } finally {
       database.close();
     }

@@ -700,11 +700,20 @@ export interface DirectorySearchResponse {
   truncated: boolean;
 }
 
+export const DEFAULT_SCAN_WORKER_COUNT = 3;
+export const SCAN_WORKER_WARNING_THRESHOLD = 4;
+export const MAX_SCAN_WORKER_COUNT = 32;
+
 export interface ServerSettingsResponse {
   trackCount: number;
   availableTrackCount: number;
+  scanning: ScanWorkerSettingsResponse;
   sourceRefresh: SourceRefreshSettingsResponse;
   fileLogging: FileLoggingSettingsResponse;
+}
+
+export interface ScanWorkerSettingsResponse {
+  workerCount: number;
 }
 
 export interface SourceRefreshSettingsResponse {
@@ -719,6 +728,9 @@ export interface FileLoggingSettingsResponse {
 }
 
 export interface UpdateServerSettingsRequest {
+  scanning?: {
+    workerCount: number;
+  };
   sourceRefresh?: {
     enabled: boolean;
     cron: string;

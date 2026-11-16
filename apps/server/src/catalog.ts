@@ -364,6 +364,7 @@ export class CatalogService {
   private flushTail: Promise<unknown> = Promise.resolve();
   private closing = false;
   private lastRevision = 0;
+  private lastYieldAt = Date.now();
 
   constructor(
     private readonly database: Database,
@@ -413,6 +414,12 @@ export class CatalogService {
 
   async waitForBackfill(): Promise<void> {
     await this.backfillPromise;
+  }
+
+  private async yieldCatalogWork(): Promise<void> {
+    if (Date.now() - this.lastYieldAt < 5) return;
+    await yieldToEventLoop();
+    this.lastYieldAt = Date.now();
   }
 
   async rebuildAll(reason: CatalogChange["reason"] = "reset") {
@@ -539,6 +546,7 @@ export class CatalogService {
           id: term.id,
         }).delete();
       }
+      await this.yieldCatalogWork();
     }
 
     const bridgedReleaseKey =
@@ -579,6 +587,7 @@ export class CatalogService {
     };
 
     await this.database.orm.CatalogTrack.create({ id: trackId, ...values });
+    await this.yieldCatalogWork();
 
     if (!track.available) {
       const unavailableTerms = searchTerms([
@@ -598,6 +607,7 @@ export class CatalogService {
 
     if (albumId && album) {
       await this.refreshAlbum(albumId);
+      await this.yieldCatalogWork();
     }
 
     if (music) {
@@ -619,6 +629,7 @@ export class CatalogService {
             artistId,
           });
         }
+        await this.yieldCatalogWork();
       }
     }
 
@@ -634,6 +645,7 @@ export class CatalogService {
     for (const term of trackTerms) {
       await this.createSearchTerm("track", trackId, term);
     }
+    await this.yieldCatalogWork();
     if (propagateAlbumIdentity && albumId && albumReleaseKey) {
       await this.reindexBridgedAlbumSiblings(
         albumFolderKey,

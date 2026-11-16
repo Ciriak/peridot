@@ -146,6 +146,16 @@ and requires the Android and Java toolchain described below. After linting, CI
 runs Web, Server, shared UI, Desktop, and Android tests in parallel jobs. Any
 failed test suite blocks the build jobs.
 
+Run the disposable local-scan responsiveness benchmark with:
+
+```sh
+pnpm --filter @peridot/server perf:scan -- --files 300 --workers 1 3 4 8
+```
+
+It reports scan duration, `/api/health` latency, and event-loop delay for each
+worker count. The benchmark disables metadata-provider matching so it measures
+library scanning rather than the separately queued enrichment task.
+
 Build output: `apps/web/.output/public` and `apps/server/dist`. Start the built
 server with `pnpm start`, which applies pending database migrations before
 running `node apps/server/dist/index.js`. The server serves the API and embedded
@@ -683,6 +693,14 @@ candidates and apply or clear an override through
 `GET /api/artists/:id/metadata/candidates` and
 `PUT/DELETE /api/artists/:id/metadata` routes. Cached portraits are served from
 short-lived artist-scoped `GET/HEAD /api/artists/:id/image` URLs.
+Administrators configure local scan worker threads with
+`PUT /api/admin/server` and `{ "scanning": { "workerCount": 3 } }`;
+`GET /api/admin/server` returns the persisted value under `scanning`. The
+supported range is 1 through 32, the default is 3, and the web UI warns above 4.
+The setting applies when each scan starts. Local directory discovery and audio
+metadata extraction use the workers, while SQLite track and catalog writes stay
+serialized on the main thread. Jellyfin traversal and metadata-provider matching
+retain their separate scheduling.
 Task responses expose only safe titles, source display names, bounded labeled
 details, progress, and lifecycle timestamps. Source paths and provider
 credentials are never included. Core task kinds are `library_scan` and

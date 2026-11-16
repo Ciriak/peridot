@@ -19,7 +19,7 @@ import type {
 } from '@prisma/orm-sqlite/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'4e95e705bb64da3502c63812c1276da93b77815295ef507f0ffabcf2225fc0a1'>;
+  StorageHashBase<'5e5cd62452bcf2b23307a87be75af60e40feb17f74db5bb4e4093dc3a1a4219a'>;
 export type ExecutionHash =
   ExecutionHashBase<'69abe59ddf12aaa78738519fa294ac279958f3b4caa4e85b2cb8fd0effde430a'>;
 export type ProfileHash =
@@ -424,6 +424,7 @@ export namespace Models {
     fileLoggingEnabled: FieldOutputTypes['__unbound__']['ServerSetting']['fileLoggingEnabled'];
     id: FieldOutputTypes['__unbound__']['ServerSetting']['id'];
     libraryRoot: FieldOutputTypes['__unbound__']['ServerSetting']['libraryRoot'];
+    scanWorkerCount: FieldOutputTypes['__unbound__']['ServerSetting']['scanWorkerCount'];
     sourceRefreshCron: FieldOutputTypes['__unbound__']['ServerSetting']['sourceRefreshCron'];
     sourceRefreshEnabled: FieldOutputTypes['__unbound__']['ServerSetting']['sourceRefreshEnabled'];
     updatedAt: FieldOutputTypes['__unbound__']['ServerSetting']['updatedAt'];
@@ -2069,6 +2070,16 @@ type ContractBase = Omit<
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly scanWorkerCount: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '3'>;
+                  };
                   readonly many: false;
                 };
                 readonly sourceRefreshCron: {
@@ -4274,6 +4285,10 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
+              readonly scanWorkerCount: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
               readonly sourceRefreshCron: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
@@ -4295,6 +4310,7 @@ type ContractBase = Omit<
                 readonly fileLoggingEnabled: { readonly column: 'fileLoggingEnabled' };
                 readonly id: { readonly column: 'id' };
                 readonly libraryRoot: { readonly column: 'libraryRoot' };
+                readonly scanWorkerCount: { readonly column: 'scanWorkerCount' };
                 readonly sourceRefreshCron: { readonly column: 'sourceRefreshCron' };
                 readonly sourceRefreshEnabled: { readonly column: 'sourceRefreshEnabled' };
                 readonly updatedAt: { readonly column: 'updatedAt' };
