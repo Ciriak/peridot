@@ -42,8 +42,12 @@ import {
 import type { MetadataResolverRegistry } from "./metadata-resolver.js";
 import type { ServerLogBuffer } from "./server-log.js";
 import {
+  readFileLoggingSettings,
+  readSourceRefreshSettings,
   ServerSettingsError,
-  updateSourceRefreshSettings,
+  updateServerSettings,
+  validateFileLoggingSettings,
+  validateSourceRefreshSettings,
 } from "./server-settings.js";
 import type { SourceRefreshScheduler } from "./source-refresh-scheduler.js";
 import { UpdateError, type UpdateService } from "./updates.js";
@@ -119,6 +123,10 @@ export async function registerAdminRoutes(
             cron: "",
             nextRunAt: null,
           },
+          fileLogging: {
+            ...(await readFileLoggingSettings(database)),
+            path: logBuffer.filePath,
+          },
         };
       },
     );
@@ -126,17 +134,30 @@ export async function registerAdminRoutes(
     admin.put<{ Body: UpdateServerSettingsRequest }>(
       "/api/admin/server",
       async (request, reply): Promise<ServerSettingsResponse | undefined> => {
+        const previousFileLogging = await readFileLoggingSettings(database);
         try {
-          const settings = await updateSourceRefreshSettings(
-            database,
-            request.body?.sourceRefresh,
-          );
-          const sourceRefresh = (await sourceRefreshScheduler?.reconfigure(
-            settings,
-          )) ?? {
-            ...settings,
-            nextRunAt: null,
-          };
+          const requestedSourceRefresh = request.body?.sourceRefresh
+            ? validateSourceRefreshSettings(request.body.sourceRefresh)
+            : undefined;
+          const requestedFileLogging = request.body?.fileLogging
+            ? validateFileLoggingSettings(request.body.fileLogging)
+            : undefined;
+          if (requestedFileLogging) {
+            await logBuffer.configureFileLogging(requestedFileLogging.enabled);
+          }
+          const settings = await updateServerSettings(database, request.body);
+          const sourceRefresh = settings.sourceRefresh
+            ? ((await sourceRefreshScheduler?.reconfigure(
+                settings.sourceRefresh,
+              )) ?? {
+                ...settings.sourceRefresh,
+                nextRunAt: null,
+              })
+            : (sourceRefreshScheduler?.status() ??
+              {
+                ...(await readSourceRefreshSettings(database)),
+                nextRunAt: null,
+              });
           const [trackCount, availableTrackCount] = await Promise.all([
             database.orm.Track.aggregate((aggregate) => ({
               count: aggregate.count(),
@@ -149,8 +170,15 @@ export async function registerAdminRoutes(
             trackCount: trackCount.count,
             availableTrackCount: availableTrackCount.count,
             sourceRefresh,
+            fileLogging: {
+              ...(await readFileLoggingSettings(database)),
+              path: logBuffer.filePath,
+            },
           };
         } catch (error) {
+          await logBuffer
+            .configureFileLogging(previousFileLogging.enabled)
+            .catch(() => undefined);
           if (error instanceof ServerSettingsError) {
             return sendError(
               reply,

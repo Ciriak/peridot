@@ -1,4 +1,7 @@
-import type { UpdateServerSettingsRequest } from "@peridot/contracts";
+import type {
+  MessageDescriptor,
+  UpdateServerSettingsRequest,
+} from "@peridot/contracts";
 import { CronPattern } from "croner";
 import type { Database } from "./database.js";
 import { message } from "./messages.js";
@@ -16,7 +19,7 @@ export interface FileLoggingSettings {
 }
 
 export class ServerSettingsError extends Error {
-  readonly messageDescriptor;
+  readonly messageDescriptor: MessageDescriptor;
 
   constructor(
     messageText: string,
@@ -135,4 +138,41 @@ export async function updateFileLoggingSettings(
     fileLoggingEnabled: settings.enabled ? 1 : 0,
   });
   return settings;
+}
+
+export async function updateServerSettings(
+  database: Database,
+  input: UpdateServerSettingsRequest | undefined,
+): Promise<{
+  sourceRefresh?: SourceRefreshSettings;
+  fileLogging?: FileLoggingSettings;
+}> {
+  const sourceRefresh = input?.sourceRefresh
+    ? validateSourceRefreshSettings(input.sourceRefresh)
+    : undefined;
+  const fileLogging = input?.fileLogging
+    ? validateFileLoggingSettings(input.fileLogging)
+    : undefined;
+  if (!sourceRefresh && !fileLogging) {
+    throw new ServerSettingsError("Choose a server setting to update.");
+  }
+
+  await database.transaction(async (transaction) => {
+    if (sourceRefresh) {
+      await transaction.orm.ServerSetting.where({
+        id: SERVER_SETTING_ID,
+      }).update({
+        sourceRefreshEnabled: sourceRefresh.enabled ? 1 : 0,
+        sourceRefreshCron: sourceRefresh.cron,
+      });
+    }
+    if (fileLogging) {
+      await transaction.orm.ServerSetting.where({
+        id: SERVER_SETTING_ID,
+      }).update({
+        fileLoggingEnabled: fileLogging.enabled ? 1 : 0,
+      });
+    }
+  });
+  return { sourceRefresh, fileLogging };
 }
