@@ -2,6 +2,44 @@
 
 Last updated: 2026-11-16.
 
+## Persistent server log file and automatic settings saves
+
+Settings → Server now includes a disabled-by-default `Keep server logs in a
+file` option. When enabled, Fastify/pino request logs and task warning/error
+entries are appended as JSON lines to `peridot.log` beside the SQLite database.
+For the container deployment that path is `/data/peridot.log`, inside the
+persistent `peridot-data` volume. Disabling the option stops new writes and
+leaves the existing file in place.
+
+The setting applies without a server restart and is persisted in
+`ServerSetting.fileLoggingEnabled`. The Settings UI displays the resolved file
+path. The local development file is `apps/server/peridot.log`.
+
+Server-backed settings cards now save automatically. Toggles save immediately;
+the source-refresh cron and profile display name save on blur or Enter. The
+corresponding save buttons were removed. User creation, metadata-provider
+configuration, and other dialogs that submit credentials or create records keep
+their explicit actions.
+
+Checks completed:
+
+- Full server suite: 153 passing, including enabling, writing, and disabling
+  file logging
+- Full web suite: 210 passing
+- Server and web type checks
+- Workspace ESLint and targeted Prettier checks
+- Server and web production builds
+- Prisma contract emission and additive database update
+- Live development verification: `apps/server/peridot.log` is receiving entries
+
+Known limits: the log file is append-only and has no built-in rotation or size
+cap. Existing file contents are not imported into the in-memory Settings log.
+The current commits are on `fix/source-deletion`; no additional push, tag,
+publication, or deployment was performed by this work.
+
+Next: decide whether persistent file logs need a maximum size or rotation policy
+before production use.
+
 ## Source removal responds immediately
 
 Removing a source now updates the web query cache before the API request

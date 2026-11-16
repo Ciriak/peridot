@@ -1,5 +1,22 @@
 # Decisions
 
+## 2026-11-16: Persistent logs are opt-in beside the database
+
+Server log files are disabled by default. When enabled, the runtime appends
+JSON lines to `peridot.log` in the same directory as the SQLite database. This
+places Docker logs in `/data`, which is already backed by the persistent
+Peridot volume, while keeping local development logs at
+`apps/server/peridot.log`.
+
+The setting is stored in SQLite and applied immediately. Disabling file output
+closes the sink but does not delete existing logs. The in-memory 500-entry log
+view remains separate from the append-only file.
+
+Settings cards use auto-save rather than explicit save buttons: switches persist
+immediately, and text settings persist on blur or Enter. Account and provider
+creation/credential dialogs remain explicit submissions because they create
+records or transmit secrets.
+
 ## 2026-11-16: Source removal is optimistic after durable bulk deletion
 
 Source removal updates the shared web query cache as soon as the administrator
