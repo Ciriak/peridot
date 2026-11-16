@@ -4,4 +4,6 @@
     <string name="title_activity_main">Peridot</string>
     <string name="package_name">app.peridot.android</string>
     <string name="custom_url_scheme">app.peridot.android</string>
+    <string name="playback_notification_channel_name">Playback controls</string>
+    <string name="playback_notification_channel_description">Controls for music playing in Peridot.</string>
 </resources>

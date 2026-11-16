@@ -2,6 +2,9 @@ package app.peridot.android.playback
 
 import android.app.PendingIntent
 import android.app.SearchManager
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -19,6 +22,7 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaLibraryService.LibraryParams
@@ -27,6 +31,7 @@ import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionError
 import androidx.media3.session.SessionResult
 import app.peridot.android.MainActivity
+import app.peridot.android.R
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
@@ -83,6 +88,14 @@ class PeridotPlaybackService : MediaLibraryService() {
 
     override fun onCreate() {
         super.onCreate()
+        createPlaybackNotificationChannel()
+        setMediaNotificationProvider(
+            DefaultMediaNotificationProvider.Builder(this)
+                .setChannelId(PLAYBACK_NOTIFICATION_CHANNEL_ID)
+                .setChannelName(R.string.playback_notification_channel_name)
+                .build()
+                .apply { setSmallIcon(R.drawable.ic_stat_peridot) },
+        )
         sessions = SessionStore(this)
         playbackStore = PlaybackStore(this)
         offlineStore = OfflineStore(this)
@@ -202,6 +215,20 @@ class PeridotPlaybackService : MediaLibraryService() {
             .build()
         restoreQueue()
         mainHandler.post(publishProgress)
+    }
+
+    private fun createPlaybackNotificationChannel() {
+        val channel = NotificationChannel(
+            PLAYBACK_NOTIFICATION_CHANNEL_ID,
+            getString(R.string.playback_notification_channel_name),
+            NotificationManager.IMPORTANCE_LOW,
+        ).apply {
+            description = getString(R.string.playback_notification_channel_description)
+            setShowBadge(false)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        }
+        getSystemService(NotificationManager::class.java)
+            .createNotificationChannel(channel)
     }
 
     override fun onGetSession(
@@ -570,6 +597,7 @@ class PeridotPlaybackService : MediaLibraryService() {
         const val ALBUM_PREFIX = "album"
         const val ARTIST_PREFIX = "artist"
         const val PLAYLIST_PREFIX = "playlist"
+        const val PLAYBACK_NOTIFICATION_CHANNEL_ID = "peridot_playback"
 
         fun command(context: Context, action: String, configure: Intent.() -> Unit = {}) {
             val intent = Intent(context, PeridotPlaybackService::class.java).apply {

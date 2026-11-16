@@ -13,6 +13,7 @@ class AndroidAutoManifestTest {
         assertTrue(manifest.contains("androidx.media3.session.MediaLibraryService"))
         assertTrue(manifest.contains("android.media.browse.MediaBrowserService"))
         assertTrue(manifest.contains("android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"))
+        assertTrue(manifest.contains("android.permission.POST_NOTIFICATIONS"))
         assertTrue(manifest.contains("foregroundServiceType=\"mediaPlayback\""))
     }
 }

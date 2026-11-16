@@ -1,6 +1,7 @@
 package app.peridot.android.playback
 
 import android.content.ComponentName
+import android.app.NotificationManager
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.LibraryResult
@@ -65,6 +66,18 @@ class PeridotMediaBrowserTest {
                 PeridotPlaybackService.PLAYLISTS_ID,
             ),
             result.value!!.map { it.mediaId },
+        )
+    }
+
+    @Test
+    fun playbackServiceRegistersNotificationChannel() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val notifications = context.getSystemService(NotificationManager::class.java)
+
+        assertNotNull(
+            notifications.getNotificationChannel(
+                PeridotPlaybackService.PLAYBACK_NOTIFICATION_CHANNEL_ID,
+            ),
         )
     }
 }

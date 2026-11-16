@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="playback_notification_channel_name">Commandes de lecture</string>
+    <string name="playback_notification_channel_description">Commandes pour la musique lue dans Peridot.</string>
+</resources>
