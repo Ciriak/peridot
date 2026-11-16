@@ -33,7 +33,7 @@
        image: ghcr.io/ciriak/peridot:${PERIDOT_CHANNEL:-stable}
        restart: unless-stopped
        ports:
-         - "${PERIDOT_PORT:-17430}:17430"
+         - "17430:17430"
        volumes:
          - peridot-data:/data
          - ./music:/music:ro
