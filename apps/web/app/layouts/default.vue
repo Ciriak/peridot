@@ -226,7 +226,7 @@ onBeforeUnmount(stopLoadingRay);
 
 <template>
   <div
-    class="flex h-dvh flex-col overflow-hidden bg-background text-foreground"
+    class="fixed inset-0 flex flex-col overflow-hidden bg-background text-foreground"
   >
     <a href="#main-content" class="sr-only focus:not-sr-only focus:p-4">{{
       t("navigation.skipToContent")

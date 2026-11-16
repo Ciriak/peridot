@@ -223,6 +223,11 @@ test("shared track tables keep the main content as the only scroll owner", async
     /id="main-content"[\s\S]*?class="[^"]*overflow-y-auto/,
     "The main content remains the full-screen track-list scroll owner",
   );
+  assert.match(
+    layout,
+    /<div\s+class="fixed inset-0 flex flex-col overflow-hidden bg-background text-foreground"/,
+    "The app shell is fixed to the viewport so the document cannot add a second scrollbar",
+  );
 });
 
 test("player queue details are merged without refetching known tracks", () => {

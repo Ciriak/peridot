@@ -81,6 +81,22 @@ test("player slider renders initial progress and exposes bounds and a named thum
   assert.match(html, /aria-valuemax="246"/);
   assert.match(html, /aria-label="Playback position"/);
 });
+test("slider can render a flat, thumbless progress line while retaining its range control", async () => {
+  const html = await render("Slider", {
+    modelValue: [22],
+    min: 0,
+    max: 100,
+    thumbLabel: "Track position",
+    trackClass: "rounded-none",
+    hideThumb: true,
+  });
+  assert.match(html, /data-slot="slider-track"[^>]*class="[^"]*rounded-none/);
+  assert.match(
+    html,
+    /data-slot="slider-thumb"[^>]*class="[^"]*pointer-events-none opacity-0/,
+  );
+  assert.match(html, /role="slider"/);
+});
 test("PeridotSpinner uses the animated brand asset with an accessible reduced-motion fallback", async () => {
   const html = await render(
     "PeridotSpinner",

@@ -102,25 +102,25 @@ function openQueue() {
 
 <template>
   <DialogRoot v-model:open="open">
-    <div data-mobile-player class="flex h-full w-full flex-col md:hidden">
-      <div class="flex h-6 shrink-0 items-center px-2">
-        <Slider
-          :model-value="[elapsed]"
-          :min="0"
-          :max="Math.max(durationSeconds, 1)"
-          :step="1"
-          :disabled="!currentTrackPlayable || durationSeconds <= 0"
-          :aria-busy="loading"
-          class="h-full w-full"
-          :thumb-label="t('player.position')"
-          @update:model-value="seek($event?.[0] ?? 0)"
-        />
-      </div>
+    <div data-mobile-player class="relative flex h-full w-full md:hidden">
+      <Slider
+        :model-value="[elapsed]"
+        :min="0"
+        :max="Math.max(durationSeconds, 1)"
+        :step="1"
+        :disabled="!currentTrackPlayable || durationSeconds <= 0"
+        :aria-busy="loading"
+        class="absolute inset-x-0 top-0 z-10 h-5 items-start"
+        track-class="rounded-none"
+        hide-thumb
+        :thumb-label="t('player.position')"
+        @update:model-value="seek($event?.[0] ?? 0)"
+      />
       <div class="flex min-h-0 flex-1">
         <DialogTrigger as-child>
           <Button
             variant="ghost"
-            class="h-full min-w-0 flex-1 justify-start gap-3 px-3 text-left"
+            class="h-full min-w-0 flex-1 justify-start gap-3 px-3 text-left transition-none hover:bg-transparent hover:text-current active:bg-transparent active:text-current dark:hover:bg-transparent dark:active:bg-transparent"
             :aria-label="t('player.openFullscreen')"
             aria-haspopup="dialog"
           >
@@ -169,7 +169,18 @@ function openQueue() {
         </DialogTrigger>
 
         <div class="flex shrink-0 items-center gap-2 pr-3">
+          <Button
+            variant="ghost"
+            size="icon-lg"
+            class="size-12 transition-none hover:bg-transparent hover:text-current active:bg-transparent active:text-current dark:hover:bg-transparent dark:active:bg-transparent"
+            :aria-label="t('player.next')"
+            :disabled="!canGoNext"
+            @click="next()"
+          >
+            <Icon :icon="icons.next" aria-hidden="true" class="size-6" />
+          </Button>
           <LikeButton
+            class="-ml-1.5 transition-none hover:bg-transparent hover:text-current active:bg-transparent active:text-current dark:hover:bg-transparent dark:active:bg-transparent"
             :liked="
               currentTrackLikeTarget
                 ? likedTrackIds.includes(currentTrackLikeTarget.trackId)
@@ -186,7 +197,7 @@ function openQueue() {
           />
           <Button
             size="icon-lg"
-            class="size-12 rounded-full"
+            class="size-12 rounded-full transition-none hover:bg-primary active:bg-primary"
             :disabled="!currentTrackPlayable"
             :aria-label="playing ? t('player.pause') : t('player.play')"
             :aria-busy="loading"
