@@ -6,6 +6,7 @@ pnpm-lock.yaml
 .peridot
 dist
 generated
+apps/server/migrations
 apps/server/src/prisma/contract.d.ts
 apps/server/src/prisma/contract.json
 apps/desktop/src-tauri/gen

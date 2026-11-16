@@ -74,6 +74,20 @@
 
    Go to **http://YOUR_SERVER_IP:17430** in your browser.
 
+## Updates and database backups
+
+Peridot applies committed database migrations automatically before the server
+starts after an image update. When migrations are pending, it first writes a
+consistent SQLite snapshot to the `backups` directory beside the database. The
+container path is `/data/backups`, and the five newest snapshots are retained.
+
+If a migration fails, Peridot does not start the server. Review the container
+logs and keep the reported snapshot together with `peridot.db.key` or your
+configured `PERIDOT_CREDENTIAL_KEY`; provider credentials in database snapshots
+cannot be decrypted without the matching key. To roll back, stop the container,
+restore the database snapshot and its key on the same `/data` volume, then run
+the previous Peridot image.
+
 ## Features
 
 - ### 🗂️ Local-first catalog
