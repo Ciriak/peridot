@@ -12,10 +12,109 @@ import type {
 } from "@peridot/contracts";
 import {
   createTaggedMp3,
+  createMemberSession,
   createTestContext,
+  createWav,
   startScan,
   waitForTask,
 } from "./helpers.js";
+
+test("one automatic source separates mixed music, audiobooks, and podcasts", async () => {
+  const context = await createTestContext();
+  const mixedRoot = path.join(context.root, "mixed-library");
+  try {
+    await mkdir(path.join(mixedRoot, "Book One"), { recursive: true });
+    await mkdir(path.join(mixedRoot, "Show One"), { recursive: true });
+    await writeFile(
+      path.join(mixedRoot, "music.mp3"),
+      createTaggedMp3({
+        title: "Music Track",
+        artist: "Music Artist",
+        album: "Music Album",
+        discNumber: 1,
+        trackNumber: 1,
+      }),
+    );
+    await writeFile(
+      path.join(mixedRoot, "Book One", "chapter.mp3"),
+      createTaggedMp3({
+        title: "Chapter One",
+        artist: "Book Author",
+        album: "Book One",
+        releaseTypes: ["Audiobook"],
+        discNumber: 1,
+        trackNumber: 1,
+      }),
+    );
+    await writeFile(
+      path.join(mixedRoot, "Show One", "episode.mp3"),
+      createTaggedMp3({
+        title: "Episode One",
+        artist: "Show Publisher",
+        album: "Show One",
+        podcast: true,
+        discNumber: 1,
+        trackNumber: 1,
+      }),
+    );
+    await writeFile(path.join(mixedRoot, "untagged.wav"), createWav());
+
+    const response = await context.app.inject({
+      method: "POST",
+      url: "/api/admin/sources",
+      headers: context.authorization,
+      payload: { kind: "path", path: mixedRoot },
+    });
+    assert.equal(response.statusCode, 201, response.body);
+    const source = response.json<CreateSourceResponse>();
+    assert.equal(source.classificationMode, "auto");
+    assert.equal(source.fixedMediaType, null);
+    assert.ok(source.task);
+    await waitForTask(context, source.task.id);
+
+    const tracks = await context.database.orm.Track.all();
+    const byTitle = new Map(tracks.map((track) => [track.title, track]));
+    assert.equal(byTitle.get("Music Track")?.mediaType, "music");
+    assert.equal(byTitle.get("Chapter One")?.mediaType, "audiobook");
+    assert.equal(
+      byTitle.get("Chapter One")?.detectedMediaTypeOrigin,
+      "embedded",
+    );
+    assert.equal(byTitle.get("Episode One")?.mediaType, "podcast");
+    assert.equal(
+      byTitle.get("Episode One")?.detectedMediaTypeOrigin,
+      "embedded",
+    );
+    assert.equal(byTitle.get("untagged")?.mediaType, "music");
+    assert.equal(byTitle.get("untagged")?.mediaTypeOrigin, "fallback");
+    assert.equal(byTitle.get("untagged")?.detectedMediaTypeOrigin, "fallback");
+
+    const audiobooks = (
+      await context.app.inject({
+        method: "GET",
+        url: "/api/audiobooks",
+        headers: context.authorization,
+      })
+    ).json<AudiobookListResponse>();
+    assert.deepEqual(
+      audiobooks.items.map((book) => book.title),
+      ["Book One"],
+    );
+    const podcasts = (
+      await context.app.inject({
+        method: "GET",
+        url: "/api/podcasts",
+        headers: context.authorization,
+      })
+    ).json<PodcastListResponse>();
+    assert.deepEqual(
+      podcasts.items.map((show) => show.title),
+      ["Show One"],
+    );
+  } finally {
+    await context.close();
+  }
+});
 
 test("audiobook and podcast sources stay separate from music collections", async () => {
   const context = await createTestContext();
@@ -65,12 +164,14 @@ test("audiobook and podcast sources stay separate from music collections", async
       payload: {
         kind: "path",
         path: booksRoot,
-        mediaType: "audiobook",
+        classificationMode: "fixed",
+        fixedMediaType: "audiobook",
       },
     });
     assert.equal(bookSourceResponse.statusCode, 201);
     const bookSource = bookSourceResponse.json<CreateSourceResponse>();
-    assert.equal(bookSource.mediaType, "audiobook");
+    assert.equal(bookSource.classificationMode, "fixed");
+    assert.equal(bookSource.fixedMediaType, "audiobook");
     assert.ok(bookSource.task);
     await waitForTask(context, bookSource.task.id);
 
@@ -107,7 +208,8 @@ test("audiobook and podcast sources stay separate from music collections", async
       payload: {
         kind: "path",
         path: showsRoot,
-        mediaType: "podcast",
+        classificationMode: "fixed",
+        fixedMediaType: "podcast",
       },
     });
     assert.equal(podcastSourceResponse.statusCode, 201);
@@ -230,7 +332,7 @@ test("audiobook and podcast sources stay separate from music collections", async
       method: "PATCH",
       url: `/api/admin/sources/${bookSource.id}`,
       headers: context.authorization,
-      payload: { mediaType: "music" },
+      payload: { classificationMode: "fixed", fixedMediaType: "music" },
     });
     assert.equal(updateResponse.statusCode, 200);
     const updated = updateResponse.json<CreateSourceResponse>();
@@ -269,13 +371,151 @@ test("source media type validation rejects unsupported values", async () => {
       method: "PATCH",
       url: `/api/admin/sources/${source.id}`,
       headers: context.authorization,
-      payload: { mediaType: "radio" },
+      payload: { classificationMode: "fixed", fixedMediaType: "radio" },
     });
     assert.equal(response.statusCode, 400);
     assert.equal(
       response.json<{ error: { code: string } }>().error.code,
       "invalid_source",
     );
+  } finally {
+    await context.close();
+  }
+});
+
+test("administrators can correct track and collection media types", async () => {
+  const context = await createTestContext();
+  try {
+    await writeFile(
+      path.join(context.libraryRoot, "correction.mp3"),
+      createTaggedMp3({
+        title: "Correction Track",
+        artist: "Correction Creator",
+        albumArtist: "Correction Creator",
+        album: "Correction Album",
+        discNumber: 1,
+        trackNumber: 1,
+      }),
+    );
+    await startScan(context);
+    const track = await context.database.orm.Track.firstOrThrow();
+    const albums = (
+      await context.app.inject({
+        method: "GET",
+        url: "/api/albums",
+        headers: context.authorization,
+      })
+    ).json<AlbumListResponse>();
+    const collectionId = albums.items[0]?.id;
+    assert.ok(collectionId);
+
+    const member = await createMemberSession(context);
+    const forbidden = await context.app.inject({
+      method: "PUT",
+      url: `/api/admin/tracks/${track.id}/media-type`,
+      headers: { authorization: member.authorization },
+      payload: { mediaType: "podcast" },
+    });
+    assert.equal(forbidden.statusCode, 403);
+
+    const trackUpdate = await context.app.inject({
+      method: "PUT",
+      url: `/api/admin/tracks/${track.id}/media-type`,
+      headers: context.authorization,
+      payload: { mediaType: "podcast" },
+    });
+    assert.equal(trackUpdate.statusCode, 204, trackUpdate.body);
+    let corrected = await context.database.orm.Track.firstOrThrow({
+      id: track.id,
+    });
+    assert.equal(corrected.mediaType, "podcast");
+    assert.equal(corrected.mediaTypeOrigin, "manual");
+    assert.equal(corrected.mediaTypeOverride, "podcast");
+
+    const trackReset = await context.app.inject({
+      method: "DELETE",
+      url: `/api/admin/tracks/${track.id}/media-type`,
+      headers: context.authorization,
+    });
+    assert.equal(trackReset.statusCode, 204);
+    corrected = await context.database.orm.Track.firstOrThrow({ id: track.id });
+    assert.equal(corrected.mediaType, "music");
+    assert.equal(corrected.mediaTypeOrigin, "fallback");
+    assert.equal(corrected.mediaTypeOverride, null);
+
+    const collectionUpdate = await context.app.inject({
+      method: "PUT",
+      url: `/api/admin/media-collections/${collectionId}/media-type`,
+      headers: context.authorization,
+      payload: { mediaType: "audiobook" },
+    });
+    assert.equal(collectionUpdate.statusCode, 204, collectionUpdate.body);
+    const audiobooks = (
+      await context.app.inject({
+        method: "GET",
+        url: "/api/audiobooks",
+        headers: context.authorization,
+      })
+    ).json<AudiobookListResponse>();
+    assert.deepEqual(
+      audiobooks.items.map((book) => book.title),
+      ["Correction Album"],
+    );
+    const audiobookId = audiobooks.items[0]?.id;
+    assert.ok(audiobookId);
+
+    const collectionReset = await context.app.inject({
+      method: "DELETE",
+      url: `/api/admin/media-collections/${audiobookId}/media-type`,
+      headers: context.authorization,
+    });
+    assert.equal(collectionReset.statusCode, 204);
+    const albumsAfterReset = (
+      await context.app.inject({
+        method: "GET",
+        url: "/api/albums",
+        headers: context.authorization,
+      })
+    ).json<AlbumListResponse>();
+    assert.deepEqual(
+      albumsAfterReset.items.map((album) => album.title),
+      ["Correction Album"],
+    );
+
+    const source = await context.database.orm.Source.firstOrThrow({
+      id: track.sourceId!,
+    });
+    const fixedResponse = await context.app.inject({
+      method: "PATCH",
+      url: `/api/admin/sources/${source.id}`,
+      headers: context.authorization,
+      payload: { classificationMode: "fixed", fixedMediaType: "audiobook" },
+    });
+    assert.equal(fixedResponse.statusCode, 200);
+    const fixedSource = fixedResponse.json<CreateSourceResponse>();
+    assert.ok(fixedSource.task);
+    await waitForTask(context, fixedSource.task.id);
+    corrected = await context.database.orm.Track.firstOrThrow({ id: track.id });
+    assert.equal(corrected.mediaType, "audiobook");
+    assert.equal(corrected.mediaTypeOrigin, "source");
+
+    const manualResponse = await context.app.inject({
+      method: "PUT",
+      url: `/api/admin/tracks/${track.id}/media-type`,
+      headers: context.authorization,
+      payload: { mediaType: "podcast" },
+    });
+    assert.equal(manualResponse.statusCode, 204);
+    const rescanResponse = await context.app.inject({
+      method: "POST",
+      url: `/api/admin/sources/${source.id}/scans`,
+      headers: context.authorization,
+    });
+    assert.equal(rescanResponse.statusCode, 202);
+    await waitForTask(context, rescanResponse.json<{ id: string }>().id);
+    corrected = await context.database.orm.Track.firstOrThrow({ id: track.id });
+    assert.equal(corrected.mediaType, "podcast");
+    assert.equal(corrected.mediaTypeOrigin, "manual");
   } finally {
     await context.close();
   }

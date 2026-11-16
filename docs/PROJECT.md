@@ -12,9 +12,10 @@ an owner's music collection. Core owns users, the canonical library, audio, and
 playlists. Optional plugins extend capabilities through versioned contracts.
 
 The core audio library also supports audiobooks and locally stored podcast
-episodes as first-class browse categories. Media type is configured explicitly
-per source so music, books, and shows remain deterministic and separately
-browsable without title-based classification heuristics.
+episodes as first-class browse categories. Media type is detected per track
+from authoritative Jellyfin and embedded metadata. One source may contain music,
+books, and shows; ambiguous tracks default to music and remain correctable by
+administrators without title- or folder-name classification heuristics.
 
 - In-app marketplace for plugin discovery, permissions, installation, and updates.
 - Playlist account linking and synchronization: Spotify, Deezer, SoundCloud,

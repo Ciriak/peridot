@@ -56,8 +56,9 @@ import {
   reorderSources,
   searchDirectoryEntries,
   SourceError,
-  updateSourceMediaType,
+  updateSourceClassification,
 } from "./sources.js";
+import { registerMediaClassificationRoutes } from "./media-classification-routes.js";
 import {
   queueLibraryScan,
   queueMetadataFetch,
@@ -395,10 +396,10 @@ export async function registerAdminRoutes(
       "/api/admin/sources/:id",
       async (request, reply): Promise<CreateSourceResponse | undefined> => {
         try {
-          const source = await updateSourceMediaType(
+          const source = await updateSourceClassification(
             database,
             request.params.id,
-            request.body?.mediaType,
+            request.body,
           );
           await tasks.stopForSource(source.id);
           const task = await queueLibraryScan(tasks, {
@@ -712,5 +713,9 @@ export async function registerAdminRoutes(
         }
       },
     );
+
+    if (catalog) {
+      await registerMediaClassificationRoutes(admin, database, catalog);
+    }
   });
 }

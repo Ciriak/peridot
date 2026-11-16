@@ -5,13 +5,17 @@ import type {
   DirectorySearchResponse,
   JellyfinLibraryResponse,
   MessageDescriptor,
+  SourceClassificationMode,
   SourceKind,
   SourceResponse,
 } from "@peridot/contracts";
 import type { CredentialStore } from "./credential-store.js";
 import type { Database } from "./database.js";
 import { JellyfinClient, JellyfinError } from "./jellyfin.js";
-import { mediaType as normalizeMediaType, mediaTypeOrNull } from "./media.js";
+import {
+  mediaTypeValue,
+  sourceClassificationMode,
+} from "./media-classification.js";
 import { message } from "./messages.js";
 import type { SourceRow } from "./prisma/models.js";
 
@@ -50,7 +54,9 @@ function toSourceResponse(
   return {
     id: source.id,
     kind: source.kind as SourceKind,
-    mediaType: normalizeMediaType(source.mediaType),
+    classificationMode: sourceClassificationMode(source.classificationMode),
+    fixedMediaType: mediaTypeValue(source.fixedMediaType),
+    externalLibraryCollectionType: source.externalLibraryCollectionType,
     name: source.name,
     path: source.path,
     url: source.url,
@@ -71,7 +77,7 @@ export async function ensureDefaultSource(
   if (count === 0) {
     await database.orm.Source.create({
       kind: "path",
-      mediaType: "music",
+      classificationMode: "auto",
       path: seedLibraryRoot,
       position: 0,
     });
@@ -125,7 +131,8 @@ export async function createSource(
     integration?: unknown;
     apiKey?: unknown;
     libraryId?: unknown;
-    mediaType?: unknown;
+    classificationMode?: unknown;
+    fixedMediaType?: unknown;
   };
   const kind = value.kind;
   if (kind !== "path" && kind !== "url" && kind !== "integration") {
@@ -138,7 +145,7 @@ export async function createSource(
     typeof value.name === "string" && value.name.trim()
       ? value.name.trim()
       : null;
-  const requestedMediaType = normalizeMediaType(value.mediaType);
+  const classification = parseClassification(value);
   const { count: position } = await database.orm.Source.aggregate(
     (aggregate) => ({ count: aggregate.count() }),
   );
@@ -165,7 +172,7 @@ export async function createSource(
     }
     const source = await database.orm.Source.create({
       kind,
-      mediaType: requestedMediaType,
+      ...classification,
       name,
       path: resolved,
       position,
@@ -190,7 +197,7 @@ export async function createSource(
     }
     const source = await database.orm.Source.create({
       kind,
-      mediaType: requestedMediaType,
+      ...classification,
       name,
       url,
       position,
@@ -229,20 +236,19 @@ export async function createSource(
     );
   }
   const libraryId =
-    typeof value.libraryId === "string" && value.libraryId.trim()
-      ? value.libraryId.trim()
-      : null;
+    typeof value.libraryId === "string" ? value.libraryId.trim() : "";
+  if (!libraryId) {
+    throw new SourceError(
+      "Choose a Jellyfin library.",
+      message("api.message.jellyfinLibraryMissing"),
+    );
+  }
   const duplicate = await database.orm.Source.where({
     kind: "integration",
     integration,
     url,
-  })
-    .where((source) =>
-      libraryId
-        ? source.externalLibraryId.eq(libraryId)
-        : source.externalLibraryId.isNull(),
-    )
-    .first();
+    externalLibraryId: libraryId,
+  }).first();
   if (duplicate) {
     throw new SourceError(
       "This integration is already a source.",
@@ -250,21 +256,21 @@ export async function createSource(
     );
   }
   let sourceName: string;
-  let selectedLibraryName: string | null = null;
+  let selectedLibraryName: string;
+  let selectedLibraryCollectionType: string | null;
   try {
     const info = await jellyfin.validate(url, apiKey);
     sourceName = info.name;
-    if (libraryId) {
-      const libraries = await jellyfin.listLibraries(url, apiKey);
-      const library = libraries.find((item) => item.id === libraryId);
-      if (!library) {
-        throw new SourceError(
-          "Choose an available Jellyfin library.",
-          message("api.message.jellyfinLibraryMissing"),
-        );
-      }
-      selectedLibraryName = library.name;
+    const libraries = await jellyfin.listLibraries(url, apiKey);
+    const library = libraries.find((item) => item.id === libraryId);
+    if (!library) {
+      throw new SourceError(
+        "Choose an available Jellyfin library.",
+        message("api.message.jellyfinLibraryMissing"),
+      );
     }
+    selectedLibraryName = library.name;
+    selectedLibraryCollectionType = library.collectionType;
   } catch (error) {
     if (error instanceof JellyfinError) {
       throw new SourceError(error.message, error.messageDescriptor);
@@ -273,11 +279,12 @@ export async function createSource(
   }
   const source = await database.orm.Source.create({
     kind,
-    mediaType: requestedMediaType,
+    ...classification,
     name: name || selectedLibraryName || sourceName,
     url,
     integration,
     externalLibraryId: libraryId,
+    externalLibraryCollectionType: selectedLibraryCollectionType,
     credentialCiphertext: credentials.encrypt(apiKey, "source"),
     position,
   });
@@ -313,7 +320,7 @@ export async function listJellyfinLibraries(
   }
 }
 
-export async function updateSourceMediaType(
+export async function updateSourceClassification(
   database: Database,
   id: string,
   value: unknown,
@@ -330,21 +337,50 @@ export async function updateSourceMediaType(
     !(source.kind === "integration" && source.integration === "jellyfin")
   ) {
     throw new SourceError(
-      "Only configured folder and Jellyfin sources can change media type.",
+      "Only configured folder and Jellyfin sources can change classification.",
       message("api.message.sourceNotRescanable"),
     );
   }
-  const requested = mediaTypeOrNull(value);
-  if (!requested) {
+  const classification = parseClassification(
+    (value ?? {}) as Record<string, unknown>,
+  );
+  const updated = await database.orm.Source.where({ id }).update({
+    ...classification,
+  });
+  return toSourceResponse(updated ?? source);
+}
+
+function parseClassification(value: {
+  classificationMode?: unknown;
+  fixedMediaType?: unknown;
+}): {
+  classificationMode: SourceClassificationMode;
+  fixedMediaType: string | null;
+} {
+  const classificationMode =
+    value.classificationMode === undefined
+      ? "auto"
+      : sourceClassificationMode(value.classificationMode, "auto");
+  if (
+    value.classificationMode !== undefined &&
+    value.classificationMode !== classificationMode
+  ) {
     throw new SourceError(
-      "Choose a valid media type.",
+      "Choose automatic or fixed source classification.",
+      message("api.message.sourceClassificationInvalid"),
+    );
+  }
+  if (classificationMode === "auto") {
+    return { classificationMode, fixedMediaType: null };
+  }
+  const fixedMediaType = mediaTypeValue(value.fixedMediaType);
+  if (!fixedMediaType) {
+    throw new SourceError(
+      "Choose a valid fixed media type.",
       message("api.message.sourceMediaTypeInvalid"),
     );
   }
-  const updated = await database.orm.Source.where({ id }).update({
-    mediaType: requested,
-  });
-  return toSourceResponse(updated ?? source);
+  return { classificationMode, fixedMediaType };
 }
 
 async function resolveDirectory(value: string): Promise<string> {

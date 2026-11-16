@@ -32,6 +32,47 @@ deployment was performed.
 Next: push the branch and confirm both platform jobs complete, upload two digest
 artifacts, and the merge job publishes a two-platform GHCR manifest.
 
+## Per-track media auto-detection
+
+Media classification is now automatic per track. A local folder or selected
+Jellyfin library can contain music, audiobooks, and podcasts without separate
+sources. Sources default to automatic mode and retain an optional fixed-type
+override. Jellyfin `AudioBook` item types, `books` library types, podcast tags,
+iTunes audiobook media type, audiobook release types, and `.m4b` extensions are
+supported classification evidence. Tracks without a reliable signal remain
+music.
+
+Administrators can override an individual track or complete book/show collection
+and can restore the stored automatic detection result. The server reindexes
+affected catalog rows immediately. Manual overrides take precedence over fixed
+source modes and survive rescans. Source and Jellyfin unchanged-item checks now
+include classification state.
+
+The Prisma 8 contract replaces source-level `mediaType` with
+`classificationMode`, `fixedMediaType`, and the selected Jellyfin library's
+collection type. Tracks store effective, detected, and override media types with
+detection provenance. Existing source classification data is intentionally
+discarded; there is no compatibility migration.
+
+Checks completed:
+
+- Full workspace tests: server 151, web 204, shared UI 16, desktop 4
+- Full workspace type check, workspace ESLint, Prettier, and version check
+- Prisma 8 contract emit and local `db update` (23 additive operations)
+- Prisma migration status: no migration packages in this development setup
+- Server production build
+- Web production build, including 142 PWA precache entries
+- `git diff --check`
+
+Known limits: Jellyfin behavior uses mocked API responses; a live mixed Jellyfin
+library and browser interaction QA were not run. Existing source classification
+data has no compatibility path. All work remains uncommitted on
+`feature/clasicifation-update`; no commit, push, tag, publication, or deployment
+was performed.
+
+Next: scan a real mixed library, verify the source and collection correction
+menus at desktop and mobile widths, then commit the completed change.
+
 ## Single public Peridot port on 17430
 
 The built server now serves the web SPA and API from one Fastify listener on 17430. Static assets use the generated web root, unknown GET/HEAD routes fall

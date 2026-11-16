@@ -100,6 +100,13 @@ export function toTrackResponse(
   return {
     id: track.id,
     mediaType: storedMediaType(track.mediaType),
+    mediaTypeOrigin:
+      track.mediaTypeOrigin === "manual" ||
+      track.mediaTypeOrigin === "source" ||
+      track.mediaTypeOrigin === "jellyfin" ||
+      track.mediaTypeOrigin === "embedded"
+        ? track.mediaTypeOrigin
+        : "fallback",
     title: effective.title,
     artist: effective.artist,
     artists: effective.artists,

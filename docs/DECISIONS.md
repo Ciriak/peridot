@@ -21,6 +21,26 @@ server compilation, and static client generation into individual layers. The
 runtime still includes target-native dependencies such as `better-sqlite3`, so
 build outputs and dependency trees must not be copied between architectures.
 
+## 2026-11-16: Media type is detected per track
+
+Peridot classifies each track independently so one local folder or Jellyfin
+library can contain music, audiobooks, and podcasts without requiring separate
+sources. Jellyfin item type, Jellyfin library collection type, podcast tags,
+iTunes audiobook media type, audiobook release type, and `.m4b` are the accepted
+signals. Title, containing folder, duration, and genre are not classification
+signals.
+
+A source defaults to automatic detection and may optionally use one fixed type.
+For each track, an administrator override takes precedence over the fixed source
+type, detected metadata, and the music fallback. The detected type and its origin
+are stored separately from the override so resetting a correction restores the
+last detection without rereading the media. Ambiguous tracks default to music.
+
+All-source rescans compare the effective type during unchanged-item checks, so
+changing source mode or detection evidence reindexes category and collection
+projections. Music metadata providers remain music-only. This supersedes the
+explicit per-source decision below.
+
 ## 2026-11-16: One public Peridot port on 17430
 
 The built server uses one Fastify listener on 17430 for the SPA, authenticated
