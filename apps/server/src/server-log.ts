@@ -1,6 +1,11 @@
-import { createWriteStream, type WriteStream } from "node:fs";
+import {
+  createReadStream,
+  createWriteStream,
+  type WriteStream,
+} from "node:fs";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { createInterface } from "node:readline";
 import { Writable } from "node:stream";
 import { DEFAULT_FILE_LOG_RETENTION_DAYS } from "@peridot/contracts";
 import { sqliteFilePath } from "./database.js";
@@ -25,8 +30,21 @@ const PINO_LEVELS: Record<number, string> = {
   60: "fatal",
 };
 
+const PINO_LEVEL_VALUES: Record<string, number> = {
+  trace: 10,
+  debug: 20,
+  info: 30,
+  warn: 40,
+  error: 50,
+  fatal: 60,
+};
+
 function levelName(level: unknown): string {
-  return typeof level === "number" ? (PINO_LEVELS[level] ?? "log") : "log";
+  if (typeof level === "number") return PINO_LEVELS[level] ?? "log";
+  if (typeof level === "string" && level.trim()) {
+    return level.trim().toLowerCase();
+  }
+  return "log";
 }
 
 function describe(record: Record<string, unknown>): string {
@@ -46,18 +64,45 @@ function describe(record: Record<string, unknown>): string {
   return typeof record.msg === "string" ? record.msg : "";
 }
 
+function recordTime(record: Record<string, unknown>): number | null {
+  if (typeof record.time === "number" && Number.isFinite(record.time)) {
+    return record.time;
+  }
+  if (typeof record.time === "string") {
+    const parsed = Date.parse(record.time);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function entryFromRecord(
+  record: Record<string, unknown>,
+): Omit<ServerLogEntry, "id"> | null {
+  const time = recordTime(record);
+  const message = describe(record).trim();
+  if (time === null || !message) return null;
+  return {
+    time: new Date(time).toISOString(),
+    level: levelName(record.level),
+    message,
+  };
+}
+
+function fileRecord(entry: ServerLogEntry): string {
+  return `${JSON.stringify({
+    time: Date.parse(entry.time),
+    level: PINO_LEVEL_VALUES[entry.level] ?? PINO_LEVEL_VALUES.info,
+    msg: entry.message,
+  })}\n`;
+}
+
 function isLogLineWithinRetention(line: string, cutoff: number): boolean {
   const trimmed = line.trim();
   if (!trimmed) return true;
   try {
     const record = JSON.parse(trimmed) as Record<string, unknown>;
-    const time =
-      typeof record.time === "number"
-        ? record.time
-        : typeof record.time === "string"
-          ? Date.parse(record.time)
-          : Number.NaN;
-    return !Number.isFinite(time) || time >= cutoff;
+    const time = recordTime(record);
+    return time === null || time >= cutoff;
   } catch {
     return true;
   }
@@ -99,13 +144,14 @@ export async function pruneFileLog(
 
 export class ServerLogBuffer {
   private entries: ServerLogEntry[] = [];
-  private nextId = 1;
+  private nextId = Date.now();
   private entryListener: ((entry: ServerLogEntry) => void) | null = null;
   private fileStream: WriteStream | null = null;
   private fileLoggingEnabled = false;
   private fileLogRetentionDays = DEFAULT_FILE_LOG_RETENTION_DAYS;
   private pendingFileText = "";
   private retentionTimer: ReturnType<typeof setInterval> | null = null;
+  private historyLoaded = false;
   readonly stream: Writable;
 
   constructor(readonly filePath = path.resolve("peridot.log")) {
@@ -119,12 +165,8 @@ export class ServerLogBuffer {
           if (!trimmed) continue;
           try {
             const record = JSON.parse(trimmed) as Record<string, unknown>;
-            this.push({
-              id: this.nextId++,
-              time: new Date(Number(record.time) || Date.now()).toISOString(),
-              level: levelName(record.level),
-              message: describe(record),
-            });
+            const entry = entryFromRecord(record);
+            if (entry) this.push({ id: this.allocateId(), ...entry });
           } catch {
             // Ignore non-JSON log lines.
           }
@@ -136,20 +178,58 @@ export class ServerLogBuffer {
 
   add(level: string, message: string): ServerLogEntry {
     const entry: ServerLogEntry = {
-      id: this.nextId++,
+      id: this.allocateId(),
       time: new Date().toISOString(),
       level,
       message,
     };
     this.push(entry);
-    this.writeToFile(
-      `${JSON.stringify({
-        time: Date.parse(entry.time),
-        level,
-        msg: message,
-      })}\n`,
-    );
+    this.writeToFile(fileRecord(entry));
     return entry;
+  }
+
+  async loadPersistedHistory(): Promise<number> {
+    if (this.historyLoaded) return 0;
+    this.historyLoaded = true;
+
+    const recovered: Array<Omit<ServerLogEntry, "id">> = [];
+    try {
+      const lines = createInterface({
+        input: createReadStream(this.filePath, { encoding: "utf8" }),
+        crlfDelay: Number.POSITIVE_INFINITY,
+      });
+      for await (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        try {
+          const record = JSON.parse(trimmed) as Record<string, unknown>;
+          const entry = entryFromRecord(record);
+          if (!entry) continue;
+          recovered.push(entry);
+          if (recovered.length > MAX_ENTRIES) recovered.shift();
+        } catch {
+          // Ignore legacy or interleaved non-JSON output.
+        }
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return 0;
+      throw error;
+    }
+
+    if (!recovered.length) return 0;
+    const entries = [
+      ...recovered,
+      ...this.entries.map(({ time, level, message }) => ({
+        time,
+        level,
+        message,
+      })),
+    ].slice(-MAX_ENTRIES);
+    this.entries = entries.map((entry) => ({
+      id: this.allocateId(),
+      ...entry,
+    }));
+    return recovered.length;
   }
 
   async configureFileLogging(
@@ -200,6 +280,12 @@ export class ServerLogBuffer {
       this.entries.splice(0, this.entries.length - MAX_ENTRIES);
     }
     this.entryListener?.(entry);
+  }
+
+  private allocateId(): number {
+    const id = this.nextId;
+    this.nextId = Math.max(this.nextId + 1, Date.now());
+    return id;
   }
 
   private writeToFile(text: string) {

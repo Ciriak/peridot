@@ -231,6 +231,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
     database,
     config.libraryRoot,
   );
+  await logBuffer.loadPersistedHistory();
   await logBuffer.configureFileLogging(
     initialServerSettings.fileLogging.enabled,
     initialServerSettings.fileLogging.retentionDays,

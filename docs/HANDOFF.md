@@ -2,6 +2,32 @@
 
 Last updated: 2026-11-17.
 
+## Server Settings restores log history after restart
+
+The server now restores the latest 500 structured entries from `peridot.log`
+into the in-memory administrator Settings log during startup. Recovery occurs
+before the public listener starts and also applies when file logging is
+currently disabled, so prior history remains available after a full reboot or
+an in-app server restart. Live IDs continue above all restored entries.
+
+Application-generated file records now use numeric Pino levels, epoch times,
+and `msg`, matching Fastify/Pino JSON lines. Recovery remains compatible with
+the previous string-level records. Non-JSON lines remain on disk and are
+ignored by the structured Settings reader.
+
+Checks completed:
+
+- Focused log recovery tests cover restart persistence, API exposure, numeric
+  format, legacy string levels, a 500-entry recovery cap, and malformed lines
+
+Known limits: recovery loads the latest 500 structured records, not the entire
+retained file. Reading the complete retained history still requires direct
+access to `peridot.log`. All changes remain uncommitted on `dev`; no commit,
+push, tag, publication, or deployment was performed.
+
+Next: confirm the recovered history in a live development restart with an
+existing `apps/server/peridot.log`.
+
 ## Android launcher icon uses a dark canvas and margin
 
 The Android launcher icon now places the green Peridot mark on a `#121312`

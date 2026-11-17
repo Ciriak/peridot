@@ -1,5 +1,19 @@
 # Decisions
 
+## 2026-11-17: Server log history is restored from the persistent JSON file
+
+At server startup, Peridot streams `peridot.log` and restores the latest 500
+structured records into the administrator Settings log before accepting
+requests. Recovery applies even when file logging is currently disabled, so a
+previous log file remains readable in Settings after a restart. Entries written
+after recovery continue with monotonically increasing IDs.
+
+Persisted application entries now use the same core JSON-line shape as
+Fastify/Pino records: numeric epoch `time`, numeric Pino `level`, and string
+`msg`. Recovery accepts the older string-level shape for compatibility.
+Non-JSON interleaved output remains on disk for retention safety but is not
+exposed through the structured Settings reader.
+
 ## 2026-11-17: Android app icons use a dark canvas with brand margin
 
 Android launcher icons use `#121312` as an opaque background across legacy and

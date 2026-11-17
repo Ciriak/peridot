@@ -142,3 +142,105 @@ test("file logging removes entries older than its retention period", async () =>
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("server logs reload persisted history after a restart", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "peridot-log-recovery-"));
+  const logPath = path.join(root, "peridot.log");
+  const previous = new ServerLogBuffer(logPath);
+  try {
+    await previous.configureFileLogging(true, 5);
+    previous.add("info", "before restart");
+    previous.add("error", "restart failure");
+    await previous.close();
+
+    const content = await readFile(logPath, "utf8");
+    const records = content
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    assert.ok(
+      records.every(
+        (record) =>
+          typeof record.time === "number" &&
+          typeof record.level === "number" &&
+          typeof record.msg === "string",
+      ),
+    );
+
+    const restarted = new ServerLogBuffer(logPath);
+    try {
+      assert.equal(await restarted.loadPersistedHistory(), 2);
+      const recovered = restarted.list();
+      assert.deepEqual(
+        recovered.map(({ level, message }) => ({ level, message })),
+        [
+          { level: "info", message: "before restart" },
+          { level: "error", message: "restart failure" },
+        ],
+      );
+      const live = restarted.add("warn", "after restart");
+      assert.ok(live.id > (recovered.at(-1)?.id ?? 0));
+    } finally {
+      await restarted.close();
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("the admin log endpoint exposes history restored from the log file", async () => {
+  const time = Date.UTC(2026, 10, 17, 11, 30);
+  const context = await createTestContext({
+    persistedLogLines: [
+      JSON.stringify({
+        time,
+        level: 30,
+        msg: "request before restart",
+      }),
+    ],
+  });
+  try {
+    const response = await context.app.inject({
+      method: "GET",
+      url: "/api/admin/logs",
+      headers: context.authorization,
+    });
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(
+      response.json<{ items: Array<Record<string, unknown>> }>().items.map(
+        ({ level, message }) => ({ level, message }),
+      ),
+      [{ level: "info", message: "request before restart" }],
+    );
+  } finally {
+    await context.close();
+  }
+});
+
+test("log recovery accepts legacy string levels and keeps the latest entries", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "peridot-log-compat-"));
+  const logPath = path.join(root, "peridot.log");
+  const now = Date.UTC(2026, 10, 17, 12);
+  const lines = Array.from({ length: 502 }, (_, index) =>
+    JSON.stringify({
+      time: now + index,
+      level: index === 500 ? "warn" : 30,
+      msg: `entry ${index}`,
+    }),
+  );
+  lines.push("interleaved non-JSON output");
+  await writeFile(logPath, `${lines.join("\n")}\n`);
+
+  const logBuffer = new ServerLogBuffer(logPath);
+  try {
+    assert.equal(await logBuffer.loadPersistedHistory(), 500);
+    const entries = logBuffer.list();
+    assert.equal(entries.length, 500);
+    assert.equal(entries[0]?.message, "entry 2");
+    assert.equal(entries.at(-1)?.message, "entry 501");
+    assert.equal(entries.at(-2)?.level, "warn");
+  } finally {
+    await logBuffer.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});

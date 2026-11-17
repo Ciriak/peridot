@@ -1,4 +1,4 @@
-import { copyFile, mkdtemp, realpath, rm } from "node:fs/promises";
+import { copyFile, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
@@ -36,6 +36,7 @@ export interface TestContextOptions {
   enableSourceRefreshScheduler?: boolean;
   updateService?: UpdateService;
   webRoot?: string;
+  persistedLogLines?: string[];
 }
 
 export async function createTestContext(
@@ -57,7 +58,15 @@ export async function createTestContext(
   }
   await copyFile(templatePath, databasePath);
   const database = createDatabase(databaseUrl);
-  const logBuffer = new ServerLogBuffer(serverLogFilePath(databaseUrl));
+  const logPath = serverLogFilePath(databaseUrl);
+  if (options.persistedLogLines?.length) {
+    await writeFile(
+      logPath,
+      `${options.persistedLogLines.join("\n")}\n`,
+      "utf8",
+    );
+  }
+  const logBuffer = new ServerLogBuffer(logPath);
   const metadataFetch =
     options.metadataFetch ??
     (async () => Response.json({ releases: [], recordings: [] }));

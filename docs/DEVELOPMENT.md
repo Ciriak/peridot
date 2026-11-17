@@ -431,6 +431,11 @@ Administrators can restart the running server from Settings â†’ Admin â†
 after confirming the action. The server briefly disconnects clients, rebuilds
 its Fastify runtime on the same host and port, interrupts running tasks, and
 resumes queued tasks. Sessions and persisted data are retained.
+At startup, the administrator Settings log restores up to 500 structured
+records from `peridot.log` beside the database. Recovery works whether file
+logging is currently enabled or disabled. New application records use numeric
+Pino levels in the same JSON-line shape as Fastify request logs; unstructured
+lines remain in the file but are omitted from the structured log reader.
 Settings → Admin → Server also persists an automatic source-refresh toggle and
 cron expression. It is enabled by default with the five-field schedule
 `0 3 * * *`. When enabled, Peridot queues an all-source library scan at server
