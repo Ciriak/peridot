@@ -571,17 +571,14 @@ test("offline saves show progress and success toasts without removal toasts", as
   assert.match(toasts, /notifyOfflineAlbumSaved/);
   assert.doesNotMatch(toasts, /toast\.offlineRemoved/);
   assert.equal(messages["toast.offlineSavedTitle"], "Saved for offline");
-  assert.equal(
-    messages["toast.offlineSaved"],
-    "{track} is available when your server is unreachable.",
-  );
+  assert.equal(messages["toast.offlineSaved"], "{track} is available offline.");
   assert.equal(
     messages["toast.albumOfflineSavedTitle"],
     "Album saved for offline",
   );
   assert.equal(
     messages["toast.albumOfflineSaved"],
-    "{album} is available when your server is unreachable.",
+    "{album} is available offline.",
   );
   assert.equal(messages["toast.offlineRemovedTitle"], undefined);
   assert.equal(messages["toast.offlineRemoved"], undefined);
