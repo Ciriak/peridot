@@ -17,7 +17,10 @@ import {
   type JellyfinAudioItem,
 } from "./jellyfin.js";
 import type { MetadataEnrichment } from "./metadata-enrichment.js";
-import { detectMediaType } from "./media-classification.js";
+import {
+  detectMediaType,
+  type DetectedMediaType,
+} from "./media-classification.js";
 import {
   collectionFallbackTitle,
   mediaType,
@@ -42,6 +45,7 @@ import {
 const CURRENT_METADATA_VERSION = 7;
 const PROGRESS_WRITE_INTERVAL_MS = 250;
 const EVENT_LOOP_YIELD_INTERVAL_MS = 25;
+const JELLYFIN_PREPARE_CONCURRENCY = 6;
 
 interface DiscoveredFile {
   absolutePath: string;
@@ -97,6 +101,27 @@ type PreparedFile =
   | {
       kind: "failed";
       file: SourceFile;
+      existing: TrackRow | null;
+    };
+
+type PreparedRemoteItem =
+  | {
+      kind: "unchanged";
+      remote: RemoteSourceItem;
+      existing: TrackRow;
+    }
+  | {
+      kind: "changed";
+      remote: RemoteSourceItem;
+      existing: TrackRow | null;
+      detected: DetectedMediaType;
+      coverKey: string | null;
+      cover: CoverImage | null;
+      coverId: string | null;
+    }
+  | {
+      kind: "failed";
+      remote: RemoteSourceItem;
       existing: TrackRow | null;
     };
 
@@ -167,6 +192,12 @@ function coverImage(cover: ScanWorkerCover | null): CoverImage | null {
     : null;
 }
 
+function remoteCoverKey(item: JellyfinAudioItem): string | null {
+  return item.coverItemId
+    ? `${item.coverItemId}\u0000${item.coverTag ?? ""}`
+    : null;
+}
+
 async function* prepareFiles(
   scanner: LibraryScanner,
   files: readonly SourceFile[],
@@ -217,7 +248,8 @@ async function yieldToEventLoop(): Promise<void> {
 }
 
 export class LibraryScanner {
-  private jellyfinCoverCache = new Map<string, CoverImage | null>();
+  private jellyfinCoverFetches = new Map<string, Promise<CoverImage | null>>();
+  private jellyfinCoverIds = new Map<string, string | null>();
 
   constructor(
     private readonly database: Database,
@@ -278,7 +310,8 @@ export class LibraryScanner {
 
     try {
       throwIfAborted(signal);
-      this.jellyfinCoverCache.clear();
+      this.jellyfinCoverFetches.clear();
+      this.jellyfinCoverIds.clear();
       const { workerCount } = await readScanWorkerSettings(this.database);
       const activeWorkerPool = new ScanWorkerPool(workerCount);
       workerPool = activeWorkerPool;
@@ -392,6 +425,9 @@ export class LibraryScanner {
         jellyfinSources.push(remoteSource);
       }
       let discoveredCount = files.length;
+      let progressTotal: number | null = jellyfinSources.length
+        ? null
+        : discoveredCount;
       let processedItems = 0;
       let unsupportedCount = 0;
       let completedRemoteTotal = 0;
@@ -408,7 +444,7 @@ export class LibraryScanner {
         await tasks.updateProgress(
           task.id,
           processedItems,
-          jellyfinSources.length ? null : discoveredCount,
+          progressTotal,
           scanDetails({
             source: sourceName,
             discovered: discoveredCount,
@@ -456,39 +492,30 @@ export class LibraryScanner {
           source.libraryId,
           async (page) => {
             throwIfAborted(signal);
-            for (const item of page.items) {
-              await this.processRemoteItem(
-                { source, item },
-                task.id,
-                counts,
-                signal,
-              );
-              if (shouldYield(lastYieldAt)) {
-                await yieldToEventLoop();
-                lastYieldAt = Date.now();
-              }
-            }
             sourceTotal = page.totalCount ?? sourceTotal;
             unsupportedCount += page.unsupportedCount;
-            processedItems += page.items.length + page.unsupportedCount;
+            processedItems += page.unsupportedCount;
             discoveredCount =
               files.length +
               completedRemoteTotal +
               (sourceTotal ?? page.processedCount);
-            await tasks.updateProgress(
-              task.id,
-              processedItems,
-              discoveredCount,
-              scanDetails({
-                source: sourceName,
-                discovered: discoveredCount,
-                created: counts.createdCount,
-                updated: counts.updatedCount,
-                unchanged: counts.unchangedCount,
-                unavailable: 0,
-                errors: counts.errorCount + unsupportedCount,
-              }),
-            );
+            progressTotal = discoveredCount;
+            await updateProgress(true);
+
+            for await (const prepared of this.prepareRemoteItems(
+              page.items.map((item) => ({ source, item })),
+              signal,
+            )) {
+              throwIfAborted(signal);
+              await this.applyPreparedRemoteItem(prepared, task.id, counts);
+              processedItems += 1;
+              if (shouldYield(lastYieldAt)) {
+                await yieldToEventLoop();
+                lastYieldAt = Date.now();
+              }
+              await updateProgress();
+            }
+            await updateProgress(true);
           },
           signal,
         );
@@ -735,12 +762,43 @@ export class LibraryScanner {
     }
   }
 
-  private async processRemoteItem(
-    remote: RemoteSourceItem,
-    scanId: string,
-    counts: ScanCounts,
+  private async *prepareRemoteItems(
+    remoteItems: readonly RemoteSourceItem[],
     signal: AbortSignal,
-  ): Promise<void> {
+  ): AsyncGenerator<PreparedRemoteItem> {
+    let nextIndex = 0;
+    const pending = new Map<number, Promise<PreparedRemoteItem>>();
+    while (nextIndex < remoteItems.length || pending.size) {
+      throwIfAborted(signal);
+      let startedAny = false;
+      while (
+        nextIndex < remoteItems.length &&
+        pending.size < JELLYFIN_PREPARE_CONCURRENCY
+      ) {
+        const index = nextIndex;
+        const remote = remoteItems[nextIndex++];
+        if (!remote) break;
+        pending.set(index, this.prepareRemoteItem(remote, signal));
+        startedAny = true;
+      }
+      if (startedAny) await yieldToEventLoop();
+      if (!pending.size) break;
+      const completed = await Promise.race(
+        [...pending].map(async ([index, promise]) => ({
+          index,
+          prepared: await promise,
+        })),
+      );
+      pending.delete(completed.index);
+      yield completed.prepared;
+      if (signal.aborted) return;
+    }
+  }
+
+  private async prepareRemoteItem(
+    remote: RemoteSourceItem,
+    signal: AbortSignal,
+  ): Promise<PreparedRemoteItem> {
     const { source, item } = remote;
     let existing: TrackRow | null = null;
     try {
@@ -761,115 +819,174 @@ export class LibraryScanner {
         mediaType(existing.mediaType) === detected.mediaType &&
         trackMediaTypeOrigin(existing.mediaTypeOrigin) === detected.origin;
       if (existing && unchanged) {
-        const wasUnavailable = !existing.available;
-        await this.database.orm.Track.where({ id: existing.id }).update({
-          available: 1,
-          lastSeenScanId: scanId,
-        });
-        if (wasUnavailable) {
-          await this.catalog?.reindexTrack(existing.id, "scan");
-        }
-        counts.unchangedCount += 1;
-        return;
+        return { kind: "unchanged", remote, existing };
       }
 
-      let cover: CoverImage | null = null;
-      if (item.coverItemId && this.jellyfin) {
-        const cacheKey = `${item.coverItemId}\u0000${item.coverTag ?? ""}`;
-        if (this.jellyfinCoverCache.has(cacheKey)) {
-          cover = this.jellyfinCoverCache.get(cacheKey) ?? null;
-        } else {
-          try {
-            cover = await this.jellyfin.cover(
-              source.url,
-              source.apiKey,
-              item.coverItemId,
-              item.coverTag,
-              signal,
-            );
-          } catch (error) {
-            if (signal.aborted) throw error;
-            if (
-              error instanceof JellyfinError &&
-              error.code !== "unavailable"
-            ) {
-              throw error;
-            }
-          }
-          this.jellyfinCoverCache.set(cacheKey, cover);
-        }
+      const coverKey = remoteCoverKey(item);
+      if (coverKey && this.jellyfinCoverIds.has(coverKey)) {
+        return {
+          kind: "changed",
+          remote,
+          existing,
+          detected,
+          coverKey,
+          cover: null,
+          coverId: this.jellyfinCoverIds.get(coverKey) ?? null,
+        };
       }
-      const coverId = await this.storeCover(cover);
-      const artistCredits = normalizeArtistCredits(
-        item.artists.length ? item.artists : ["Unknown artist"],
-      );
-      const itemAlbumArtists = normalizeOptionalArtistCredits(
-        item.albumArtists,
-      );
-      const albumArtists =
-        detected.mediaType !== "music" && itemAlbumArtists.length === 0
-          ? artistCredits
-          : itemAlbumArtists;
-      const relativePath = `jellyfin/${item.albumId ?? "unknown"}/${item.externalId}`;
-      const trackData = {
-        mediaType: detected.mediaType,
-        mediaTypeOrigin: detected.origin,
-        relativePath,
-        title: item.title,
-        artist: artistCredits.join(", "),
-        artistCredits: serializeArtistCredits(artistCredits),
-        albumArtist: albumArtists.length ? albumArtists.join(", ") : null,
-        albumArtistCredits: albumArtists.length
-          ? JSON.stringify(albumArtists)
-          : null,
-        album: item.album,
-        genres: serializeGenres(item.genres),
-        discNumber: item.discNumber,
-        trackNumber: item.trackNumber,
-        durationMs: item.durationMs,
-        publishedAt: item.publishedAt ?? parsePublishedAt(item.fileModifiedAt),
-        coverId,
-        mimeType: item.mimeType,
-        fileSizeBytes: item.fileSizeBytes,
-        fileModifiedAt: item.fileModifiedAt,
-        externalId: item.externalId,
-        externalVersion: item.externalVersion,
-        externalContainer: item.container,
-        available: 1,
-        lastSeenScanId: scanId,
-        metadataVersion: CURRENT_METADATA_VERSION,
+      const cover =
+        coverKey && this.jellyfin
+          ? await this.fetchRemoteCover(source, item, coverKey, signal)
+          : null;
+      return {
+        kind: "changed",
+        remote,
+        existing,
+        detected,
+        coverKey,
+        cover,
+        coverId: null,
       };
-      if (existing) {
-        await this.database.orm.Track.where({ id: existing.id }).update(
-          trackData,
-        );
-        await this.catalog?.reindexTrack(existing.id, "scan");
-        counts.updatedCount += 1;
-      } else {
-        const created = await this.database.orm.Track.create({
-          ...trackData,
-          sourceId: source.id,
-        });
-        await this.catalog?.reindexTrack(created.id, "scan");
-        counts.createdCount += 1;
-      }
     } catch (error) {
       if (signal.aborted) throw error;
+      return { kind: "failed", remote, existing };
+    }
+  }
+
+  private async fetchRemoteCover(
+    source: JellyfinSource,
+    item: JellyfinAudioItem,
+    coverKey: string,
+    signal: AbortSignal,
+  ): Promise<CoverImage | null> {
+    const existing = this.jellyfinCoverFetches.get(coverKey);
+    if (existing) return existing;
+
+    const pending = (async () => {
+      try {
+        return await this.jellyfin!.cover(
+          source.url,
+          source.apiKey,
+          item.coverItemId!,
+          item.coverTag,
+          signal,
+        );
+      } catch (error) {
+        if (signal.aborted) throw error;
+        if (error instanceof JellyfinError && error.code === "unavailable") {
+          return null;
+        }
+        throw error;
+      }
+    })().finally(() => {
+      if (this.jellyfinCoverFetches.get(coverKey) === pending) {
+        this.jellyfinCoverFetches.delete(coverKey);
+      }
+    });
+    this.jellyfinCoverFetches.set(coverKey, pending);
+    return pending;
+  }
+
+  private async applyPreparedRemoteItem(
+    prepared: PreparedRemoteItem,
+    scanId: string,
+    counts: ScanCounts,
+  ): Promise<void> {
+    const { remote } = prepared;
+    const { source, item } = remote;
+    if (prepared.kind === "unchanged") {
+      const wasUnavailable = !prepared.existing.available;
+      await this.database.orm.Track.where({ id: prepared.existing.id }).update({
+        available: 1,
+        lastSeenScanId: scanId,
+      });
+      if (wasUnavailable) {
+        await this.catalog?.reindexTrack(prepared.existing.id, "scan");
+      }
+      counts.unchangedCount += 1;
+      return;
+    }
+
+    if (prepared.kind === "failed") {
       counts.errorCount += 1;
-      if (existing) {
+      if (prepared.existing) {
         try {
-          await this.database.orm.Track.where({ id: existing.id }).update({
+          await this.database.orm.Track.where({
+            id: prepared.existing.id,
+          }).update({
             fileSizeBytes: item.fileSizeBytes,
             fileModifiedAt: item.fileModifiedAt,
             externalVersion: item.externalVersion,
             available: 1,
             lastSeenScanId: scanId,
           });
-          await this.catalog?.reindexTrack(existing.id, "scan");
+          await this.catalog?.reindexTrack(prepared.existing.id, "scan");
         } catch {
           // Preserve the error count when the fallback write also fails.
         }
       }
+      return;
+    }
+
+    const { detected, coverKey, cover } = prepared;
+    let coverId = prepared.coverId;
+    if (coverKey && this.jellyfinCoverIds.has(coverKey)) {
+      coverId = this.jellyfinCoverIds.get(coverKey) ?? null;
+    } else if (coverKey) {
+      coverId = await this.storeCover(cover);
+      this.jellyfinCoverIds.set(coverKey, coverId);
+    }
+
+    const artistCredits = normalizeArtistCredits(
+      item.artists.length ? item.artists : ["Unknown artist"],
+    );
+    const itemAlbumArtists = normalizeOptionalArtistCredits(item.albumArtists);
+    const albumArtists =
+      detected.mediaType !== "music" && itemAlbumArtists.length === 0
+        ? artistCredits
+        : itemAlbumArtists;
+    const relativePath = `jellyfin/${item.albumId ?? "unknown"}/${item.externalId}`;
+    const trackData = {
+      mediaType: detected.mediaType,
+      mediaTypeOrigin: detected.origin,
+      relativePath,
+      title: item.title,
+      artist: artistCredits.join(", "),
+      artistCredits: serializeArtistCredits(artistCredits),
+      albumArtist: albumArtists.length ? albumArtists.join(", ") : null,
+      albumArtistCredits: albumArtists.length
+        ? JSON.stringify(albumArtists)
+        : null,
+      album: item.album,
+      genres: serializeGenres(item.genres),
+      discNumber: item.discNumber,
+      trackNumber: item.trackNumber,
+      durationMs: item.durationMs,
+      publishedAt: item.publishedAt ?? parsePublishedAt(item.fileModifiedAt),
+      coverId,
+      mimeType: item.mimeType,
+      fileSizeBytes: item.fileSizeBytes,
+      fileModifiedAt: item.fileModifiedAt,
+      externalId: item.externalId,
+      externalVersion: item.externalVersion,
+      externalContainer: item.container,
+      available: 1,
+      lastSeenScanId: scanId,
+      metadataVersion: CURRENT_METADATA_VERSION,
+    };
+    if (prepared.existing) {
+      await this.database.orm.Track.where({ id: prepared.existing.id }).update(
+        trackData,
+      );
+      await this.catalog?.reindexTrack(prepared.existing.id, "scan");
+      counts.updatedCount += 1;
+    } else {
+      const created = await this.database.orm.Track.create({
+        ...trackData,
+        sourceId: source.id,
+      });
+      await this.catalog?.reindexTrack(created.id, "scan");
+      counts.createdCount += 1;
     }
   }
 

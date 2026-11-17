@@ -727,3 +727,184 @@ test("a failed Jellyfin scan writes an error to the administrator log", async ()
     await context.close();
   }
 });
+
+test("Jellyfin artwork fetches use bounded concurrency", async () => {
+  let activeCovers = 0;
+  let maximumActiveCovers = 0;
+  const items = Array.from({ length: 12 }, (_, index) => ({
+    Id: `track-${index}`,
+    Name: `Track ${index}`,
+    Etag: `track-${index}-v1`,
+    Container: "mp3",
+    Album: `Album ${index}`,
+    AlbumId: `album-${index}`,
+    AlbumPrimaryImageTag: `cover-${index}`,
+    Artists: [`Artist ${index}`],
+    MediaSources: [{ Container: "mp3", Size: 10 }],
+  }));
+  const context = await createTestContext({
+    jellyfinFetch: async (input) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      if (url.pathname === "/System/Info") {
+        return Response.json({ ServerName: "Concurrent Jellyfin" });
+      }
+      if (url.pathname === "/Library/VirtualFolders") {
+        return Response.json(LIBRARIES);
+      }
+      if (url.pathname === "/Items") {
+        return Response.json({
+          Items: items,
+          TotalRecordCount: items.length,
+        });
+      }
+      if (/^\/Items\/album-\d+\/Images\/Primary$/u.test(url.pathname)) {
+        activeCovers += 1;
+        maximumActiveCovers = Math.max(maximumActiveCovers, activeCovers);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        activeCovers -= 1;
+        return new Response(JPEG, {
+          headers: {
+            "content-type": "image/jpeg",
+            "content-length": String(JPEG.length),
+          },
+        });
+      }
+      return new Response("not found", { status: 404 });
+    },
+  });
+  try {
+    const created = await context.app.inject({
+      method: "POST",
+      url: "/api/admin/sources",
+      headers: context.authorization,
+      payload: {
+        kind: "integration",
+        integration: "jellyfin",
+        libraryId: "music-library-id",
+        url: "http://concurrent-jellyfin.example.test",
+        apiKey: API_KEY,
+      },
+    });
+    assert.equal(created.statusCode, 201, created.body);
+    const task = created.json<{ task: TaskResponse }>().task;
+    const completed = await waitForScan(context, task.id);
+    assert.equal(completed.status, "completed");
+    assert.equal(completed.createdCount, items.length);
+    assert.ok(
+      maximumActiveCovers > 1,
+      "Jellyfin artwork requests should overlap",
+    );
+    assert.ok(
+      maximumActiveCovers <= 6,
+      "Jellyfin artwork concurrency should remain bounded",
+    );
+  } finally {
+    await context.close();
+  }
+});
+
+test("Jellyfin task progress advances before a page finishes", async () => {
+  let releaseCovers!: () => void;
+  let coversReleased = false;
+  const coversReady = new Promise<void>((resolve) => {
+    releaseCovers = () => {
+      if (coversReleased) return;
+      coversReleased = true;
+      resolve();
+    };
+  });
+  const items = Array.from({ length: 4 }, (_, index) => ({
+    Id: `progress-track-${index}`,
+    Name: `Progress track ${index}`,
+    Etag: `progress-track-${index}-v1`,
+    Container: "mp3",
+    Album: `Progress album ${index}`,
+    AlbumId: `progress-album-${index}`,
+    AlbumPrimaryImageTag: `progress-cover-${index}`,
+    Artists: [`Progress artist ${index}`],
+    MediaSources: [{ Container: "mp3", Size: 10 }],
+  }));
+  const context = await createTestContext({
+    jellyfinFetch: async (input) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      if (url.pathname === "/System/Info") {
+        return Response.json({ ServerName: "Progress Jellyfin" });
+      }
+      if (url.pathname === "/Library/VirtualFolders") {
+        return Response.json(LIBRARIES);
+      }
+      if (url.pathname === "/Items") {
+        return Response.json({
+          Items: items,
+          TotalRecordCount: items.length,
+        });
+      }
+      if (url.pathname === "/Items/progress-album-0/Images/Primary") {
+        return new Response(JPEG, {
+          headers: {
+            "content-type": "image/jpeg",
+            "content-length": String(JPEG.length),
+          },
+        });
+      }
+      if (
+        /^\/Items\/progress-album-\d+\/Images\/Primary$/u.test(url.pathname)
+      ) {
+        await coversReady;
+        return new Response(JPEG, {
+          headers: {
+            "content-type": "image/jpeg",
+            "content-length": String(JPEG.length),
+          },
+        });
+      }
+      return new Response("not found", { status: 404 });
+    },
+  });
+  try {
+    const created = await context.app.inject({
+      method: "POST",
+      url: "/api/admin/sources",
+      headers: context.authorization,
+      payload: {
+        kind: "integration",
+        integration: "jellyfin",
+        libraryId: "music-library-id",
+        url: "http://progress-jellyfin.example.test",
+        apiKey: API_KEY,
+      },
+    });
+    assert.equal(created.statusCode, 201, created.body);
+    const task = created.json<{ task: TaskResponse }>().task;
+
+    let partiallyProcessed: TaskResponse | null = null;
+    for (let attempt = 0; attempt < 1_500; attempt += 1) {
+      const response = await context.app.inject({
+        method: "GET",
+        url: `/api/tasks/${task.id}`,
+        headers: context.authorization,
+      });
+      const current = response.json<TaskResponse>();
+      if (
+        current.status === "running" &&
+        current.progress.completed !== null &&
+        current.progress.completed > 0 &&
+        current.progress.completed < items.length
+      ) {
+        partiallyProcessed = current;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.ok(partiallyProcessed);
+    assert.equal(partiallyProcessed.progress.total, items.length);
+
+    releaseCovers();
+    const completed = await waitForScan(context, task.id);
+    assert.equal(completed.status, "completed");
+    assert.equal(completed.createdCount, items.length);
+  } finally {
+    releaseCovers();
+    await context.close();
+  }
+});

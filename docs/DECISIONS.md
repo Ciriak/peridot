@@ -1,5 +1,25 @@
 # Decisions
 
+## 2026-11-17: Jellyfin item preparation is bounded and writes stay serialized
+
+Jellyfin scans prepare up to six items concurrently so cover requests can
+overlap instead of extending the scan by one remote round trip per track.
+Preparation performs read-only track lookup and artwork download. Track,
+cover, and catalog-projection writes remain serialized through the main scan
+executor so SQLite single-writer behavior and catalog identity propagation stay
+predictable.
+
+Concurrent requests for the same cover item and tag share one in-flight
+download. Successfully stored covers are remembered by that remote identity so
+later items reuse the local cover ID without retaining the complete image set
+for the scan. Task progress is written after each item and throttled to the
+existing four-writes-per-second cadence rather than only after a complete
+Jellyfin page.
+
+This avoids a fixed page-sized stall on very large libraries while keeping a
+bounded number of remote requests. No Jellyfin page size or API contract changes
+are required.
+
 ## 2026-11-17: Media type classification is automatic only
 
 Media type is derived only from each track's Jellyfin item/library metadata or

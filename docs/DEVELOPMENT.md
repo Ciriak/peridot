@@ -469,9 +469,13 @@ audio and byte-range requests are proxied through Peridot with the encrypted API
 key remaining server-side. Unsupported Jellyfin audio containers are skipped and
 reported in the scan error count. Pages are processed incrementally so large
 remote libraries update progress without holding the complete Jellyfin catalog
-in memory. Jellyfin requests allow up to 60 seconds for response headers because
-large library pages can be slow to prepare. Task failures, partial-completion
-warnings, and startup interruptions are written to the administrator log.
+in memory. Up to six item lookups and artwork downloads prepare concurrently,
+while track, cover, and catalog writes remain serialized. Repeated image
+identities share one download and reuse the stored local cover ID. Progress
+updates after each item, throttled to four writes per second. Jellyfin requests
+allow up to 60 seconds for response headers because large library pages can be
+slow to prepare. Task failures, partial-completion warnings, and startup
+interruptions are written to the administrator log.
 Source rows show the current available file count and latest successful sync
 time. The Settings sidebar shows the number of configured sources beside
 Sources. Both refresh from the shared source query after a completed library

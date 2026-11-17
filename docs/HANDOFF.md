@@ -2,6 +2,36 @@
 
 Last updated: 2026-11-17.
 
+## Large Jellyfin imports use pipelined item preparation
+
+Jellyfin scans now prefetch up to six item/artwork preparations concurrently
+while applying track, cover, and catalog writes serially. Concurrent requests
+for the same Jellyfin image identity share one download, and later changed items
+reuse the local cover ID without retaining every decoded image for the complete
+scan. Task progress advances after each imported item, throttled to four writes
+per second, instead of jumping once per 500-item Jellyfin page.
+
+The local live diagnosis found a 69,878-item Jellyfin library whose first
+500-item page took about 6 minutes 49 seconds with the previous serial artwork
+path. Regression tests now verify bounded artwork overlap and intermediate task
+progress before the current page finishes.
+
+Checks completed:
+
+- `pnpm check`
+- `pnpm --filter @peridot/server typecheck`
+- `pnpm --filter @peridot/server test` (176 passing)
+- `pnpm --filter @peridot/server build`
+- `git diff --check`
+
+Known limits: the optimized path is covered with mocked Jellyfin responses, not
+yet timed against the complete live 69,878-item library. SQLite track and catalog
+projection writes remain serialized. The changes are uncommitted on `dev`; no
+commit, push, tag, publication, or deployment was performed.
+
+Next: rerun the live `Audio` source scan and record completed page timing and
+overall duration. Metadata matching remains a separate rate-limited phase.
+
 ## Automatic media detection only
 
 Media classification is now automatic only. Source creation and settings no
