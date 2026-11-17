@@ -17,13 +17,15 @@ ignored by the structured Settings reader.
 
 Checks completed:
 
-- Focused log recovery tests cover restart persistence, API exposure, numeric
-  format, legacy string levels, a 500-entry recovery cap, and malformed lines
+- Full server suite: 173 passing
+- Server type checks, targeted ESLint, Prettier, production build, and
+  `git diff --check`
 
 Known limits: recovery loads the latest 500 structured records, not the entire
 retained file. Reading the complete retained history still requires direct
-access to `peridot.log`. All changes remain uncommitted on `dev`; no commit,
-push, tag, publication, or deployment was performed.
+access to `peridot.log`. The first implementation is committed on `dev` as
+`e4930f4`; startup retention ordering and formatter follow-ups are uncommitted.
+No push, tag, publication, or deployment was performed.
 
 Next: confirm the recovered history in a live development restart with an
 existing `apps/server/peridot.log`.

@@ -1,8 +1,4 @@
-import {
-  createReadStream,
-  createWriteStream,
-  type WriteStream,
-} from "node:fs";
+import { createReadStream, createWriteStream, type WriteStream } from "node:fs";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createInterface } from "node:readline";
@@ -91,7 +87,8 @@ function entryFromRecord(
 function fileRecord(entry: ServerLogEntry): string {
   return `${JSON.stringify({
     time: Date.parse(entry.time),
-    level: PINO_LEVEL_VALUES[entry.level] ?? PINO_LEVEL_VALUES.info,
+    level:
+      PINO_LEVEL_VALUES[entry.level.toLowerCase()] ?? PINO_LEVEL_VALUES.info,
     msg: entry.message,
   })}\n`;
 }

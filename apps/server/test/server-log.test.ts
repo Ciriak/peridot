@@ -207,10 +207,45 @@ test("the admin log endpoint exposes history restored from the log file", async 
     });
     assert.equal(response.statusCode, 200);
     assert.deepEqual(
-      response.json<{ items: Array<Record<string, unknown>> }>().items.map(
-        ({ level, message }) => ({ level, message }),
-      ),
+      response
+        .json<{ items: Array<Record<string, unknown>> }>()
+        .items.map(({ level, message }) => ({ level, message })),
       [{ level: "info", message: "request before restart" }],
+    );
+  } finally {
+    await context.close();
+  }
+});
+
+test("startup recovery only exposes history retained by the file policy", async () => {
+  const now = Date.now();
+  const day = 24 * 60 * 60 * 1000;
+  const context = await createTestContext({
+    persistedLogLines: [
+      JSON.stringify({
+        time: now - 6 * day,
+        level: 30,
+        msg: "expired before startup",
+      }),
+      JSON.stringify({
+        time: now - day,
+        level: 30,
+        msg: "retained through startup",
+      }),
+    ],
+  });
+  try {
+    const response = await context.app.inject({
+      method: "GET",
+      url: "/api/admin/logs",
+      headers: context.authorization,
+    });
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(
+      response
+        .json<{ items: Array<{ message: string }> }>()
+        .items.map(({ message }) => message),
+      ["retained through startup"],
     );
   } finally {
     await context.close();
