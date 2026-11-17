@@ -8,8 +8,6 @@ function source(id: string): SourceResponse {
   return {
     id,
     kind: "path",
-    classificationMode: "auto",
-    fixedMediaType: null,
     externalLibraryCollectionType: null,
     name: id,
     path: `/music/${id}`,

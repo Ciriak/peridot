@@ -728,6 +728,5 @@ export async function registerAdminRoutes(
         }
       },
     );
-
   });
 }

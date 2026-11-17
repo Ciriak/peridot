@@ -14,8 +14,8 @@ playlists. Optional plugins extend capabilities through versioned contracts.
 The core audio library also supports audiobooks and locally stored podcast
 episodes as first-class browse categories. Media type is detected per track
 from authoritative Jellyfin and embedded metadata. One source may contain music,
-books, and shows; ambiguous tracks default to music and remain correctable by
-administrators without title- or folder-name classification heuristics.
+books, and shows; ambiguous tracks default to music. Classification is
+automatic only and does not use title- or folder-name heuristics.
 
 - In-app marketplace for plugin discovery, permissions, installation, and updates.
 - Playlist account linking and synchronization: Spotify, Deezer, SoundCloud,

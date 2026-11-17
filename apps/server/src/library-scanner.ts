@@ -17,10 +17,7 @@ import {
   type JellyfinAudioItem,
 } from "./jellyfin.js";
 import type { MetadataEnrichment } from "./metadata-enrichment.js";
-import {
-  detectMediaType,
-  type DetectedMediaType,
-} from "./media-classification.js";
+import { detectMediaType } from "./media-classification.js";
 import {
   collectionFallbackTitle,
   mediaType,
@@ -104,10 +101,7 @@ type PreparedFile =
     };
 
 function trackMediaTypeOrigin(value: string): TrackMediaTypeOrigin {
-  return value === "jellyfin" ||
-    value === "embedded"
-    ? value
-    : "fallback";
+  return value === "jellyfin" || value === "embedded" ? value : "fallback";
 }
 
 function positiveInteger(value: number | null | undefined): number | null {

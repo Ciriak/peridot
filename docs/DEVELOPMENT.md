@@ -106,10 +106,10 @@ rows, cards, and detail headers. Likes are private to the signed-in user and per
 reloads, sessions, and server restarts. The server requires an initialized local
 SQLite database and a music folder, but no API key or hosted service.
 Sources detect music, audiobooks, and podcasts per track from embedded tags and
-Jellyfin item/library metadata. One source may contain all three kinds. A source
-can optionally use one fixed media type, while administrator overrides can
-correct an individual track or complete collection. Unmatched tracks default to
-music. Audiobooks are grouped into books by album title and author, with chapters
+Jellyfin item/library metadata. One source may contain all three kinds.
+Classification is automatic only; sources and individual tracks do not expose
+manual media-type selectors. Unmatched tracks default to music. Audiobooks are
+grouped into books by album title and author, with chapters
 ordered by disc and track number. Podcast audio is grouped into shows by album
 title and publisher, with episodes newest first using published metadata and
 file-date fallback. The Audiobooks and Podcasts
@@ -619,9 +619,10 @@ Signed-in clients list derived books with `GET /api/audiobooks`, read one with
 `GET /api/audiobooks/:id`, and page its chapters through
 `GET /api/audiobooks/:id/chapters`. Podcast shows use
 `GET /api/podcasts`, `GET /api/podcasts/:id`, and
-`GET /api/podcasts/:id/episodes`. Track responses include `mediaType` and
-optional `publishedAt`. `/api/tracks` filters by media type and defaults to
-music; `mediaType=all` supports mixed search and playlists.
+`GET /api/podcasts/:id/episodes`. Track responses include `mediaType`, its
+detection `mediaTypeOrigin`, and optional `publishedAt`. `/api/tracks` filters
+by media type and defaults to music; `mediaType=all` supports mixed search and
+playlists.
 `POST /api/realtime/ticket` issues a 30-second single-use ticket for the
 authenticated `/api/realtime` WebSocket. Subscriptions cover tasks, catalog
 revisions, and administrator-only logs; catalog events never include track rows.
@@ -693,17 +694,10 @@ tracks from that source and queues metadata matching for that source. Requests
 are queued behind active work, and equivalent requests that are still queued
 coalesce into the existing task. Administrators stop an active task with
 `POST /api/admin/tasks/:id/stop`.
-Source creation accepts `classificationMode` and optional `fixedMediaType`;
 Jellyfin creation requires the selected `libraryId`. Administrators discover
 Jellyfin libraries through
 `POST /api/admin/integrations/jellyfin/libraries` using write-only connection
-credentials. `PATCH /api/admin/sources/:id` changes a source's classification
-mode or fixed type; the server stops source-scoped operations and queues a
-rescan that reclassifies unchanged tracks. Administrators can override a track
-or complete book/show collection with
-`PUT /api/admin/tracks/:id/media-type` or
-`PUT /api/admin/media-collections/:id/media-type`; the corresponding `DELETE`
-routes restore the stored detected type.
+credentials.
 Administrators manage metadata providers through
 `GET/POST /api/admin/metadata-providers`,
 `GET /api/admin/metadata-providers/definitions`,

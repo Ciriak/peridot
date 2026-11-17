@@ -160,3 +160,98 @@ test("backup retention keeps the five newest snapshots and unrelated files", asy
     assert.equal(entries.includes(path.basename(backups[5]!)), true);
   });
 });
+
+test("automatic media detection migration preserves the detected track type", async () => {
+  await withTemporaryDatabase(async (databasePath) => {
+    const url = databaseUrl(databasePath);
+    await runPrismaCommand(
+      [
+        "db",
+        "migrate",
+        "--db",
+        url,
+        "--to",
+        "20261117T1421_add_file_log_retention",
+        "--no-interactive",
+      ],
+      true,
+    );
+
+    const database = new DatabaseSync(databasePath);
+    try {
+      database
+        .prepare(
+          `INSERT INTO "Source"
+            ("id", "kind", "classificationMode", "fixedMediaType", "updatedAt")
+           VALUES (?, ?, ?, ?, ?)`,
+        )
+        .run(
+          "source-id",
+          "path",
+          "fixed",
+          "podcast",
+          "2026-11-17T00:00:00.000Z",
+        );
+      database
+        .prepare(
+          `INSERT INTO "Track"
+            ("id", "sourceId", "mediaType", "mediaTypeOrigin",
+             "detectedMediaType", "detectedMediaTypeOrigin", "mediaTypeOverride",
+             "title", "artist", "relativePath", "mimeType", "fileSizeBytes",
+             "fileModifiedAt", "available", "updatedAt")
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          "track-id",
+          "source-id",
+          "podcast",
+          "manual",
+          "audiobook",
+          "embedded",
+          "podcast",
+          "Detected Track",
+          "Detected Author",
+          "detected.m4b",
+          "audio/mp4",
+          1,
+          "2026-11-17T00:00:00.000Z",
+          1,
+          "2026-11-17T00:00:00.000Z",
+        );
+    } finally {
+      database.close();
+    }
+
+    await runPendingMigrations({
+      databaseUrl: url,
+      info: () => undefined,
+    });
+
+    const migrated = new DatabaseSync(databasePath, { readOnly: true });
+    try {
+      const track = migrated
+        .prepare(
+          `SELECT "mediaType", "mediaTypeOrigin" FROM "Track" WHERE "id" = ?`,
+        )
+        .get("track-id") as
+        { mediaType?: string; mediaTypeOrigin?: string } | undefined;
+      assert.equal(track?.mediaType, "audiobook");
+      assert.equal(track?.mediaTypeOrigin, "embedded");
+
+      for (const [table, removedColumn] of [
+        ["Source", "classificationMode"],
+        ["Source", "fixedMediaType"],
+        ["Track", "detectedMediaType"],
+        ["Track", "detectedMediaTypeOrigin"],
+        ["Track", "mediaTypeOverride"],
+      ] as const) {
+        const column = migrated
+          .prepare(`SELECT name FROM pragma_table_info(?) WHERE name = ?`)
+          .get(table, removedColumn) as { name?: string } | undefined;
+        assert.equal(column, undefined);
+      }
+    } finally {
+      migrated.close();
+    }
+  });
+});

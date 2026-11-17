@@ -20,12 +20,12 @@ export default class M extends Migration<Start, End> {
         run: () =>
           `UPDATE "Track" SET "mediaType" = "detectedMediaType", "mediaTypeOrigin" = "detectedMediaTypeOrigin"`,
       }),
+      this.dropIndex({ table: 'Source', index: 'Source_classificationMode_idx_d9eab081' }),
       this.dropColumn({ table: 'Source', column: 'fixedMediaType' }),
       this.dropColumn({ table: 'Source', column: 'classificationMode' }),
       this.dropColumn({ table: 'Track', column: 'detectedMediaType' }),
       this.dropColumn({ table: 'Track', column: 'detectedMediaTypeOrigin' }),
       this.dropColumn({ table: 'Track', column: 'mediaTypeOverride' }),
-      this.dropIndex({ table: 'Source', index: 'Source_classificationMode_idx_d9eab081' }),
     ];
   }
 }

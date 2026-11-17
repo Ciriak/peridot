@@ -327,7 +327,6 @@ test("automatic detection keeps books and shows separate from music", async () =
     const likes = likesResponse.json<LikeListResponse>();
     assert.equal(likes.audiobooks[0]?.title, "Book One");
     assert.equal(likes.podcasts[0]?.title, "Show One");
-
   } finally {
     await context.close();
   }

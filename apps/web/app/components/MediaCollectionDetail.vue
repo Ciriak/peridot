@@ -24,7 +24,10 @@ import {
   trackIdFromTitleHash,
   type TrackSort,
 } from "../lib/library";
-import { isAuthenticationRedirectError, isPeridotNetworkError } from "../lib/peridot-client";
+import {
+  isAuthenticationRedirectError,
+  isPeridotNetworkError,
+} from "../lib/peridot-client";
 import FadeInImage from "./FadeInImage.vue";
 import LikeButton from "./LikeButton.vue";
 import MediaCollectionOfflineButton from "./MediaCollectionOfflineButton.vue";

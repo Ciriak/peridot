@@ -21,6 +21,54 @@
     "postcheck": []
   },
   {
+    "id": "dropIndex.Source.Source_classificationMode_idx_d9eab081",
+    "label": "Drop index Source_classificationMode_idx_d9eab081 on Source",
+    "summary": "Drops index Source_classificationMode_idx_d9eab081 on Source which is not in the contract",
+    "operationClass": "widening",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "index",
+        "name": "Source_classificationMode_idx_d9eab081",
+        "table": "Source"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"Source_classificationMode_idx_d9eab081\" exists",
+        "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
+        "params": [
+          "index",
+          "Source_classificationMode_idx_d9eab081"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "index \"Source_classificationMode_idx_d9eab081\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "drop index \"Source_classificationMode_idx_d9eab081\"",
+        "sql": "DROP INDEX IF EXISTS \"Source_classificationMode_idx_d9eab081\""
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"Source_classificationMode_idx_d9eab081\" is gone",
+        "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
+        "params": [
+          "index",
+          "Source_classificationMode_idx_d9eab081"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "index \"Source_classificationMode_idx_d9eab081\""
+        }
+      }
+    ]
+  },
+  {
     "id": "dropColumn.Source.fixedMediaType",
     "label": "Drop column \"fixedMediaType\" from \"Source\"",
     "summary": "Drops column fixedMediaType on Source which is not in the contract",
@@ -256,54 +304,6 @@
         "expectation": {
           "expects": "absent",
           "object": "column \"mediaTypeOverride\" on \"Track\""
-        }
-      }
-    ]
-  },
-  {
-    "id": "dropIndex.Source.Source_classificationMode_idx_d9eab081",
-    "label": "Drop index Source_classificationMode_idx_d9eab081 on Source",
-    "summary": "Drops index Source_classificationMode_idx_d9eab081 on Source which is not in the contract",
-    "operationClass": "widening",
-    "target": {
-      "id": "sqlite",
-      "details": {
-        "objectType": "index",
-        "name": "Source_classificationMode_idx_d9eab081",
-        "table": "Source"
-      }
-    },
-    "precheck": [
-      {
-        "description": "ensure index \"Source_classificationMode_idx_d9eab081\" exists",
-        "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
-        "params": [
-          "index",
-          "Source_classificationMode_idx_d9eab081"
-        ],
-        "expectation": {
-          "expects": "present",
-          "object": "index \"Source_classificationMode_idx_d9eab081\""
-        }
-      }
-    ],
-    "execute": [
-      {
-        "description": "drop index \"Source_classificationMode_idx_d9eab081\"",
-        "sql": "DROP INDEX IF EXISTS \"Source_classificationMode_idx_d9eab081\""
-      }
-    ],
-    "postcheck": [
-      {
-        "description": "verify index \"Source_classificationMode_idx_d9eab081\" is gone",
-        "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
-        "params": [
-          "index",
-          "Source_classificationMode_idx_d9eab081"
-        ],
-        "expectation": {
-          "expects": "absent",
-          "object": "index \"Source_classificationMode_idx_d9eab081\""
         }
       }
     ]

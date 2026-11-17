@@ -1,5 +1,19 @@
 # Decisions
 
+## 2026-11-17: Media type classification is automatic only
+
+Media type is derived only from each track's Jellyfin item/library metadata or
+embedded metadata. Sources cannot fix one media type, and administrators cannot
+override a track or collection from the application. Ambiguous tracks remain
+music, while the API retains detection provenance as `jellyfin`, `embedded`, or
+`fallback`.
+
+The migration that removes source and override fields first replaces each
+track's effective type and provenance with its stored detection result. A
+catalog projection-version increase then rebuilds derived albums and category
+projections once at startup. This supersedes the optional fixed-source and
+manual-correction portions of the 2026-11-16 per-track decision.
+
 ## 2026-11-17: Scheme-less client addresses prefer HTTPS
 
 When a user enters a Peridot address without an explicit scheme, the client

@@ -2,6 +2,45 @@
 
 Last updated: 2026-11-17.
 
+## Automatic media detection only
+
+Media classification is now automatic only. Source creation and settings no
+longer offer automatic/fixed modes, track context menus no longer expose media
+type corrections, and audiobook/podcast details no longer expose collection
+reclassification. Local and Jellyfin scanners write detection directly to each
+track's `mediaType` and `mediaTypeOrigin`.
+
+The Prisma 8 contract removes source classification, fixed media type, duplicate
+detected fields, and manual overrides. Migration
+`20261117T1749_automatic_media_detection_only` first replaces every track's
+effective type and provenance with its stored detected values, then drops the
+obsolete columns and source index. Catalog projection version 6 rebuilds derived
+albums and media categories once after the migration. The reviewed migration was
+applied to the local development database and the `db` ref advanced.
+
+Checks completed:
+
+- `pnpm check`
+- `pnpm typecheck` (7 successful tasks)
+- `pnpm test` (server 174, web 233, UI 17, desktop 5)
+- `pnpm db:validate`
+- `pnpm build` (6 successful tasks, including the Android debug build)
+- Migration regression covering fixed-source/manual override normalization
+
+Known limits: `pnpm db:migrate:dev` reached the SQLite backup step and exited
+with a platform-level `not an error`; the reviewed migration was therefore
+applied with `pnpm exec prisma db migrate --db file:./peridot.db --advance-ref db
+--no-interactive`. Android Kotlin tests and browser visual QA were not rerun
+because no native Kotlin code changed and the build already covers the packaged
+web client. Most of the implementation was recorded on `dev` in `0880056`
+during the work. The final migration ordering/hash, advanced `db` ref,
+regression test, and documentation updates remain uncommitted alongside the
+user's unrelated changes; no push, tag, publication, or deployment was
+performed.
+
+Next: visually verify the source creation dialog, source actions menu, track
+context menu, and audiobook/podcast detail headers at desktop and mobile widths.
+
 ## Server settings show server and client versions
 
 The Software updates card on Settings → Server now labels the running server's

@@ -1,7 +1,4 @@
-import type {
-  MediaType,
-  TrackMediaTypeOrigin,
-} from "@peridot/contracts";
+import type { MediaType, TrackMediaTypeOrigin } from "@peridot/contracts";
 
 export interface MediaDetectionInput {
   extension?: string | null;
