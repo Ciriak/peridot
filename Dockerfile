@@ -24,7 +24,7 @@ RUN pnpm --filter @peridot/web generate
 FROM base AS runtime
 
 RUN apt-get update \
-  && apt-get install --yes --no-install-recommends ca-certificates dumb-init libcap2-bin \
+  && apt-get install --yes --no-install-recommends ca-certificates dumb-init \
   && rm -rf /var/lib/apt/lists/* \
   && mkdir -p /data /music \
   && chown node:node /data
@@ -37,8 +37,6 @@ ARG PERIDOT_VERSION=
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=17430 \
-    WEB_HOST=0.0.0.0 \
-    WEB_PORT=80 \
     PERIDOT_SERVE_WEB=true \
     PERIDOT_WEB_DIST=/app/apps/web/.output/public \
     PERIDOT_WATCHTOWER_URL=http://watchtower:8080 \
@@ -59,10 +57,9 @@ LABEL org.opencontainers.image.title="Peridot" \
 
 COPY --from=builder --chown=node:node /app /app
 COPY --chmod=755 scripts/docker-entrypoint.sh /usr/local/bin/peridot-entrypoint
-RUN setcap cap_net_bind_service=+ep "$(command -v node)"
 
 USER node
-EXPOSE 80 17430
+EXPOSE 17430
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:17430/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"

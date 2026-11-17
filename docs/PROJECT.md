@@ -42,12 +42,12 @@ Desktop shell, production storage, authentication, plugin RPC/isolation, and
 marketplace trust/distribution protocols still require implementation decisions.
 
 Production deployment uses immutable multi-architecture GHCR images. The web
-application defaults to port 80 and proxies API, audio, and realtime traffic to
-the authenticated Fastify server on port 17430. External web clients discover
-and connect to the server address. Persistent SQLite state and credentials live
-in `/data`; music remains a read-only mounted source. The maintained Watchtower
-fork watches the deployed image channel but applies images only when an
-administrator explicitly installs an available update from Settings.
+application, authenticated API, audio, and realtime traffic share one Fastify
+listener on port 17430. External web clients discover and connect to that
+server address. Persistent SQLite state and credentials live in `/data`; music
+remains a read-only mounted source. The maintained Watchtower fork watches the
+deployed image channel but applies images only when an administrator explicitly
+installs an available update from Settings.
 
 Public GitHub release data drives automatic update checks without requiring a
 GitHub account. Browser and desktop clients update silently in the background.

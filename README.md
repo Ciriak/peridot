@@ -33,7 +33,6 @@
        image: ghcr.io/ciriak/peridot:${PERIDOT_CHANNEL:-stable}
        restart: unless-stopped
        ports:
-         - "80:80"
          - "17430:17430"
        volumes:
          - peridot-data:/data
@@ -71,7 +70,7 @@
 
 3. **Open Peridot**
 
-   Go to **http://YOUR_SERVER_IP** in your browser.
+   Go to **http://YOUR_SERVER_IP:17430** in your browser.
 
 ## Updates and database backups
 

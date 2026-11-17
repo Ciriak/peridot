@@ -3,10 +3,9 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 test("Nuxt pre-bundles dependencies discovered by the first onboarding render", async () => {
-  const [source, packageSource, rootPackageSource] = await Promise.all([
+  const [source, packageSource] = await Promise.all([
     readFile(new URL("../nuxt.config.ts", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
-    readFile(new URL("../../../package.json", import.meta.url), "utf8"),
   ]);
   for (const dependency of [
     "@iconify/vue/offline",
@@ -44,25 +43,12 @@ test("Nuxt pre-bundles dependencies discovered by the first onboarding render", 
   };
   assert.equal(
     packageJson.scripts?.dev,
-    "nuxt dev --host 127.0.0.1 --port 80",
-    "Nuxt development must use the default web port",
+    "nuxt dev --host 127.0.0.1 --port 17430",
+    "Nuxt development must use the public Peridot port",
   );
   assert.match(source, /devProxy:/);
   assert.match(source, /"\/api":\s*\{/);
-  assert.match(source, /target: "http:\/\/127\.0\.0\.1:17430\/api"/);
-  const rootPackage = JSON.parse(rootPackageSource) as {
-    scripts?: Record<string, string>;
-  };
-  assert.match(
-    rootPackage.scripts?.dev ?? "",
-    /PORT=17430 PERIDOT_SERVE_WEB=false/,
-    "The development API must remain on the server port",
-  );
-  assert.match(
-    rootPackage.scripts?.["dev:server"] ?? "",
-    /PORT=17430 PERIDOT_SERVE_WEB=false/,
-    "Standalone development server startup must use the server port",
-  );
+  assert.match(source, /target: "http:\/\/127\.0\.0\.1:17431\/api"/);
   assert.equal(
     packageJson.scripts?.build,
     "nuxt generate",

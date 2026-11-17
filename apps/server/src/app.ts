@@ -44,6 +44,8 @@ import {
   UpdateCheckScheduler,
   type UpdateCheckSchedulerOptions,
 } from "./update-check-scheduler.js";
+import { registerWebApplication } from "./web-server.js";
+
 export interface BuildAppOptions {
   config?: ServerConfig;
   database?: Database;
@@ -60,6 +62,7 @@ export interface BuildAppOptions {
   enableUpdateCheckScheduler?: boolean;
   updateCheckSchedulerOptions?: UpdateCheckSchedulerOptions;
   updateService?: UpdateService;
+  webRoot?: string;
 }
 
 export async function buildApp(options: BuildAppOptions = {}) {
@@ -285,6 +288,9 @@ export async function buildApp(options: BuildAppOptions = {}) {
     (request) => playbackTokens.authorizeRequest(request.method, request.url),
     (sessionId) => realtime.disconnectSession(sessionId),
   );
+  if (options.webRoot) {
+    await registerWebApplication(app, { webRoot: options.webRoot });
+  }
   app.addHook("onClose", async () => {
     updateCheckScheduler.close();
     sourceRefreshScheduler.close();

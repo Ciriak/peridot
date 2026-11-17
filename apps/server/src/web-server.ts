@@ -1,15 +1,15 @@
 import { stat } from "node:fs/promises";
-import Fastify from "fastify";
-import httpProxy from "@fastify/http-proxy";
+import type { FastifyInstance } from "fastify";
 import fastifyStatic from "@fastify/static";
 
-export interface WebServerOptions {
-  apiBaseUrl: string;
+export interface WebApplicationOptions {
   webRoot: string;
-  logger?: boolean;
 }
 
-export async function buildWebServer(options: WebServerOptions) {
+export async function registerWebApplication(
+  app: FastifyInstance,
+  options: WebApplicationOptions,
+) {
   const rootStat = await stat(options.webRoot).catch(() => null);
   if (!rootStat?.isDirectory()) {
     throw new Error(
@@ -17,21 +17,6 @@ export async function buildWebServer(options: WebServerOptions) {
     );
   }
 
-  const app = Fastify({
-    logger:
-      options.logger === false
-        ? false
-        : {
-            level: "info",
-          },
-  });
-
-  await app.register(httpProxy, {
-    upstream: options.apiBaseUrl,
-    prefix: "/api",
-    rewritePrefix: "/api",
-    websocket: true,
-  });
   await app.register(fastifyStatic, {
     root: options.webRoot,
     index: "index.html",
@@ -50,6 +35,4 @@ export async function buildWebServer(options: WebServerOptions) {
     }
     return reply.sendFile("200.html");
   });
-
-  return app;
 }

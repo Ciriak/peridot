@@ -2,6 +2,44 @@
 
 Last updated: 2026-11-17.
 
+## Peridot now uses one public port on 17430
+
+The built server again serves the SPA, authenticated API, audio ranges, and
+realtime WebSockets from one Fastify listener on `17430`. The separate port-80
+web listener, HTTP proxy dependency, `WEB_HOST`, `WEB_PORT`, privileged-port
+capability, and second Compose mapping were removed. Nuxt and the Tauri
+development window use `http://127.0.0.1:17430`; Nuxt proxies development API
+traffic to a private Fastify process on `17431`. Scheme-less server discovery
+now falls back only to `17430`.
+
+Checks completed:
+
+- Server suite: 167 passing, including the combined SPA/API origin test
+- Web suite: 224 passing
+- Desktop config tests passing
+- Server, web, and desktop type checks
+- Workspace ESLint, Prettier, version synchronization, and migration validation
+- Full workspace build: 6 successful tasks, including Nuxt generation, server
+  compilation, and Android debug assembly
+- Live development checks on `17430`: root, nested route, and proxied health
+  returned 200
+- Built-server smoke checks on an alternate port: root and nested routes
+  returned 200, health returned the Peridot signature, and a missing API route
+  returned JSON 404
+- `docker compose config` resolved only published port `17430`
+- `git diff --check`
+
+Known limits: the first full build attempt crashed inside Turbo before any task
+started; an immediate retry completed successfully. A user-owned development
+process already occupies `127.0.0.1:17430`, so the built-server smoke test used
+an alternate port while the runtime default remains covered by automated tests.
+The Docker image was not rebuilt and the Compose stack was not started. All
+changes are uncommitted on `dev`; no commit, push, tag, publication, or
+deployment was performed.
+
+Next: rebuild the image and verify the single Compose port from another machine,
+then verify audio streaming and realtime reconnection through `17430`.
+
 ## Owner-assisted password recovery is implemented
 
 Sign-in now offers password recovery without any email-delivery capability.

@@ -1,5 +1,20 @@
 # Decisions
 
+## 2026-11-17: Peridot uses one public listener on port 17430
+
+The built server serves the SPA, authenticated API, audio ranges, and realtime
+WebSockets from one Fastify listener on port 17430. There is no separate web
+listener, proxy hop, `WEB_HOST`, `WEB_PORT`, or port 80 endpoint. `HOST` and
+`PORT` configure the public listener.
+
+Local Nuxt development and the Tauri development window also use port 17430 as
+their public origin. Nuxt HMR and the API still require separate development
+processes, so Nuxt proxies `/api` to a private Fastify listener on 17431. That
+port is not a public Peridot endpoint. Compose and Docker publish only 17430.
+
+This supersedes the 2026-11-17 two-listener decision that put the web
+application on port 80 and the API on port 17430.
+
 ## 2026-11-17: Email is an account identifier, not an application channel
 
 Peridot uses an email address as the user's sign-in identifier, but the
