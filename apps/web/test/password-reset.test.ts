@@ -49,13 +49,18 @@ test("password recovery calls use the public owner-assisted reset endpoints", as
   });
 });
 
-test("sign-in exposes owner-assisted recovery without an email-delivery claim", async () => {
-  const source = await readFile(
-    new URL("../app/pages/onboarding.vue", import.meta.url),
-    "utf8",
+test("sign-in points users to recovery and the server log", async () => {
+  const [source, messagesSource] = await Promise.all([
+    readFile(new URL("../app/pages/onboarding.vue", import.meta.url), "utf8"),
+    readFile(new URL("../i18n/locales/en-US.json", import.meta.url), "utf8"),
+  ]);
+  const messages = JSON.parse(messagesSource) as Record<string, string>;
+  assert.match(
+    messages["onboarding.recoveryDescription"] ?? "",
+    /recovery code is available in the server log files/i,
   );
   assert.match(source, /@click="beginPasswordResetRequest"/);
-  assert.match(source, /@click="beginRecoveryCodeEntry"/);
+  assert.doesNotMatch(source, /onboarding\.useRecoveryCode/);
   assert.match(source, /id="recovery-email"/);
   assert.match(source, /id="recovery-token"/);
   assert.match(source, /id="reset-password"/);

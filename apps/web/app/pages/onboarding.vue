@@ -278,13 +278,6 @@ function beginPasswordResetRequest() {
   accountView.value = "recovery-request";
 }
 
-function beginRecoveryCodeEntry() {
-  error.value = "";
-  accountNotice.value = "";
-  recoveryNotice.value = "";
-  accountView.value = "recovery-reset";
-}
-
 function returnToSignIn() {
   error.value = "";
   recoveryNotice.value = "";
@@ -622,15 +615,6 @@ function changeServer() {
             >
               {{ t("onboarding.forgotPassword") }}
             </Button>
-            <Button
-              type="button"
-              variant="link"
-              size="sm"
-              :disabled="loading"
-              @click="beginRecoveryCodeEntry"
-            >
-              {{ t("onboarding.useRecoveryCode") }}
-            </Button>
           </div>
         </form>
 
@@ -639,9 +623,6 @@ function changeServer() {
           class="space-y-4"
           @submit.prevent="requestPasswordRecovery"
         >
-          <p class="text-sm text-muted-foreground">
-            {{ t("onboarding.recoveryRequestHelp") }}
-          </p>
           <div class="space-y-2">
             <label for="recovery-email" class="text-sm font-medium">
               {{ t("onboarding.email") }}

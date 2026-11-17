@@ -18,6 +18,8 @@ Inspect git status and recent commits before editing; preserve unrelated changes
   Check formatting, types, tests, schema, and builds for relevant changes;
   report actual results and any skipped verification.
 - Add meaningful behavioral tests. Keep package boundaries explicit.
+- Never add useless commentary or redundant text to agent updates or
+  user-facing copy. State only the required action, result, or context.
 
 ## Product constraints
 

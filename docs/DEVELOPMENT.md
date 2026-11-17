@@ -334,6 +334,8 @@ Keep runtime copy focused on the user's action or current state instead of
 making the product the grammatical subject or repeating its name before generic
 nouns such as "server" and "account." Reserve the runtime product name for the
 application name and browser page titles.
+Do not add redundant helper copy or commentary; each sentence must add required
+context beyond the heading and nearby controls.
 
 Server responses carry stable `MessageDescriptor` values for errors, tasks,
 provider definitions, and metadata details. The browser owns their presentation,

@@ -15,6 +15,11 @@ the public listener on `17430`. The development configuration test now reads
 the root package and verifies that both API scripts use the same private port
 targeted by the Nuxt `/api` proxy.
 
+The failing `PORT=17430` override later returned to the local working tree even
+though the regression coverage was committed. It has been removed again. This
+must not be changed to `17430`: in development, Nuxt owns that public port and
+forwards `/api` to Fastify on `17431`.
+
 Checks completed:
 
 - Web suite: 224 passing
@@ -22,11 +27,15 @@ Checks completed:
 - Live root, `/onboarding`, `/api/health`, and `/api/auth/status` requests on
   `17430` returned 200; direct `/api/health` on the private `17431` also
   returned the Peridot signature
+- Exact `npm run dev` startup on both `127.0.0.1` and `localhost`; root, health,
+  auth status, and discovery requests returned 200 from the rendered web origin
 
 Known limits: full workspace type checks, tests, schema validation, and build
 were not repeated for this development-script and regression-test fix. The
-restored development stack is running locally. The only uncommitted change is
-the regression test; no push, tag, publication, or deployment was performed.
+restored development stack is running locally. The earlier regression test and
+handoff notes were committed in `24c7aa2`; this follow-up only records the
+repeated local port override. No push, tag, publication, or deployment was
+performed.
 
 Next: continue using `pnpm dev` at `http://127.0.0.1:17430`; restart it after
 changes to root scripts or Nuxt proxy configuration.
