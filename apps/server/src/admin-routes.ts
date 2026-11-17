@@ -450,6 +450,15 @@ export async function registerAdminRoutes(
           };
           return reply.code(201).send(response);
         } catch (error) {
+          if (error instanceof PluginError) {
+            return sendError(
+              reply,
+              error.statusCode,
+              "invalid_plugin",
+              error.message,
+              error.messageDescriptor,
+            );
+          }
           if (error instanceof SourceError) {
             return sendError(
               reply,

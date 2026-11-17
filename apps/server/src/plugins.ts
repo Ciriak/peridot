@@ -99,8 +99,21 @@ export class PluginService {
     definitions: readonly PluginDefinition[],
   ) {
     for (const definition of definitions) {
+      if (definition.manifest.sdkVersion !== "1") {
+        throw new Error(
+          `Unsupported plugin SDK version for ${definition.manifest.id}: ${definition.manifest.sdkVersion}`,
+        );
+      }
       if (this.definitions.has(definition.manifest.id)) {
         throw new Error(`Duplicate plugin id: ${definition.manifest.id}`);
+      }
+      const sourceContribution = definition.contributions.some(
+        (contribution) => contribution.kind === "source",
+      );
+      if (sourceContribution !== Boolean(definition.source)) {
+        throw new Error(
+          `Plugin ${definition.manifest.id} must declare and implement its source contribution together.`,
+        );
       }
       this.definitions.set(definition.manifest.id, definition);
     }

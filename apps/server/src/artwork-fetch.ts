@@ -2,7 +2,7 @@ import { pruneReferencedArtwork, type ArtworkCache } from "./artwork-cache.js";
 import type { CatalogService } from "./catalog.js";
 import type { Database } from "./database.js";
 import type { PluginService } from "./plugins.js";
-import type { ArtworkJobRow, SourceRow, TaskRow } from "./prisma/models.js";
+import type { ArtworkJobRow, TaskRow } from "./prisma/models.js";
 import {
   artworkDetails,
   type TaskExecutionResult,

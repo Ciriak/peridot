@@ -244,6 +244,7 @@ export async function createSource(
     validated = await plugins.validateSource(pluginId, configuration);
   } catch (error) {
     if (error instanceof PluginError) {
+      if (error.code === "not_installed") throw error;
       throw new SourceError(error.message, error.messageDescriptor);
     }
     throw error;

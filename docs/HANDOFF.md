@@ -250,6 +250,54 @@ performed.
 Next: replace offset-based cursor pages with sort-key-plus-ID keyset cursors to
 avoid snapshot invalidation during normal scrolling.
 
+## Jellyfin is now an installable source plugin
+
+Jellyfin protocol behavior is isolated in `@peridot/plugin-jellyfin` behind the
+generic trusted plugin host and `@peridot/plugin-sdk`. Source discovery,
+configuration validation, scan records, media classification evidence, artwork,
+playback, and Jellyfin-specific errors now live in the plugin. Core retains
+credential encryption, task scheduling, persistence, catalog projections,
+artwork validation/storage, HTTP range handling, and lifecycle state.
+
+Settings → Plugins now lists bundled plugins and supports install plus confirmed
+uninstall. Uninstall stops related tasks and purges the plugin's local sources,
+tracks, artwork, credentials, task history, track likes, play events, queue
+items, and playlist entries without deleting anything from the Jellyfin server.
+Jellyfin starts installed for both migrated and fresh databases. The source UI
+is driven by plugin-declared fields and discovery results rather than Jellyfin
+form logic.
+
+The Prisma 8 migration `20261117T2010_plugin_installation` adds plugin
+installation state, generic source configuration/identity, and generic
+`source` media provenance. It backfills existing Jellyfin source rows and values,
+then removes the protocol-specific source columns. The migration was applied to
+the local development database and the `db` ref advanced to
+`ec4439f027192084c2f935618851071404049cbdad3a702b90e0a6f14ae7966e`.
+
+Checks completed:
+
+- `pnpm check`
+- `pnpm typecheck` (8 successful tasks)
+- `pnpm test` (server 179, web 235, UI 17, desktop 5)
+- `pnpm db:validate`
+- `pnpm build` (server, web, shared packages, and Android debug APK)
+- `git diff --check`
+
+Known limits: executable plugins are bundled and trusted only. The contracts
+and installation provenance can support a future GitHub-backed catalog, but no
+remote package loader or sandbox is implemented. Display, playlist-generation,
+and data-processing contribution kinds are declared for future hosts; only
+source execution is implemented. Browser visual QA and a live Jellyfin scan
+against a real library were not run. The bulk implementation is in the
+owner-created commit `f398c39`; subsequent lifecycle hardening and documentation
+remain uncommitted. `Cargo.lock` was refreshed to the synchronized 0.0.7 desktop
+package version during verification. No commit, push, tag, publication, or
+deployment was performed by this agent.
+
+Next: run the new Sources and Plugins screens at desktop/mobile widths, test a
+real Jellyfin install/uninstall cycle, and design the sandbox and package
+verification boundary required before enabling GitHub-backed plugin loading.
+
 ## Android launcher icons gain a second padding pass
 
 The centered Peridot mark now renders at 70% of its original source scale,
