@@ -4,9 +4,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import Fastify from "fastify";
-import { registerWebApplication } from "../src/web-server.js";
+import websocket from "@fastify/websocket";
+import { buildWebServer } from "../src/web-server.js";
 
-test("embedded web application serves static assets and the SPA fallback", async () => {
+test("web server serves the SPA and proxies API and realtime traffic", async () => {
   const webRoot = await mkdtemp(path.join(tmpdir(), "peridot-web-"));
   await mkdir(path.join(webRoot, "albums"));
   await writeFile(
@@ -23,41 +24,76 @@ test("embedded web application serves static assets and the SPA fallback", async
   );
   await writeFile(path.join(webRoot, "asset.txt"), "static asset");
 
-  const app = Fastify({ logger: false });
-  app.get("/api/health", async () => ({ status: "ok" }));
-  await registerWebApplication(app, { webRoot });
+  const upstream = Fastify({ logger: false });
+  await upstream.register(websocket);
+  upstream.get("/api/health", async () => ({ status: "ok" }));
+  upstream.get("/api/stream", async (request, reply) => {
+    reply.header("Accept-Ranges", "bytes");
+    reply.header("Content-Range", "bytes 1-3/4");
+    return request.method === "HEAD" ? null : "abc";
+  });
+  upstream.get("/api/realtime", { websocket: true }, (socket) => {
+    socket.on("message", (message) => socket.send(`echo:${message}`));
+  });
+  await upstream.listen({ host: "127.0.0.1", port: 0 });
+  const address = upstream.server.address();
+  assert.ok(address && typeof address !== "string");
+
+  const web = await buildWebServer({
+    apiBaseUrl: `http://127.0.0.1:${address.port}`,
+    webRoot,
+    logger: false,
+  });
+  await web.listen({ host: "127.0.0.1", port: 0 });
+  const webAddress = web.server.address();
+  assert.ok(webAddress && typeof webAddress !== "string");
+  const baseUrl = `http://127.0.0.1:${webAddress.port}`;
 
   try {
-    const home = await app.inject({ method: "GET", url: "/" });
-    assert.equal(home.statusCode, 200);
-    assert.match(home.body, /Peridot home/);
+    const home = await fetch(`${baseUrl}/`);
+    assert.equal(home.status, 200);
+    assert.match(await home.text(), /Peridot home/);
 
-    const albums = await app.inject({ method: "GET", url: "/albums/" });
-    assert.equal(albums.statusCode, 200);
-    assert.match(albums.body, /Peridot albums/);
+    const albums = await fetch(`${baseUrl}/albums/`);
+    assert.equal(albums.status, 200);
+    assert.match(await albums.text(), /Peridot albums/);
 
-    const fallback = await app.inject({
-      method: "GET",
-      url: "/albums/unknown",
+    const fallback = await fetch(`${baseUrl}/albums/unknown`);
+    assert.equal(fallback.status, 200);
+    assert.match(await fallback.text(), /Peridot fallback/);
+
+    const asset = await fetch(`${baseUrl}/asset.txt`);
+    assert.equal(await asset.text(), "static asset");
+
+    const health = await fetch(`${baseUrl}/api/health`);
+    assert.deepEqual(await health.json(), { status: "ok" });
+
+    const missingApi = await fetch(`${baseUrl}/api/missing`);
+    assert.equal(missingApi.status, 404);
+    assert.match(missingApi.headers.get("content-type") ?? "", /json/);
+    assert.equal((await missingApi.text()).includes("<html"), false);
+
+    const head = await fetch(`${baseUrl}/api/stream`, { method: "HEAD" });
+    assert.equal(head.status, 200);
+    assert.equal(head.headers.get("accept-ranges"), "bytes");
+    assert.equal(head.headers.get("content-range"), "bytes 1-3/4");
+
+    const socket = new WebSocket(
+      `${baseUrl.replace(/^http/, "ws")}/api/realtime`,
+    );
+    const reply = await new Promise<string>((resolve, reject) => {
+      socket.addEventListener("open", () => socket.send("hello"));
+      socket.addEventListener("message", (event) =>
+        resolve(String(event.data)),
+      );
+      socket.addEventListener("error", () => reject(new Error("socket error")));
+      setTimeout(() => reject(new Error("socket timeout")), 3_000).unref();
     });
-    assert.equal(fallback.statusCode, 200);
-    assert.match(fallback.body, /Peridot fallback/);
-
-    const asset = await app.inject({ method: "GET", url: "/asset.txt" });
-    assert.equal(asset.body, "static asset");
-
-    const health = await app.inject({ method: "GET", url: "/api/health" });
-    assert.deepEqual(health.json(), { status: "ok" });
-
-    const missingApi = await app.inject({
-      method: "GET",
-      url: "/api/missing",
-    });
-    assert.equal(missingApi.statusCode, 404);
-    assert.match(String(missingApi.headers["content-type"]), /json/);
-    assert.doesNotMatch(missingApi.body, /<html/);
+    socket.close();
+    assert.equal(reply, "echo:hello");
   } finally {
-    await app.close();
+    await web.close();
+    await upstream.close();
     await rm(webRoot, { recursive: true, force: true });
   }
 });

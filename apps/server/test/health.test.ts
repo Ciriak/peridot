@@ -4,7 +4,8 @@ import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
-  DEFAULT_PORT,
+  DEFAULT_SERVER_PORT,
+  DEFAULT_WEB_PORT,
   DESKTOP_WEB_ORIGINS,
   MOBILE_WEB_ORIGINS,
   loadServerConfig,
@@ -29,7 +30,8 @@ test("health endpoint responds without database or external services", async () 
 });
 
 test("server configuration validates storage and browser origins", async () => {
-  assert.equal(DEFAULT_PORT, 17430);
+  assert.equal(DEFAULT_SERVER_PORT, 17430);
+  assert.equal(DEFAULT_WEB_PORT, 80);
   const root = await mkdtemp(path.join(tmpdir(), "peridot-config-"));
   const libraryRoot = path.join(root, "music");
   await mkdir(libraryRoot);
@@ -40,10 +42,9 @@ test("server configuration validates storage and browser origins", async () => {
       MUSIC_LIBRARY_PATH: libraryRoot,
     });
     assert.deepEqual(defaults.webOrigins, [
-      "http://127.0.0.1:17430",
-      "http://localhost:17430",
+      "http://127.0.0.1",
+      "http://localhost",
       ...DESKTOP_WEB_ORIGINS,
-      ...MOBILE_WEB_ORIGINS,
     ]);
     await assert.rejects(
       loadServerConfig({
@@ -114,41 +115,9 @@ test("server configuration validates storage and browser origins", async () => {
   }
 });
 
-test("the single server origin exposes the API, SPA, and external discovery health", async () => {
-  const webRoot = await mkdtemp(path.join(tmpdir(), "peridot-single-port-"));
-  await mkdir(path.join(webRoot, "albums"));
-  await writeFile(
-    path.join(webRoot, "index.html"),
-    "<!doctype html><title>Peridot home</title>",
-  );
-  await writeFile(
-    path.join(webRoot, "200.html"),
-    "<!doctype html><title>Peridot fallback</title>",
-  );
-  await writeFile(
-    path.join(webRoot, "albums", "index.html"),
-    "<!doctype html><title>Peridot albums</title>",
-  );
-  const context = await createTestContext({ webRoot });
+test("the API listener stays API-only and exposes external discovery health", async () => {
+  const context = await createTestContext();
   try {
-    const home = await context.app.inject({ method: "GET", url: "/" });
-    assert.equal(home.statusCode, 200);
-    assert.match(home.body, /Peridot home/);
-
-    const albums = await context.app.inject({
-      method: "GET",
-      url: "/albums/",
-    });
-    assert.equal(albums.statusCode, 200);
-    assert.match(albums.body, /Peridot albums/);
-
-    const fallback = await context.app.inject({
-      method: "GET",
-      url: "/albums/unknown",
-    });
-    assert.equal(fallback.statusCode, 200);
-    assert.match(fallback.body, /Peridot fallback/);
-
     const health = await context.app.inject({
       method: "GET",
       url: "/api/health",
@@ -168,9 +137,12 @@ test("the single server origin exposes the API, SPA, and external discovery heal
       /application\/json/,
     );
     assert.doesNotMatch(missingApi.body, /<html/);
+
+    const home = await context.app.inject({ method: "GET", url: "/" });
+    assert.equal(home.statusCode, 404);
+    assert.doesNotMatch(home.body, /<html/);
   } finally {
     await context.close();
-    await rm(webRoot, { recursive: true, force: true });
   }
 });
 

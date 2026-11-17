@@ -1,12 +1,18 @@
 import { buildApp } from "./app.js";
-import { DEFAULT_PORT } from "./config.js";
+import { DEFAULT_SERVER_PORT, DEFAULT_WEB_PORT } from "./config.js";
+import { buildWebServer } from "./web-server.js";
 import { fileURLToPath } from "node:url";
+
+type PeridotServer = Awaited<ReturnType<typeof buildApp>>;
+type PeridotWebServer = Awaited<ReturnType<typeof buildWebServer>>;
 
 const DEFAULT_WEB_DIST = new URL("../../web/.output/public", import.meta.url);
 
 export interface ServerRuntimeOptions {
   port: number;
+  webPort: number;
   host: string;
+  webHost: string;
   serveWeb: boolean;
   webRoot: string;
 }
@@ -25,25 +31,38 @@ export function resolveServerRuntimeOptions(
 ): ServerRuntimeOptions {
   const host = environment.HOST ?? "127.0.0.1";
   return {
-    port: parsePort(environment.PORT, DEFAULT_PORT, "PORT"),
+    port: parsePort(environment.PORT, DEFAULT_SERVER_PORT, "PORT"),
+    webPort: parsePort(environment.WEB_PORT, DEFAULT_WEB_PORT, "WEB_PORT"),
     host,
+    webHost: environment.WEB_HOST ?? host,
     serveWeb: environment.PERIDOT_SERVE_WEB !== "false",
     webRoot: environment.PERIDOT_WEB_DIST?.trim() || defaultWebRoot,
   };
 }
 
+function apiBaseUrl(host: string, port: number): string {
+  const targetHost =
+    host === "0.0.0.0" || host === "::"
+      ? "127.0.0.1"
+      : host.includes(":")
+        ? `[${host}]`
+        : host;
+  return `http://${targetHost}:${port}`;
+}
+
 export async function startServer(
   environment: NodeJS.ProcessEnv = process.env,
 ): Promise<void> {
-  const { port, host, serveWeb, webRoot } = resolveServerRuntimeOptions(
-    environment,
-    fileURLToPath(DEFAULT_WEB_DIST),
-  );
-  let app: Awaited<ReturnType<typeof buildApp>> | null = null;
+  const { port, webPort, host, webHost, serveWeb, webRoot } =
+    resolveServerRuntimeOptions(environment, fileURLToPath(DEFAULT_WEB_DIST));
+  let app: PeridotServer | null = null;
+  let webApp: PeridotWebServer | null = null;
   let restartScheduled = false;
   let shuttingDown = false;
 
-  async function closeApp() {
+  async function closeApps() {
+    await webApp?.close();
+    webApp = null;
     await app?.close();
     app = null;
   }
@@ -53,9 +72,15 @@ export async function startServer(
       restartServer: requestRestart,
       enableSourceRefreshScheduler: true,
       enableUpdateCheckScheduler: true,
-      ...(serveWeb ? { webRoot } : {}),
     });
     await app.listen({ port, host });
+    if (serveWeb) {
+      webApp = await buildWebServer({
+        apiBaseUrl: apiBaseUrl(host, port),
+        webRoot,
+      });
+      await webApp.listen({ port: webPort, host: webHost });
+    }
   }
 
   function requestRestart() {
@@ -63,7 +88,7 @@ export async function startServer(
     restartScheduled = true;
     setImmediate(async () => {
       try {
-        await closeApp();
+        await closeApps();
         if (shuttingDown) return;
         await buildAndListen();
       } catch (error) {
@@ -81,12 +106,12 @@ export async function startServer(
       process.once(signal, () => {
         if (shuttingDown) return;
         shuttingDown = true;
-        void closeApp();
+        void closeApps();
       });
     }
   } catch (error) {
     console.error("Could not start the Peridot server.", error);
-    await closeApp().catch(() => undefined);
+    await closeApps().catch(() => undefined);
     process.exitCode = 1;
   }
 }

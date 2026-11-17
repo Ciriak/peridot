@@ -14,10 +14,10 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-Development web: http://localhost:17430. Browser API health is available at
-http://127.0.0.1:17430/api/health through Nuxt's development proxy. A built
-server serves the production SPA, API, audio, and realtime traffic on the same
-port.
+Development web: http://localhost. The web app proxies API and realtime traffic
+to the development server on http://127.0.0.1:17430, where health is directly
+available at http://127.0.0.1:17430/api/health. A built deployment serves the
+web application on port 80 and the API on port 17430.
 Development startup applies the committed Prisma 8 migrations and, when the
 corresponding environment variables are unset, uses `apps/server/peridot.db`
 and creates
@@ -158,10 +158,12 @@ library scanning rather than the separately queued enrichment task.
 
 Build output: `apps/web/.output/public` and `apps/server/dist`. Start the built
 server with `pnpm start`, which applies pending database migrations before
-running `node apps/server/dist/index.js`. The server serves the API and embedded
-web application from one Fastify listener on 17430. Local development runs Nuxt
-HMR on public port 17430 and proxies `/api` to a private Fastify listener on 17431. Set `PERIDOT_SERVE_WEB=false` to intentionally run the built server API
-without serving the web application.
+running `node apps/server/dist/index.js`. The API listener defaults to port
+17430, and a separate embedded web listener defaults to port 80 and proxies
+`/api` including WebSockets and audio ranges to the API. Local development runs
+Nuxt HMR on port 80 and proxies `/api` to Fastify on port 17430. Set
+`PERIDOT_SERVE_WEB=false` to intentionally run the built server API without the
+web listener.
 The web package's standard build runs `nuxt generate` so `.output/public`
 contains the SPA entry and fallback documents required by the embedded server.
 
@@ -393,8 +395,9 @@ backoff, and checks public health only while the socket is unavailable.
 
 ## Configuration
 
-The built server defaults to loopback port 17430. `HOST` and `PORT` configure
-the single Fastify listener; there is no separate web-listener port.
+The built server API defaults to loopback port 17430. `HOST` and `PORT`
+configure the Fastify API listener. `WEB_HOST` and `WEB_PORT` configure the
+embedded web listener, which defaults to the same host on port 80.
 `PERIDOT_WEB_DIST` selects the generated static web directory and defaults to
 `apps/web/.output/public`.
 See apps/server/.env.example for variables required by built server startup.
@@ -753,8 +756,8 @@ To check a message manually: `echo "feat: add library scanning" | pnpm commitlin
 The root `Dockerfile` builds contracts, server output, and the static Nuxt
 application into one Node 24.15 image. Startup applies committed migrations to
 `/data/peridot.db`, with snapshots in `/data/backups`, before launching the
-server. `compose.yaml` exposes only 17430, persists `/data`, mounts music
-read-only at `/music`, and runs the maintained
+server. `compose.yaml` exposes the web app on 80 and the API on 17430, persists
+`/data`, mounts music read-only at `/music`, and runs the maintained
 `nickfedor/watchtower` fork with automatic polling disabled. The API checks the
 public GitHub repository every six hours, but Watchtower is called only when an
 administrator presses Install. The README contains the user-facing installation

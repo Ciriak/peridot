@@ -9,7 +9,7 @@ pnpm desktop:dev
 ```
 
 The Tauri development command applies normal database migrations, starts the
-Nuxt and Fastify servers, then loads `http://127.0.0.1:17430`. It exercises the
+Nuxt and Fastify servers, then loads `http://127.0.0.1`. It exercises the
 same web application, API, realtime connection, and playback path as the
 browser.
 

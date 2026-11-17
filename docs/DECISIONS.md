@@ -1,5 +1,20 @@
 # Decisions
 
+## 2026-11-17: The web app defaults to port 80 and the API to 17430
+
+The browser-facing web application defaults to port 80. A separate embedded
+Fastify web listener serves the generated SPA on that port and proxies `/api`,
+audio ranges, and realtime WebSockets to the API on port 17430. The API listener
+remains API-only. `WEB_HOST` and `WEB_PORT` configure the web listener; `HOST`
+and `PORT` configure the API listener.
+
+Local Nuxt development and the Tauri development window use port 80. Nuxt
+proxies `/api` and realtime traffic to the development Fastify listener on 17430. Onboarding continues to use 17430 for server discovery and direct API
+selection while the same-origin web proxy keeps normal browser traffic on port 80.
+
+Compose publishes web port 80 and API port 17430. This supersedes the
+2026-11-16 decision that served the SPA and API together from one listener on 17430.
+
 ## 2026-11-16: Update checks are public, silent, and client-specific
 
 Peridot uses public GitHub repository and release data for update discovery. No

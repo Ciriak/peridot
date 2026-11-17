@@ -1,6 +1,46 @@
 # Handoff
 
-Last updated: 2026-11-16.
+Last updated: 2026-11-17.
+
+## Web defaults to port 80 and the API remains on 17430
+
+The built server now runs a separate web listener on port 80 and an API-only
+Fastify listener on port 17430. The web listener serves the generated SPA,
+falls back to `200.html` for client routes, and proxies `/api`, audio ranges,
+and realtime WebSockets to the API. `WEB_HOST` and `WEB_PORT` configure the web
+listener; `HOST` and `PORT` continue to configure the API.
+
+Nuxt and Tauri development now load port 80, while the root development command
+runs Fastify on 17430. Nuxt proxies `/api` to that server. Docker and Compose
+publish web port 80 and API port 17430. The image grants the non-root Node
+process permission to bind port 80, and both environment examples document the
+new split.
+
+Checks completed:
+
+- Server suite: 164 passing, including API-only listener boundaries and web
+  proxy coverage for static files, SPA fallback, HEAD ranges, and WebSockets
+- Web suite: 222 passing
+- Desktop config suite: 5 passing
+- Server, web, and desktop tests; server and web type checks
+- Workspace ESLint, Prettier, version synchronization, and migration validation
+- Full workspace build: 6 successful tasks, including web generation, server
+  compilation, and Android debug assembly
+- Built-server smoke test on web port 80: SPA root returned 200 and proxied
+  `/api/health` returned the Peridot signature
+- `docker compose config` resolved published ports 80 and 17430
+- `git diff --check`
+
+Known limits: the Docker daemon is not running, so the image was not rebuilt
+and the Compose stack was not started. A pre-existing user-owned development
+process already owns `127.0.0.1:17430`; it was preserved, so the default API
+port was verified by runtime tests and the API-side smoke test used an
+alternate port. All changes are uncommitted on `feature/auto-updates`; no
+commit, push, tag, publication, or deployment was performed.
+
+Next: rebuild the image and verify both published ports in Compose, then run
+normal development after the existing 17430 listener is stopped by its owner
+to exercise the complete default 80-to-17430 path.
 
 ## Update discovery is automatic but installation is explicit
 
