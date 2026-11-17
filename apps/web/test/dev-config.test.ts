@@ -3,9 +3,10 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 test("Nuxt pre-bundles dependencies discovered by the first onboarding render", async () => {
-  const [source, packageSource] = await Promise.all([
+  const [source, packageSource, rootPackageSource] = await Promise.all([
     readFile(new URL("../nuxt.config.ts", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
+    readFile(new URL("../../../package.json", import.meta.url), "utf8"),
   ]);
   for (const dependency of [
     "@iconify/vue/offline",
@@ -49,6 +50,19 @@ test("Nuxt pre-bundles dependencies discovered by the first onboarding render", 
   assert.match(source, /devProxy:/);
   assert.match(source, /"\/api":\s*\{/);
   assert.match(source, /target: "http:\/\/127\.0\.0\.1:17431\/api"/);
+  const rootPackageJson = JSON.parse(rootPackageSource) as {
+    scripts?: Record<string, string>;
+  };
+  assert.match(
+    rootPackageJson.scripts?.dev ?? "",
+    /cross-env PORT=17431 PERIDOT_SERVE_WEB=false/,
+    "The development API must use the private port targeted by Nuxt's /api proxy",
+  );
+  assert.match(
+    rootPackageJson.scripts?.["dev:server"] ?? "",
+    /cross-env PORT=17431 PERIDOT_SERVE_WEB=false/,
+    "The standalone development API must use the same private proxy port",
+  );
   assert.equal(
     packageJson.scripts?.build,
     "nuxt generate",

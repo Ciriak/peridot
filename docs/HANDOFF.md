@@ -2,6 +2,35 @@
 
 Last updated: 2026-11-17.
 
+## Development `/api` proxy restored
+
+Reported behavior: the development web app stayed on the onboarding pending
+state and `/api` requests never completed. The root `dev` and `dev:server`
+scripts had been changed to start Fastify on public port `17430`, which Nuxt
+already owns. Fastify therefore failed to bind while Nuxt continued proxying
+`/api` to an unserved `17431`, producing the pending requests.
+
+The scripts again start the private development API on `17431`; Nuxt remains
+the public listener on `17430`. The development configuration test now reads
+the root package and verifies that both API scripts use the same private port
+targeted by the Nuxt `/api` proxy.
+
+Checks completed:
+
+- Web suite: 224 passing
+- Targeted web configuration test, ESLint, Prettier, and `git diff --check`
+- Live root, `/onboarding`, `/api/health`, and `/api/auth/status` requests on
+  `17430` returned 200; direct `/api/health` on the private `17431` also
+  returned the Peridot signature
+
+Known limits: full workspace type checks, tests, schema validation, and build
+were not repeated for this development-script and regression-test fix. The
+restored development stack is running locally. The only uncommitted change is
+the regression test; no push, tag, publication, or deployment was performed.
+
+Next: continue using `pnpm dev` at `http://127.0.0.1:17430`; restart it after
+changes to root scripts or Nuxt proxy configuration.
+
 ## Peridot now uses one public port on 17430
 
 The built server again serves the SPA, authenticated API, audio ranges, and
