@@ -1,5 +1,16 @@
 # Decisions
 
+## 2026-11-17: Android app icons use a dark canvas with brand margin
+
+Android launcher icons use `#121312` as an opaque background across legacy and
+adaptive icon paths. The green Peridot mark retains its source artwork margin
+inside that canvas.
+
+Legacy square and circular launcher PNGs contain the background themselves.
+Adaptive icons use the `ic_launcher_background` color resource and a transparent
+foreground scaled on Android's 108 dp canvas. The editable source layers live
+under `apps/android/assets`.
+
 ## 2026-11-17: Playback starts retry three times before failing
 
 The browser player and Android Media3 service make one initial start attempt

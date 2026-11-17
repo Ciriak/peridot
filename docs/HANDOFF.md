@@ -2,6 +2,28 @@
 
 Last updated: 2026-11-17.
 
+## Android launcher icon uses a dark canvas and margin
+
+The Android launcher icon now places the green Peridot mark on a `#121312`
+background with visible margin. Legacy square and circular PNGs include the
+opaque background, while Android 8+ adaptive icons use the background color
+resource with a transparent foreground. Editable foreground and full-icon SVG
+sources were added under `apps/android/assets`.
+
+Checks completed:
+
+- Android lint and debug resource compilation
+- PNG dimension, opacity, background color, and artwork-bound inspection at
+  every retained launcher density
+- `git diff --check`
+
+Known limits: launcher appearance was not inspected on a physical Android
+device or emulator. The change remains uncommitted on `dev`; no commit, push,
+tag, publication, or deployment was performed.
+
+Next: install the debug build on devices using square, circular, and themed
+launcher masks to confirm the margin visually.
+
 ## Playback start retries three times
 
 The browser player and Android Media3 service now retry a track start up to
