@@ -5,6 +5,8 @@ import { test } from "node:test";
 import type {
   AlbumListResponse,
   ArtistListResponse,
+  AudiobookListResponse,
+  PodcastListResponse,
   TrackListResponse,
 } from "@peridot/contracts";
 import { CatalogService } from "../src/catalog.js";
@@ -150,6 +152,123 @@ test("catalog endpoints page tracks, albums, artists, search, and likes", async 
         .items.map((track) => track.id),
       [page.items[2]!.id, page.items[0]!.id],
     );
+  } finally {
+    await context.close();
+  }
+});
+
+test("scoped catalog search filters each media collection before paging", async () => {
+  const context = await createTestContext();
+  try {
+    const files = [
+      {
+        filename: "calm.mp3",
+        title: "Calm Harbor",
+        artist: "Mira North",
+        album: "Calm Waters",
+      },
+      {
+        filename: "journey.mp3",
+        title: "Journey North",
+        artist: "Ada Reader",
+        album: "Journey North",
+        releaseTypes: ["Audiobook"],
+      },
+      {
+        filename: "studio.mp3",
+        title: "Studio Notes",
+        artist: "Pat Host",
+        album: "Studio Notes",
+        podcast: true,
+      },
+    ];
+    for (const file of files) {
+      const { filename, ...tags } = file;
+      await writeFile(
+        path.join(context.libraryRoot, filename),
+        createTaggedMp3({
+          ...tags,
+          discNumber: 1,
+          trackNumber: 1,
+        }),
+      );
+    }
+    const scan = await startScan(context);
+    assert.equal(scan.status, "completed");
+
+    const albums = (
+      await context.app.inject({
+        method: "GET",
+        url: "/api/albums?query=calm",
+        headers: context.authorization,
+      })
+    ).json<AlbumListResponse>();
+    assert.equal(albums.totalCount, 1);
+    assert.equal(albums.items[0]?.title, "Calm Waters");
+
+    const albumsByArtist = (
+      await context.app.inject({
+        method: "GET",
+        url: "/api/albums?query=mira%20north",
+        headers: context.authorization,
+      })
+    ).json<AlbumListResponse>();
+    assert.equal(albumsByArtist.totalCount, 1);
+    assert.equal(albumsByArtist.items[0]?.id, albums.items[0]?.id);
+
+    const artists = (
+      await context.app.inject({
+        method: "GET",
+        url: "/api/artists?query=north",
+        headers: context.authorization,
+      })
+    ).json<ArtistListResponse>();
+    assert.equal(artists.totalCount, 1);
+    assert.equal(artists.items[0]?.name, "Mira North");
+
+    const audiobooks = (
+      await context.app.inject({
+        method: "GET",
+        url: "/api/audiobooks?query=ada",
+        headers: context.authorization,
+      })
+    ).json<AudiobookListResponse>();
+    assert.equal(audiobooks.totalCount, 1);
+    assert.equal(audiobooks.items[0]?.title, "Journey North");
+
+    const podcasts = (
+      await context.app.inject({
+        method: "GET",
+        url: "/api/podcasts?query=pat",
+        headers: context.authorization,
+      })
+    ).json<PodcastListResponse>();
+    assert.equal(podcasts.totalCount, 1);
+    assert.equal(podcasts.items[0]?.title, "Studio Notes");
+
+    const music = (
+      await context.app.inject({
+        method: "GET",
+        url: "/api/tracks?query=harbor",
+        headers: context.authorization,
+      })
+    ).json<TrackListResponse>();
+    assert.equal(music.totalCount, 1);
+    await context.app.inject({
+      method: "POST",
+      url: "/api/likes",
+      headers: context.authorization,
+      payload: { kind: "track", trackId: music.items[0]!.id },
+    });
+    const liked = (
+      await context.app.inject({
+        method: "GET",
+        url: "/api/tracks?liked=true&query=harbor",
+        headers: context.authorization,
+      })
+    ).json<TrackListResponse>();
+    assert.equal(liked.totalCount, 1);
+    assert.equal(liked.items[0]?.id, music.items[0]?.id);
   } finally {
     await context.close();
   }

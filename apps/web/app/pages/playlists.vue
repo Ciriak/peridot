@@ -6,8 +6,10 @@ import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { onMounted, ref } from "vue";
 import AutoLoadMore from "../components/AutoLoadMore.vue";
+import ListSearchBar from "../components/ListSearchBar.vue";
 import PlaylistCard from "../components/PlaylistCard.vue";
 import PlaylistNameDialog from "../components/PlaylistNameDialog.vue";
+import { useListSearch } from "../composables/use-list-search";
 import {
   usePlaylistActions,
   usePlaylistList,
@@ -17,6 +19,7 @@ import { icons } from "../lib/icons";
 const { t } = useI18n();
 useHead({ title: t("page.playlists.title") });
 
+const { query, searchQuery, clear } = useListSearch();
 const {
   items,
   totalCount,
@@ -27,7 +30,7 @@ const {
   error,
   load,
   loadMore,
-} = usePlaylistList(50);
+} = usePlaylistList({ limit: 50, query: searchQuery });
 const actions = usePlaylistActions();
 const createOpen = ref(false);
 const creating = ref(false);
@@ -52,10 +55,21 @@ onMounted(() => void load());
 
 <template>
   <div class="flex flex-wrap items-start justify-between gap-4">
-    <div class="space-y-2">
+    <div class="flex min-w-0 flex-1 flex-wrap items-center gap-4">
       <h1 class="text-2xl font-semibold tracking-tight">
         {{ t("navigation.playlists") }}
       </h1>
+      <ListSearchBar
+        v-model="query"
+        :label="
+          t('components.listSearch.label', {
+            collection: t('navigation.playlists'),
+          })
+        "
+        :clear-label="t('components.listSearch.clear')"
+        class="w-full md:max-w-sm"
+        @clear="clear"
+      />
     </div>
     <Button @click="createOpen = true">
       <Icon :icon="icons.plus" aria-hidden="true" class="size-4" />
@@ -108,6 +122,13 @@ onMounted(() => void load());
         @load="loadMore"
       />
     </div>
+    <p
+      v-else-if="loaded && searchQuery"
+      role="status"
+      class="rounded-lg border p-6 text-sm text-muted-foreground"
+    >
+      {{ t("page.playlists.noMatches") }}
+    </p>
     <div
       v-else-if="loaded"
       class="space-y-4 rounded-lg border bg-card p-6 text-card-foreground"

@@ -19,6 +19,7 @@ import type {
   PlaylistRow,
   TrackRow,
 } from "./prisma/models.js";
+import { normalizeSearchText, searchTerms } from "./search-text.js";
 import { effectiveTrackFields, toTrackResponse } from "./track-response.js";
 
 const MAX_PLAYLIST_NAME_LENGTH = 120;
@@ -36,6 +37,7 @@ interface PlaylistListQuery {
   limit?: string;
   offset?: string;
   trackId?: string;
+  query?: string;
 }
 
 function normalizeName(value: unknown): string | null {
@@ -337,19 +339,41 @@ export async function registerPlaylistRoutes(
         );
       }
       const userId = request.authenticatedUser!.id;
-      const [playlists, aggregate] = await Promise.all([
-        database.orm.Playlist.where({ userId })
+      const terms = searchTerms([request.query.query]);
+      let playlists: PlaylistRow[];
+      let totalCount: number;
+      if (terms.length) {
+        const orderedPlaylists = await database.orm.Playlist.where({
+          userId,
+        })
           .orderBy([
             (playlist) => playlist.updatedAt.desc(),
             (playlist) => playlist.id.desc(),
           ])
-          .offset(offset)
-          .limit(limit)
-          .all(),
-        database.orm.Playlist.where({ userId }).aggregate((value) => ({
-          count: value.count(),
-        })),
-      ]);
+          .all();
+        const matchingPlaylists = orderedPlaylists.filter((playlist) => {
+          const name = normalizeSearchText(playlist.name);
+          return terms.every((term) => name.includes(term));
+        });
+        totalCount = matchingPlaylists.length;
+        playlists = matchingPlaylists.slice(offset, offset + limit);
+      } else {
+        const [page, aggregate] = await Promise.all([
+          database.orm.Playlist.where({ userId })
+            .orderBy([
+              (playlist) => playlist.updatedAt.desc(),
+              (playlist) => playlist.id.desc(),
+            ])
+            .offset(offset)
+            .limit(limit)
+            .all(),
+          database.orm.Playlist.where({ userId }).aggregate((value) => ({
+            count: value.count(),
+          })),
+        ]);
+        playlists = page;
+        totalCount = aggregate.count;
+      }
       const details = await Promise.all(
         playlists.map((playlist) =>
           materializePlaylist(
@@ -363,11 +387,9 @@ export async function registerPlaylistRoutes(
       );
       return {
         items: details.map(summaryFromDetail),
-        totalCount: aggregate.count,
+        totalCount,
         nextOffset:
-          offset + details.length < aggregate.count
-            ? offset + details.length
-            : null,
+          offset + details.length < totalCount ? offset + details.length : null,
       };
     },
   );

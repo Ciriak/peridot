@@ -184,6 +184,57 @@ test("playlists support owner CRUD and stay private", async () => {
   }
 });
 
+test("playlist list search filters names before pagination", async () => {
+  const context = await createTestContext();
+  try {
+    for (const name of ["Road One", "Road Two", "Road Three", "Grüne Reise"]) {
+      await createPlaylist(context, context.authorization, name);
+    }
+
+    const firstPage = await context.app.inject({
+      method: "GET",
+      url: "/api/playlists?query=road&limit=1",
+      headers: context.authorization,
+    });
+    assert.equal(firstPage.statusCode, 200);
+    const first = firstPage.json<PlaylistListResponse>();
+    assert.equal(first.totalCount, 3);
+    assert.equal(first.items.length, 1);
+    assert.equal(first.nextOffset, 1);
+
+    const secondPage = await context.app.inject({
+      method: "GET",
+      url: "/api/playlists?query=road&limit=1&offset=1",
+      headers: context.authorization,
+    });
+    assert.equal(secondPage.statusCode, 200);
+    const second = secondPage.json<PlaylistListResponse>();
+    assert.equal(second.totalCount, 3);
+    assert.equal(second.items.length, 1);
+    assert.equal(second.nextOffset, 2);
+
+    const accented = await context.app.inject({
+      method: "GET",
+      url: "/api/playlists?query=grune",
+      headers: context.authorization,
+    });
+    assert.equal(accented.statusCode, 200);
+    const normalized = accented.json<PlaylistListResponse>();
+    assert.equal(normalized.totalCount, 1);
+    assert.equal(normalized.items[0]?.name, "Grüne Reise");
+
+    const blank = await context.app.inject({
+      method: "GET",
+      url: "/api/playlists?query=%20",
+      headers: context.authorization,
+    });
+    assert.equal(blank.statusCode, 200);
+    assert.equal(blank.json<PlaylistListResponse>().totalCount, 4);
+  } finally {
+    await context.close();
+  }
+});
+
 test("playlist items append, deduplicate, reorder, and compact after removal", async () => {
   const context = await createTestContext();
   try {

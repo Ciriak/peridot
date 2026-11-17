@@ -946,6 +946,7 @@ export interface PlaylistListOptions {
   limit?: number;
   offset?: number;
   trackId?: string;
+  query?: string;
 }
 
 export function listPlaylists(
@@ -959,6 +960,7 @@ export function listPlaylists(
     params.set("offset", String(options.offset));
   }
   if (options.trackId) params.set("trackId", options.trackId);
+  if (options.query) params.set("query", options.query);
   const suffix = params.size ? `?${params.toString()}` : "";
   return authenticatedRequestJson<PlaylistListResponse>(
     serverAddress,

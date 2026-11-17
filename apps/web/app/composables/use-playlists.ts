@@ -35,26 +35,32 @@ import { useLocalizedMessage } from "./use-localized-message";
 import { useQueryScope } from "./use-query-scope";
 import { useSession } from "./use-session";
 
-export function usePlaylistList(
-  limit = 50,
-  trackId?: MaybeRefOrGetter<string | null>,
-) {
+interface PlaylistListQueryOptions {
+  limit?: number;
+  trackId?: MaybeRefOrGetter<string | null>;
+  query?: MaybeRefOrGetter<string | null | undefined>;
+}
+
+export function usePlaylistList(options: PlaylistListQueryOptions = {}) {
+  const limit = options.limit ?? 50;
   const { scope } = useQueryScope();
   const { token } = useSession();
   const { errorMessage } = useLocalizedMessage();
-  const targetTrackId = computed(() => toValue(trackId) || undefined);
+  const targetTrackId = computed(() =>
+    options.trackId ? toValue(options.trackId) || undefined : undefined,
+  );
+  const targetQuery = computed(() =>
+    options.query ? toValue(options.query)?.trim() || undefined : undefined,
+  );
+  const listOptions = computed(() => ({
+    limit,
+    ...(targetTrackId.value ? { trackId: targetTrackId.value } : {}),
+    ...(targetQuery.value ? { query: targetQuery.value } : {}),
+  }));
   const queryKey = computed<QueryKey>(() =>
     scope.value
-      ? queryKeys.playlists(scope.value, {
-          limit,
-          trackId: targetTrackId.value,
-        })
-      : [
-          "peridot",
-          "unscoped",
-          "playlists",
-          { limit, trackId: targetTrackId.value },
-        ],
+      ? queryKeys.playlists(scope.value, listOptions.value)
+      : ["peridot", "unscoped", "playlists", listOptions.value],
   );
   const query = useInfiniteQuery<
     PlaylistListResponse,
@@ -69,9 +75,8 @@ export function usePlaylistList(
         throw new Error("Peridot query scope is unavailable.");
       }
       return listPlaylists(scope.value.serverAddress, token.value, {
-        limit,
+        ...listOptions.value,
         offset: pageParam,
-        trackId: targetTrackId.value,
       });
     },
     initialPageParam: 0,

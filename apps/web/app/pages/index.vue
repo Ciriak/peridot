@@ -71,7 +71,7 @@ const {
   error: playlistsError,
   loaded: playlistsLoaded,
   load: loadPlaylists,
-} = usePlaylistList(HOME_PREVIEW_LIMIT);
+} = usePlaylistList({ limit: HOME_PREVIEW_LIMIT });
 
 const suggestedAlbums = computed(() =>
   selectHomeAlbumSuggestions({

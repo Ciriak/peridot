@@ -6,12 +6,15 @@ import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { onMounted } from "vue";
 import ArtistCard from "../../components/ArtistCard.vue";
 import AutoLoadMore from "../../components/AutoLoadMore.vue";
+import ListSearchBar from "../../components/ListSearchBar.vue";
 import { useCatalogArtistQuery } from "../../composables/use-catalog-query";
+import { useListSearch } from "../../composables/use-list-search";
 import { useLikes } from "../../composables/use-likes";
 
 const { t } = useI18n();
 useHead({ title: t("page.artists.title") });
 
+const { query, searchQuery, clear } = useListSearch();
 const {
   items: artists,
   loading,
@@ -22,7 +25,10 @@ const {
   totalCount,
   load,
   loadMore,
-} = useCatalogArtistQuery();
+} = useCatalogArtistQuery(() => ({
+  query: searchQuery.value || undefined,
+  sort: "name",
+}));
 const { load: loadLikes } = useLikes();
 
 onMounted(() => {
@@ -32,10 +38,21 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="space-y-2">
+  <div class="flex flex-wrap items-center gap-4">
     <h1 class="text-2xl font-semibold tracking-tight">
       {{ t("navigation.artists") }}
     </h1>
+    <ListSearchBar
+      v-model="query"
+      :label="
+        t('components.listSearch.label', {
+          collection: t('navigation.artists'),
+        })
+      "
+      :clear-label="t('components.listSearch.clear')"
+      class="w-full md:max-w-sm"
+      @clear="clear"
+    />
   </div>
   <section aria-labelledby="artists-heading" class="space-y-4">
     <div class="flex flex-wrap items-center gap-2">
@@ -85,7 +102,9 @@ onMounted(() => {
       class="rounded-lg border p-6 text-sm text-muted-foreground"
     >
       <template v-if="loaded">
-        {{ t("page.artists.empty") }}
+        {{
+          searchQuery ? t("page.artists.noMatches") : t("page.artists.empty")
+        }}
       </template>
       <template v-else>{{ t("page.artists.loading") }}…</template>
     </p>

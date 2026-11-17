@@ -2,6 +2,39 @@
 
 Last updated: 2026-11-17.
 
+## Library lists have title-adjacent scoped search
+
+Albums, Artists, Audiobooks, Podcasts, Playlists, and Liked songs now show a
+clearable quick-search field immediately beside the page title. Input is
+trimmed and applied after 250 ms, while clearing applies immediately. On narrow
+screens the field wraps below the title.
+
+Catalog pages pass the deferred term through their existing server-backed,
+paginated queries. Liked songs retains the liked and sort filters. Playlist
+search adds `GET /api/playlists?query=` and matches normalized name terms before
+pagination, so filtered totals remain exact without a database migration.
+Filtered no-match copy is distinct from an empty library.
+
+Checks completed:
+
+- Full server suite: 175 passing, including scoped media and playlist search
+- Full web suite: 232 passing, including title adjacency, debounce, clear, and
+  no-match behavior
+- Workspace typecheck: 7 successful tasks
+- Workspace lint, schema validation, and production build: 6 successful build
+  tasks across contracts, server, web, desktop, and Android
+- Targeted Prettier and `git diff --check`
+
+Known limits: browser visual QA was not run. Playlist search normalizes the
+current user's playlist rows before paging, which is linear in that user's
+playlist count; no schema or migration was added. Repository-wide
+`pnpm format:check` still reports the pre-existing unmodified
+`apps/desktop/src-tauri/tauri.conf.json`. All changes remain uncommitted on
+`dev`; no commit, push, tag, publication, or deployment was performed.
+
+Next: visually verify title-adjacent placement at desktop and mobile widths,
+then resolve the unrelated Desktop formatting warning separately.
+
 ## Server Settings restores log history after restart
 
 The server now restores the latest 500 structured entries from `peridot.log`
@@ -23,9 +56,9 @@ Checks completed:
 
 Known limits: recovery loads the latest 500 structured records, not the entire
 retained file. Reading the complete retained history still requires direct
-access to `peridot.log`. The first implementation is committed on `dev` as
-`e4930f4`; startup retention ordering and formatter follow-ups are uncommitted.
-No push, tag, publication, or deployment was performed.
+access to `peridot.log`. The implementation is committed on `dev` as
+`e4930f4`, with startup retention ordering and formatter follow-ups in
+`cc450e7`. No push, tag, publication, or deployment was performed.
 
 Next: confirm the recovered history in a live development restart with an
 existing `apps/server/peridot.log`.

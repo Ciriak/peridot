@@ -30,10 +30,10 @@ const emit = defineEmits<{
   "update:open": [open: boolean];
 }>();
 const { t } = useI18n();
-const { items, loading, error, load } = usePlaylistList(
-  100,
-  () => props.track.id,
-);
+const { items, loading, error, load } = usePlaylistList({
+  limit: 100,
+  trackId: () => props.track.id,
+});
 const actions = usePlaylistActions();
 const pendingPlaylistId = ref("");
 const actionError = ref<string | null>(null);

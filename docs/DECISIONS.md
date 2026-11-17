@@ -1,5 +1,22 @@
 # Decisions
 
+## 2026-11-17: Library list pages have scoped quick search
+
+Albums, Artists, Audiobooks, Podcasts, Playlists, and Liked songs each provide
+a search field immediately beside the page title. The field is transient page
+state, applies after a 250 ms debounce, and is independent of the global
+`Ctrl/Cmd+K` library search.
+
+Scoped catalog searches use the existing server filters so results, exact
+counts, availability, and pagination cover the complete collection rather than
+only rows already loaded in the browser. Playlist names use the same normalized
+token matching as catalog text and are filtered before offset/limit paging. This
+avoids a schema change while preserving exact playlist totals.
+
+Filtered empty states say that no item matches the search; library-level empty
+states remain unchanged. Search values are not written to the URL and reset
+when the page is left or reloaded.
+
 ## 2026-11-17: Server log history is restored from the persistent JSON file
 
 At server startup, Peridot streams `peridot.log` and restores the latest 500

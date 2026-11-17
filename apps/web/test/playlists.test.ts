@@ -127,7 +127,7 @@ test("playlist pages expose creation, unavailable tracks, editing, likes, and of
       ),
     ]);
 
-  assert.match(index, /usePlaylistList\(HOME_PREVIEW_LIMIT\)/);
+  assert.match(index, /usePlaylistList\(\{ limit: HOME_PREVIEW_LIMIT \}\)/);
   assert.match(index, /<PlaylistCard/);
   assert.doesNotMatch(index, /page\.home\.comingSoon/);
   assert.match(listPage, /<PlaylistNameDialog/);

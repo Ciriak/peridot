@@ -26,6 +26,10 @@ import { message } from "./messages.js";
 import type { PlaybackTokenService } from "./playback-tokens.js";
 import type { ArtistImageRow, ArtistMetadataRow } from "./prisma/models.js";
 import {
+  normalizeSearchText as normalize,
+  searchTerms,
+} from "./search-text.js";
+import {
   albumReleaseYear,
   effectiveTrackFields,
   toCoverUrl,
@@ -131,10 +135,6 @@ interface CardPageOptions {
 
 export type CatalogChangedPublisher = (change: CatalogChange) => void;
 
-function normalize(value: string): string {
-  return value.normalize("NFKD").replace(/\p{M}/gu, "").trim().toLowerCase();
-}
-
 function stableId(prefix: string, value: string): string {
   return `${prefix}_${createHash("sha256").update(value).digest("hex").slice(0, 28)}`;
 }
@@ -186,20 +186,6 @@ export function catalogAlbumId(identity: CatalogAlbumIdentity): string {
 
 export function catalogArtistId(name: string): string {
   return stableId("artist", normalize(name));
-}
-
-function searchTerms(values: readonly (string | null | undefined)[]): string[] {
-  return [
-    ...new Set(
-      values
-        .filter((value): value is string => Boolean(value))
-        .flatMap((value) =>
-          normalize(value)
-            .split(/[^\p{L}\p{N}]+/u)
-            .filter((term) => term.length > 0),
-        ),
-    ),
-  ].slice(0, 64);
 }
 
 function uniqueArtistCredits(values: readonly string[]): string[] {
