@@ -19,9 +19,9 @@ import type {
 } from '@prisma/orm-sqlite/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'5e5cd62452bcf2b23307a87be75af60e40feb17f74db5bb4e4093dc3a1a4219a'>;
+  StorageHashBase<'05ef14e09055a1e89fe0d4263fdfa341825af094253dfc0fc2cb819591ad0427'>;
 export type ExecutionHash =
-  ExecutionHashBase<'69abe59ddf12aaa78738519fa294ac279958f3b4caa4e85b2cb8fd0effde430a'>;
+  ExecutionHashBase<'b8742140c70062f86caa6d72cafc965dc42172098c5fb9a906ef71c33c37e56b'>;
 export type ProfileHash =
   ProfileHashBase<'260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53'>;
 
@@ -363,6 +363,15 @@ export namespace Models {
     updatedAt: FieldOutputTypes['__unbound__']['MetadataProvider']['updatedAt'];
     readonly [RelationKeys]?: never;
   };
+  export type PasswordResetToken = {
+    createdAt: FieldOutputTypes['__unbound__']['PasswordResetToken']['createdAt'];
+    expiresAt: FieldOutputTypes['__unbound__']['PasswordResetToken']['expiresAt'];
+    id: FieldOutputTypes['__unbound__']['PasswordResetToken']['id'];
+    tokenHash: FieldOutputTypes['__unbound__']['PasswordResetToken']['tokenHash'];
+    userId: FieldOutputTypes['__unbound__']['PasswordResetToken']['userId'];
+    user: User;
+    readonly [RelationKeys]?: 'user';
+  };
   export type Playlist = {
     createdAt: FieldOutputTypes['__unbound__']['Playlist']['createdAt'];
     id: FieldOutputTypes['__unbound__']['Playlist']['id'];
@@ -585,6 +594,7 @@ export declare const models: {
   CatalogTrack: Models.CatalogTrack;
   CatalogTrackArtist: Models.CatalogTrackArtist;
   MetadataProvider: Models.MetadataProvider;
+  PasswordResetToken: Models.PasswordResetToken;
   Playlist: Models.Playlist;
   PlaylistItem: Models.PlaylistItem;
   PlaylistLike: Models.PlaylistLike;
@@ -1617,6 +1627,71 @@ type ContractBase = Omit<
                 },
               ];
               foreignKeys: readonly [];
+            };
+            readonly PasswordResetToken: {
+              columns: {
+                readonly createdAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                  readonly many: false;
+                };
+                readonly expiresAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly id: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly tokenHash: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly userId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [{ readonly columns: readonly ['tokenHash'] }];
+              indexes: readonly [
+                {
+                  readonly name: 'PasswordResetToken_expiresAt_idx_6b6b8c10';
+                  readonly prefix: 'PasswordResetToken_expiresAt_idx';
+                  readonly columns: readonly ['expiresAt'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'PasswordResetToken_userId_idx_a489d58a';
+                  readonly prefix: 'PasswordResetToken_userId_idx';
+                  readonly columns: readonly ['userId'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'PasswordResetToken';
+                    readonly columns: readonly ['userId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'User';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+              ];
             };
             readonly Playlist: {
               columns: {
@@ -3159,6 +3234,10 @@ type ContractBase = Omit<
       readonly namespace: '__unbound__' & NamespaceId;
       readonly model: 'MetadataProvider';
     };
+    readonly PasswordResetToken: {
+      readonly namespace: '__unbound__' & NamespaceId;
+      readonly model: 'PasswordResetToken';
+    };
     readonly Playlist: {
       readonly namespace: '__unbound__' & NamespaceId;
       readonly model: 'Playlist';
@@ -3923,6 +4002,55 @@ type ContractBase = Omit<
                 readonly name: { readonly column: 'name' };
                 readonly position: { readonly column: 'position' };
                 readonly updatedAt: { readonly column: 'updatedAt' };
+              };
+            };
+          };
+          readonly PasswordResetToken: {
+            readonly fields: {
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly expiresAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly tokenHash: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly userId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+            };
+            readonly relations: {
+              readonly user: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'User';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['userId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'PasswordResetToken';
+              readonly namespaceId: '__unbound__';
+              readonly fields: {
+                readonly createdAt: { readonly column: 'createdAt' };
+                readonly expiresAt: { readonly column: 'expiresAt' };
+                readonly id: { readonly column: 'id' };
+                readonly tokenHash: { readonly column: 'tokenHash' };
+                readonly userId: { readonly column: 'userId' };
               };
             };
           };
@@ -5176,6 +5304,14 @@ type ContractBase = Omit<
           readonly ref: {
             readonly entry: 'MetadataProvider';
             readonly field: 'updatedAt';
+            readonly namespace: '__unbound__';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'PasswordResetToken';
+            readonly field: 'id';
             readonly namespace: '__unbound__';
           };
         },

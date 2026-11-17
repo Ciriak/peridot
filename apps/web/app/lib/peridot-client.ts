@@ -11,6 +11,7 @@ import type {
   ArtistMetadataCandidateListResponse,
   AuthSessionResponse,
   AuthStatusResponse,
+  CompletePasswordResetRequest,
   CreateMetadataProviderRequest,
   CreatePlaylistRequest,
   CreateSourceRequest,
@@ -30,6 +31,8 @@ import type {
   MetadataProviderDefinitionListResponse,
   MetadataProviderListResponse,
   MetadataProviderResponse,
+  PasswordResetRequest,
+  PasswordResetRequestResponse,
   PlaylistDetailResponse,
   PlaylistListResponse,
   PodcastListResponse,
@@ -269,6 +272,34 @@ export function createUserSession(
     method: "POST",
     body: JSON.stringify(credentials),
   });
+}
+
+export function requestPasswordReset(
+  serverAddress: string,
+  request: PasswordResetRequest,
+) {
+  return requestJson<PasswordResetRequestResponse>(
+    serverAddress,
+    "/api/auth/password-resets",
+    {
+      method: "POST",
+      body: JSON.stringify(request),
+    },
+  );
+}
+
+export function completePasswordReset(
+  serverAddress: string,
+  reset: CompletePasswordResetRequest,
+) {
+  return requestJson<void>(
+    serverAddress,
+    "/api/auth/password-resets/complete",
+    {
+      method: "POST",
+      body: JSON.stringify(reset),
+    },
+  );
 }
 
 export function updateUserProfile(

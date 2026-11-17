@@ -218,7 +218,11 @@ export async function buildApp(options: BuildAppOptions = {}) {
   });
   await registerLocalDiscoveryRoute(app);
   await registerRealtimeSocket(app, realtime, config.webOrigins);
-  await registerAuthRoutes(app, database);
+  await registerAuthRoutes(app, database, (sessionIds) => {
+    for (const sessionId of sessionIds) {
+      realtime.disconnectSession(sessionId);
+    }
+  });
   await catalog.initialize();
   const initialServerSettings = await ensureServerSettings(
     database,

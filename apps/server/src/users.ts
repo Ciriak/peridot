@@ -255,6 +255,11 @@ export async function updateManagedUser(
     if (sessions.length) {
       await transaction.orm.Session.where({ userId: target.id }).delete();
     }
+    if (identityChanged) {
+      await transaction.orm.PasswordResetToken.where({
+        userId: target.id,
+      }).delete();
+    }
 
     const updated = await transaction.orm.User.where({
       id: target.id,

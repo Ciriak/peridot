@@ -52,6 +52,19 @@ export interface AuthSessionResponse {
   user: UserResponse;
 }
 
+export interface PasswordResetRequest {
+  email: string;
+}
+
+export interface PasswordResetRequestResponse {
+  status: "requested";
+}
+
+export interface CompletePasswordResetRequest {
+  token: string;
+  password: string;
+}
+
 export interface TrackReference {
   id: string;
   title: string;

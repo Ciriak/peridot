@@ -24,10 +24,12 @@ import { useSession } from "../composables/use-session";
 import { useUser } from "../composables/use-user";
 import { useLocalizedMessage } from "../composables/use-localized-message";
 import {
+  completePasswordReset,
   createAdministrator,
   createUserSession,
   discoverLocalServers,
   fetchAuthStatus,
+  requestPasswordReset,
   type DiscoveredServer,
 } from "../lib/peridot-client";
 import {
@@ -56,16 +58,31 @@ const opensAccountStep =
   Boolean(address.value);
 const step = ref<"server" | "account">(opensAccountStep ? "account" : "server");
 const requiresAdminUser = ref(false);
+const accountView = ref<"credentials" | "recovery-request" | "recovery-reset">(
+  "credentials",
+);
 const email = ref("");
 const displayName = ref("");
 const password = ref("");
 const confirmPassword = ref("");
+const recoveryEmail = ref("");
+const recoveryToken = ref("");
+const resetPassword = ref("");
+const resetPasswordConfirmation = ref("");
+const accountNotice = ref("");
+const recoveryNotice = ref("");
 const error = ref("");
 const loading = ref(false);
 const confirmationError = computed(() =>
   requiresAdminUser.value &&
   confirmPassword.value.length > 0 &&
   password.value !== confirmPassword.value
+    ? t("onboarding.passwordsMismatch")
+    : "",
+);
+const recoveryConfirmationError = computed(() =>
+  resetPasswordConfirmation.value.length > 0 &&
+  resetPassword.value !== resetPasswordConfirmation.value
     ? t("onboarding.passwordsMismatch")
     : "",
 );
@@ -253,12 +270,82 @@ async function finishOnboarding() {
   }
 }
 
+function beginPasswordResetRequest() {
+  error.value = "";
+  accountNotice.value = "";
+  recoveryNotice.value = "";
+  recoveryEmail.value = email.value;
+  accountView.value = "recovery-request";
+}
+
+function beginRecoveryCodeEntry() {
+  error.value = "";
+  accountNotice.value = "";
+  recoveryNotice.value = "";
+  accountView.value = "recovery-reset";
+}
+
+function returnToSignIn() {
+  error.value = "";
+  recoveryNotice.value = "";
+  recoveryToken.value = "";
+  resetPassword.value = "";
+  resetPasswordConfirmation.value = "";
+  accountView.value = "credentials";
+}
+
+async function requestPasswordRecovery() {
+  error.value = "";
+  loading.value = true;
+  try {
+    await requestPasswordReset(selectedAddress.value, {
+      email: recoveryEmail.value,
+    });
+    email.value = recoveryEmail.value;
+    recoveryNotice.value = t("onboarding.recoveryRequested");
+    accountView.value = "recovery-reset";
+  } catch (reason) {
+    error.value = errorMessage(reason, "onboarding.recoveryRequestError");
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function finishPasswordRecovery() {
+  error.value = "";
+  if (resetPassword.value !== resetPasswordConfirmation.value) {
+    error.value = t("onboarding.passwordsMismatch");
+    return;
+  }
+  loading.value = true;
+  try {
+    await completePasswordReset(selectedAddress.value, {
+      token: recoveryToken.value,
+      password: resetPassword.value,
+    });
+    email.value = recoveryEmail.value;
+    accountNotice.value = t("onboarding.passwordResetSuccess");
+    returnToSignIn();
+  } catch (reason) {
+    error.value = errorMessage(reason, "onboarding.passwordResetError");
+  } finally {
+    loading.value = false;
+  }
+}
+
 function changeServer() {
   error.value = "";
+  accountNotice.value = "";
+  recoveryNotice.value = "";
   email.value = "";
   displayName.value = "";
   password.value = "";
   confirmPassword.value = "";
+  recoveryEmail.value = "";
+  recoveryToken.value = "";
+  resetPassword.value = "";
+  resetPasswordConfirmation.value = "";
+  accountView.value = "credentials";
   user.value = null;
   step.value = "server";
   if (androidRuntime) {
@@ -285,18 +372,22 @@ function changeServer() {
           {{
             step === "server"
               ? t("onboarding.serverHeading")
-              : requiresAdminUser
-                ? t("onboarding.adminHeading")
-                : t("onboarding.loginHeading")
+              : accountView !== "credentials"
+                ? t("onboarding.recoveryHeading")
+                : requiresAdminUser
+                  ? t("onboarding.adminHeading")
+                  : t("onboarding.loginHeading")
           }}
         </h1>
         <p class="text-sm text-muted-foreground">
           {{
             step === "server"
               ? t("onboarding.serverDescription")
-              : requiresAdminUser
-                ? t("onboarding.adminDescription")
-                : t("onboarding.loginDescription")
+              : accountView !== "credentials"
+                ? t("onboarding.recoveryDescription")
+                : requiresAdminUser
+                  ? t("onboarding.adminDescription")
+                  : t("onboarding.loginDescription")
           }}
         </p>
       </div>
@@ -388,125 +479,314 @@ function changeServer() {
           {{ error }}
         </p>
       </div>
-      <form v-else class="space-y-4" @submit.prevent="finishOnboarding">
-        <div class="space-y-2">
-          <label for="email" class="text-sm font-medium">{{
-            t("onboarding.email")
-          }}</label>
-          <Input
-            id="email"
-            v-model="email"
-            type="email"
-            autocomplete="email"
-            required
-            maxlength="254"
-          />
-        </div>
-        <div v-if="requiresAdminUser" class="space-y-2">
-          <label for="display-name" class="text-sm font-medium">
-            {{ t("onboarding.displayName") }}
-          </label>
-          <Input
-            id="display-name"
-            v-model="displayName"
-            autocomplete="nickname"
-            required
-            minlength="2"
-            maxlength="80"
-            aria-describedby="display-name-help"
-          />
-          <p id="display-name-help" class="text-xs text-muted-foreground">
-            {{ t("onboarding.displayNameHelp") }}
-          </p>
-        </div>
-        <div class="space-y-2">
-          <label for="password" class="text-sm font-medium">{{
-            t("onboarding.password")
-          }}</label>
-          <Input
-            id="password"
-            v-model="password"
-            type="password"
-            :autocomplete="
-              requiresAdminUser ? 'new-password' : 'current-password'
-            "
-            required
-            :minlength="requiresAdminUser ? 12 : undefined"
-            :aria-invalid="Boolean(error)"
-            :aria-describedby="error ? 'account-error' : undefined"
-          />
-          <p v-if="requiresAdminUser" class="text-xs text-muted-foreground">
-            {{ t("onboarding.passwordHelp") }}
-          </p>
-        </div>
-        <div v-if="requiresAdminUser" class="space-y-2">
-          <label for="confirm-password" class="text-sm font-medium">
-            {{ t("onboarding.confirmPassword") }}
-          </label>
-          <Input
-            id="confirm-password"
-            v-model="confirmPassword"
-            type="password"
-            autocomplete="new-password"
-            required
-            minlength="12"
-            :aria-invalid="Boolean(confirmationError)"
-            :aria-describedby="
-              confirmationError
-                ? 'confirm-password-error'
-                : 'confirm-password-help'
-            "
-          />
+      <template v-else>
+        <form
+          v-if="accountView === 'credentials'"
+          class="space-y-4"
+          @submit.prevent="finishOnboarding"
+        >
           <p
-            v-if="confirmationError"
-            id="confirm-password-error"
-            role="alert"
-            class="text-sm text-destructive"
+            v-if="accountNotice"
+            role="status"
+            class="rounded-md border p-3 text-sm text-muted-foreground"
           >
-            {{ confirmationError }}
+            {{ accountNotice }}
           </p>
-          <p
-            v-else
-            id="confirm-password-help"
-            class="text-xs text-muted-foreground"
+          <div class="space-y-2">
+            <label for="email" class="text-sm font-medium">{{
+              t("onboarding.email")
+            }}</label>
+            <Input
+              id="email"
+              v-model="email"
+              type="email"
+              autocomplete="email"
+              required
+              maxlength="254"
+            />
+          </div>
+          <div v-if="requiresAdminUser" class="space-y-2">
+            <label for="display-name" class="text-sm font-medium">
+              {{ t("onboarding.displayName") }}
+            </label>
+            <Input
+              id="display-name"
+              v-model="displayName"
+              autocomplete="nickname"
+              required
+              minlength="2"
+              maxlength="80"
+              aria-describedby="display-name-help"
+            />
+            <p id="display-name-help" class="text-xs text-muted-foreground">
+              {{ t("onboarding.displayNameHelp") }}
+            </p>
+          </div>
+          <div class="space-y-2">
+            <label for="password" class="text-sm font-medium">{{
+              t("onboarding.password")
+            }}</label>
+            <Input
+              id="password"
+              v-model="password"
+              type="password"
+              :autocomplete="
+                requiresAdminUser ? 'new-password' : 'current-password'
+              "
+              required
+              :minlength="requiresAdminUser ? 12 : undefined"
+              :aria-invalid="Boolean(error)"
+              :aria-describedby="error ? 'account-error' : undefined"
+            />
+            <p v-if="requiresAdminUser" class="text-xs text-muted-foreground">
+              {{ t("onboarding.passwordHelp") }}
+            </p>
+          </div>
+          <div v-if="requiresAdminUser" class="space-y-2">
+            <label for="confirm-password" class="text-sm font-medium">
+              {{ t("onboarding.confirmPassword") }}
+            </label>
+            <Input
+              id="confirm-password"
+              v-model="confirmPassword"
+              type="password"
+              autocomplete="new-password"
+              required
+              minlength="12"
+              :aria-invalid="Boolean(confirmationError)"
+              :aria-describedby="
+                confirmationError
+                  ? 'confirm-password-error'
+                  : 'confirm-password-help'
+              "
+            />
+            <p
+              v-if="confirmationError"
+              id="confirm-password-error"
+              role="alert"
+              class="text-sm text-destructive"
+            >
+              {{ confirmationError }}
+            </p>
+            <p
+              v-else
+              id="confirm-password-help"
+              class="text-xs text-muted-foreground"
+            >
+              {{ t("onboarding.confirmPasswordHelp") }}
+            </p>
+          </div>
+          <div>
+            <p
+              v-if="error"
+              id="account-error"
+              role="alert"
+              class="text-sm text-destructive"
+            >
+              {{ error }}
+            </p>
+          </div>
+          <div class="flex gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              class="flex-1"
+              @click="changeServer"
+            >
+              {{ t("onboarding.back") }}
+            </Button>
+            <Button
+              type="submit"
+              class="flex-1"
+              :disabled="loading || Boolean(confirmationError)"
+            >
+              {{
+                loading
+                  ? t("onboarding.pleaseWait")
+                  : requiresAdminUser
+                    ? t("onboarding.createAdministrator")
+                    : t("onboarding.signIn")
+              }}
+            </Button>
+          </div>
+          <div
+            v-if="!requiresAdminUser"
+            class="flex flex-wrap justify-center gap-2"
           >
-            {{ t("onboarding.confirmPasswordHelp") }}
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              :disabled="loading"
+              @click="beginPasswordResetRequest"
+            >
+              {{ t("onboarding.forgotPassword") }}
+            </Button>
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              :disabled="loading"
+              @click="beginRecoveryCodeEntry"
+            >
+              {{ t("onboarding.useRecoveryCode") }}
+            </Button>
+          </div>
+        </form>
+
+        <form
+          v-else-if="accountView === 'recovery-request'"
+          class="space-y-4"
+          @submit.prevent="requestPasswordRecovery"
+        >
+          <p class="text-sm text-muted-foreground">
+            {{ t("onboarding.recoveryRequestHelp") }}
           </p>
-        </div>
-        <div>
+          <div class="space-y-2">
+            <label for="recovery-email" class="text-sm font-medium">
+              {{ t("onboarding.email") }}
+            </label>
+            <Input
+              id="recovery-email"
+              v-model="recoveryEmail"
+              type="email"
+              autocomplete="email"
+              required
+              maxlength="254"
+              :aria-invalid="Boolean(error)"
+              :aria-describedby="error ? 'recovery-request-error' : undefined"
+            />
+          </div>
           <p
             v-if="error"
-            id="account-error"
+            id="recovery-request-error"
             role="alert"
             class="text-sm text-destructive"
           >
             {{ error }}
           </p>
-        </div>
-        <div class="flex gap-3">
-          <Button
-            type="button"
-            variant="outline"
-            class="flex-1"
-            @click="changeServer"
+          <div class="flex gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              class="flex-1"
+              :disabled="loading"
+              @click="returnToSignIn"
+            >
+              {{ t("onboarding.back") }}
+            </Button>
+            <Button type="submit" class="flex-1" :disabled="loading">
+              {{
+                loading
+                  ? t("onboarding.pleaseWait")
+                  : t("onboarding.requestRecovery")
+              }}
+            </Button>
+          </div>
+        </form>
+
+        <form v-else class="space-y-4" @submit.prevent="finishPasswordRecovery">
+          <p
+            v-if="recoveryNotice"
+            role="status"
+            class="rounded-md border p-3 text-sm text-muted-foreground"
           >
-            {{ t("onboarding.back") }}
-          </Button>
-          <Button
-            type="submit"
-            class="flex-1"
-            :disabled="loading || Boolean(confirmationError)"
+            {{ recoveryNotice }}
+          </p>
+          <div class="space-y-2">
+            <label for="recovery-token" class="text-sm font-medium">
+              {{ t("onboarding.recoveryCode") }}
+            </label>
+            <Input
+              id="recovery-token"
+              v-model="recoveryToken"
+              type="text"
+              autocomplete="one-time-code"
+              autocapitalize="none"
+              spellcheck="false"
+              required
+              maxlength="256"
+            />
+          </div>
+          <div class="space-y-2">
+            <label for="reset-password" class="text-sm font-medium">
+              {{ t("onboarding.newPassword") }}
+            </label>
+            <Input
+              id="reset-password"
+              v-model="resetPassword"
+              type="password"
+              autocomplete="new-password"
+              required
+              minlength="12"
+              aria-describedby="reset-password-help"
+            />
+            <p id="reset-password-help" class="text-xs text-muted-foreground">
+              {{ t("onboarding.passwordHelp") }}
+            </p>
+          </div>
+          <div class="space-y-2">
+            <label
+              for="reset-password-confirmation"
+              class="text-sm font-medium"
+            >
+              {{ t("onboarding.confirmNewPassword") }}
+            </label>
+            <Input
+              id="reset-password-confirmation"
+              v-model="resetPasswordConfirmation"
+              type="password"
+              autocomplete="new-password"
+              required
+              minlength="12"
+              :aria-invalid="Boolean(recoveryConfirmationError)"
+              :aria-describedby="
+                recoveryConfirmationError
+                  ? 'reset-password-confirmation-error'
+                  : undefined
+              "
+            />
+            <p
+              v-if="recoveryConfirmationError"
+              id="reset-password-confirmation-error"
+              role="alert"
+              class="text-sm text-destructive"
+            >
+              {{ recoveryConfirmationError }}
+            </p>
+          </div>
+          <p
+            v-if="error"
+            id="password-reset-error"
+            role="alert"
+            class="text-sm text-destructive"
           >
-            {{
-              loading
-                ? t("onboarding.pleaseWait")
-                : requiresAdminUser
-                  ? t("onboarding.createAdministrator")
-                  : t("onboarding.signIn")
-            }}
-          </Button>
-        </div>
-      </form>
+            {{ error }}
+          </p>
+          <div class="flex gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              class="flex-1"
+              :disabled="loading"
+              @click="returnToSignIn"
+            >
+              {{ t("onboarding.back") }}
+            </Button>
+            <Button
+              type="submit"
+              class="flex-1"
+              :disabled="loading || Boolean(recoveryConfirmationError)"
+            >
+              {{
+                loading
+                  ? t("onboarding.pleaseWait")
+                  : t("onboarding.resetPassword")
+              }}
+            </Button>
+          </div>
+        </form>
+      </template>
     </section>
   </Gradient>
 </template>

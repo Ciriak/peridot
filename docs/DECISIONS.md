@@ -1,5 +1,20 @@
 # Decisions
 
+## 2026-11-17: Email is an account identifier, not an application channel
+
+Peridot uses an email address as the user's sign-in identifier, but the
+application does not provide email functionality. Peridot will not send
+verification, notification, invitation, or password-recovery email, and will
+not configure SMTP or depend on a hosted mail service. Account recovery must
+use owner-assisted flows, local server access, or another channel that does not
+require Peridot to send email.
+
+The approved password-recovery model is owner-assisted. A user may request a
+reset, after which the server owner obtains a short-lived, single-use reset link
+through server-side access, including the logs when necessary, and provides it
+to the user out of band. Completing the reset replaces the password hash,
+invalidates the reset token, and revokes all existing sessions.
+
 ## 2026-11-17: The web app defaults to port 80 and the API to 17430
 
 The browser-facing web application defaults to port 80. A separate embedded

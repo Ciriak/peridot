@@ -52,6 +52,10 @@
       "model": "MetadataProvider",
       "namespace": "__unbound__"
     },
+    "PasswordResetToken": {
+      "model": "PasswordResetToken",
+      "namespace": "__unbound__"
+    },
     "Playlist": {
       "model": "Playlist",
       "namespace": "__unbound__"
@@ -1380,6 +1384,84 @@
               },
               "namespaceId": "__unbound__",
               "table": "MetadataProvider"
+            }
+          },
+          "PasswordResetToken": {
+            "fields": {
+              "createdAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                }
+              },
+              "expiresAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "tokenHash": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "userId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "user": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "userId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "User",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "createdAt": {
+                  "column": "createdAt"
+                },
+                "expiresAt": {
+                  "column": "expiresAt"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "tokenHash": {
+                  "column": "tokenHash"
+                },
+                "userId": {
+                  "column": "userId"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "PasswordResetToken"
             }
           },
           "Playlist": {
@@ -4402,6 +4484,91 @@
                 }
               ]
             },
+            "PasswordResetToken": {
+              "columns": {
+                "createdAt": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/datetime",
+                  "default": {
+                    "expression": "now()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                },
+                "expiresAt": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/datetime",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "tokenHash": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "userId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "name": "PasswordResetToken_userId_idx_a489d58a"
+                  },
+                  "onDelete": "cascade",
+                  "source": {
+                    "columns": [
+                      "userId"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "PasswordResetToken"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "User"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "expiresAt"
+                  ],
+                  "name": "PasswordResetToken_expiresAt_idx_6b6b8c10",
+                  "prefix": "PasswordResetToken_expiresAt_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "userId"
+                  ],
+                  "name": "PasswordResetToken_userId_idx_a489d58a",
+                  "prefix": "PasswordResetToken_userId_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": [
+                {
+                  "columns": [
+                    "tokenHash"
+                  ]
+                }
+              ]
+            },
             "Playlist": {
               "columns": {
                 "createdAt": {
@@ -6080,10 +6247,10 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "5e5cd62452bcf2b23307a87be75af60e40feb17f74db5bb4e4093dc3a1a4219a"
+    "storageHash": "05ef14e09055a1e89fe0d4263fdfa341825af094253dfc0fc2cb819591ad0427"
   },
   "execution": {
-    "executionHash": "69abe59ddf12aaa78738519fa294ac279958f3b4caa4e85b2cb8fd0effde430a",
+    "executionHash": "b8742140c70062f86caa6d72cafc965dc42172098c5fb9a906ef71c33c37e56b",
     "mutations": {
       "defaults": [
         {
@@ -6265,6 +6432,17 @@
           "ref": {
             "entry": "MetadataProvider",
             "field": "updatedAt",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "cuid2",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "PasswordResetToken",
+            "field": "id",
             "namespace": "__unbound__"
           }
         },

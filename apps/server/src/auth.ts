@@ -8,6 +8,8 @@ import { promisify } from "node:util";
 import type {
   AuthSessionResponse,
   AuthStatusResponse,
+  PasswordResetRequest,
+  PasswordResetRequestResponse,
   UserResponse,
 } from "@peridot/contracts";
 import type { FastifyInstance, FastifyRequest } from "fastify";
@@ -18,6 +20,10 @@ import { ensureDefaultMetadataProvider } from "./metadata-providers.js";
 
 const scrypt = promisify(scryptCallback);
 const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
+const PASSWORD_RESET_DURATION_MS = 30 * 60 * 1000;
+const PASSWORD_RESET_RATE_WINDOW_MS = 10 * 60 * 1000;
+const PASSWORD_RESET_RATE_LIMIT = 10;
+const PASSWORD_RESET_MAX_TRACKED_EMAILS = 5_000;
 const BOOTSTRAP_KEY = "initial-admin";
 
 declare module "fastify" {
@@ -35,6 +41,11 @@ interface CredentialsBody {
 
 interface ProfileBody {
   displayName?: unknown;
+}
+
+interface CompletePasswordResetBody {
+  token?: unknown;
+  password?: unknown;
 }
 
 export function publicUser(user: {
@@ -118,7 +129,41 @@ async function createSession(
 export async function registerAuthRoutes(
   app: FastifyInstance,
   database: Database,
+  onSessionsRevoked?: (sessionIds: string[]) => void,
 ) {
+  const resetAttempts = new Map<string, number[]>();
+
+  function passwordResetAllowed(email: string): boolean {
+    const now = Date.now();
+    if (
+      !resetAttempts.has(email) &&
+      resetAttempts.size >= PASSWORD_RESET_MAX_TRACKED_EMAILS
+    ) {
+      for (const [trackedEmail, attempts] of resetAttempts) {
+        if (
+          !attempts.some(
+            (attempt) => now - attempt < PASSWORD_RESET_RATE_WINDOW_MS,
+          )
+        ) {
+          resetAttempts.delete(trackedEmail);
+        }
+      }
+      if (resetAttempts.size >= PASSWORD_RESET_MAX_TRACKED_EMAILS) {
+        return false;
+      }
+    }
+    const active = (resetAttempts.get(email) ?? []).filter(
+      (attempt) => now - attempt < PASSWORD_RESET_RATE_WINDOW_MS,
+    );
+    if (active.length >= PASSWORD_RESET_RATE_LIMIT) {
+      resetAttempts.set(email, active);
+      return false;
+    }
+    active.push(now);
+    resetAttempts.set(email, active);
+    return true;
+  }
+
   app.get("/api/auth/status", async (): Promise<AuthStatusResponse> => ({
     requiresAdminUser:
       (
@@ -214,6 +259,116 @@ export async function registerAuthRoutes(
         );
       }
       return createSession(database, user);
+    },
+  );
+
+  app.post<{ Body: PasswordResetRequest }>(
+    "/api/auth/password-resets",
+    async (request, reply): Promise<PasswordResetRequestResponse> => {
+      const email = normalizeEmail(request.body?.email);
+      if (email && passwordResetAllowed(email)) {
+        const user = await database.orm.User.first({ email });
+        if (user) {
+          const token = randomBytes(32).toString("base64url");
+          const expiresAt = new Date(Date.now() + PASSWORD_RESET_DURATION_MS);
+          await database.transaction(async (transaction) => {
+            await transaction.orm.PasswordResetToken.where({
+              userId: user.id,
+            }).deleteAndCount();
+            await transaction.orm.PasswordResetToken.create({
+              tokenHash: tokenHash(token),
+              expiresAt,
+              userId: user.id,
+            });
+          });
+          request.log.warn(
+            {
+              event: "password_reset.requested",
+              email,
+              expiresAt: expiresAt.toISOString(),
+            },
+            `Password recovery token for ${email}: ${token}`,
+          );
+        }
+      }
+      return reply.code(202).send({ status: "requested" });
+    },
+  );
+
+  app.post<{ Body: CompletePasswordResetBody }>(
+    "/api/auth/password-resets/complete",
+    async (request, reply) => {
+      const token = request.body?.token;
+      const password = request.body?.password;
+      if (typeof token !== "string" || !token || token.length > 256) {
+        return sendError(
+          reply,
+          400,
+          "invalid_password_reset_token",
+          "This recovery code is invalid or has expired",
+          message("api.message.invalidPasswordResetToken"),
+        );
+      }
+      if (!validPassword(password)) {
+        return sendError(
+          reply,
+          400,
+          "invalid_password",
+          "Use a password between 12 and 256 characters",
+          message("api.message.invalidPassword"),
+        );
+      }
+
+      const tokenDigest = tokenHash(token);
+      const pending = await database.orm.PasswordResetToken.where({
+        tokenHash: tokenDigest,
+      }).first();
+      if (!pending || pending.expiresAt <= new Date()) {
+        return sendError(
+          reply,
+          400,
+          "invalid_password_reset_token",
+          "This recovery code is invalid or has expired",
+          message("api.message.invalidPasswordResetToken"),
+        );
+      }
+
+      const passwordHash = await hashPassword(password);
+      const revokedSessionIds = await database.transaction(
+        async (transaction) => {
+          const current = await transaction.orm.PasswordResetToken.where({
+            tokenHash: tokenDigest,
+          }).first();
+          if (!current || current.expiresAt <= new Date()) return null;
+
+          const sessions = await transaction.orm.Session.where({
+            userId: current.userId,
+          })
+            .select("id")
+            .all();
+          await transaction.orm.User.where({ id: current.userId }).update({
+            passwordHash,
+          });
+          await transaction.orm.PasswordResetToken.where({
+            userId: current.userId,
+          }).delete();
+          await transaction.orm.Session.where({
+            userId: current.userId,
+          }).delete();
+          return sessions.map((session) => session.id);
+        },
+      );
+      if (revokedSessionIds === null) {
+        return sendError(
+          reply,
+          400,
+          "invalid_password_reset_token",
+          "This recovery code is invalid or has expired",
+          message("api.message.invalidPasswordResetToken"),
+        );
+      }
+      onSessionsRevoked?.(revokedSessionIds);
+      return reply.code(204).send();
     },
   );
 }

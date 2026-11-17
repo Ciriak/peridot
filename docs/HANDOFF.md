@@ -2,6 +2,47 @@
 
 Last updated: 2026-11-17.
 
+## Owner-assisted password recovery is implemented
+
+Sign-in now offers password recovery without any email-delivery capability.
+`POST /api/auth/password-resets` always returns a generic `202`, while a
+matching account receives a 30-minute one-time recovery token in the server
+log. Only the SHA-256 token hash is stored in SQLite. The server owner provides
+the token out of band; the user enters it with a new password in onboarding.
+
+Completing recovery through `POST /api/auth/password-resets/complete` updates
+the scrypt password hash in a transaction, consumes every reset token for the
+account, deletes every session, and disconnects affected realtime clients.
+Requests are limited per normalized email, and the generic response does not
+reveal whether an account exists. The onboarding UI also supports entering an
+owner-provided token after a reload.
+
+Checks completed:
+
+- Server suite: 167 passing, including token logging/hash storage, generic
+  unknown-account responses, password validation, expiry, single use, session
+  revocation, administrator credential-change invalidation, and migration
+  coverage
+- Web suite: 224 passing, including reset endpoint calls and onboarding recovery
+  controls
+- Full workspace typecheck, ESLint, Prettier, version synchronization, and
+  migration validation
+- Full workspace build: 6 successful tasks, including Nuxt generation, server
+  compilation, and Android debug assembly
+- Development database migrated from `5e5cd624` to `05ef14e0`; the migration
+  runner created a verified pre-migration backup under `apps/server/backups`
+
+Known limits: recovery depends on access to server or container logs because
+Peridot does not send email. Persistent file logging remains opt-in; the raw
+token is also written to standard server output and the in-memory administrator
+log. Logs must therefore be treated as sensitive administrative data. The
+recovery flow has not yet been exercised manually in a browser or against a
+rebuilt Docker container. All changes are uncommitted on `dev`; no commit,
+push, tag, publication, or deployment was performed.
+
+Next: run one request in the live web UI, retrieve its token from the server or
+container log, complete the reset, and verify the old session is signed out.
+
 ## Web defaults to port 80 and the API remains on 17430
 
 The built server now runs a separate web listener on port 80 and an API-only

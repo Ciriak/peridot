@@ -32,7 +32,12 @@ test("fresh databases apply the baseline without a backup", async () => {
       info: () => undefined,
     });
 
-    assert.equal(result.pendingCount, 2);
+    const migrationDirectories = (
+      await readdir(path.resolve("migrations", "app"), {
+        withFileTypes: true,
+      })
+    ).filter((entry) => entry.isDirectory() && entry.name !== "refs");
+    assert.equal(result.pendingCount, migrationDirectories.length);
     assert.equal(result.backupPath, null);
 
     const database = new DatabaseSync(databasePath, { readOnly: true });
@@ -49,6 +54,12 @@ test("fresh databases apply the baseline without a backup", async () => {
         )
         .get() as { name?: string } | undefined;
       assert.equal(scanWorkerColumn?.name, "scanWorkerCount");
+      const passwordResetTable = database
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'PasswordResetToken'",
+        )
+        .get() as { name?: string } | undefined;
+      assert.equal(passwordResetTable?.name, "PasswordResetToken");
     } finally {
       database.close();
     }

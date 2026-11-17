@@ -589,6 +589,17 @@ library state. Passwords are stored as salted scrypt hashes and opaque sessions
 expire after 30 days. If an authenticated browser request loses its session, the
 web app clears the stale local session and returns to sign-in with its original
 destination preserved.
+
+Email is not an application communication channel. Owner-assisted password
+recovery starts with `POST /api/auth/password-resets`; the response is always
+the same generic `202`, while a matching account receives a 30-minute recovery
+token in the server log. SQLite stores only the token hash. The server owner
+provides that token out of band, and the user submits it with the new password
+through `POST /api/auth/password-resets/complete`. Completion consumes every
+reset token for the account, revokes every session, and disconnects affected
+realtime clients. Server and container logs are therefore sensitive
+administrative data.
+
 Except for health and these setup/sign-in routes, server routes require the
 returned session as `Authorization: Bearer <token>`.
 Queue a scan with `POST /api/library/scans`, list tasks with `GET /api/tasks`,

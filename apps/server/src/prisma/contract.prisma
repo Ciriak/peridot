@@ -74,6 +74,18 @@ model Session {
   @@index([expiresAt])
 }
 
+model PasswordResetToken {
+  id        String   @id @onCreate(cuid(2))
+  tokenHash String   @unique
+  expiresAt DateTime
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
 model Track {
   id                         String     @id @onCreate(cuid(2))
   mediaType                  String     @default("music")
