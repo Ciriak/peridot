@@ -146,14 +146,10 @@ test("Jellyfin library discovery creates one auto-detected source per selected l
     assert.equal(create.statusCode, 201, create.body);
     const source = create.json<{
       id: string;
-      classificationMode: string;
-      fixedMediaType: string | null;
       externalLibraryCollectionType: string | null;
       externalLibraryId: string;
       task: TaskResponse;
     }>();
-    assert.equal(source.classificationMode, "auto");
-    assert.equal(source.fixedMediaType, null);
     assert.equal(source.externalLibraryCollectionType, "books");
     assert.equal(source.externalLibraryId, "audio-library-id");
     await waitForScan(context, source.task.id);
@@ -246,7 +242,7 @@ test("Jellyfin auto-detects audiobooks, podcasts, and music within one library",
       },
     });
     assert.equal(created.statusCode, 201, created.body);
-    const source = created.json<{ id: string; task: TaskResponse }>();
+    const source = created.json<{ task: TaskResponse }>();
     await waitForScan(context, source.task.id);
 
     const tracks = await context.database.orm.Track.all();
@@ -257,24 +253,6 @@ test("Jellyfin auto-detects audiobooks, podcasts, and music within one library",
     assert.equal(byTitle.get("Episode One")?.mediaTypeOrigin, "jellyfin");
     assert.equal(byTitle.get("Song One")?.mediaType, "music");
     assert.equal(byTitle.get("Song One")?.mediaTypeOrigin, "fallback");
-
-    const fixedResponse = await context.app.inject({
-      method: "PATCH",
-      url: `/api/admin/sources/${source.id}`,
-      headers: context.authorization,
-      payload: { classificationMode: "fixed", fixedMediaType: "audiobook" },
-    });
-    assert.equal(fixedResponse.statusCode, 200);
-    const fixedSource = fixedResponse.json<{
-      task: TaskResponse | null;
-    }>();
-    assert.ok(fixedSource.task);
-    await waitForScan(context, fixedSource.task.id);
-    const reclassifiedSong = await context.database.orm.Track.firstOrThrow({
-      id: byTitle.get("Song One")!.id,
-    });
-    assert.equal(reclassifiedSong.mediaType, "audiobook");
-    assert.equal(reclassifiedSong.mediaTypeOrigin, "source");
 
     const itemsRequest = requestedUrls.find(
       (value) => new URL(value).pathname === "/Items",

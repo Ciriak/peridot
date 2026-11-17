@@ -7,6 +7,7 @@ import {
   onMounted,
   ref,
   useI18n,
+  useRuntimeConfig,
   watch,
 } from "#imports";
 import { Icon } from "@iconify/vue/offline";
@@ -64,9 +65,11 @@ const { status: connectionStatus } = useServerConnection();
 const { token } = useSession();
 const { user } = useUser();
 const realtime = useRealtime();
+const runtimeConfig = useRuntimeConfig();
 const logsQuery = useServerLogsQuery();
 const serverSettings = useServerSettingsQuery();
 const updates = useUpdatesQuery();
+const clientVersion = runtimeConfig.public.clientVersion;
 const logs = logsQuery.items;
 let logAfter = 0;
 let unsubscribeLogs: (() => void) | undefined;
@@ -447,12 +450,18 @@ watch(connectionStatus, (status) => {
         {{ t("settings.server.updates.title") }}
       </h3>
       <div class="space-y-5 rounded-lg border bg-card p-6 text-card-foreground">
-        <dl class="grid gap-4 text-sm sm:grid-cols-3">
+        <dl class="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
           <div class="space-y-1">
             <dt class="text-muted-foreground">
-              {{ t("settings.server.updates.version") }}
+              {{ t("settings.server.updates.serverVersion") }}
             </dt>
             <dd class="font-medium">{{ updateStatus?.version ?? "—" }}</dd>
+          </div>
+          <div class="space-y-1">
+            <dt class="text-muted-foreground">
+              {{ t("settings.server.updates.clientVersion") }}
+            </dt>
+            <dd class="break-all font-medium">{{ clientVersion }}</dd>
           </div>
           <div class="space-y-1">
             <dt class="text-muted-foreground">

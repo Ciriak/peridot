@@ -1,34 +1,21 @@
 <script setup lang="ts">
-import { navigateTo, useI18n, useRoute } from "#imports";
-import type { LikeTarget, MediaType } from "@peridot/contracts";
+import { useI18n, useRoute } from "#imports";
+import type { LikeTarget } from "@peridot/contracts";
 import { Icon } from "@iconify/vue/offline";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
-import {
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuPortal,
-  DropdownMenuRoot,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "reka-ui";
 import { computed, onMounted, ref, watch } from "vue";
-import {
-  useCatalogRevision,
-  useCatalogTrackQuery,
-} from "../composables/use-catalog-query";
+import { useCatalogTrackQuery } from "../composables/use-catalog-query";
 import { useCachedArtwork } from "../composables/use-cached-artwork";
 import { useLikes } from "../composables/use-likes";
 import { useLibraryPlayer } from "../composables/use-library-player";
-import { useLocalizedMessage } from "../composables/use-localized-message";
 import { useMediaCollection } from "../composables/use-media-collection";
 import { useOfflineTracks } from "../composables/use-offline-tracks";
 import { useServerConnection } from "../composables/use-server-connection";
 import { useServer } from "../composables/use-server";
 import { useSession } from "../composables/use-session";
-import { useUser } from "../composables/use-user";
 import { loadCollectionTracks } from "../lib/catalog-collections";
 import { icons } from "../lib/icons";
 import {
@@ -37,16 +24,7 @@ import {
   trackIdFromTitleHash,
   type TrackSort,
 } from "../lib/library";
-import {
-  isAuthenticationRedirectError,
-  isPeridotNetworkError,
-  resetMediaCollectionType,
-  updateMediaCollectionType,
-} from "../lib/peridot-client";
-import {
-  notifyMediaTypeUpdated,
-  notifyMediaTypeUpdateFailed,
-} from "../lib/toasts";
+import { isAuthenticationRedirectError, isPeridotNetworkError } from "../lib/peridot-client";
 import FadeInImage from "./FadeInImage.vue";
 import LikeButton from "./LikeButton.vue";
 import MediaCollectionOfflineButton from "./MediaCollectionOfflineButton.vue";
@@ -63,9 +41,6 @@ const route = useRoute();
 const { t } = useI18n();
 const { address } = useServer();
 const { token } = useSession();
-const { user } = useUser();
-const { errorMessage } = useLocalizedMessage();
-const { invalidate: invalidateCatalog } = useCatalogRevision();
 const { active, playing, playCollection, togglePlayback } = useLibraryPlayer();
 const { status: serverStatus } = useServerConnection();
 const { savedTracks, tracksMatching } = useOfflineTracks();
@@ -78,9 +53,6 @@ const {
   isPending: isLikePending,
 } = useLikes();
 const offlinePlaybackError = ref("");
-const changingMediaType = ref(false);
-const admin = computed(() => user.value?.role === "admin");
-const mediaTypes: MediaType[] = ["music", "audiobook", "podcast"];
 const trackSort = ref<TrackSort>(
   props.mediaType === "podcast"
     ? { field: "title", direction: "desc" }
@@ -203,77 +175,6 @@ const emptyKey = computed(() =>
     ? "page.audiobook.noTracks"
     : "page.podcast.noTracks",
 );
-
-function mediaTypeLabel(mediaType: MediaType): string {
-  return t(
-    mediaType === "music"
-      ? "settings.sources.media.music"
-      : mediaType === "audiobook"
-        ? "settings.sources.media.audiobook"
-        : "settings.sources.media.podcast",
-  );
-}
-
-function mediaTypeIndexRoute(mediaType: MediaType): string {
-  return mediaType === "music"
-    ? "/albums"
-    : mediaType === "audiobook"
-      ? "/audiobooks"
-      : "/podcasts";
-}
-
-async function changeCollectionMediaType(mediaType: MediaType) {
-  const current = collection.value;
-  if (!current || changingMediaType.value || serverStatus.value === "lost") {
-    return;
-  }
-  changingMediaType.value = true;
-  try {
-    await updateMediaCollectionType(
-      address.value ?? "",
-      token.value ?? "",
-      current.id,
-      mediaType,
-    );
-    notifyMediaTypeUpdated(current.title, mediaTypeLabel(mediaType));
-    invalidateCatalog();
-    await navigateTo(mediaTypeIndexRoute(mediaType));
-  } catch (reason) {
-    if (isAuthenticationRedirectError(reason)) return;
-    notifyMediaTypeUpdateFailed(
-      current.title,
-      errorMessage(reason, "components.mediaType.updateError"),
-    );
-  } finally {
-    changingMediaType.value = false;
-  }
-}
-
-async function restoreCollectionMediaType() {
-  const current = collection.value;
-  if (!current || changingMediaType.value || serverStatus.value === "lost") {
-    return;
-  }
-  changingMediaType.value = true;
-  try {
-    await resetMediaCollectionType(
-      address.value ?? "",
-      token.value ?? "",
-      current.id,
-    );
-    notifyMediaTypeUpdated(current.title, t("components.mediaType.automatic"));
-    invalidateCatalog();
-    await navigateTo(backRoute.value);
-  } catch (reason) {
-    if (isAuthenticationRedirectError(reason)) return;
-    notifyMediaTypeUpdateFailed(
-      current.title,
-      errorMessage(reason, "components.mediaType.updateError"),
-    );
-  } finally {
-    changingMediaType.value = false;
-  }
-}
 
 function setTrackSort(next: TrackSort | null) {
   trackSort.value =
@@ -461,63 +362,6 @@ onMounted(() => {
             </template>
             {{ formatTrackDuration(collection.durationMs) }}
           </span>
-          <DropdownMenuRoot v-if="admin">
-            <DropdownMenuTrigger as-child>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                :disabled="changingMediaType || serverStatus === 'lost'"
-              >
-                <Icon :icon="icons.music" aria-hidden="true" class="size-4" />
-                {{ t("components.mediaType.change") }}
-                <Icon
-                  :icon="icons.caretDown"
-                  aria-hidden="true"
-                  class="size-4"
-                />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuPortal>
-              <DropdownMenuContent
-                class="z-50 min-w-52 rounded-lg border bg-popover p-1 text-popover-foreground shadow-lg"
-              >
-                <DropdownMenuItem
-                  v-for="mediaTypeOption in mediaTypes"
-                  :key="mediaTypeOption"
-                  :disabled="changingMediaType"
-                  class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none data-disabled:cursor-default data-disabled:opacity-50"
-                  @select="changeCollectionMediaType(mediaTypeOption)"
-                >
-                  <Icon
-                    :icon="
-                      mediaTypeOption === 'music'
-                        ? icons.music
-                        : mediaTypeOption === 'audiobook'
-                          ? icons.book
-                          : icons.podcast
-                    "
-                    aria-hidden="true"
-                    class="size-4"
-                  />
-                  {{ mediaTypeLabel(mediaTypeOption) }}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator class="my-1 h-px bg-border" />
-                <DropdownMenuItem
-                  :disabled="changingMediaType"
-                  class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none data-disabled:cursor-default data-disabled:opacity-50"
-                  @select="restoreCollectionMediaType"
-                >
-                  <Icon
-                    :icon="icons.restart"
-                    aria-hidden="true"
-                    class="size-4"
-                  />
-                  {{ t("components.mediaType.restore") }}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenuPortal>
-          </DropdownMenuRoot>
         </div>
       </div>
     </section>

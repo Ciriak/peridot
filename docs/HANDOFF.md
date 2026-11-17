@@ -2,6 +2,75 @@
 
 Last updated: 2026-11-17.
 
+## Server settings show server and client versions
+
+The Software updates card on Settings → Server now labels the running server's
+version separately from the web client bundle version. The server value comes
+from the authenticated update status, and the client value comes from the
+client's build runtime configuration.
+
+Checks completed:
+
+- Focused settings regression suite: 15 passing
+- Full web suite: 233 passing
+- Web type check, targeted ESLint and Prettier, production web build, and
+  `git diff --check`
+
+Known limits: browser visual QA was not run. The change remains uncommitted on
+`dev`; unrelated working-tree changes were preserved. No commit, push, tag,
+publication, or deployment was performed.
+
+Next: verify the four-column version summary at desktop and narrow settings
+widths.
+
+## Android launcher icon gains additional padding
+
+The Peridot mark is now centered on the Android icon canvas and rendered at 80%
+of its previous scale. Square, circular, and adaptive foreground PNGs keep an
+even margin at every density, with roughly 28% padding at the artwork's
+narrowest side. A round full-icon SVG source was added alongside the square and
+foreground sources.
+
+Checks completed:
+
+- Android `lintDebug`, including debug resource compilation
+- Dimension, transparent-corner, background-color, centering, and green artwork
+  bounds inspected at mdpi, hdpi, xhdpi, xxhdpi, and xxxhdpi
+- `git diff --check`
+
+Known limits: launcher appearance was not inspected on a physical Android
+device or emulator. The icon changes remain uncommitted on `dev` alongside
+unrelated working-tree changes; no commit, push, tag, publication, or deployment
+was performed.
+
+Next: install the debug build and compare square, circular, and themed launcher
+masks on a device.
+
+## Scheme-less server addresses prefer HTTPS
+
+Server selection now probes HTTPS before HTTP when the user enters a hostname
+without a scheme. It still tries both protocols and the default Peridot port,
+so HTTP-only LAN servers remain discoverable. Explicit `http://` and `https://`
+addresses remain restricted to the protocol the user entered.
+
+This prevents a TLS-only reverse-proxied deployment from being selected through
+an HTTP health redirect and then failing the cross-origin auth status request
+when the browser refuses the HTTP-to-HTTPS CORS redirect.
+
+Checks completed:
+
+- Focused server-address suite: 9 passing
+- Full web suite: 233 passing
+- Web type check, targeted ESLint and Prettier, production web build, and
+  `git diff --check`
+
+Known limits: the scheme-less flow was not exercised against the live VPS in a
+browser or on an Android device. The fix remains uncommitted on `dev`; no
+commit, push, tag, publication, or deployment was performed.
+
+Next: rebuild the web image, deploy it, and enter `peridot.cyriaque.dev` without
+a scheme from a separate web instance and Android.
+
 ## Library lists have title-adjacent scoped search
 
 Albums, Artists, Audiobooks, Podcasts, Playlists, and Liked songs now show a
@@ -23,14 +92,12 @@ Checks completed:
 - Workspace typecheck: 7 successful tasks
 - Workspace lint, schema validation, and production build: 6 successful build
   tasks across contracts, server, web, desktop, and Android
-- Targeted Prettier and `git diff --check`
+- Repository-wide Prettier and `git diff --check`
 
 Known limits: browser visual QA was not run. Playlist search normalizes the
 current user's playlist rows before paging, which is linear in that user's
-playlist count; no schema or migration was added. Repository-wide
-`pnpm format:check` still reports the pre-existing unmodified
-`apps/desktop/src-tauri/tauri.conf.json`. All changes remain uncommitted on
-`dev`; no commit, push, tag, publication, or deployment was performed.
+playlist count; no schema or migration was added. The work is committed on
+`dev` as `f653d66`; no push, tag, publication, or deployment was performed.
 
 Next: visually verify title-adjacent placement at desktop and mobile widths,
 then resolve the unrelated Desktop formatting warning separately.

@@ -56,7 +56,6 @@ import type {
   UpdateUserProfileRequest,
   UpdateMetadataProviderRequest,
   UpdateServerSettingsRequest,
-  UpdateSourceRequest,
   UpdateStatusResponse,
   UpdateUserRequest,
   UserListResponse,
@@ -551,74 +550,6 @@ export function deleteSource(
   return authenticatedRequestJson<void>(
     serverAddress,
     `/api/admin/sources/${sourceId}`,
-    token,
-    { method: "DELETE" },
-  );
-}
-
-export function updateSource(
-  serverAddress: string,
-  token: string,
-  sourceId: string,
-  request: UpdateSourceRequest,
-) {
-  return authenticatedRequestJson<CreateSourceResponse>(
-    serverAddress,
-    `/api/admin/sources/${encodeURIComponent(sourceId)}`,
-    token,
-    { method: "PATCH", body: JSON.stringify(request) },
-  );
-}
-
-export function updateTrackMediaType(
-  serverAddress: string,
-  token: string,
-  trackId: string,
-  mediaType: "music" | "audiobook" | "podcast",
-) {
-  return authenticatedRequestJson<null>(
-    serverAddress,
-    `/api/admin/tracks/${encodeURIComponent(trackId)}/media-type`,
-    token,
-    { method: "PUT", body: JSON.stringify({ mediaType }) },
-  );
-}
-
-export function resetTrackMediaType(
-  serverAddress: string,
-  token: string,
-  trackId: string,
-) {
-  return authenticatedRequestJson<null>(
-    serverAddress,
-    `/api/admin/tracks/${encodeURIComponent(trackId)}/media-type`,
-    token,
-    { method: "DELETE" },
-  );
-}
-
-export function updateMediaCollectionType(
-  serverAddress: string,
-  token: string,
-  collectionId: string,
-  mediaType: "music" | "audiobook" | "podcast",
-) {
-  return authenticatedRequestJson<null>(
-    serverAddress,
-    `/api/admin/media-collections/${encodeURIComponent(collectionId)}/media-type`,
-    token,
-    { method: "PUT", body: JSON.stringify({ mediaType }) },
-  );
-}
-
-export function resetMediaCollectionType(
-  serverAddress: string,
-  token: string,
-  collectionId: string,
-) {
-  return authenticatedRequestJson<null>(
-    serverAddress,
-    `/api/admin/media-collections/${encodeURIComponent(collectionId)}/media-type`,
     token,
     { method: "DELETE" },
   );

@@ -48,12 +48,12 @@ test("rejects unsafe or incomplete server addresses", () => {
   );
 });
 
-test("scheme-less addresses probe HTTP and HTTPS on configured Peridot ports", () => {
+test("scheme-less addresses probe HTTPS before HTTP on configured Peridot ports", () => {
   assert.deepEqual(serverAddressCandidates("192.168.1.20"), [
-    "http://192.168.1.20",
     "https://192.168.1.20",
-    "http://192.168.1.20:17430",
+    "http://192.168.1.20",
     "https://192.168.1.20:17430",
+    "http://192.168.1.20:17430",
   ]);
   assert.deepEqual(
     serverAddressCandidates("https://music.example.com/peridot"),
@@ -63,12 +63,12 @@ test("scheme-less addresses probe HTTP and HTTPS on configured Peridot ports", (
     ],
   );
   assert.deepEqual(serverAddressCandidates("192.168.1.20:17430"), [
-    "http://192.168.1.20:17430",
     "https://192.168.1.20:17430",
+    "http://192.168.1.20:17430",
   ]);
   assert.deepEqual(serverAddressCandidates("192.168.1.20:80"), [
-    "http://192.168.1.20",
     "https://192.168.1.20:80",
+    "http://192.168.1.20",
   ]);
 });
 
@@ -118,6 +118,14 @@ test("scheme-less addresses discover an HTTPS-only server", async () => {
   });
 
   assert.equal(found, "https://192.168.1.20:17430");
+});
+
+test("scheme-less addresses prefer HTTPS when both protocols are reachable", async () => {
+  const found = await findPeridotServerAddress("peridot.example.com", {
+    fetcher: async () => Response.json({ status: "ok", service: "peridot" }),
+  });
+
+  assert.equal(found, "https://peridot.example.com");
 });
 
 test("manual address probing requires the Peridot health signature", async () => {

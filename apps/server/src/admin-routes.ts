@@ -18,7 +18,6 @@ import type {
   SourceListResponse,
   UpdateMetadataProviderRequest,
   UpdateServerSettingsRequest,
-  UpdateSourceRequest,
   UpdateUserRequest,
   UserListResponse,
   UpdateStatusResponse,
@@ -59,9 +58,7 @@ import {
   reorderSources,
   searchDirectoryEntries,
   SourceError,
-  updateSourceClassification,
 } from "./sources.js";
-import { registerMediaClassificationRoutes } from "./media-classification-routes.js";
 import {
   queueLibraryScan,
   queueMetadataFetch,
@@ -425,40 +422,6 @@ export async function registerAdminRoutes(
       },
     );
 
-    admin.patch<{ Params: { id: string }; Body: UpdateSourceRequest }>(
-      "/api/admin/sources/:id",
-      async (request, reply): Promise<CreateSourceResponse | undefined> => {
-        try {
-          const source = await updateSourceClassification(
-            database,
-            request.params.id,
-            request.body,
-          );
-          await tasks.stopForSource(source.id);
-          const task = await queueLibraryScan(tasks, {
-            id: source.id,
-            name:
-              source.name ||
-              (source.path
-                ? path.basename(source.path)
-                : (source.url ?? "Jellyfin")),
-          });
-          return { ...source, task: toTaskResponse(task) };
-        } catch (error) {
-          if (error instanceof SourceError) {
-            return sendError(
-              reply,
-              400,
-              "invalid_source",
-              error.message,
-              error.messageDescriptor,
-            );
-          }
-          throw error;
-        }
-      },
-    );
-
     admin.put<{ Body: ReorderSourcesRequest }>(
       "/api/admin/sources/order",
       async (request, reply) => {
@@ -766,8 +729,5 @@ export async function registerAdminRoutes(
       },
     );
 
-    if (catalog) {
-      await registerMediaClassificationRoutes(admin, database, catalog);
-    }
   });
 }

@@ -1,11 +1,7 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { and, or } from "@prisma/orm-sqlite/orm-client";
-import type {
-  MediaType,
-  SourceClassificationMode,
-  TrackMediaTypeOrigin,
-} from "@peridot/contracts";
+import type { TrackMediaTypeOrigin } from "@peridot/contracts";
 import {
   normalizeArtistCredits,
   normalizeOptionalArtistCredits,
@@ -23,11 +19,7 @@ import {
 import type { MetadataEnrichment } from "./metadata-enrichment.js";
 import {
   detectMediaType,
-  effectiveMediaType,
-  mediaTypeValue,
-  sourceClassificationMode,
   type DetectedMediaType,
-  type EffectiveMediaType,
 } from "./media-classification.js";
 import {
   collectionFallbackTitle,
@@ -64,8 +56,6 @@ interface DiscoveredFile {
 
 interface SourceFile extends DiscoveredFile {
   sourceId: string;
-  classificationMode: SourceClassificationMode;
-  fixedMediaType: MediaType | null;
 }
 
 interface JellyfinSource {
@@ -73,8 +63,6 @@ interface JellyfinSource {
   name: string;
   url: string;
   apiKey: string;
-  classificationMode: SourceClassificationMode;
-  fixedMediaType: MediaType | null;
   libraryCollectionType: string | null;
   libraryId: string | null;
 }
@@ -101,8 +89,6 @@ type PreparedFile =
       kind: "unchanged";
       file: SourceFile;
       existing: TrackRow;
-      classificationUnchanged: boolean;
-      effective: EffectiveMediaType;
       wasUnavailable: boolean;
     }
   | {
@@ -117,22 +103,8 @@ type PreparedFile =
       existing: TrackRow | null;
     };
 
-function detectedMediaType(track: TrackRow): DetectedMediaType {
-  const origin =
-    track.detectedMediaTypeOrigin === "jellyfin" ||
-    track.detectedMediaTypeOrigin === "embedded"
-      ? track.detectedMediaTypeOrigin
-      : "fallback";
-  return {
-    mediaType: mediaType(track.detectedMediaType),
-    origin,
-  };
-}
-
 function trackMediaTypeOrigin(value: string): TrackMediaTypeOrigin {
-  return value === "manual" ||
-    value === "source" ||
-    value === "jellyfin" ||
+  return value === "jellyfin" ||
     value === "embedded"
     ? value
     : "fallback";
@@ -276,20 +248,10 @@ export class LibraryScanner {
       existing.fileModifiedAt.getTime() === file.modifiedAt.getTime() &&
       existing.metadataVersion >= CURRENT_METADATA_VERSION;
     if (existing && fileUnchanged) {
-      const detected = detectedMediaType(existing);
-      const effective = effectiveMediaType(detected, {
-        override: existing.mediaTypeOverride,
-        classificationMode: file.classificationMode,
-        fixedMediaType: file.fixedMediaType,
-      });
       return {
         kind: "unchanged",
         file,
         existing,
-        classificationUnchanged:
-          mediaType(existing.mediaType) === effective.mediaType &&
-          trackMediaTypeOrigin(existing.mediaTypeOrigin) === effective.origin,
-        effective,
         wasUnavailable: !existing.available,
       };
     }
@@ -400,10 +362,6 @@ export class LibraryScanner {
             files.push({
               ...file,
               sourceId: source.id,
-              classificationMode: sourceClassificationMode(
-                source.classificationMode,
-              ),
-              fixedMediaType: mediaTypeValue(source.fixedMediaType),
             });
           }
           continue;
@@ -434,10 +392,6 @@ export class LibraryScanner {
             "Jellyfin",
           url: source.url,
           apiKey,
-          classificationMode: sourceClassificationMode(
-            source.classificationMode,
-          ),
-          fixedMediaType: mediaTypeValue(source.fixedMediaType),
           libraryCollectionType: source.externalLibraryCollectionType,
           libraryId: source.externalLibraryId,
         };
@@ -646,27 +600,14 @@ export class LibraryScanner {
   ): Promise<void> {
     throwIfAborted(signal);
     if (prepared.kind === "unchanged") {
-      if (prepared.classificationUnchanged) {
-        await this.database.orm.Track.where({
-          id: prepared.existing.id,
-        }).update({
-          available: 1,
-          lastSeenScanId: scanId,
-        });
-        if (prepared.wasUnavailable) {
-          await this.catalog?.reindexTrack(prepared.existing.id, "scan");
-        }
-        counts.unchangedCount += 1;
-        return;
-      }
       await this.database.orm.Track.where({ id: prepared.existing.id }).update({
-        mediaType: prepared.effective.mediaType,
-        mediaTypeOrigin: prepared.effective.origin,
         available: 1,
         lastSeenScanId: scanId,
       });
-      await this.catalog?.reindexTrack(prepared.existing.id, "scan");
-      counts.updatedCount += 1;
+      if (prepared.wasUnavailable) {
+        await this.catalog?.reindexTrack(prepared.existing.id, "scan");
+      }
+      counts.unchangedCount += 1;
       return;
     }
 
@@ -702,13 +643,8 @@ export class LibraryScanner {
         releaseTypes: metadata.releaseTypes,
         iTunesMediaType: metadata.iTunesMediaType,
       });
-      const effective = effectiveMediaType(detected, {
-        override: existing?.mediaTypeOverride ?? null,
-        classificationMode: file.classificationMode,
-        fixedMediaType: file.fixedMediaType,
-      });
       const creatorCredits =
-        effective.mediaType !== "music" && albumArtistCredits.length === 0
+        detected.mediaType !== "music" && albumArtistCredits.length === 0
           ? artistCredits
           : albumArtistCredits;
       const albumArtist = creatorCredits.length
@@ -716,7 +652,7 @@ export class LibraryScanner {
         : null;
       const album =
         metadata.album?.trim() ||
-        (effective.mediaType === "music"
+        (detected.mediaType === "music"
           ? null
           : collectionFallbackTitle(file.relativePath));
       const genres = serializeGenres(metadata.genres);
@@ -735,14 +671,12 @@ export class LibraryScanner {
       );
       const publishedAt =
         taggedPublishedAt ??
-        (effective.mediaType === "podcast" ? file.modifiedAt : null);
+        (detected.mediaType === "podcast" ? file.modifiedAt : null);
       const coverId = await this.storeCover(coverImage(metadata.cover));
 
       const trackData = {
-        mediaType: effective.mediaType,
-        mediaTypeOrigin: effective.origin,
-        detectedMediaType: detected.mediaType,
-        detectedMediaTypeOrigin: detected.origin,
+        mediaType: detected.mediaType,
+        mediaTypeOrigin: detected.origin,
         title,
         artist,
         artistCredits: serializeArtistCredits(artistCredits),
@@ -827,19 +761,11 @@ export class LibraryScanner {
         jellyfinTags: item.jellyfinTags,
         jellyfinProviderIds: item.jellyfinProviderIds,
       });
-      const effective = effectiveMediaType(detected, {
-        override: existing?.mediaTypeOverride ?? null,
-        classificationMode: source.classificationMode,
-        fixedMediaType: source.fixedMediaType,
-      });
       const unchanged =
         existing?.externalVersion === item.externalVersion &&
         existing.metadataVersion >= CURRENT_METADATA_VERSION &&
-        mediaType(existing.mediaType) === effective.mediaType &&
-        trackMediaTypeOrigin(existing.mediaTypeOrigin) === effective.origin &&
-        mediaType(existing.detectedMediaType) === detected.mediaType &&
-        trackMediaTypeOrigin(existing.detectedMediaTypeOrigin) ===
-          detected.origin;
+        mediaType(existing.mediaType) === detected.mediaType &&
+        trackMediaTypeOrigin(existing.mediaTypeOrigin) === detected.origin;
       if (existing && unchanged) {
         const wasUnavailable = !existing.available;
         await this.database.orm.Track.where({ id: existing.id }).update({
@@ -887,15 +813,13 @@ export class LibraryScanner {
         item.albumArtists,
       );
       const albumArtists =
-        effective.mediaType !== "music" && itemAlbumArtists.length === 0
+        detected.mediaType !== "music" && itemAlbumArtists.length === 0
           ? artistCredits
           : itemAlbumArtists;
       const relativePath = `jellyfin/${item.albumId ?? "unknown"}/${item.externalId}`;
       const trackData = {
-        mediaType: effective.mediaType,
-        mediaTypeOrigin: effective.origin,
-        detectedMediaType: detected.mediaType,
-        detectedMediaTypeOrigin: detected.origin,
+        mediaType: detected.mediaType,
+        mediaTypeOrigin: detected.origin,
         relativePath,
         title: item.title,
         artist: artistCredits.join(", "),

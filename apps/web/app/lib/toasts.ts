@@ -161,35 +161,6 @@ export function notifyMetadataUpdateFailed(
   });
 }
 
-export function notifyMediaTypeUpdated(subject: string, mediaType: string) {
-  addToast({
-    titleMessage: message("toast.mediaTypeUpdatedTitle"),
-    descriptionMessage: message("toast.mediaTypeUpdated", {
-      subject,
-      mediaType,
-    }),
-    status: "success",
-    duration: 5000,
-    kind: "success",
-  });
-}
-
-export function notifyMediaTypeUpdateFailed(
-  subject: string,
-  detailMessage: string,
-) {
-  addToast({
-    titleMessage: message("toast.mediaTypeUpdateFailedTitle"),
-    descriptionMessage: message("toast.mediaTypeUpdateFailed", {
-      subject,
-      message: detailMessage,
-    }),
-    status: "error",
-    duration: 8000,
-    kind: "error",
-  });
-}
-
 export function notifyTrackDownloadFailed(
   trackTitle: string,
   detailMessage: string,

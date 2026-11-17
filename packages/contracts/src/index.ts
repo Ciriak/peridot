@@ -76,9 +76,7 @@ export interface TrackReference {
 
 export type MediaType = "music" | "audiobook" | "podcast";
 export type TrackMediaFilter = MediaType | "all";
-export type SourceClassificationMode = "auto" | "fixed";
-export type TrackMediaTypeOrigin =
-  "manual" | "source" | "jellyfin" | "embedded" | "fallback";
+export type TrackMediaTypeOrigin = "jellyfin" | "embedded" | "fallback";
 
 export interface TrackResponse {
   id: string;
@@ -500,8 +498,6 @@ export type SourceKind = "path" | "url" | "integration";
 export interface SourceResponse {
   id: string;
   kind: SourceKind;
-  classificationMode: SourceClassificationMode;
-  fixedMediaType: MediaType | null;
   externalLibraryCollectionType: string | null;
   name: string | null;
   path: string | null;
@@ -522,16 +518,12 @@ export interface SourceListResponse {
 
 export interface CreatePathSourceRequest {
   kind: "path";
-  classificationMode?: SourceClassificationMode;
-  fixedMediaType?: MediaType | null;
   name?: string | null;
   path: string;
 }
 
 export interface CreateUrlSourceRequest {
   kind: "url";
-  classificationMode?: SourceClassificationMode;
-  fixedMediaType?: MediaType | null;
   name?: string | null;
   url: string;
 }
@@ -539,8 +531,6 @@ export interface CreateUrlSourceRequest {
 export interface CreateJellyfinSourceRequest {
   kind: "integration";
   integration: "jellyfin";
-  classificationMode?: SourceClassificationMode;
-  fixedMediaType?: MediaType | null;
   name?: string | null;
   url: string;
   apiKey: string;
@@ -551,15 +541,6 @@ export type CreateSourceRequest =
   | CreatePathSourceRequest
   | CreateUrlSourceRequest
   | CreateJellyfinSourceRequest;
-
-export interface UpdateSourceRequest {
-  classificationMode: SourceClassificationMode;
-  fixedMediaType?: MediaType | null;
-}
-
-export interface UpdateMediaTypeRequest {
-  mediaType: MediaType;
-}
 
 export interface JellyfinLibraryResponse {
   id: string;

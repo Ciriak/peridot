@@ -609,7 +609,12 @@ test("server settings expose channel update checks and confirmed installation", 
   );
 
   assert.match(page, /useUpdatesQuery/);
-  assert.match(updateCard, /settings\.server\.updates\.version/);
+  assert.match(page, /useRuntimeConfig/);
+  assert.match(page, /runtimeConfig\.public\.clientVersion/);
+  assert.match(updateCard, /settings\.server\.updates\.serverVersion/);
+  assert.match(updateCard, /settings\.server\.updates\.clientVersion/);
+  assert.match(updateCard, /\{\{ updateStatus\?\.version \?\? "—" \}\}/);
+  assert.match(updateCard, /\{\{ clientVersion \}\}/);
   assert.match(updateCard, /settings\.server\.updates\.channel/);
   assert.match(updateCard, /settings\.server\.updates\.revision/);
   assert.match(updateCard, /@click="checkUpdates"/);

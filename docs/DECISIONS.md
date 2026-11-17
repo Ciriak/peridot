@@ -1,5 +1,17 @@
 # Decisions
 
+## 2026-11-17: Scheme-less client addresses prefer HTTPS
+
+When a user enters a Peridot address without an explicit scheme, the client
+probes HTTPS before HTTP while retaining HTTP as a fallback for LAN servers
+without TLS. Explicit `http://` and `https://` addresses still probe only the
+requested protocol.
+
+TLS-only reverse-proxied deployments commonly answer HTTP with a redirect to
+HTTPS. A browser CORS request can fail across that origin change before the
+authenticated API is reached, so the unencrypted candidate must not take
+precedence merely because the proxy's health redirect succeeds.
+
 ## 2026-11-17: Library list pages have scoped quick search
 
 Albums, Artists, Audiobooks, Podcasts, Playlists, and Liked songs each provide
@@ -35,12 +47,13 @@ exposed through the structured Settings reader.
 
 Android launcher icons use `#121312` as an opaque background across legacy and
 adaptive icon paths. The green Peridot mark retains its source artwork margin
-inside that canvas.
+inside that canvas and is centered and rendered at 80% of its earlier source
+scale, leaving roughly 28% canvas padding at the artwork's narrowest side.
 
 Legacy square and circular launcher PNGs contain the background themselves.
 Adaptive icons use the `ic_launcher_background` color resource and a transparent
 foreground scaled on Android's 108 dp canvas. The editable source layers live
-under `apps/android/assets`.
+under `apps/android/assets`, including a separate round full-icon source.
 
 ## 2026-11-17: Playback starts retry three times before failing
 

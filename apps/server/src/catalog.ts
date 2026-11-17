@@ -39,7 +39,7 @@ import { parseStoredGenres } from "./genres.js";
 import { storedMediaType, trackMediaFilter } from "./media.js";
 
 const CATALOG_STATE_ID = "catalog";
-const PROJECTION_VERSION = 5;
+const PROJECTION_VERSION = 6;
 const CHANGE_THROTTLE_MS = 2_000;
 const BACKFILL_BATCH_SIZE = 500;
 const DEFAULT_PAGE_SIZE = 100;

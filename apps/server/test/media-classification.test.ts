@@ -1,9 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  detectMediaType,
-  effectiveMediaType,
-} from "../src/media-classification.js";
+import { detectMediaType } from "../src/media-classification.js";
 
 test("embedded podcast metadata is classified as a podcast", () => {
   assert.deepEqual(
@@ -62,33 +59,3 @@ test("unmatched tracks fall back to music", () => {
   });
 });
 
-test("manual override wins over a fixed source and detected type", () => {
-  const detected = {
-    mediaType: "audiobook" as const,
-    origin: "embedded" as const,
-  };
-  assert.deepEqual(
-    effectiveMediaType(detected, {
-      override: "podcast",
-      classificationMode: "fixed",
-      fixedMediaType: "music",
-    }),
-    { mediaType: "podcast", origin: "manual" },
-  );
-  assert.deepEqual(
-    effectiveMediaType(detected, {
-      override: null,
-      classificationMode: "fixed",
-      fixedMediaType: "music",
-    }),
-    { mediaType: "music", origin: "source" },
-  );
-  assert.deepEqual(
-    effectiveMediaType(detected, {
-      override: null,
-      classificationMode: "auto",
-      fixedMediaType: null,
-    }),
-    detected,
-  );
-});

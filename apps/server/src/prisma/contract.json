@@ -2179,13 +2179,6 @@
           },
           "Source": {
             "fields": {
-              "classificationMode": {
-                "nullable": false,
-                "type": {
-                  "codecId": "sqlite/text@1",
-                  "kind": "scalar"
-                }
-              },
               "createdAt": {
                 "nullable": false,
                 "type": {
@@ -2208,13 +2201,6 @@
                 }
               },
               "externalLibraryId": {
-                "nullable": true,
-                "type": {
-                  "codecId": "sqlite/text@1",
-                  "kind": "scalar"
-                }
-              },
-              "fixedMediaType": {
                 "nullable": true,
                 "type": {
                   "codecId": "sqlite/text@1",
@@ -2288,9 +2274,6 @@
             "relations": {},
             "storage": {
               "fields": {
-                "classificationMode": {
-                  "column": "classificationMode"
-                },
                 "createdAt": {
                   "column": "createdAt"
                 },
@@ -2302,9 +2285,6 @@
                 },
                 "externalLibraryId": {
                   "column": "externalLibraryId"
-                },
-                "fixedMediaType": {
-                  "column": "fixedMediaType"
                 },
                 "id": {
                   "column": "id"
@@ -2587,20 +2567,6 @@
                   "kind": "scalar"
                 }
               },
-              "detectedMediaType": {
-                "nullable": false,
-                "type": {
-                  "codecId": "sqlite/text@1",
-                  "kind": "scalar"
-                }
-              },
-              "detectedMediaTypeOrigin": {
-                "nullable": false,
-                "type": {
-                  "codecId": "sqlite/text@1",
-                  "kind": "scalar"
-                }
-              },
               "discNumber": {
                 "nullable": true,
                 "type": {
@@ -2680,13 +2646,6 @@
               },
               "mediaTypeOrigin": {
                 "nullable": false,
-                "type": {
-                  "codecId": "sqlite/text@1",
-                  "kind": "scalar"
-                }
-              },
-              "mediaTypeOverride": {
-                "nullable": true,
                 "type": {
                   "codecId": "sqlite/text@1",
                   "kind": "scalar"
@@ -2926,12 +2885,6 @@
                 "createdAt": {
                   "column": "createdAt"
                 },
-                "detectedMediaType": {
-                  "column": "detectedMediaType"
-                },
-                "detectedMediaTypeOrigin": {
-                  "column": "detectedMediaTypeOrigin"
-                },
                 "discNumber": {
                   "column": "discNumber"
                 },
@@ -2967,9 +2920,6 @@
                 },
                 "mediaTypeOrigin": {
                   "column": "mediaTypeOrigin"
-                },
-                "mediaTypeOverride": {
-                  "column": "mediaTypeOverride"
                 },
                 "metadataAlbum": {
                   "column": "metadataAlbum"
@@ -5287,15 +5237,6 @@
             },
             "Source": {
               "columns": {
-                "classificationMode": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
-                  "default": {
-                    "kind": "literal",
-                    "value": "auto"
-                  },
-                  "nullable": false
-                },
                 "createdAt": {
                   "codecId": "sqlite/datetime@1",
                   "dataType": "sqlite/datetime",
@@ -5316,11 +5257,6 @@
                   "nullable": true
                 },
                 "externalLibraryId": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
-                  "nullable": true
-                },
-                "fixedMediaType": {
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
                   "nullable": true
@@ -5377,14 +5313,6 @@
               },
               "foreignKeys": [],
               "indexes": [
-                {
-                  "columns": [
-                    "classificationMode"
-                  ],
-                  "name": "Source_classificationMode_idx_d9eab081",
-                  "prefix": "Source_classificationMode_idx",
-                  "unique": false
-                },
                 {
                   "columns": [
                     "kind"
@@ -5600,24 +5528,6 @@
                   },
                   "nullable": false
                 },
-                "detectedMediaType": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
-                  "default": {
-                    "kind": "literal",
-                    "value": "music"
-                  },
-                  "nullable": false
-                },
-                "detectedMediaTypeOrigin": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
-                  "default": {
-                    "kind": "literal",
-                    "value": "fallback"
-                  },
-                  "nullable": false
-                },
                 "discNumber": {
                   "codecId": "sqlite/integer@1",
                   "dataType": "sqlite/integer",
@@ -5685,11 +5595,6 @@
                     "value": "fallback"
                   },
                   "nullable": false
-                },
-                "mediaTypeOverride": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
-                  "nullable": true
                 },
                 "metadataAlbum": {
                   "codecId": "sqlite/text@1",
@@ -6266,7 +6171,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "ba133506171d37b8a85af222553e3399c488fa1856749d814284ab46a4e99533"
+    "storageHash": "9b4234f0591e41176d20f5d34fd379b28d1d2b94ea0a96897b3f39d419b8af81"
   },
   "execution": {
     "executionHash": "b8742140c70062f86caa6d72cafc965dc42172098c5fb9a906ef71c33c37e56b",

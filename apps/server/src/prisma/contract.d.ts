@@ -19,7 +19,7 @@ import type {
 } from '@prisma/orm-sqlite/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'ba133506171d37b8a85af222553e3399c488fa1856749d814284ab46a4e99533'>;
+  StorageHashBase<'9b4234f0591e41176d20f5d34fd379b28d1d2b94ea0a96897b3f39d419b8af81'>;
 export type ExecutionHash =
   ExecutionHashBase<'b8742140c70062f86caa6d72cafc965dc42172098c5fb9a906ef71c33c37e56b'>;
 export type ProfileHash =
@@ -450,12 +450,10 @@ export namespace Models {
     readonly [RelationKeys]?: 'user';
   };
   export type Source = {
-    classificationMode: FieldOutputTypes['__unbound__']['Source']['classificationMode'];
     createdAt: FieldOutputTypes['__unbound__']['Source']['createdAt'];
     credentialCiphertext: FieldOutputTypes['__unbound__']['Source']['credentialCiphertext'];
     externalLibraryCollectionType: FieldOutputTypes['__unbound__']['Source']['externalLibraryCollectionType'];
     externalLibraryId: FieldOutputTypes['__unbound__']['Source']['externalLibraryId'];
-    fixedMediaType: FieldOutputTypes['__unbound__']['Source']['fixedMediaType'];
     id: FieldOutputTypes['__unbound__']['Source']['id'];
     integration: FieldOutputTypes['__unbound__']['Source']['integration'];
     kind: FieldOutputTypes['__unbound__']['Source']['kind'];
@@ -497,8 +495,6 @@ export namespace Models {
     available: FieldOutputTypes['__unbound__']['Track']['available'];
     coverId: FieldOutputTypes['__unbound__']['Track']['coverId'];
     createdAt: FieldOutputTypes['__unbound__']['Track']['createdAt'];
-    detectedMediaType: FieldOutputTypes['__unbound__']['Track']['detectedMediaType'];
-    detectedMediaTypeOrigin: FieldOutputTypes['__unbound__']['Track']['detectedMediaTypeOrigin'];
     discNumber: FieldOutputTypes['__unbound__']['Track']['discNumber'];
     durationMs: FieldOutputTypes['__unbound__']['Track']['durationMs'];
     externalContainer: FieldOutputTypes['__unbound__']['Track']['externalContainer'];
@@ -511,7 +507,6 @@ export namespace Models {
     lastSeenScanId: FieldOutputTypes['__unbound__']['Track']['lastSeenScanId'];
     mediaType: FieldOutputTypes['__unbound__']['Track']['mediaType'];
     mediaTypeOrigin: FieldOutputTypes['__unbound__']['Track']['mediaTypeOrigin'];
-    mediaTypeOverride: FieldOutputTypes['__unbound__']['Track']['mediaTypeOverride'];
     metadataAlbum: FieldOutputTypes['__unbound__']['Track']['metadataAlbum'];
     metadataAlbumArtist: FieldOutputTypes['__unbound__']['Track']['metadataAlbumArtist'];
     metadataAlbumArtistCredits: FieldOutputTypes['__unbound__']['Track']['metadataAlbumArtistCredits'];
@@ -2267,16 +2262,6 @@ type ContractBase = Omit<
             };
             readonly Source: {
               columns: {
-                readonly classificationMode: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/text@1', 'auto'>;
-                  };
-                  readonly many: false;
-                };
                 readonly createdAt: {
                   readonly dataType: 'sqlite/datetime';
                   readonly codecId: 'sqlite/datetime@1';
@@ -2297,12 +2282,6 @@ type ContractBase = Omit<
                   readonly many: false;
                 };
                 readonly externalLibraryId: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly fixedMediaType: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: true;
@@ -2370,12 +2349,6 @@ type ContractBase = Omit<
               primaryKey: { readonly columns: readonly ['id'] };
               uniques: readonly [];
               indexes: readonly [
-                {
-                  readonly name: 'Source_classificationMode_idx_d9eab081';
-                  readonly prefix: 'Source_classificationMode_idx';
-                  readonly columns: readonly ['classificationMode'];
-                  readonly unique: false;
-                },
                 {
                   readonly name: 'Source_kind_idx_c9ca668f';
                   readonly prefix: 'Source_kind_idx';
@@ -2590,26 +2563,6 @@ type ContractBase = Omit<
                   readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
                   readonly many: false;
                 };
-                readonly detectedMediaType: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/text@1', 'music'>;
-                  };
-                  readonly many: false;
-                };
-                readonly detectedMediaTypeOrigin: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/text@1', 'fallback'>;
-                  };
-                  readonly many: false;
-                };
                 readonly discNumber: {
                   readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/integer@1';
@@ -2688,12 +2641,6 @@ type ContractBase = Omit<
                     readonly kind: 'literal';
                     readonly value: DefaultLiteralValue<'sqlite/text@1', 'fallback'>;
                   };
-                  readonly many: false;
-                };
-                readonly mediaTypeOverride: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
                   readonly many: false;
                 };
                 readonly metadataAlbum: {
@@ -4512,10 +4459,6 @@ type ContractBase = Omit<
           };
           readonly Source: {
             readonly fields: {
-              readonly classificationMode: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
               readonly createdAt: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
@@ -4529,10 +4472,6 @@ type ContractBase = Omit<
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
               readonly externalLibraryId: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly fixedMediaType: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
@@ -4578,14 +4517,12 @@ type ContractBase = Omit<
               readonly table: 'Source';
               readonly namespaceId: '__unbound__';
               readonly fields: {
-                readonly classificationMode: { readonly column: 'classificationMode' };
                 readonly createdAt: { readonly column: 'createdAt' };
                 readonly credentialCiphertext: { readonly column: 'credentialCiphertext' };
                 readonly externalLibraryCollectionType: {
                   readonly column: 'externalLibraryCollectionType';
                 };
                 readonly externalLibraryId: { readonly column: 'externalLibraryId' };
-                readonly fixedMediaType: { readonly column: 'fixedMediaType' };
                 readonly id: { readonly column: 'id' };
                 readonly integration: { readonly column: 'integration' };
                 readonly kind: { readonly column: 'kind' };
@@ -4733,14 +4670,6 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
               };
-              readonly detectedMediaType: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly detectedMediaTypeOrigin: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
               readonly discNumber: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
@@ -4787,10 +4716,6 @@ type ContractBase = Omit<
               };
               readonly mediaTypeOrigin: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly mediaTypeOverride: {
-                readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
               readonly metadataAlbum: {
@@ -4928,8 +4853,6 @@ type ContractBase = Omit<
                 readonly available: { readonly column: 'available' };
                 readonly coverId: { readonly column: 'coverId' };
                 readonly createdAt: { readonly column: 'createdAt' };
-                readonly detectedMediaType: { readonly column: 'detectedMediaType' };
-                readonly detectedMediaTypeOrigin: { readonly column: 'detectedMediaTypeOrigin' };
                 readonly discNumber: { readonly column: 'discNumber' };
                 readonly durationMs: { readonly column: 'durationMs' };
                 readonly externalContainer: { readonly column: 'externalContainer' };
@@ -4942,7 +4865,6 @@ type ContractBase = Omit<
                 readonly lastSeenScanId: { readonly column: 'lastSeenScanId' };
                 readonly mediaType: { readonly column: 'mediaType' };
                 readonly mediaTypeOrigin: { readonly column: 'mediaTypeOrigin' };
-                readonly mediaTypeOverride: { readonly column: 'mediaTypeOverride' };
                 readonly metadataAlbum: { readonly column: 'metadataAlbum' };
                 readonly metadataAlbumArtist: { readonly column: 'metadataAlbumArtist' };
                 readonly metadataAlbumArtistCredits: {

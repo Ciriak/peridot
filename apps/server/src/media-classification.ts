@@ -1,13 +1,7 @@
 import type {
   MediaType,
-  SourceClassificationMode,
   TrackMediaTypeOrigin,
 } from "@peridot/contracts";
-
-export type DetectedMediaTypeOrigin = Extract<
-  TrackMediaTypeOrigin,
-  "jellyfin" | "embedded" | "fallback"
->;
 
 export interface MediaDetectionInput {
   extension?: string | null;
@@ -23,11 +17,6 @@ export interface MediaDetectionInput {
 }
 
 export interface DetectedMediaType {
-  mediaType: MediaType;
-  origin: DetectedMediaTypeOrigin;
-}
-
-export interface EffectiveMediaType {
   mediaType: MediaType;
   origin: TrackMediaTypeOrigin;
 }
@@ -88,32 +77,8 @@ export function detectMediaType(input: MediaDetectionInput): DetectedMediaType {
   return { mediaType: "music", origin: "fallback" };
 }
 
-export function effectiveMediaType(
-  detected: DetectedMediaType,
-  options: {
-    override?: string | null;
-    classificationMode?: string | null;
-    fixedMediaType?: string | null;
-  },
-): EffectiveMediaType {
-  const override = mediaTypeValue(options.override);
-  if (override) return { mediaType: override, origin: "manual" };
-  if (options.classificationMode === "fixed") {
-    const fixed = mediaTypeValue(options.fixedMediaType);
-    if (fixed) return { mediaType: fixed, origin: "source" };
-  }
-  return detected;
-}
-
 export function mediaTypeValue(value: unknown): MediaType | null {
   return value === "music" || value === "audiobook" || value === "podcast"
     ? value
     : null;
-}
-
-export function sourceClassificationMode(
-  value: unknown,
-  fallback: SourceClassificationMode = "auto",
-): SourceClassificationMode {
-  return value === "fixed" || value === "auto" ? value : fallback;
 }
