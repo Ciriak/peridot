@@ -154,7 +154,7 @@ export class CredentialStore {
         store.validateStoredCredentials(groups);
       } catch {
         throw new CredentialStoreError(
-          "PERIDOT_CREDENTIAL_KEY cannot decrypt the existing integration credentials.",
+          "PERIDOT_CREDENTIAL_KEY cannot decrypt the existing plugin credentials.",
           503,
         );
       }
@@ -174,7 +174,7 @@ export class CredentialStore {
       store.validateStoredCredentials(groups);
     } catch {
       throw new CredentialStoreError(
-        "The local credential encryption key cannot decrypt the existing integration credentials. Set PERIDOT_CREDENTIAL_KEY to the previous key and restart Peridot once to migrate it.",
+        "The local credential encryption key cannot decrypt the existing plugin credentials. Set PERIDOT_CREDENTIAL_KEY to the previous key and restart Peridot once to migrate it.",
         503,
       );
     }

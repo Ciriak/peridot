@@ -1,5 +1,6 @@
 # Decisions
 
+<<<<<<< HEAD
 ## 2026-11-18: Catalog paging uses stable keyset cursors
 
 Track, album, artist, audiobook, and podcast listing cursors use the active
@@ -120,6 +121,28 @@ Stale cursor responses bypass the generic query retry policy. This prevents
 multiple retries of the same known-invalid cursor before the controlled
 first-page recovery runs. Other request failures retain the normal visible
 error path.
+=======
+## 2026-11-17: Jellyfin is a trusted bundled source plugin
+
+Peridot loads Jellyfin through a generic plugin host backed by
+`@peridot/plugin-sdk`. The Jellyfin package owns protocol-specific discovery,
+configuration validation, scan mapping, media classification evidence, artwork
+requests, and audio proxying. Core owns storage, tasks, catalog projections,
+credentials, HTTP range handling, and plugin lifecycle.
+
+Plugins model installation rather than an enable toggle: administrators can
+install or uninstall a plugin, and uninstall requires explicit confirmation.
+Jellyfin starts installed for existing and new databases. Uninstalling purges
+its local sources, tracks, artwork, encrypted credentials, task history, and
+track-linked user state, but never deletes data from the Jellyfin server.
+
+Plugin manifests reserve source, display, playlist-generation, and
+data-processing contribution kinds. Only source execution is implemented in
+this milestone. Installation records include source type, locator, and version
+so a future catalog can support GitHub-hosted packages without changing source
+or lifecycle storage. Executable code remains bundled and trusted for now;
+remote packages require a sandboxed runtime and package verification.
+>>>>>>> f398c39 (feat: wip pluin)
 
 ## 2026-11-17: Docker does not run or control Watchtower
 
@@ -244,8 +267,10 @@ exposed through the structured Settings reader.
 
 Android launcher icons use `#121312` as an opaque background across legacy and
 adaptive icon paths. The green Peridot mark retains its source artwork margin
-inside that canvas and is centered and rendered at 80% of its earlier source
-scale, leaving roughly 28% canvas padding at the artwork's narrowest side.
+inside that canvas and is centered and rendered at 70% of its original source
+scale, leaving roughly 30% canvas padding at the artwork's narrowest side. The
+additional inset keeps the mark clear of curved launcher masks without making
+the legacy square mark visually undersized.
 
 Legacy square and circular launcher PNGs contain the background themselves.
 Adaptive icons use the `ic_launcher_background` color resource and a transparent

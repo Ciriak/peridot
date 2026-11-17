@@ -4,6 +4,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { TaskResponse } from "@peridot/contracts";
+import { createJellyfinPlugin } from "@peridot/plugin-jellyfin";
 import { buildApp } from "../src/app.js";
 import { artworkCacheDirectory } from "../src/artwork-cache.js";
 import { localCredentialKeyFile } from "../src/credential-store.js";
@@ -96,10 +97,14 @@ export async function createTestContext(
     metadataFetch,
     metadataRequestIntervalMs,
     discogsFetch,
-    ...(options.jellyfinFetch ? { jellyfinFetch: options.jellyfinFetch } : {}),
-    ...(options.jellyfinRequestTimeoutMs !== undefined
-      ? { jellyfinRequestTimeoutMs: options.jellyfinRequestTimeoutMs }
-      : {}),
+    plugins: [
+      createJellyfinPlugin({
+        ...(options.jellyfinFetch ? { fetch: options.jellyfinFetch } : {}),
+        ...(options.jellyfinRequestTimeoutMs !== undefined
+          ? { requestTimeoutMs: options.jellyfinRequestTimeoutMs }
+          : {}),
+      }),
+    ],
     ...(options.discogsRequestIntervalMs !== undefined
       ? { discogsRequestIntervalMs: options.discogsRequestIntervalMs }
       : { discogsRequestIntervalMs: 0 }),

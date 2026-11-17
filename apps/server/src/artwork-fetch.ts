@@ -1,8 +1,7 @@
 import { pruneReferencedArtwork, type ArtworkCache } from "./artwork-cache.js";
 import type { CatalogService } from "./catalog.js";
-import type { CredentialStore } from "./credential-store.js";
 import type { Database } from "./database.js";
-import { JellyfinClient, JellyfinError } from "./jellyfin.js";
+import type { PluginService } from "./plugins.js";
 import type { ArtworkJobRow, SourceRow, TaskRow } from "./prisma/models.js";
 import {
   artworkDetails,
@@ -12,17 +11,17 @@ import {
 
 const ARTWORK_CONCURRENCY = 6;
 const PROGRESS_WRITE_INTERVAL_MS = 250;
+const MAX_COVER_BYTES = 5 * 1024 * 1024;
+const COVER_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 interface CoverImage {
-  data: Buffer;
+  data: Uint8Array;
   mimeType: string;
 }
 
 interface ArtworkSource {
-  id: string;
-  name: string;
-  url: string;
-  apiKey: string;
+  handle: PluginSourceHandle;
+  adapter: PluginSourceAdapter;
 }
 
 interface ArtworkGroup {
@@ -107,35 +106,6 @@ export async function syncArtworkJob(
   });
 }
 
-function sourceCredentials(
-  sources: readonly SourceRow[],
-  credentials: CredentialStore,
-): Map<string, ArtworkSource> {
-  return new Map(
-    sources.flatMap((source) => {
-      if (
-        source.kind !== "integration" ||
-        source.integration !== "jellyfin" ||
-        !source.url ||
-        !source.credentialCiphertext
-      ) {
-        return [];
-      }
-      return [
-        [
-          source.id,
-          {
-            id: source.id,
-            name: source.name || source.url,
-            url: source.url,
-            apiKey: credentials.decrypt(source.credentialCiphertext, "source"),
-          },
-        ] as const,
-      ];
-    }),
-  );
-}
-
 function taskSourceName(task: TaskRow): string {
   return task.sourceName || "All sources";
 }
@@ -149,7 +119,7 @@ function errorSummary(error: unknown): string {
 export class ArtworkService {
   constructor(
     private readonly database: Database,
-    private readonly jellyfin: JellyfinClient,
+    private readonly plugins: PluginService,
     private readonly catalog: CatalogService,
     private readonly credentials: CredentialStore,
     private readonly artworkCache: ArtworkCache,
@@ -187,12 +157,19 @@ export class ArtworkService {
       };
     }
 
-    const sources = sourceCredentials(
-      await this.database.orm.Source.where((source) =>
-        source.id.in([...new Set(jobs.map((job) => job.sourceId))]),
-      ).all(),
-      this.credentials,
-    );
+    const sourceRows = await this.database.orm.Source.where((source) =>
+      source.id.in([...new Set(jobs.map((job) => job.sourceId))]),
+    ).all();
+    const sources = new Map<string, ArtworkSource>();
+    for (const source of sourceRows) {
+      const adapter = await this.plugins.sourceAdapter(source);
+      if (adapter) {
+        sources.set(source.id, {
+          handle: this.plugins.sourceHandle(source),
+          adapter,
+        });
+      }
+    }
     const groups = new Map<string, ArtworkGroup>();
     for (const job of jobs) {
       const source = sources.get(job.sourceId);
@@ -272,9 +249,13 @@ export class ArtworkService {
       );
       try {
         if ("error" in result) throw result.error;
-        const coverId = result.cover
-          ? await this.storeCover(result.cover)
-          : null;
+        const cover =
+          result.cover &&
+          COVER_TYPES.has(result.cover.mimeType) &&
+          result.cover.data.length <= MAX_COVER_BYTES
+            ? result.cover
+            : null;
+        const coverId = cover ? await this.storeCover(cover) : null;
         let updatedJobs = 0;
         for (const job of group.jobs) {
           const updated = await this.catalog.updateTrackCover(
@@ -295,10 +276,10 @@ export class ArtworkService {
         ).deleteAndCount();
       } catch (error) {
         if (
-          error instanceof JellyfinError &&
+          error instanceof PluginError &&
           (error.code === "invalid_credentials" || error.code === "unavailable")
         ) {
-          unavailableSources.add(group.source.id);
+          unavailableSources.add(group.source.handle.id);
         }
         failureSummary ??= errorSummary(error);
         failed += group.jobs.length;
@@ -348,25 +329,27 @@ export class ArtworkService {
         pending.set(
           index,
           (async () => {
-            if (unavailableSources.has(group.source.id)) {
+            if (unavailableSources.has(group.source.handle.id)) {
               return {
                 group,
-                error: new JellyfinError(
-                  "Jellyfin could not provide artwork.",
+                error: new PluginError(
+                  "The source plugin could not provide artwork.",
                   "unavailable",
+                  502,
                 ),
               };
             }
             try {
               return {
                 group,
-                cover: await this.jellyfin.cover(
-                  group.source.url,
-                  group.source.apiKey,
-                  group.externalCoverItemId,
-                  group.externalCoverTag,
+                cover: await group.source.adapter.artwork({
+                  source: group.source.handle,
+                  reference: {
+                    itemId: group.externalCoverItemId,
+                    tag: group.externalCoverTag,
+                  },
                   signal,
-                ),
+                }),
               };
             } catch (error) {
               return { group, error };

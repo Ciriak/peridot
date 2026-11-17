@@ -128,16 +128,18 @@ test("Jellyfin library discovery creates one auto-detected source per selected l
   try {
     const discovery = await context.app.inject({
       method: "POST",
-      url: "/api/admin/integrations/jellyfin/libraries",
+      url: "/api/admin/plugins/jellyfin/sources/discover",
       headers: context.authorization,
       payload: {
-        url: "http://jellyfin.local:8096",
-        apiKey: API_KEY,
+        configuration: {
+          url: "http://jellyfin.local:8096",
+          apiKey: API_KEY,
+        },
       },
     });
     assert.equal(discovery.statusCode, 200, discovery.body);
     assert.equal(
-      discovery.json<{ items: Array<{ name: string }> }>().items[0]?.name,
+      discovery.json<{ items: Array<{ label: string }> }>().items[0]?.label,
       "Audiobooks",
     );
 
@@ -146,22 +148,23 @@ test("Jellyfin library discovery creates one auto-detected source per selected l
       url: "/api/admin/sources",
       headers: context.authorization,
       payload: {
-        kind: "integration",
-        integration: "jellyfin",
-        libraryId: "audio-library-id",
-        url: "http://jellyfin.local:8096",
-        apiKey: API_KEY,
+        kind: "plugin",
+        pluginId: "jellyfin",
+        configuration: {
+          libraryId: "audio-library-id",
+          url: "http://jellyfin.local:8096",
+          apiKey: API_KEY,
+        },
       },
     });
     assert.equal(create.statusCode, 201, create.body);
     const source = create.json<{
       id: string;
-      externalLibraryCollectionType: string | null;
-      externalLibraryId: string;
+      configuration: Record<string, string> | null;
       task: TaskResponse;
     }>();
-    assert.equal(source.externalLibraryCollectionType, "books");
-    assert.equal(source.externalLibraryId, "audio-library-id");
+    assert.equal(source.configuration?.libraryCollectionType, "books");
+    assert.equal(source.configuration?.libraryId, "audio-library-id");
     await waitForScan(context, source.task.id);
 
     assert.ok(
@@ -251,11 +254,13 @@ test("Jellyfin auto-detects audiobooks, podcasts, and music within one library",
       url: "/api/admin/sources",
       headers: context.authorization,
       payload: {
-        kind: "integration",
-        integration: "jellyfin",
-        libraryId: "music-library-id",
-        url: "http://jellyfin.example.test",
-        apiKey: API_KEY,
+        kind: "plugin",
+        pluginId: "jellyfin",
+        configuration: {
+          libraryId: "music-library-id",
+          url: "http://jellyfin.example.test",
+          apiKey: API_KEY,
+        },
       },
     });
     assert.equal(created.statusCode, 201, created.body);
@@ -265,9 +270,9 @@ test("Jellyfin auto-detects audiobooks, podcasts, and music within one library",
     const tracks = await context.database.orm.Track.all();
     const byTitle = new Map(tracks.map((track) => [track.title, track]));
     assert.equal(byTitle.get("Chapter One")?.mediaType, "audiobook");
-    assert.equal(byTitle.get("Chapter One")?.mediaTypeOrigin, "jellyfin");
+    assert.equal(byTitle.get("Chapter One")?.mediaTypeOrigin, "source");
     assert.equal(byTitle.get("Episode One")?.mediaType, "podcast");
-    assert.equal(byTitle.get("Episode One")?.mediaTypeOrigin, "jellyfin");
+    assert.equal(byTitle.get("Episode One")?.mediaTypeOrigin, "source");
     assert.equal(byTitle.get("Song One")?.mediaType, "music");
     assert.equal(byTitle.get("Song One")?.mediaTypeOrigin, "fallback");
 
@@ -306,27 +311,29 @@ test("Jellyfin sources validate, import audio only, encrypt credentials, proxy p
       url: "/api/admin/sources",
       headers: context.authorization,
       payload: {
-        kind: "integration",
-        integration: "jellyfin",
-        libraryId: "music-library-id",
-        url: "http://jellyfin.local:8096",
-        apiKey: API_KEY,
+        kind: "plugin",
+        pluginId: "jellyfin",
+        configuration: {
+          libraryId: "music-library-id",
+          url: "http://jellyfin.local:8096",
+          apiKey: API_KEY,
+        },
       },
     });
     assert.equal(create.statusCode, 201, create.body);
     const source = create.json<{
       id: string;
       name: string;
-      url: string;
-      integration: string;
+      pluginId: string;
+      configuration: Record<string, string> | null;
       fileCount: number;
       lastSyncedAt: string | null;
       credentialCiphertext?: unknown;
       task: TaskResponse;
     }>();
     assert.equal(source.name, "Music");
-    assert.equal(source.url, "http://jellyfin.local:8096/");
-    assert.equal(source.integration, "jellyfin");
+    assert.equal(source.configuration?.url, "http://jellyfin.local:8096/");
+    assert.equal(source.pluginId, "jellyfin");
     assert.equal(source.fileCount, 0);
     assert.equal(source.lastSyncedAt, null);
     assert.equal(source.task.kind, "library_scan");
@@ -470,23 +477,25 @@ test("Jellyfin source validation rejects invalid keys without persisting a sourc
       url: "/api/admin/sources",
       headers: context.authorization,
       payload: {
-        kind: "integration",
-        integration: "jellyfin",
-        libraryId: "music-library-id",
-        url: "https://media.example.test/jellyfin",
-        apiKey: "bad-key",
+        kind: "plugin",
+        pluginId: "jellyfin",
+        configuration: {
+          libraryId: "music-library-id",
+          url: "https://media.example.test/jellyfin",
+          apiKey: "bad-key",
+        },
       },
     });
     assert.equal(response.statusCode, 400);
     assert.equal(response.json().error.code, "invalid_source");
     assert.equal(
       response.json().error.messageDescriptor.key,
-      "api.message.jellyfinInvalidCredentials",
+      "plugin.jellyfin.error.invalidCredentials",
     );
     assert.equal(
       (
         await context.database.orm.Source.where({
-          integration: "jellyfin",
+          pluginId: "jellyfin",
         }).all()
       ).length,
       0,
@@ -520,11 +529,13 @@ test("multiple Jellyfin instances are supported while normalized duplicate URLs 
       url: "/api/admin/sources",
       headers: context.authorization,
       payload: {
-        kind: "integration",
-        integration: "jellyfin",
-        libraryId: "music-library-id",
-        url: "https://media.example.test/jellyfin",
-        apiKey: "first-key",
+        kind: "plugin",
+        pluginId: "jellyfin",
+        configuration: {
+          libraryId: "music-library-id",
+          url: "https://media.example.test/jellyfin",
+          apiKey: "first-key",
+        },
       },
     });
     assert.equal(first.statusCode, 201, first.body);
@@ -536,17 +547,19 @@ test("multiple Jellyfin instances are supported while normalized duplicate URLs 
       url: "/api/admin/sources",
       headers: context.authorization,
       payload: {
-        kind: "integration",
-        integration: "jellyfin",
-        libraryId: "music-library-id",
-        url: "https://media.example.test/jellyfin/",
-        apiKey: "different-key",
+        kind: "plugin",
+        pluginId: "jellyfin",
+        configuration: {
+          libraryId: "music-library-id",
+          url: "https://media.example.test/jellyfin/",
+          apiKey: "different-key",
+        },
       },
     });
     assert.equal(duplicate.statusCode, 400);
     assert.equal(
       duplicate.json().error.messageDescriptor.key,
-      "api.message.sourceIntegrationDuplicate",
+      "api.message.sourcePluginDuplicate",
     );
 
     const second = await context.app.inject({
@@ -554,11 +567,13 @@ test("multiple Jellyfin instances are supported while normalized duplicate URLs 
       url: "/api/admin/sources",
       headers: context.authorization,
       payload: {
-        kind: "integration",
-        integration: "jellyfin",
-        libraryId: "music-library-id",
-        url: "https://media.example.test/other",
-        apiKey: "second-key",
+        kind: "plugin",
+        pluginId: "jellyfin",
+        configuration: {
+          libraryId: "music-library-id",
+          url: "https://media.example.test/other",
+          apiKey: "second-key",
+        },
       },
     });
     assert.equal(second.statusCode, 201, second.body);
@@ -578,8 +593,8 @@ test("multiple Jellyfin instances are supported while normalized duplicate URLs 
     assert.equal(
       (
         await context.database.orm.Source.where({
-          kind: "integration",
-          integration: "jellyfin",
+          kind: "plugin",
+          pluginId: "jellyfin",
         }).all()
       ).length,
       2,
@@ -634,11 +649,13 @@ test("Jellyfin rescans use item versions and mark remotely deleted audio unavail
       url: "/api/admin/sources",
       headers: context.authorization,
       payload: {
-        kind: "integration",
-        integration: "jellyfin",
-        libraryId: "music-library-id",
-        url: "http://jellyfin.example.test",
-        apiKey: API_KEY,
+        kind: "plugin",
+        pluginId: "jellyfin",
+        configuration: {
+          libraryId: "music-library-id",
+          url: "http://jellyfin.example.test",
+          apiKey: API_KEY,
+        },
       },
     });
     assert.equal(created.statusCode, 201, created.body);
@@ -710,11 +727,13 @@ test("a failed Jellyfin scan writes an error to the administrator log", async ()
       url: "/api/admin/sources",
       headers: context.authorization,
       payload: {
-        kind: "integration",
-        integration: "jellyfin",
-        libraryId: "music-library-id",
-        url: "http://jellyfin-logging.example.test",
-        apiKey: API_KEY,
+        kind: "plugin",
+        pluginId: "jellyfin",
+        configuration: {
+          libraryId: "music-library-id",
+          url: "http://jellyfin-logging.example.test",
+          apiKey: API_KEY,
+        },
       },
     });
     assert.equal(created.statusCode, 201, created.body);
@@ -795,11 +814,13 @@ test("Jellyfin artwork fetches use bounded concurrency", async () => {
       url: "/api/admin/sources",
       headers: context.authorization,
       payload: {
-        kind: "integration",
-        integration: "jellyfin",
-        libraryId: "music-library-id",
-        url: "http://concurrent-jellyfin.example.test",
-        apiKey: API_KEY,
+        kind: "plugin",
+        pluginId: "jellyfin",
+        configuration: {
+          libraryId: "music-library-id",
+          url: "http://concurrent-jellyfin.example.test",
+          apiKey: API_KEY,
+        },
       },
     });
     assert.equal(created.statusCode, 201, created.body);
@@ -871,11 +892,13 @@ test("failed Jellyfin artwork remains pending and retries after a rescan", async
       url: "/api/admin/sources",
       headers: context.authorization,
       payload: {
-        kind: "integration",
-        integration: "jellyfin",
-        libraryId: "music-library-id",
-        url: "http://retry-jellyfin.example.test",
-        apiKey: API_KEY,
+        kind: "plugin",
+        pluginId: "jellyfin",
+        configuration: {
+          libraryId: "music-library-id",
+          url: "http://retry-jellyfin.example.test",
+          apiKey: API_KEY,
+        },
       },
     });
     assert.equal(created.statusCode, 201, created.body);
@@ -989,11 +1012,13 @@ test("Jellyfin tracks become available before deferred artwork finishes", async 
       url: "/api/admin/sources",
       headers: context.authorization,
       payload: {
-        kind: "integration",
-        integration: "jellyfin",
-        libraryId: "music-library-id",
-        url: "http://deferred-jellyfin.example.test",
-        apiKey: API_KEY,
+        kind: "plugin",
+        pluginId: "jellyfin",
+        configuration: {
+          libraryId: "music-library-id",
+          url: "http://deferred-jellyfin.example.test",
+          apiKey: API_KEY,
+        },
       },
     });
     assert.equal(created.statusCode, 201, created.body);

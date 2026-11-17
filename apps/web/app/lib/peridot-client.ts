@@ -19,8 +19,7 @@ import type {
   CreateUserRequest,
   DirectoryListResponse,
   DirectorySearchResponse,
-  DiscoverJellyfinLibrariesRequest,
-  JellyfinLibraryListResponse,
+  DiscoverPluginSourcesRequest,
   LikeListResponse,
   LikeResponse,
   LikeTarget,
@@ -34,6 +33,9 @@ import type {
   PasswordResetRequestResponse,
   PlaylistDetailResponse,
   PlaylistListResponse,
+  PluginListResponse,
+  PluginResponse,
+  PluginSourceOptionListResponse,
   PodcastListResponse,
   PodcastSummaryResponse,
   QuickPickListResponse,
@@ -545,14 +547,52 @@ export function deleteSource(
   );
 }
 
-export function discoverJellyfinLibraries(
+export function listPlugins(serverAddress: string, token: string) {
+  return authenticatedRequestJson<PluginListResponse>(
+    serverAddress,
+    "/api/admin/plugins",
+    token,
+  );
+}
+
+export function installPlugin(
   serverAddress: string,
   token: string,
-  request: DiscoverJellyfinLibrariesRequest,
+  pluginId: string,
 ) {
-  return authenticatedRequestJson<JellyfinLibraryListResponse>(
+  return authenticatedRequestJson<PluginResponse>(
     serverAddress,
-    "/api/admin/integrations/jellyfin/libraries",
+    `/api/admin/plugins/${encodeURIComponent(pluginId)}/install`,
+    token,
+    { method: "POST" },
+  );
+}
+
+export function uninstallPlugin(
+  serverAddress: string,
+  token: string,
+  pluginId: string,
+) {
+  return authenticatedRequestJson<PluginResponse>(
+    serverAddress,
+    `/api/admin/plugins/${encodeURIComponent(pluginId)}/uninstall`,
+    token,
+    {
+      method: "POST",
+      body: JSON.stringify({ confirm: true }),
+    },
+  );
+}
+
+export function discoverPluginSources(
+  serverAddress: string,
+  token: string,
+  pluginId: string,
+  request: DiscoverPluginSourcesRequest,
+) {
+  return authenticatedRequestJson<PluginSourceOptionListResponse>(
+    serverAddress,
+    `/api/admin/plugins/${encodeURIComponent(pluginId)}/sources/discover`,
     token,
     { method: "POST", body: JSON.stringify(request) },
   );

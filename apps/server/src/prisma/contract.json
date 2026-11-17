@@ -72,6 +72,10 @@
       "model": "PlaylistLike",
       "namespace": "__unbound__"
     },
+    "PluginInstallation": {
+      "model": "PluginInstallation",
+      "namespace": "__unbound__"
+    },
     "QueueItem": {
       "model": "QueueItem",
       "namespace": "__unbound__"
@@ -1948,6 +1952,97 @@
               "table": "PlaylistLike"
             }
           },
+          "PluginInstallation": {
+            "fields": {
+              "createdAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                }
+              },
+              "installSource": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "installSourceLocator": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "installed": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
+              "installedAt": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                }
+              },
+              "pluginId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "updatedAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                }
+              },
+              "version": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "createdAt": {
+                  "column": "createdAt"
+                },
+                "installSource": {
+                  "column": "installSource"
+                },
+                "installSourceLocator": {
+                  "column": "installSourceLocator"
+                },
+                "installed": {
+                  "column": "installed"
+                },
+                "installedAt": {
+                  "column": "installedAt"
+                },
+                "pluginId": {
+                  "column": "pluginId"
+                },
+                "updatedAt": {
+                  "column": "updatedAt"
+                },
+                "version": {
+                  "column": "version"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "PluginInstallation"
+            }
+          },
           "QueueItem": {
             "fields": {
               "createdAt": {
@@ -2297,6 +2392,13 @@
           },
           "Source": {
             "fields": {
+              "configuration": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
               "createdAt": {
                 "nullable": false,
                 "type": {
@@ -2311,29 +2413,8 @@
                   "kind": "scalar"
                 }
               },
-              "externalLibraryCollectionType": {
-                "nullable": true,
-                "type": {
-                  "codecId": "sqlite/text@1",
-                  "kind": "scalar"
-                }
-              },
-              "externalLibraryId": {
-                "nullable": true,
-                "type": {
-                  "codecId": "sqlite/text@1",
-                  "kind": "scalar"
-                }
-              },
               "id": {
                 "nullable": false,
-                "type": {
-                  "codecId": "sqlite/text@1",
-                  "kind": "scalar"
-                }
-              },
-              "integration": {
-                "nullable": true,
                 "type": {
                   "codecId": "sqlite/text@1",
                   "kind": "scalar"
@@ -2361,6 +2442,20 @@
                 }
               },
               "path": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "pluginId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "pluginSourceIdentity": {
                 "nullable": true,
                 "type": {
                   "codecId": "sqlite/text@1",
@@ -2408,23 +2503,17 @@
             },
             "storage": {
               "fields": {
+                "configuration": {
+                  "column": "configuration"
+                },
                 "createdAt": {
                   "column": "createdAt"
                 },
                 "credentialCiphertext": {
                   "column": "credentialCiphertext"
                 },
-                "externalLibraryCollectionType": {
-                  "column": "externalLibraryCollectionType"
-                },
-                "externalLibraryId": {
-                  "column": "externalLibraryId"
-                },
                 "id": {
                   "column": "id"
-                },
-                "integration": {
-                  "column": "integration"
                 },
                 "kind": {
                   "column": "kind"
@@ -2437,6 +2526,12 @@
                 },
                 "path": {
                   "column": "path"
+                },
+                "pluginId": {
+                  "column": "pluginId"
+                },
+                "pluginSourceIdentity": {
+                  "column": "pluginSourceIdentity"
                 },
                 "position": {
                   "column": "position"
@@ -5145,6 +5240,79 @@
                 }
               ]
             },
+            "PluginInstallation": {
+              "columns": {
+                "createdAt": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/datetime",
+                  "default": {
+                    "expression": "now()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                },
+                "installSource": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "default": {
+                    "kind": "literal",
+                    "value": "bundled"
+                  },
+                  "nullable": false
+                },
+                "installSourceLocator": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "installed": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "default": {
+                    "kind": "literal",
+                    "value": "1"
+                  },
+                  "nullable": false
+                },
+                "installedAt": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/datetime",
+                  "nullable": true
+                },
+                "pluginId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "updatedAt": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/datetime",
+                  "nullable": false
+                },
+                "version": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [
+                {
+                  "columns": [
+                    "installed"
+                  ],
+                  "name": "PluginInstallation_installed_idx_fe8abdbf",
+                  "prefix": "PluginInstallation_installed_idx",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "pluginId"
+                ]
+              },
+              "uniques": []
+            },
             "QueueItem": {
               "columns": {
                 "createdAt": {
@@ -5508,6 +5676,11 @@
             },
             "Source": {
               "columns": {
+                "configuration": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
                 "createdAt": {
                   "codecId": "sqlite/datetime@1",
                   "dataType": "sqlite/datetime",
@@ -5522,25 +5695,10 @@
                   "dataType": "sqlite/text",
                   "nullable": true
                 },
-                "externalLibraryCollectionType": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
-                  "nullable": true
-                },
-                "externalLibraryId": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
-                  "nullable": true
-                },
                 "id": {
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
                   "nullable": false
-                },
-                "integration": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
-                  "nullable": true
                 },
                 "kind": {
                   "codecId": "sqlite/text@1",
@@ -5558,6 +5716,16 @@
                   "nullable": true
                 },
                 "path": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "pluginId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "pluginSourceIdentity": {
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
                   "nullable": true
@@ -5590,6 +5758,14 @@
                   ],
                   "name": "Source_kind_idx_c9ca668f",
                   "prefix": "Source_kind_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "pluginId"
+                  ],
+                  "name": "Source_pluginId_idx_32c3e11d",
+                  "prefix": "Source_pluginId_idx",
                   "unique": false
                 },
                 {
@@ -6437,10 +6613,14 @@
         "id": "__unbound__"
       }
     },
+<<<<<<< HEAD
     "storageHash": "fb6cc2e0b2e51eb223bd9403134ecbb7e3b9d82ee89302e8b41accf0b8e428e4"
+=======
+    "storageHash": "ec4439f027192084c2f935618851071404049cbdad3a702b90e0a6f14ae7966e"
+>>>>>>> f398c39 (feat: wip pluin)
   },
   "execution": {
-    "executionHash": "85edb6c43666162916bbb345e5da90f53ec36d044ed381921f3de575cd433dc6",
+    "executionHash": "af5db9c2d052d8692ee1f1a70221c2da0712097bb5b307d7d3a15319aaae43d9",
     "mutations": {
       "defaults": [
         {
@@ -6722,6 +6902,21 @@
           "ref": {
             "entry": "PlaylistLike",
             "field": "id",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "onUpdate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "PluginInstallation",
+            "field": "updatedAt",
             "namespace": "__unbound__"
           }
         },

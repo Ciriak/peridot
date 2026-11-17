@@ -2,6 +2,8 @@ import Fastify, { LogController } from "fastify";
 import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
 import type { HealthResponse } from "@peridot/contracts";
+import type { PluginDefinition } from "@peridot/plugin-sdk";
+import { createJellyfinPlugin } from "@peridot/plugin-jellyfin";
 import { registerAuthRoutes, registerProtectedRoutes } from "./auth.js";
 import { ArtworkCache } from "./artwork-cache.js";
 import { CatalogService } from "./catalog.js";
@@ -10,7 +12,6 @@ import { loadServerConfig, type ServerConfig } from "./config.js";
 import { CredentialStore } from "./credential-store.js";
 import { createDatabase, type Database } from "./database.js";
 import { DiscogsClient, DiscogsResolver } from "./discogs.js";
-import { JellyfinClient } from "./jellyfin.js";
 import { registerLibraryRoutes } from "./library-routes.js";
 import { registerLikeRoutes } from "./like-routes.js";
 import { registerPlaylistRoutes } from "./playlist-routes.js";
@@ -29,6 +30,7 @@ import {
 } from "./playback-tokens.js";
 import { registerAdminRoutes } from "./admin-routes.js";
 import { ArtworkService, hasPendingArtworkJobs } from "./artwork-fetch.js";
+import { PluginService } from "./plugins.js";
 import { registerTaskRoutes } from "./task-routes.js";
 import { queueArtworkFetch, TaskService } from "./tasks.js";
 import { ensureServerSettings } from "./server-settings.js";
@@ -58,8 +60,7 @@ export interface BuildAppOptions {
   metadataRequestIntervalMs?: number;
   discogsFetch?: typeof fetch;
   discogsRequestIntervalMs?: number;
-  jellyfinFetch?: typeof fetch;
-  jellyfinRequestTimeoutMs?: number;
+  plugins?: readonly PluginDefinition[];
   enableSourceRefreshScheduler?: boolean;
   enableUpdateCheckScheduler?: boolean;
   updateCheckSchedulerOptions?: UpdateCheckSchedulerOptions;
@@ -133,9 +134,10 @@ export async function buildApp(options: BuildAppOptions = {}) {
       ),
     );
   const playbackTokens = new PlaybackTokenService();
-  const jellyfin = new JellyfinClient(
-    options.jellyfinFetch ?? fetch,
-    options.jellyfinRequestTimeoutMs,
+  const plugins = new PluginService(
+    database,
+    credentials,
+    options.plugins ?? [createJellyfinPlugin()],
   );
   const catalog = new CatalogService(database, playbackTokens);
   const realtime = new RealtimeHub(database);
@@ -253,6 +255,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
   await logBuffer.loadPersistedHistory();
   await ensureDefaultSource(database, config.libraryRoot);
   await ensureDefaultMetadataProvider(database);
+  await plugins.initialize();
   await tasks.initialize();
   const sourceRefreshScheduler = new SourceRefreshScheduler(
     database,
@@ -300,7 +303,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
           }
         },
         options.restartServer,
-        jellyfin,
+        plugins,
         catalog,
         sourceRefreshScheduler,
         updateService,

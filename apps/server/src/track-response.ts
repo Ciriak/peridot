@@ -101,8 +101,7 @@ export function toTrackResponse(
     id: track.id,
     mediaType: storedMediaType(track.mediaType),
     mediaTypeOrigin:
-      track.mediaTypeOrigin === "jellyfin" ||
-      track.mediaTypeOrigin === "embedded"
+      track.mediaTypeOrigin === "source" || track.mediaTypeOrigin === "embedded"
         ? track.mediaTypeOrigin
         : "fallback",
     title: effective.title,

@@ -22,6 +22,7 @@ import {
   listDirectories,
   listMetadataProviderDefinitions,
   listMetadataProviders,
+  listPlugins,
   listSources,
   listTasks,
   listUsers,
@@ -240,6 +241,57 @@ export function useAdminSourcesQuery() {
         queryKeys.sources(scope.value),
         sourceId,
       );
+    },
+  };
+}
+
+export function usePluginsQuery() {
+  const { scope } = useQueryScope();
+  const { token } = useSession();
+  const { user } = useUser();
+  const { errorMessage } = useLocalizedMessage();
+  const query = useQuery({
+    queryKey: computed(() =>
+      scope.value
+        ? queryKeys.plugins(scope.value)
+        : ["peridot", "unscoped", "admin", "plugins"],
+    ),
+    queryFn: () => {
+      if (!scope.value || !token.value) {
+        throw new Error("Peridot query scope is unavailable.");
+      }
+      return listPlugins(scope.value.serverAddress, token.value);
+    },
+    enabled: computed(() =>
+      Boolean(scope.value && token.value && user.value?.role === "admin"),
+    ),
+    meta: { persist: true },
+  });
+  const items = computed(() => query.data.value?.items ?? []);
+  const loaded = computed(() => query.data.value !== undefined);
+  return {
+    items,
+    loading: computed(() =>
+      blockingQueryLoading(loaded.value, query.isPending.value),
+    ),
+    loaded,
+    error: computed(() =>
+      visibleQueryError(
+        loaded.value,
+        query.error.value
+          ? localizedQueryError(
+              query.error.value,
+              errorMessage,
+              "settings.plugins.loadError",
+            )
+          : null,
+      ),
+    ),
+    load: async (force = false) => {
+      if (force || !query.data.value) await query.refetch();
+    },
+    refresh: async () => {
+      await query.refetch();
     },
   };
 }

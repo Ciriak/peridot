@@ -76,7 +76,7 @@ export interface TrackReference {
 
 export type MediaType = "music" | "audiobook" | "podcast";
 export type TrackMediaFilter = MediaType | "all";
-export type TrackMediaTypeOrigin = "jellyfin" | "embedded" | "fallback";
+export type TrackMediaTypeOrigin = "source" | "embedded" | "fallback";
 
 export interface TrackResponse {
   id: string;
@@ -494,17 +494,16 @@ export interface ApiErrorResponse {
   };
 }
 
-export type SourceKind = "path" | "url" | "integration";
+export type SourceKind = "path" | "url" | "plugin";
 
 export interface SourceResponse {
   id: string;
   kind: SourceKind;
-  externalLibraryCollectionType: string | null;
   name: string | null;
   path: string | null;
   url: string | null;
-  integration: string | null;
-  externalLibraryId: string | null;
+  pluginId: string | null;
+  configuration: Record<string, string> | null;
   fileCount: number;
   lastSyncedAt: string | null;
 }
@@ -529,33 +528,95 @@ export interface CreateUrlSourceRequest {
   url: string;
 }
 
-export interface CreateJellyfinSourceRequest {
-  kind: "integration";
-  integration: "jellyfin";
+export interface CreatePluginSourceRequest {
+  kind: "plugin";
+  pluginId: string;
   name?: string | null;
-  url: string;
-  apiKey: string;
-  libraryId: string;
+  configuration: Record<string, string>;
 }
 
 export type CreateSourceRequest =
-  | CreatePathSourceRequest
-  | CreateUrlSourceRequest
-  | CreateJellyfinSourceRequest;
+  CreatePathSourceRequest | CreateUrlSourceRequest | CreatePluginSourceRequest;
 
-export interface JellyfinLibraryResponse {
+export type PluginCapability =
+  | "source"
+  | "display"
+  | "playlist:read"
+  | "playlist:write"
+  | "playlist:generate"
+  | "metadata:search"
+  | "metadata:enrich"
+  | "data:process"
+  | "recommendations:read";
+
+export type PluginContributionKind =
+  "source" | "display" | "playlist-generator" | "data-processor";
+
+export type PluginSourceFieldType = "text" | "url" | "password";
+
+export interface PluginSourceFieldDefinition {
+  key: string;
+  labelMessage: MessageDescriptor;
+  type: PluginSourceFieldType;
+  required: boolean;
+  secret: boolean;
+  visible: boolean;
+  placeholderMessage: MessageDescriptor | null;
+  helpMessage: MessageDescriptor | null;
+}
+
+export interface PluginSourceDiscoveryDefinition {
+  actionMessage: MessageDescriptor;
+  helpMessage: MessageDescriptor | null;
+}
+
+export interface PluginSourceContributionResponse {
+  kind: "source";
+  configurationFields: PluginSourceFieldDefinition[];
+  discovery: PluginSourceDiscoveryDefinition | null;
+}
+
+export interface PluginCapabilityContributionResponse {
+  kind: Exclude<PluginContributionKind, "source">;
+}
+
+export type PluginContributionResponse =
+  PluginSourceContributionResponse | PluginCapabilityContributionResponse;
+
+export type PluginInstallSource = "bundled" | "github";
+
+export interface PluginResponse {
   id: string;
   name: string;
-  collectionType: string | null;
+  descriptionMessage: MessageDescriptor;
+  version: string;
+  sdkVersion: string;
+  capabilities: PluginCapability[];
+  permissions: string[];
+  contributions: PluginContributionResponse[];
+  installed: boolean;
+  installedAt: string | null;
+  installSource: PluginInstallSource;
+  installSourceLocator: string;
+  icon: string | null;
 }
 
-export interface JellyfinLibraryListResponse {
-  items: JellyfinLibraryResponse[];
+export interface PluginListResponse {
+  items: PluginResponse[];
 }
 
-export interface DiscoverJellyfinLibrariesRequest {
-  url: string;
-  apiKey: string;
+export interface PluginSourceOptionResponse {
+  id: string;
+  label: string;
+  configuration: Record<string, string>;
+}
+
+export interface PluginSourceOptionListResponse {
+  items: PluginSourceOptionResponse[];
+}
+
+export interface DiscoverPluginSourcesRequest {
+  configuration: Record<string, string>;
 }
 
 export interface ReorderSourcesRequest {

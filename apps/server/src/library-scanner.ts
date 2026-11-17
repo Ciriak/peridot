@@ -1,7 +1,13 @@
 import path from "node:path";
-import { and, or } from "@prisma/orm-sqlite/orm-client";
+import { or } from "@prisma/orm-sqlite/orm-client";
 import type { TrackMediaTypeOrigin } from "@peridot/contracts";
 import { pruneReferencedArtwork, type ArtworkCache } from "./artwork-cache.js";
+import {
+  PluginError,
+  type PluginSourceAdapter,
+  type PluginSourceHandle,
+  type PluginTrackRecord,
+} from "@peridot/plugin-sdk";
 import {
   normalizeArtistCredits,
   normalizeOptionalArtistCredits,
@@ -13,25 +19,17 @@ import {
   syncArtworkJob,
 } from "./artwork-fetch.js";
 import type { CatalogService } from "./catalog.js";
-import type { CredentialStore } from "./credential-store.js";
 import type { Database } from "./database.js";
 import { serializeGenres } from "./genres.js";
-import {
-  JellyfinClient,
-  JellyfinError,
-  type JellyfinAudioItem,
-} from "./jellyfin.js";
 import type { MetadataEnrichment } from "./metadata-enrichment.js";
-import {
-  detectMediaType,
-  type DetectedMediaType,
-} from "./media-classification.js";
+import { detectMediaType } from "./media-classification.js";
 import {
   collectionFallbackTitle,
   mediaType,
   parsePublishedAt,
 } from "./media.js";
 import { message } from "./messages.js";
+import type { PluginService } from "./plugins.js";
 import type { SourceRow, TaskRow, TrackRow } from "./prisma/models.js";
 import {
   type ScanWorkerCover,
@@ -51,7 +49,7 @@ import {
 const CURRENT_METADATA_VERSION = 8;
 const PROGRESS_WRITE_INTERVAL_MS = 250;
 const EVENT_LOOP_YIELD_INTERVAL_MS = 25;
-const JELLYFIN_PREPARE_CONCURRENCY = 6;
+const PLUGIN_PREPARE_CONCURRENCY = 6;
 
 interface DiscoveredFile {
   absolutePath: string;
@@ -65,18 +63,15 @@ interface SourceFile extends DiscoveredFile {
   sourceId: string;
 }
 
-interface JellyfinSource {
-  id: string;
-  name: string;
-  url: string;
-  apiKey: string;
-  libraryCollectionType: string | null;
-  libraryId: string | null;
+interface PluginSourceWork {
+  source: SourceRow;
+  adapter: PluginSourceAdapter;
+  handle: PluginSourceHandle;
 }
 
 interface RemoteSourceItem {
-  source: JellyfinSource;
-  item: JellyfinAudioItem;
+  source: PluginSourceWork;
+  item: PluginTrackRecord;
 }
 
 interface ScanCounts {
@@ -120,7 +115,6 @@ type PreparedRemoteItem =
       kind: "changed";
       remote: RemoteSourceItem;
       existing: TrackRow | null;
-      detected: DetectedMediaType;
       coverKey: string | null;
       queueArtwork: boolean;
     }
@@ -131,7 +125,7 @@ type PreparedRemoteItem =
     };
 
 function trackMediaTypeOrigin(value: string): TrackMediaTypeOrigin {
-  return value === "jellyfin" || value === "embedded" ? value : "fallback";
+  return value === "source" || value === "embedded" ? value : "fallback";
 }
 
 function positiveInteger(value: number | null | undefined): number | null {
@@ -197,9 +191,9 @@ function coverImage(cover: ScanWorkerCover | null): CoverImage | null {
     : null;
 }
 
-function remoteCoverKey(item: JellyfinAudioItem): string | null {
-  return item.coverItemId
-    ? externalCoverKey(item.coverItemId, item.coverTag)
+function remoteCoverKey(item: PluginTrackRecord): string | null {
+  return item.cover
+    ? externalCoverKey(item.cover.itemId, item.cover.tag)
     : null;
 }
 
@@ -257,9 +251,13 @@ export class LibraryScanner {
     private readonly database: Database,
     private readonly metadataEnrichment?: MetadataEnrichment,
     private readonly catalog?: CatalogService,
+<<<<<<< HEAD
     private readonly jellyfin?: JellyfinClient,
     private readonly credentials?: CredentialStore,
     private readonly artworkCache?: ArtworkCache,
+=======
+    private readonly plugins?: PluginService,
+>>>>>>> f398c39 (feat: wip pluin)
   ) {}
 
   async prepareFile(
@@ -325,13 +323,7 @@ export class LibraryScanner {
         const source = await this.database.orm.Source.first({
           id: task.sourceId,
         });
-        if (
-          !source ||
-          (source.kind !== "path" &&
-            !(
-              source.kind === "integration" && source.integration === "jellyfin"
-            ))
-        ) {
+        if (!source || (source.kind !== "path" && source.kind !== "plugin")) {
           throw new TaskExecutionError(
             "The selected music source is no longer available.",
             "failed",
@@ -340,24 +332,25 @@ export class LibraryScanner {
         }
         requestedSource = source;
       }
-      const sourceQuery = this.database.orm.Source;
+      const sourceQuery = this.database.orm.Source.orderBy([
+        (source) => source.position.asc(),
+        (source) => source.createdAt.asc(),
+      ]);
+      const installedPlugins = new Set(
+        (await this.plugins?.installedDefinitions())?.map(
+          (definition) => definition.manifest.id,
+        ) ?? [],
+      );
       const sources = requestedSource
         ? [requestedSource]
-        : await sourceQuery
-            .where((source) =>
-              or(
-                source.kind.eq("path"),
-                and(
-                  source.kind.eq("integration"),
-                  source.integration.eq("jellyfin"),
-                ),
-              ),
-            )
-            .orderBy([
-              (source) => source.position.asc(),
-              (source) => source.createdAt.asc(),
-            ])
-            .all();
+        : (await sourceQuery.all()).filter(
+            (source) =>
+              source.kind === "path" ||
+              (source.kind === "plugin" &&
+                Boolean(
+                  source.pluginId && installedPlugins.has(source.pluginId),
+                )),
+          );
       if (sources.length === 0) {
         throw new TaskExecutionError(
           "No music library sources are configured.",
@@ -370,7 +363,7 @@ export class LibraryScanner {
         (requestedSource ? task.sourceName : null) ||
         "All sources";
       const files: SourceFile[] = [];
-      const jellyfinSources: JellyfinSource[] = [];
+      const pluginSources: PluginSourceWork[] = [];
       for (const source of sources) {
         throwIfAborted(signal);
         if (source.kind === "path") {
@@ -394,39 +387,29 @@ export class LibraryScanner {
           }
           continue;
         }
-        if (
-          !this.jellyfin ||
-          !this.credentials ||
-          source.integration !== "jellyfin" ||
-          !source.url ||
-          !source.credentialCiphertext
-        ) {
+        if (!this.plugins || source.kind !== "plugin" || !source.pluginId) {
           throw new TaskExecutionError(
-            "The selected Jellyfin source is not fully configured.",
+            "The selected plugin source is not fully configured.",
             "failed",
             message("api.message.sourceUnavailable"),
           );
         }
-        const apiKey = this.credentials.decrypt(
-          source.credentialCiphertext,
-          "source",
-        );
-        const remoteSource: JellyfinSource = {
-          id: source.id,
-          name:
-            source.name ||
-            task.sourceName ||
-            new URL(source.url).host ||
-            "Jellyfin",
-          url: source.url,
-          apiKey,
-          libraryCollectionType: source.externalLibraryCollectionType,
-          libraryId: source.externalLibraryId,
-        };
-        jellyfinSources.push(remoteSource);
+        const adapter = await this.plugins.sourceAdapter(source);
+        if (!adapter) {
+          throw new TaskExecutionError(
+            "The selected plugin source is not available.",
+            "failed",
+            message("api.message.sourceUnavailable"),
+          );
+        }
+        pluginSources.push({
+          source,
+          adapter,
+          handle: this.plugins.sourceHandle(source),
+        });
       }
       let discoveredCount = files.length;
-      let progressTotal: number | null = jellyfinSources.length
+      let progressTotal: number | null = pluginSources.length
         ? null
         : discoveredCount;
       let processedItems = 0;
@@ -477,23 +460,17 @@ export class LibraryScanner {
         await updateProgress();
       }
       await updateProgress(true);
-      for (const source of jellyfinSources) {
+      for (const source of pluginSources) {
         throwIfAborted(signal);
         let sourceTotal: number | null = null;
-        if (!this.jellyfin) {
-          throw new TaskExecutionError(
-            "The selected Jellyfin source is not available.",
-            "failed",
-            message("api.message.sourceUnavailable"),
-          );
-        }
-        const remote = await this.jellyfin.listAudio(
-          source.url,
-          source.apiKey,
-          source.libraryId,
-          async (page) => {
+        let sourceProcessed = 0;
+        await source.adapter.scan({
+          source: source.handle,
+          signal,
+          onPage: async (page) => {
             throwIfAborted(signal);
             sourceTotal = page.totalCount ?? sourceTotal;
+            sourceProcessed = page.processedCount;
             unsupportedCount += page.unsupportedCount;
             processedItems += page.unsupportedCount;
             discoveredCount =
@@ -518,10 +495,8 @@ export class LibraryScanner {
             }
             await updateProgress(true);
           },
-          signal,
-        );
-        completedRemoteTotal +=
-          sourceTotal ?? remote.totalCount ?? remote.processedCount;
+        });
+        completedRemoteTotal += sourceTotal ?? sourceProcessed;
         discoveredCount = files.length + completedRemoteTotal;
       }
       throwIfAborted(signal);
@@ -609,7 +584,7 @@ export class LibraryScanner {
         );
       }
       if (error instanceof TaskExecutionError) throw error;
-      if (error instanceof JellyfinError) {
+      if (error instanceof PluginError) {
         throw new TaskExecutionError(
           error.message,
           "failed",
@@ -793,7 +768,7 @@ export class LibraryScanner {
       let startedAny = false;
       while (
         nextIndex < remoteItems.length &&
-        pending.size < JELLYFIN_PREPARE_CONCURRENCY
+        pending.size < PLUGIN_PREPARE_CONCURRENCY
       ) {
         const index = nextIndex;
         const remote = remoteItems[nextIndex++];
@@ -824,21 +799,15 @@ export class LibraryScanner {
     try {
       throwIfAborted(signal);
       existing = await this.database.orm.Track.where({
-        sourceId: source.id,
+        sourceId: source.source.id,
         externalId: item.externalId,
       }).first();
-      const detected = detectMediaType({
-        jellyfinItemType: item.jellyfinItemType,
-        jellyfinLibraryCollectionType: source.libraryCollectionType,
-        jellyfinTags: item.jellyfinTags,
-        jellyfinProviderIds: item.jellyfinProviderIds,
-      });
       const coverKey = remoteCoverKey(item);
       const unchanged =
         existing?.externalVersion === item.externalVersion &&
         existing.metadataVersion >= CURRENT_METADATA_VERSION &&
-        mediaType(existing.mediaType) === detected.mediaType &&
-        trackMediaTypeOrigin(existing.mediaTypeOrigin) === detected.origin;
+        mediaType(existing.mediaType) === item.mediaType &&
+        trackMediaTypeOrigin(existing.mediaTypeOrigin) === item.mediaTypeOrigin;
       if (existing && unchanged) {
         return { kind: "unchanged", remote, existing };
       }
@@ -852,7 +821,6 @@ export class LibraryScanner {
         kind: "changed",
         remote,
         existing,
-        detected,
         coverKey,
         queueArtwork: Boolean(coverKey && !existingCoverUsable),
       };
@@ -909,7 +877,7 @@ export class LibraryScanner {
       return;
     }
 
-    const { detected, coverKey, queueArtwork } = prepared;
+    const { coverKey, queueArtwork } = prepared;
     const coverId = coverKey ? (prepared.existing?.coverId ?? null) : null;
 
     const artistCredits = normalizeArtistCredits(
@@ -917,14 +885,13 @@ export class LibraryScanner {
     );
     const itemAlbumArtists = normalizeOptionalArtistCredits(item.albumArtists);
     const albumArtists =
-      detected.mediaType !== "music" && itemAlbumArtists.length === 0
+      item.mediaType !== "music" && itemAlbumArtists.length === 0
         ? artistCredits
         : itemAlbumArtists;
-    const relativePath = `jellyfin/${item.albumId ?? "unknown"}/${item.externalId}`;
     const trackData = {
-      mediaType: detected.mediaType,
-      mediaTypeOrigin: detected.origin,
-      relativePath,
+      mediaType: item.mediaType,
+      mediaTypeOrigin: item.mediaTypeOrigin,
+      relativePath: item.relativePath,
       title: item.title,
       artist: artistCredits.join(", "),
       artistCredits: serializeArtistCredits(artistCredits),
@@ -959,14 +926,14 @@ export class LibraryScanner {
       if (queueArtwork) {
         await syncArtworkJob(this.database, {
           trackId: prepared.existing.id,
-          sourceId: source.id,
-          externalCoverItemId: item.coverItemId,
-          externalCoverTag: item.coverTag,
+          sourceId: source.source.id,
+          externalCoverItemId: item.cover?.itemId ?? null,
+          externalCoverTag: item.cover?.tag ?? null,
         });
       } else if (!coverKey) {
         await syncArtworkJob(this.database, {
           trackId: prepared.existing.id,
-          sourceId: source.id,
+          sourceId: source.source.id,
           externalCoverItemId: null,
           externalCoverTag: null,
         });
@@ -974,16 +941,16 @@ export class LibraryScanner {
     } else {
       const created = await this.database.orm.Track.create({
         ...trackData,
-        sourceId: source.id,
+        sourceId: source.source.id,
       });
       await this.catalog?.reindexTrack(created.id, "scan");
       counts.createdCount += 1;
       if (queueArtwork) {
         await syncArtworkJob(this.database, {
           trackId: created.id,
-          sourceId: source.id,
-          externalCoverItemId: item.coverItemId,
-          externalCoverTag: item.coverTag,
+          sourceId: source.source.id,
+          externalCoverItemId: item.cover?.itemId ?? null,
+          externalCoverTag: item.cover?.tag ?? null,
         });
       }
     }

@@ -324,9 +324,11 @@ under Program Files. Turbo and nested scripts need pnpm itself on PATH.
 - `packages/contracts`: shared API types.
 - `packages/ui`: shared brand tokens and reusable Button, Input, Badge, Slider, Gradient, ProgressCircle, PeridotSpinner, and classic Spinner components.
 - `packages/player`: shared playback state contract; the web app owns the browser audio adapter.
-- `packages/plugin-sdk`: initial manifest contract, no execution runtime.
+- `packages/plugin-sdk`: manifest, contribution, source-adapter, and lifecycle
+  contracts.
 - `packages/config`: shared TypeScript configuration.
-- `plugins`: planned official connectors and metadata providers.
+- `plugins`: bundled official plugins; `plugins/jellyfin` contains the Jellyfin
+  source adapter and plugin-owned protocol behavior.
 - `infra`: future self-hosted deployment assets.
 
 ## Localization
@@ -451,36 +453,31 @@ scan. Disabling the schedule prevents both startup and recurring automatic
 scans while retaining manual rescans.
 Administrators can manage where the server gets raw audio files from
 Settings → Admin → Sources. The add-source dialog offers a folder inside the
-server or a Jellyfin instance. Existing URL sources remain listed and removable
-for compatibility, but the dialog no longer offers URL creation. Folder sources
-seed from `MUSIC_LIBRARY_PATH` on first launch.
-Jellyfin sources use the instance's HTTP(S) base URL and an
-administrator-generated API key. The connection is validated before it is
-stored, and the API key is encrypted with the same local credential-key
-mechanism as metadata-provider credentials. Multiple Jellyfin instances with
-different URLs are supported. Adding a folder or Jellyfin source queues its
-source-scoped library scan automatically. A successful scan queues a linked
-metadata-fetch task for the same source. Each scannable source row has a
-three-dot action menu for a source-scoped rescan or confirmed removal. Source
-removal remains available while work is active; the server first stops running
-or queued work for that source and stops unscoped all-source work that could
-access it. Unrelated source-specific tasks continue.
-Jellyfin scans request `Audio` and `AudioBook` items, page through the complete
-result set, and import Peridot-supported original audio containers. Item IDs and
-ETags provide stable identity and change detection. Static
-audio and byte-range requests are proxied through Peridot with the encrypted API
-key remaining server-side. Unsupported Jellyfin audio containers are skipped and
-reported in the scan error count. Pages are processed incrementally so large
-remote libraries update progress without holding the complete Jellyfin catalog
-in memory. Tracks are persisted and become playable without waiting for cover
-artwork. Changed image identities create durable artwork jobs after the metadata
-scan. Metadata provider matching runs first, followed by an `artwork_fetch` task
-that downloads up to six distinct covers concurrently, deduplicates repeated
-images, and updates cover fields without a full catalog reindex. Progress updates
-after each scanned or retrieved item, throttled to four writes per second.
-Jellyfin requests allow up to 60 seconds for response headers because large
-library pages can be slow to prepare. Task failures, partial-completion
-warnings, and startup interruptions are written to the administrator log.
+server or any installed plugin that contributes library sources. Existing URL
+sources remain listed and removable for compatibility, but the dialog no longer
+offers URL creation. Folder sources seed from `MUSIC_LIBRARY_PATH` on first
+launch.
+Settings → Admin → Plugins lists every bundled plugin, its version, permissions,
+contribution kinds, and installed state. Installation is persisted separately
+from source configuration. The installed Jellyfin plugin supplies source fields
+through the generic source dialog; the web app does not own Jellyfin form logic.
+Adding a folder or plugin source queues its source-scoped library scan
+automatically. A successful scan queues a linked metadata-fetch task for the
+same source. Each scannable source row has a three-dot action menu for a
+source-scoped rescan or confirmed removal.
+Uninstalling a plugin requires explicit confirmation. The server stops its
+active tasks and deletes its sources, tracks, artwork jobs and orphaned covers,
+encrypted source credentials, task history, track likes, play events, queue
+items, and playlist entries. External Jellyfin data is never deleted.
+The Jellyfin plugin requests `Audio` and `AudioBook` items, pages through the
+complete result set, and returns protocol-neutral track records to the core
+scanner. Item IDs and ETags provide stable identity and change detection.
+Static audio and byte-range requests are proxied through Peridot with the
+encrypted API key remaining server-side. Unsupported containers are skipped and
+reported in the scan error count. Tracks become playable before cover artwork;
+changed image identities create durable jobs that fetch up to six distinct
+covers concurrently. Core task failures, partial-completion warnings, and
+startup interruptions are written to the administrator log.
 Source rows show the current available file count and latest successful sync
 time. The Settings sidebar shows the number of configured sources beside
 Sources. Both refresh from the shared source query after a completed library
@@ -709,19 +706,22 @@ schedule and its next run. `PUT /api/admin/server` accepts
 `{ "sourceRefresh": { "enabled": boolean, "cron": string } }`, validates the
 expression, persists it, and reschedules the active timer without restarting the
 server.
-Creating a folder or Jellyfin source with `POST /api/admin/sources` returns the
-source plus its automatically queued scan task. A Jellyfin create request uses
-`kind: "integration"`, `integration: "jellyfin"`, `url`, and the write-only
-`apiKey`. Administrators can rescan one scannable source with
+Creating a folder or plugin source with `POST /api/admin/sources` returns the
+source plus its automatically queued scan task. A plugin create request uses
+`kind: "plugin"`, `pluginId`, and a plugin-defined `configuration` object.
+Secret fields are stored encrypted and are never returned. Administrators can
+rescan one scannable source with
 `POST /api/admin/sources/:id/scans`; a scoped scan only changes availability for
 tracks from that source and queues metadata matching for that source. Requests
 are queued behind active work, and equivalent requests that are still queued
 coalesce into the existing task. Administrators stop an active task with
 `POST /api/admin/tasks/:id/stop`.
-Jellyfin creation requires the selected `libraryId`. Administrators discover
-Jellyfin libraries through
-`POST /api/admin/integrations/jellyfin/libraries` using write-only connection
-credentials.
+Administrators list bundled plugins with `GET /api/admin/plugins`, install with
+`POST /api/admin/plugins/:id/install`, and uninstall with
+`POST /api/admin/plugins/:id/uninstall` plus `{ "confirm": true }`.
+Source choices are discovered through
+`POST /api/admin/plugins/:id/sources/discover`. Jellyfin uses this generic route
+to list libraries using write-only connection credentials.
 Administrators manage metadata providers through
 `GET/POST /api/admin/metadata-providers`,
 `GET /api/admin/metadata-providers/definitions`,
@@ -748,12 +748,17 @@ supported range is 1 through 32, the default is 3, and the web UI warns above 4.
 The setting applies when each scan starts. Local directory discovery and audio
 metadata extraction use the workers, while SQLite track and catalog writes stay
 serialized on the main thread. Jellyfin traversal and metadata-provider matching
-retain their separate scheduling.
+retain their separate scheduling. A GitHub-backed plugin catalog can later
+provide a trusted package/version through the existing installation provenance
+fields, but this milestone executes only bundled code. Remote packages require a
+sandboxed runtime and verification before loading.
 Task responses expose only safe titles, source display names, bounded labeled
 details, progress, and lifecycle timestamps. Source paths and provider
 credentials are never included. Core task kinds are `library_scan` and
-`metadata_fetch`; future isolated jobs may use validated
-`plugin:<plugin-id>:<job-name>` kinds without loading plugin code into Fastify.
+`metadata_fetch`; trusted bundled source plugins run through the core scan and
+artwork hosts. Future isolated jobs may use validated
+`plugin:<plugin-id>:<job-name>` kinds, with a sandbox required before remote
+plugin code can execute.
 
 ## Linting and formatting
 

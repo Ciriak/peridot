@@ -7,10 +7,6 @@ export interface MediaDetectionInput {
   podcastUrl?: string | null;
   releaseTypes?: readonly string[];
   iTunesMediaType?: number;
-  jellyfinItemType?: string | null;
-  jellyfinLibraryCollectionType?: string | null;
-  jellyfinTags?: readonly string[];
-  jellyfinProviderIds?: Readonly<Record<string, string | null>>;
 }
 
 export interface DetectedMediaType {
@@ -30,11 +26,7 @@ function hasPodcastEvidence(input: MediaDetectionInput): boolean {
   return (
     input.podcast === true ||
     Boolean(input.podcastId?.trim()) ||
-    Boolean(input.podcastUrl?.trim()) ||
-    (input.jellyfinTags ?? []).some((tag) => normalized(tag) === "podcast") ||
-    Object.keys(input.jellyfinProviderIds ?? {}).some((key) =>
-      ["podcast", "podcastguid", "podcastindex"].includes(normalized(key)),
-    )
+    Boolean(input.podcastUrl?.trim())
   );
 }
 
@@ -45,9 +37,7 @@ function hasAudiobookEvidence(input: MediaDetectionInput): boolean {
     input.iTunesMediaType === 2 ||
     (input.releaseTypes ?? []).some(
       (value) => normalized(value) === "audiobook",
-    ) ||
-    normalized(input.jellyfinItemType) === "audiobook" ||
-    normalized(input.jellyfinLibraryCollectionType) === "books"
+    )
   );
 }
 
@@ -55,20 +45,13 @@ export function detectMediaType(input: MediaDetectionInput): DetectedMediaType {
   if (hasPodcastEvidence(input)) {
     return {
       mediaType: "podcast",
-      origin:
-        input.jellyfinTags?.length ||
-        Object.keys(input.jellyfinProviderIds ?? {}).length
-          ? "jellyfin"
-          : "embedded",
+      origin: "embedded",
     };
   }
   if (hasAudiobookEvidence(input)) {
     return {
       mediaType: "audiobook",
-      origin:
-        input.jellyfinItemType || input.jellyfinLibraryCollectionType
-          ? "jellyfin"
-          : "embedded",
+      origin: "embedded",
     };
   }
   return { mediaType: "music", origin: "fallback" };

@@ -1,8 +1,8 @@
-import type {
-  JellyfinLibraryResponse,
-  MessageDescriptor,
-} from "@peridot/contracts";
-import { message } from "./messages.js";
+import type { MessageDescriptor } from "@peridot/contracts";
+
+function message(key: string): MessageDescriptor {
+  return { key };
+}
 
 const AUDIO_PAGE_SIZE = 500;
 const MAX_COVER_BYTES = 5 * 1024 * 1024;
@@ -64,6 +64,12 @@ interface JellyfinLibrary {
   ItemId?: string | null;
   Name?: string | null;
   CollectionType?: string | null;
+}
+
+export interface JellyfinLibraryResponse {
+  id: string;
+  name: string;
+  collectionType: string | null;
 }
 
 interface JellyfinSystemInfo {
@@ -305,7 +311,7 @@ export class JellyfinClient {
         "Jellyfin rejected the API key.",
         "invalid_credentials",
         400,
-        message("api.message.jellyfinInvalidCredentials"),
+        message("plugin.jellyfin.error.invalidCredentials"),
       );
     }
     if (!response.ok) {
@@ -313,7 +319,7 @@ export class JellyfinClient {
         "Jellyfin did not accept the connection.",
         "unavailable",
         502,
-        message("api.message.jellyfinUnavailable"),
+        message("plugin.jellyfin.error.unavailable"),
       );
     }
     let raw: unknown;
@@ -324,7 +330,7 @@ export class JellyfinClient {
         "Jellyfin returned an invalid server response.",
         "invalid_response",
         502,
-        message("api.message.jellyfinInvalidResponse"),
+        message("plugin.jellyfin.error.invalidResponse"),
       );
     }
     const value = jsonObject(raw) as JellyfinSystemInfo;
@@ -334,7 +340,7 @@ export class JellyfinClient {
         "Jellyfin returned an invalid server response.",
         "invalid_response",
         502,
-        message("api.message.jellyfinInvalidResponse"),
+        message("plugin.jellyfin.error.invalidResponse"),
       );
     }
     return {
@@ -384,7 +390,7 @@ export class JellyfinClient {
           "Jellyfin rejected the API key.",
           "invalid_credentials",
           409,
-          message("api.message.jellyfinInvalidCredentials"),
+          message("plugin.jellyfin.error.invalidCredentials"),
         );
       }
       if (!response.ok) {
@@ -392,7 +398,7 @@ export class JellyfinClient {
           "Jellyfin could not list its audio library.",
           "unavailable",
           502,
-          message("api.message.jellyfinUnavailable"),
+          message("plugin.jellyfin.error.unavailable"),
         );
       }
       let raw: unknown;
@@ -403,7 +409,7 @@ export class JellyfinClient {
           "Jellyfin returned an invalid library response.",
           "invalid_response",
           502,
-          message("api.message.jellyfinInvalidResponse"),
+          message("plugin.jellyfin.error.invalidResponse"),
         );
       }
       const page = jsonObject(raw) as JellyfinItemsResponse;
@@ -462,7 +468,7 @@ export class JellyfinClient {
         "Jellyfin rejected the API key.",
         "invalid_credentials",
         400,
-        message("api.message.jellyfinInvalidCredentials"),
+        message("plugin.jellyfin.error.invalidCredentials"),
       );
     }
     if (!response.ok) {
@@ -470,7 +476,7 @@ export class JellyfinClient {
         "Jellyfin could not list its libraries.",
         "unavailable",
         502,
-        message("api.message.jellyfinUnavailable"),
+        message("plugin.jellyfin.error.unavailable"),
       );
     }
     let raw: unknown;
@@ -481,7 +487,7 @@ export class JellyfinClient {
         "Jellyfin returned an invalid library response.",
         "invalid_response",
         502,
-        message("api.message.jellyfinInvalidResponse"),
+        message("plugin.jellyfin.error.invalidResponse"),
       );
     }
     if (!Array.isArray(raw)) {
@@ -489,7 +495,7 @@ export class JellyfinClient {
         "Jellyfin returned an invalid library response.",
         "invalid_response",
         502,
-        message("api.message.jellyfinInvalidResponse"),
+        message("plugin.jellyfin.error.invalidResponse"),
       );
     }
     return raw.flatMap((value) => {
@@ -534,7 +540,7 @@ export class JellyfinClient {
         "Jellyfin rejected the API key.",
         "invalid_credentials",
         400,
-        message("api.message.jellyfinInvalidCredentials"),
+        message("plugin.jellyfin.error.invalidCredentials"),
       );
     }
     if (response.status === 404 || response.status === 410) return null;
@@ -543,7 +549,7 @@ export class JellyfinClient {
         "Jellyfin could not provide artwork.",
         "unavailable",
         502,
-        message("api.message.jellyfinUnavailable"),
+        message("plugin.jellyfin.error.unavailable"),
       );
     }
     const mimeType =
@@ -638,7 +644,7 @@ export class JellyfinClient {
         `Jellyfin could not be reached: ${detail}.`,
         "unavailable",
         502,
-        message("api.message.jellyfinUnavailable"),
+        message("plugin.jellyfin.error.unavailable"),
       );
     } finally {
       options.signal?.removeEventListener("abort", abortFromCaller);

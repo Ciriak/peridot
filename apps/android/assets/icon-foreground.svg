@@ -4,7 +4,7 @@
   viewBox="0 0 1000 1000"
   xmlns="http://www.w3.org/2000/svg"
 >
-  <g transform="translate(75 100) scale(0.8)">
+  <g transform="translate(128.125 150) scale(0.7)">
     <path
       fill="#00a63e"
       d="M625 716.5Q250 933 250 500t375-216.5q375 216.5 0 433Z"

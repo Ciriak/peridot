@@ -250,6 +250,29 @@ performed.
 Next: replace offset-based cursor pages with sort-key-plus-ID keyset cursors to
 avoid snapshot invalidation during normal scrolling.
 
+## Android launcher icons gain a second padding pass
+
+The centered Peridot mark now renders at 70% of its original source scale,
+leaving roughly 30% padding at the artwork's narrowest side. The square,
+circular, and adaptive foreground sources and all fifteen retained launcher
+PNGs were regenerated together. Legacy square icons retain their opaque canvas,
+round icons retain the circular mask, and adaptive foregrounds retain their
+transparent canvas.
+
+Checks completed:
+
+- Dimension, centering, artwork-bound, corner-alpha, and brand-color inspection
+  at mdpi, hdpi, xhdpi, xxhdpi, and xxxhdpi
+- Android `lintDebug`, including debug resource compilation
+- `git diff --check`
+
+Known limits: launcher appearance was not inspected on a physical Android
+device or emulator. Existing unrelated plugin work remains uncommitted and
+preserved. No commit, push, publication, or deployment was performed.
+
+Next: compare the updated square, circular, and themed masks on an Android
+device.
+
 ## Docker deployment no longer includes Watchtower
 
 Removed the Watchtower service and Docker socket mount from Compose. The Docker

@@ -77,6 +77,9 @@ export const queryKeys = {
   sources(scope: PeridotQueryScope) {
     return [...peridotScopeKey(scope), "admin", "sources"];
   },
+  plugins(scope: PeridotQueryScope) {
+    return [...peridotScopeKey(scope), "admin", "plugins"];
+  },
   users(scope: PeridotQueryScope) {
     return [...peridotScopeKey(scope), "admin", "users"];
   },

@@ -283,15 +283,28 @@ model ServerSetting {
   updatedAt            DateTime @onCreate(now()) @onUpdate(now())
 }
 
+model PluginInstallation {
+  pluginId             String    @id
+  installed            Int       @default(1)
+  installedAt          DateTime?
+  installSource        String    @default("bundled")
+  installSourceLocator String
+  version              String
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @onCreate(now()) @onUpdate(now())
+
+  @@index([installed])
+}
+
 model Source {
   id                   String   @id @onCreate(cuid(2))
   kind                 String
   name                 String?
   path                 String?
   url                  String?
-  integration          String?
-  externalLibraryId    String?
-  externalLibraryCollectionType String?
+  pluginId             String?
+  pluginSourceIdentity String?
+  configuration        String?
   credentialCiphertext String?
   lastSyncedAt         DateTime?
   position             Int      @default(0)
@@ -300,6 +313,7 @@ model Source {
   updatedAt            DateTime @onCreate(now()) @onUpdate(now())
 
   @@index([kind])
+  @@index([pluginId])
   @@index([position])
 }
 
