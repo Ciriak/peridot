@@ -85,7 +85,7 @@ async function loadUpdateConfig(
     channelValue && isUpdateChannel(channelValue) ? channelValue : "local";
   if (channelValue && !isUpdateChannel(channelValue)) {
     throw new Error(
-      "PERIDOT_UPDATE_CHANNEL must be dev, master, stable, or local",
+      "PERIDOT_UPDATE_CHANNEL must be dev, beta, stable, or local",
     );
   }
 
@@ -139,7 +139,7 @@ async function loadUpdateConfig(
 function isUpdateChannel(value: string): value is UpdateChannel {
   return (
     value === "dev" ||
-    value === "master" ||
+    value === "beta" ||
     value === "stable" ||
     value === "local"
   );

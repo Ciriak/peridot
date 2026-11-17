@@ -64,7 +64,7 @@ onMounted(() => void load());
   </div>
 
   <section aria-labelledby="playlists-heading" class="space-y-4">
-    <div class="flex items-center justify-between gap-4">
+    <div class="flex flex-wrap items-center gap-2">
       <h2 id="playlists-heading" class="text-lg font-semibold">
         {{ t("page.playlists.all") }}
       </h2>

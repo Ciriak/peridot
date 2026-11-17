@@ -58,6 +58,8 @@ class PeridotPlaybackService : MediaLibraryService() {
     private var activeTracks: Map<String, TrackSnapshot> = emptyMap()
     private var activeQueue: PlaybackQueue? = null
     private var lastError: String? = null
+    private var playbackStartRetries = 0
+    private var playbackStartedTrackId: String? = null
 
     private val publishProgress = object : Runnable {
         override fun run() {
@@ -69,10 +71,16 @@ class PeridotPlaybackService : MediaLibraryService() {
     private val playerListener = object : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             lastError = null
+            playbackStartRetries = 0
+            playbackStartedTrackId = null
             publishSnapshot()
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
+            if (isPlaying) {
+                playbackStartRetries = 0
+                playbackStartedTrackId = player.currentMediaItem?.mediaId?.substringAfter(':')
+            }
             publishSnapshot()
         }
 
@@ -81,6 +89,17 @@ class PeridotPlaybackService : MediaLibraryService() {
         }
 
         override fun onPlayerError(error: PlaybackException) {
+            val failedTrackId = player.currentMediaItem?.mediaId?.substringAfter(':')
+            if (playbackStartedTrackId != failedTrackId) {
+                val nextRetry = PlaybackStartRetryPolicy.nextRetryCount(playbackStartRetries)
+                if (nextRetry != null) {
+                    playbackStartRetries = nextRetry
+                    lastError = null
+                    player.prepare()
+                    publishSnapshot()
+                    return
+                }
+            }
             lastError = error.message ?: "Playback failed."
             publishSnapshot()
         }
@@ -365,6 +384,8 @@ class PeridotPlaybackService : MediaLibraryService() {
 
     private fun replaceQueue(queue: PlaybackQueue, prepare: Boolean) {
         lastError = null
+        playbackStartRetries = 0
+        playbackStartedTrackId = null
         val items = playableItems(queue.tracks)
         if (items.isEmpty()) {
             player.clearMediaItems()

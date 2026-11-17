@@ -233,6 +233,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
   );
   await logBuffer.configureFileLogging(
     initialServerSettings.fileLogging.enabled,
+    initialServerSettings.fileLogging.retentionDays,
   );
   await ensureDefaultSource(database, config.libraryRoot);
   await ensureDefaultMetadataProvider(database);

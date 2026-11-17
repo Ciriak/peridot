@@ -38,6 +38,24 @@ test("development update checks report current and available commits", async () 
   assert.equal(available.installAvailable, true);
 });
 
+test("beta update checks follow the master source branch", async () => {
+  const requests: string[] = [];
+  const service = new UpdateService(
+    updateConfig({ channel: "beta" }),
+    async (input) => {
+      requests.push(String(input));
+      return Response.json({ sha: nextCommit });
+    },
+  );
+
+  const result = await service.check();
+  assert.deepEqual(requests, [
+    "https://api.github.com/repos/Ciriak/peridot/commits/master",
+  ]);
+  assert.equal(result.channel, "beta");
+  assert.equal(result.state, "available");
+});
+
 test("stable update checks use the highest non-prerelease version tag", async () => {
   const service = new UpdateService(
     updateConfig({

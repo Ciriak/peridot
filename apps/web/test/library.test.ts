@@ -264,7 +264,7 @@ test("unavailable track titles and artwork are dimmed with inert controls", asyn
 
   assert.match(
     table,
-    /<ScrollingText\s+:id="trackTitleAnchorId\(item\.data\.id\)"\s+class="min-w-0 flex-1 scroll-mt-4"\s+:class="\{ 'opacity-60': isUnavailable\(item\.data\) \}"\s+>\{\{ item\.data\.title \}\}<\/ScrollingText/,
+    /<ScrollingText\s+:id="trackTitleAnchorId\(item\.data\.id\)"\s+class="min-w-0 scroll-mt-4"\s+:class="\{ 'opacity-60': isUnavailable\(item\.data\) \}"\s+>\{\{ item\.data\.title \}\}<\/ScrollingText/,
   );
   assert.match(table, /:class="isUnavailable\(item\.data\) && 'opacity-60'"/);
   assert.match(table, /:disabled="isUnavailable\(item\.data\)"/);

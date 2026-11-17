@@ -88,6 +88,7 @@ const {
   loadingMore: albumsLoadingMore,
   error: albumsError,
   hasMore: hasMoreAlbums,
+  totalCount: albumTotalCount,
   load: loadAlbums,
   loadMore: loadMoreAlbums,
 } = useCatalogAlbumQuery(() => ({
@@ -101,6 +102,7 @@ const {
   error: tracksError,
   loaded: tracksLoaded,
   hasMore: hasMoreTracks,
+  totalCount: trackTotalCount,
   load: loadTracks,
   loadMore: loadMoreTracks,
 } = useCatalogTrackQuery(() => ({
@@ -306,18 +308,12 @@ onMounted(() => {
       aria-labelledby="artist-albums-heading"
       class="space-y-4"
     >
-      <div class="flex items-center justify-between gap-4">
+      <div class="flex flex-wrap items-center gap-2">
         <h2 id="artist-albums-heading" class="text-lg font-semibold">
           {{ t("navigation.albums") }}
         </h2>
         <Badge variant="secondary">
-          {{
-            `${t(
-              "count.album",
-              { count: albums.length },
-              albums.length,
-            )}${hasMoreAlbums ? "+" : ""}`
-          }}
+          {{ t("count.album", { count: albumTotalCount }, albumTotalCount) }}
         </Badge>
       </div>
       <div class="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-5">
@@ -334,18 +330,12 @@ onMounted(() => {
     </section>
 
     <section aria-labelledby="artist-tracks-heading" class="space-y-4">
-      <div class="flex items-center justify-between gap-4">
+      <div class="flex flex-wrap items-center gap-2">
         <h2 id="artist-tracks-heading" class="text-lg font-semibold">
           {{ t("components.tracks.label") }}
         </h2>
         <Badge variant="secondary">
-          {{
-            `${t(
-              "count.track",
-              { count: tracks.length },
-              tracks.length,
-            )}${hasMoreTracks ? "+" : ""}`
-          }}
+          {{ t("count.track", { count: trackTotalCount }, trackTotalCount) }}
         </Badge>
       </div>
       <div

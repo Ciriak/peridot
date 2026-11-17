@@ -837,7 +837,12 @@ export class CatalogService {
     const offset = cursor?.offset ?? 0;
     const filterIds = await this.trackFilterIds(options);
     if (filterIds && !filterIds.size) {
-      return { items: [], nextCursor: null, catalogRevision: revision };
+      return {
+        items: [],
+        nextCursor: null,
+        totalCount: 0,
+        catalogRevision: revision,
+      };
     }
 
     let query = this.database.orm.CatalogTrack;
@@ -848,6 +853,9 @@ export class CatalogService {
     const collectionId = options.collectionId ?? options.albumId;
     if (collectionId) query = query.where({ albumId: collectionId });
     if (filterIds) query = query.where((track) => track.id.in([...filterIds]));
+    const { count: totalCount } = await query.aggregate((aggregate) => ({
+      count: aggregate.count(),
+    }));
 
     const directionValue = orderDirection(direction);
     let ordered;
@@ -899,6 +907,7 @@ export class CatalogService {
       nextCursor: hasMore
         ? encodeCursor(offset + limit, revision, signature)
         : null,
+      totalCount,
       catalogRevision: revision,
     };
   }
@@ -962,7 +971,12 @@ export class CatalogService {
     }
     const filterIds = await this.cardFilterIds("album", options);
     if (filterIds && !filterIds.size) {
-      return { items: [], nextCursor: null, catalogRevision: revision };
+      return {
+        items: [],
+        nextCursor: null,
+        totalCount: 0,
+        catalogRevision: revision,
+      };
     }
     let query = this.database.orm.CatalogAlbum.where((album) =>
       album.trackCount.gt(0),
@@ -974,13 +988,21 @@ export class CatalogService {
         .select("albumId")
         .all();
       if (!artistAlbums.length) {
-        return { items: [], nextCursor: null, catalogRevision: revision };
+        return {
+          items: [],
+          nextCursor: null,
+          totalCount: 0,
+          catalogRevision: revision,
+        };
       }
       query = query.where((album) =>
         album.id.in(artistAlbums.map((link) => link.albumId)),
       );
     }
     if (filterIds) query = query.where((album) => album.id.in([...filterIds]));
+    const { count: totalCount } = await query.aggregate((aggregate) => ({
+      count: aggregate.count(),
+    }));
     const directionValue = orderDirection(direction);
     const rows = await query
       .orderBy([
@@ -1001,6 +1023,7 @@ export class CatalogService {
       nextCursor: hasMore
         ? encodeCursor((cursor?.offset ?? 0) + limit, revision, signature)
         : null,
+      totalCount,
       catalogRevision: revision,
     };
   }
@@ -1046,12 +1069,20 @@ export class CatalogService {
     }
     const filterIds = await this.cardFilterIds("album", options);
     if (filterIds && !filterIds.size) {
-      return { items: [], nextCursor: null, catalogRevision: revision };
+      return {
+        items: [],
+        nextCursor: null,
+        totalCount: 0,
+        catalogRevision: revision,
+      };
     }
     let query = this.database.orm.CatalogAlbum.where((album) =>
       album.trackCount.gt(0),
     ).where({ mediaType });
     if (filterIds) query = query.where((album) => album.id.in([...filterIds]));
+    const { count: totalCount } = await query.aggregate((aggregate) => ({
+      count: aggregate.count(),
+    }));
     const directionValue = orderDirection(direction);
     const rows = await query
       .orderBy([
@@ -1101,6 +1132,7 @@ export class CatalogService {
       nextCursor: hasMore
         ? encodeCursor((cursor?.offset ?? 0) + limit, revision, signature)
         : null,
+      totalCount,
       catalogRevision: revision,
     } as AudiobookListResponse | PodcastListResponse;
   }
@@ -1191,13 +1223,21 @@ export class CatalogService {
     }
     const filterIds = await this.cardFilterIds("artist", options);
     if (filterIds && !filterIds.size) {
-      return { items: [], nextCursor: null, catalogRevision: revision };
+      return {
+        items: [],
+        nextCursor: null,
+        totalCount: 0,
+        catalogRevision: revision,
+      };
     }
     let query = this.database.orm.CatalogArtist.where((artist) =>
       artist.trackCount.gt(0),
     );
     if (filterIds)
       query = query.where((artist) => artist.id.in([...filterIds]));
+    const { count: totalCount } = await query.aggregate((aggregate) => ({
+      count: aggregate.count(),
+    }));
     const directionValue = orderDirection(direction);
     const rows = await query
       .orderBy([
@@ -1225,6 +1265,7 @@ export class CatalogService {
       nextCursor: hasMore
         ? encodeCursor((cursor?.offset ?? 0) + limit, revision, signature)
         : null,
+      totalCount,
       catalogRevision: revision,
     };
   }

@@ -12,8 +12,8 @@ const androidGradle = await readFile(
   "utf8",
 );
 const channel = process.env.PERIDOT_CLIENT_CHANNEL?.trim() || "local";
-if (!["dev", "master", "stable"].includes(channel)) {
-  throw new Error("PERIDOT_CLIENT_CHANNEL must be dev, master, or stable.");
+if (!["dev", "beta", "stable"].includes(channel)) {
+  throw new Error("PERIDOT_CLIENT_CHANNEL must be dev, beta, or stable.");
 }
 const version =
   process.env.PERIDOT_CLIENT_VERSION?.trim() || rootPackage.version;

@@ -153,17 +153,20 @@ function catalogErrorMessage(
     : errorMessage(reason, "error.catalogLoad");
 }
 
+interface CatalogPage<T> {
+  items: T[];
+  nextCursor: string | null;
+  totalCount?: number;
+  catalogRevision: number;
+}
+
 function useCatalogInfiniteQuery<T>(options: {
   queryKey: () => QueryKey;
   fetchPage: (
     cursor: string | null,
     scope: PeridotQueryScope,
     token: string,
-  ) => Promise<{
-    items: T[];
-    nextCursor: string | null;
-    catalogRevision: number;
-  }>;
+  ) => Promise<CatalogPage<T>>;
   itemKey: (item: T) => string;
   offlineItems: (snapshot: OfflineCatalogSnapshot) => T[];
 }) {
@@ -173,16 +176,9 @@ function useCatalogInfiniteQuery<T>(options: {
   const { snapshot: offlineSnapshot } = useOfflineCatalog();
   const { errorMessage } = useLocalizedMessage();
   const query = useInfiniteQuery<
-    {
-      items: T[];
-      nextCursor: string | null;
-      catalogRevision: number;
-    },
+    CatalogPage<T>,
     Error,
-    InfiniteData<
-      { items: T[]; nextCursor: string | null; catalogRevision: number },
-      string | null
-    >,
+    InfiniteData<CatalogPage<T>, string | null>,
     QueryKey,
     string | null
   >({
@@ -245,6 +241,9 @@ function useCatalogInfiniteQuery<T>(options: {
   const hasMore = computed(
     () => !usingOffline.value && query.hasNextPage.value,
   );
+  const totalCount = computed(
+    () => query.data.value?.pages[0]?.totalCount ?? items.value.length,
+  );
 
   async function load(force = false) {
     if (!scope.value || !token.value || usingOffline.value) return;
@@ -270,6 +269,7 @@ function useCatalogInfiniteQuery<T>(options: {
     error,
     nextCursor,
     hasMore,
+    totalCount,
     load,
     loadMore,
     reload: () => load(true),
@@ -314,11 +314,7 @@ function useCatalogCardQuery<T extends { id: string }>(config: {
     address: string,
     token: string,
     listOptions: CardListOptions,
-  ) => Promise<{
-    items: T[];
-    nextCursor: string | null;
-    catalogRevision: number;
-  }>;
+  ) => Promise<CatalogPage<T>>;
   options: () => CardListOptions;
   offlineItems: (
     snapshot: OfflineCatalogSnapshot,

@@ -42,6 +42,7 @@ test("catalog endpoints page tracks, albums, artists, search, and likes", async 
     assert.equal(first.statusCode, 200);
     const page = first.json<TrackListResponse>();
     assert.equal(page.items.length, 5);
+    assert.equal(page.totalCount, 12);
     assert.ok(page.nextCursor);
     assert.ok(page.catalogRevision > 0);
 
@@ -52,6 +53,7 @@ test("catalog endpoints page tracks, albums, artists, search, and likes", async 
     });
     assert.equal(second.statusCode, 200);
     const secondPage = second.json<TrackListResponse>();
+    assert.equal(secondPage.totalCount, 12);
     assert.equal(
       new Set([
         ...page.items.map((track) => track.id),
@@ -75,6 +77,7 @@ test("catalog endpoints page tracks, albums, artists, search, and likes", async 
       })
     ).json<AlbumListResponse>();
     assert.equal(albums.items.length, 5);
+    assert.equal(albums.totalCount, 9);
     assert.ok(albums.items.every((album) => album.trackCount > 0));
 
     const artists = (
@@ -85,6 +88,7 @@ test("catalog endpoints page tracks, albums, artists, search, and likes", async 
       })
     ).json<ArtistListResponse>();
     assert.equal(artists.items.length, 2);
+    assert.equal(artists.totalCount, 2);
     assert.deepEqual(
       artists.items.map((artist) => artist.name),
       ["North Artist", "South Artist"],
@@ -96,6 +100,7 @@ test("catalog endpoints page tracks, albums, artists, search, and likes", async 
         headers: context.authorization,
       })
     ).json<ArtistListResponse>();
+    assert.equal(matchingArtists.totalCount, 1);
     assert.deepEqual(
       matchingArtists.items.map((artist) => artist.name),
       ["South Artist"],
@@ -109,6 +114,7 @@ test("catalog endpoints page tracks, albums, artists, search, and likes", async 
       })
     ).json<TrackListResponse>();
     assert.equal(search.items.length, 12);
+    assert.equal(search.totalCount, 12);
 
     const likedTrack = page.items[0]!;
     await context.app.inject({
@@ -124,6 +130,7 @@ test("catalog endpoints page tracks, albums, artists, search, and likes", async 
         headers: context.authorization,
       })
     ).json<TrackListResponse>();
+    assert.equal(liked.totalCount, 1);
     assert.deepEqual(
       liked.items.map((track) => track.id),
       [likedTrack.id],

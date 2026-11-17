@@ -101,13 +101,19 @@ test("server configuration validates storage and browser origins", async () => {
       PERIDOT_WATCHTOWER_TOKEN_FILE: tokenFile,
     });
     assert.equal(generatedSecret.updates?.watchtowerToken, "file-token");
+    const beta = await loadServerConfig({
+      DATABASE_URL: "file:test.db",
+      MUSIC_LIBRARY_PATH: libraryRoot,
+      PERIDOT_UPDATE_CHANNEL: "beta",
+    });
+    assert.equal(beta.updates?.channel, "beta");
     await assert.rejects(
       loadServerConfig({
         DATABASE_URL: "file:test.db",
         MUSIC_LIBRARY_PATH: libraryRoot,
         PERIDOT_UPDATE_CHANNEL: "nightly",
       }),
-      /PERIDOT_UPDATE_CHANNEL must be dev, master, stable, or local/,
+      /PERIDOT_UPDATE_CHANNEL must be dev, beta, stable, or local/,
     );
   } finally {
     await rm(root, { recursive: true, force: true });

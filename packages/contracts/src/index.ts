@@ -109,6 +109,7 @@ export type CatalogSortDirection = "asc" | "desc";
 export interface CursorPageResponse<T> {
   items: T[];
   nextCursor: string | null;
+  totalCount: number;
   catalogRevision: number;
 }
 
@@ -137,6 +138,7 @@ export interface AlbumSummaryResponse {
 export interface AlbumListResponse {
   items: AlbumSummaryResponse[];
   nextCursor: string | null;
+  totalCount: number;
   catalogRevision: number;
 }
 
@@ -169,12 +171,14 @@ export interface PodcastSummaryResponse {
 export interface AudiobookListResponse {
   items: AudiobookSummaryResponse[];
   nextCursor: string | null;
+  totalCount: number;
   catalogRevision: number;
 }
 
 export interface PodcastListResponse {
   items: PodcastSummaryResponse[];
   nextCursor: string | null;
+  totalCount: number;
   catalogRevision: number;
 }
 
@@ -193,6 +197,7 @@ export interface ArtistSummaryResponse {
 export interface ArtistListResponse {
   items: ArtistSummaryResponse[];
   nextCursor: string | null;
+  totalCount: number;
   catalogRevision: number;
 }
 
@@ -716,6 +721,8 @@ export interface DirectorySearchResponse {
 export const DEFAULT_SCAN_WORKER_COUNT = 3;
 export const SCAN_WORKER_WARNING_THRESHOLD = 4;
 export const MAX_SCAN_WORKER_COUNT = 32;
+export const DEFAULT_FILE_LOG_RETENTION_DAYS = 5;
+export const MAX_FILE_LOG_RETENTION_DAYS = 3650;
 
 export interface ServerSettingsResponse {
   trackCount: number;
@@ -737,6 +744,7 @@ export interface SourceRefreshSettingsResponse {
 
 export interface FileLoggingSettingsResponse {
   enabled: boolean;
+  retentionDays: number;
   path: string;
 }
 
@@ -750,6 +758,7 @@ export interface UpdateServerSettingsRequest {
   };
   fileLogging?: {
     enabled: boolean;
+    retentionDays: number;
   };
 }
 
@@ -757,7 +766,7 @@ export interface RestartServerResponse {
   status: "restarting";
 }
 
-export type UpdateChannel = "dev" | "master" | "stable" | "local";
+export type UpdateChannel = "dev" | "beta" | "stable" | "local";
 
 export type UpdateState = "unchecked" | "current" | "available";
 

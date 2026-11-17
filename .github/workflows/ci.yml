@@ -191,7 +191,11 @@ jobs:
             channel=stable
             version="$(node -p 'require("./package.json").version')"
           elif [[ "$GITHUB_REF_NAME" = "dev" || "$GITHUB_REF_NAME" = "master" ]]; then
-            channel="$GITHUB_REF_NAME"
+            if [[ "$GITHUB_REF_NAME" = "master" ]]; then
+              channel=beta
+            else
+              channel=dev
+            fi
             version="0.0.${GITHUB_RUN_NUMBER}"
           else
             channel=local
@@ -235,7 +239,11 @@ jobs:
             version="$(node -p 'require("./package.json").version')"
             release_tag="$GITHUB_REF_NAME"
           else
-            channel="$GITHUB_REF_NAME"
+            if [[ "$GITHUB_REF_NAME" = "master" ]]; then
+              channel=beta
+            else
+              channel="$GITHUB_REF_NAME"
+            fi
             version="0.0.${GITHUB_RUN_NUMBER}"
             release_tag="client-${channel}"
           fi
@@ -473,7 +481,8 @@ jobs:
         with:
           images: ghcr.io/ciriak/peridot
           tags: |
-            type=ref,event=branch
+            type=raw,value=dev,enable=${{ github.ref == 'refs/heads/dev' }}
+            type=raw,value=beta,enable=${{ github.ref == 'refs/heads/master' }}
             type=ref,event=tag
             type=sha,format=short
             type=raw,value=stable,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
@@ -486,7 +495,7 @@ jobs:
           outputs: >-
             type=image,name=ghcr.io/ciriak/peridot,push-by-digest=true,name-canonical=true,push=true
           build-args: |
-            PERIDOT_BUILD_CHANNEL=${{ github.ref_type == 'tag' && 'stable' || github.ref_name }}
+            PERIDOT_BUILD_CHANNEL=${{ github.ref_type == 'tag' && 'stable' || github.ref_name == 'master' && 'beta' || github.ref_name }}
             PERIDOT_BUILD_TAG=${{ github.ref_type == 'tag' && github.ref_name || '' }}
             PERIDOT_BUILD_COMMIT=${{ github.sha }}
             PERIDOT_VERSION=${{ steps.version.outputs.value }}
@@ -527,7 +536,8 @@ jobs:
         with:
           images: ghcr.io/ciriak/peridot
           tags: |
-            type=ref,event=branch
+            type=raw,value=dev,enable=${{ github.ref == 'refs/heads/dev' }}
+            type=raw,value=beta,enable=${{ github.ref == 'refs/heads/master' }}
             type=ref,event=tag
             type=sha,format=short
             type=raw,value=stable,enable=${{ startsWith(github.ref, 'refs/tags/v') }}

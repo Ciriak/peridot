@@ -23,8 +23,17 @@ const queryOptions = computed(() => ({
   direction: sort.value?.direction ?? ("asc" as const),
   ...(props.favorites ? { liked: true } : {}),
 }));
-const { tracks, loading, loadingMore, error, loaded, hasMore, load, loadMore } =
-  useCatalogTrackQuery(() => queryOptions.value);
+const {
+  tracks,
+  loading,
+  loadingMore,
+  error,
+  loaded,
+  hasMore,
+  totalCount,
+  load,
+  loadMore,
+} = useCatalogTrackQuery(() => queryOptions.value);
 const { likedTrackIds, loaded: likesLoaded, load: loadLikes } = useLikes();
 const visibleTracks = computed(() =>
   props.favorites && likesLoaded.value
@@ -47,7 +56,7 @@ onMounted(() => {
     <h1 class="text-2xl font-semibold tracking-tight">{{ title }}</h1>
   </div>
   <section aria-labelledby="tracks-heading" class="space-y-4">
-    <div class="flex items-center justify-between gap-4">
+    <div class="flex flex-wrap items-center gap-2">
       <h2 id="tracks-heading" class="text-lg font-semibold">
         {{ t("components.tracks.label") }}
       </h2>
@@ -55,7 +64,7 @@ onMounted(() => {
         {{
           loading
             ? t("common.loading")
-            : `${t("count.track", { count: visibleTracks.length }, visibleTracks.length)}${hasMore ? "+" : ""}`
+            : t("count.track", { count: totalCount }, totalCount)
         }}
       </Badge>
     </div>

@@ -346,7 +346,10 @@ watch(
           >
             {{ formatTrackNumber(item.data) }}
           </div>
-          <div role="cell" class="flex min-w-0 flex-1 items-center gap-2 p-2">
+          <div
+            role="cell"
+            class="flex min-w-0 flex-1 items-center gap-2 p-2"
+          >
             <TrackArtwork
               :track="item.data"
               :server-address="address ?? ''"
@@ -376,7 +379,7 @@ watch(
               <div class="flex min-w-0 items-center gap-2">
                 <ScrollingText
                   :id="trackTitleAnchorId(item.data.id)"
-                  class="min-w-0 flex-1 scroll-mt-4"
+                  class="min-w-0 scroll-mt-4"
                   :class="{ 'opacity-60': isUnavailable(item.data) }"
                   >{{ item.data.title }}</ScrollingText
                 >
@@ -498,7 +501,10 @@ watch(
         </div>
       </TrackContextMenu>
     </div>
-    <div v-if="hasHiddenRows || hasMore" role="rowgroup">
+    <div
+      v-if="hasHiddenRows || hasMore"
+      role="rowgroup"
+    >
       <div role="row" :aria-rowindex="tracks.length + 2">
         <AutoLoadMore
           role="cell"

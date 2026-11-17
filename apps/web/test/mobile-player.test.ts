@@ -13,18 +13,14 @@ test("the compact mobile player anchors metadata and actions separately", async 
 
   assert.match(
     layout,
-    /<MobilePlayer\s+v-model:open="mobilePlayerOpen"\s+@open-queue="openQueueFromMobilePlayer"\s*\/>/,
+    /<MobilePlayer\s+@open-queue="openQueueFromMobilePlayer"\s*\/>/,
   );
   assert.match(layout, /class="flex min-h-0 flex-1 pb-20 md:pb-28"/);
   assert.match(
     layout,
     /class="fixed inset-x-0 bottom-0 z-30 isolate h-20 overflow-hidden border-t bg-card text-card-foreground md:h-28"/,
   );
-  assert.match(
-    layout,
-    /watch\(currentPath, \(path\) => \{\s+mobileNavigation\.value = false;\s+mobilePlayerOpen\.value = false;/,
-    "route changes dismiss the mobile fullscreen player",
-  );
+  assert.doesNotMatch(layout, /mobilePlayerOpen/);
 
   const triggerStart = player.indexOf("<DialogTrigger as-child>");
   const triggerEnd = player.indexOf("</DialogTrigger>");
@@ -41,8 +37,13 @@ test("the compact mobile player anchors metadata and actions separately", async 
   assert.match(trigger, /t\('player\.openFullscreen'\)/);
   assert.match(
     trigger,
-    /class="h-full min-w-0 flex-1 justify-start gap-3 px-3 text-left transition-none hover:bg-transparent hover:text-current active:bg-transparent active:text-current dark:hover:bg-transparent dark:active:bg-transparent"/,
-    "the compact metadata trigger does not show a hover or touch background",
+    /class="h-full w-0 min-w-0 max-w-full shrink flex-1 justify-start gap-3 overflow-hidden px-3 text-left transition-none hover:bg-transparent hover:text-current active:bg-transparent active:text-current dark:hover:bg-transparent dark:active:bg-transparent"/,
+    "the compact metadata trigger shrinks before the fixed action group",
+  );
+  assert.match(
+    trigger,
+    /<span class="w-0 min-w-0 max-w-full flex-1 overflow-hidden">/,
+    "the compact metadata text is clipped within the trigger",
   );
   assert.match(trigger, /class="relative flex size-14 shrink-0/);
   assert.match(trigger, /active\.title/);
@@ -75,6 +76,18 @@ test("the fullscreen mobile player exposes accessible complete controls", async 
     "utf8",
   );
 
+  assert.match(
+    player,
+    /const open = computed<boolean>\(\{\s+get: \(\) => isMobilePlayerRoute\(route\.query\),/,
+  );
+  assert.match(
+    player,
+    /router\.push\(\{ query: withMobilePlayerRoute\(route\.query\) \}\)/,
+  );
+  assert.match(
+    player,
+    /if \(historyState\?\.back\) \{\s+router\.back\(\);\s+return;/,
+  );
   assert.match(player, /<DialogRoot v-model:open="open">/);
   assert.match(player, /<DialogOverlay class="fixed inset-0 z-40/);
   assert.match(
@@ -86,7 +99,7 @@ test("the fullscreen mobile player exposes accessible complete controls", async 
   assert.match(player, /t\('player\.closeFullscreen'\)/);
   assert.match(player, /icons\.caretDown/);
   assert.match(player, /@click="openQueue"/);
-  assert.match(player, /open\.value = false;\s+emit\("openQueue"\)/);
+  assert.match(player, /closeFullscreen\(\);\s+emit\("openQueue"\)/);
   assert.match(player, /<TrackContextMenu[\s\S]*:track="active"/);
   assert.match(player, /<TrackArtistLinks/);
   assert.match(player, /:thumb-label="t\('player\.position'\)"/);

@@ -223,6 +223,7 @@ test("audiobook and podcast sources stay separate from music collections", async
       headers: context.authorization,
     });
     const albums = albumsResponse.json<AlbumListResponse>();
+    assert.equal(albums.totalCount, 1);
     assert.deepEqual(
       albums.items.map((album) => album.title),
       ["Music Album"],
@@ -235,6 +236,7 @@ test("audiobook and podcast sources stay separate from music collections", async
     });
     const audiobooks = audiobooksResponse.json<AudiobookListResponse>();
     assert.equal(audiobooks.items.length, 1);
+    assert.equal(audiobooks.totalCount, 1);
     const audiobook = audiobooks.items[0]!;
     assert.equal(audiobook.title, "Book One");
     assert.equal(audiobook.author, "Author One");
@@ -246,6 +248,7 @@ test("audiobook and podcast sources stay separate from music collections", async
         headers: context.authorization,
       })
     ).json<AudiobookListResponse>();
+    assert.equal(matchingAudiobooks.totalCount, 1);
     assert.deepEqual(
       matchingAudiobooks.items.map((book) => book.title),
       ["Book One"],
@@ -257,6 +260,7 @@ test("audiobook and podcast sources stay separate from music collections", async
       headers: context.authorization,
     });
     const chapters = chaptersResponse.json<TrackListResponse>();
+    assert.equal(chapters.totalCount, 2);
     assert.deepEqual(
       chapters.items.map((track) => track.title),
       ["Chapter One", "Chapter Two"],
@@ -270,6 +274,7 @@ test("audiobook and podcast sources stay separate from music collections", async
     });
     const podcasts = podcastsResponse.json<PodcastListResponse>();
     assert.equal(podcasts.items.length, 1);
+    assert.equal(podcasts.totalCount, 1);
     const podcast = podcasts.items[0]!;
     assert.equal(podcast.title, "Show One");
     assert.equal(podcast.publisher, "Publisher One");
@@ -281,6 +286,7 @@ test("audiobook and podcast sources stay separate from music collections", async
         headers: context.authorization,
       })
     ).json<PodcastListResponse>();
+    assert.equal(matchingPodcasts.totalCount, 1);
     assert.deepEqual(
       matchingPodcasts.items.map((show) => show.title),
       ["Show One"],
@@ -292,6 +298,7 @@ test("audiobook and podcast sources stay separate from music collections", async
       headers: context.authorization,
     });
     const episodes = episodesResponse.json<TrackListResponse>();
+    assert.equal(episodes.totalCount, 2);
     assert.deepEqual(
       episodes.items.map((track) => track.title),
       ["Newest Episode", "Older Episode"],

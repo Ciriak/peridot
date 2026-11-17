@@ -264,7 +264,8 @@ model ServerSetting {
   scanWorkerCount      Int      @default(3)
   sourceRefreshEnabled Int      @default(1)
   sourceRefreshCron    String   @default("0 3 * * *")
-  fileLoggingEnabled   Int      @default(0)
+  fileLoggingEnabled   Int      @default(1)
+  fileLogRetentionDays Int      @default(5)
   updatedAt            DateTime @onCreate(now()) @onUpdate(now())
 }
 

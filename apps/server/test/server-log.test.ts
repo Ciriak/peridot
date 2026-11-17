@@ -1,5 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { ServerLogBuffer } from "../src/server-log.js";
 import { createMemberSession, createTestContext } from "./helpers.js";
 
 test("administrators can read recent server logs", async () => {
@@ -111,5 +115,30 @@ test("server logs require an administrator", async () => {
     assert.equal(anonymousResponse.statusCode, 401);
   } finally {
     await context.close();
+  }
+});
+
+test("file logging removes entries older than its retention period", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "peridot-log-retention-"));
+  const logPath = path.join(root, "peridot.log");
+  const now = Date.UTC(2026, 10, 17, 12);
+  const day = 24 * 60 * 60 * 1000;
+  const lines = [
+    JSON.stringify({ time: now - 6 * day, level: "info", msg: "expired" }),
+    JSON.stringify({ time: now - 4 * day, level: "info", msg: "retained" }),
+    "unparseable line",
+  ];
+  await writeFile(logPath, `${lines.join("\n")}\n`);
+
+  const logBuffer = new ServerLogBuffer(logPath);
+  try {
+    await logBuffer.configureFileLogging(true, 5);
+    const content = await readFile(logPath, "utf8");
+    assert.doesNotMatch(content, /expired/);
+    assert.match(content, /retained/);
+    assert.match(content, /unparseable line/);
+  } finally {
+    await logBuffer.close();
+    await rm(root, { recursive: true, force: true });
   }
 });

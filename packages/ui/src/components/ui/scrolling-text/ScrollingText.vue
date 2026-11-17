@@ -1,9 +1,18 @@
 <script setup lang="ts">
 import type { HTMLAttributes } from "vue";
-import { usePreferredReducedMotion } from "@vueuse/core";
+import { useMediaQuery, usePreferredReducedMotion } from "@vueuse/core";
 import { cn } from "cn";
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from "vue";
+import {
+  SCROLLING_TEXT_MOBILE_MEDIA_QUERY,
+  scrollingTextActivatesAutomatically,
   scrollingTextKeyframes,
   scrollingTextLoopDuration,
   scrollingTextOverflowDistance,
@@ -25,6 +34,10 @@ const hovering = ref(false);
 const focused = ref(false);
 const overflowing = ref(false);
 const reducedMotion = usePreferredReducedMotion();
+const mobile = useMediaQuery(SCROLLING_TEXT_MOBILE_MEDIA_QUERY);
+const activatesAutomatically = computed(() =>
+  scrollingTextActivatesAutomatically(props.mode, mobile.value),
+);
 
 let animation: Animation | null = null;
 let resizeObserver: ResizeObserver | null = null;
@@ -40,11 +53,11 @@ function cancelAnimation() {
 }
 
 function isPausedByInteraction() {
-  return props.mode === "always" && (hovering.value || focused.value);
+  return activatesAutomatically.value && (hovering.value || focused.value);
 }
 
 function isActivated() {
-  return props.mode === "always" || hovering.value || focused.value;
+  return activatesAutomatically.value || hovering.value || focused.value;
 }
 
 function createAnimation(distance: number) {
@@ -145,14 +158,11 @@ function handleFocusOut(event: FocusEvent) {
   syncAnimation();
 }
 
-watch(
-  () => props.mode,
-  async () => {
-    cancelAnimation();
-    await nextTick();
-    scheduleMeasure(true);
-  },
-);
+watch(activatesAutomatically, async () => {
+  cancelAnimation();
+  await nextTick();
+  scheduleMeasure(true);
+});
 
 watch(reducedMotion, () => {
   cancelAnimation();

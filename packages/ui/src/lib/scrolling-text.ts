@@ -1,6 +1,14 @@
 export const SCROLLING_TEXT_SPEED_PX_PER_SECOND = 30;
 export const SCROLLING_TEXT_HOLD_MS = 1500;
+export const SCROLLING_TEXT_MOBILE_MEDIA_QUERY = "(max-width: 47.999rem)";
 const OVERFLOW_TOLERANCE_PX = 1;
+
+export function scrollingTextActivatesAutomatically(
+  mode: "always" | "hover",
+  mobile: boolean,
+) {
+  return mode === "always" || mobile;
+}
 
 export function scrollingTextOverflowDistance(
   contentWidth: number,

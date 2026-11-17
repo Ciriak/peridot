@@ -50,7 +50,7 @@ function page(
   items: TrackResponse[],
   nextCursor: string | null,
 ): TrackListResponse {
-  return { items, nextCursor, catalogRevision: 1 };
+  return { items, nextCursor, totalCount: items.length, catalogRevision: 1 };
 }
 
 test("liked titles are available offline by default for each server and user", () => {

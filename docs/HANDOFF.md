@@ -2,6 +2,237 @@
 
 Last updated: 2026-11-17.
 
+## Playback start retries three times
+
+The browser player and Android Media3 service now retry a track start up to
+three times after the initial attempt before showing the loading error state.
+The retry path covers preparation failures and media errors before playback
+reaches its first playing state; the browser path also retries rejected media
+`play()` calls. Once playback has started, failures keep the existing offline
+fallback and error behavior. Autoplay-policy rejections still show the immediate
+press-play message.
+
+Checks completed:
+
+- Focused playback retry and player tests: 4 passing
+- Android unit suite: 5 passing, including the native retry policy
+- Full web suite: 228 of 229 passing; the sole failure is the pre-existing
+  uncommitted offline-toast locale wording mismatch in `offline-spa.test.ts`
+- Web type check, targeted ESLint and Prettier, production web build, and
+  `git diff --check`
+
+Known limits: a deliberately failing source was not exercised against a live
+browser player or Android device. All changes remain uncommitted on `dev`;
+unrelated working-tree changes were preserved. No commit, push, tag,
+publication, or deployment was performed.
+
+Next: manually interrupt a live track start in the browser and Android app and
+confirm four total attempts, then the existing error state; resolve the
+unrelated offline-toast wording mismatch separately.
+
+## Mobile fullscreen player uses router history
+
+The mobile mini-player now opens fullscreen through a pushed
+`player=fullscreen` route query entry. The player derives its dialog state from
+the route, so browser history, PWA back navigation, and Android's existing
+hardware-back listener close the player and return to the previous view. Closing
+from the player UI pops the same entry; direct fullscreen URLs fall back to
+replacing the query when there is no prior history.
+
+Checks completed:
+
+- Focused mobile-player and route tests: 4 passing
+- Web type check, targeted ESLint, Prettier, production web build, and
+  `git diff --check`
+- Full web suite: 226 of 227 passing; the sole failure is the pre-existing
+  offline-toast locale wording mismatch in `offline-spa.test.ts`
+
+Known limits: browser and Android hardware-back interaction were not exercised
+on a device. All changes remain uncommitted on `dev`; unrelated working-tree
+changes were preserved. No commit, push, tag, publication, or deployment was
+performed.
+
+Next: exercise fullscreen open/close and Android hardware back against the live
+mobile build, then resolve the unrelated offline-toast wording mismatch
+separately.
+
+## Mobile overflow text scrolls automatically
+
+The shared `ScrollingText` component now activates automatically below the
+`md` breakpoint. Every catalog surface already using the component inherits
+the behavior, including track tables, cards, queue and playlist rows, context
+menus, quick picks, and mobile player metadata. Visible text remains static,
+desktop hover/focus behavior is unchanged, interaction pauses automatic
+motion, and reduced-motion users still receive no animation.
+
+Checks completed:
+
+- Shared UI suite: 17 passing
+- Focused mobile player and scrolling-text suite: 4 passing
+- Full web suite: 226 of 227 passing; the sole failure is the pre-existing
+  uncommitted offline-toast locale wording mismatch in `offline-spa.test.ts`
+- Web type check, production web build, targeted ESLint, Prettier, and
+  `git diff --check`
+
+Known limits: a standalone shared-UI type check stops on pre-existing missing
+SVG module declarations for spinner assets; the web type check and build cover
+the component in its consuming workspace. Browser visual QA was not run. The
+change remains uncommitted on `dev`; unrelated working-tree changes were
+preserved. No commit, push, tag, publication, or deployment was performed.
+
+Next: verify long and short metadata at mobile and desktop widths.
+
+## File logging enabled by default with five-day retention
+
+Settings → Server now enables persistent file logging for new server settings
+by default. The same section exposes a whole-day retention setting with a
+five-day default. Saved retention changes take effect immediately.
+
+The file logger removes JSON lines older than the configured cutoff whenever it
+opens and checks again hourly while enabled. Unknown or unstructured lines
+remain because their age cannot be established safely. The implementation
+keeps the existing single `peridot.log` path and preserves explicitly stored
+logging enable/disable values during migration.
+
+The API response and update contract now include `retentionDays`. The Prisma
+contract adds `ServerSetting.fileLogRetentionDays`, changes the default for
+`fileLoggingEnabled` to enabled, and includes migration
+`20261117T1421_add_file_log_retention`. The local development database was
+updated from contract `05ef14e0` to `ba133506`, and its database ref is current.
+
+Checks completed:
+
+- Server suite: 169 passing, including default-enabled settings, validation,
+  persistence, old-entry pruning, and fresh migration application
+- Focused web settings/client suite: 33 passing
+- Full web suite: 224 of 225 passing; the sole failure is the pre-existing
+  uncommitted offline-toast locale wording mismatch in `offline-spa.test.ts`
+- Server and web type checks
+- Targeted ESLint, Prettier, `git diff --check`, `pnpm db:validate`, and
+  `pnpm db:migration:check`
+
+Known limits: browser visual QA was not run. All changes remain uncommitted on
+`dev`; unrelated working-tree changes were preserved. No commit, push, tag,
+publication, or deployment was performed.
+
+Next: visually verify the retention input at desktop and narrow widths, then
+resolve the unrelated offline-toast wording mismatch separately.
+
+## Collection headers show exact totals
+
+Albums, artists, audiobooks, podcasts, liked tracks, playlist lists, search
+groups, and artist-detail subsections now place their count badge beside the
+section heading. Counts use exact filtered catalog totals from the server
+instead of the currently loaded page size with a trailing `+`.
+
+Paginated track and card responses now include `totalCount`, including when
+search, liked, artist, album, collection, and availability filters are active.
+The web query layer exposes that total and falls back to loaded items only while
+an older persisted page is being refreshed.
+
+Checks completed:
+
+- Server suite: 168 passing, including exact totals across pagination and
+  filtered track, album, artist, audiobook, and podcast responses
+- Web suite: 224 of 225 passing; the sole failure is the pre-existing
+  uncommitted offline-toast locale wording mismatch in `offline-spa.test.ts`
+- Contract, server, and web type checks
+- Workspace ESLint, Prettier, version check, and `git diff --check`
+- Full workspace build: 6 successful tasks, including web generation, server
+  compilation, and Android debug assembly
+
+Known limits: browser visual QA was not run. All changes remain uncommitted on
+`dev`; unrelated working-tree changes were preserved. No commit, push, tag,
+publication, or deployment was performed.
+
+Next: visually verify the adjacent badge spacing on the collection pages at
+desktop and narrow widths, then resolve the unrelated offline-toast wording
+mismatch separately.
+
+## Compact mobile-player metadata stays inside its control area
+
+The fixed bottom mini-player now gives its metadata trigger a zero flex basis and
+explicit maximum width before the fixed next, favorite, and play controls are
+laid out. The trigger and metadata wrapper clip their contents, so long titles
+and artist credits cannot paint over or push those buttons offscreen. The
+unrelated shared track-table layout experiments were reverted.
+
+Checks completed:
+
+- Focused mobile-player and player tests: 4 passing
+- Web type check, targeted ESLint, Prettier, production web build, and
+  `git diff --check`
+
+Known limits: browser screenshot capture was unavailable because Computer Use
+stopped when it could not verify the active browser URL. Unrelated concurrent
+worktree changes were preserved, including the offline-toast locale mismatch.
+The fix and tests remain uncommitted on `dev`; no commit, push, tag, publication,
+or deployment was performed.
+
+Next: reload the live mobile layout and confirm the next, favorite, and
+play/pause buttons remain visible with the longest artist credit.
+
+## Beta update and Docker channel replaces master
+
+The public update and image channel is now `beta`. The `master` Git branch
+remains the beta source branch, but GHCR publishes `dev`, `beta`, commit,
+version-tag, and `stable` images instead of a `master` image. Server builds use
+`PERIDOT_UPDATE_CHANNEL=beta` and resolve beta updates from the `master` branch
+commit. Desktop, Android, and web client update metadata now use the
+`client-beta` GitHub release. The Settings label remains Beta and the Compose
+channel can be selected with `PERIDOT_CHANNEL=beta`.
+
+Checks completed:
+
+- Server suite: 168 passing, including beta configuration and master-branch
+  update lookup
+- Targeted web update suite: 6 passing
+- Desktop suite: 5 passing
+- Workspace ESLint, Prettier, contract/server/web type checks, and version check
+- Full workspace build: 6 successful tasks, including Nuxt generation, server
+  compilation, and Android debug assembly
+- `docker compose config` with `PERIDOT_CHANNEL=beta` resolved
+  `ghcr.io/ciriak/peridot:beta`
+- Desktop beta updater manifest resolved
+  `client-beta/latest.json`
+- `git diff --check`
+
+The full web suite remains 223 of 224 passing because the pre-existing
+uncommitted offline-toast locale wording does not match `offline-spa.test.ts`.
+That unrelated change was preserved. The Docker image was not built or
+published, and the hosted CI workflow was not run. All beta-channel changes
+remain uncommitted on `dev`; no commit, push, tag, publication, or deployment
+was performed.
+
+Next: publish the beta tag through CI, point existing `master` image users at
+`beta`, and verify an installed beta server detects and installs the next
+`master` build.
+
+## Current-track indicator follows list titles
+
+The waveform shown for the active track now follows the visible title in both
+shared track tables and playlist rows. The scrolling title uses its content
+width instead of growing across the remaining cell, so a short title no longer
+pushes the indicator to the far edge while long titles still shrink and scroll
+within the available space.
+
+Checks completed:
+
+- Focused web tests: 34 passing
+- Web type check, targeted ESLint, Prettier, production web build, and
+  `git diff --check`
+- Full web suite: 223 of 224 passing; the sole failure is the pre-existing
+  uncommitted offline-toast locale wording mismatch in `offline-spa.test.ts`
+
+Known limits: browser visual QA was not run. The working tree also contains
+unrelated concurrent edits, including the offline-toast locale change; those
+were preserved. The indicator and test changes remain uncommitted on `dev`; no
+commit, push, tag, publication, or deployment was performed.
+
+Next: confirm the current-track indicator spacing in a live catalog at desktop
+and narrow widths, then resolve the unrelated offline-toast copy and test
+mismatch separately.
+
 ## Development `/api` proxy restored
 
 Reported behavior: the development web app stayed on the onboarding pending

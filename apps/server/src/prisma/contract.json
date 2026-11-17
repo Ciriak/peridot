@@ -2010,6 +2010,13 @@
           },
           "ServerSetting": {
             "fields": {
+              "fileLogRetentionDays": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
               "fileLoggingEnabled": {
                 "nullable": false,
                 "type": {
@@ -2063,6 +2070,9 @@
             "relations": {},
             "storage": {
               "fields": {
+                "fileLogRetentionDays": {
+                  "column": "fileLogRetentionDays"
+                },
                 "fileLoggingEnabled": {
                   "column": "fileLoggingEnabled"
                 },
@@ -5120,12 +5130,21 @@
             },
             "ServerSetting": {
               "columns": {
+                "fileLogRetentionDays": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "default": {
+                    "kind": "literal",
+                    "value": "5"
+                  },
+                  "nullable": false
+                },
                 "fileLoggingEnabled": {
                   "codecId": "sqlite/integer@1",
                   "dataType": "sqlite/integer",
                   "default": {
                     "kind": "literal",
-                    "value": "0"
+                    "value": "1"
                   },
                   "nullable": false
                 },
@@ -6247,7 +6266,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "05ef14e09055a1e89fe0d4263fdfa341825af094253dfc0fc2cb819591ad0427"
+    "storageHash": "ba133506171d37b8a85af222553e3399c488fa1856749d814284ab46a4e99533"
   },
   "execution": {
     "executionHash": "b8742140c70062f86caa6d72cafc965dc42172098c5fb9a906ef71c33c37e56b",

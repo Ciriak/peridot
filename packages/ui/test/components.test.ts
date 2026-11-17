@@ -289,6 +289,23 @@ test("ScrollingText calculations enforce its overflow threshold and timing defau
 
   assert.equal(timing.SCROLLING_TEXT_SPEED_PX_PER_SECOND, 30);
   assert.equal(timing.SCROLLING_TEXT_HOLD_MS, 1500);
+  assert.equal(
+    timing.SCROLLING_TEXT_MOBILE_MEDIA_QUERY,
+    "(max-width: 47.999rem)",
+  );
+  assert.equal(
+    timing.scrollingTextActivatesAutomatically("hover", false),
+    false,
+  );
+  assert.equal(timing.scrollingTextActivatesAutomatically("hover", true), true);
+  assert.equal(
+    timing.scrollingTextActivatesAutomatically("always", false),
+    true,
+  );
+  assert.equal(
+    timing.scrollingTextActivatesAutomatically("always", true),
+    true,
+  );
   assert.equal(timing.scrollingTextOverflowDistance(320, 200), 120);
   assert.equal(timing.scrollingTextOverflowDistance(200, 200), 0);
   assert.equal(timing.scrollingTextOverflowDistance(201, 200), 0);

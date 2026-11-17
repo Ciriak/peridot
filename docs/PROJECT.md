@@ -83,7 +83,8 @@ motion, visible keyboard focus, and accessible contrast.
 
 ## Branch policy
 
-Owner confirmed: dev = development; master = beta; tags = production releases.
-Docker publishes `dev`, `master`, version/commit tags, and a `stable` alias that
+Owner confirmed: dev = development; the master source branch publishes beta;
+tags = production releases. Docker publishes `dev`, `beta`, version/commit
+tags, and a `stable` alias that
 advances only for non-prerelease `vX.Y.Z` tags. The stable/production channel is
 the default installation channel.

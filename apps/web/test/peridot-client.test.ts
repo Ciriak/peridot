@@ -1147,7 +1147,8 @@ test("authenticated admin calls send the bearer token and expected bodies", asyn
           nextRunAt: "2026-11-16T02:00:00.000Z",
         },
         fileLogging: {
-          enabled: false,
+          enabled: true,
+          retentionDays: 5,
           path: "/data/peridot.log",
         },
       });
@@ -1214,7 +1215,8 @@ test("authenticated admin calls send the bearer token and expected bodies", asyn
         nextRunAt: null,
       },
       fileLogging: {
-        enabled: false,
+        enabled: true,
+        retentionDays: 5,
         path: "/data/peridot.log",
       },
     });
@@ -1232,7 +1234,8 @@ test("authenticated admin calls send the bearer token and expected bodies", asyn
       nextRunAt: null,
     },
     fileLogging: {
-      enabled: false,
+      enabled: true,
+      retentionDays: 5,
       path: "/data/peridot.log",
     },
   });
@@ -1258,7 +1261,8 @@ test("authenticated admin calls send the bearer token and expected bodies", asyn
         nextRunAt: "2026-11-16T02:00:00.000Z",
       },
       fileLogging: {
-        enabled: false,
+        enabled: true,
+        retentionDays: 5,
         path: "/data/peridot.log",
       },
     },

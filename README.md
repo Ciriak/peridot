@@ -58,7 +58,7 @@
      peridot-data:
    ```
 
-   *Note: `master` and `dev` channels are also available*
+   *Note: `beta` and `dev` channels are also available*
 
 2. **Start it**
 

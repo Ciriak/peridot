@@ -1,5 +1,85 @@
 # Decisions
 
+## 2026-11-17: Playback starts retry three times before failing
+
+The browser player and Android Media3 service make one initial start attempt
+and up to three automatic retries when track preparation or a media error
+prevents playback from reaching its first playing state. The browser path also
+retries rejected media `play()` calls. The retry window ends as soon as playback
+starts, so an error after playback has begun retains the existing offline
+recovery and error behavior instead of restarting the track unexpectedly.
+
+Browser autoplay-policy `NotAllowedError` rejections are not retried because
+another programmatic attempt cannot satisfy the required user gesture. They
+continue to show the immediate press-play instruction.
+
+## 2026-11-17: Mobile fullscreen player uses a routed history state
+
+Opening the mobile fullscreen player pushes `player=fullscreen` onto the current
+route's query while preserving any existing query values. The dialog's open
+state is derived from that query, so history back closes the player and restores
+the previous route entry without additional hardware-back handling. The
+existing Android back listener therefore only needs to call `router.back()`.
+
+Closing from the player UI also navigates back instead of mutating local dialog
+state. If a fullscreen-player URL is opened directly without a prior history
+entry, closing replaces it with the same route without the player query.
+
+## 2026-11-17: Mobile overflow text scrolls automatically
+
+The shared `ScrollingText` component automatically activates below Tailwind's
+`md` breakpoint, even for surfaces that use its default interaction-driven
+mode. This applies the same mobile behavior to every adopted catalog title,
+artist line, album name, playlist name, and collection label without adding
+surface-specific mode overrides.
+
+Desktop hover/focus activation is unchanged. Automatic mobile motion pauses
+while pointer or keyboard focus remains inside the text and resumes after the
+interaction ends. The existing overflow threshold and reduced-motion behavior
+continue to apply, so short or fully visible text remains static and users who
+prefer reduced motion receive no scrolling animation.
+
+## 2026-11-17: File logging defaults on with five-day retention
+
+Persistent file logging is enabled for newly created server settings and keeps
+five days of log entries by default. The retention is configurable from 1
+through 3,650 whole days in Settings → Server and applies immediately after a
+successful save.
+
+The existing log file remains a single append-only `peridot.log`. While file
+logging is enabled, Peridot prunes JSON lines older than the retention cutoff
+when the sink starts and checks hourly afterward. Unstructured lines are kept
+because their age cannot be determined safely. Existing persisted
+`fileLoggingEnabled` values are carried through the table rebuild so an
+administrator's explicit disable choice is not overwritten.
+
+This supersedes the earlier opt-in default. The in-memory 500-entry Settings
+log remains separate and is not governed by file retention.
+
+## 2026-11-17: Catalog headers use exact filtered totals
+
+Paginated track, album, artist, audiobook, and podcast responses include the
+total number of records matching the same filters as the returned page. Count
+badges use this server total instead of the number of loaded rows plus a
+pagination marker, and they sit beside the section heading rather than at the
+opposite edge of the row.
+
+The total stays exact while a collection is still loading more pages. Existing
+persisted responses without the field fall back to the loaded item count until
+their normal refetch completes.
+
+## 2026-11-17: Beta replaces master as the update and Docker channel
+
+The public server image and update channel is `beta`; `master` is only the
+underlying source branch that feeds it. GHCR publishes `beta` instead of
+`master`, server builds receive `PERIDOT_UPDATE_CHANNEL=beta`, and client
+release assets use the `client-beta` release tag. Beta update checks resolve
+the `master` branch commit internally so the public channel can be renamed
+without requiring a remote branch move.
+
+This supersedes the earlier channel naming, where the Docker and update channel
+was called `master` while the interface labeled it Beta.
+
 ## 2026-11-17: Peridot uses one public listener on port 17430
 
 The built server serves the SPA, authenticated API, audio ranges, and realtime

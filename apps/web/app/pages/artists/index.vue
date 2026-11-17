@@ -19,6 +19,7 @@ const {
   error,
   loaded,
   hasMore,
+  totalCount,
   load,
   loadMore,
 } = useCatalogArtistQuery();
@@ -37,16 +38,12 @@ onMounted(() => {
     </h1>
   </div>
   <section aria-labelledby="artists-heading" class="space-y-4">
-    <div class="flex items-center justify-between gap-4">
+    <div class="flex flex-wrap items-center gap-2">
       <h2 id="artists-heading" class="text-lg font-semibold">
         {{ t("page.artists.all") }}
       </h2>
       <Badge variant="secondary">
-        {{
-          loading
-            ? t("common.loading")
-            : `${artists.length}${hasMore ? "+" : ""}`
-        }}
+        {{ loading ? t("common.loading") : totalCount }}
       </Badge>
     </div>
     <div

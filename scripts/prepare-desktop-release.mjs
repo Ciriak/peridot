@@ -5,8 +5,8 @@ import process from "node:process";
 
 const channel = process.env.PERIDOT_CLIENT_CHANNEL?.trim();
 const version = process.env.PERIDOT_CLIENT_VERSION?.trim();
-if (!channel || !["dev", "master", "stable"].includes(channel)) {
-  throw new Error("PERIDOT_CLIENT_CHANNEL must be dev, master, or stable.");
+if (!channel || !["dev", "beta", "stable"].includes(channel)) {
+  throw new Error("PERIDOT_CLIENT_CHANNEL must be dev, beta, or stable.");
 }
 if (!version || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {
   throw new Error("PERIDOT_CLIENT_VERSION must be a valid SemVer version.");

@@ -141,7 +141,10 @@ export async function registerAdminRoutes(
             ? validateFileLoggingSettings(request.body.fileLogging)
             : undefined;
           if (requestedFileLogging) {
-            await logBuffer.configureFileLogging(requestedFileLogging.enabled);
+            await logBuffer.configureFileLogging(
+              requestedFileLogging.enabled,
+              requestedFileLogging.retentionDays,
+            );
           }
           const settings = await updateServerSettings(database, request.body);
           const sourceRefresh = settings.sourceRefresh
@@ -177,7 +180,10 @@ export async function registerAdminRoutes(
           };
         } catch (error) {
           await logBuffer
-            .configureFileLogging(previousFileLogging.enabled)
+            .configureFileLogging(
+              previousFileLogging.enabled,
+              previousFileLogging.retentionDays,
+            )
             .catch(() => undefined);
           if (error instanceof ServerSettingsError) {
             return sendError(

@@ -414,8 +414,8 @@ Channel build metadata uses `PERIDOT_UPDATE_CHANNEL`, `PERIDOT_BUILD_TAG`, and
 `PERIDOT_WATCHTOWER_TOKEN` or `PERIDOT_WATCHTOWER_TOKEN_FILE` enable the
 server-to-server install request; neither value is returned to browser code.
 The Docker entrypoint generates that file automatically in `/data`. Release
-channels are `dev`, `master`/beta, `stable`/production, and `local` for builds
-without update metadata.
+channels are `dev`, `beta`, `stable`/production, and `local` for builds without
+update metadata.
 Discogs metadata uses an administrator-provided personal access token. Peridot
 encrypts provider credentials at rest with an automatically generated local key
 stored as `<database path>.key`, for example `peridot.db.key`, and reuses that
@@ -606,8 +606,10 @@ read one with `GET /api/tasks/:id`, page tracks and summaries with
 `GET /api/tracks`, `GET /api/albums`, and `GET /api/artists`, and stream a track
 with `GET /api/tracks/:id/audio`. Catalog pages default to 100 tracks or 50
 album/artist summaries, with `cursor`, `query`, sort, availability, and
-authenticated like filters. `POST /api/tracks/resolve` hydrates at most 500
-queue track IDs in requested order.
+authenticated like filters. Paginated catalog responses include `totalCount`
+for the complete filtered collection, independent of the current page size.
+`POST /api/tracks/resolve` hydrates at most 500 queue track IDs in requested
+order.
 Signed-in clients list derived books with `GET /api/audiobooks`, read one with
 `GET /api/audiobooks/:id`, and page its chapters through
 `GET /api/audiobooks/:id/chapters`. Podcast shows use
@@ -755,10 +757,10 @@ To check a message manually: `echo "feat: add library scanning" | pnpm commitlin
 ## Branches and releases
 
 - `dev`: active development; target ordinary pull requests here.
-- `master`: beta channel; promote reviewed changes from dev.
+- `master`: beta source branch; promote reviewed changes from dev.
 - Git tags: production releases. The tag must match `v${root package version}`;
   use `v0.0.1` while the synchronized workspace version is `0.0.1`.
-- CI publishes `dev`, `master`, commit, version-tag, and `stable` GHCR images
+- CI publishes `dev`, `beta`, commit, version-tag, and `stable` GHCR images
   after all build and test gates pass.
 
 ## Docker
@@ -785,7 +787,7 @@ Client release signing requires these repository secrets:
 - `CAPGO_UPDATE_PRIVATE_KEY`
 
 Only the corresponding public keys are committed. Release jobs create or update
-`client-dev`, `client-master`, and version-tag GitHub releases containing
+`client-dev`, `client-beta`, and version-tag GitHub releases containing
 platform bundles, signatures, and `latest.json`. Android bundles and manifests
 are also retained as workflow artifacts.
 

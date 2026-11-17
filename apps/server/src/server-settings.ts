@@ -1,5 +1,7 @@
 import {
+  DEFAULT_FILE_LOG_RETENTION_DAYS,
   DEFAULT_SCAN_WORKER_COUNT,
+  MAX_FILE_LOG_RETENTION_DAYS,
   MAX_SCAN_WORKER_COUNT,
   type MessageDescriptor,
   type UpdateServerSettingsRequest,
@@ -18,6 +20,7 @@ export interface SourceRefreshSettings {
 
 export interface FileLoggingSettings {
   enabled: boolean;
+  retentionDays: number;
 }
 
 export interface ScanWorkerSettings {
@@ -67,12 +70,21 @@ export function validateSourceRefreshSettings(
 export function validateFileLoggingSettings(
   input: UpdateServerSettingsRequest["fileLogging"] | undefined,
 ): FileLoggingSettings {
-  if (!input || typeof input.enabled !== "boolean") {
+  if (
+    !input ||
+    typeof input.enabled !== "boolean" ||
+    !Number.isSafeInteger(input.retentionDays) ||
+    input.retentionDays < 1 ||
+    input.retentionDays > MAX_FILE_LOG_RETENTION_DAYS
+  ) {
     throw new ServerSettingsError(
-      "Choose whether server logs are kept in a file.",
+      `Choose whether server logs are kept in a file and a retention from 1 through ${MAX_FILE_LOG_RETENTION_DAYS} days.`,
     );
   }
-  return { enabled: input.enabled };
+  return {
+    enabled: input.enabled,
+    retentionDays: input.retentionDays,
+  };
 }
 
 export function validateScanWorkerSettings(
@@ -123,6 +135,11 @@ export async function ensureServerSettings(
     },
     fileLogging: {
       enabled: Boolean(existing.fileLoggingEnabled),
+      retentionDays:
+        existing.fileLogRetentionDays >= 1 &&
+        existing.fileLogRetentionDays <= MAX_FILE_LOG_RETENTION_DAYS
+          ? existing.fileLogRetentionDays
+          : DEFAULT_FILE_LOG_RETENTION_DAYS,
     },
   };
 }
@@ -175,7 +192,14 @@ export async function readFileLoggingSettings(
   const settings = await database.orm.ServerSetting.firstOrThrow({
     id: SERVER_SETTING_ID,
   });
-  return { enabled: Boolean(settings.fileLoggingEnabled) };
+  return {
+    enabled: Boolean(settings.fileLoggingEnabled),
+    retentionDays:
+      settings.fileLogRetentionDays >= 1 &&
+      settings.fileLogRetentionDays <= MAX_FILE_LOG_RETENTION_DAYS
+        ? settings.fileLogRetentionDays
+        : DEFAULT_FILE_LOG_RETENTION_DAYS,
+  };
 }
 
 export async function updateFileLoggingSettings(
@@ -185,6 +209,7 @@ export async function updateFileLoggingSettings(
   const settings = validateFileLoggingSettings(input);
   await database.orm.ServerSetting.where({ id: SERVER_SETTING_ID }).update({
     fileLoggingEnabled: settings.enabled ? 1 : 0,
+    fileLogRetentionDays: settings.retentionDays,
   });
   return settings;
 }
@@ -231,6 +256,7 @@ export async function updateServerSettings(
         id: SERVER_SETTING_ID,
       }).update({
         fileLoggingEnabled: fileLogging.enabled ? 1 : 0,
+        fileLogRetentionDays: fileLogging.retentionDays,
       });
     }
   });

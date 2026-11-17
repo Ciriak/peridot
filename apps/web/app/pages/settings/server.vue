@@ -11,7 +11,9 @@ import {
 } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import {
+  DEFAULT_FILE_LOG_RETENTION_DAYS,
   DEFAULT_SCAN_WORKER_COUNT,
+  MAX_FILE_LOG_RETENTION_DAYS,
   MAX_SCAN_WORKER_COUNT,
   SCAN_WORKER_WARNING_THRESHOLD,
 } from "@peridot/contracts";
@@ -79,7 +81,11 @@ let restartSawDisconnect = false;
 const disconnectOpen = ref(false);
 const disconnecting = ref(false);
 const logError = ref("");
-const fileLoggingEnabled = ref(false);
+const fileLoggingEnabled = ref(true);
+const fileLogRetentionDays = ref<string | number>(
+  String(DEFAULT_FILE_LOG_RETENTION_DAYS),
+);
+const savedFileLogRetentionDays = ref(DEFAULT_FILE_LOG_RETENTION_DAYS);
 const fileLoggingSaving = ref(false);
 const fileLoggingNotice = ref("");
 const fileLoggingError = ref("");
@@ -102,7 +108,7 @@ const updateStatus = computed(() => updates.status.value);
 const updateChannel = computed(() => {
   const channel = updateStatus.value?.channel;
   if (channel === "dev") return t("settings.server.updates.channel.dev");
-  if (channel === "master") return t("settings.server.updates.channel.master");
+  if (channel === "beta") return t("settings.server.updates.channel.beta");
   if (channel === "stable") return t("settings.server.updates.channel.stable");
   return t("settings.server.updates.channel.local");
 });
@@ -121,7 +127,11 @@ watch(
   serverSettings.settings,
   (settings) => {
     if (settings) {
-      fileLoggingEnabled.value = settings.fileLogging?.enabled ?? false;
+      fileLoggingEnabled.value = settings.fileLogging?.enabled ?? true;
+      const retentionDays =
+        settings.fileLogging?.retentionDays ?? DEFAULT_FILE_LOG_RETENTION_DAYS;
+      fileLogRetentionDays.value = String(retentionDays);
+      savedFileLogRetentionDays.value = retentionDays;
       const workerCount =
         settings.scanning?.workerCount ?? DEFAULT_SCAN_WORKER_COUNT;
       scanWorkerCount.value = String(workerCount);
@@ -150,6 +160,16 @@ const scanWorkerWarning = computed(
 const logFilePath = computed(
   () => serverSettings.settings.value?.fileLogging?.path ?? "",
 );
+const parsedFileLogRetentionDays = computed(() => {
+  const text = String(fileLogRetentionDays.value).trim();
+  if (!/^\d+$/.test(text)) return null;
+  const days = Number(text);
+  return Number.isSafeInteger(days) &&
+    days >= 1 &&
+    days <= MAX_FILE_LOG_RETENTION_DAYS
+    ? days
+    : null;
+});
 
 async function refreshLogs() {
   logError.value = "";
@@ -234,13 +254,27 @@ async function checkUpdates() {
 
 async function saveFileLogging() {
   if (fileLoggingSaving.value) return;
-  fileLoggingSaving.value = true;
   fileLoggingNotice.value = "";
   fileLoggingError.value = "";
+  const retentionDays = parsedFileLogRetentionDays.value;
+  if (retentionDays === null) {
+    fileLoggingError.value = t("settings.server.fileLogging.invalidRetention");
+    return;
+  }
+  if (retentionDays === savedFileLogRetentionDays.value) {
+    const current = serverSettings.settings.value?.fileLogging;
+    if (current?.enabled === fileLoggingEnabled.value) return;
+  }
+
+  fileLoggingSaving.value = true;
   try {
     await serverSettings.save({
-      fileLogging: { enabled: fileLoggingEnabled.value },
+      fileLogging: {
+        enabled: fileLoggingEnabled.value,
+        retentionDays,
+      },
     });
+    savedFileLogRetentionDays.value = retentionDays;
     fileLoggingNotice.value = t("settings.server.fileLogging.saved");
   } catch (reason) {
     if (isAuthenticationRedirectError(reason)) return;
@@ -752,6 +786,31 @@ watch(connectionStatus, (status) => {
             :aria-label="t('settings.server.fileLogging.enabled')"
             @update:model-value="changeFileLogging"
           />
+        </div>
+        <div class="space-y-2 border-t pt-4">
+          <label for="file-log-retention-days" class="text-sm font-medium">
+            {{ t("settings.server.fileLogging.retentionDays") }}
+          </label>
+          <Input
+            id="file-log-retention-days"
+            v-model="fileLogRetentionDays"
+            type="number"
+            min="1"
+            :max="MAX_FILE_LOG_RETENTION_DAYS"
+            step="1"
+            :disabled="fileLoggingSaving || connectionStatus === 'lost'"
+            :aria-invalid="
+              String(fileLogRetentionDays).trim() !== '' &&
+              parsedFileLogRetentionDays === null
+            "
+            aria-describedby="file-log-retention-help"
+            class="max-w-32"
+            @blur="saveFileLogging"
+            @keydown.enter.prevent="saveFileLogging"
+          />
+          <p id="file-log-retention-help" class="text-sm text-muted-foreground">
+            {{ t("settings.server.fileLogging.retentionDaysHelp") }}
+          </p>
         </div>
         <div class="space-y-1 border-t pt-4">
           <p class="text-sm font-medium">

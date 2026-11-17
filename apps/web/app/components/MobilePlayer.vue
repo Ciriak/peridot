@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useI18n } from "#imports";
+import { useI18n, useRoute, useRouter } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import { Button } from "@peridot/ui/components/ui/button";
 import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
@@ -28,10 +28,16 @@ import {
   trackArtistNames,
   trackCoverUrl,
 } from "../lib/library";
+import {
+  isMobilePlayerRoute,
+  withMobilePlayerRoute,
+  withoutMobilePlayerRoute,
+} from "../lib/mobile-player-route";
 
-const open = defineModel<boolean>("open", { default: false });
 const emit = defineEmits<{ openQueue: [] }>();
 const { t } = useI18n();
+const route = useRoute();
+const router = useRouter();
 const { address } = useServer();
 const {
   likedTrackIds,
@@ -84,6 +90,18 @@ const placeholderIcon = computed(() =>
         ? icons.album
         : icons.music,
 );
+const open = computed<boolean>({
+  get: () => isMobilePlayerRoute(route.query),
+  set: (isOpen) => {
+    if (isOpen) {
+      if (!isMobilePlayerRoute(route.query)) {
+        void router.push({ query: withMobilePlayerRoute(route.query) });
+      }
+      return;
+    }
+    closeFullscreen();
+  },
+});
 
 function toggleCurrentTrackLike() {
   if (currentTrackId.value)
@@ -94,8 +112,20 @@ function playActiveTrack() {
   if (active.value && !playing.value) togglePlayback();
 }
 
+function closeFullscreen() {
+  if (!isMobilePlayerRoute(route.query)) return;
+  const historyState = window.history.state as {
+    back?: string | null;
+  } | null;
+  if (historyState?.back) {
+    router.back();
+    return;
+  }
+  void router.replace({ query: withoutMobilePlayerRoute(route.query) });
+}
+
 function openQueue() {
-  open.value = false;
+  closeFullscreen();
   emit("openQueue");
 }
 </script>
@@ -120,7 +150,7 @@ function openQueue() {
         <DialogTrigger as-child>
           <Button
             variant="ghost"
-            class="h-full min-w-0 flex-1 justify-start gap-3 px-3 text-left transition-none hover:bg-transparent hover:text-current active:bg-transparent active:text-current dark:hover:bg-transparent dark:active:bg-transparent"
+            class="h-full w-0 min-w-0 max-w-full shrink flex-1 justify-start gap-3 overflow-hidden px-3 text-left transition-none hover:bg-transparent hover:text-current active:bg-transparent active:text-current dark:hover:bg-transparent dark:active:bg-transparent"
             :aria-label="t('player.openFullscreen')"
             aria-haspopup="dialog"
           >
@@ -139,12 +169,12 @@ function openQueue() {
                 @error="coverFailed = true"
               />
             </span>
-            <span class="min-w-0 flex-1">
+            <span class="w-0 min-w-0 max-w-full flex-1 overflow-hidden">
               <ScrollingText
                 v-if="active"
                 :key="`${active.id}:${active.title}`"
                 mode="always"
-                class="w-full text-sm font-medium"
+                class="w-full max-w-full text-sm font-medium"
               >
                 {{ active.title }}
               </ScrollingText>
@@ -154,7 +184,7 @@ function openQueue() {
               <ScrollingText
                 v-if="active"
                 mode="always"
-                class="w-full text-xs text-muted-foreground"
+                class="w-full max-w-full text-xs text-muted-foreground"
               >
                 <template v-if="active.mediaType === 'music'">
                   {{ trackArtistNames(active).join(", ") }}

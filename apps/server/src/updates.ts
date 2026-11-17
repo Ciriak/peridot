@@ -10,6 +10,11 @@ import { PERIDOT_VERSION } from "./version.js";
 const GITHUB_API = "https://api.github.com";
 const REQUEST_TIMEOUT_MS = 10_000;
 const STABLE_TAG_PATTERN = /^v(\d+)\.(\d+)\.(\d+)$/;
+type BranchUpdateChannel = Exclude<UpdateChannel, "stable" | "local">;
+const UPDATE_BRANCHES: Record<BranchUpdateChannel, string> = {
+  dev: "dev",
+  beta: "master",
+};
 
 export type { UpdateConfig };
 
@@ -82,7 +87,7 @@ export class UpdateService {
       throw new UpdateError(
         400,
         "update_channel_unavailable",
-        "Update checks require a dev, master, or stable image.",
+        "Update checks require a dev, beta, or stable image.",
         "api.message.updateChannelUnavailable",
       );
     }
@@ -171,10 +176,10 @@ export class UpdateService {
   }
 
   private async latestBranchCommit(
-    channel: Exclude<UpdateChannel, "stable" | "local">,
+    channel: BranchUpdateChannel,
   ): Promise<{ tag: null; commit: string | null }> {
     const response = await this.githubRequest(
-      `/repos/${this.config.repository}/commits/${channel}`,
+      `/repos/${this.config.repository}/commits/${UPDATE_BRANCHES[channel]}`,
     );
     const body = (await response
       .json()

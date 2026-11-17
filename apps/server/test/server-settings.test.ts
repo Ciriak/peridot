@@ -31,7 +31,8 @@ test("administrators can update and validate the source refresh schedule", async
         nextRunAt: null,
       },
       fileLogging: {
-        enabled: false,
+        enabled: true,
+        retentionDays: 5,
         path: path.join(context.root, "peridot.log"),
       },
     });
@@ -119,7 +120,7 @@ test("administrators can update and validate scan worker threads", async () => {
   }
 });
 
-test("administrators can enable and disable persistent file logging", async () => {
+test("file logging is enabled by default and its retention can be configured", async () => {
   const context = await createTestContext();
   const logPath = path.join(context.root, "peridot.log");
   try {
@@ -129,29 +130,41 @@ test("administrators can enable and disable persistent file logging", async () =
       headers: context.authorization,
     });
     assert.deepEqual(initial.json().fileLogging, {
-      enabled: false,
+      enabled: true,
+      retentionDays: 5,
       path: logPath,
     });
+    context.logBuffer.add("info", "enabled by default");
+    let defaultContent = "";
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      defaultContent = await readFile(logPath, "utf8").catch(() => "");
+      if (defaultContent.includes("enabled by default")) break;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.match(defaultContent, /enabled by default/);
 
-    const enabled = await context.app.inject({
+    const configured = await context.app.inject({
       method: "PUT",
       url: "/api/admin/server",
       headers: context.authorization,
-      payload: { fileLogging: { enabled: true } },
+      payload: {
+        fileLogging: {
+          enabled: true,
+          retentionDays: 14,
+        },
+      },
     });
-    assert.equal(enabled.statusCode, 200);
-    assert.deepEqual(enabled.json().fileLogging, {
+    assert.equal(configured.statusCode, 200);
+    assert.deepEqual(configured.json().fileLogging, {
       enabled: true,
+      retentionDays: 14,
       path: logPath,
     });
-    assert.equal(
-      (
-        await context.database.orm.ServerSetting.firstOrThrow({
-          id: "server",
-        })
-      ).fileLoggingEnabled,
-      1,
-    );
+    const stored = await context.database.orm.ServerSetting.firstOrThrow({
+      id: "server",
+    });
+    assert.equal(stored.fileLoggingEnabled, 1);
+    assert.equal(stored.fileLogRetentionDays, 14);
 
     context.logBuffer.add("info", "persisted test entry");
     let content = "";
@@ -166,7 +179,12 @@ test("administrators can enable and disable persistent file logging", async () =
       method: "PUT",
       url: "/api/admin/server",
       headers: context.authorization,
-      payload: { fileLogging: { enabled: false } },
+      payload: {
+        fileLogging: {
+          enabled: false,
+          retentionDays: 14,
+        },
+      },
     });
     assert.equal(disabled.statusCode, 200);
     assert.equal(disabled.json().fileLogging.enabled, false);
@@ -175,6 +193,22 @@ test("administrators can enable and disable persistent file logging", async () =
     const finalContent = await readFile(logPath, "utf8");
     assert.match(finalContent, /persisted test entry/);
     assert.doesNotMatch(finalContent, /not persisted after disable/);
+
+    for (const retentionDays of [0, 1.5, 3651]) {
+      const invalid = await context.app.inject({
+        method: "PUT",
+        url: "/api/admin/server",
+        headers: context.authorization,
+        payload: {
+          fileLogging: {
+            enabled: true,
+            retentionDays,
+          },
+        },
+      });
+      assert.equal(invalid.statusCode, 400);
+      assert.equal(invalid.json().error.code, "invalid_server_settings");
+    }
   } finally {
     await context.close();
   }

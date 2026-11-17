@@ -160,7 +160,7 @@ function toggleEntryPlayback(entry: PlaylistEntryResponse) {
       <div class="min-w-0 flex-1">
         <div class="flex min-w-0 flex-wrap items-center gap-2">
           <ScrollingText
-            class="min-w-0 flex-1"
+            class="min-w-0"
             :class="!playable(entry) && 'opacity-60'"
             :title="entry.title"
           >

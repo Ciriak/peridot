@@ -31,7 +31,8 @@ test("administrators can read server counts and the default source", async () =>
         nextRunAt: null,
       },
       fileLogging: {
-        enabled: false,
+        enabled: true,
+        retentionDays: 5,
         path: path.join(context.root, "peridot.log"),
       },
     });

@@ -196,8 +196,8 @@ test("albums have list and detail routes with derived groups", async () => {
   );
   assert.match(
     trackTable,
-    /<TrackArtwork[\s\S]*icons\.play[\s\S]*<\/TrackArtwork>\s*<div class="min-w-0 flex-1">\s*<div class="flex min-w-0 items-center gap-2">\s*<ScrollingText\s+:id="trackTitleAnchorId\(item\.data\.id\)"\s+class="min-w-0 flex-1 scroll-mt-4"\s+:class="\{ 'opacity-60': isUnavailable\(item\.data\) \}"\s+>\{\{ item\.data\.title \}\}<\/ScrollingText/,
-    "Track titles remain plain text beside artwork that embeds the play control",
+    /<TrackArtwork[\s\S]*icons\.play[\s\S]*<\/TrackArtwork>\s*<div class="min-w-0 flex-1">\s*<div class="flex min-w-0 items-center gap-2">\s*<ScrollingText\s+:id="trackTitleAnchorId\(item\.data\.id\)"\s+class="min-w-0 scroll-mt-4"\s+:class="\{ 'opacity-60': isUnavailable\(item\.data\) \}"\s+>\{\{ item\.data\.title \}\}<\/ScrollingText/,
+    "The current-track indicator sits immediately after the track title",
   );
   assert.match(
     trackTable,

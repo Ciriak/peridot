@@ -549,10 +549,17 @@ test("server settings leave source refresh without library status management", a
   assert.match(page, /settings\.server\.categories/);
   assert.match(page, /settings\.server\.fileLogging\.enabled/);
   assert.match(page, /settings\.server\.fileLogging\.enabledHelp/);
+  assert.match(page, /settings\.server\.fileLogging\.retentionDays/);
+  assert.match(page, /settings\.server\.fileLogging\.retentionDaysHelp/);
   assert.match(page, /settings\.server\.fileLogging\.path/);
   assert.match(page, /@update:model-value="changeFileLogging"/);
   assert.doesNotMatch(page, /@click="saveFileLogging"/);
-  assert.match(page, /fileLogging: \{ enabled: fileLoggingEnabled\.value \}/);
+  assert.match(page, /@blur="saveFileLogging"/);
+  assert.match(page, /@keydown\.enter\.prevent="saveFileLogging"/);
+  assert.match(
+    page,
+    /fileLogging:\s*\{\s*enabled:\s*fileLoggingEnabled\.value,\s*retentionDays,\s*\}/,
+  );
   assert.match(page, /settings\.server\.scanning\.workerCount/);
   assert.match(page, /settings\.server\.scanning\.warning/);
   assert.match(page, /scanning: \{ workerCount \}/);

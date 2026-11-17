@@ -50,7 +50,6 @@ const searchInput = ref<{ $el?: HTMLInputElement } | null>(null);
 const shortcutModifier = ref<SearchShortcutModifier>("ctrl");
 const mobileNavigation = ref(false);
 const queueOpen = ref(false);
-const mobilePlayerOpen = ref(false);
 const desktopRuntime = ref(false);
 const loadingRayAtRight = ref(false);
 let loadingRayFrame: number | undefined;
@@ -159,7 +158,6 @@ async function openSearch() {
 
 watch(currentPath, (path) => {
   mobileNavigation.value = false;
-  mobilePlayerOpen.value = false;
   if (path !== "/search") {
     searchQuery.value = "";
   } else {
@@ -448,10 +446,7 @@ onBeforeUnmount(stopLoadingRay);
         aria-hidden="true"
         class="pointer-events-none absolute inset-0 -z-10 bg-linear-to-r from-card/20 via-card/70 to-card"
       />
-      <MobilePlayer
-        v-model:open="mobilePlayerOpen"
-        @open-queue="openQueueFromMobilePlayer"
-      />
+      <MobilePlayer @open-queue="openQueueFromMobilePlayer" />
       <div class="hidden h-full w-full min-w-0 items-center gap-6 px-6 md:flex">
         <div class="flex min-w-0 items-center gap-3 md:flex-1">
           <div

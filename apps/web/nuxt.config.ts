@@ -17,7 +17,7 @@ const releaseRepository = "Ciriak/peridot";
 const releaseAssetBase =
   clientUpdateChannel === "stable"
     ? `https://github.com/${releaseRepository}/releases/latest/download`
-    : clientUpdateChannel === "dev" || clientUpdateChannel === "master"
+    : clientUpdateChannel === "dev" || clientUpdateChannel === "beta"
       ? `https://github.com/${releaseRepository}/releases/download/client-${clientUpdateChannel}`
       : "";
 
@@ -101,7 +101,7 @@ export default defineNuxtConfig({
       androidWebReleaseApiUrl:
         clientUpdateChannel === "stable"
           ? `https://api.github.com/repos/${releaseRepository}/releases/latest`
-          : clientUpdateChannel === "dev" || clientUpdateChannel === "master"
+          : clientUpdateChannel === "dev" || clientUpdateChannel === "beta"
             ? `https://api.github.com/repos/${releaseRepository}/releases/tags/client-${clientUpdateChannel}`
             : "",
       desktopUpdateManifestUrl: releaseAssetBase

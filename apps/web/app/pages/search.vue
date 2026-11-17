@@ -93,6 +93,7 @@ const {
   loadingMore: artistsLoadingMore,
   error: artistsError,
   hasMore: hasMoreArtists,
+  totalCount: artistTotalCount,
   load: loadArtists,
   loadMore: loadMoreArtists,
 } = useCatalogArtistQuery(() => ({
@@ -105,6 +106,7 @@ const {
   loadingMore: albumsLoadingMore,
   error: albumsError,
   hasMore: hasMoreAlbums,
+  totalCount: albumTotalCount,
   load: loadAlbums,
   loadMore: loadMoreAlbums,
 } = useCatalogAlbumQuery(() => ({
@@ -117,6 +119,7 @@ const {
   loadingMore: audiobooksLoadingMore,
   error: audiobooksError,
   hasMore: hasMoreAudiobooks,
+  totalCount: audiobookTotalCount,
   load: loadAudiobooks,
   loadMore: loadMoreAudiobooks,
 } = useCatalogAudiobookQuery(() => ({
@@ -129,6 +132,7 @@ const {
   loadingMore: podcastsLoadingMore,
   error: podcastsError,
   hasMore: hasMorePodcasts,
+  totalCount: podcastTotalCount,
   load: loadPodcasts,
   loadMore: loadMorePodcasts,
 } = useCatalogPodcastQuery(() => ({
@@ -141,6 +145,7 @@ const {
   loadingMore: tracksLoadingMore,
   error: tracksError,
   hasMore: hasMoreTracks,
+  totalCount: trackTotalCount,
   load: loadTracks,
   loadMore: loadMoreTracks,
 } = useCatalogTrackQuery(() => ({
@@ -280,7 +285,7 @@ onMounted(() => {
       aria-labelledby="recent-searches-heading"
       class="space-y-4"
     >
-      <div class="flex items-center justify-between gap-4">
+      <div class="flex flex-wrap items-center gap-2">
         <h2 id="recent-searches-heading" class="text-lg font-semibold">
           {{ t("page.search.recent") }}
         </h2>
@@ -321,17 +326,13 @@ onMounted(() => {
         aria-labelledby="local-artists-heading"
         class="space-y-4"
       >
-        <div class="flex items-center justify-between gap-4">
+        <div class="flex flex-wrap items-center gap-2">
           <h2 id="local-artists-heading" class="text-lg font-semibold">
             {{ t("page.search.localArtists") }}
           </h2>
           <Badge variant="secondary">
             {{
-              `${t(
-                "count.artist",
-                { count: artistResults.length },
-                artistResults.length,
-              )}${hasMoreArtists ? "+" : ""}`
+              t("count.artist", { count: artistTotalCount }, artistTotalCount)
             }}
           </Badge>
         </div>
@@ -367,18 +368,12 @@ onMounted(() => {
         aria-labelledby="local-albums-heading"
         class="space-y-4"
       >
-        <div class="flex items-center justify-between gap-4">
+        <div class="flex flex-wrap items-center gap-2">
           <h2 id="local-albums-heading" class="text-lg font-semibold">
             {{ t("page.search.localAlbums") }}
           </h2>
           <Badge variant="secondary">
-            {{
-              `${t(
-                "count.album",
-                { count: albumResults.length },
-                albumResults.length,
-              )}${hasMoreAlbums ? "+" : ""}`
-            }}
+            {{ t("count.album", { count: albumTotalCount }, albumTotalCount) }}
           </Badge>
         </div>
         <div
@@ -415,18 +410,12 @@ onMounted(() => {
         aria-labelledby="local-tracks-heading"
         class="space-y-4"
       >
-        <div class="flex items-center justify-between gap-4">
+        <div class="flex flex-wrap items-center gap-2">
           <h2 id="local-tracks-heading" class="text-lg font-semibold">
             {{ t("page.search.localTracks") }}
           </h2>
           <Badge variant="secondary">
-            {{
-              `${t(
-                "count.track",
-                { count: trackResults.length },
-                trackResults.length,
-              )}${hasMoreTracks ? "+" : ""}`
-            }}
+            {{ t("count.track", { count: trackTotalCount }, trackTotalCount) }}
           </Badge>
         </div>
         <TrackTable
@@ -453,17 +442,17 @@ onMounted(() => {
         aria-labelledby="local-audiobooks-heading"
         class="space-y-4"
       >
-        <div class="flex items-center justify-between gap-4">
+        <div class="flex flex-wrap items-center gap-2">
           <h2 id="local-audiobooks-heading" class="text-lg font-semibold">
             {{ t("page.search.localAudiobooks") }}
           </h2>
           <Badge variant="secondary">
             {{
-              `${t(
+              t(
                 "count.audiobook",
-                { count: audiobookResults.length },
-                audiobookResults.length,
-              )}${hasMoreAudiobooks ? "+" : ""}`
+                { count: audiobookTotalCount },
+                audiobookTotalCount,
+              )
             }}
           </Badge>
         </div>
@@ -499,17 +488,17 @@ onMounted(() => {
         aria-labelledby="local-podcasts-heading"
         class="space-y-4"
       >
-        <div class="flex items-center justify-between gap-4">
+        <div class="flex flex-wrap items-center gap-2">
           <h2 id="local-podcasts-heading" class="text-lg font-semibold">
             {{ t("page.search.localPodcasts") }}
           </h2>
           <Badge variant="secondary">
             {{
-              `${t(
+              t(
                 "count.podcast",
-                { count: podcastResults.length },
-                podcastResults.length,
-              )}${hasMorePodcasts ? "+" : ""}`
+                { count: podcastTotalCount },
+                podcastTotalCount,
+              )
             }}
           </Badge>
         </div>

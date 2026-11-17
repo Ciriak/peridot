@@ -145,6 +145,11 @@ test("playlist pages expose creation, unavailable tracks, editing, likes, and of
   assert.match(trackList, /useSortable/);
   assert.match(trackList, /playlistTracks\.unavailable/);
   assert.match(trackList, /emit\(\s*"reorder"/);
+  assert.match(
+    trackList,
+    /<ScrollingText\s+class="min-w-0"[\s\S]*>\s*\{\{ entry\.title \}\}\s*<\/ScrollingText>\s*<Icon\s+v-if="isCurrent\(entry\)"\s+:icon="icons\.waveform"/,
+    "The current-track indicator sits immediately after the playlist title",
+  );
   assert.match(contextMenu, /<AddTrackToPlaylistDialog/);
   assert.match(actions, /createPlaylist\(/);
   assert.match(actions, /updatePlaylist\(/);

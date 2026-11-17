@@ -19,7 +19,7 @@ import type {
 } from '@prisma/orm-sqlite/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'05ef14e09055a1e89fe0d4263fdfa341825af094253dfc0fc2cb819591ad0427'>;
+  StorageHashBase<'ba133506171d37b8a85af222553e3399c488fa1856749d814284ab46a4e99533'>;
 export type ExecutionHash =
   ExecutionHashBase<'b8742140c70062f86caa6d72cafc965dc42172098c5fb9a906ef71c33c37e56b'>;
 export type ProfileHash =
@@ -430,6 +430,7 @@ export namespace Models {
     readonly [RelationKeys]?: 'activeTrack' | 'user';
   };
   export type ServerSetting = {
+    fileLogRetentionDays: FieldOutputTypes['__unbound__']['ServerSetting']['fileLogRetentionDays'];
     fileLoggingEnabled: FieldOutputTypes['__unbound__']['ServerSetting']['fileLoggingEnabled'];
     id: FieldOutputTypes['__unbound__']['ServerSetting']['id'];
     libraryRoot: FieldOutputTypes['__unbound__']['ServerSetting']['libraryRoot'];
@@ -2125,13 +2126,23 @@ type ContractBase = Omit<
             };
             readonly ServerSetting: {
               columns: {
+                readonly fileLogRetentionDays: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '5'>;
+                  };
+                  readonly many: false;
+                };
                 readonly fileLoggingEnabled: {
                   readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/integer@1';
                   readonly nullable: false;
                   readonly default: {
                     readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
+                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '1'>;
                   };
                   readonly many: false;
                 };
@@ -4401,6 +4412,10 @@ type ContractBase = Omit<
           };
           readonly ServerSetting: {
             readonly fields: {
+              readonly fileLogRetentionDays: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
               readonly fileLoggingEnabled: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
@@ -4435,6 +4450,7 @@ type ContractBase = Omit<
               readonly table: 'ServerSetting';
               readonly namespaceId: '__unbound__';
               readonly fields: {
+                readonly fileLogRetentionDays: { readonly column: 'fileLogRetentionDays' };
                 readonly fileLoggingEnabled: { readonly column: 'fileLoggingEnabled' };
                 readonly id: { readonly column: 'id' };
                 readonly libraryRoot: { readonly column: 'libraryRoot' };

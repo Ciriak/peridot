@@ -27,6 +27,7 @@ import {
   shuffledPoolExcept,
   type RepeatMode,
 } from "../lib/playback-queue";
+import { nextPlaybackStartRetry } from "../lib/playback-start-retry";
 import {
   createPlaybackToken,
   fetchQueue,
@@ -1117,6 +1118,8 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     let loadingTrackId: string | null = null;
     let offlineObjectUrl: string | null = null;
     let loadAttempt = 0;
+    let playbackStartRetries = 0;
+    let playbackStartedTrackId: string | null = null;
     let lastRecordedPlaybackRequest = -1;
     let stallTimer: ReturnType<typeof setTimeout> | undefined;
     let stopAudioWatch: (() => void) | undefined;
@@ -1125,6 +1128,50 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
 
     const playbackError = (reason: unknown, fallbackKey: string) =>
       errorMessage(reason, fallbackKey);
+
+    function resetPlaybackStartTracking() {
+      if (stallTimer) clearTimeout(stallTimer);
+      stallTimer = undefined;
+      playbackStartRetries = 0;
+      playbackStartedTrackId = null;
+    }
+
+    async function retryTrackStart(
+      trackId: string,
+      failedAttempt: number,
+      preferOffline: boolean,
+    ): Promise<boolean> {
+      const nextRetry = nextPlaybackStartRetry(playbackStartRetries);
+      if (
+        failedAttempt !== loadAttempt ||
+        currentTrackId.value !== trackId ||
+        !playing.value ||
+        playbackStartedTrackId === trackId ||
+        nextRetry === null
+      ) {
+        return false;
+      }
+
+      playbackStartRetries = nextRetry;
+      const attempt = ++loadAttempt;
+      error.value = null;
+      loading.value = true;
+      loadingTrackId = trackId;
+      loadedTrackId = null;
+      audio?.pause();
+      audio?.removeAttribute("src");
+      audio?.load();
+      if (offlineObjectUrl) {
+        URL.revokeObjectURL(offlineObjectUrl);
+        offlineObjectUrl = null;
+      }
+
+      if (preferOffline && (await loadOfflineTrack(trackId, attempt))) {
+        return true;
+      }
+      await prepareTrack(trackId, attempt);
+      return true;
+    }
 
     async function playLoadedTrack(trackId: string, attempt: number) {
       if (
@@ -1175,6 +1222,9 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
         }
         const blocked =
           reason instanceof DOMException && reason.name === "NotAllowedError";
+        if (!blocked && (await retryTrackStart(trackId, attempt, false))) {
+          return;
+        }
         playing.value = false;
         error.value = blocked
           ? t("error.playbackBlocked")
@@ -1243,15 +1293,18 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
       } catch (reason) {
         if (attempt !== loadAttempt) return;
         loadedTrackId = null;
-        playing.value = false;
         if (isAuthenticationRedirectError(reason)) return;
         if (isPeridotNetworkError(reason)) {
           if (await loadOfflineTrack(trackId, attempt)) {
             return;
           }
+          if (await retryTrackStart(trackId, attempt, false)) return;
+          playing.value = false;
           error.value = t("error.offlineTrackMissing");
           return;
         }
+        if (await retryTrackStart(trackId, attempt, false)) return;
+        playing.value = false;
         error.value = playbackError(reason, "error.audioPrepare");
       } finally {
         if (attempt === loadAttempt) {
@@ -1290,8 +1343,29 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
         if (!loadedTrackId) return;
         const failedTrackId = loadedTrackId;
         const failedAttempt = loadAttempt;
+        const startFailed = playbackStartedTrackId !== failedTrackId;
+        const failedOfflinePlayback = Boolean(offlineObjectUrl);
         loadedTrackId = null;
         loading.value = false;
+        if (startFailed) {
+          void retryTrackStart(
+            failedTrackId,
+            failedAttempt,
+            !failedOfflinePlayback,
+          ).then((retried) => {
+            if (
+              retried ||
+              failedAttempt !== loadAttempt ||
+              currentTrackId.value !== failedTrackId ||
+              !playing.value
+            ) {
+              return;
+            }
+            playing.value = false;
+            error.value = t("error.audioDecode");
+          });
+          return;
+        }
         playing.value = false;
         if (!offlineObjectUrl) {
           error.value = null;
@@ -1317,6 +1391,8 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
         if (!audio || loadedTrackId !== currentTrackId.value) return;
         if (stallTimer) clearTimeout(stallTimer);
         stallTimer = undefined;
+        playbackStartRetries = 0;
+        playbackStartedTrackId = loadedTrackId;
         loading.value = false;
       };
 
@@ -1359,6 +1435,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
             loadAttempt++;
             loadedTrackId = null;
             loadingTrackId = null;
+            resetPlaybackStartTracking();
             loading.value = false;
             error.value = null;
             elapsed.value = 0;
@@ -1374,6 +1451,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
 
           if (!trackId) return;
           if (!shouldPlay) {
+            resetPlaybackStartTracking();
             audio.pause();
             loading.value = false;
             return;
@@ -1384,6 +1462,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
             request !== previousRequest &&
             loadedTrackId === trackId
           ) {
+            resetPlaybackStartTracking();
             audio.currentTime = 0;
             elapsed.value = 0;
             await playLoadedTrack(trackId, loadAttempt);
