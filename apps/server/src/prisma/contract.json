@@ -20,6 +20,10 @@
       "model": "ArtistMetadata",
       "namespace": "__unbound__"
     },
+    "ArtworkJob": {
+      "model": "ArtworkJob",
+      "namespace": "__unbound__"
+    },
     "CatalogAlbum": {
       "model": "CatalogAlbum",
       "namespace": "__unbound__"
@@ -576,6 +580,140 @@
               },
               "namespaceId": "__unbound__",
               "table": "ArtistMetadata"
+            }
+          },
+          "ArtworkJob": {
+            "fields": {
+              "attemptCount": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
+              "createdAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                }
+              },
+              "externalCoverItemId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "externalCoverTag": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "lastAttemptAt": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                }
+              },
+              "sourceId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "trackId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "updatedAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "source": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "sourceId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Source",
+                  "namespace": "__unbound__"
+                }
+              },
+              "track": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "trackId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "Track",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "fields": {
+                "attemptCount": {
+                  "column": "attemptCount"
+                },
+                "createdAt": {
+                  "column": "createdAt"
+                },
+                "externalCoverItemId": {
+                  "column": "externalCoverItemId"
+                },
+                "externalCoverTag": {
+                  "column": "externalCoverTag"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "lastAttemptAt": {
+                  "column": "lastAttemptAt"
+                },
+                "sourceId": {
+                  "column": "sourceId"
+                },
+                "trackId": {
+                  "column": "trackId"
+                },
+                "updatedAt": {
+                  "column": "updatedAt"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "ArtworkJob"
             }
           },
           "CatalogAlbum": {
@@ -2271,7 +2409,23 @@
                 }
               }
             },
-            "relations": {},
+            "relations": {
+              "artworkJobs": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "sourceId"
+                  ]
+                },
+                "to": {
+                  "model": "ArtworkJob",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
             "storage": {
               "fields": {
                 "createdAt": {
@@ -2588,6 +2742,13 @@
                   "kind": "scalar"
                 }
               },
+              "externalCoverKey": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
               "externalId": {
                 "nullable": true,
                 "type": {
@@ -2842,6 +3003,22 @@
               }
             },
             "relations": {
+              "artworkJob": {
+                "cardinality": "1:1",
+                "nullable": true,
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "trackId"
+                  ]
+                },
+                "to": {
+                  "model": "ArtworkJob",
+                  "namespace": "__unbound__"
+                }
+              },
               "source": {
                 "cardinality": "N:1",
                 "nullable": true,
@@ -2893,6 +3070,9 @@
                 },
                 "externalContainer": {
                   "column": "externalContainer"
+                },
+                "externalCoverKey": {
+                  "column": "externalCoverKey"
                 },
                 "externalId": {
                   "column": "externalId"
@@ -3720,6 +3900,147 @@
                 ]
               },
               "uniques": []
+            },
+            "ArtworkJob": {
+              "columns": {
+                "attemptCount": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "default": {
+                    "kind": "literal",
+                    "value": "0"
+                  },
+                  "nullable": false
+                },
+                "createdAt": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/datetime",
+                  "default": {
+                    "expression": "now()",
+                    "kind": "function"
+                  },
+                  "nullable": false
+                },
+                "externalCoverItemId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "externalCoverTag": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "id": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "lastAttemptAt": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/datetime",
+                  "nullable": true
+                },
+                "sourceId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "trackId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "updatedAt": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/datetime",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [
+                {
+                  "index": {
+                    "unique": [
+                      "trackId"
+                    ]
+                  },
+                  "onDelete": "cascade",
+                  "source": {
+                    "columns": [
+                      "trackId"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "ArtworkJob"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Track"
+                  }
+                },
+                {
+                  "index": {
+                    "name": "ArtworkJob_sourceId_idx_d92a2571"
+                  },
+                  "onDelete": "cascade",
+                  "source": {
+                    "columns": [
+                      "sourceId"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "ArtworkJob"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Source"
+                  }
+                }
+              ],
+              "indexes": [
+                {
+                  "columns": [
+                    "createdAt"
+                  ],
+                  "name": "ArtworkJob_createdAt_idx_9575dbd7",
+                  "prefix": "ArtworkJob_createdAt_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "sourceId"
+                  ],
+                  "name": "ArtworkJob_sourceId_idx_d92a2571",
+                  "prefix": "ArtworkJob_sourceId_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "sourceId",
+                    "externalCoverItemId",
+                    "externalCoverTag"
+                  ],
+                  "name": "artwork_source_cover_170ef716",
+                  "prefix": "artwork_source_cover",
+                  "unique": false
+                }
+              ],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": [
+                {
+                  "columns": [
+                    "trackId"
+                  ]
+                }
+              ]
             },
             "CatalogAlbum": {
               "columns": {
@@ -5543,6 +5864,11 @@
                   "dataType": "sqlite/text",
                   "nullable": true
                 },
+                "externalCoverKey": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
                 "externalId": {
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
@@ -6171,10 +6497,10 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "9b4234f0591e41176d20f5d34fd379b28d1d2b94ea0a96897b3f39d419b8af81"
+    "storageHash": "4708250320cb1838b745eec80208e7ddea8325b16f784084116cbff5294d845e"
   },
   "execution": {
-    "executionHash": "b8742140c70062f86caa6d72cafc965dc42172098c5fb9a906ef71c33c37e56b",
+    "executionHash": "85edb6c43666162916bbb345e5da90f53ec36d044ed381921f3de575cd433dc6",
     "mutations": {
       "defaults": [
         {
@@ -6236,6 +6562,32 @@
           },
           "ref": {
             "entry": "ArtistMetadata",
+            "field": "updatedAt",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "cuid2",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "ArtworkJob",
+            "field": "id",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "onUpdate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "ArtworkJob",
             "field": "updatedAt",
             "namespace": "__unbound__"
           }

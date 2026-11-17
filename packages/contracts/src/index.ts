@@ -435,7 +435,8 @@ export type LikeResponse =
 export type TaskStatus =
   "queued" | "running" | "completed" | "failed" | "interrupted" | "stopped";
 
-export type TaskKind = "library_scan" | "metadata_fetch" | `plugin:${string}`;
+export type TaskKind =
+  "library_scan" | "metadata_fetch" | "artwork_fetch" | `plugin:${string}`;
 
 export const TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY =
   "metadata.activeProvider";
@@ -760,11 +761,6 @@ export interface UpdateStatusResponse {
   latestCommit: string | null;
   state: UpdateState;
   checkedAt: string | null;
-  installAvailable: boolean;
-}
-
-export interface InstallUpdateResponse {
-  status: "updating";
 }
 
 export interface LogEntryResponse {

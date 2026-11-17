@@ -7,6 +7,11 @@ import {
   normalizeOptionalArtistCredits,
   serializeArtistCredits,
 } from "./artist-credits.js";
+import {
+  externalCoverKey,
+  hasPendingArtworkJobs,
+  syncArtworkJob,
+} from "./artwork-fetch.js";
 import type { CatalogService } from "./catalog.js";
 import type { CredentialStore } from "./credential-store.js";
 import type { Database } from "./database.js";
@@ -35,6 +40,7 @@ import {
 import { ScanWorkerPool } from "./scan-worker-pool.js";
 import { readScanWorkerSettings } from "./server-settings.js";
 import {
+  queueArtworkFetch,
   queueMetadataFetch,
   scanDetails,
   TaskExecutionError,
@@ -116,8 +122,7 @@ type PreparedRemoteItem =
       existing: TrackRow | null;
       detected: DetectedMediaType;
       coverKey: string | null;
-      cover: CoverImage | null;
-      coverId: string | null;
+      queueArtwork: boolean;
     }
   | {
       kind: "failed";
@@ -194,7 +199,7 @@ function coverImage(cover: ScanWorkerCover | null): CoverImage | null {
 
 function remoteCoverKey(item: JellyfinAudioItem): string | null {
   return item.coverItemId
-    ? `${item.coverItemId}\u0000${item.coverTag ?? ""}`
+    ? externalCoverKey(item.coverItemId, item.coverTag)
     : null;
 }
 
@@ -248,9 +253,6 @@ async function yieldToEventLoop(): Promise<void> {
 }
 
 export class LibraryScanner {
-  private jellyfinCoverFetches = new Map<string, Promise<CoverImage | null>>();
-  private jellyfinCoverIds = new Map<string, string | null>();
-
   constructor(
     private readonly database: Database,
     private readonly metadataEnrichment?: MetadataEnrichment,
@@ -310,8 +312,6 @@ export class LibraryScanner {
 
     try {
       throwIfAborted(signal);
-      this.jellyfinCoverFetches.clear();
-      this.jellyfinCoverIds.clear();
       const { workerCount } = await readScanWorkerSettings(this.database);
       const activeWorkerPool = new ScanWorkerPool(workerCount);
       workerPool = activeWorkerPool;
@@ -538,6 +538,9 @@ export class LibraryScanner {
         await this.database.orm.Track.where({ id: track.id }).update({
           available: 0,
         });
+        await this.database.orm.ArtworkJob.where({
+          trackId: track.id,
+        }).deleteAndCount();
         await this.catalog?.reindexTrack(track.id, "scan");
         if (shouldYield(lastYieldAt)) {
           await yieldToEventLoop();
@@ -559,6 +562,19 @@ export class LibraryScanner {
         .first();
       if (this.metadataEnrichment && musicTrack) {
         await queueMetadataFetch(tasks, {
+          source: requestedSource
+            ? {
+                id: requestedSource.id,
+                name: requestedSource.name || "Library source",
+              }
+            : null,
+          parentTaskId: task.id,
+        });
+      }
+      if (
+        await hasPendingArtworkJobs(this.database, requestedSource?.id ?? null)
+      ) {
+        await queueArtworkFetch(tasks, {
           source: requestedSource
             ? {
                 id: requestedSource.id,
@@ -813,6 +829,7 @@ export class LibraryScanner {
         jellyfinTags: item.jellyfinTags,
         jellyfinProviderIds: item.jellyfinProviderIds,
       });
+      const coverKey = remoteCoverKey(item);
       const unchanged =
         existing?.externalVersion === item.externalVersion &&
         existing.metadataVersion >= CURRENT_METADATA_VERSION &&
@@ -822,69 +839,23 @@ export class LibraryScanner {
         return { kind: "unchanged", remote, existing };
       }
 
-      const coverKey = remoteCoverKey(item);
-      if (coverKey && this.jellyfinCoverIds.has(coverKey)) {
-        return {
-          kind: "changed",
-          remote,
-          existing,
-          detected,
-          coverKey,
-          cover: null,
-          coverId: this.jellyfinCoverIds.get(coverKey) ?? null,
-        };
-      }
-      const cover =
-        coverKey && this.jellyfin
-          ? await this.fetchRemoteCover(source, item, coverKey, signal)
-          : null;
+      const existingCoverUsable = Boolean(
+        existing?.coverId &&
+        (existing.externalCoverKey === null ||
+          existing.externalCoverKey === coverKey),
+      );
       return {
         kind: "changed",
         remote,
         existing,
         detected,
         coverKey,
-        cover,
-        coverId: null,
+        queueArtwork: Boolean(coverKey && !existingCoverUsable),
       };
     } catch (error) {
       if (signal.aborted) throw error;
       return { kind: "failed", remote, existing };
     }
-  }
-
-  private async fetchRemoteCover(
-    source: JellyfinSource,
-    item: JellyfinAudioItem,
-    coverKey: string,
-    signal: AbortSignal,
-  ): Promise<CoverImage | null> {
-    const existing = this.jellyfinCoverFetches.get(coverKey);
-    if (existing) return existing;
-
-    const pending = (async () => {
-      try {
-        return await this.jellyfin!.cover(
-          source.url,
-          source.apiKey,
-          item.coverItemId!,
-          item.coverTag,
-          signal,
-        );
-      } catch (error) {
-        if (signal.aborted) throw error;
-        if (error instanceof JellyfinError && error.code === "unavailable") {
-          return null;
-        }
-        throw error;
-      }
-    })().finally(() => {
-      if (this.jellyfinCoverFetches.get(coverKey) === pending) {
-        this.jellyfinCoverFetches.delete(coverKey);
-      }
-    });
-    this.jellyfinCoverFetches.set(coverKey, pending);
-    return pending;
   }
 
   private async applyPreparedRemoteItem(
@@ -896,9 +867,15 @@ export class LibraryScanner {
     const { source, item } = remote;
     if (prepared.kind === "unchanged") {
       const wasUnavailable = !prepared.existing.available;
+      const coverKey = remoteCoverKey(item);
       await this.database.orm.Track.where({ id: prepared.existing.id }).update({
         available: 1,
         lastSeenScanId: scanId,
+        ...(prepared.existing.coverId &&
+        prepared.existing.externalCoverKey === null &&
+        coverKey
+          ? { externalCoverKey: coverKey }
+          : {}),
       });
       if (wasUnavailable) {
         await this.catalog?.reindexTrack(prepared.existing.id, "scan");
@@ -928,14 +905,8 @@ export class LibraryScanner {
       return;
     }
 
-    const { detected, coverKey, cover } = prepared;
-    let coverId = prepared.coverId;
-    if (coverKey && this.jellyfinCoverIds.has(coverKey)) {
-      coverId = this.jellyfinCoverIds.get(coverKey) ?? null;
-    } else if (coverKey) {
-      coverId = await this.storeCover(cover);
-      this.jellyfinCoverIds.set(coverKey, coverId);
-    }
+    const { detected, coverKey, queueArtwork } = prepared;
+    const coverId = coverKey ? (prepared.existing?.coverId ?? null) : null;
 
     const artistCredits = normalizeArtistCredits(
       item.artists.length ? item.artists : ["Unknown artist"],
@@ -970,6 +941,7 @@ export class LibraryScanner {
       externalId: item.externalId,
       externalVersion: item.externalVersion,
       externalContainer: item.container,
+      externalCoverKey: coverKey,
       available: 1,
       lastSeenScanId: scanId,
       metadataVersion: CURRENT_METADATA_VERSION,
@@ -980,6 +952,21 @@ export class LibraryScanner {
       );
       await this.catalog?.reindexTrack(prepared.existing.id, "scan");
       counts.updatedCount += 1;
+      if (queueArtwork) {
+        await syncArtworkJob(this.database, {
+          trackId: prepared.existing.id,
+          sourceId: source.id,
+          externalCoverItemId: item.coverItemId,
+          externalCoverTag: item.coverTag,
+        });
+      } else if (!coverKey) {
+        await syncArtworkJob(this.database, {
+          trackId: prepared.existing.id,
+          sourceId: source.id,
+          externalCoverItemId: null,
+          externalCoverTag: null,
+        });
+      }
     } else {
       const created = await this.database.orm.Track.create({
         ...trackData,
@@ -987,6 +974,14 @@ export class LibraryScanner {
       });
       await this.catalog?.reindexTrack(created.id, "scan");
       counts.createdCount += 1;
+      if (queueArtwork) {
+        await syncArtworkJob(this.database, {
+          trackId: created.id,
+          sourceId: source.id,
+          externalCoverItemId: item.coverItemId,
+          externalCoverTag: item.coverTag,
+        });
+      }
     }
   }
 

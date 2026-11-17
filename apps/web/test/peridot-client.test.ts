@@ -42,7 +42,6 @@ import {
   recordTrackPlay,
   refreshMetadata,
   checkForUpdates,
-  installUpdate,
   removePlaylistItem,
   requestServerRestart,
   reorderMetadataProviders,
@@ -1075,7 +1074,7 @@ test("log polling reads from the admin logs endpoint", async (context) => {
   assert.equal(result.items[0]?.message, "hello");
 });
 
-test("update checks and installs use authenticated administrator endpoints", async (context) => {
+test("update checks use authenticated administrator endpoints", async (context) => {
   const originalFetch = globalThis.fetch;
   const requests: Array<{ input: string; init?: RequestInit }> = [];
   context.after(() => {
@@ -1090,19 +1089,15 @@ test("update checks and installs use authenticated administrator endpoints", asy
     latestCommit: "b".repeat(40),
     state: "available",
     checkedAt: "2026-11-15T12:00:00.000Z",
-    installAvailable: true,
   };
   globalThis.fetch = async (input, init) => {
     requests.push({ input: String(input), init });
-    return String(input).endsWith("/api/admin/updates/install")
-      ? Response.json({ status: "updating" }, { status: 202 })
-      : Response.json(status);
+    return Response.json(status);
   };
 
   const server = "http://127.0.0.1:17430";
   assert.deepEqual(await fetchUpdateStatus(server, "s"), status);
   assert.deepEqual(await checkForUpdates(server, "s"), status);
-  assert.deepEqual(await installUpdate(server, "s"), { status: "updating" });
   assert.deepEqual(
     requests.map((request) => [
       request.input,
@@ -1112,7 +1107,6 @@ test("update checks and installs use authenticated administrator endpoints", asy
     [
       [`${server}/api/admin/updates`, "GET", "Bearer s"],
       [`${server}/api/admin/updates/check`, "POST", "Bearer s"],
-      [`${server}/api/admin/updates/install`, "POST", "Bearer s"],
     ],
   );
 });

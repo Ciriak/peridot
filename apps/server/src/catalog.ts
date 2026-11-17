@@ -744,6 +744,25 @@ export class CatalogService {
     await this.reindexTrack(trackId, reason);
   }
 
+  async updateTrackCover(
+    trackId: string,
+    coverId: string | null,
+    expectedCoverKey: string,
+  ): Promise<boolean> {
+    return this.serializeCatalog(async () => {
+      const track = await this.database.orm.Track.first({ id: trackId });
+      if (!track || track.externalCoverKey !== expectedCoverKey) return false;
+      await this.database.orm.Track.where({ id: trackId }).update({ coverId });
+      await this.database.orm.CatalogTrack.where({
+        id: trackId,
+      }).updateAndCount({
+        coverId,
+      });
+      this.markChanged(track.sourceId, "scan");
+      return true;
+    });
+  }
+
   async flushChanges(): Promise<number> {
     if (this.closing) return this.lastRevision;
     const next = this.flushTail.then(

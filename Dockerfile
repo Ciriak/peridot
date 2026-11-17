@@ -39,8 +39,6 @@ ENV NODE_ENV=production \
     PORT=17430 \
     PERIDOT_SERVE_WEB=true \
     PERIDOT_WEB_DIST=/app/apps/web/.output/public \
-    PERIDOT_WATCHTOWER_URL=http://watchtower:8080 \
-    PERIDOT_WATCHTOWER_TOKEN_FILE=/data/watchtower-token \
     PERIDOT_UPDATE_CHANNEL=${PERIDOT_BUILD_CHANNEL} \
     PERIDOT_BUILD_TAG=${PERIDOT_BUILD_TAG} \
     PERIDOT_BUILD_COMMIT=${PERIDOT_BUILD_COMMIT} \
@@ -52,8 +50,7 @@ LABEL org.opencontainers.image.title="Peridot" \
       org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.version="${PERIDOT_VERSION}" \
       org.opencontainers.image.revision="${PERIDOT_BUILD_COMMIT}" \
-      org.opencontainers.image.ref.name="${PERIDOT_BUILD_TAG}" \
-      com.centurylinklabs.watchtower.enable="true"
+      org.opencontainers.image.ref.name="${PERIDOT_BUILD_TAG}"
 
 COPY --from=builder --chown=node:node /app /app
 COPY --chmod=755 scripts/docker-entrypoint.sh /usr/local/bin/peridot-entrypoint

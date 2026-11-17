@@ -6,5 +6,7 @@ the contracts, server, and static web application into one Node image.
 persists application data in the `peridot-data` Docker volume, and mounts
 `./music` read-only.
 The root README documents installation and production-channel defaults.
+Server image updates are applied manually with Compose; no Docker socket is
+mounted into a container.
 
 No Peridot-operated API or credential proxy is required.

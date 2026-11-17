@@ -1,4 +1,4 @@
-import { readFile, realpath, stat } from "node:fs/promises";
+import { realpath, stat } from "node:fs/promises";
 import type { UpdateChannel } from "@peridot/contracts";
 
 export const DEFAULT_PORT = 17430;
@@ -24,8 +24,6 @@ export interface UpdateConfig {
   repository: string;
   currentTag: string | null;
   currentCommit: string | null;
-  watchtowerUrl?: string;
-  watchtowerToken?: string;
 }
 
 function requireValue(environment: NodeJS.ProcessEnv, name: string): string {
@@ -99,40 +97,12 @@ async function loadUpdateConfig(
 
   const currentTag = environment.PERIDOT_BUILD_TAG?.trim() || null;
   const currentCommit = environment.PERIDOT_BUILD_COMMIT?.trim() || null;
-  const watchtowerUrlValue = environment.PERIDOT_WATCHTOWER_URL?.trim();
-  let watchtowerToken = environment.PERIDOT_WATCHTOWER_TOKEN?.trim();
-  const watchtowerTokenFile = environment.PERIDOT_WATCHTOWER_TOKEN_FILE?.trim();
-  if (!watchtowerToken && watchtowerTokenFile) {
-    try {
-      watchtowerToken = (await readFile(watchtowerTokenFile, "utf8")).trim();
-    } catch {
-      throw new Error("PERIDOT_WATCHTOWER_TOKEN_FILE could not be read");
-    }
-    if (!watchtowerToken) {
-      throw new Error("PERIDOT_WATCHTOWER_TOKEN_FILE must not be empty");
-    }
-  }
-  let watchtowerUrl: string | undefined;
-  if (watchtowerUrlValue) {
-    let parsed: URL;
-    try {
-      parsed = new URL(watchtowerUrlValue);
-    } catch {
-      throw new Error("PERIDOT_WATCHTOWER_URL must be a valid HTTP(S) URL");
-    }
-    if (!["http:", "https:"].includes(parsed.protocol)) {
-      throw new Error("PERIDOT_WATCHTOWER_URL must be a valid HTTP(S) URL");
-    }
-    watchtowerUrl = parsed.toString().replace(/\/$/, "");
-  }
 
   return {
     channel,
     repository,
     currentTag,
     currentCommit,
-    ...(watchtowerUrl ? { watchtowerUrl } : {}),
-    ...(watchtowerToken ? { watchtowerToken } : {}),
   };
 }
 

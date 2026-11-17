@@ -469,6 +469,7 @@ test("tasks have a settings view for active work and paginated history", async (
   assert.match(page, /settings\.tasks\.history/);
   assert.match(page, /taskProgressMessage\(task\)/);
   assert.match(page, /taskStatusMessage\(task\)/);
+  assert.match(page, /settings\.tasks\.artworkFetch/);
   assert.match(page, /task\.failureMessage/);
   assert.match(page, /TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY/);
   assert.match(page, /settings\.tasks\.loadingOlder/);
@@ -597,15 +598,11 @@ test("server settings confirm before restarting the connected server", async () 
   assert.match(page, /settings\.server\.restartRequested/);
 });
 
-test("server settings expose channel update checks and confirmed installation", async () => {
+test("server settings expose channel update checks without automatic installation", async () => {
   const page = await readSource("../app/pages/settings/server.vue");
   const updateCard = page.slice(
     page.indexOf('<section aria-labelledby="software-updates-heading"'),
     page.indexOf('<section aria-labelledby="server-heading"'),
-  );
-  const installDialog = page.slice(
-    page.indexOf('<AlertDialogRoot v-model:open="installOpen">'),
-    page.indexOf('<AlertDialogRoot v-model:open="disconnectOpen">'),
   );
 
   assert.match(page, /useUpdatesQuery/);
@@ -619,12 +616,11 @@ test("server settings expose channel update checks and confirmed installation", 
   assert.match(updateCard, /settings\.server\.updates\.revision/);
   assert.match(updateCard, /@click="checkUpdates"/);
   assert.match(updateCard, /updateStatus\?\.state === 'available'/);
-  assert.match(updateCard, /@click="requestInstall"/);
-  assert.match(page, /status === "lost"/);
-  assert.match(page, /status === "connected" && installSawDisconnect/);
-  assert.match(installDialog, /settings\.server\.updates\.installTitle/);
-  assert.match(installDialog, /@click="confirmInstall"/);
-  assert.match(page, /settings\.server\.updates\.installComplete/);
+  assert.match(updateCard, /settings\.server\.updates\.manualHelp/);
+  assert.doesNotMatch(
+    updateCard,
+    /requestInstall|installOpen|installAvailable/,
+  );
 });
 
 test("server settings confirm before disconnecting from the connected server", async () => {

@@ -17,6 +17,13 @@ function createdAt(task: TaskResponse): number {
   return Number.isFinite(value) ? value : 0;
 }
 
+function taskKindPriority(task: TaskResponse): number {
+  if (task.kind === "library_scan") return 0;
+  if (task.kind === "metadata_fetch") return 1;
+  if (task.kind === "artwork_fetch") return 2;
+  return 1;
+}
+
 export function orderedActiveTasks(
   tasks: readonly TaskResponse[],
 ): TaskResponse[] {
@@ -26,6 +33,8 @@ export function orderedActiveTasks(
       if (left.status !== right.status) {
         return left.status === "running" ? -1 : 1;
       }
+      const priority = taskKindPriority(left) - taskKindPriority(right);
+      if (priority !== 0) return priority;
       return createdAt(left) - createdAt(right);
     });
 }

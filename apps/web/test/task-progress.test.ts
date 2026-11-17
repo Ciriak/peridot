@@ -63,6 +63,27 @@ test("active tasks put running work first and queued work in FIFO order", () => 
   );
 });
 
+test("queued artwork follows metadata matching", () => {
+  const ordered = orderedActiveTasks([
+    task({
+      id: "artwork",
+      kind: "artwork_fetch",
+      status: "queued",
+      createdAt: "2026-11-11T10:00:00.000Z",
+    }),
+    task({
+      id: "metadata",
+      kind: "metadata_fetch",
+      status: "queued",
+      createdAt: "2026-11-11T10:05:00.000Z",
+    }),
+  ]);
+  assert.deepEqual(
+    ordered.map((item) => item.id),
+    ["metadata", "artwork"],
+  );
+});
+
 test("active source work prefers the running task for that source", () => {
   const tasks = [
     task({

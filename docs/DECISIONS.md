@@ -1,5 +1,47 @@
 # Decisions
 
+## 2026-11-17: Docker does not run or control Watchtower
+
+The Compose stack runs only the Peridot application container. It does not mount
+the host Docker socket, generate an updater token, or launch Watchtower. Docker
+socket access gives a container control over the host Docker daemon, while
+Peridot's release image remains immutable and can be updated without exposing
+that authority.
+
+Update discovery remains automatic and uses public GitHub release data. Settings
+shows whether the deployed image channel has a newer build, but server image
+updates are applied manually with `docker compose pull peridot` and `docker
+compose up -d peridot`. The API no longer exposes an install endpoint or claims
+that automatic image installation is configured.
+
+## 2026-11-17: Jellyfin metadata is imported before artwork
+
+Tracks from a Jellyfin scan are committed and catalogued without waiting for
+their cover images. New items therefore become searchable and playable using the
+existing artwork placeholder as soon as their metadata row is available. Local
+folder scans continue to extract embedded and folder artwork during file
+metadata parsing.
+
+Each changed Jellyfin image identity creates a durable `ArtworkJob`. Jobs cascade
+with their track or source and retain their attempt count and last attempt time
+across restarts. The track records the current external cover key so unchanged
+rescans do not download the same image again. An existing cover remains visible
+while a replacement is pending; a Jellyfin item with no image clears it during
+the metadata scan.
+
+After a successful metadata scan, Peridot queues provider metadata matching
+first and artwork retrieval second. Core task priority is deterministic:
+library scans run before metadata matching, which runs before artwork. This
+matches the selected product priority while keeping both background phases
+independent of initial playback access. Artwork retrieval uses six concurrent
+image downloads, deduplicates jobs with the same source and image identity, and
+updates track and catalog cover fields without rebuilding the full catalog
+projection.
+
+Transient artwork failures leave jobs pending for the next scan or server
+startup. Missing, unusable, or deleted images remove the job and clear the
+cover. Queued artwork recovery starts behind any queued startup scan.
+
 ## 2026-11-17: Jellyfin item preparation is bounded and writes stay serialized
 
 Jellyfin scans prepare up to six items concurrently so cover requests can

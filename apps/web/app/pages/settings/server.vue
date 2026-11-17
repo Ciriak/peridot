@@ -100,12 +100,6 @@ const scanWorkerError = ref("");
 const updateChecking = ref(false);
 const updateCheckingNotice = ref("");
 const updateCheckingError = ref("");
-const installOpen = ref(false);
-const installing = ref(false);
-const installNotice = ref("");
-const installError = ref("");
-let installSawDisconnect = false;
-let installWatchdog: ReturnType<typeof setTimeout> | undefined;
 
 const updateStatus = computed(() => updates.status.value);
 const updateChannel = computed(() => {
@@ -324,36 +318,6 @@ async function saveScanWorkerCount() {
   }
 }
 
-function requestInstall() {
-  installNotice.value = "";
-  installError.value = "";
-  installOpen.value = true;
-}
-
-async function confirmInstall() {
-  if (installing.value) return;
-  installing.value = true;
-  installSawDisconnect = false;
-  installError.value = "";
-  try {
-    await updates.install();
-    installNotice.value = t("settings.server.updates.installRequested");
-    clearTimeout(installWatchdog);
-    installWatchdog = setTimeout(() => {
-      if (!installing.value || installSawDisconnect) return;
-      installing.value = false;
-      installNotice.value = t("settings.server.updates.installNotStarted");
-    }, 45_000);
-  } catch (reason) {
-    installing.value = false;
-    if (isAuthenticationRedirectError(reason)) return;
-    installError.value = errorMessage(
-      reason,
-      "settings.server.updates.installError",
-    );
-  }
-}
-
 async function confirmDisconnect() {
   if (disconnecting.value) return;
   disconnecting.value = true;
@@ -394,7 +358,6 @@ onMounted(() => {
   });
 });
 onBeforeUnmount(() => {
-  clearTimeout(installWatchdog);
   unsubscribeLogs?.();
 });
 
@@ -408,19 +371,6 @@ watch(connectionStatus, (status) => {
       restarting.value = false;
       restartSawDisconnect = false;
       restartNotice.value = t("settings.server.restartComplete");
-    }
-  }
-  if (installing.value) {
-    if (status === "lost") {
-      installSawDisconnect = true;
-      clearTimeout(installWatchdog);
-      return;
-    }
-    if (status === "connected" && installSawDisconnect) {
-      installing.value = false;
-      installSawDisconnect = false;
-      clearTimeout(installWatchdog);
-      installNotice.value = t("settings.server.updates.installComplete");
     }
   }
 });
@@ -499,7 +449,7 @@ watch(connectionStatus, (status) => {
             {{
               updateStatus?.channel === "local"
                 ? t("settings.server.updates.localHelp")
-                : t("settings.server.updates.automaticHelp")
+                : t("settings.server.updates.manualHelp")
             }}
           </p>
           <div class="flex gap-2">
@@ -509,7 +459,6 @@ watch(connectionStatus, (status) => {
               size="sm"
               :disabled="
                 updateChecking ||
-                installing ||
                 connectionStatus === 'lost' ||
                 updateStatus?.channel === 'local'
               "
@@ -522,44 +471,22 @@ watch(connectionStatus, (status) => {
                   : t("settings.server.updates.check")
               }}
             </Button>
-            <Button
-              v-if="updateStatus?.state === 'available'"
-              type="button"
-              size="sm"
-              :disabled="
-                installing ||
-                !updateStatus.installAvailable ||
-                connectionStatus === 'lost'
-              "
-              @click="requestInstall"
-            >
-              <Icon
-                :icon="icons.cloudDownload"
-                aria-hidden="true"
-                class="size-4"
-              />
-              {{
-                installing
-                  ? t("settings.server.updates.installing")
-                  : t("settings.server.updates.install")
-              }}
-            </Button>
           </div>
         </div>
         <p
-          v-if="updateCheckingNotice || installNotice"
+          v-if="updateCheckingNotice"
           role="status"
           aria-live="polite"
           class="text-sm text-muted-foreground"
         >
-          {{ installNotice || updateCheckingNotice }}
+          {{ updateCheckingNotice }}
         </p>
         <p
-          v-if="updateCheckingError || installError || updates.error.value"
+          v-if="updateCheckingError || updates.error.value"
           role="alert"
           class="text-sm text-destructive"
         >
-          {{ updateCheckingError || installError || updates.error.value }}
+          {{ updateCheckingError || updates.error.value }}
         </p>
       </div>
     </section>
@@ -632,43 +559,6 @@ watch(connectionStatus, (status) => {
                   restarting
                     ? t("settings.server.restarting")
                     : t("settings.server.restart")
-                }}
-              </Button>
-            </AlertDialogAction>
-          </div>
-        </AlertDialogContent>
-      </AlertDialogPortal>
-    </AlertDialogRoot>
-
-    <AlertDialogRoot v-model:open="installOpen">
-      <AlertDialogPortal>
-        <AlertDialogOverlay class="fixed inset-0 z-50 bg-background/80" />
-        <AlertDialogContent
-          class="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-card p-6 text-card-foreground shadow-lg"
-        >
-          <AlertDialogTitle class="text-lg font-semibold">
-            {{ t("settings.server.updates.installTitle") }}
-          </AlertDialogTitle>
-          <AlertDialogDescription class="text-sm text-muted-foreground">
-            {{ t("settings.server.updates.installDescription") }}
-          </AlertDialogDescription>
-          <div class="mt-6 flex justify-end gap-3">
-            <AlertDialogCancel as-child>
-              <Button type="button" variant="outline">{{
-                t("common.cancel")
-              }}</Button>
-            </AlertDialogCancel>
-            <AlertDialogAction as-child @click="confirmInstall">
-              <Button type="button" :disabled="installing">
-                <Icon
-                  :icon="icons.cloudDownload"
-                  aria-hidden="true"
-                  class="size-4"
-                />
-                {{
-                  installing
-                    ? t("settings.server.updates.installing")
-                    : t("settings.server.updates.install")
                 }}
               </Button>
             </AlertDialogAction>

@@ -1,5 +1,4 @@
 import type {
-  InstallUpdateResponse,
   UpdateChannel,
   UpdateState,
   UpdateStatusResponse,
@@ -50,7 +49,6 @@ export class UpdateError extends Error {
 
 export class UpdateService {
   private checked: UpdateStatusResponse | null = null;
-  private installRequested = false;
   private checkInFlight: Promise<UpdateStatusResponse> | null = null;
 
   constructor(
@@ -69,7 +67,6 @@ export class UpdateService {
         latestCommit: null,
         state: "unchecked",
         checkedAt: null,
-        installAvailable: false,
       }
     );
   }
@@ -115,64 +112,8 @@ export class UpdateService {
       latestCommit: latest.commit,
       state,
       checkedAt: new Date().toISOString(),
-      installAvailable: state === "available" && this.updaterConfigured(),
     };
     return this.checked;
-  }
-
-  install(): InstallUpdateResponse {
-    if (this.checked?.state !== "available") {
-      throw new UpdateError(
-        409,
-        "update_not_available",
-        "Check for updates before installing one.",
-        "api.message.updateNotAvailable",
-      );
-    }
-    if (!this.updaterConfigured()) {
-      throw new UpdateError(
-        503,
-        "updater_unavailable",
-        "Automatic image updates are not configured.",
-        "api.message.updaterUnavailable",
-      );
-    }
-    if (this.installRequested) {
-      throw new UpdateError(
-        409,
-        "update_in_progress",
-        "An update request is already in progress.",
-        "api.message.updateInProgress",
-      );
-    }
-    this.installRequested = true;
-    return { status: "updating" };
-  }
-
-  async requestWatchtowerUpdate(): Promise<void> {
-    if (!this.config.watchtowerUrl || !this.config.watchtowerToken) return;
-    try {
-      const response = await this.request(
-        `${this.config.watchtowerUrl}/v1/update`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${this.config.watchtowerToken}`,
-            Accept: "application/json",
-          },
-          signal: AbortSignal.timeout(30_000),
-        },
-      );
-      if (!response.ok) {
-        throw new Error(`Watchtower returned HTTP ${response.status}.`);
-      }
-    } finally {
-      this.installRequested = false;
-    }
-  }
-
-  private updaterConfigured(): boolean {
-    return Boolean(this.config.watchtowerUrl && this.config.watchtowerToken);
   }
 
   private async latestBranchCommit(

@@ -2,6 +2,82 @@
 
 Last updated: 2026-11-17.
 
+## Docker deployment no longer includes Watchtower
+
+Removed the Watchtower service and Docker socket mount from Compose. The Docker
+image no longer sets Watchtower environment variables or the enable label, and
+the entrypoint no longer generates an updater token. The server update service
+still checks public GitHub channel data, but the install endpoint, automatic
+install contract fields, client method, Settings install dialog, and
+server-to-server Watchtower request were removed.
+
+Settings now reports whether a newer server image is available and directs
+administrators to apply it with `docker compose pull peridot` and `docker
+compose up -d peridot`. README, Docker guidance, the project brief, and durable
+decision history were updated accordingly.
+
+Checks completed:
+
+- `pnpm check`
+- Server and web type checks
+- Server suite: 178 passing
+- Web suite: 234 passing
+- `pnpm build`
+- `docker compose config`: one `peridot` service, no Docker socket mount
+- `git diff --check`
+
+Known limits: the Docker daemon is not running in this environment, so the
+image and stack were not built or started. Historical handoff and decision
+entries still mention Watchtower as prior implementation context. Existing
+unrelated Jellyfin artwork and catalog changes remain uncommitted and preserved.
+No commit, push, publication, or deployment was performed.
+
+Next: rebuild the image with Docker running, recreate the Compose stack, and
+confirm Settings reports an available channel update without offering an
+automatic install.
+
+## Jellyfin artwork retrieval is deferred from metadata sync
+
+Jellyfin library scans now persist tracks and catalog projections without
+downloading cover images. Tracks are immediately searchable and playable with
+the semantic artwork placeholder. Changed Jellyfin images create durable
+`ArtworkJob` rows associated with their track and source.
+
+After the scan, metadata matching is queued first and `artwork_fetch` second.
+Task priority enforces `library_scan`, then `metadata_fetch`, then
+`artwork_fetch`. Artwork retrieval processes six distinct covers concurrently,
+shares work across tracks with the same image identity, updates only the track
+and catalog cover fields, and reports per-item progress. Failed jobs remain
+pending for a later scan or server restart; missing images clear the cover and
+remove the job.
+
+The Prisma 8 migration `20261117T1914_add_artwork_jobs` adds `ArtworkJob` and
+`Track.externalCoverKey`, creates its indexes and cascading foreign keys, and was
+applied to the local development database. The migration has no data
+backfill. Existing covers are adopted by the next unchanged Jellyfin scan.
+
+Checks completed:
+
+- `pnpm check`
+- Server and web type checks
+- Server suite: 178 passing
+- Web suite: 234 passing
+- `pnpm db:validate`
+- Server build and full workspace build
+- `git diff --check`
+
+Known limits: deferred artwork applies to Jellyfin; local-folder embedded and
+folder covers remain part of local metadata extraction. Provider metadata runs
+to completion before artwork because the task service is serial and metadata was
+the selected priority. The complete live 70k-item library has not yet been timed
+with this split. The live HTTP smoke check was unavailable because the
+development listener was stopped. Unrelated concurrent worktree changes were
+preserved. Changes are uncommitted on `dev`; no commit, push, publication, or
+deployment was performed.
+
+Next: run a source-scoped live Jellyfin scan, confirm tracks appear before the
+artwork task starts, and record the metadata-versus-artwork durations.
+
 ## Large Jellyfin imports use pipelined item preparation
 
 Jellyfin scans now prefetch up to six item/artwork preparations concurrently

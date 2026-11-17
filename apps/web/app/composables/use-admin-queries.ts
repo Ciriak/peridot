@@ -18,7 +18,6 @@ import {
   fetchLogs,
   fetchServerSettings,
   fetchUpdateStatus,
-  installUpdate,
   isAuthenticationRedirectError,
   listDirectories,
   listMetadataProviderDefinitions,
@@ -183,10 +182,6 @@ export function useUpdatesQuery() {
         result,
       );
       return result;
-    },
-    install: async () => {
-      const credentials = scopeCredentials();
-      return installUpdate(credentials.serverAddress, credentials.token);
     },
   };
 }

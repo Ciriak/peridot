@@ -529,7 +529,23 @@ export class JellyfinClient {
       headers: { Accept: "*/*" },
       ...(signal ? { signal } : {}),
     });
-    if (!response.ok) return null;
+    if (response.status === 401 || response.status === 403) {
+      throw new JellyfinError(
+        "Jellyfin rejected the API key.",
+        "invalid_credentials",
+        400,
+        message("api.message.jellyfinInvalidCredentials"),
+      );
+    }
+    if (response.status === 404 || response.status === 410) return null;
+    if (!response.ok) {
+      throw new JellyfinError(
+        "Jellyfin could not provide artwork.",
+        "unavailable",
+        502,
+        message("api.message.jellyfinUnavailable"),
+      );
+    }
     const mimeType =
       response.headers
         .get("content-type")

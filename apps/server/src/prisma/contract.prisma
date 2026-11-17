@@ -129,10 +129,12 @@ model Track {
   externalId                 String?
   externalVersion            String?
   externalContainer          String?
+  externalCoverKey           String?
   available                  Int        @default(1)
   lastSeenScanId             String?
   sourceId                   String?
   source                     Source?    @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  artworkJob                 ArtworkJob?
   createdAt                  DateTime   @default(now())
   updatedAt                  DateTime   @onCreate(now()) @onUpdate(now())
 
@@ -153,6 +155,23 @@ model TrackCover {
   data      Bytes
   createdAt DateTime @default(now())
   updatedAt DateTime @onCreate(now()) @onUpdate(now())
+}
+
+model ArtworkJob {
+  id                   String    @id @onCreate(cuid(2))
+  trackId              String    @unique
+  sourceId             String
+  externalCoverItemId  String
+  externalCoverTag     String?
+  attemptCount         Int       @default(0)
+  lastAttemptAt        DateTime?
+  track                Track     @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  source               Source    @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @onCreate(now()) @onUpdate(now())
+
+  @@index([createdAt])
+  @@index([sourceId, externalCoverItemId, externalCoverTag], name: "artwork_source_cover")
 }
 
 model TrackLike {
@@ -278,6 +297,7 @@ model Source {
   credentialCiphertext String?
   lastSyncedAt         DateTime?
   position             Int      @default(0)
+  artworkJobs          ArtworkJob[]
   createdAt            DateTime @default(now())
   updatedAt            DateTime @onCreate(now()) @onUpdate(now())
 

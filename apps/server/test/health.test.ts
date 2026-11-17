@@ -80,27 +80,13 @@ test("server configuration validates storage and browser origins", async () => {
       PERIDOT_UPDATE_CHANNEL: "stable",
       PERIDOT_BUILD_TAG: "v0.0.1",
       PERIDOT_BUILD_COMMIT: "a".repeat(40),
-      PERIDOT_WATCHTOWER_URL: "http://watchtower:8080/",
-      PERIDOT_WATCHTOWER_TOKEN: "private-token",
     });
     assert.deepEqual(release.updates, {
       channel: "stable",
       repository: "Ciriak/peridot",
       currentTag: "v0.0.1",
       currentCommit: "a".repeat(40),
-      watchtowerUrl: "http://watchtower:8080",
-      watchtowerToken: "private-token",
     });
-    const tokenFile = path.join(root, "watchtower-token");
-    await writeFile(tokenFile, "file-token\n");
-    const generatedSecret = await loadServerConfig({
-      DATABASE_URL: "file:test.db",
-      MUSIC_LIBRARY_PATH: libraryRoot,
-      PERIDOT_UPDATE_CHANNEL: "stable",
-      PERIDOT_WATCHTOWER_URL: "http://watchtower:8080",
-      PERIDOT_WATCHTOWER_TOKEN_FILE: tokenFile,
-    });
-    assert.equal(generatedSecret.updates?.watchtowerToken, "file-token");
     const beta = await loadServerConfig({
       DATABASE_URL: "file:test.db",
       MUSIC_LIBRARY_PATH: libraryRoot,

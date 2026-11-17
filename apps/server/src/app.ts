@@ -27,8 +27,9 @@ import {
   redactPlaybackToken,
 } from "./playback-tokens.js";
 import { registerAdminRoutes } from "./admin-routes.js";
+import { ArtworkService, hasPendingArtworkJobs } from "./artwork-fetch.js";
 import { registerTaskRoutes } from "./task-routes.js";
-import { TaskService } from "./tasks.js";
+import { queueArtworkFetch, TaskService } from "./tasks.js";
 import { ensureServerSettings } from "./server-settings.js";
 import { SourceRefreshScheduler } from "./source-refresh-scheduler.js";
 import { ensureDefaultSource } from "./sources.js";
@@ -143,6 +144,12 @@ export async function buildApp(options: BuildAppOptions = {}) {
     catalog,
     options.discogsFetch ?? fetch,
   );
+  const artworkService = new ArtworkService(
+    database,
+    jellyfin,
+    catalog,
+    credentials,
+  );
   const logBuffer =
     options.logBuffer ??
     new ServerLogBuffer(serverLogFilePath(config.databaseUrl));
@@ -168,6 +175,9 @@ export async function buildApp(options: BuildAppOptions = {}) {
   );
   tasks.registerExecutor("metadata_fetch", (task, taskService, signal) =>
     metadataEnrichment.runTask(task, taskService, signal),
+  );
+  tasks.registerExecutor("artwork_fetch", (task, taskService, signal) =>
+    artworkService.runTask(task, taskService, signal),
   );
   logBuffer.onEntry((entry) => realtime.publishLog(entry));
   catalog.setPublisher((change) => realtime.publishCatalog(change));
@@ -247,6 +257,9 @@ export async function buildApp(options: BuildAppOptions = {}) {
   await sourceRefreshScheduler.initialize(
     options.enableSourceRefreshScheduler ?? false,
   );
+  if (await hasPendingArtworkJobs(database, null)) {
+    await queueArtworkFetch(tasks);
+  }
   await registerProtectedRoutes(
     app,
     database,

@@ -78,6 +78,10 @@ test("en-US messages interpolate and pluralize", () => {
     i18n.global.t("settings.sources.lastSync", { date: "Nov 13, 2026" }),
     "Last sync Nov 13, 2026",
   );
+  assert.equal(
+    i18n.global.t("settings.tasks.artworkFetch"),
+    "Artwork retrieval",
+  );
   assert.equal(i18n.global.te("settings.sources.externalUrl"), false);
   assert.equal(i18n.global.te("settings.sources.integrationsPending"), false);
 });

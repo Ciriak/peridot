@@ -21,7 +21,6 @@ import type {
   UpdateUserRequest,
   UserListResponse,
   UpdateStatusResponse,
-  InstallUpdateResponse,
 } from "@peridot/contracts";
 import type { FastifyInstance } from "fastify";
 import type { CatalogService } from "./catalog.js";
@@ -241,36 +240,6 @@ export async function registerAdminRoutes(
         throw error;
       }
     });
-
-    admin.post(
-      "/api/admin/updates/install",
-      async (request, reply): Promise<InstallUpdateResponse | undefined> => {
-        if (!updates) {
-          throw new Error("Update service is unavailable.");
-        }
-        try {
-          const response = updates.install();
-          reply.code(202).send(response);
-          setImmediate(() => {
-            void updates.requestWatchtowerUpdate().catch((error) => {
-              request.log.error(error, "Could not request a Watchtower update");
-            });
-          });
-          return undefined;
-        } catch (error) {
-          if (error instanceof UpdateError) {
-            return sendError(
-              reply,
-              error.statusCode,
-              error.code,
-              error.message,
-              message(error.messageKey),
-            );
-          }
-          throw error;
-        }
-      },
-    );
 
     admin.get("/api/admin/sources", async (): Promise<SourceListResponse> => ({
       items: await listSources(database),

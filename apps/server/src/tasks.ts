@@ -156,7 +156,13 @@ export function toTaskResponse(task: TaskRow): TaskResponse {
               source: task.sourceName,
             })
           : message("task.title.metadataMatch")
-        : message("task.title.plugin", { task: task.title }));
+        : task.kind === "artwork_fetch"
+          ? task.sourceName
+            ? message("task.title.sourceArtworkFetch", {
+                source: task.sourceName,
+              })
+            : message("task.title.artworkFetch")
+          : message("task.title.plugin", { task: task.title }));
   return {
     id: task.id,
     kind: task.kind as TaskKind,
@@ -193,8 +199,25 @@ function isTaskKind(value: string): value is TaskKind {
   return (
     value === "library_scan" ||
     value === "metadata_fetch" ||
+    value === "artwork_fetch" ||
     PLUGIN_TASK_KIND.test(value)
   );
+}
+
+function queuedTaskPriority(kind: string): number {
+  if (kind === "library_scan") return 0;
+  if (kind === "metadata_fetch") return 1;
+  if (kind === "artwork_fetch") return 2;
+  return 1;
+}
+
+function compareQueuedTasks(left: TaskRow, right: TaskRow): number {
+  const priority =
+    queuedTaskPriority(left.kind) - queuedTaskPriority(right.kind);
+  if (priority !== 0) return priority;
+  const created = left.createdAt.getTime() - right.createdAt.getTime();
+  if (created !== 0) return created;
+  return left.id.localeCompare(right.id);
 }
 
 function activeRank(status: string): number {
@@ -587,9 +610,9 @@ export class TaskService {
   }
 
   private async hasRunnableTask(): Promise<boolean> {
-    const queued = await this.database.orm.Task.where({ status: "queued" })
-      .orderBy((task) => task.createdAt.asc())
-      .all();
+    const queued = (
+      await this.database.orm.Task.where({ status: "queued" }).all()
+    ).sort(compareQueuedTasks);
     for (const task of queued) {
       if (!task.parentTaskId) return true;
       const parent = await this.database.orm.Task.first({
@@ -607,9 +630,9 @@ export class TaskService {
 
   private async drain(): Promise<void> {
     while (!this.stopping) {
-      const queued = await this.database.orm.Task.where({ status: "queued" })
-        .orderBy([(row) => row.createdAt.asc(), (row) => row.id.asc()])
-        .all();
+      const queued = (
+        await this.database.orm.Task.where({ status: "queued" }).all()
+      ).sort(compareQueuedTasks);
       let task: TaskRow | null = null;
       for (const candidate of queued) {
         if (!candidate.parentTaskId) {
@@ -773,6 +796,37 @@ export function queueMetadataFetch(
   });
 }
 
+export function queueArtworkFetch(
+  tasks: TaskService,
+  options: {
+    source?: { id: string; name: string } | null;
+    parentTaskId?: string | null;
+  } = {},
+): Promise<TaskRow> {
+  return tasks.enqueue({
+    kind: "artwork_fetch",
+    title: options.source
+      ? `${options.source.name} artwork retrieval`
+      : "Library artwork retrieval",
+    titleMessage: options.source
+      ? message("task.title.sourceArtworkFetch", {
+          source: options.source.name,
+        })
+      : message("task.title.artworkFetch"),
+    parentTaskId: options.parentTaskId ?? null,
+    sourceId: options.source?.id ?? null,
+    sourceName: options.source?.name ?? null,
+    details: [
+      {
+        key: "source",
+        value: options.source?.name ?? "All sources",
+        labelMessage: message("task.detail.source"),
+        valueMessage: options.source ? null : message("common.allSources"),
+      },
+    ],
+  });
+}
+
 export function scanDetails(counts: {
   source: string;
   discovered: number;
@@ -831,6 +885,53 @@ export function scanDetails(counts: {
       key: "files.failed",
       value: String(counts.errors),
       labelMessage: message("task.detail.filesFailed"),
+      valueMessage: null,
+    },
+  ];
+}
+
+export function artworkDetails(counts: {
+  source: string;
+  total: number;
+  retrieved: number;
+  missing: number;
+  failed: number;
+}): TaskDetailResponse[] {
+  return [
+    {
+      key: "source",
+      value: counts.source,
+      labelMessage: message("task.detail.source"),
+      valueMessage: null,
+    },
+    {
+      key: "progress.total",
+      value: String(counts.total),
+      labelMessage: message("task.detail.artworkItems"),
+      valueMessage: null,
+    },
+    {
+      key: "progress.completed",
+      value: String(counts.retrieved + counts.missing + counts.failed),
+      labelMessage: message("task.detail.processed"),
+      valueMessage: null,
+    },
+    {
+      key: "artwork.retrieved",
+      value: String(counts.retrieved),
+      labelMessage: message("task.detail.artworkRetrieved"),
+      valueMessage: null,
+    },
+    {
+      key: "artwork.missing",
+      value: String(counts.missing),
+      labelMessage: message("task.detail.artworkMissing"),
+      valueMessage: null,
+    },
+    {
+      key: "artwork.failed",
+      value: String(counts.failed),
+      labelMessage: message("task.detail.artworkFailed"),
       valueMessage: null,
     },
   ];

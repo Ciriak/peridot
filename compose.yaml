@@ -10,21 +10,5 @@ services:
       - peridot-data:/data
       - ./music:/music:ro
 
-  watchtower:
-    image: nickfedor/watchtower:1.24.0
-    restart: unless-stopped
-    command: >-
-      --label-enable
-      --http-api-endpoints update
-      --cleanup
-    depends_on:
-      peridot:
-        condition: service_healthy
-    environment:
-      WATCHTOWER_HTTP_API_TOKEN: /data/watchtower-token
-    volumes:
-      - peridot-data:/data:ro
-      - /var/run/docker.sock:/var/run/docker.sock
-
 volumes:
   peridot-data:

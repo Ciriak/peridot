@@ -45,9 +45,9 @@ Production deployment uses immutable multi-architecture GHCR images. The web
 application, authenticated API, audio, and realtime traffic share one Fastify
 listener on port 17430. External web clients discover and connect to that
 server address. Persistent SQLite state and credentials live in `/data`; music
-remains a read-only mounted source. The maintained Watchtower fork watches the
-deployed image channel but applies images only when an administrator explicitly
-installs an available update from Settings.
+remains a read-only mounted source. The deployed image channel is checked against
+the public GitHub repository; administrators apply server image updates manually
+with Compose.
 
 Public GitHub release data drives automatic update checks without requiring a
 GitHub account. Browser and desktop clients update silently in the background.

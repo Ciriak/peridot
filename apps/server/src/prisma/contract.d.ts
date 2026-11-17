@@ -19,9 +19,9 @@ import type {
 } from '@prisma/orm-sqlite/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'9b4234f0591e41176d20f5d34fd379b28d1d2b94ea0a96897b3f39d419b8af81'>;
+  StorageHashBase<'4708250320cb1838b745eec80208e7ddea8325b16f784084116cbff5294d845e'>;
 export type ExecutionHash =
-  ExecutionHashBase<'b8742140c70062f86caa6d72cafc965dc42172098c5fb9a906ef71c33c37e56b'>;
+  ExecutionHashBase<'85edb6c43666162916bbb345e5da90f53ec36d044ed381921f3de575cd433dc6'>;
 export type ProfileHash =
   ProfileHashBase<'260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53'>;
 
@@ -267,6 +267,20 @@ export namespace Models {
     image: ArtistImage | null;
     readonly [RelationKeys]?: 'image';
   };
+  export type ArtworkJob = {
+    attemptCount: FieldOutputTypes['__unbound__']['ArtworkJob']['attemptCount'];
+    createdAt: FieldOutputTypes['__unbound__']['ArtworkJob']['createdAt'];
+    externalCoverItemId: FieldOutputTypes['__unbound__']['ArtworkJob']['externalCoverItemId'];
+    externalCoverTag: FieldOutputTypes['__unbound__']['ArtworkJob']['externalCoverTag'];
+    id: FieldOutputTypes['__unbound__']['ArtworkJob']['id'];
+    lastAttemptAt: FieldOutputTypes['__unbound__']['ArtworkJob']['lastAttemptAt'];
+    sourceId: FieldOutputTypes['__unbound__']['ArtworkJob']['sourceId'];
+    trackId: FieldOutputTypes['__unbound__']['ArtworkJob']['trackId'];
+    updatedAt: FieldOutputTypes['__unbound__']['ArtworkJob']['updatedAt'];
+    source: Source;
+    track: Track;
+    readonly [RelationKeys]?: 'source' | 'track';
+  };
   export type CatalogAlbum = {
     artist: FieldOutputTypes['__unbound__']['CatalogAlbum']['artist'];
     artistCredits: FieldOutputTypes['__unbound__']['CatalogAlbum']['artistCredits'];
@@ -463,7 +477,8 @@ export namespace Models {
     position: FieldOutputTypes['__unbound__']['Source']['position'];
     updatedAt: FieldOutputTypes['__unbound__']['Source']['updatedAt'];
     url: FieldOutputTypes['__unbound__']['Source']['url'];
-    readonly [RelationKeys]?: never;
+    artworkJobs: ArtworkJob[];
+    readonly [RelationKeys]?: 'artworkJobs';
   };
   export type Task = {
     completedAt: FieldOutputTypes['__unbound__']['Task']['completedAt'];
@@ -498,6 +513,7 @@ export namespace Models {
     discNumber: FieldOutputTypes['__unbound__']['Track']['discNumber'];
     durationMs: FieldOutputTypes['__unbound__']['Track']['durationMs'];
     externalContainer: FieldOutputTypes['__unbound__']['Track']['externalContainer'];
+    externalCoverKey: FieldOutputTypes['__unbound__']['Track']['externalCoverKey'];
     externalId: FieldOutputTypes['__unbound__']['Track']['externalId'];
     externalVersion: FieldOutputTypes['__unbound__']['Track']['externalVersion'];
     fileModifiedAt: FieldOutputTypes['__unbound__']['Track']['fileModifiedAt'];
@@ -534,8 +550,9 @@ export namespace Models {
     title: FieldOutputTypes['__unbound__']['Track']['title'];
     trackNumber: FieldOutputTypes['__unbound__']['Track']['trackNumber'];
     updatedAt: FieldOutputTypes['__unbound__']['Track']['updatedAt'];
+    artworkJob: ArtworkJob | null;
     source: Source | null;
-    readonly [RelationKeys]?: 'source';
+    readonly [RelationKeys]?: 'artworkJob' | 'source';
   };
   export type TrackCover = {
     createdAt: FieldOutputTypes['__unbound__']['TrackCover']['createdAt'];
@@ -582,6 +599,7 @@ export declare const models: {
   ArtistImage: Models.ArtistImage;
   ArtistLike: Models.ArtistLike;
   ArtistMetadata: Models.ArtistMetadata;
+  ArtworkJob: Models.ArtworkJob;
   CatalogAlbum: Models.CatalogAlbum;
   CatalogArtist: Models.CatalogArtist;
   CatalogArtistAlbum: Models.CatalogArtistAlbum;
@@ -947,6 +965,121 @@ type ContractBase = Omit<
                   readonly target: {
                     readonly namespaceId: '__unbound__' & NamespaceId;
                     readonly tableName: 'ArtistImage';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+              ];
+            };
+            readonly ArtworkJob: {
+              columns: {
+                readonly attemptCount: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
+                  };
+                  readonly many: false;
+                };
+                readonly createdAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                  readonly many: false;
+                };
+                readonly externalCoverItemId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly externalCoverTag: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly id: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly lastAttemptAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly sourceId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly trackId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly updatedAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [{ readonly columns: readonly ['trackId'] }];
+              indexes: readonly [
+                {
+                  readonly name: 'ArtworkJob_createdAt_idx_9575dbd7';
+                  readonly prefix: 'ArtworkJob_createdAt_idx';
+                  readonly columns: readonly ['createdAt'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'ArtworkJob_sourceId_idx_d92a2571';
+                  readonly prefix: 'ArtworkJob_sourceId_idx';
+                  readonly columns: readonly ['sourceId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'artwork_source_cover_170ef716';
+                  readonly prefix: 'artwork_source_cover';
+                  readonly columns: readonly [
+                    'sourceId',
+                    'externalCoverItemId',
+                    'externalCoverTag',
+                  ];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'ArtworkJob';
+                    readonly columns: readonly ['trackId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'Track';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+                {
+                  readonly source: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'ArtworkJob';
+                    readonly columns: readonly ['sourceId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'Source';
                     readonly columns: readonly ['id'];
                   };
                 },
@@ -2581,6 +2714,12 @@ type ContractBase = Omit<
                   readonly nullable: true;
                   readonly many: false;
                 };
+                readonly externalCoverKey: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
                 readonly externalId: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
@@ -3160,6 +3299,10 @@ type ContractBase = Omit<
       readonly namespace: '__unbound__' & NamespaceId;
       readonly model: 'ArtistMetadata';
     };
+    readonly ArtworkJob: {
+      readonly namespace: '__unbound__' & NamespaceId;
+      readonly model: 'ArtworkJob';
+    };
     readonly CatalogAlbum: {
       readonly namespace: '__unbound__' & NamespaceId;
       readonly model: 'CatalogAlbum';
@@ -3511,6 +3654,87 @@ type ContractBase = Omit<
                 readonly nameProviderKind: { readonly column: 'nameProviderKind' };
                 readonly nameProviderName: { readonly column: 'nameProviderName' };
                 readonly nameSourceUrl: { readonly column: 'nameSourceUrl' };
+                readonly updatedAt: { readonly column: 'updatedAt' };
+              };
+            };
+          };
+          readonly ArtworkJob: {
+            readonly fields: {
+              readonly attemptCount: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly externalCoverItemId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly externalCoverTag: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly lastAttemptAt: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly sourceId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly trackId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly updatedAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+            };
+            readonly relations: {
+              readonly source: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'Source';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['sourceId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+              readonly track: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'Track';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['trackId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'ArtworkJob';
+              readonly namespaceId: '__unbound__';
+              readonly fields: {
+                readonly attemptCount: { readonly column: 'attemptCount' };
+                readonly createdAt: { readonly column: 'createdAt' };
+                readonly externalCoverItemId: { readonly column: 'externalCoverItemId' };
+                readonly externalCoverTag: { readonly column: 'externalCoverTag' };
+                readonly id: { readonly column: 'id' };
+                readonly lastAttemptAt: { readonly column: 'lastAttemptAt' };
+                readonly sourceId: { readonly column: 'sourceId' };
+                readonly trackId: { readonly column: 'trackId' };
                 readonly updatedAt: { readonly column: 'updatedAt' };
               };
             };
@@ -4512,7 +4736,19 @@ type ContractBase = Omit<
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
             };
-            readonly relations: Record<string, never>;
+            readonly relations: {
+              readonly artworkJobs: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'ArtworkJob';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['sourceId'];
+                };
+              };
+            };
             readonly storage: {
               readonly table: 'Source';
               readonly namespaceId: '__unbound__';
@@ -4682,6 +4918,10 @@ type ContractBase = Omit<
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
+              readonly externalCoverKey: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
               readonly externalId: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
@@ -4828,6 +5068,18 @@ type ContractBase = Omit<
               };
             };
             readonly relations: {
+              readonly artworkJob: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'ArtworkJob';
+                };
+                readonly cardinality: '1:1';
+                readonly nullable: true;
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['trackId'];
+                };
+              };
               readonly source: {
                 readonly to: {
                   readonly namespace: '__unbound__' & NamespaceId;
@@ -4856,6 +5108,7 @@ type ContractBase = Omit<
                 readonly discNumber: { readonly column: 'discNumber' };
                 readonly durationMs: { readonly column: 'durationMs' };
                 readonly externalContainer: { readonly column: 'externalContainer' };
+                readonly externalCoverKey: { readonly column: 'externalCoverKey' };
                 readonly externalId: { readonly column: 'externalId' };
                 readonly externalVersion: { readonly column: 'externalVersion' };
                 readonly fileModifiedAt: { readonly column: 'fileModifiedAt' };
@@ -5164,6 +5417,23 @@ type ContractBase = Omit<
           readonly onUpdate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
           readonly ref: {
             readonly entry: 'ArtistMetadata';
+            readonly field: 'updatedAt';
+            readonly namespace: '__unbound__';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'ArtworkJob';
+            readonly field: 'id';
+            readonly namespace: '__unbound__';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly onUpdate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'ArtworkJob';
             readonly field: 'updatedAt';
             readonly namespace: '__unbound__';
           };

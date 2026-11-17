@@ -1,0 +1,262 @@
+[
+  {
+    "id": "table.ArtworkJob",
+    "label": "Create table ArtworkJob",
+    "summary": "Creates table ArtworkJob with required columns",
+    "operationClass": "additive",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "table",
+        "name": "ArtworkJob"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"ArtworkJob\" does not exist",
+        "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
+        "params": [
+          "table",
+          "ArtworkJob"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"ArtworkJob\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"ArtworkJob\"",
+        "sql": "CREATE TABLE \"ArtworkJob\" (\n  \"attemptCount\" INTEGER NOT NULL DEFAULT 0,\n  \"createdAt\" TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),\n  \"externalCoverItemId\" TEXT NOT NULL,\n  \"externalCoverTag\" TEXT,\n  \"id\" TEXT NOT NULL,\n  \"lastAttemptAt\" TEXT,\n  \"sourceId\" TEXT NOT NULL,\n  \"trackId\" TEXT NOT NULL,\n  \"updatedAt\" TEXT NOT NULL,\n  PRIMARY KEY (\"id\"),\n  UNIQUE (\"trackId\"),\n  FOREIGN KEY (\"trackId\") REFERENCES \"Track\" (\"id\") ON DELETE CASCADE,\n  FOREIGN KEY (\"sourceId\") REFERENCES \"Source\" (\"id\") ON DELETE CASCADE\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"ArtworkJob\" exists",
+        "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
+        "params": [
+          "table",
+          "ArtworkJob"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"ArtworkJob\""
+        }
+      },
+      {
+        "description": "verify table \"ArtworkJob\" has exactly its columns",
+        "sql": "SELECT (SELECT COUNT(*) FROM pragma_table_info('ArtworkJob')) = 9 AND (SELECT COUNT(*) FROM pragma_table_info('ArtworkJob') WHERE (name, LOWER(type), \"notnull\", pk) IN (VALUES ('attemptCount', 'integer', 1, 0), ('createdAt', 'text', 1, 0), ('externalCoverItemId', 'text', 1, 0), ('externalCoverTag', 'text', 0, 0), ('id', 'text', 1, 1), ('lastAttemptAt', 'text', 0, 0), ('sourceId', 'text', 1, 0), ('trackId', 'text', 1, 0), ('updatedAt', 'text', 1, 0))) = 9"
+      }
+    ]
+  },
+  {
+    "id": "column.Track.externalCoverKey",
+    "label": "Add column externalCoverKey on Track",
+    "summary": "Adds column externalCoverKey on Track",
+    "operationClass": "additive",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "column",
+        "name": "externalCoverKey",
+        "table": "Track"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"externalCoverKey\" is missing",
+        "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM pragma_table_info(?1) WHERE \"name\" = ?2",
+        "params": [
+          "Track",
+          "externalCoverKey"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "column \"externalCoverKey\" on \"Track\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"externalCoverKey\"",
+        "sql": "ALTER TABLE \"Track\" ADD COLUMN \"externalCoverKey\" TEXT"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"externalCoverKey\" exists",
+        "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM pragma_table_info(?1) WHERE \"name\" = ?2",
+        "params": [
+          "Track",
+          "externalCoverKey"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "column \"externalCoverKey\" on \"Track\""
+        }
+      },
+      {
+        "description": "verify column \"externalCoverKey\" on \"Track\" has type TEXT and is optional",
+        "sql": "SELECT COUNT(*) > 0 FROM pragma_table_info('Track') WHERE name = 'externalCoverKey' AND LOWER(type) = 'text' AND \"notnull\" = 0"
+      }
+    ]
+  },
+  {
+    "id": "index.ArtworkJob.ArtworkJob_createdAt_idx_9575dbd7",
+    "label": "Create index ArtworkJob_createdAt_idx_9575dbd7 on ArtworkJob",
+    "summary": "Creates index ArtworkJob_createdAt_idx_9575dbd7 on ArtworkJob",
+    "operationClass": "additive",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "index",
+        "name": "ArtworkJob_createdAt_idx_9575dbd7",
+        "table": "ArtworkJob"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"ArtworkJob_createdAt_idx_9575dbd7\" is missing",
+        "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
+        "params": [
+          "index",
+          "ArtworkJob_createdAt_idx_9575dbd7"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "index \"ArtworkJob_createdAt_idx_9575dbd7\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"ArtworkJob_createdAt_idx_9575dbd7\"",
+        "sql": "CREATE INDEX \"ArtworkJob_createdAt_idx_9575dbd7\" ON \"ArtworkJob\" (\"createdAt\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"ArtworkJob_createdAt_idx_9575dbd7\" exists",
+        "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
+        "params": [
+          "index",
+          "ArtworkJob_createdAt_idx_9575dbd7"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "index \"ArtworkJob_createdAt_idx_9575dbd7\""
+        }
+      },
+      {
+        "description": "verify index \"ArtworkJob_createdAt_idx_9575dbd7\" on \"ArtworkJob\" covers (createdAt)",
+        "sql": "SELECT EXISTS (SELECT 1 FROM pragma_index_list('ArtworkJob') WHERE name = 'ArtworkJob_createdAt_idx_9575dbd7' AND \"unique\" = 0) AND (SELECT COUNT(*) FROM pragma_index_info('ArtworkJob_createdAt_idx_9575dbd7')) = 1 AND (SELECT COUNT(*) FROM pragma_index_info('ArtworkJob_createdAt_idx_9575dbd7') WHERE (seqno, name) IN (VALUES (0, 'createdAt'))) = 1"
+      }
+    ]
+  },
+  {
+    "id": "index.ArtworkJob.ArtworkJob_sourceId_idx_d92a2571",
+    "label": "Create index ArtworkJob_sourceId_idx_d92a2571 on ArtworkJob",
+    "summary": "Creates index ArtworkJob_sourceId_idx_d92a2571 on ArtworkJob",
+    "operationClass": "additive",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "index",
+        "name": "ArtworkJob_sourceId_idx_d92a2571",
+        "table": "ArtworkJob"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"ArtworkJob_sourceId_idx_d92a2571\" is missing",
+        "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
+        "params": [
+          "index",
+          "ArtworkJob_sourceId_idx_d92a2571"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "index \"ArtworkJob_sourceId_idx_d92a2571\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"ArtworkJob_sourceId_idx_d92a2571\"",
+        "sql": "CREATE INDEX \"ArtworkJob_sourceId_idx_d92a2571\" ON \"ArtworkJob\" (\"sourceId\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"ArtworkJob_sourceId_idx_d92a2571\" exists",
+        "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
+        "params": [
+          "index",
+          "ArtworkJob_sourceId_idx_d92a2571"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "index \"ArtworkJob_sourceId_idx_d92a2571\""
+        }
+      },
+      {
+        "description": "verify index \"ArtworkJob_sourceId_idx_d92a2571\" on \"ArtworkJob\" covers (sourceId)",
+        "sql": "SELECT EXISTS (SELECT 1 FROM pragma_index_list('ArtworkJob') WHERE name = 'ArtworkJob_sourceId_idx_d92a2571' AND \"unique\" = 0) AND (SELECT COUNT(*) FROM pragma_index_info('ArtworkJob_sourceId_idx_d92a2571')) = 1 AND (SELECT COUNT(*) FROM pragma_index_info('ArtworkJob_sourceId_idx_d92a2571') WHERE (seqno, name) IN (VALUES (0, 'sourceId'))) = 1"
+      }
+    ]
+  },
+  {
+    "id": "index.ArtworkJob.artwork_source_cover_170ef716",
+    "label": "Create index artwork_source_cover_170ef716 on ArtworkJob",
+    "summary": "Creates index artwork_source_cover_170ef716 on ArtworkJob",
+    "operationClass": "additive",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "index",
+        "name": "artwork_source_cover_170ef716",
+        "table": "ArtworkJob"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"artwork_source_cover_170ef716\" is missing",
+        "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
+        "params": [
+          "index",
+          "artwork_source_cover_170ef716"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "index \"artwork_source_cover_170ef716\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"artwork_source_cover_170ef716\"",
+        "sql": "CREATE INDEX \"artwork_source_cover_170ef716\" ON \"ArtworkJob\" (\"sourceId\", \"externalCoverItemId\", \"externalCoverTag\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"artwork_source_cover_170ef716\" exists",
+        "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
+        "params": [
+          "index",
+          "artwork_source_cover_170ef716"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "index \"artwork_source_cover_170ef716\""
+        }
+      },
+      {
+        "description": "verify index \"artwork_source_cover_170ef716\" on \"ArtworkJob\" covers (sourceId, externalCoverItemId, externalCoverTag)",
+        "sql": "SELECT EXISTS (SELECT 1 FROM pragma_index_list('ArtworkJob') WHERE name = 'artwork_source_cover_170ef716' AND \"unique\" = 0) AND (SELECT COUNT(*) FROM pragma_index_info('artwork_source_cover_170ef716')) = 3 AND (SELECT COUNT(*) FROM pragma_index_info('artwork_source_cover_170ef716') WHERE (seqno, name) IN (VALUES (0, 'sourceId'), (1, 'externalCoverItemId'), (2, 'externalCoverTag'))) = 3"
+      }
+    ]
+  }
+]

@@ -279,7 +279,11 @@ function taskDetailNumber(task: TaskResponse, key: string): number {
   );
 }
 
-function taskResult(scan: TaskResponse, metadata: TaskResponse | null) {
+function taskResult(
+  scan: TaskResponse,
+  metadata: TaskResponse | null,
+  artwork: TaskResponse | null = null,
+) {
   return {
     id: scan.id,
     status: scan.status,
@@ -308,13 +312,25 @@ function taskResult(scan: TaskResponse, metadata: TaskResponse | null) {
       ? taskDetailNumber(metadata, "metadata.failed")
       : 0,
     metadataFailureMessage: metadata?.failureMessage ?? null,
+    artworkStatus: artwork?.status ?? "skipped",
+    artworkRetrievedCount: artwork
+      ? taskDetailNumber(artwork, "artwork.retrieved")
+      : 0,
+    artworkMissingCount: artwork
+      ? taskDetailNumber(artwork, "artwork.missing")
+      : 0,
+    artworkErrorCount: artwork
+      ? taskDetailNumber(artwork, "artwork.failed")
+      : 0,
     failureMessage: scan.failureMessage,
     createdAt: scan.createdAt,
     startedAt: scan.startedAt,
     completedAt: scan.completedAt,
     metadataTaskId: metadata?.id ?? null,
+    artworkTaskId: artwork?.id ?? null,
     scan,
     metadata,
+    artwork,
   };
 }
 
@@ -359,7 +375,19 @@ export async function waitForScan(
     }
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
-  return taskResult(scan, metadata);
+  let artwork: TaskResponse | null = null;
+  for (let attempt = 0; attempt < 500; attempt += 1) {
+    const child = await context.database.orm.Task.where({
+      parentTaskId: scan.id,
+      kind: "artwork_fetch",
+    }).first();
+    if (child) {
+      artwork = await waitForTask(context, child.id);
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  return taskResult(scan, metadata, artwork);
 }
 
 export async function startScan(

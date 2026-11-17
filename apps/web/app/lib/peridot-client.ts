@@ -21,7 +21,6 @@ import type {
   DirectorySearchResponse,
   DiscoverJellyfinLibrariesRequest,
   JellyfinLibraryListResponse,
-  InstallUpdateResponse,
   LikeListResponse,
   LikeResponse,
   LikeTarget,
@@ -409,15 +408,6 @@ export function checkForUpdates(serverAddress: string, token: string) {
   return authenticatedRequestJson<UpdateStatusResponse>(
     serverAddress,
     "/api/admin/updates/check",
-    token,
-    { method: "POST" },
-  );
-}
-
-export function installUpdate(serverAddress: string, token: string) {
-  return authenticatedRequestJson<InstallUpdateResponse>(
-    serverAddress,
-    "/api/admin/updates/install",
     token,
     { method: "POST" },
   );

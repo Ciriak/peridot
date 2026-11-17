@@ -228,6 +228,63 @@ test("task service runs FIFO, coalesces queued duplicates, and reports progress"
   }
 });
 
+test("scans and metadata matching run before queued artwork retrieval", async () => {
+  const context = await createTestContext();
+  await context.app.close();
+  const tasks = new TaskService(context.database);
+  const events: string[] = [];
+  let releaseScan!: () => void;
+  const scanGate = new Promise<void>((resolve) => {
+    releaseScan = resolve;
+  });
+  tasks.registerExecutor("library_scan", async (task) => {
+    events.push(`start:${task.kind}`);
+    await scanGate;
+    events.push(`finish:${task.kind}`);
+  });
+  tasks.registerExecutor("metadata_fetch", async (task) => {
+    events.push(`start:${task.kind}`);
+    events.push(`finish:${task.kind}`);
+  });
+  tasks.registerExecutor("artwork_fetch", async (task) => {
+    events.push(`start:${task.kind}`);
+    events.push(`finish:${task.kind}`);
+  });
+  await tasks.initialize();
+
+  try {
+    const scan = await tasks.enqueue({
+      kind: "library_scan",
+      title: "Scan",
+    });
+    await waitForStatus(tasks, scan.id, "running");
+    const artwork = await tasks.enqueue({
+      kind: "artwork_fetch",
+      title: "Artwork",
+    });
+    const metadata = await tasks.enqueue({
+      kind: "metadata_fetch",
+      title: "Metadata",
+    });
+
+    releaseScan();
+    await waitForStatus(tasks, metadata.id, "completed");
+    await waitForStatus(tasks, artwork.id, "completed");
+    assert.deepEqual(events, [
+      "start:library_scan",
+      "finish:library_scan",
+      "start:metadata_fetch",
+      "finish:metadata_fetch",
+      "start:artwork_fetch",
+      "finish:artwork_fetch",
+    ]);
+  } finally {
+    releaseScan();
+    await tasks.close();
+    await context.close();
+  }
+});
+
 test("running and queued tasks can be stopped without running queued work", async () => {
   const context = await createTestContext();
   await context.app.close();

@@ -410,12 +410,9 @@ scheme webview origins; add the exact web origin when accessing Peridot from
 another device.
 Channel build metadata uses `PERIDOT_UPDATE_CHANNEL`, `PERIDOT_BUILD_TAG`, and
 `PERIDOT_BUILD_COMMIT`. `PERIDOT_UPDATE_REPOSITORY` defaults to
-`Ciriak/peridot`. `PERIDOT_WATCHTOWER_URL` and either
-`PERIDOT_WATCHTOWER_TOKEN` or `PERIDOT_WATCHTOWER_TOKEN_FILE` enable the
-server-to-server install request; neither value is returned to browser code.
-The Docker entrypoint generates that file automatically in `/data`. Release
-channels are `dev`, `beta`, `stable`/production, and `local` for builds without
-update metadata.
+`Ciriak/peridot`. Release channels are `dev`, `beta`, `stable`/production, and
+`local` for builds without update metadata. Update checks use only public GitHub
+data and never install an image.
 Discogs metadata uses an administrator-provided personal access token. Peridot
 encrypts provider credentials at rest with an automatically generated local key
 stored as `<database path>.key`, for example `peridot.db.key`, and reuses that
@@ -462,20 +459,21 @@ removal remains available while work is active; the server first stops running
 or queued work for that source and stops unscoped all-source work that could
 access it. Unrelated source-specific tasks continue.
 Jellyfin scans request `Audio` and `AudioBook` items, page through the complete
-result set, import Peridot-supported original audio containers, and cache
-bounded album artwork. Item IDs and ETags provide stable identity and change
-detection. Static
+result set, and import Peridot-supported original audio containers. Item IDs and
+ETags provide stable identity and change detection. Static
 audio and byte-range requests are proxied through Peridot with the encrypted API
 key remaining server-side. Unsupported Jellyfin audio containers are skipped and
 reported in the scan error count. Pages are processed incrementally so large
 remote libraries update progress without holding the complete Jellyfin catalog
-in memory. Up to six item lookups and artwork downloads prepare concurrently,
-while track, cover, and catalog writes remain serialized. Repeated image
-identities share one download and reuse the stored local cover ID. Progress
-updates after each item, throttled to four writes per second. Jellyfin requests
-allow up to 60 seconds for response headers because large library pages can be
-slow to prepare. Task failures, partial-completion warnings, and startup
-interruptions are written to the administrator log.
+in memory. Tracks are persisted and become playable without waiting for cover
+artwork. Changed image identities create durable artwork jobs after the metadata
+scan. Metadata provider matching runs first, followed by an `artwork_fetch` task
+that downloads up to six distinct covers concurrently, deduplicates repeated
+images, and updates cover fields without a full catalog reindex. Progress updates
+after each scanned or retrieved item, throttled to four writes per second.
+Jellyfin requests allow up to 60 seconds for response headers because large
+library pages can be slow to prepare. Task failures, partial-completion
+warnings, and startup interruptions are written to the administrator log.
 Source rows show the current available file count and latest successful sync
 time. The Settings sidebar shows the number of configured sources beside
 Sources. Both refresh from the shared source query after a completed library
@@ -772,12 +770,12 @@ The root `Dockerfile` builds contracts, server output, and the static Nuxt
 application into one Node 24.15 image. Startup applies committed migrations to
 `/data/peridot.db`, with snapshots in `/data/backups`, before launching the
 server. `compose.yaml` exposes the combined web app and API on 17430, persists
-`/data`, mounts music read-only at `/music`, and runs the maintained
-`nickfedor/watchtower` fork with automatic polling disabled. The API checks the
-public GitHub repository every six hours, but Watchtower is called only when an
-administrator presses Install. The README contains the user-facing installation
-steps. The default Compose channel is `stable`, which is the production release
-channel.
+`/data`, and mounts music read-only at `/music`. The API checks the public GitHub
+repository every six hours without receiving access to the Docker socket.
+Administrators apply server image updates manually with `docker compose pull
+peridot` followed by `docker compose up -d peridot`. The README contains the
+user-facing installation steps. The default Compose channel is `stable`, which
+is the production release channel.
 CI builds AMD64 and ARM64 independently on native Ubuntu runners, pushes each
 image by digest, and merges the digests into the final tagged manifest. Keep
 target-native dependencies in their own architecture's build so runtime native

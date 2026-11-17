@@ -13,8 +13,6 @@ function updateConfig(overrides: Partial<UpdateConfig> = {}): UpdateConfig {
     repository: "Ciriak/peridot",
     currentTag: null,
     currentCommit: commit,
-    watchtowerUrl: "http://watchtower:8080",
-    watchtowerToken: "private-token",
     ...overrides,
   };
 }
@@ -29,13 +27,11 @@ test("development update checks report current and available commits", async () 
   const current = await service.check();
   assert.equal(current.state, "current");
   assert.equal(current.latestCommit, commit);
-  assert.equal(current.installAvailable, false);
 
   remoteCommit = nextCommit;
   const available = await service.check();
   assert.equal(available.state, "available");
   assert.equal(available.latestCommit, nextCommit);
-  assert.equal(available.installAvailable, true);
 });
 
 test("beta update checks follow the master source branch", async () => {
@@ -140,7 +136,7 @@ test("automatic checks skip local builds", async () => {
   assert.equal(requests, 0);
 });
 
-test("administrator update endpoints reject members and trigger Watchtower privately", async () => {
+test("administrator update checks reject members and do not expose server-to-server state", async () => {
   const requests: Array<{ url: string; authorization: string | null }> = [];
   const service = new UpdateService(updateConfig(), async (input, init) => {
     const url = String(input);
@@ -148,7 +144,6 @@ test("administrator update endpoints reject members and trigger Watchtower priva
       url,
       authorization: new Headers(init?.headers).get("authorization"),
     });
-    if (url.endsWith("/v1/update")) return Response.json({ ok: true });
     return Response.json({ sha: nextCommit });
   });
   const context = await createTestContext({ updateService: service });
@@ -168,20 +163,17 @@ test("administrator update endpoints reject members and trigger Watchtower priva
     });
     assert.equal(checked.statusCode, 200);
     assert.equal(checked.json().state, "available");
-    assert.equal(checked.body.includes("private-token"), false);
 
-    const installed = await context.app.inject({
+    const installEndpoint = await context.app.inject({
       method: "POST",
       url: "/api/admin/updates/install",
       headers: context.authorization,
     });
-    assert.equal(installed.statusCode, 202);
-    assert.deepEqual(installed.json(), { status: "updating" });
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    const watchtower = requests.find((request) =>
-      request.url.endsWith("/v1/update"),
+    assert.equal(installEndpoint.statusCode, 404);
+    assert.deepEqual(
+      requests.map((request) => request.url),
+      ["https://api.github.com/repos/Ciriak/peridot/commits/dev"],
     );
-    assert.equal(watchtower?.authorization, "Bearer private-token");
   } finally {
     await context.close();
   }
