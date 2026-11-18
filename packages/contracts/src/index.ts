@@ -99,6 +99,53 @@ export interface TrackResponse {
   liked: boolean;
 }
 
+export interface PluginTrackReference {
+  trackId: string;
+  sourceId: string;
+  sourcePluginId: string | null;
+  externalId: string | null;
+}
+
+export interface PluginRecommendationCandidate {
+  sourceId: string;
+  externalId: string;
+  score: number | null;
+  reason: string | null;
+}
+
+export interface PluginRecommendedTrackResponse {
+  track: TrackResponse;
+  score: number | null;
+  reason: string | null;
+}
+
+export interface PluginRecommendationListResponse {
+  items: PluginRecommendedTrackResponse[];
+  unmatchedCount: number;
+}
+
+export interface PluginSimilarTracksRequest {
+  trackId: string;
+  limit?: number;
+}
+
+export interface PluginForYouTracksRequest {
+  limit?: number;
+}
+
+export interface PluginGeneratedPlaylistResponse extends PluginRecommendationListResponse {
+  name: string | null;
+}
+
+export interface GeneratePluginPlaylistRequest {
+  name?: string;
+  prompt?: string;
+  seedTrackId?: string;
+  limit?: number;
+}
+
+export type PluginRecommendationMethod = "similar" | "for-you";
+
 export type CatalogSortField =
   "title" | "artist" | "album" | "duration" | "track" | "published";
 
@@ -547,14 +594,19 @@ export type PluginCapability =
   | "metadata:search"
   | "metadata:enrich"
   | "data:process"
-  | "recommendations:read";
+  | "recommendations:read"
+  | "recommendations:generate";
 
 export type PluginContributionKind =
-  "source" | "display" | "playlist-generator" | "data-processor";
+  | "source"
+  | "recommendation-provider"
+  | "display"
+  | "playlist-generator"
+  | "data-processor";
 
 export type PluginSourceFieldType = "text" | "url" | "password";
 
-export interface PluginSourceFieldDefinition {
+export interface PluginConfigurationFieldDefinition {
   key: string;
   labelMessage: MessageDescriptor;
   type: PluginSourceFieldType;
@@ -563,6 +615,19 @@ export interface PluginSourceFieldDefinition {
   visible: boolean;
   placeholderMessage: MessageDescriptor | null;
   helpMessage: MessageDescriptor | null;
+}
+
+export type PluginSourceFieldDefinition = PluginConfigurationFieldDefinition;
+
+export interface PluginSettingsResponse {
+  fields: PluginConfigurationFieldDefinition[];
+  configuration: Record<string, string>;
+  configured: boolean;
+}
+
+export interface UpdatePluginSettingsRequest {
+  configuration: Record<string, string>;
+  credentials?: Record<string, string>;
 }
 
 export interface PluginSourceDiscoveryDefinition {
@@ -576,12 +641,51 @@ export interface PluginSourceContributionResponse {
   discovery: PluginSourceDiscoveryDefinition | null;
 }
 
-export interface PluginCapabilityContributionResponse {
-  kind: Exclude<PluginContributionKind, "source">;
+export interface PluginRecommendationProviderContributionResponse {
+  kind: "recommendation-provider";
+  methods: PluginRecommendationMethod[];
+}
+
+export interface PluginPlaylistGeneratorContributionResponse {
+  kind: "playlist-generator";
+  supportsPrompt: boolean;
+  supportsSeed: boolean;
+}
+
+export interface PluginTaskContributionResponse {
+  id: string;
+  titleMessage: MessageDescriptor;
+}
+
+export interface PluginDataProcessorContributionResponse {
+  kind: "data-processor";
+  tasks: PluginTaskContributionResponse[];
+}
+
+export interface PluginDisplayContributionResponse {
+  kind: "display";
+}
+
+export interface PluginProviderResponse {
+  id: string;
+  name: string;
+  descriptionMessage: MessageDescriptor;
+  version: string;
+  recommendationMethods: PluginRecommendationMethod[];
+  playlistGeneration: boolean;
+  configured: boolean;
+}
+
+export interface PluginProviderListResponse {
+  items: PluginProviderResponse[];
 }
 
 export type PluginContributionResponse =
-  PluginSourceContributionResponse | PluginCapabilityContributionResponse;
+  | PluginSourceContributionResponse
+  | PluginRecommendationProviderContributionResponse
+  | PluginPlaylistGeneratorContributionResponse
+  | PluginDataProcessorContributionResponse
+  | PluginDisplayContributionResponse;
 
 export type PluginInstallSource = "bundled" | "github";
 
@@ -599,6 +703,7 @@ export interface PluginResponse {
   installSource: PluginInstallSource;
   installSourceLocator: string;
   icon: string | null;
+  settings: PluginSettingsResponse;
 }
 
 export interface PluginListResponse {

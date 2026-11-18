@@ -3,6 +3,7 @@ import { useI18n } from "#imports";
 import type {
   ApplyTrackMetadataRequest,
   MetadataCandidateResponse,
+  PluginProviderResponse,
   TrackResponse,
 } from "@peridot/contracts";
 import { Icon } from "@iconify/vue/offline";
@@ -37,6 +38,7 @@ import { useLibraryPlayer } from "../composables/use-library-player";
 import { useCatalogRevision } from "../composables/use-catalog-query";
 import { useLocalizedMessage } from "../composables/use-localized-message";
 import { useOfflineTracks } from "../composables/use-offline-tracks";
+import { usePluginProviders } from "../composables/use-plugin-providers";
 import { useQueryScope } from "../composables/use-query-scope";
 import { useServer } from "../composables/use-server";
 import { useServerConnection } from "../composables/use-server-connection";
@@ -47,6 +49,7 @@ import { isTrackPlayable } from "../lib/offline-playback";
 import { queryKeys } from "../lib/query-keys";
 import {
   applyTrackMetadata,
+  fetchSimilarPluginTracks,
   isAuthenticationRedirectError,
   listMetadataCandidates,
   revertTrackMetadata,
@@ -58,6 +61,7 @@ import {
   notifyMetadataUpdateFailed,
   notifyOfflineTrackFailed,
   notifyOfflineTrackSaved,
+  notifySimilarTracksFailed,
 } from "../lib/toasts";
 import AddTrackToPlaylistDialog from "./AddTrackToPlaylistDialog.vue";
 import DownloadProgressTooltip from "./DownloadProgressTooltip.vue";
@@ -66,7 +70,9 @@ const props = defineProps<{ track: TrackResponse }>();
 const emit = defineEmits<{ play: [] }>();
 const { t } = useI18n();
 const { translate, errorMessage } = useLocalizedMessage();
-const { addToQueue, downloadTrack, queueLoaded } = useLibraryPlayer();
+const { addToQueue, downloadTrack, playCollection, queueLoaded } =
+  useLibraryPlayer();
+const { items: pluginProviders } = usePluginProviders();
 const { invalidate: invalidateCatalog } = useCatalogRevision();
 const { address } = useServer();
 const { scope } = useQueryScope();
@@ -98,6 +104,7 @@ const {
 } = useLikes();
 const downloading = ref(false);
 const addingToQueue = ref(false);
+const similarPending = ref<string | null>(null);
 const playlistOpen = ref(false);
 const metadataOpen = ref(false);
 const metadataQuery = ref("");
@@ -108,6 +115,12 @@ const applyingMetadataId = ref("");
 const revertingMetadata = ref(false);
 const artists = computed(() => trackArtistNames(props.track));
 const music = computed(() => props.track.mediaType === "music");
+const similarProviders = computed(() =>
+  pluginProviders.value.filter(
+    (provider) =>
+      provider.configured && provider.recommendationMethods.includes("similar"),
+  ),
+);
 const albumRouteValue = computed(() =>
   props.track.album?.trim() && artists.value.length
     ? trackAlbumRoute(props.track)
@@ -161,6 +174,35 @@ async function addNext() {
     if (await addToQueue(props.track.id)) notifyAddedToQueue(props.track.title);
   } finally {
     addingToQueue.value = false;
+  }
+}
+
+async function listenSimilar(provider: PluginProviderResponse) {
+  if (similarPending.value) return;
+  similarPending.value = provider.id;
+  try {
+    if (!address.value || !token.value) {
+      throw new Error("Peridot server is unavailable.");
+    }
+    const result = await fetchSimilarPluginTracks(
+      address.value,
+      token.value,
+      provider.id,
+      { trackId: props.track.id },
+    );
+    if (!result.items.length) {
+      notifySimilarTracksFailed(t("context.noSimilarTracks"));
+      return;
+    }
+    playCollection(
+      [props.track, ...result.items.map((item) => item.track)],
+      props.track.id,
+    );
+  } catch (reason) {
+    if (isAuthenticationRedirectError(reason)) return;
+    notifySimilarTracksFailed(errorMessage(reason, "error.similarTracksLoad"));
+  } finally {
+    similarPending.value = null;
   }
 }
 
@@ -289,6 +331,27 @@ async function revertMetadata() {
         <Icon :icon="icons.addToQueue" aria-hidden="true" />
         {{ addingToQueue ? t("common.adding") : t("context.addToQueue") }}
       </ContextMenuItem>
+      <ContextMenuSub v-if="music && similarProviders.length">
+        <ContextMenuSubTrigger :disabled="similarPending !== null">
+          <Icon :icon="icons.waveform" aria-hidden="true" />
+          {{
+            similarPending
+              ? t("context.findingSimilar")
+              : t("context.listenSimilar")
+          }}
+        </ContextMenuSubTrigger>
+        <ContextMenuSubContent>
+          <ContextMenuItem
+            v-for="provider in similarProviders"
+            :key="provider.id"
+            :disabled="similarPending !== null"
+            @select="listenSimilar(provider)"
+          >
+            <Icon :icon="icons.waveform" aria-hidden="true" />
+            {{ provider.name }}
+          </ContextMenuItem>
+        </ContextMenuSubContent>
+      </ContextMenuSub>
       <ContextMenuItem :disabled="serverLost" @select="playlistOpen = true">
         <Icon :icon="icons.plus" aria-hidden="true" />
         {{ t("context.addToPlaylist") }}

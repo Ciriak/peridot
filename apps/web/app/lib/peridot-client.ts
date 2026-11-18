@@ -20,6 +20,7 @@ import type {
   DirectoryListResponse,
   DirectorySearchResponse,
   DiscoverPluginSourcesRequest,
+  GeneratePluginPlaylistRequest,
   LikeListResponse,
   LikeResponse,
   LikeTarget,
@@ -33,8 +34,13 @@ import type {
   PasswordResetRequestResponse,
   PlaylistDetailResponse,
   PlaylistListResponse,
+  PluginForYouTracksRequest,
+  PluginGeneratedPlaylistResponse,
   PluginListResponse,
+  PluginProviderListResponse,
+  PluginRecommendationListResponse,
   PluginResponse,
+  PluginSimilarTracksRequest,
   PluginSourceOptionListResponse,
   PodcastListResponse,
   PodcastSummaryResponse,
@@ -56,6 +62,7 @@ import type {
   UpdatePlaylistRequest,
   UpdateUserProfileRequest,
   UpdateMetadataProviderRequest,
+  UpdatePluginSettingsRequest,
   UpdateServerSettingsRequest,
   UpdateStatusResponse,
   UpdateUserRequest,
@@ -552,6 +559,84 @@ export function listPlugins(serverAddress: string, token: string) {
     serverAddress,
     "/api/admin/plugins",
     token,
+  );
+}
+
+export function listPluginProviders(serverAddress: string, token: string) {
+  return authenticatedRequestJson<PluginProviderListResponse>(
+    serverAddress,
+    "/api/plugins/providers",
+    token,
+  );
+}
+
+export function fetchSimilarPluginTracks(
+  serverAddress: string,
+  token: string,
+  pluginId: string,
+  request: PluginSimilarTracksRequest,
+) {
+  return authenticatedRequestJson<PluginRecommendationListResponse>(
+    serverAddress,
+    `/api/plugins/${encodeURIComponent(pluginId)}/recommendations/similar`,
+    token,
+    { method: "POST", body: JSON.stringify(request) },
+  );
+}
+
+export function fetchForYouPluginTracks(
+  serverAddress: string,
+  token: string,
+  pluginId: string,
+  request: PluginForYouTracksRequest = {},
+) {
+  return authenticatedRequestJson<PluginRecommendationListResponse>(
+    serverAddress,
+    `/api/plugins/${encodeURIComponent(pluginId)}/recommendations/for-you`,
+    token,
+    { method: "POST", body: JSON.stringify(request) },
+  );
+}
+
+export function generatePluginPlaylist(
+  serverAddress: string,
+  token: string,
+  pluginId: string,
+  request: GeneratePluginPlaylistRequest,
+) {
+  return authenticatedRequestJson<PluginGeneratedPlaylistResponse>(
+    serverAddress,
+    `/api/plugins/${encodeURIComponent(pluginId)}/playlists/generate`,
+    token,
+    { method: "POST", body: JSON.stringify(request) },
+  );
+}
+
+export function updatePluginSettings(
+  serverAddress: string,
+  token: string,
+  pluginId: string,
+  request: UpdatePluginSettingsRequest,
+) {
+  return authenticatedRequestJson<PluginResponse>(
+    serverAddress,
+    `/api/admin/plugins/${encodeURIComponent(pluginId)}/settings`,
+    token,
+    { method: "PUT", body: JSON.stringify(request) },
+  );
+}
+
+export function runPluginTask(
+  serverAddress: string,
+  token: string,
+  pluginId: string,
+  taskId: string,
+) {
+  return authenticatedRequestJson<TaskResponse>(
+    serverAddress,
+    `/api/admin/plugins/${encodeURIComponent(pluginId)}/tasks/${encodeURIComponent(taskId)}`,
+    token,
+    { method: "POST" },
   );
 }
 

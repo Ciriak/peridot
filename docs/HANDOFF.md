@@ -2,6 +2,41 @@
 
 Last updated: 2026-11-18.
 
+## Plugin system supports recommendation and generated-playlist providers
+
+Extended the trusted plugin SDK and host beyond library sources. Plugins can now
+declare recommendation-provider and playlist-generator contributions, provide
+plugin-level settings, and implement similar-track, For You, prompt-based, or
+seed-based generation methods. Secret settings use a dedicated encrypted plugin
+credential scope and are never returned to the browser.
+
+The server exposes authenticated provider discovery and recommendation routes.
+Candidates are mapped only by exact source ID plus external track ID, preserving
+catalog order and reporting unavailable or unresolved tracks as unmatched. The
+shared track context menu discovers installed and configured providers and adds
+Listen similar songs without provider-specific UI; selecting it starts a queue
+with the seed track followed by the resolved recommendations.
+
+No AudioMuse-specific plugin or API client was added. Generated playlists remain
+transient responses that can be saved later through the existing playlist CRUD
+API. Data-processor plugins can queue named analysis or enrichment jobs through
+the shared task system, including progress and cancellation.
+
+Checks completed:
+
+- `pnpm check`
+- `pnpm typecheck`
+- `pnpm test` (186 server tests plus web, UI, desktop, and shared suites)
+- `pnpm db:validate`
+- `git diff --check`
+
+Changes remain uncommitted on `feature/plugin`. No push, tag, publication, or
+deployment was performed.
+
+Next: implement an AudioMuse-compatible plugin against the new contribution
+contracts, then add generated-playlist collection surfaces using the For You and
+playlist-generation APIs.
+
 ## Plugin rebase reconciled with dev
 
 Resolved the conflict markers and incomplete auto-merge in the server runtime,

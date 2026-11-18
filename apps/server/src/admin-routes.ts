@@ -15,7 +15,9 @@ import type {
   RestartServerResponse,
   ServerSettingsResponse,
   SourceListResponse,
+  TaskResponse,
   UpdateMetadataProviderRequest,
+  UpdatePluginSettingsRequest,
   UpdateServerSettingsRequest,
   UpdateUserRequest,
   UserListResponse,
@@ -254,6 +256,59 @@ export async function registerAdminRoutes(
       if (!plugins) throw new Error("Plugin service is unavailable.");
       return plugins.list();
     });
+
+    admin.put<{
+      Params: { id: string };
+      Body: UpdatePluginSettingsRequest;
+    }>(
+      "/api/admin/plugins/:id/settings",
+      async (request, reply): Promise<PluginResponse | undefined> => {
+        try {
+          if (!plugins) throw new Error("Plugin service is unavailable.");
+          return await plugins.updateSettings(request.params.id, request.body);
+        } catch (error) {
+          if (error instanceof PluginError) {
+            return sendError(
+              reply,
+              error.statusCode,
+              "invalid_plugin",
+              error.message,
+              error.messageDescriptor,
+            );
+          }
+          throw error;
+        }
+      },
+    );
+
+    admin.post<{ Params: { id: string; task: string } }>(
+      "/api/admin/plugins/:id/tasks/:task",
+      async (request, reply): Promise<TaskResponse | undefined> => {
+        try {
+          if (!plugins) throw new Error("Plugin service is unavailable.");
+          return reply
+            .code(202)
+            .send(
+              await plugins.enqueueTask(
+                request.params.id,
+                request.params.task,
+                tasks,
+              ),
+            );
+        } catch (error) {
+          if (error instanceof PluginError) {
+            return sendError(
+              reply,
+              error.statusCode,
+              error.code,
+              error.message,
+              error.messageDescriptor,
+            );
+          }
+          throw error;
+        }
+      },
+    );
 
     admin.post<{ Params: { id: string } }>(
       "/api/admin/plugins/:id/install",

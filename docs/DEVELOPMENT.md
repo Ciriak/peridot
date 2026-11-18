@@ -461,6 +461,11 @@ Settings → Admin → Plugins lists every bundled plugin, its version, permissi
 contribution kinds, and installed state. Installation is persisted separately
 from source configuration. The installed Jellyfin plugin supplies source fields
 through the generic source dialog; the web app does not own Jellyfin form logic.
+Plugins with plugin-level `settingsFields` render the same generic settings form;
+secret fields are write-only and stored with the plugin credential scope.
+Installed recommendation providers appear automatically in the music-track
+context menu under Listen similar songs. They do not add provider-specific web
+components.
 Adding a folder or plugin source queues its source-scoped library scan
 automatically. A successful scan queues a linked metadata-fetch task for the
 same source. Each scannable source row has a three-dot action menu for a
@@ -719,6 +724,20 @@ coalesce into the existing task. Administrators stop an active task with
 Administrators list bundled plugins with `GET /api/admin/plugins`, install with
 `POST /api/admin/plugins/:id/install`, and uninstall with
 `POST /api/admin/plugins/:id/uninstall` plus `{ "confirm": true }`.
+They update plugin-level settings through
+`PUT /api/admin/plugins/:id/settings`. Signed-in users list installed service
+providers with `GET /api/plugins/providers`.
+Administrators start a data-processor job with
+`POST /api/admin/plugins/:id/tasks/:task`; it returns a normal shared task
+response and uses the existing progress, cancellation, realtime, and history
+surfaces.
+`POST /api/plugins/:id/recommendations/similar`,
+`POST /api/plugins/:id/recommendations/for-you`, and
+`POST /api/plugins/:id/playlists/generate` dispatch the typed non-source
+contributions. Provider results are materialized only through exact source and
+external track identities; unresolved or unavailable candidates are counted as
+unmatched. Generated playlists remain transient until the client saves them
+through the normal private-playlist APIs.
 Source choices are discovered through
 `POST /api/admin/plugins/:id/sources/discover`. Jellyfin uses this generic route
 to list libraries using write-only connection credentials.
@@ -751,7 +770,10 @@ serialized on the main thread. Jellyfin traversal and metadata-provider matching
 retain their separate scheduling. A GitHub-backed plugin catalog can later
 provide a trusted package/version through the existing installation provenance
 fields, but this milestone executes only bundled code. Remote packages require a
-sandboxed runtime and verification before loading.
+sandboxed runtime and verification before loading. Non-source recommendation
+calls are synchronous requests with cancellation. Data-processor plugins expose
+named jobs through the shared task system and receive progress and cancellation
+handles from the core.
 Task responses expose only safe titles, source display names, bounded labeled
 details, progress, and lifecycle timestamps. Source paths and provider
 credentials are never included. Core task kinds are `library_scan` and

@@ -19,7 +19,7 @@ import type {
 } from '@prisma/orm-sqlite/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'da6afdb4d7c8cafd144930cbcb8fc7105bbec726d2b453025fbb96ff59c784b2'>;
+  StorageHashBase<'b91674bc063489d8959b6f40b8130847a63d7b56156a8065b9c26bdc2ee14cde'>;
 export type ExecutionHash =
   ExecutionHashBase<'af5db9c2d052d8692ee1f1a70221c2da0712097bb5b307d7d3a15319aaae43d9'>;
 export type ProfileHash =
@@ -423,7 +423,9 @@ export namespace Models {
     readonly [RelationKeys]?: 'playlist' | 'user';
   };
   export type PluginInstallation = {
+    configuration: FieldOutputTypes['__unbound__']['PluginInstallation']['configuration'];
     createdAt: FieldOutputTypes['__unbound__']['PluginInstallation']['createdAt'];
+    credentialCiphertext: FieldOutputTypes['__unbound__']['PluginInstallation']['credentialCiphertext'];
     installSource: FieldOutputTypes['__unbound__']['PluginInstallation']['installSource'];
     installSourceLocator: FieldOutputTypes['__unbound__']['PluginInstallation']['installSourceLocator'];
     installed: FieldOutputTypes['__unbound__']['PluginInstallation']['installed'];
@@ -2093,11 +2095,27 @@ type ContractBase = Omit<
             };
             readonly PluginInstallation: {
               columns: {
+                readonly configuration: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/text@1', '{}'>;
+                  };
+                  readonly many: false;
+                };
                 readonly createdAt: {
                   readonly dataType: 'sqlite/datetime';
                   readonly codecId: 'sqlite/datetime@1';
                   readonly nullable: false;
                   readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                  readonly many: false;
+                };
+                readonly credentialCiphertext: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
                   readonly many: false;
                 };
                 readonly installSource: {
@@ -4522,9 +4540,17 @@ type ContractBase = Omit<
           };
           readonly PluginInstallation: {
             readonly fields: {
+              readonly configuration: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
               readonly createdAt: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly credentialCiphertext: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
               readonly installSource: {
                 readonly nullable: false;
@@ -4560,7 +4586,9 @@ type ContractBase = Omit<
               readonly table: 'PluginInstallation';
               readonly namespaceId: '__unbound__';
               readonly fields: {
+                readonly configuration: { readonly column: 'configuration' };
                 readonly createdAt: { readonly column: 'createdAt' };
+                readonly credentialCiphertext: { readonly column: 'credentialCiphertext' };
                 readonly installSource: { readonly column: 'installSource' };
                 readonly installSourceLocator: { readonly column: 'installSourceLocator' };
                 readonly installed: { readonly column: 'installed' };

@@ -4,6 +4,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { TaskResponse } from "@peridot/contracts";
+import type { PluginDefinition } from "@peridot/plugin-sdk";
 import { createJellyfinPlugin } from "@peridot/plugin-jellyfin";
 import { buildApp } from "../src/app.js";
 import { artworkCacheDirectory } from "../src/artwork-cache.js";
@@ -40,6 +41,7 @@ export interface TestContextOptions {
   updateService?: UpdateService;
   webRoot?: string;
   persistedLogLines?: string[];
+  additionalPlugins?: readonly PluginDefinition[];
 }
 
 export async function createTestContext(
@@ -104,6 +106,7 @@ export async function createTestContext(
           ? { requestTimeoutMs: options.jellyfinRequestTimeoutMs }
           : {}),
       }),
+      ...(options.additionalPlugins ?? []),
     ],
     ...(options.discogsRequestIntervalMs !== undefined
       ? { discogsRequestIntervalMs: options.discogsRequestIntervalMs }

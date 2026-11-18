@@ -290,6 +290,8 @@ model PluginInstallation {
   installSource        String    @default("bundled")
   installSourceLocator String
   version              String
+  configuration        String    @default("{}")
+  credentialCiphertext String?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @onCreate(now()) @onUpdate(now())
 

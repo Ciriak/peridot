@@ -1,5 +1,25 @@
 # Decisions
 
+## 2026-11-18: Non-source plugins use typed service contributions
+
+The plugin host executes recommendation-provider and playlist-generator
+contributions in addition to library sources. Recommendation providers can
+return similar or For You candidates, while playlist generators can create
+prompt- or seed-based transient playlists. Results cross the core boundary as
+exact source ID plus external track ID references; the host resolves those to
+available catalog tracks and reports unmatched entries without title or artist
+guessing.
+
+Non-source plugins store connection settings and encrypted credentials on their
+installation record. Secret values remain server-side. The shared track context
+menu discovers installed, configured providers at runtime, so adding a provider
+does not require another context-menu or route implementation.
+
+Data-processor plugins expose named jobs as validated
+`plugin:<plugin-id>:<task-id>` tasks. The core supplies cancellation, progress,
+persistence, realtime updates, and the existing task UI; plugin code still
+executes only in the trusted server process.
+
 ## 2026-11-18: Plugin migration follows the artwork-cache schema
 
 The rebased plugin schema migrates from `dev`'s external artwork-cache contract

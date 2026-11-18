@@ -18,8 +18,11 @@ import {
   useAdminSourcesQuery,
   usePluginsQuery,
 } from "../../composables/use-admin-queries";
+import PluginSettingsForm from "../../components/PluginSettingsForm.vue";
+import PluginTaskActions from "../../components/PluginTaskActions.vue";
 import { useCatalogRevision } from "../../composables/use-catalog-query";
 import { useLocalizedMessage } from "../../composables/use-localized-message";
+import { usePluginProviders } from "../../composables/use-plugin-providers";
 import { useServer } from "../../composables/use-server";
 import { useSession } from "../../composables/use-session";
 import { useUser } from "../../composables/use-user";
@@ -38,6 +41,7 @@ const { address } = useServer();
 const { token } = useSession();
 const { user } = useUser();
 const pluginsQuery = usePluginsQuery();
+const providerQuery = usePluginProviders();
 const sourcesQuery = useAdminSourcesQuery();
 const { invalidate: invalidateCatalog, resetOfflineCatalog } =
   useCatalogRevision();
@@ -66,7 +70,11 @@ async function install(plugin: PluginResponse) {
   pageError.value = "";
   try {
     await installPlugin(address.value, token.value, plugin.id);
-    await Promise.all([pluginsQuery.refresh(), sourcesQuery.load(true)]);
+    await Promise.all([
+      pluginsQuery.refresh(),
+      sourcesQuery.load(true),
+      providerQuery.refresh(),
+    ]);
   } catch (reason) {
     if (isAuthenticationRedirectError(reason)) return;
     pageError.value = errorMessage(reason, "settings.plugins.installError");
@@ -100,7 +108,11 @@ async function confirmUninstall() {
   try {
     await uninstallPlugin(address.value, token.value, plugin.id);
     closeUninstall();
-    await Promise.all([pluginsQuery.refresh(), sourcesQuery.load(true)]);
+    await Promise.all([
+      pluginsQuery.refresh(),
+      sourcesQuery.load(true),
+      providerQuery.refresh(),
+    ]);
     await resetOfflineCatalog();
     invalidateCatalog();
   } catch (reason) {
@@ -109,6 +121,10 @@ async function confirmUninstall() {
   } finally {
     uninstalling.value = false;
   }
+}
+
+function pluginSettingsSaved() {
+  void Promise.all([pluginsQuery.refresh(), providerQuery.refresh()]);
 }
 </script>
 
@@ -194,6 +210,8 @@ async function confirmUninstall() {
             {{ t("settings.plugins.uninstall") }}
           </Button>
         </div>
+        <PluginSettingsForm :plugin="plugin" @saved="pluginSettingsSaved" />
+        <PluginTaskActions :plugin="plugin" />
       </article>
     </div>
   </section>

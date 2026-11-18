@@ -31,6 +31,7 @@ import {
 import { registerAdminRoutes } from "./admin-routes.js";
 import { ArtworkService, hasPendingArtworkJobs } from "./artwork-fetch.js";
 import { PluginService } from "./plugins.js";
+import { registerPluginRoutes } from "./plugin-routes.js";
 import { registerTaskRoutes } from "./task-routes.js";
 import { queueArtworkFetch, TaskService } from "./tasks.js";
 import { ensureServerSettings } from "./server-settings.js";
@@ -100,11 +101,19 @@ export async function buildApp(options: BuildAppOptions = {}) {
     ).flatMap((source) =>
       source.credentialCiphertext ? [source.credentialCiphertext] : [],
     );
+    const pluginCredentials = (
+      await database.orm.PluginInstallation.where((plugin) =>
+        plugin.credentialCiphertext.isNotNull(),
+      ).all()
+    ).flatMap((plugin) =>
+      plugin.credentialCiphertext ? [plugin.credentialCiphertext] : [],
+    );
     credentials = await CredentialStore.fromConfig(
       config.credentialEncryptionKey,
       config.databaseUrl,
       {
         metadataProvider: metadataProviderCredentials,
+        plugin: pluginCredentials,
         source: sourceCredentials,
       },
     );
@@ -168,6 +177,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
     (task) => realtime.publishTask(task),
     (level, message) => logBuffer.add(level, message),
   );
+  plugins.registerTaskExecutors(tasks);
   const scanner = new LibraryScanner(
     database,
     metadataEnrichment,
@@ -280,6 +290,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
         plugins,
       );
       await registerCatalogRoutes(protectedApp, catalog, artworkCache);
+      await registerPluginRoutes(protectedApp, database, plugins, catalog);
       await registerTaskRoutes(protectedApp, tasks);
       await registerLikeRoutes(protectedApp, database);
       await registerPlaylistRoutes(protectedApp, database, playbackTokens);

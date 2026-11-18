@@ -1954,10 +1954,24 @@
           },
           "PluginInstallation": {
             "fields": {
+              "configuration": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
               "createdAt": {
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                }
+              },
+              "credentialCiphertext": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
                   "kind": "scalar"
                 }
               },
@@ -2014,8 +2028,14 @@
             "relations": {},
             "storage": {
               "fields": {
+                "configuration": {
+                  "column": "configuration"
+                },
                 "createdAt": {
                   "column": "createdAt"
+                },
+                "credentialCiphertext": {
+                  "column": "credentialCiphertext"
                 },
                 "installSource": {
                   "column": "installSource"
@@ -5242,6 +5262,15 @@
             },
             "PluginInstallation": {
               "columns": {
+                "configuration": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "default": {
+                    "kind": "literal",
+                    "value": "{}"
+                  },
+                  "nullable": false
+                },
                 "createdAt": {
                   "codecId": "sqlite/datetime@1",
                   "dataType": "sqlite/datetime",
@@ -5250,6 +5279,11 @@
                     "kind": "function"
                   },
                   "nullable": false
+                },
+                "credentialCiphertext": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
                 },
                 "installSource": {
                   "codecId": "sqlite/text@1",
@@ -6613,7 +6647,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "da6afdb4d7c8cafd144930cbcb8fc7105bbec726d2b453025fbb96ff59c784b2"
+    "storageHash": "b91674bc063489d8959b6f40b8130847a63d7b56156a8065b9c26bdc2ee14cde"
   },
   "execution": {
     "executionHash": "af5db9c2d052d8692ee1f1a70221c2da0712097bb5b307d7d3a15319aaae43d9",

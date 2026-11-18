@@ -82,8 +82,10 @@ test("/settings redirects to account and /plugins redirects into settings", asyn
 });
 
 test("plugins have install and confirmed uninstall lifecycle controls", async () => {
-  const [page, client, contracts] = await Promise.all([
+  const [page, settings, tasks, client, contracts] = await Promise.all([
     readSource("../app/pages/settings/plugins.vue"),
+    readSource("../app/components/PluginSettingsForm.vue"),
+    readSource("../app/components/PluginTaskActions.vue"),
     readSource("../app/lib/peridot-client.ts"),
     readSource("../../../packages/contracts/src/index.ts"),
   ]);
@@ -94,8 +96,20 @@ test("plugins have install and confirmed uninstall lifecycle controls", async ()
   assert.match(page, /settings\.plugins\.uninstallRemote/);
   assert.match(page, /AlertDialogRoot/);
   assert.match(page, /plugin\.contributions/);
+  assert.match(page, /PluginSettingsForm/);
   assert.match(client, /\/api\/admin\/plugins/);
   assert.match(client, /sources\/discover/);
+  assert.match(client, /updatePluginSettings/);
+  assert.match(settings, /plugin\.settings\.fields/);
+  assert.match(settings, /field\.secret/);
+  assert.match(settings, /credentials/);
+  assert.match(tasks, /data-processor/);
+  assert.match(tasks, /runPluginTask/);
+  assert.match(client, /runPluginTask/);
+  assert.match(
+    contracts,
+    /"recommendation-provider"[\s\S]*"playlist-generator"/,
+  );
   assert.match(contracts, /PluginInstallSource = "bundled" \| "github"/);
 });
 
