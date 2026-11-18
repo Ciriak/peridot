@@ -13,6 +13,7 @@ import ArtistCard from "../components/ArtistCard.vue";
 import AutoLoadMore from "../components/AutoLoadMore.vue";
 import MediaCollectionCard from "../components/MediaCollectionCard.vue";
 import TrackTable from "../components/TrackTable.vue";
+import VirtualCardGrid from "../components/VirtualCardGrid.vue";
 import {
   useCatalogAlbumQuery,
   useCatalogArtistQuery,
@@ -336,24 +337,26 @@ onMounted(() => {
             }}
           </Badge>
         </div>
-        <div
+        <VirtualCardGrid
           v-if="artistResults.length"
-          class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+          :items="artistResults"
+          layout="standard"
+          :item-key="(artist) => artist.id"
+          :estimate-row-height="92"
         >
-          <ArtistCard
-            v-for="artist in artistResults"
-            :key="artist.id"
-            :artist="artist"
-          />
-          <AutoLoadMore
-            class="col-span-full"
-            :enabled="hasMoreArtists"
-            :loading="artistsLoadingMore"
-            :item-count="artistResults.length"
-            :label="t('page.search.loadingMoreArtists')"
-            @load="loadMoreArtists"
-          />
-        </div>
+          <template #default="{ item }">
+            <ArtistCard :artist="item" />
+          </template>
+          <template #footer>
+            <AutoLoadMore
+              :enabled="hasMoreArtists"
+              :loading="artistsLoadingMore"
+              :item-count="artistResults.length"
+              :label="t('page.search.loadingMoreArtists')"
+              @load="loadMoreArtists"
+            />
+          </template>
+        </VirtualCardGrid>
         <p
           v-else
           role="status"
@@ -376,26 +379,26 @@ onMounted(() => {
             {{ t("count.album", { count: albumTotalCount }, albumTotalCount) }}
           </Badge>
         </div>
-        <div
+        <VirtualCardGrid
           v-if="albumResults.length"
-          class="grid grid-cols-3 gap-1.5 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10"
+          :items="albumResults"
+          layout="compact"
+          :item-key="(album) => album.id"
+          :estimate-row-height="150"
         >
-          <AlbumCard
-            v-for="album in albumResults"
-            :key="album.id"
-            :album="album"
-            compact
-            @open="openAlbum(album)"
-          />
-          <AutoLoadMore
-            class="col-span-full"
-            :enabled="hasMoreAlbums"
-            :loading="albumsLoadingMore"
-            :item-count="albumResults.length"
-            :label="t('page.search.loadingMoreAlbums')"
-            @load="loadMoreAlbums"
-          />
-        </div>
+          <template #default="{ item }">
+            <AlbumCard :album="item" compact @open="openAlbum(item)" />
+          </template>
+          <template #footer>
+            <AutoLoadMore
+              :enabled="hasMoreAlbums"
+              :loading="albumsLoadingMore"
+              :item-count="albumResults.length"
+              :label="t('page.search.loadingMoreAlbums')"
+              @load="loadMoreAlbums"
+            />
+          </template>
+        </VirtualCardGrid>
         <p
           v-else
           role="status"
@@ -456,24 +459,26 @@ onMounted(() => {
             }}
           </Badge>
         </div>
-        <div
+        <VirtualCardGrid
           v-if="audiobookResults.length"
-          class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+          :items="audiobookResults"
+          layout="standard"
+          :item-key="(audiobook) => audiobook.id"
+          :estimate-row-height="340"
         >
-          <MediaCollectionCard
-            v-for="audiobook in audiobookResults"
-            :key="audiobook.id"
-            :collection="audiobook"
-          />
-          <AutoLoadMore
-            class="col-span-full"
-            :enabled="hasMoreAudiobooks"
-            :loading="audiobooksLoadingMore"
-            :item-count="audiobookResults.length"
-            :label="t('page.search.loadingMoreAudiobooks')"
-            @load="loadMoreAudiobooks"
-          />
-        </div>
+          <template #default="{ item }">
+            <MediaCollectionCard :collection="item" />
+          </template>
+          <template #footer>
+            <AutoLoadMore
+              :enabled="hasMoreAudiobooks"
+              :loading="audiobooksLoadingMore"
+              :item-count="audiobookResults.length"
+              :label="t('page.search.loadingMoreAudiobooks')"
+              @load="loadMoreAudiobooks"
+            />
+          </template>
+        </VirtualCardGrid>
         <p
           v-else
           role="status"
@@ -502,24 +507,26 @@ onMounted(() => {
             }}
           </Badge>
         </div>
-        <div
+        <VirtualCardGrid
           v-if="podcastResults.length"
-          class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+          :items="podcastResults"
+          layout="standard"
+          :item-key="(podcast) => podcast.id"
+          :estimate-row-height="340"
         >
-          <MediaCollectionCard
-            v-for="podcast in podcastResults"
-            :key="podcast.id"
-            :collection="podcast"
-          />
-          <AutoLoadMore
-            class="col-span-full"
-            :enabled="hasMorePodcasts"
-            :loading="podcastsLoadingMore"
-            :item-count="podcastResults.length"
-            :label="t('page.search.loadingMorePodcasts')"
-            @load="loadMorePodcasts"
-          />
-        </div>
+          <template #default="{ item }">
+            <MediaCollectionCard :collection="item" />
+          </template>
+          <template #footer>
+            <AutoLoadMore
+              :enabled="hasMorePodcasts"
+              :loading="podcastsLoadingMore"
+              :item-count="podcastResults.length"
+              :label="t('page.search.loadingMorePodcasts')"
+              @load="loadMorePodcasts"
+            />
+          </template>
+        </VirtualCardGrid>
         <p
           v-else
           role="status"

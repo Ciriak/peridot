@@ -13,6 +13,7 @@ import {
   nextTick,
   onBeforeUnmount,
   onMounted,
+  provide,
   ref,
   watch,
 } from "vue";
@@ -32,6 +33,7 @@ import { useUser } from "../composables/use-user";
 import { isTauriRuntime } from "../lib/desktop-runtime";
 import { gravatarUrl } from "../lib/gravatar";
 import { icons } from "../lib/icons";
+import { MAIN_SCROLL_ELEMENT_KEY } from "../lib/main-scroll";
 import {
   trackAlbumRoute,
   trackAlbumTitleRoute,
@@ -51,6 +53,7 @@ const searchInput = ref<{ $el?: HTMLInputElement } | null>(null);
 const shortcutModifier = ref<SearchShortcutModifier>("ctrl");
 const mobileNavigation = ref(false);
 const queueOpen = ref(false);
+const mainScrollElement = ref<HTMLElement | null>(null);
 const desktopRuntime = ref(false);
 const loadingRayAtRight = ref(false);
 let loadingRayFrame: number | undefined;
@@ -116,6 +119,7 @@ const navigation = [
   },
 ];
 const currentPath = computed(() => route.path);
+provide(MAIN_SCROLL_ELEMENT_KEY, mainScrollElement);
 const isNavigationActive = (target: string) =>
   target === "/"
     ? currentPath.value === "/"
@@ -399,6 +403,7 @@ onBeforeUnmount(stopLoadingRay);
           </div>
         </header>
         <main
+          ref="mainScrollElement"
           id="main-content"
           tabindex="-1"
           class="min-h-0 flex-1 overflow-y-auto p-4 md:p-6"

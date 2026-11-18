@@ -7,6 +7,7 @@ import { onMounted } from "vue";
 import AutoLoadMore from "../../components/AutoLoadMore.vue";
 import ListSearchBar from "../../components/ListSearchBar.vue";
 import MediaCollectionCard from "../../components/MediaCollectionCard.vue";
+import VirtualCardGrid from "../../components/VirtualCardGrid.vue";
 import { useCatalogPodcastQuery } from "../../composables/use-catalog-query";
 import { useListSearch } from "../../composables/use-list-search";
 import { useLikes } from "../../composables/use-likes";
@@ -80,25 +81,27 @@ onMounted(() => {
         t("common.tryAgain")
       }}</Button>
     </div>
-    <div
+    <VirtualCardGrid
       v-else-if="podcasts.length"
-      class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+      :items="podcasts"
+      layout="standard"
+      :item-key="(podcast) => podcast.id"
+      :estimate-row-height="340"
       :aria-busy="loading"
     >
-      <MediaCollectionCard
-        v-for="podcast in podcasts"
-        :key="podcast.id"
-        :collection="podcast"
-      />
-      <AutoLoadMore
-        class="col-span-full"
-        :enabled="hasMore"
-        :loading="loadingMore"
-        :item-count="podcasts.length"
-        :label="t('page.podcasts.loadingMore')"
-        @load="loadMore"
-      />
-    </div>
+      <template #default="{ item }">
+        <MediaCollectionCard :collection="item" />
+      </template>
+      <template #footer>
+        <AutoLoadMore
+          :enabled="hasMore"
+          :loading="loadingMore"
+          :item-count="podcasts.length"
+          :label="t('page.podcasts.loadingMore')"
+          @load="loadMore"
+        />
+      </template>
+    </VirtualCardGrid>
     <p
       v-else
       role="status"

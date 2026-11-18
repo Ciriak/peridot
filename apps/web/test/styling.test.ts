@@ -33,6 +33,7 @@ test("app layout respects the owner's Tailwind and shadcn styling authority", as
     "../app/components/TrackArtistLinks.vue",
     "../app/components/TrackContextMenu.vue",
     "../app/components/TrackTable.vue",
+    "../app/components/VirtualCardGrid.vue",
     "../app/pages/albums/index.vue",
     "../app/pages/albums/[album].vue",
     "../app/pages/artists/index.vue",
@@ -55,13 +56,37 @@ test("app layout respects the owner's Tailwind and shadcn styling authority", as
     "../../../packages/ui/src/components/ui/scrolling-text/ScrollingText.vue",
     "../../../packages/ui/src/components/ui/spinner/PeridotSpinner.vue",
   ];
-  const source = (
-    await Promise.all(
-      files.map((file) => readFile(new URL(file, import.meta.url), "utf8")),
-    )
-  ).join("\n");
+  const sources = await Promise.all(
+    files.map(async (file) => ({
+      file,
+      source: await readFile(new URL(file, import.meta.url), "utf8"),
+    })),
+  );
+  const source = sources.map((entry) => entry.source).join("\n");
+  const virtualStyleFiles = new Set([
+    "../app/components/TrackTable.vue",
+    "../app/components/VirtualCardGrid.vue",
+  ]);
   assert.doesNotMatch(source, /<style\b/i, "No custom CSS blocks");
-  assert.doesNotMatch(source, /\s:?style\s*=/i, "No inline styles");
+  for (const entry of sources) {
+    if (virtualStyleFiles.has(entry.file)) continue;
+    assert.doesNotMatch(
+      entry.source,
+      /\s:?style\s*=/i,
+      `No inline styles in ${entry.file}`,
+    );
+  }
+  assert.match(
+    sources.find((entry) => entry.file.endsWith("/TrackTable.vue"))!.source,
+    /:style="virtualizer\.virtualRowStyle\(item\)"/,
+    "Track rows bind virtualizer-generated positioning only",
+  );
+  assert.match(
+    sources.find((entry) => entry.file.endsWith("/VirtualCardGrid.vue"))!
+      .source,
+    /:style="virtualizer\.virtualRowStyle\(row\)"/,
+    "Card rows bind virtualizer-generated positioning only",
+  );
   assert.doesNotMatch(
     source,
     /[\w-]+-\[[^\]]+\]/,
@@ -79,7 +104,7 @@ test("app layout respects the owner's Tailwind and shadcn styling authority", as
   );
 });
 
-test("the gradient is the sole custom-styling exception and defaults to primary", async () => {
+test("the gradient remains the sole custom CSS block and defaults to primary", async () => {
   const source = await readFile(
     new URL(
       "../../../packages/ui/src/components/ui/gradient/Gradient.vue",

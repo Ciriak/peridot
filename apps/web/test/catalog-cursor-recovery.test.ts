@@ -87,7 +87,7 @@ test("recovery waits for catalog changes to settle before refetching", async () 
   assert.deepEqual(sleeps, [500, 500]);
 });
 
-test("catalog infinite queries recover stale pages without surfacing an error", async () => {
+test("catalog infinite queries rebuild from the first page after a stale cursor", async () => {
   const catalog = await readFile(
     new URL("../app/composables/use-catalog-query.ts", import.meta.url),
     "utf8",
@@ -97,8 +97,29 @@ test("catalog infinite queries recover stale pages without surfacing an error", 
   assert.match(catalog, /recoverStaleCursor/);
   assert.match(catalog, /isStaleCatalogCursor\(result\.error\)/);
   assert.match(catalog, /recoveringStaleCursor\.value/);
+  assert.match(catalog, /queryClient\.infiniteQuery</);
+  assert.match(
+    catalog,
+    /pages: Math\.max\(1, query\.data\.value\?\.pages\.length/,
+  );
+  assert.doesNotMatch(catalog, /return query\.refetch\(\)/);
   assert.match(
     catalog,
     /retry: \(failureCount, error\) =>\s*!isStaleCatalogCursor\(error\)/,
   );
+});
+
+test("loading more renders a visible spinner at the bottom of paginated lists", async () => {
+  const trigger = await readFile(
+    new URL("../app/components/AutoLoadMore.vue", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(
+    trigger,
+    /import \{ PeridotSpinner \} from "@peridot\/ui\/components\/ui\/spinner"/,
+  );
+  assert.match(trigger, /<PeridotSpinner :label="label"/);
+  assert.match(trigger, /v-if="loading"/);
+  assert.match(trigger, /\{\{ label \}\}/);
 });

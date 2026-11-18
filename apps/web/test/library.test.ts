@@ -174,7 +174,7 @@ test("shared track rows always show linked artists beneath the title", async () 
 
   assert.match(
     table,
-    /<ScrollingText class="w-full text-xs text-muted-foreground">\s*<TrackArtistLinks[\s\S]*?showArtists !== false[\s\S]*?item\.data\.mediaType === 'music'[\s\S]*?:artists="trackArtistNames\(item\.data\)"/,
+    /<ScrollingText class="w-full text-xs text-muted-foreground">\s*<TrackArtistLinks[\s\S]*?showArtists !== false[\s\S]*?item\.track\.mediaType === 'music'[\s\S]*?:artists="trackArtistNames\(item\.track\)"/,
   );
   assert.doesNotMatch(table, />\s*Artist\s*<Icon/);
   assert.equal(table.match(/<TrackArtistLinks/g)?.length, 1);
@@ -194,35 +194,48 @@ test("shared track lists show cover artwork beside every title", async () => {
   );
   assert.match(
     table,
-    /<TrackArtwork[\s\S]*class="[^"]*absolute inset-0 size-full cursor-pointer[^"]*bg-background\/70[^"]*hover:bg-background\/70[^"]*"[\s\S]*@click="playFromList\(item\.data\)"[\s\S]*class="text-foreground"[\s\S]*<\/TrackArtwork>\s*<div class="min-w-0 flex-1">[\s\S]*\{\{ item\.data\.title \}\}/,
+    /<TrackArtwork[\s\S]*class="[^"]*absolute inset-0 size-full cursor-pointer[^"]*bg-background\/70[^"]*hover:bg-background\/70[^"]*"[\s\S]*@click="playFromList\(item\.track\)"[\s\S]*class="text-foreground"[\s\S]*<\/TrackArtwork>\s*<div class="min-w-0 flex-1">[\s\S]*\{\{ item\.track\.title \}\}/,
     "The full-cover track control uses a pointer cursor and matches the Quick pick colors",
   );
 });
 
-test("shared track tables keep the main content as the only scroll owner", async () => {
-  const [table, layout] = await Promise.all(
-    ["../app/components/TrackTable.vue", "../app/layouts/default.vue"].map(
-      (path) => readFile(new URL(path, import.meta.url), "utf8"),
-    ),
+test("shared track tables virtualize against the main content scroll owner", async () => {
+  const [table, layout, virtualizer] = await Promise.all(
+    [
+      "../app/components/TrackTable.vue",
+      "../app/layouts/default.vue",
+      "../app/composables/use-main-scroll-virtualizer.ts",
+    ].map((path) => readFile(new URL(path, import.meta.url), "utf8")),
   );
 
-  assert.match(table, /const TRACK_BATCH_SIZE = 30/);
-  assert.match(table, /v-for="item in visibleRows"/);
+  assert.match(table, /useMainScrollVirtualizer/);
+  assert.match(table, /v-for="item in virtualRows"/);
   assert.match(table, /<AutoLoadMore/);
-  assert.match(table, /:item-count="autoLoadProgress"/);
+  assert.match(table, /:item-count="tracks\.length"/);
   assert.match(table, /@load="loadMoreRows"/);
   assert.doesNotMatch(table, /@click="loadMoreRows"/);
   assert.doesNotMatch(table, /t\("trackTable\.loadMore"\)/);
   assert.match(table, /role="table"/);
   assert.match(table, /:aria-rowcount="tracks\.length \+ 1"/);
   assert.match(table, /:aria-rowindex="item\.index \+ 2"/);
+  assert.match(table, /:style="virtualizer\.virtualRowStyle\(item\)"/);
+  assert.match(table, /:style="\{ overflowAnchor: 'none' \}"/);
   assert.doesNotMatch(table, /useVirtualList|containerProps|wrapperProps/);
   assert.doesNotMatch(table, /overflow-[xy]-(?:auto|scroll)|max-h-|h-96/);
+  assert.match(virtualizer, /MAIN_SCROLL_ELEMENT_KEY/);
+  assert.match(virtualizer, /getScrollElement: \(\) => scrollElement\.value/);
+  assert.match(virtualizer, /scrollMargin\.value/);
+  assert.match(virtualizer, /useAnimationFrameWithResizeObserver: true/);
+  assert.doesNotMatch(virtualizer, /useElementBounding|wrapperBounds/);
+  assert.match(table, /completedScrollTarget/);
+  assert.doesNotMatch(table, /scrollIntoView\(\{ block: "start" \}\)/);
   assert.match(
     layout,
     /id="main-content"[\s\S]*?class="[^"]*overflow-y-auto/,
-    "The main content remains the full-screen track-list scroll owner",
+    "The main content remains the only scroll element",
   );
+  assert.match(layout, /ref="mainScrollElement"/);
+  assert.match(layout, /provide\(MAIN_SCROLL_ELEMENT_KEY, mainScrollElement\)/);
   assert.match(
     layout,
     /<div\s+class="fixed inset-0 flex flex-col overflow-hidden bg-background text-foreground"/,
@@ -264,10 +277,10 @@ test("unavailable track titles and artwork are dimmed with inert controls", asyn
 
   assert.match(
     table,
-    /<ScrollingText\s+:id="trackTitleAnchorId\(item\.data\.id\)"\s+class="min-w-0 scroll-mt-4"\s+:class="\{ 'opacity-60': isUnavailable\(item\.data\) \}"\s+>\{\{ item\.data\.title \}\}<\/ScrollingText/,
+    /<ScrollingText\s+:id="trackTitleAnchorId\(item\.track\.id\)"\s+class="min-w-0 scroll-mt-4"\s+:class="\{ 'opacity-60': isUnavailable\(item\.track\) \}"\s+>\{\{ item\.track\.title \}\}<\/ScrollingText/,
   );
-  assert.match(table, /:class="isUnavailable\(item\.data\) && 'opacity-60'"/);
-  assert.match(table, /:disabled="isUnavailable\(item\.data\)"/);
+  assert.match(table, /:class="isUnavailable\(item\.track\) && 'opacity-60'"/);
+  assert.match(table, /:disabled="isUnavailable\(item\.track\)"/);
   assert.match(
     table,
     /function isUnavailable\(track: TrackResponse\): boolean/,

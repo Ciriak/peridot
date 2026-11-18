@@ -5,11 +5,12 @@ import {
 import type { QueryClient } from "@tanstack/vue-query";
 import { createStore, del, entries, get, set, type UseStore } from "idb-keyval";
 import type { QueryKey } from "@tanstack/vue-query";
-import { isPeridotQueryKey, PERIDOT_QUERY_ROOT } from "./query-keys";
+import { isPeridotQueryKey, PERIDOT_QUERY_ROOT } from "./query-keys.ts";
 
 export const QUERY_CACHE_BUSTER = "peridot-query-v1";
 export const QUERY_CACHE_PREFIX = "peridot-query";
 export const QUERY_DATABASE = "peridot-web-query";
+export const CATALOG_RESTORED_PAGE_LIMIT = 1;
 const QUERY_STORE = "query-cache";
 
 export interface QueryPersisterRuntime {
@@ -21,6 +22,43 @@ let runtime: QueryPersisterRuntime | null = null;
 
 function createQueryStore(): UseStore {
   return createStore(QUERY_DATABASE, QUERY_STORE);
+}
+
+export function boundPersistedCatalogQuery(
+  query: PersistedQuery,
+): PersistedQuery {
+  if (
+    query.queryKey[0] !== PERIDOT_QUERY_ROOT ||
+    query.queryKey[3] !== "catalog"
+  ) {
+    return query;
+  }
+  const data = query.state.data;
+  if (!data || typeof data !== "object") return query;
+  const pages = Reflect.get(data, "pages");
+  const pageParams = Reflect.get(data, "pageParams");
+  if (
+    !Array.isArray(pages) ||
+    !Array.isArray(pageParams) ||
+    pages.length <= CATALOG_RESTORED_PAGE_LIMIT
+  ) {
+    return query;
+  }
+  return {
+    ...query,
+    state: {
+      ...query.state,
+      data: {
+        ...(data as Record<string, unknown>),
+        pages: pages.slice(0, CATALOG_RESTORED_PAGE_LIMIT),
+        pageParams: pageParams.slice(0, CATALOG_RESTORED_PAGE_LIMIT),
+      },
+    },
+  };
+}
+
+export function serializePersistedQuery(query: PersistedQuery): string {
+  return JSON.stringify(boundPersistedCatalogQuery(query));
 }
 
 export function createPeridotQueryPersister() {
@@ -41,6 +79,7 @@ export function createPeridotQueryPersister() {
       },
     },
     buster: QUERY_CACHE_BUSTER,
+    serialize: serializePersistedQuery,
     maxAge: Number.POSITIVE_INFINITY,
     prefix: QUERY_CACHE_PREFIX,
     refetchOnRestore: true,
@@ -52,7 +91,7 @@ export function createPeridotQueryPersister() {
       },
     },
     deserialize(value): PersistedQuery {
-      return JSON.parse(value) as PersistedQuery;
+      return boundPersistedCatalogQuery(JSON.parse(value) as PersistedQuery);
     },
   });
 }

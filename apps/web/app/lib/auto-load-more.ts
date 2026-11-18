@@ -4,6 +4,7 @@ export interface AutoLoadMoreState {
   loading: boolean;
   itemCount: number;
   lastRequestedItemCount: number | null;
+  armed: boolean;
 }
 
 export function shouldAutoLoadMore(state: AutoLoadMoreState): boolean {
@@ -11,6 +12,7 @@ export function shouldAutoLoadMore(state: AutoLoadMoreState): boolean {
     state.isIntersecting &&
     state.enabled &&
     !state.loading &&
+    state.armed &&
     state.lastRequestedItemCount !== state.itemCount
   );
 }

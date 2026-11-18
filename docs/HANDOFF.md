@@ -2,6 +2,61 @@
 
 Last updated: 2026-11-18.
 
+## Catalog paging no longer conflicts with library changes
+
+Track, album, artist, audiobook, and podcast lists now continue from stable
+sort-key plus ID cursors. New or changed catalog rows during a scan no longer
+turn the next page request into a `409`, and rows inserted before the current
+position do not duplicate the next page. Published-time track ordering keeps
+offset paging because of its explicit null ordering, but those offsets no longer
+depend on the catalog revision.
+
+Legacy offset cursors remain readable. When an incompatible cursor still
+reaches the web client, recovery now rebuilds the same number of loaded pages
+from the first page instead of refetching with the invalid cursor. All shared
+auto-load sentinels now show the Peridot spinner and loading label at the bottom
+while the next page or recovery runs. A sentinel must leave the viewport before
+it can request another page, so scroll anchoring no longer loads the complete
+collection automatically.
+
+Persisted catalog infinite queries now restore at most their first page.
+Clearing the active query cache once removed pages accumulated by the earlier
+cascade; the persistence bound prevents those pages from recurring. The separate
+offline catalog snapshot is unaffected.
+
+Catalog card grids use responsive-row virtualization with
+`@tanstack/vue-virtual`, and shared track tables virtualize fixed rows against
+the main content scroll element. The existing responsive layouts and gaps are
+unchanged. Long lists now mount only visible rows and their overscan instead of
+mounting every loaded card or track.
+
+Live mobile inspection reproduced the original page-append jump from about
+5,563px to 14,429px with a 218ms frame. Browser scroll anchoring was retaining
+the loading footer as rows were inserted. Scroll anchoring is now disabled for
+the complete virtual list root. A subsequent 40-frame scroll across a page
+append advanced in even 500px steps with no reversal while 8-12 card rows were
+mounted. The remaining append frame measured 173ms; catalog persistence now
+serializes only its first page instead of every loaded page, avoiding work that
+grows with the loaded collection.
+
+Checks completed:
+
+- Full workspace suite (247 web, 184 server, 17 UI, and 5 desktop tests)
+- Web type check
+- Production web build
+- `pnpm check`
+- `git diff --check`
+
+Known limits: append-frame latency was measured on the live mobile profile but
+not profiled on desktop. Published-time offset pages can still shift when rows
+are inserted before the current offset, although they no longer fail with
+`409`. Changes remain uncommitted on
+`feature/cover-art-worker`; no commit, push, tag, publication, or deployment was
+performed.
+
+Next: profile an append on the desktop layout and on a low-power phone if the
+remaining one-off page-append frame is still perceptible.
+
 ## Track navigation and metadata progress polish
 
 Every music credit now uses the shared artist-link component across the main

@@ -50,7 +50,7 @@ test("home suggests albums and tracks from the catalog", async () => {
 
   const gridClass = /grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-5/;
   assert.match(homePage, gridClass);
-  assert.match(albumPage, gridClass);
+  assert.match(albumPage, /<VirtualCardGrid[\s\S]*layout="wide"/);
 });
 
 test("the standalone library route and navigation item are removed", async () => {

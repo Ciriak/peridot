@@ -13,6 +13,7 @@ import ArtistContextMenu from "../../components/ArtistContextMenu.vue";
 import AutoLoadMore from "../../components/AutoLoadMore.vue";
 import LikeButton from "../../components/LikeButton.vue";
 import TrackTable from "../../components/TrackTable.vue";
+import VirtualCardGrid from "../../components/VirtualCardGrid.vue";
 import {
   useCatalogArtistQuery,
   useCatalogAlbumQuery,
@@ -316,17 +317,25 @@ onMounted(() => {
           {{ t("count.album", { count: albumTotalCount }, albumTotalCount) }}
         </Badge>
       </div>
-      <div class="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-5">
-        <AlbumCard v-for="album in albums" :key="album.id" :album="album" />
-        <AutoLoadMore
-          class="col-span-full"
-          :enabled="hasMoreAlbums"
-          :loading="albumsLoadingMore"
-          :item-count="albums.length"
-          :label="t('page.albums.loadingMore')"
-          @load="loadMoreAlbums"
-        />
-      </div>
+      <VirtualCardGrid
+        :items="albums"
+        layout="wide"
+        :item-key="(album) => album.id"
+        :estimate-row-height="300"
+      >
+        <template #default="{ item }">
+          <AlbumCard :album="item" />
+        </template>
+        <template #footer>
+          <AutoLoadMore
+            :enabled="hasMoreAlbums"
+            :loading="albumsLoadingMore"
+            :item-count="albums.length"
+            :label="t('page.albums.loadingMore')"
+            @load="loadMoreAlbums"
+          />
+        </template>
+      </VirtualCardGrid>
     </section>
 
     <section aria-labelledby="artist-tracks-heading" class="space-y-4">

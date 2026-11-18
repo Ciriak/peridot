@@ -12,6 +12,7 @@ import LikeButton from "./LikeButton.vue";
 import TrackArtwork from "./TrackArtwork.vue";
 import TrackArtistLinks from "./TrackArtistLinks.vue";
 import TrackContextMenu from "./TrackContextMenu.vue";
+import { useMainScrollVirtualizer } from "../composables/use-main-scroll-virtualizer";
 import { useLikes } from "../composables/use-likes";
 import { useLibraryPlayer } from "../composables/use-library-player";
 import { useOfflineTracks } from "../composables/use-offline-tracks";
@@ -78,15 +79,19 @@ const savedTrackIds = computed(
 const activeSort = computed(
   () => props.sort ?? defaultTrackSort(props.variant),
 );
-const TRACK_BATCH_SIZE = 30;
-const rows = computed(() =>
-  props.tracks.map((data, index) => ({ data, index })),
-);
-const visibleCount = ref(TRACK_BATCH_SIZE);
-const visibleRows = computed(() => rows.value.slice(0, visibleCount.value));
-const hasHiddenRows = computed(() => visibleCount.value < rows.value.length);
-const autoLoadProgress = computed(
-  () => rows.value.length + visibleRows.value.length,
+const rowGroup = ref<HTMLElement | null>(null);
+const virtualizer = useMainScrollVirtualizer({
+  count: computed(() => props.tracks.length),
+  estimateSize: 56,
+  overscan: 8,
+  wrapper: rowGroup,
+  getItemKey: (index) => props.tracks[index]?.id ?? index,
+});
+const virtualRows = computed(() =>
+  virtualizer.virtualItems.value.flatMap((row) => {
+    const track = props.tracks[row.index];
+    return track ? [{ ...row, track }] : [];
+  }),
 );
 
 function toggleSort(field: TrackSortField) {
@@ -133,13 +138,6 @@ function isUnavailable(track: TrackResponse): boolean {
 }
 
 function loadMoreRows() {
-  if (hasHiddenRows.value) {
-    visibleCount.value = Math.min(
-      rows.value.length,
-      visibleCount.value + TRACK_BATCH_SIZE,
-    );
-    return;
-  }
   if (props.hasMore && !props.loadingMore) emit("load-more");
 }
 
@@ -185,17 +183,37 @@ function offlineActionLabel(track: TrackResponse): string {
     : t("trackTable.saveOffline", { title: track.title });
 }
 
+const completedScrollTarget = ref<string | null>(null);
+
+async function scrollToTarget(trackId: string) {
+  await nextTick();
+  await virtualizer.refresh();
+  const index = props.tracks.findIndex((track) => track.id === trackId);
+  if (index < 0) return false;
+  virtualizer.scrollToIndex(index, { align: "start" });
+  completedScrollTarget.value = trackId;
+  return true;
+}
+
 watch(
-  [() => props.scrollToTrackId, () => props.tracks],
-  async ([trackId]) => {
-    if (!import.meta.client || !trackId) return;
-    const index = rows.value.findIndex((item) => item.data.id === trackId);
-    if (index < 0) return;
-    visibleCount.value = Math.max(visibleCount.value, index + 1);
-    await nextTick();
-    document
-      .getElementById(trackTitleAnchorId(trackId))
-      ?.scrollIntoView({ block: "start" });
+  () => props.scrollToTrackId,
+  async (trackId) => {
+    completedScrollTarget.value = null;
+    if (import.meta.client && trackId) await scrollToTarget(trackId);
+  },
+  { flush: "post", immediate: true },
+);
+watch(
+  () => props.tracks,
+  async () => {
+    const trackId = props.scrollToTrackId;
+    if (
+      import.meta.client &&
+      trackId &&
+      completedScrollTarget.value !== trackId
+    ) {
+      await scrollToTarget(trackId);
+    }
   },
   { flush: "post" },
 );
@@ -207,6 +225,7 @@ watch(
     :aria-rowcount="tracks.length + 1"
     :aria-label="t('trackTable.label')"
     class="rounded-lg border text-sm"
+    :style="{ overflowAnchor: 'none' }"
   >
     <div role="rowgroup">
       <div
@@ -324,12 +343,20 @@ watch(
       </div>
     </div>
 
-    <div role="rowgroup">
+    <div
+      ref="rowGroup"
+      role="rowgroup"
+      class="relative"
+      :style="{
+        height: `${virtualizer.totalSize.value}px`,
+        overflowAnchor: 'none',
+      }"
+    >
       <TrackContextMenu
-        v-for="item in visibleRows"
-        :key="item.data.id"
-        :track="item.data"
-        @play="playFromList(item.data, true)"
+        v-for="item in virtualRows"
+        :key="String(item.key)"
+        :track="item.track"
+        @play="playFromList(item.track, true)"
       >
         <div
           role="row"
@@ -338,36 +365,37 @@ watch(
           :class="{
             'border-0': item.index === tracks.length - 1,
           }"
-          @dblclick.prevent="playFromList(item.data)"
+          :style="virtualizer.virtualRowStyle(item)"
+          @dblclick.prevent="playFromList(item.track)"
         >
           <div
             v-if="variant !== 'library'"
             role="cell"
             class="flex w-16 shrink-0 justify-end p-3 tabular-nums text-muted-foreground"
           >
-            {{ formatTrackNumber(item.data) }}
+            {{ formatTrackNumber(item.track) }}
           </div>
           <div role="cell" class="flex min-w-0 flex-1 items-center gap-2 p-2">
             <TrackArtwork
-              :track="item.data"
+              :track="item.track"
               :server-address="address ?? ''"
-              :class="isUnavailable(item.data) && 'opacity-60'"
+              :class="isUnavailable(item.track) && 'opacity-60'"
             >
               <Button
                 variant="ghost"
                 size="icon-sm"
                 class="absolute inset-0 size-full cursor-pointer rounded-md bg-background/70 opacity-0 transition-opacity hover:bg-background/70 hover:text-foreground disabled:cursor-not-allowed dark:hover:bg-background/70 group-hover/track-artwork:opacity-100 group-focus-within/track-artwork:opacity-100"
-                :disabled="isUnavailable(item.data)"
+                :disabled="isUnavailable(item.track)"
                 :aria-label="
-                  isPlaying(item.data)
-                    ? t('trackTable.pause', { title: item.data.title })
-                    : t('trackTable.play', { title: item.data.title })
+                  isPlaying(item.track)
+                    ? t('trackTable.pause', { title: item.track.title })
+                    : t('trackTable.play', { title: item.track.title })
                 "
-                @click="playFromList(item.data)"
+                @click="playFromList(item.track)"
                 @dblclick.stop
               >
                 <Icon
-                  :icon="isPlaying(item.data) ? icons.pause : icons.play"
+                  :icon="isPlaying(item.track) ? icons.pause : icons.play"
                   aria-hidden="true"
                   class="text-foreground"
                 />
@@ -376,13 +404,13 @@ watch(
             <div class="min-w-0 flex-1">
               <div class="flex min-w-0 items-center gap-2">
                 <ScrollingText
-                  :id="trackTitleAnchorId(item.data.id)"
+                  :id="trackTitleAnchorId(item.track.id)"
                   class="min-w-0 scroll-mt-4"
-                  :class="{ 'opacity-60': isUnavailable(item.data) }"
-                  >{{ item.data.title }}</ScrollingText
+                  :class="{ 'opacity-60': isUnavailable(item.track) }"
+                  >{{ item.track.title }}</ScrollingText
                 >
                 <Icon
-                  v-if="isActive(item.data)"
+                  v-if="isActive(item.track)"
                   :icon="icons.waveform"
                   aria-hidden="true"
                   class="size-4 shrink-0 text-primary"
@@ -391,20 +419,20 @@ watch(
               <ScrollingText class="w-full text-xs text-muted-foreground">
                 <TrackArtistLinks
                   v-if="
-                    showArtists !== false && item.data.mediaType === 'music'
+                    showArtists !== false && item.track.mediaType === 'music'
                   "
-                  :artists="trackArtistNames(item.data)"
+                  :artists="trackArtistNames(item.track)"
                 />
-                <template v-else>{{ item.data.artist }}</template>
+                <template v-else>{{ item.track.artist }}</template>
                 <span
-                  v-if="item.data.genres.length"
+                  v-if="item.track.genres.length"
                   :aria-label="
                     t('trackTable.genres', {
-                      genres: item.data.genres.join(', '),
+                      genres: item.track.genres.join(', '),
                     })
                   "
                 >
-                  · {{ item.data.genres.join(" · ") }}
+                  · {{ item.track.genres.join(" · ") }}
                 </span>
               </ScrollingText>
             </div>
@@ -415,35 +443,36 @@ watch(
             class="hidden w-56 shrink-0 p-3 text-muted-foreground md:block"
           >
             <ScrollingText
-              v-if="item.data.album?.trim() && item.data.artist.trim()"
+              v-if="item.track.album?.trim() && item.track.artist.trim()"
               class="w-full"
             >
               <NuxtLink
-                :to="trackAlbumRoute(item.data)"
+                :to="trackAlbumRoute(item.track)"
                 class="rounded-sm hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 @dblclick.stop
               >
-                {{ item.data.album?.trim() }}
+                {{ item.track.album?.trim() }}
               </NuxtLink>
             </ScrollingText>
             <ScrollingText v-else class="w-full">
-              {{ item.data.album?.trim() || "—" }}
+              {{ item.track.album?.trim() || "—" }}
             </ScrollingText>
           </div>
           <div
             role="cell"
             class="w-20 shrink-0 p-3 text-right tabular-nums text-muted-foreground"
           >
-            {{ formatTrackDuration(item.data.durationMs) }}
+            {{ formatTrackDuration(item.track.durationMs) }}
           </div>
           <div role="cell" class="w-14 shrink-0 p-2 text-right">
             <DownloadProgressTooltip
               :active="
-                isOfflinePending(item.data.id) && !isSavedOffline(item.data.id)
+                isOfflinePending(item.track.id) &&
+                !isSavedOffline(item.track.id)
               "
-              :label="offlineActionLabel(item.data)"
-              :progress="offlineProgressFor(item.data.id) ?? null"
-              :title="item.data.title"
+              :label="offlineActionLabel(item.track)"
+              :progress="offlineProgressFor(item.track.id) ?? null"
+              :title="item.track.title"
               type="track"
             >
               <Button
@@ -451,36 +480,36 @@ watch(
                 variant="ghost"
                 size="icon-sm"
                 :disabled="
-                  isOfflinePending(item.data.id) ||
-                  (!isSavedOffline(item.data.id) &&
-                    (!canSaveOffline || !item.data.available))
+                  isOfflinePending(item.track.id) ||
+                  (!isSavedOffline(item.track.id) &&
+                    (!canSaveOffline || !item.track.available))
                 "
-                :aria-busy="isOfflinePending(item.data.id)"
-                :aria-label="offlineActionLabel(item.data)"
-                :title="offlineActionLabel(item.data)"
-                :aria-pressed="isSavedOffline(item.data.id)"
-                @click="toggleOffline(item.data)"
+                :aria-busy="isOfflinePending(item.track.id)"
+                :aria-label="offlineActionLabel(item.track)"
+                :title="offlineActionLabel(item.track)"
+                :aria-pressed="isSavedOffline(item.track.id)"
+                @click="toggleOffline(item.track)"
                 @dblclick.stop
               >
                 <ProgressCircle
                   v-if="
-                    isOfflinePending(item.data.id) &&
-                    !isSavedOffline(item.data.id)
+                    isOfflinePending(item.track.id) &&
+                    !isSavedOffline(item.track.id)
                   "
-                  :value="offlineProgressFor(item.data.id) ?? null"
-                  :label="offlineActionLabel(item.data)"
+                  :value="offlineProgressFor(item.track.id) ?? null"
+                  :label="offlineActionLabel(item.track)"
                   size="sm"
                 />
                 <Icon
                   v-else
                   :icon="
-                    isSavedOffline(item.data.id)
+                    isSavedOffline(item.track.id)
                       ? icons.cloudCheck
                       : icons.cloudDownload
                   "
                   aria-hidden="true"
                   :class="
-                    isSavedOffline(item.data.id)
+                    isSavedOffline(item.track.id)
                       ? 'text-primary'
                       : 'text-muted-foreground'
                   "
@@ -489,34 +518,36 @@ watch(
             </DownloadProgressTooltip>
           </div>
           <div
-            v-if="allowTrackLike !== false && item.data.mediaType === 'music'"
+            v-if="allowTrackLike !== false && item.track.mediaType === 'music'"
             role="cell"
             class="w-14 shrink-0 p-2 text-right"
           >
             <LikeButton
               :liked="
                 likesLoaded
-                  ? likedTrackIds.includes(item.data.id)
-                  : item.data.liked
+                  ? likedTrackIds.includes(item.track.id)
+                  : item.track.liked
               "
-              :label="item.data.title"
-              :pending="isLikePending({ kind: 'track', trackId: item.data.id })"
+              :label="item.track.title"
+              :pending="
+                isLikePending({ kind: 'track', trackId: item.track.id })
+              "
               :disabled="!likesLoaded"
-              @toggle="toggleLike({ kind: 'track', trackId: item.data.id })"
+              @toggle="toggleLike({ kind: 'track', trackId: item.track.id })"
               @dblclick.stop
             />
           </div>
         </div>
       </TrackContextMenu>
     </div>
-    <div v-if="hasHiddenRows || hasMore" role="rowgroup">
+    <div v-if="hasMore" role="rowgroup">
       <div role="row" :aria-rowindex="tracks.length + 2">
         <AutoLoadMore
           role="cell"
           class="min-w-full"
-          :enabled="hasHiddenRows || Boolean(hasMore)"
-          :loading="Boolean(loadingMore) && !hasHiddenRows"
-          :item-count="autoLoadProgress"
+          :enabled="Boolean(hasMore)"
+          :loading="Boolean(loadingMore)"
+          :item-count="tracks.length"
           :label="t('trackTable.loadingMore')"
           @load="loadMoreRows"
         />

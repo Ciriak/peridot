@@ -555,7 +555,7 @@ test("offline saves show progress and success toasts without removal toasts", as
 
   assert.match(
     table,
-    /<ProgressCircle[\s\S]*?:value="offlineProgressFor\(item\.data\.id\) \?\? null"/,
+    /<ProgressCircle[\s\S]*?:value="offlineProgressFor\(item\.track\.id\) \?\? null"/,
   );
   assert.match(
     table,
@@ -619,7 +619,7 @@ test("offline progress spinners show song and album download details", async () 
   assert.match(tooltip, /\{\{ title \}\}/);
   assert.match(tooltip, /\{\{ progressLabel \}\}/);
   assert.match(table, /<DownloadProgressTooltip[\s\S]*?type="track"/);
-  assert.match(table, /:title="item\.data\.title"/);
+  assert.match(table, /:title="item\.track\.title"/);
   assert.match(albumButton, /<DownloadProgressTooltip[\s\S]*?type="album"/);
   assert.match(albumButton, /:title="album\.title"/);
   assert.match(albumMenu, /<DownloadProgressTooltip[\s\S]*?type="album"/);
@@ -702,7 +702,7 @@ test("offline playback prefers saved audio and recovers stream failures", async 
   assert.match(table, /saveTrackForOffline|saveOffline/);
   assert.match(
     table,
-    /:title="offlineActionLabel\(item\.data\)"/,
+    /:title="offlineActionLabel\(item\.track\)"/,
     "The offline save control has a native title tooltip",
   );
 });

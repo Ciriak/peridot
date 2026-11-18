@@ -100,7 +100,7 @@ test("track, album, and artist likes share accessible persistent state wiring", 
   assert.match(library, /:tracks="visibleTracks"/);
   assert.match(
     trackTable,
-    /likesLoaded\s*\? likedTrackIds\.includes\(item\.data\.id\)\s*: item\.data\.liked/,
+    /likesLoaded\s*\? likedTrackIds\.includes\(item\.track\.id\)\s*: item\.track\.liked/,
     "The loaded likes cache supersedes stale track response state",
   );
   assert.match(layout, /loadLikes\(\)/);

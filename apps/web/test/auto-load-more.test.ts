@@ -9,6 +9,7 @@ const idleVisiblePage = {
   loading: false,
   itemCount: 60,
   lastRequestedItemCount: null,
+  armed: true,
 };
 
 test("automatic pagination requests the next page at a visible sentinel", () => {
@@ -25,6 +26,7 @@ test("automatic pagination requests the next page at a visible sentinel", () => 
     shouldAutoLoadMore({ ...idleVisiblePage, loading: true }),
     false,
   );
+  assert.equal(shouldAutoLoadMore({ ...idleVisiblePage, armed: false }), false);
 });
 
 test("automatic pagination waits for new items before requesting again", () => {
@@ -40,6 +42,30 @@ test("automatic pagination waits for new items before requesting again", () => {
       ...idleVisiblePage,
       itemCount: 120,
       lastRequestedItemCount: idleVisiblePage.itemCount,
+    }),
+    true,
+  );
+});
+
+test("automatic pagination re-arms only after the sentinel leaves view", () => {
+  const afterRequest = {
+    ...idleVisiblePage,
+    armed: false,
+  };
+  assert.equal(shouldAutoLoadMore(afterRequest), false);
+  assert.equal(
+    shouldAutoLoadMore({
+      ...afterRequest,
+      isIntersecting: false,
+      armed: true,
+    }),
+    false,
+  );
+  assert.equal(
+    shouldAutoLoadMore({
+      ...afterRequest,
+      itemCount: 120,
+      armed: true,
     }),
     true,
   );
@@ -73,5 +99,7 @@ test("paginated app surfaces do not render manual load-more buttons", async () =
   );
   assert.match(trigger, /useIntersectionObserver/);
   assert.match(trigger, /shouldAutoLoadMore/);
+  assert.match(trigger, /armed\.value = false/);
+  assert.match(trigger, /if \(!intersecting\) armed\.value = true/);
   assert.doesNotMatch(trigger, /<Button|<button/);
 });

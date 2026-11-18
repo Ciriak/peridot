@@ -77,6 +77,7 @@ const optimizedDependencies = [
   "@peridot/ui/components/ui/slider",
   "@peridot/ui/components/ui/spinner",
   "@peridot/ui/components/ui/switch",
+  "@tanstack/vue-virtual",
   "@vueuse/core",
   "class-variance-authority",
   "cn",

@@ -62,7 +62,7 @@ test("track rows expose a Reka context menu with playback, favorites, offline st
   assert.match(menu, /candidate\.details/);
   assert.match(menu, /genres: candidate\.genres/);
   assert.match(menu, /context\.metadataGenres/);
-  assert.match(trackTable, /item\.data\.genres\.join\(" · "\)/);
+  assert.match(trackTable, /item\.track\.genres\.join\(" · "\)/);
 
   const offlineActionIndex = menu.indexOf('@select="toggleOffline"');
   const downloadActionIndex = menu.indexOf('@select="download"');
@@ -76,7 +76,7 @@ test("track rows expose a Reka context menu with playback, favorites, offline st
   );
 
   assert.match(trackTable, /<TrackContextMenu/);
-  assert.match(trackTable, /@play="playFromList\(item\.data, true\)"/);
+  assert.match(trackTable, /@play="playFromList\(item\.track, true\)"/);
   assert.match(
     trackTable,
     /playCollection\(\s*props\.tracks\.filter\(\(candidate\) => !isUnavailable\(candidate\)\),\s*track\.id,?\s*\)/,

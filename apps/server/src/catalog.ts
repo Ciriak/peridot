@@ -94,9 +94,12 @@ export class CatalogError extends Error {
   }
 }
 
+type CursorValue = string | number | null;
+type CursorKey = Record<string, CursorValue>;
+
 interface CursorPayload {
-  offset: number;
-  revision: number;
+  key?: CursorKey;
+  offset?: number;
   signature: string;
 }
 
@@ -201,13 +204,15 @@ function uniqueArtistCredits(values: readonly string[]): string[] {
   return artists;
 }
 
-function encodeCursor(
-  offset: number,
-  revision: number,
-  signature: string,
-): string {
+function encodeCursor(key: CursorKey, signature: string): string {
   return Buffer.from(
-    JSON.stringify({ offset, revision, signature } satisfies CursorPayload),
+    JSON.stringify({ key, signature } satisfies CursorPayload),
+  ).toString("base64url");
+}
+
+function encodeOffsetCursor(offset: number, signature: string): string {
+  return Buffer.from(
+    JSON.stringify({ offset, signature } satisfies CursorPayload),
   ).toString("base64url");
 }
 
@@ -216,20 +221,105 @@ function decodeCursor(value: string | undefined): CursorPayload | null {
   try {
     const parsed = JSON.parse(
       Buffer.from(value, "base64url").toString("utf8"),
-    ) as Partial<CursorPayload>;
-    if (
-      !Number.isSafeInteger(parsed.offset) ||
-      parsed.offset! < 0 ||
-      !Number.isSafeInteger(parsed.revision) ||
-      parsed.revision! < 0 ||
-      typeof parsed.signature !== "string"
-    ) {
+    ) as Partial<CursorPayload> & { revision?: unknown };
+    if (typeof parsed.signature !== "string") {
       throw new Error();
     }
-    return parsed as CursorPayload;
+    const cursor: CursorPayload = { signature: parsed.signature };
+    if (parsed.key !== undefined) {
+      if (
+        !parsed.key ||
+        typeof parsed.key !== "object" ||
+        Array.isArray(parsed.key)
+      ) {
+        throw new Error();
+      }
+      for (const fieldValue of Object.values(parsed.key)) {
+        if (
+          fieldValue !== null &&
+          typeof fieldValue !== "string" &&
+          !(typeof fieldValue === "number" && Number.isFinite(fieldValue))
+        ) {
+          throw new Error();
+        }
+      }
+      cursor.key = parsed.key as CursorKey;
+    }
+    if (parsed.offset !== undefined) {
+      if (!Number.isSafeInteger(parsed.offset) || parsed.offset < 0) {
+        throw new Error();
+      }
+      cursor.offset = parsed.offset;
+    }
+    if (!cursor.key && cursor.offset === undefined) throw new Error();
+    return cursor;
   } catch {
     throw new CatalogError("invalid_catalog_query", "Invalid catalog cursor");
   }
+}
+
+function cursorField(key: CursorKey, field: string): string | number | null {
+  if (!(field in key)) {
+    throw new CatalogError("invalid_catalog_query", "Invalid catalog cursor");
+  }
+  return key[field]!;
+}
+
+function cursorString(key: CursorKey, field: string): string {
+  const value = cursorField(key, field);
+  if (typeof value !== "string") {
+    throw new CatalogError("invalid_catalog_query", "Invalid catalog cursor");
+  }
+  return value;
+}
+
+function cursorNullableString(key: CursorKey, field: string): string | null {
+  const value = cursorField(key, field);
+  if (value !== null && typeof value !== "string") {
+    throw new CatalogError("invalid_catalog_query", "Invalid catalog cursor");
+  }
+  return value;
+}
+
+function cursorNullableNumber(key: CursorKey, field: string): number | null {
+  const value = cursorField(key, field);
+  if (value !== null && typeof value !== "number") {
+    throw new CatalogError("invalid_catalog_query", "Invalid catalog cursor");
+  }
+  return value;
+}
+
+function trackCursorKey(
+  sort: CatalogSortField,
+  row: {
+    album: string | null;
+    discNumber: number | null;
+    durationMs: number | null;
+    id: string;
+    normalizedAlbum: string;
+    normalizedArtist: string;
+    normalizedTitle: string;
+    trackNumber: number | null;
+  },
+): CursorKey {
+  if (sort === "track") {
+    return {
+      album: row.album,
+      discNumber: row.discNumber,
+      trackNumber: row.trackNumber,
+      id: row.id,
+    };
+  }
+  if (sort === "duration") {
+    return { durationMs: row.durationMs, id: row.id };
+  }
+  if (sort === "title") {
+    return { normalizedTitle: row.normalizedTitle, id: row.id };
+  }
+  if (sort === "album") {
+    return { normalizedAlbum: row.normalizedAlbum, id: row.id };
+  }
+  return { normalizedArtist: row.normalizedArtist, id: row.id };
 }
 
 function pageSize(
@@ -830,13 +920,10 @@ export class CatalogService {
     const signature = trackSignature(options);
     const revision = await this.revision();
     const cursor = decodeCursor(options.cursor);
-    if (
-      cursor &&
-      (cursor.revision !== revision || cursor.signature !== signature)
-    ) {
+    if (cursor && cursor.signature !== signature) {
       throw new CatalogError(
         "stale_catalog_cursor",
-        "The catalog changed while paging; reload from the first page",
+        "The catalog query changed while paging; reload from the first page",
       );
     }
     const offset = cursor?.offset ?? 0;
@@ -897,10 +984,41 @@ export class CatalogService {
         (track) => track.id[directionValue](),
       ]);
     }
-    const rows = await ordered
-      .offset(offset)
-      .limit(limit + 1)
-      .all();
+    let paged: typeof ordered;
+    if (cursor?.key && sort !== "published") {
+      const key = cursor.key;
+      if (sort === "track") {
+        paged = ordered.cursor({
+          album: cursorNullableString(key, "album"),
+          discNumber: cursorNullableNumber(key, "discNumber"),
+          trackNumber: cursorNullableNumber(key, "trackNumber"),
+          id: cursorString(key, "id"),
+        });
+      } else if (sort === "duration") {
+        paged = ordered.cursor({
+          durationMs: cursorNullableNumber(key, "durationMs"),
+          id: cursorString(key, "id"),
+        });
+      } else if (sort === "title") {
+        paged = ordered.cursor({
+          normalizedTitle: cursorString(key, "normalizedTitle"),
+          id: cursorString(key, "id"),
+        });
+      } else if (sort === "album") {
+        paged = ordered.cursor({
+          normalizedAlbum: cursorString(key, "normalizedAlbum"),
+          id: cursorString(key, "id"),
+        });
+      } else {
+        paged = ordered.cursor({
+          normalizedArtist: cursorString(key, "normalizedArtist"),
+          id: cursorString(key, "id"),
+        });
+      }
+    } else {
+      paged = ordered.offset(offset);
+    }
+    const rows = await paged.limit(limit + 1).all();
     const hasMore = rows.length > limit;
     const pageRows = rows.slice(0, limit);
     const tracks = await this.hydrateTracks(
@@ -910,7 +1028,9 @@ export class CatalogService {
     return {
       items: tracks,
       nextCursor: hasMore
-        ? encodeCursor(offset + limit, revision, signature)
+        ? sort === "published"
+          ? encodeOffsetCursor(offset + limit, signature)
+          : encodeCursor(trackCursorKey(sort, pageRows.at(-1)!), signature)
         : null,
       totalCount,
       catalogRevision: revision,
@@ -965,13 +1085,10 @@ export class CatalogService {
     const signature = cardSignature("album", options);
     const revision = await this.revision();
     const cursor = decodeCursor(options.cursor);
-    if (
-      cursor &&
-      (cursor.revision !== revision || cursor.signature !== signature)
-    ) {
+    if (cursor && cursor.signature !== signature) {
       throw new CatalogError(
         "stale_catalog_cursor",
-        "The catalog changed while paging; reload from the first page",
+        "The catalog query changed while paging; reload from the first page",
       );
     }
     const filterIds = await this.cardFilterIds("album", options);
@@ -1009,24 +1126,53 @@ export class CatalogService {
       count: aggregate.count(),
     }));
     const directionValue = orderDirection(direction);
-    const rows = await query
-      .orderBy([
-        sort === "artist"
-          ? (album) => album.normalizedArtist[directionValue]()
-          : (album) => album.normalizedTitle[directionValue](),
-        (album) => album.id[directionValue](),
-      ])
-      .offset(cursor?.offset ?? 0)
-      .limit(limit + 1)
-      .all();
+    const ordered =
+      sort === "artist"
+        ? query.orderBy([
+            (album) => album.normalizedArtist[directionValue](),
+            (album) => album.id[directionValue](),
+          ])
+        : query.orderBy([
+            (album) => album.normalizedTitle[directionValue](),
+            (album) => album.id[directionValue](),
+          ]);
+    let paged: typeof ordered;
+    if (cursor?.key) {
+      if (sort === "artist") {
+        paged = ordered.cursor({
+          normalizedArtist: cursorString(cursor.key, "normalizedArtist"),
+          id: cursorString(cursor.key, "id"),
+        });
+      } else {
+        paged = ordered.cursor({
+          normalizedTitle: cursorString(cursor.key, "normalizedTitle"),
+          id: cursorString(cursor.key, "id"),
+        });
+      }
+    } else {
+      paged = ordered.offset(cursor?.offset ?? 0);
+    }
+    const rows = await paged.limit(limit + 1).all();
     const hasMore = rows.length > limit;
+    const pageRows = rows.slice(0, limit);
     const likedIds = await this.likedAlbumIds(options.userId);
     return {
-      items: rows
-        .slice(0, limit)
-        .map((album) => this.toAlbumSummary(album, likedIds.has(album.id))),
+      items: pageRows.map((album) =>
+        this.toAlbumSummary(album, likedIds.has(album.id)),
+      ),
       nextCursor: hasMore
-        ? encodeCursor((cursor?.offset ?? 0) + limit, revision, signature)
+        ? encodeCursor(
+            sort === "artist"
+              ? {
+                  normalizedArtist: pageRows.at(-1)!.normalizedArtist,
+                  id: pageRows.at(-1)!.id,
+                }
+              : {
+                  normalizedTitle: pageRows.at(-1)!.normalizedTitle,
+                  id: pageRows.at(-1)!.id,
+                },
+            signature,
+          )
         : null,
       totalCount,
       catalogRevision: revision,
@@ -1063,13 +1209,10 @@ export class CatalogService {
     const signature = cardSignature(mediaType, options);
     const revision = await this.revision();
     const cursor = decodeCursor(options.cursor);
-    if (
-      cursor &&
-      (cursor.revision !== revision || cursor.signature !== signature)
-    ) {
+    if (cursor && cursor.signature !== signature) {
       throw new CatalogError(
         "stale_catalog_cursor",
-        "The catalog changed while paging; reload from the first page",
+        "The catalog query changed while paging; reload from the first page",
       );
     }
     const filterIds = await this.cardFilterIds("album", options);
@@ -1089,19 +1232,37 @@ export class CatalogService {
       count: aggregate.count(),
     }));
     const directionValue = orderDirection(direction);
-    const rows = await query
-      .orderBy([
-        sort === "artist"
-          ? (album) => album.normalizedArtist[directionValue]()
-          : (album) => album.normalizedTitle[directionValue](),
-        (album) => album.id[directionValue](),
-      ])
-      .offset(cursor?.offset ?? 0)
-      .limit(limit + 1)
-      .all();
+    const ordered =
+      sort === "artist"
+        ? query.orderBy([
+            (album) => album.normalizedArtist[directionValue](),
+            (album) => album.id[directionValue](),
+          ])
+        : query.orderBy([
+            (album) => album.normalizedTitle[directionValue](),
+            (album) => album.id[directionValue](),
+          ]);
+    let paged: typeof ordered;
+    if (cursor?.key) {
+      if (sort === "artist") {
+        paged = ordered.cursor({
+          normalizedArtist: cursorString(cursor.key, "normalizedArtist"),
+          id: cursorString(cursor.key, "id"),
+        });
+      } else {
+        paged = ordered.cursor({
+          normalizedTitle: cursorString(cursor.key, "normalizedTitle"),
+          id: cursorString(cursor.key, "id"),
+        });
+      }
+    } else {
+      paged = ordered.offset(cursor?.offset ?? 0);
+    }
+    const rows = await paged.limit(limit + 1).all();
     const hasMore = rows.length > limit;
+    const pageRows = rows.slice(0, limit);
     const likedIds = await this.likedAlbumIds(options.userId);
-    const items = rows.slice(0, limit).map((collection) => {
+    const items = pageRows.map((collection) => {
       const authors = this.collectionCreators(collection.artistCredits, [
         collection.artist,
       ]);
@@ -1135,7 +1296,18 @@ export class CatalogService {
     return {
       items,
       nextCursor: hasMore
-        ? encodeCursor((cursor?.offset ?? 0) + limit, revision, signature)
+        ? encodeCursor(
+            sort === "artist"
+              ? {
+                  normalizedArtist: pageRows.at(-1)!.normalizedArtist,
+                  id: pageRows.at(-1)!.id,
+                }
+              : {
+                  normalizedTitle: pageRows.at(-1)!.normalizedTitle,
+                  id: pageRows.at(-1)!.id,
+                },
+            signature,
+          )
         : null,
       totalCount,
       catalogRevision: revision,
@@ -1217,13 +1389,10 @@ export class CatalogService {
     const signature = cardSignature("artist", options);
     const revision = await this.revision();
     const cursor = decodeCursor(options.cursor);
-    if (
-      cursor &&
-      (cursor.revision !== revision || cursor.signature !== signature)
-    ) {
+    if (cursor && cursor.signature !== signature) {
       throw new CatalogError(
         "stale_catalog_cursor",
-        "The catalog changed while paging; reload from the first page",
+        "The catalog query changed while paging; reload from the first page",
       );
     }
     const filterIds = await this.cardFilterIds("artist", options);
@@ -1244,31 +1413,42 @@ export class CatalogService {
       count: aggregate.count(),
     }));
     const directionValue = orderDirection(direction);
-    const rows = await query
-      .orderBy([
-        (artist) => artist.normalizedDisplayName[directionValue](),
-        (artist) => artist.id[directionValue](),
-      ])
-      .offset(cursor?.offset ?? 0)
-      .limit(limit + 1)
-      .all();
+    const ordered = query.orderBy([
+      (artist) => artist.normalizedDisplayName[directionValue](),
+      (artist) => artist.id[directionValue](),
+    ]);
+    const paged = cursor?.key
+      ? ordered.cursor({
+          normalizedDisplayName: cursorString(
+            cursor.key,
+            "normalizedDisplayName",
+          ),
+          id: cursorString(cursor.key, "id"),
+        })
+      : ordered.offset(cursor?.offset ?? 0);
+    const rows = await paged.limit(limit + 1).all();
     const hasMore = rows.length > limit;
+    const pageRows = rows.slice(0, limit);
     const likedKeys = await this.likedArtistKeys(options.userId);
     const artistMetadata = await this.artistMetadataMap(
-      rows.slice(0, limit).map((artist) => artist.id),
+      pageRows.map((artist) => artist.id),
     );
     return {
-      items: rows
-        .slice(0, limit)
-        .map((artist) =>
-          this.toArtistSummary(
-            artist,
-            likedKeys.has(normalize(artist.name)),
-            artistMetadata.get(artist.id) ?? null,
-          ),
+      items: pageRows.map((artist) =>
+        this.toArtistSummary(
+          artist,
+          likedKeys.has(normalize(artist.name)),
+          artistMetadata.get(artist.id) ?? null,
         ),
+      ),
       nextCursor: hasMore
-        ? encodeCursor((cursor?.offset ?? 0) + limit, revision, signature)
+        ? encodeCursor(
+            {
+              normalizedDisplayName: pageRows.at(-1)!.normalizedDisplayName,
+              id: pageRows.at(-1)!.id,
+            },
+            signature,
+          )
         : null,
       totalCount,
       catalogRevision: revision,

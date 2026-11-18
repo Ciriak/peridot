@@ -7,6 +7,7 @@ import { onMounted } from "vue";
 import AlbumCard from "../../components/AlbumCard.vue";
 import AutoLoadMore from "../../components/AutoLoadMore.vue";
 import ListSearchBar from "../../components/ListSearchBar.vue";
+import VirtualCardGrid from "../../components/VirtualCardGrid.vue";
 import { useCatalogAlbumQuery } from "../../composables/use-catalog-query";
 import { useListSearch } from "../../composables/use-list-search";
 import { useLikes } from "../../composables/use-likes";
@@ -80,21 +81,27 @@ onMounted(() => {
         t("common.tryAgain")
       }}</Button>
     </div>
-    <div
+    <VirtualCardGrid
       v-else-if="albums.length"
-      class="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-5"
+      :items="albums"
+      layout="wide"
+      :item-key="(album) => album.id"
+      :estimate-row-height="300"
       :aria-busy="loading"
     >
-      <AlbumCard v-for="album in albums" :key="album.id" :album="album" />
-      <AutoLoadMore
-        class="col-span-full"
-        :enabled="hasMore"
-        :loading="loadingMore"
-        :item-count="albums.length"
-        :label="t('page.albums.loadingMore')"
-        @load="loadMore"
-      />
-    </div>
+      <template #default="{ item }">
+        <AlbumCard :album="item" />
+      </template>
+      <template #footer>
+        <AutoLoadMore
+          :enabled="hasMore"
+          :loading="loadingMore"
+          :item-count="albums.length"
+          :label="t('page.albums.loadingMore')"
+          @load="loadMore"
+        />
+      </template>
+    </VirtualCardGrid>
     <p
       v-else
       role="status"
