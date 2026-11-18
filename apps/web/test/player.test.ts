@@ -156,6 +156,16 @@ test("the persistent player controls a native audio element", async () => {
     "The player loading state does not pulse the seek control",
   );
   assert.match(
+    layout,
+    /const currentArtworkRoute = computed\(\(\) =>[\s\S]*?track\.mediaType !== "music"[\s\S]*?trackAlbumRoute\(track\)/,
+    "Only an available music album becomes an artwork route",
+  );
+  assert.match(
+    playerFooter,
+    /<NuxtLink\s+v-if="currentArtworkRoute"\s+:to="currentArtworkRoute"\s+:aria-label="\s*t\('player\.openAlbum'/,
+    "The desktop player artwork opens its album",
+  );
+  assert.match(
     playerFooter,
     /class="relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted text-muted-foreground md:size-20"/,
     "The player artwork is larger on compact and medium layouts",

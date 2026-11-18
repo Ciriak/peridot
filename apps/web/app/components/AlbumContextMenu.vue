@@ -24,6 +24,7 @@ import { useServer } from "../composables/use-server";
 import { useServerConnection } from "../composables/use-server-connection";
 import { useSession } from "../composables/use-session";
 import { isPeridotNetworkError } from "../lib/peridot-client";
+import DownloadProgressTooltip from "./DownloadProgressTooltip.vue";
 
 const props = defineProps<{
   album: AlbumSummaryResponse;
@@ -100,29 +101,37 @@ async function playAlbum() {
         <Icon :icon="icons.play" aria-hidden="true" />
         {{ t("context.playAlbum") }}
       </ContextMenuItem>
-      <ContextMenuItem
-        :disabled="!canToggleAlbumOffline"
-        @select="toggleAlbumOffline"
+      <DownloadProgressTooltip
+        :active="albumOfflinePending"
+        :label="t('albumOffline.saving')"
+        :progress="albumOfflineProgress ?? null"
+        :title="album.title"
+        type="album"
       >
-        <ProgressCircle
-          v-if="albumOfflinePending"
-          :value="albumOfflineProgress ?? null"
-          :label="t('albumOffline.saving')"
-          size="sm"
-        />
-        <Icon
-          v-else
-          :icon="albumSavedOffline ? icons.cloudCheck : icons.cloudDownload"
-          aria-hidden="true"
-        />
-        {{
-          albumOfflinePending
-            ? t("albumOffline.saving")
-            : albumSavedOffline
-              ? t("albumOffline.remove")
-              : t("albumOffline.save")
-        }}
-      </ContextMenuItem>
+        <ContextMenuItem
+          :disabled="!canToggleAlbumOffline"
+          @select="toggleAlbumOffline"
+        >
+          <ProgressCircle
+            v-if="albumOfflinePending"
+            :value="albumOfflineProgress ?? null"
+            :label="t('albumOffline.saving')"
+            size="sm"
+          />
+          <Icon
+            v-else
+            :icon="albumSavedOffline ? icons.cloudCheck : icons.cloudDownload"
+            aria-hidden="true"
+          />
+          {{
+            albumOfflinePending
+              ? t("albumOffline.saving")
+              : albumSavedOffline
+                ? t("albumOffline.remove")
+                : t("albumOffline.save")
+          }}
+        </ContextMenuItem>
+      </DownloadProgressTooltip>
       <ContextMenuItem
         :disabled="!likesLoaded || isLikePending(target)"
         @select="toggleLike(target)"

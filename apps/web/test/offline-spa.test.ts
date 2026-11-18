@@ -584,6 +584,51 @@ test("offline saves show progress and success toasts without removal toasts", as
   assert.equal(messages["toast.offlineRemoved"], undefined);
 });
 
+test("offline progress spinners show song and album download details", async () => {
+  const [tooltip, table, albumButton, albumMenu, trackMenu, locale] =
+    await Promise.all([
+      readFile(
+        new URL(
+          "../app/components/DownloadProgressTooltip.vue",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+      readFile(
+        new URL("../app/components/TrackTable.vue", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL("../app/components/AlbumOfflineButton.vue", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL("../app/components/AlbumContextMenu.vue", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL("../app/components/TrackContextMenu.vue", import.meta.url),
+        "utf8",
+      ),
+      readFile(new URL("../i18n/locales/en-US.json", import.meta.url), "utf8"),
+    ]);
+  const messages = JSON.parse(locale) as Record<string, string>;
+
+  assert.match(tooltip, /<TooltipTrigger as-child>/);
+  assert.match(tooltip, /<TooltipContent/);
+  assert.match(tooltip, /\{\{ title \}\}/);
+  assert.match(tooltip, /\{\{ progressLabel \}\}/);
+  assert.match(table, /<DownloadProgressTooltip[\s\S]*?type="track"/);
+  assert.match(table, /:title="item\.data\.title"/);
+  assert.match(albumButton, /<DownloadProgressTooltip[\s\S]*?type="album"/);
+  assert.match(albumButton, /:title="album\.title"/);
+  assert.match(albumMenu, /<DownloadProgressTooltip[\s\S]*?type="album"/);
+  assert.match(trackMenu, /<DownloadProgressTooltip[\s\S]*?type="track"/);
+  assert.equal(messages["downloadProgress.track"], "Song");
+  assert.equal(messages["downloadProgress.album"], "Album");
+  assert.equal(messages["downloadProgress.percent"], "{percent}% downloaded");
+});
+
 test("album offline controls load and save the complete album collection", async () => {
   const [button, action, card, detail, menu] = await Promise.all([
     readFile(

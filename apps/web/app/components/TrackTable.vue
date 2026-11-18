@@ -7,6 +7,7 @@ import { ProgressCircle } from "@peridot/ui/components/ui/progress-circle";
 import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import { computed, nextTick, ref, watch } from "vue";
 import AutoLoadMore from "./AutoLoadMore.vue";
+import DownloadProgressTooltip from "./DownloadProgressTooltip.vue";
 import LikeButton from "./LikeButton.vue";
 import TrackArtwork from "./TrackArtwork.vue";
 import TrackArtistLinks from "./TrackArtistLinks.vue";
@@ -436,46 +437,56 @@ watch(
             {{ formatTrackDuration(item.data.durationMs) }}
           </div>
           <div role="cell" class="w-14 shrink-0 p-2 text-right">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              :disabled="
-                isOfflinePending(item.data.id) ||
-                (!isSavedOffline(item.data.id) &&
-                  (!canSaveOffline || !item.data.available))
+            <DownloadProgressTooltip
+              :active="
+                isOfflinePending(item.data.id) && !isSavedOffline(item.data.id)
               "
-              :aria-busy="isOfflinePending(item.data.id)"
-              :aria-label="offlineActionLabel(item.data)"
-              :title="offlineActionLabel(item.data)"
-              :aria-pressed="isSavedOffline(item.data.id)"
-              @click="toggleOffline(item.data)"
-              @dblclick.stop
+              :label="offlineActionLabel(item.data)"
+              :progress="offlineProgressFor(item.data.id) ?? null"
+              :title="item.data.title"
+              type="track"
             >
-              <ProgressCircle
-                v-if="
-                  isOfflinePending(item.data.id) &&
-                  !isSavedOffline(item.data.id)
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                :disabled="
+                  isOfflinePending(item.data.id) ||
+                  (!isSavedOffline(item.data.id) &&
+                    (!canSaveOffline || !item.data.available))
                 "
-                :value="offlineProgressFor(item.data.id) ?? null"
-                :label="offlineActionLabel(item.data)"
-                size="sm"
-              />
-              <Icon
-                v-else
-                :icon="
-                  isSavedOffline(item.data.id)
-                    ? icons.cloudCheck
-                    : icons.cloudDownload
-                "
-                aria-hidden="true"
-                :class="
-                  isSavedOffline(item.data.id)
-                    ? 'text-primary'
-                    : 'text-muted-foreground'
-                "
-              />
-            </Button>
+                :aria-busy="isOfflinePending(item.data.id)"
+                :aria-label="offlineActionLabel(item.data)"
+                :title="offlineActionLabel(item.data)"
+                :aria-pressed="isSavedOffline(item.data.id)"
+                @click="toggleOffline(item.data)"
+                @dblclick.stop
+              >
+                <ProgressCircle
+                  v-if="
+                    isOfflinePending(item.data.id) &&
+                    !isSavedOffline(item.data.id)
+                  "
+                  :value="offlineProgressFor(item.data.id) ?? null"
+                  :label="offlineActionLabel(item.data)"
+                  size="sm"
+                />
+                <Icon
+                  v-else
+                  :icon="
+                    isSavedOffline(item.data.id)
+                      ? icons.cloudCheck
+                      : icons.cloudDownload
+                  "
+                  aria-hidden="true"
+                  :class="
+                    isSavedOffline(item.data.id)
+                      ? 'text-primary'
+                      : 'text-muted-foreground'
+                  "
+                />
+              </Button>
+            </DownloadProgressTooltip>
           </div>
           <div
             v-if="allowTrackLike !== false && item.data.mediaType === 'music'"

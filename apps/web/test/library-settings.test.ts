@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import type { TrackListResponse, TrackResponse } from "@peridot/contracts";
+import type {
+  AlbumListResponse,
+  AlbumSummaryResponse,
+  TrackListResponse,
+  TrackResponse,
+} from "@peridot/contracts";
 import {
   defaultLibrarySettings,
   librarySettingsStorageKey,
@@ -10,7 +15,12 @@ import {
   savePersistedLibrarySettings,
   type LibrarySettingsStorage,
 } from "../app/lib/library-settings.ts";
-import { loadAllLikedTracks } from "../app/lib/liked-offline.ts";
+import {
+  loadAllLikedAlbums,
+  loadAllLikedTracks,
+  saveLikedAlbumsOffline,
+  saveLikedTracksOffline,
+} from "../app/lib/liked-offline.ts";
 
 const scope = {
   serverAddress: "http://127.0.0.1:17430",
@@ -50,6 +60,27 @@ function page(
   items: TrackResponse[],
   nextCursor: string | null,
 ): TrackListResponse {
+  return { items, nextCursor, totalCount: items.length, catalogRevision: 1 };
+}
+
+function album(id: string): AlbumSummaryResponse {
+  return {
+    id,
+    title: id,
+    artist: "Artist",
+    artists: ["Artist"],
+    coverUrl: null,
+    trackCount: 2,
+    durationMs: null,
+    releaseYear: null,
+    liked: true,
+  };
+}
+
+function albumPage(
+  items: AlbumSummaryResponse[],
+  nextCursor: string | null,
+): AlbumListResponse {
   return { items, nextCursor, totalCount: items.length, catalogRevision: 1 };
 }
 
@@ -108,6 +139,65 @@ test("liked-title synchronization loads every page and removes duplicate tracks"
   );
 });
 
+test("liked-album synchronization loads every page and removes duplicates", async () => {
+  const cursors: Array<string | null> = [];
+  const albums = await loadAllLikedAlbums(async (cursor) => {
+    cursors.push(cursor);
+    if (cursor === null)
+      return albumPage([album("one"), album("two")], "page-2");
+    return albumPage([album("two"), album("three")], null);
+  });
+
+  assert.deepEqual(cursors, [null, "page-2"]);
+  assert.deepEqual(
+    albums.map((item) => item.id),
+    ["one", "two", "three"],
+  );
+});
+
+test("automatic liked-track saving continues after a failed download", async () => {
+  const saved: string[] = [];
+  const result = await saveLikedTracksOffline(
+    [track("saved"), track("failed"), track("next")],
+    {
+      isSaved: (trackId) => trackId === "saved",
+      save: async (item) => {
+        if (item.id === "failed") return false;
+        saved.push(item.id);
+        return true;
+      },
+    },
+  );
+
+  assert.deepEqual(saved, ["next"]);
+  assert.deepEqual(result.failedTrackIds, ["failed"]);
+  assert.deepEqual(result.savedTrackIds, ["next"]);
+  assert.equal(result.stopped, false);
+});
+
+test("automatic liked-album saving continues after one album fails", async () => {
+  const saved: string[] = [];
+  const result = await saveLikedAlbumsOffline(
+    [album("failed-load"), album("saved"), album("failed-save")],
+    {
+      loadTracks: async (item) => {
+        if (item.id === "failed-load") throw new Error("load failed");
+        return [track(`${item.id}-track`)];
+      },
+      save: async (item) => {
+        if (item.id === "failed-save") return false;
+        saved.push(item.id);
+        return true;
+      },
+    },
+  );
+
+  assert.deepEqual(saved, ["saved"]);
+  assert.deepEqual(result.failedAlbumIds, ["failed-load", "failed-save"]);
+  assert.deepEqual(result.savedAlbumIds, ["saved"]);
+  assert.equal(result.stopped, false);
+});
+
 test("the Library setting persists and drives automatic liked-track saving", async () => {
   const [pageSource, syncSource, appSource] = await Promise.all([
     readFile(
@@ -132,8 +222,12 @@ test("the Library setting persists and drives automatic liked-track saving", asy
   assert.match(pageSource, /syncStatus === 'too-large'/);
   assert.match(syncSource, /liked: true/);
   assert.match(syncSource, /loadAllLikedTracks/);
-  assert.match(syncSource, /saveOfflineCollection/);
+  assert.match(syncSource, /loadAllLikedAlbums/);
+  assert.match(syncSource, /listAlbums/);
+  assert.match(syncSource, /loadCollectionTracks/);
+  assert.match(syncSource, /saveAlbum/);
+  assert.match(syncSource, /saveLikedAlbumsOffline/);
   assert.match(syncSource, /likesRevision/);
-  assert.match(syncSource, /await save\(track\)/);
+  assert.match(syncSource, /save,/);
   assert.match(appSource, /<LikedTitlesOfflineSync \/>/);
 });

@@ -78,21 +78,33 @@ test("artists have list and detail routes with artist-scoped content", async () 
 });
 
 test("artist names link from navigation and track lists", async () => {
-  const [layout, albumDetail, libraryScreen, trackTable] = await Promise.all([
-    readFile(new URL("../app/layouts/default.vue", import.meta.url), "utf8"),
-    readFile(
-      new URL("../app/pages/albums/[album].vue", import.meta.url),
-      "utf8",
-    ),
-    readFile(
-      new URL("../app/components/LibraryScreen.vue", import.meta.url),
-      "utf8",
-    ),
-    readFile(
-      new URL("../app/components/TrackTable.vue", import.meta.url),
-      "utf8",
-    ),
-  ]);
+  const [layout, albumDetail, libraryScreen, trackTable, playlist, addDialog] =
+    await Promise.all([
+      readFile(new URL("../app/layouts/default.vue", import.meta.url), "utf8"),
+      readFile(
+        new URL("../app/pages/albums/[album].vue", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL("../app/components/LibraryScreen.vue", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL("../app/components/TrackTable.vue", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL("../app/components/PlaylistTrackList.vue", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL(
+          "../app/components/AddTracksToPlaylistDialog.vue",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    ]);
 
   assert.match(
     layout,
@@ -111,4 +123,12 @@ test("artist names link from navigation and track lists", async () => {
   );
   assert.match(libraryScreen, /variant="library"/);
   assert.match(trackTable, /@dblclick\.stop/);
+  assert.match(
+    playlist,
+    /<TrackArtistLinks[\s\S]*:artists="trackArtistNames\(entry\.track\)"/,
+  );
+  assert.match(
+    addDialog,
+    /<TrackArtistLinks :artists="trackArtistNames\(track\)" \/>/,
+  );
 });

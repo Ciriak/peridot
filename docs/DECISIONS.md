@@ -1,5 +1,31 @@
 # Decisions
 
+## 2026-11-18: Metadata provider progress represents shared task work
+
+Settings → Metadata associates provider progress indicators with the running
+`metadata_fetch` task rather than the provider named in the latest
+`metadata.activeProvider` detail. Every enabled provider row shows the same task
+progress while the refresh runs.
+
+Provider identity still changes as albums and artists fall back between enabled
+providers, but that implementation detail caused one progress ring to jump
+between rows. The metadata refresh is one task across all enabled providers, so
+the stable task-level state is also the appropriate user-facing progress unit.
+
+## 2026-11-18: Track navigation uses shared artist and album routes
+
+Every music credit in track-oriented UI uses `TrackArtistLinks` with
+`trackArtistNames`, including playlist rows, the compact mobile player, and the
+playlist track picker. The compact player separates its artwork and title dialog
+triggers from the artist line so artist links are not nested inside a button.
+This keeps multi-artist normalization and independent artist routes consistent
+instead of rendering joined or untrimmed credit strings on some surfaces.
+
+The desktop fixed-player artwork links a music track to its album detail route
+when the track has an album and artist. The title keeps its anchored album link
+or artist fallback. Audiobook and podcast artwork remains non-navigational
+because the requested destination is the music album represented by the cover.
+
 ## 2026-11-18: Artwork uses a bounded external WebP cache
 
 Album covers and artist portraits are normalized through one background artwork
@@ -902,6 +928,21 @@ offline copies untouched. The manifest does not record whether a copy came from
 an automatic liked-title sync or an explicit track, album, or playlist action,
 so removing copies here could silently undo a manual offline choice. The user
 can continue to remove individual copies through the existing offline controls.
+
+## 2026-11-18: Liked album downloads join automatic offline synchronization
+
+The liked-title preference now synchronizes both liked tracks and liked albums.
+Album likes use the existing album collection loader and per-track offline
+manifest, so duplicate tracks remain deduplicated and manually saved copies keep
+their current ownership. This supersedes the earlier track-only synchronization
+scope because an album like is a distinct server record that does not imply a
+track like.
+
+One failed liked track or album is recorded for that pass without preventing
+later items from being attempted. The next connection, preference, or likes
+change retries the complete set. Active song and album download spinners expose
+the title, media type, and determinate percentage or starting state through the
+shared Reka tooltip styling. The tooltip does not add local component CSS.
 
 ## 2026-11-13: Administrators restart the server through the running app
 

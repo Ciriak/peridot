@@ -60,6 +60,7 @@ import {
   notifyOfflineTrackSaved,
 } from "../lib/toasts";
 import AddTrackToPlaylistDialog from "./AddTrackToPlaylistDialog.vue";
+import DownloadProgressTooltip from "./DownloadProgressTooltip.vue";
 
 const props = defineProps<{ track: TrackResponse }>();
 const emit = defineEmits<{ play: [] }>();
@@ -311,29 +312,37 @@ async function revertMetadata() {
             : t("context.like")
         }}
       </ContextMenuItem>
-      <ContextMenuItem
-        :disabled="
-          isOfflinePending(track.id) ||
-          (!isSavedOffline(track.id) && (!canSaveOffline || !track.available))
-        "
-        :aria-busy="isOfflinePending(track.id)"
-        @select="toggleOffline"
+      <DownloadProgressTooltip
+        :active="isOfflinePending(track.id) && !isSavedOffline(track.id)"
+        :label="offlineActionLabel()"
+        :progress="offlineProgressFor(track.id) ?? null"
+        :title="track.title"
+        type="track"
       >
-        <ProgressCircle
-          v-if="isOfflinePending(track.id) && !isSavedOffline(track.id)"
-          :value="offlineProgressFor(track.id) ?? null"
-          :label="offlineActionLabel()"
-          size="sm"
-        />
-        <Icon
-          v-else
-          :icon="
-            isSavedOffline(track.id) ? icons.cloudCheck : icons.cloudDownload
+        <ContextMenuItem
+          :disabled="
+            isOfflinePending(track.id) ||
+            (!isSavedOffline(track.id) && (!canSaveOffline || !track.available))
           "
-          aria-hidden="true"
-        />
-        {{ offlineActionLabel() }}
-      </ContextMenuItem>
+          :aria-busy="isOfflinePending(track.id)"
+          @select="toggleOffline"
+        >
+          <ProgressCircle
+            v-if="isOfflinePending(track.id) && !isSavedOffline(track.id)"
+            :value="offlineProgressFor(track.id) ?? null"
+            :label="offlineActionLabel()"
+            size="sm"
+          />
+          <Icon
+            v-else
+            :icon="
+              isSavedOffline(track.id) ? icons.cloudCheck : icons.cloudDownload
+            "
+            aria-hidden="true"
+          />
+          {{ offlineActionLabel() }}
+        </ContextMenuItem>
+      </DownloadProgressTooltip>
       <ContextMenuItem
         :disabled="downloading || serverLost || !track.available"
         @select="download"

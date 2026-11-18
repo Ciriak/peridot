@@ -377,9 +377,11 @@ test("metadata providers have a dedicated sortable management page", async () =>
     page,
     /import \{ ProgressCircle \} from "@peridot\/ui\/components\/ui\/progress-circle"/,
   );
+  assert.match(page, /runningMetadataTask\(tasks\.value\)/);
   assert.match(
     page,
-    /activeTaskForMetadataProvider\(tasks\.value, provider\.id\)/,
+    /return provider\?\.enabled \? metadataTask\.value : null/,
+    "Every enabled provider shares the stable running metadata task",
   );
   assert.match(
     page,

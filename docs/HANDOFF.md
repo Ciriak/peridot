@@ -2,6 +2,74 @@
 
 Last updated: 2026-11-18.
 
+## Track navigation and metadata progress polish
+
+Every music credit now uses the shared artist-link component across the main
+track table, playlist rows, Quick picks, queue and player metadata, and the
+playlist track picker. Playlist and picker credits respect the same artist
+normalization as the other catalog surfaces.
+
+The desktop fixed-player artwork now opens the current music track's album.
+Tracks without album or artist metadata keep non-navigational artwork, and the
+title retains its existing anchored album or artist fallback route.
+
+Liked songs now sets `Liked songs — Peridot` as its browser title and uses the
+shared navigation label for the visible heading, matching the other top-level
+library pages.
+
+Settings → Metadata now ties provider progress rings to the running shared
+metadata task. Every enabled provider row displays the same task progress,
+instead of following the briefly changing active-provider detail as matching
+falls back between providers. This removes the rapid spinner movement between
+rows without changing metadata execution or task progress persistence.
+
+Checks completed:
+
+- Focused navigation, playback, task-progress, and settings tests
+- Full web suite (245 passing)
+- Web type check
+- Targeted ESLint and Prettier checks
+- Production web build (144 PWA precache entries)
+- `git diff --check`
+
+Known limits: live browser visual confirmation was not run. All changes remain
+uncommitted alongside the existing offline-library work; no commit, push, tag,
+publication, or deployment was performed.
+
+Next: click artist credits from each track surface, open an album from the
+desktop player artwork, then run a refresh with multiple enabled providers and
+confirm every provider row keeps one stable progress ring.
+
+## Liked albums sync offline and download progress has details
+
+`Make my liked titles available offline` now covers both liked songs and liked
+albums. Each connected synchronization backfills both catalogs, saves every
+available album track through the existing per-track manifest, and retries after
+later connection, preference, or likes changes. A failed track or album no
+longer prevents later liked items from being attempted in the same pass.
+
+Active song and album progress spinners now open a theme-consistent tooltip on
+hover or focus. It shows the title, whether the item is a song or album, and the
+current percentage, or `Starting download…` when the server has not provided a
+content length.
+
+Checks completed:
+
+- Focused library setting and offline tests (27 passing)
+- Full web suite (243 passing)
+- Web type check
+- Targeted ESLint and Prettier checks
+- Production web build (144 PWA precache entries)
+- `git diff --check`
+
+Known limits: live browser visual QA did not run because Computer Use could not
+verify the active Brave URL. All changes are uncommitted; no commit, push, tag,
+publication, or deployment was performed.
+
+Next: enable the setting, like an album, confirm its available tracks receive
+offline copies, then hover and keyboard-focus the song and album progress
+spinners to verify the detail tooltip.
+
 ## Artwork uses a bounded external WebP cache
 
 Album covers and artist portraits now pass through one background artwork worker

@@ -148,56 +148,75 @@ function openQueue() {
         @update:model-value="seek($event?.[0] ?? 0)"
       />
       <div class="flex min-h-0 flex-1">
-        <DialogTrigger as-child>
-          <Button
-            variant="ghost"
-            class="h-full w-0 min-w-0 max-w-full shrink flex-1 justify-start gap-3 overflow-hidden px-3 text-left transition-none hover:bg-transparent hover:text-current active:bg-transparent active:text-current dark:hover:bg-transparent dark:active:bg-transparent"
-            :aria-label="t('player.openFullscreen')"
-            aria-haspopup="dialog"
-          >
-            <span
-              aria-hidden="true"
-              class="relative flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted text-muted-foreground"
-              :class="active && !currentTrackPlayable && 'opacity-60'"
+        <div
+          class="flex h-full w-0 min-w-0 max-w-full flex-1 items-center gap-3 overflow-hidden px-3"
+        >
+          <DialogTrigger as-child>
+            <Button
+              variant="ghost"
+              size="icon-lg"
+              class="relative size-14 shrink-0 overflow-hidden rounded-md p-0 transition-none hover:bg-transparent hover:text-current active:bg-transparent active:text-current dark:hover:bg-transparent dark:active:bg-transparent"
+              :aria-label="t('player.openFullscreen')"
+              aria-haspopup="dialog"
             >
-              <Icon :icon="placeholderIcon" aria-hidden="true" class="size-7" />
-              <FadeInImage
-                v-if="currentCoverImageUrl && !coverFailed"
-                :key="currentCoverImageUrl"
-                :src="currentCoverImageUrl"
-                loading="eager"
-                class="absolute inset-0"
-                @error="coverFailed = true"
+              <span
+                aria-hidden="true"
+                class="relative flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted text-muted-foreground"
+                :class="active && !currentTrackPlayable && 'opacity-60'"
+              >
+                <Icon
+                  :icon="placeholderIcon"
+                  aria-hidden="true"
+                  class="size-7"
+                />
+                <FadeInImage
+                  v-if="currentCoverImageUrl && !coverFailed"
+                  :key="currentCoverImageUrl"
+                  :src="currentCoverImageUrl"
+                  loading="eager"
+                  class="absolute inset-0"
+                  @error="coverFailed = true"
+                />
+              </span>
+            </Button>
+          </DialogTrigger>
+          <span class="w-0 min-w-0 max-w-full flex-1 overflow-hidden">
+            <DialogTrigger as-child>
+              <Button
+                variant="ghost"
+                class="h-auto w-full justify-start p-0 text-left transition-none hover:bg-transparent hover:text-current active:bg-transparent active:text-current dark:hover:bg-transparent dark:active:bg-transparent"
+                :aria-label="t('player.openFullscreen')"
+                aria-haspopup="dialog"
+              >
+                <ScrollingText
+                  v-if="active"
+                  :key="`${active.id}:${active.title}`"
+                  mode="always"
+                  class="w-full max-w-full text-sm font-medium"
+                >
+                  {{ active.title }}
+                </ScrollingText>
+                <span v-else class="block truncate text-sm font-medium">
+                  {{ t("player.noTrack") }}
+                </span>
+              </Button>
+            </DialogTrigger>
+            <ScrollingText
+              v-if="active"
+              mode="always"
+              class="w-full max-w-full text-xs text-muted-foreground"
+            >
+              <TrackArtistLinks
+                v-if="active.mediaType === 'music'"
+                :artists="trackArtistNames(active)"
               />
+              <template v-else>{{ active.artist }}</template>
+            </ScrollingText>
+            <span v-else class="block truncate text-xs text-muted-foreground">
+              {{ t("player.scanLibrary") }}
             </span>
-            <span class="w-0 min-w-0 max-w-full flex-1 overflow-hidden">
-              <ScrollingText
-                v-if="active"
-                :key="`${active.id}:${active.title}`"
-                mode="always"
-                class="w-full max-w-full text-sm font-medium"
-              >
-                {{ active.title }}
-              </ScrollingText>
-              <span v-else class="block truncate text-sm font-medium">
-                {{ t("player.noTrack") }}
-              </span>
-              <ScrollingText
-                v-if="active"
-                mode="always"
-                class="w-full max-w-full text-xs text-muted-foreground"
-              >
-                <template v-if="active.mediaType === 'music'">
-                  {{ trackArtistNames(active).join(", ") }}
-                </template>
-                <template v-else>{{ active.artist }}</template>
-              </ScrollingText>
-              <span v-else class="block truncate text-xs text-muted-foreground">
-                {{ t("player.scanLibrary") }}
-              </span>
-            </span>
-          </Button>
-        </DialogTrigger>
+          </span>
+        </div>
 
         <div class="flex shrink-0 items-center gap-2 pr-3">
           <Button

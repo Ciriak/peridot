@@ -7,6 +7,7 @@ import { ProgressCircle } from "@peridot/ui/components/ui/progress-circle";
 import { computed } from "vue";
 import { useOfflineAlbum } from "../composables/use-offline-album";
 import { icons } from "../lib/icons";
+import DownloadProgressTooltip from "./DownloadProgressTooltip.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -46,34 +47,42 @@ const actionLabel = computed(() => {
 </script>
 
 <template>
-  <Button
-    type="button"
-    :variant="overlay ? 'secondary' : 'ghost'"
-    :size="compact ? 'icon-sm' : 'icon-lg'"
-    class="hover:text-primary active:text-primary"
-    :disabled="!canToggle"
-    :aria-busy="pending"
-    :aria-label="actionLabel"
-    :title="actionLabel"
-    :aria-pressed="allSaved"
-    @click.stop="toggle"
-    @dblclick.stop
+  <DownloadProgressTooltip
+    :active="pending"
+    :label="actionLabel"
+    :progress="progress ?? null"
+    :title="album.title"
+    type="album"
   >
-    <ProgressCircle
-      v-if="pending"
-      :value="progress ?? null"
-      :label="actionLabel"
-      :size="compact ? 'sm' : 'md'"
-    />
-    <Icon
-      v-else
-      :icon="allSaved ? icons.cloudCheck : icons.cloudDownload"
-      aria-hidden="true"
-      class="transition-colors"
-      :class="[
-        compact ? 'size-4' : 'size-6',
-        allSaved ? 'text-primary' : 'text-muted-foreground',
-      ]"
-    />
-  </Button>
+    <Button
+      type="button"
+      :variant="overlay ? 'secondary' : 'ghost'"
+      :size="compact ? 'icon-sm' : 'icon-lg'"
+      class="hover:text-primary active:text-primary"
+      :disabled="!canToggle"
+      :aria-busy="pending"
+      :aria-label="actionLabel"
+      :title="actionLabel"
+      :aria-pressed="allSaved"
+      @click.stop="toggle"
+      @dblclick.stop
+    >
+      <ProgressCircle
+        v-if="pending"
+        :value="progress ?? null"
+        :label="actionLabel"
+        :size="compact ? 'sm' : 'md'"
+      />
+      <Icon
+        v-else
+        :icon="allSaved ? icons.cloudCheck : icons.cloudDownload"
+        aria-hidden="true"
+        class="transition-colors"
+        :class="[
+          compact ? 'size-4' : 'size-6',
+          allSaved ? 'text-primary' : 'text-muted-foreground',
+        ]"
+      />
+    </Button>
+  </DownloadProgressTooltip>
 </template>

@@ -11,6 +11,7 @@ import {
   activeTaskPercent,
   orderedActiveTasks,
   overallTaskProgress,
+  runningMetadataTask,
   sourceTaskProgress,
   taskProgressMessage,
   taskStatusMessage,
@@ -154,6 +155,25 @@ test("metadata progress is attached only to the provider being fetched", () => {
     "metadata-running",
   );
   assert.equal(activeTaskForMetadataProvider(tasks, "provider-b"), null);
+});
+
+test("running metadata work is represented by one shared task", () => {
+  const tasks = [
+    task({
+      id: "metadata-queued",
+      kind: "metadata_fetch",
+      status: "queued",
+    }),
+    task({
+      id: "metadata-running",
+      kind: "metadata_fetch",
+      status: "running",
+    }),
+  ];
+
+  assert.equal(runningMetadataTask(tasks)?.id, "metadata-running");
+  assert.equal(runningMetadataTask([tasks[0]!]), null);
+  assert.equal(runningMetadataTask([]), null);
 });
 
 test("overall progress averages the running percentage with queued tasks at zero", () => {

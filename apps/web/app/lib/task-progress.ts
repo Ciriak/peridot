@@ -69,6 +69,16 @@ export function activeTaskForMetadataProvider(
   );
 }
 
+export function runningMetadataTask(
+  tasks: readonly TaskResponse[],
+): TaskResponse | null {
+  return (
+    orderedActiveTasks(tasks).find(
+      (task) => task.kind === "metadata_fetch" && task.status === "running",
+    ) ?? null
+  );
+}
+
 export function activeTaskPercent(task: TaskResponse): number | null {
   if (task.status === "queued") return 0;
   if (task.status !== "running") return null;

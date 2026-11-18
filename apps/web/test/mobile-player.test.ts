@@ -22,36 +22,46 @@ test("the compact mobile player anchors metadata and actions separately", async 
   );
   assert.doesNotMatch(layout, /mobilePlayerOpen/);
 
-  const triggerStart = player.indexOf("<DialogTrigger as-child>");
-  const triggerEnd = player.indexOf("</DialogTrigger>");
-  assert.ok(triggerStart >= 0 && triggerEnd > triggerStart);
   const compactStart = player.indexOf("<div data-mobile-player");
-  const compactProgress = player.slice(compactStart, triggerStart);
+  const metadataStart = player.indexOf(
+    '<div class="flex min-h-0 flex-1">',
+    compactStart,
+  );
+  assert.ok(metadataStart > compactStart);
+  const compactProgress = player.slice(compactStart, metadataStart);
   assert.match(
     compactProgress,
     /<Slider[\s\S]*:model-value="\[elapsed\]"[\s\S]*:disabled="!currentTrackPlayable \|\| durationSeconds <= 0"[\s\S]*:aria-busy="loading"[\s\S]*class="absolute inset-x-0 top-0 z-10 h-5 items-start"[\s\S]*track-class="rounded-none"[\s\S]*hide-thumb[\s\S]*@update:model-value="seek\(\$event\?\.\[0\] \?\? 0\)"/,
     "the compact player places an edge-to-edge interactive progress line at its top",
   );
   assert.doesNotMatch(compactProgress, /\bpx-\d|\bpy-\d/);
-  const trigger = player.slice(triggerStart, triggerEnd);
-  assert.match(trigger, /t\('player\.openFullscreen'\)/);
+  const actionsStart = player.indexOf(
+    'class="flex shrink-0 items-center gap-2 pr-3"',
+    metadataStart,
+  );
+  assert.ok(actionsStart > metadataStart);
+  const metadata = player.slice(metadataStart, actionsStart);
+  assert.equal(
+    metadata.match(/t\('player\.openFullscreen'\)/g)?.length,
+    2,
+    "the artwork and title open the fullscreen player",
+  );
   assert.match(
-    trigger,
-    /class="h-full w-0 min-w-0 max-w-full shrink flex-1 justify-start gap-3 overflow-hidden px-3 text-left transition-none hover:bg-transparent hover:text-current active:bg-transparent active:text-current dark:hover:bg-transparent dark:active:bg-transparent"/,
+    metadata,
+    /class="flex h-full w-0 min-w-0 max-w-full flex-1 items-center gap-3 overflow-hidden px-3"/,
     "the compact metadata trigger shrinks before the fixed action group",
   );
   assert.match(
-    trigger,
+    metadata,
     /<span class="w-0 min-w-0 max-w-full flex-1 overflow-hidden">/,
-    "the compact metadata text is clipped within the trigger",
+    "the compact metadata text is clipped before the actions",
   );
-  assert.match(trigger, /class="relative flex size-14 shrink-0/);
-  assert.match(trigger, /active\.title/);
-  assert.match(trigger, /trackArtistNames\(active\)\.join/);
-  assert.doesNotMatch(trigger, /NuxtLink|TrackArtistLinks|TrackContextMenu/);
-
-  const actionsStart = player.indexOf(
-    'class="flex shrink-0 items-center gap-2 pr-3"',
+  assert.match(metadata, /class="relative size-14 shrink-0/);
+  assert.match(metadata, /active\.title/);
+  assert.match(
+    metadata,
+    /<\/Button>\s*<\/DialogTrigger>\s*<ScrollingText[\s\S]*?<TrackArtistLinks[\s\S]*?:artists="trackArtistNames\(active\)"/,
+    "artist credits sit outside the fullscreen trigger and open artist pages",
   );
   const actionsEnd = player.indexOf("</div>", actionsStart);
   assert.ok(actionsStart >= 0 && actionsEnd > actionsStart);

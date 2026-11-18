@@ -59,8 +59,8 @@ import {
   updateMetadataProvider,
 } from "../../lib/peridot-client";
 import {
-  activeTaskForMetadataProvider,
   activeTaskPercent,
+  runningMetadataTask,
   taskProgressMessage,
   taskStatusMessage,
 } from "../../lib/task-progress";
@@ -81,6 +81,7 @@ const allowed = computed(() => user.value?.role === "admin");
 const serverLost = computed(() => serverStatus.value === "lost");
 const { hasActiveTasks, queueMetadataRefresh, tasks } = useTasks();
 const { invalidate: invalidateCatalog } = useCatalogRevision();
+const metadataTask = computed(() => runningMetadataTask(tasks.value));
 
 const providersQuery = useMetadataProvidersQuery();
 const providers = ref<MetadataProviderResponse[]>([]);
@@ -291,9 +292,7 @@ function providerNeedsConfiguration(provider: MetadataProviderResponse) {
 }
 
 function providerTask(provider: MetadataProviderResponse | null) {
-  return provider
-    ? activeTaskForMetadataProvider(tasks.value, provider.id)
-    : null;
+  return provider?.enabled ? metadataTask.value : null;
 }
 
 function providerProgress(provider: MetadataProviderResponse | null) {

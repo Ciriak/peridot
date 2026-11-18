@@ -55,8 +55,10 @@ cards, an all-tracks list, and artist playback actions. Artist names in the
 shared track list appear beneath each title and link to their derived artist
 pages, while visible album names link to their album details in every track-table
 variant. Artist credits in the fixed player and queue also link to their derived
-artist pages. Matched artist profiles can replace the local file-tag name with a
-provider canonical name and fill the card and detail portrait from Discogs.
+artist pages. Playlist tracks, Quick picks, the compact mobile player, and the
+playlist track picker use the same normalized artist links. Matched artist
+profiles can replace the local file-tag name with a provider canonical name and
+fill the card and detail portrait from Discogs.
 Portraits are downloaded into the local database and served through short-lived
 artist-scoped image URLs; MusicBrainz-only installations retain the semantic
 artist placeholder. Manual artist matching accepts the same signed-in user
@@ -65,10 +67,11 @@ the stable route and favorite identity. The fixed
 player streams available tracks from the authenticated server through a
 short-lived, track-scoped playback URL, with play/pause, seeking, volume,
 previous/next, persistent randomized playback, automatic advancement, and
-retryable loading and error states. Audio playback is owned by the application
-root, so entering fullscreen settings keeps the current track playing while its
-controls are hidden. Original files are served with HTTP range support and are
-not transcoded. One durable queue is
+retryable loading and error states. The desktop player artwork opens the current
+music track's album. Audio playback is owned by the application root, so entering
+fullscreen settings keeps the current track playing while its controls are
+hidden. Original files are served with HTTP range support and are not
+transcoded. One durable queue is
 stored per signed-in user on the server, while a browser-local snapshot scoped
 to that server and user records the complete queue, active track, and elapsed
 playback position. Reloading restores the same queue and track at its saved
@@ -199,8 +202,12 @@ only tracks that were saved.
 Settings → Library includes an enabled-by-default `Make my liked titles
 available offline` preference. It is stored separately for each server and
 user. While connected, the authenticated web app pages through the complete
-liked-track catalog and saves available tracks that are not already present in
-the per-track manifest. New or changed likes trigger the same synchronization.
+liked-song and liked-album catalogs. It saves available tracks that are not
+already present in the per-track manifest and saves all available tracks in
+liked albums. New or changed song or album likes trigger the same
+synchronization. A failed download does not stop later liked titles from being
+attempted in that pass. Hovering or focusing an active song or album download
+spinner shows the title, media type, and current percentage or starting state.
 Turning the preference off stops automatic saves; it does not remove existing
 offline copies because those may have been created manually.
 
