@@ -19,7 +19,7 @@ import type {
 } from '@prisma/orm-sqlite/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'ec4439f027192084c2f935618851071404049cbdad3a702b90e0a6f14ae7966e'>;
+  StorageHashBase<'da6afdb4d7c8cafd144930cbcb8fc7105bbec726d2b453025fbb96ff59c784b2'>;
 export type ExecutionHash =
   ExecutionHashBase<'af5db9c2d052d8692ee1f1a70221c2da0712097bb5b307d7d3a15319aaae43d9'>;
 export type ProfileHash =
@@ -228,10 +228,8 @@ export namespace Models {
   };
   export type ArtistImage = {
     createdAt: FieldOutputTypes['__unbound__']['ArtistImage']['createdAt'];
-    data: FieldOutputTypes['__unbound__']['ArtistImage']['data'];
     hash: FieldOutputTypes['__unbound__']['ArtistImage']['hash'];
     id: FieldOutputTypes['__unbound__']['ArtistImage']['id'];
-    mimeType: FieldOutputTypes['__unbound__']['ArtistImage']['mimeType'];
     sourceUrl: FieldOutputTypes['__unbound__']['ArtistImage']['sourceUrl'];
     updatedAt: FieldOutputTypes['__unbound__']['ArtistImage']['updatedAt'];
     metadata: ArtistMetadata[];
@@ -567,10 +565,8 @@ export namespace Models {
   };
   export type TrackCover = {
     createdAt: FieldOutputTypes['__unbound__']['TrackCover']['createdAt'];
-    data: FieldOutputTypes['__unbound__']['TrackCover']['data'];
     hash: FieldOutputTypes['__unbound__']['TrackCover']['hash'];
     id: FieldOutputTypes['__unbound__']['TrackCover']['id'];
-    mimeType: FieldOutputTypes['__unbound__']['TrackCover']['mimeType'];
     updatedAt: FieldOutputTypes['__unbound__']['TrackCover']['updatedAt'];
     readonly [RelationKeys]?: never;
   };
@@ -741,12 +737,6 @@ type ContractBase = Omit<
                   readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
                   readonly many: false;
                 };
-                readonly data: {
-                  readonly dataType: 'sqlite/blob';
-                  readonly codecId: 'sqlite/blob@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
                 readonly hash: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
@@ -754,12 +744,6 @@ type ContractBase = Omit<
                   readonly many: false;
                 };
                 readonly id: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly mimeType: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
@@ -3110,12 +3094,6 @@ type ContractBase = Omit<
                   readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
                   readonly many: false;
                 };
-                readonly data: {
-                  readonly dataType: 'sqlite/blob';
-                  readonly codecId: 'sqlite/blob@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
                 readonly hash: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
@@ -3123,12 +3101,6 @@ type ContractBase = Omit<
                   readonly many: false;
                 };
                 readonly id: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly mimeType: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
@@ -3542,19 +3514,11 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
               };
-              readonly data: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/blob@1' };
-              };
               readonly hash: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
               readonly id: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly mimeType: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
@@ -3585,10 +3549,8 @@ type ContractBase = Omit<
               readonly namespaceId: '__unbound__';
               readonly fields: {
                 readonly createdAt: { readonly column: 'createdAt' };
-                readonly data: { readonly column: 'data' };
                 readonly hash: { readonly column: 'hash' };
                 readonly id: { readonly column: 'id' };
-                readonly mimeType: { readonly column: 'mimeType' };
                 readonly sourceUrl: { readonly column: 'sourceUrl' };
                 readonly updatedAt: { readonly column: 'updatedAt' };
               };
@@ -5303,19 +5265,11 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
               };
-              readonly data: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/blob@1' };
-              };
               readonly hash: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
               readonly id: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly mimeType: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
@@ -5330,10 +5284,8 @@ type ContractBase = Omit<
               readonly namespaceId: '__unbound__';
               readonly fields: {
                 readonly createdAt: { readonly column: 'createdAt' };
-                readonly data: { readonly column: 'data' };
                 readonly hash: { readonly column: 'hash' };
                 readonly id: { readonly column: 'id' };
-                readonly mimeType: { readonly column: 'mimeType' };
                 readonly updatedAt: { readonly column: 'updatedAt' };
               };
             };

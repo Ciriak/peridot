@@ -4,12 +4,8 @@ import { realpath, stat } from "node:fs/promises";
 import { Readable } from "node:stream";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { PlaybackTokenResponse } from "@peridot/contracts";
-<<<<<<< HEAD
 import { ARTWORK_MIME_TYPE, type ArtworkCache } from "./artwork-cache.js";
-import type { CredentialStore } from "./credential-store.js";
-=======
 import { PluginError } from "@peridot/plugin-sdk";
->>>>>>> f398c39 (feat: wip pluin)
 import type { Database } from "./database.js";
 import { sendError } from "./http.js";
 import { message } from "./messages.js";
@@ -67,13 +63,8 @@ export async function registerLibraryRoutes(
   database: Database,
   tasks: TaskService,
   playbackTokens: PlaybackTokenService,
-<<<<<<< HEAD
-  jellyfin: JellyfinClient,
-  credentials: CredentialStore,
   artworkCache: ArtworkCache,
-=======
   plugins: PluginService,
->>>>>>> f398c39 (feat: wip pluin)
 ) {
   app.post("/api/library/scans", async (_request, reply) => {
     const task = await queueLibraryScan(tasks);

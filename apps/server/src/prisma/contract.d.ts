@@ -19,11 +19,7 @@ import type {
 } from '@prisma/orm-sqlite/contract/types';
 
 export type StorageHash =
-<<<<<<< HEAD
-  StorageHashBase<'fb6cc2e0b2e51eb223bd9403134ecbb7e3b9d82ee89302e8b41accf0b8e428e4'>;
-=======
-  StorageHashBase<'ec4439f027192084c2f935618851071404049cbdad3a702b90e0a6f14ae7966e'>;
->>>>>>> f398c39 (feat: wip pluin)
+  StorageHashBase<'da6afdb4d7c8cafd144930cbcb8fc7105bbec726d2b453025fbb96ff59c784b2'>;
 export type ExecutionHash =
   ExecutionHashBase<'af5db9c2d052d8692ee1f1a70221c2da0712097bb5b307d7d3a15319aaae43d9'>;
 export type ProfileHash =

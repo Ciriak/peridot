@@ -1,8 +1,8 @@
 #!/usr/bin/env -S node
-import type { Contract as Start } from '../../snapshots/4708250320cb1838b745eec80208e7ddea8325b16f784084116cbff5294d845e/contract';
-import startContract from '../../snapshots/4708250320cb1838b745eec80208e7ddea8325b16f784084116cbff5294d845e/contract.json' with { type: 'json' };
-import type { Contract as End } from '../../snapshots/ec4439f027192084c2f935618851071404049cbdad3a702b90e0a6f14ae7966e/contract';
-import endContract from '../../snapshots/ec4439f027192084c2f935618851071404049cbdad3a702b90e0a6f14ae7966e/contract.json' with { type: 'json' };
+import type { Contract as End } from '../../snapshots/da6afdb4d7c8cafd144930cbcb8fc7105bbec726d2b453025fbb96ff59c784b2/contract';
+import endContract from '../../snapshots/da6afdb4d7c8cafd144930cbcb8fc7105bbec726d2b453025fbb96ff59c784b2/contract.json' with { type: 'json' };
+import type { Contract as Start } from '../../snapshots/fb6cc2e0b2e51eb223bd9403134ecbb7e3b9d82ee89302e8b41accf0b8e428e4/contract';
+import startContract from '../../snapshots/fb6cc2e0b2e51eb223bd9403134ecbb7e3b9d82ee89302e8b41accf0b8e428e4/contract.json' with { type: 'json' };
 import {
   Migration,
   MigrationCLI,

@@ -2,6 +2,32 @@
 
 Last updated: 2026-11-18.
 
+## Plugin rebase reconciled with dev
+
+Resolved the conflict markers and incomplete auto-merge in the server runtime,
+generated Prisma contract, artwork worker, and decision log. Jellyfin now runs
+through `PluginService` while retaining `dev`'s external artwork cache.
+
+The old plugin migration branched from the pre-artwork-cache contract. Replaced
+it with a linear migration from `dev`'s contract (`fb6cc2e0`) to the merged
+contract (`da6afdb4`). The new migration preserves the original Jellyfin
+install and source/configuration data transforms, and the local development
+database was migrated with a verified backup.
+
+Checks completed:
+
+- `pnpm check`
+- `pnpm typecheck`
+- `pnpm test` (185 server tests plus web, UI, desktop, and shared suites)
+- `pnpm db:validate`
+- `pnpm build`
+- `git diff --check`
+
+The changes remain uncommitted on `feature/plugin`. No push, tag, publication,
+or deployment was performed.
+
+Next: review the rebase repair, then commit it. Push only when authorized.
+
 ## Catalog paging no longer conflicts with library changes
 
 Track, album, artist, audiobook, and podcast lists now continue from stable

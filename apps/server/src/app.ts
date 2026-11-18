@@ -151,9 +151,8 @@ export async function buildApp(options: BuildAppOptions = {}) {
   );
   const artworkService = new ArtworkService(
     database,
-    jellyfin,
+    plugins,
     catalog,
-    credentials,
     artworkCache,
   );
   const logBuffer =
@@ -173,8 +172,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
     database,
     metadataEnrichment,
     catalog,
-    jellyfin,
-    credentials,
+    plugins,
     artworkCache,
   );
   tasks.registerExecutor("library_scan", (task, taskService, signal) =>
@@ -278,9 +276,8 @@ export async function buildApp(options: BuildAppOptions = {}) {
         database,
         tasks,
         playbackTokens,
-        jellyfin,
-        credentials,
         artworkCache,
+        plugins,
       );
       await registerCatalogRoutes(protectedApp, catalog, artworkCache);
       await registerTaskRoutes(protectedApp, tasks);

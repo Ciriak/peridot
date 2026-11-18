@@ -251,13 +251,8 @@ export class LibraryScanner {
     private readonly database: Database,
     private readonly metadataEnrichment?: MetadataEnrichment,
     private readonly catalog?: CatalogService,
-<<<<<<< HEAD
-    private readonly jellyfin?: JellyfinClient,
-    private readonly credentials?: CredentialStore,
-    private readonly artworkCache?: ArtworkCache,
-=======
     private readonly plugins?: PluginService,
->>>>>>> f398c39 (feat: wip pluin)
+    private readonly artworkCache?: ArtworkCache,
   ) {}
 
   async prepareFile(

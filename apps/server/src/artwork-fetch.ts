@@ -1,3 +1,8 @@
+import {
+  PluginError,
+  type PluginSourceAdapter,
+  type PluginSourceHandle,
+} from "@peridot/plugin-sdk";
 import { pruneReferencedArtwork, type ArtworkCache } from "./artwork-cache.js";
 import type { CatalogService } from "./catalog.js";
 import type { Database } from "./database.js";
@@ -121,7 +126,6 @@ export class ArtworkService {
     private readonly database: Database,
     private readonly plugins: PluginService,
     private readonly catalog: CatalogService,
-    private readonly credentials: CredentialStore,
     private readonly artworkCache: ArtworkCache,
   ) {}
 

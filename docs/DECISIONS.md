@@ -1,6 +1,14 @@
 # Decisions
 
-<<<<<<< HEAD
+## 2026-11-18: Plugin migration follows the artwork-cache schema
+
+The rebased plugin schema migrates from `dev`'s external artwork-cache contract
+to the merged plugin and artwork contract. The pre-rebase plugin migration
+branched from an older contract, so it was replaced with a linear migration.
+The new migration installs the bundled Jellyfin plugin and copies existing
+Jellyfin source configuration into generic plugin fields before dropping the
+legacy columns.
+
 ## 2026-11-18: Catalog paging uses stable keyset cursors
 
 Track, album, artist, audiobook, and podcast listing cursors use the active
@@ -121,7 +129,7 @@ Stale cursor responses bypass the generic query retry policy. This prevents
 multiple retries of the same known-invalid cursor before the controlled
 first-page recovery runs. Other request failures retain the normal visible
 error path.
-=======
+
 ## 2026-11-17: Jellyfin is a trusted bundled source plugin
 
 Peridot loads Jellyfin through a generic plugin host backed by
@@ -142,7 +150,6 @@ this milestone. Installation records include source type, locator, and version
 so a future catalog can support GitHub-hosted packages without changing source
 or lifecycle storage. Executable code remains bundled and trusted for now;
 remote packages require a sandboxed runtime and package verification.
->>>>>>> f398c39 (feat: wip pluin)
 
 ## 2026-11-17: Docker does not run or control Watchtower
 
