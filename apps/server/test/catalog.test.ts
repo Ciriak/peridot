@@ -157,6 +157,173 @@ test("catalog endpoints page tracks, albums, artists, search, and likes", async 
   }
 });
 
+test("catalog keyset pages survive changes between page requests", async () => {
+  const context = await createTestContext();
+  try {
+    for (let index = 0; index < 12; index += 1) {
+      await writeFile(
+        path.join(
+          context.libraryRoot,
+          `${String(index).padStart(2, "0")} track.mp3`,
+        ),
+        createTaggedMp3({
+          title: `Track ${String(index).padStart(2, "0")}`,
+          artist: index < 6 ? "First Paging Artist" : "Second Paging Artist",
+          album: `Paging Album ${String(index).padStart(2, "0")}`,
+          discNumber: 1,
+          trackNumber: index + 1,
+        }),
+      );
+    }
+    const scan = await startScan(context);
+    assert.equal(scan.status, "completed");
+
+    for (const sort of [
+      "title",
+      "artist",
+      "album",
+      "duration",
+      "track",
+      "published",
+    ]) {
+      const firstPage = await context.app.inject({
+        method: "GET",
+        url: `/api/tracks?limit=5&sort=${sort}`,
+        headers: context.authorization,
+      });
+      assert.equal(firstPage.statusCode, 200);
+      const firstPageBody = firstPage.json<TrackListResponse>();
+      assert.ok(firstPageBody.nextCursor);
+      const secondPage = await context.app.inject({
+        method: "GET",
+        url: `/api/tracks?limit=5&sort=${sort}&cursor=${encodeURIComponent(firstPageBody.nextCursor!)}`,
+        headers: context.authorization,
+      });
+      assert.equal(secondPage.statusCode, 200);
+      const secondPageBody = secondPage.json<TrackListResponse>();
+      assert.equal(
+        new Set([
+          ...firstPageBody.items.map((track) => track.id),
+          ...secondPageBody.items.map((track) => track.id),
+        ]).size,
+        firstPageBody.items.length + secondPageBody.items.length,
+      );
+    }
+
+    const tracks = (
+      await context.app.inject({
+        method: "GET",
+        url: "/api/tracks?limit=5&sort=title",
+        headers: context.authorization,
+      })
+    ).json<TrackListResponse>();
+    assert.ok(tracks.nextCursor);
+    const trackRow = await context.database.orm.CatalogTrack.firstOrThrow({
+      id: tracks.items[0]!.id,
+    });
+    await context.database.orm.CatalogTrack.create({
+      ...trackRow,
+      id: "track-inserted-before-page",
+      title: "Track 000",
+      normalizedTitle: "track 000",
+    });
+    await context.database.orm.CatalogState.where({ id: "catalog" }).update({
+      revision: tracks.catalogRevision + 1,
+    });
+
+    const changedTracks = await context.app.inject({
+      method: "GET",
+      url: `/api/tracks?limit=5&sort=title&cursor=${encodeURIComponent(tracks.nextCursor!)}`,
+      headers: context.authorization,
+    });
+    assert.equal(changedTracks.statusCode, 200);
+    const nextTracks = changedTracks.json<TrackListResponse>();
+    assert.equal(
+      new Set([
+        ...tracks.items.map((track) => track.id),
+        ...nextTracks.items.map((track) => track.id),
+      ]).size,
+      tracks.items.length + nextTracks.items.length,
+    );
+
+    const albums = (
+      await context.app.inject({
+        method: "GET",
+        url: "/api/albums?limit=5&sort=title",
+        headers: context.authorization,
+      })
+    ).json<AlbumListResponse>();
+    assert.ok(albums.nextCursor);
+    const albumRow = await context.database.orm.CatalogAlbum.firstOrThrow({
+      id: albums.items[0]!.id,
+    });
+    await context.database.orm.CatalogAlbum.create({
+      ...albumRow,
+      id: "album-inserted-before-page",
+      title: "Album 000",
+      normalizedTitle: "album 000",
+    });
+    await context.database.orm.CatalogState.where({ id: "catalog" }).update({
+      revision: albums.catalogRevision + 1,
+    });
+
+    const changedAlbums = await context.app.inject({
+      method: "GET",
+      url: `/api/albums?limit=5&sort=title&cursor=${encodeURIComponent(albums.nextCursor!)}`,
+      headers: context.authorization,
+    });
+    assert.equal(changedAlbums.statusCode, 200);
+    const nextAlbums = changedAlbums.json<AlbumListResponse>();
+    assert.equal(
+      new Set([
+        ...albums.items.map((album) => album.id),
+        ...nextAlbums.items.map((album) => album.id),
+      ]).size,
+      albums.items.length + nextAlbums.items.length,
+    );
+
+    const artists = (
+      await context.app.inject({
+        method: "GET",
+        url: "/api/artists?limit=1",
+        headers: context.authorization,
+      })
+    ).json<ArtistListResponse>();
+    assert.ok(artists.nextCursor);
+    const artistRow = await context.database.orm.CatalogArtist.firstOrThrow({
+      id: artists.items[0]!.id,
+    });
+    await context.database.orm.CatalogArtist.create({
+      ...artistRow,
+      id: "artist-inserted-before-page",
+      name: "AAA Paging Artist",
+      displayName: "AAA Paging Artist",
+      normalizedName: "aaa paging artist",
+      normalizedDisplayName: "aaa paging artist",
+    });
+    await context.database.orm.CatalogState.where({ id: "catalog" }).update({
+      revision: artists.catalogRevision + 1,
+    });
+
+    const changedArtists = await context.app.inject({
+      method: "GET",
+      url: `/api/artists?limit=1&cursor=${encodeURIComponent(artists.nextCursor!)}`,
+      headers: context.authorization,
+    });
+    assert.equal(changedArtists.statusCode, 200);
+    const nextArtists = changedArtists.json<ArtistListResponse>();
+    assert.equal(
+      new Set([
+        ...artists.items.map((artist) => artist.id),
+        ...nextArtists.items.map((artist) => artist.id),
+      ]).size,
+      artists.items.length + nextArtists.items.length,
+    );
+  } finally {
+    await context.close();
+  }
+});
+
 test("scoped catalog search filters each media collection before paging", async () => {
   const context = await createTestContext();
   try {

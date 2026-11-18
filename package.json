@@ -29,6 +29,7 @@
     "db:migration:plan": "pnpm --filter @peridot/server db:migration:plan",
     "db:migration:check": "pnpm --filter @peridot/server db:migration:check",
     "db:reset": "pnpm --filter @peridot/server db:reset",
+    "db:vacuum": "pnpm --filter @peridot/server db:vacuum",
     "desktop:dev": "pnpm --filter @peridot/desktop dev",
     "desktop:build": "pnpm --filter @peridot/desktop package",
     "android:sync": "pnpm --filter @peridot/android sync",

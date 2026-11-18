@@ -25,8 +25,9 @@ test("artists have list and detail routes with artist-scoped content", async () 
   assert.match(listPage, /useCatalogArtistQuery/);
   assert.match(listPage, /items: artists/);
   assert.doesNotMatch(listPage, /library-search/);
+  assert.match(listPage, /<VirtualCardGrid/);
   assert.match(listPage, /<ArtistCard/);
-  assert.match(listPage, /:artist="artist"/);
+  assert.match(listPage, /:artist="item"/);
   assert.match(artistCard, /:to="artistRoute\(artist\)"/);
   assert.match(artistCard, /<ArtistArtwork :image-url="artist\.imageUrl"/);
   assert.match(artistCard, /card\.localArtistName/);
@@ -57,11 +58,11 @@ test("artists have list and detail routes with artist-scoped content", async () 
   assert.match(detailPage, /useCatalogAlbumQuery/);
   assert.match(detailPage, /artistId: artist\.value\?\.id/);
   assert.match(detailPage, /<AlbumCard/);
-  assert.match(detailPage, /:album="album"/);
+  assert.match(detailPage, /:album="item"/);
   assert.match(
     detailPage,
-    /grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-5/,
-    "Artist albums use a two-column mobile grid",
+    /<VirtualCardGrid[\s\S]*layout="wide"/,
+    "Artist albums use the wide virtual card profile",
   );
   assert.match(detailPage, /playCollection\(/);
   assert.match(detailPage, /t\("context\.playArtist"\)/);
@@ -78,21 +79,33 @@ test("artists have list and detail routes with artist-scoped content", async () 
 });
 
 test("artist names link from navigation and track lists", async () => {
-  const [layout, albumDetail, libraryScreen, trackTable] = await Promise.all([
-    readFile(new URL("../app/layouts/default.vue", import.meta.url), "utf8"),
-    readFile(
-      new URL("../app/pages/albums/[album].vue", import.meta.url),
-      "utf8",
-    ),
-    readFile(
-      new URL("../app/components/LibraryScreen.vue", import.meta.url),
-      "utf8",
-    ),
-    readFile(
-      new URL("../app/components/TrackTable.vue", import.meta.url),
-      "utf8",
-    ),
-  ]);
+  const [layout, albumDetail, libraryScreen, trackTable, playlist, addDialog] =
+    await Promise.all([
+      readFile(new URL("../app/layouts/default.vue", import.meta.url), "utf8"),
+      readFile(
+        new URL("../app/pages/albums/[album].vue", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL("../app/components/LibraryScreen.vue", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL("../app/components/TrackTable.vue", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL("../app/components/PlaylistTrackList.vue", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL(
+          "../app/components/AddTracksToPlaylistDialog.vue",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    ]);
 
   assert.match(
     layout,
@@ -102,13 +115,21 @@ test("artist names link from navigation and track lists", async () => {
   assert.match(albumDetail, /<TrackArtistLinks :artists="album\.artists" \/>/);
   assert.match(
     trackTable,
-    /<TrackArtistLinks[\s\S]*?showArtists !== false[\s\S]*?item\.data\.mediaType === 'music'[\s\S]*?:artists="trackArtistNames\(item\.data\)"/,
+    /<TrackArtistLinks[\s\S]*?showArtists !== false[\s\S]*?item\.track\.mediaType === 'music'[\s\S]*?:artists="trackArtistNames\(item\.track\)"/,
   );
   assert.match(
     trackTable,
-    /:to="trackAlbumRoute\(item\.data\)"/,
+    /:to="trackAlbumRoute\(item\.track\)"/,
     "Artist-page track lists link their album names",
   );
   assert.match(libraryScreen, /variant="library"/);
   assert.match(trackTable, /@dblclick\.stop/);
+  assert.match(
+    playlist,
+    /<TrackArtistLinks[\s\S]*:artists="trackArtistNames\(entry\.track\)"/,
+  );
+  assert.match(
+    addDialog,
+    /<TrackArtistLinks :artists="trackArtistNames\(track\)" \/>/,
+  );
 });

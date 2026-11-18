@@ -1,7 +1,12 @@
 <script setup lang="ts">
-import { listTracks } from "../lib/peridot-client";
-import { loadAllLikedTracks } from "../lib/liked-offline";
-import { saveOfflineCollection } from "../lib/offline-collection";
+import { loadCollectionTracks } from "../lib/catalog-collections";
+import {
+  loadAllLikedAlbums,
+  loadAllLikedTracks,
+  saveLikedAlbumsOffline,
+  saveLikedTracksOffline,
+} from "../lib/liked-offline";
+import { listAlbums, listTracks } from "../lib/peridot-client";
 import type { PeridotQueryScope } from "../lib/query-keys";
 import { onBeforeUnmount, onMounted, watch } from "vue";
 import { useLikes } from "../composables/use-likes";
@@ -13,7 +18,7 @@ import { useSession } from "../composables/use-session";
 
 const { likesRevision } = useLikes();
 const { likedTitlesOffline } = useLibrarySettings();
-const { refresh, isSaved, save } = useOfflineTracks();
+const { refresh, isSaved, save, saveAlbum } = useOfflineTracks();
 const { scope } = useQueryScope();
 const { token } = useSession();
 const { status } = useServerConnection();
@@ -29,6 +34,18 @@ function sameScope(
   return (
     left?.serverAddress === right?.serverAddress &&
     left?.userId === right?.userId
+  );
+}
+
+function synchronizationActive(
+  currentScope: PeridotQueryScope,
+  currentToken: string,
+): boolean {
+  return (
+    likedTitlesOffline.value &&
+    status.value === "connected" &&
+    sameScope(scope.value, currentScope) &&
+    token.value === currentToken
   );
 }
 
@@ -52,37 +69,43 @@ async function synchronize() {
   running = true;
   try {
     await refresh();
-    const tracks = await loadAllLikedTracks((cursor) =>
-      listTracks(currentScope.serverAddress, currentToken, {
-        cursor,
-        limit: 100,
-        liked: true,
-      }),
-    );
-    if (
-      !likedTitlesOffline.value ||
-      status.value !== "connected" ||
-      !sameScope(scope.value, currentScope) ||
-      token.value !== currentToken
-    ) {
-      return;
+    const [trackPageResult, albumPageResult] = await Promise.allSettled([
+      loadAllLikedTracks((cursor) =>
+        listTracks(currentScope.serverAddress, currentToken, {
+          cursor,
+          limit: 100,
+          liked: true,
+        }),
+      ),
+      loadAllLikedAlbums((cursor) =>
+        listAlbums(currentScope.serverAddress, currentToken, {
+          cursor,
+          limit: 100,
+          liked: true,
+        }),
+      ),
+    ]);
+    if (!synchronizationActive(currentScope, currentToken)) return;
+
+    if (trackPageResult.status === "fulfilled") {
+      const trackResult = await saveLikedTracksOffline(trackPageResult.value, {
+        isSaved,
+        save,
+        shouldContinue: () => synchronizationActive(currentScope, currentToken),
+      });
+      if (trackResult.stopped) return;
     }
 
-    await saveOfflineCollection(tracks, {
-      isSaved,
-      save: async (track) => {
-        if (
-          !likedTitlesOffline.value ||
-          !sameScope(scope.value, currentScope) ||
-          token.value !== currentToken
-        ) {
-          throw new Error("Liked-title offline synchronization stopped.");
-        }
-        if (!(await save(track))) {
-          throw new Error("A liked track could not be saved offline.");
-        }
-      },
-    });
+    if (albumPageResult.status === "fulfilled") {
+      await saveLikedAlbumsOffline(albumPageResult.value, {
+        loadTracks: (album) =>
+          loadCollectionTracks(currentScope.serverAddress, currentToken, {
+            albumId: album.id,
+          }),
+        save: (album, albumTracks) => saveAlbum(album.id, albumTracks),
+        shouldContinue: () => synchronizationActive(currentScope, currentToken),
+      });
+    }
   } catch {
     // A later connection, setting, or likes change retries the synchronization.
   } finally {

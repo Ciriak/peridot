@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { test } from "node:test";
+import sharp from "sharp";
 import type {
   ArtistListResponse,
   ArtistMetadataCandidateListResponse,
@@ -17,9 +18,10 @@ import {
 } from "./helpers.js";
 
 const artistImageUrl = "https://i.discogs.com/artist-primary.png";
-const png = Buffer.from([
-  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01, 0x02,
-]);
+const png = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWNgWGb3HwADcgHkhrgr6AAAAABJRU5ErkJggg==",
+  "base64",
+);
 
 function providerFetch(): typeof fetch {
   return async (input) => {
@@ -151,8 +153,11 @@ test("artist profiles combine provider names with cached Discogs portraits", asy
       url: artist.imageUrl!,
     });
     assert.equal(image.statusCode, 200, image.body);
-    assert.equal(image.headers["content-type"], "image/png");
-    assert.deepEqual(image.rawPayload, png);
+    assert.equal(image.headers["content-type"], "image/webp");
+    const imageMetadata = await sharp(image.rawPayload).metadata();
+    assert.equal(imageMetadata.format, "webp");
+    assert.ok((imageMetadata.width ?? 0) <= 400);
+    assert.ok((imageMetadata.height ?? 0) <= 400);
 
     const member = await createMemberSession(context);
     const candidates = await context.app.inject({

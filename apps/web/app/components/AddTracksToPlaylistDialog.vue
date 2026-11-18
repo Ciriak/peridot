@@ -25,6 +25,7 @@ import { trackArtistNames } from "../lib/library";
 import { listTracks } from "../lib/peridot-client";
 import { queryKeys } from "../lib/query-keys";
 import TrackArtwork from "./TrackArtwork.vue";
+import TrackArtistLinks from "./TrackArtistLinks.vue";
 
 const props = defineProps<{
   open: boolean;
@@ -163,7 +164,7 @@ async function add(track: TrackResponse) {
                 </ScrollingText>
                 <p class="min-w-0 text-xs text-muted-foreground">
                   <ScrollingText class="w-full">
-                    {{ trackArtistNames(track).join(", ") }}
+                    <TrackArtistLinks :artists="trackArtistNames(track)" />
                     <template v-if="track.album"> · {{ track.album }}</template>
                   </ScrollingText>
                 </p>

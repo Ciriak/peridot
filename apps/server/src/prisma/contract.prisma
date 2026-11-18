@@ -151,8 +151,6 @@ model Track {
 model TrackCover {
   id        String   @id @onCreate(cuid(2))
   hash      String   @unique
-  mimeType  String
-  data      Bytes
   createdAt DateTime @default(now())
   updatedAt DateTime @onCreate(now()) @onUpdate(now())
 }
@@ -404,8 +402,6 @@ model CatalogArtist {
 model ArtistImage {
   id        String           @id @onCreate(cuid(2))
   hash      String           @unique
-  mimeType  String
-  data      Bytes
   sourceUrl String
   createdAt DateTime         @default(now())
   updatedAt DateTime         @onCreate(now()) @onUpdate(now())

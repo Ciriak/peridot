@@ -1,0 +1,320 @@
+[
+  {
+    "id": "data_migration.clear-track-artwork-references",
+    "label": "Clear track artwork references",
+    "summary": "Artwork is regenerated into the external WebP cache by the next scan",
+    "operationClass": "data",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "table",
+        "name": "Track"
+      }
+    },
+    "precheck": [],
+    "execute": [
+      {
+        "description": "Artwork is regenerated into the external WebP cache by the next scan",
+        "sql": "UPDATE \"Track\" SET \"coverId\" = NULL"
+      }
+    ],
+    "postcheck": []
+  },
+  {
+    "id": "data_migration.clear-catalog-track-artwork-references",
+    "label": "Clear projected track artwork references",
+    "summary": "Remove stale external artwork identifiers from catalog projections",
+    "operationClass": "data",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "table",
+        "name": "CatalogTrack"
+      }
+    },
+    "precheck": [],
+    "execute": [
+      {
+        "description": "Remove stale external artwork identifiers from catalog projections",
+        "sql": "UPDATE \"CatalogTrack\" SET \"coverId\" = NULL"
+      }
+    ],
+    "postcheck": []
+  },
+  {
+    "id": "data_migration.clear-catalog-album-artwork-references",
+    "label": "Clear album artwork references",
+    "summary": "Remove stale external artwork identifiers from album projections",
+    "operationClass": "data",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "table",
+        "name": "CatalogAlbum"
+      }
+    },
+    "precheck": [],
+    "execute": [
+      {
+        "description": "Remove stale external artwork identifiers from album projections",
+        "sql": "UPDATE \"CatalogAlbum\" SET \"coverId\" = NULL, \"coverTrackId\" = NULL"
+      }
+    ],
+    "postcheck": []
+  },
+  {
+    "id": "data_migration.clear-artist-artwork-references",
+    "label": "Clear artist portrait references",
+    "summary": "Artist portraits are fetched and normalized again by metadata enrichment",
+    "operationClass": "data",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "table",
+        "name": "ArtistMetadata"
+      }
+    },
+    "precheck": [],
+    "execute": [
+      {
+        "description": "Artist portraits are fetched and normalized again by metadata enrichment",
+        "sql": "UPDATE \"ArtistMetadata\" SET \"imageId\" = NULL, \"imageProviderId\" = NULL, \"imageProviderKind\" = NULL, \"imageProviderName\" = NULL, \"imageExternalArtistId\" = NULL, \"imageSourceUrl\" = NULL, \"attemptedSignature\" = NULL"
+      }
+    ],
+    "postcheck": []
+  },
+  {
+    "id": "data_migration.delete-embedded-track-artwork",
+    "label": "Delete embedded track artwork",
+    "summary": "Remove artwork BLOBs before dropping their storage column",
+    "operationClass": "data",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "table",
+        "name": "TrackCover"
+      }
+    },
+    "precheck": [],
+    "execute": [
+      {
+        "description": "Remove artwork BLOBs before dropping their storage column",
+        "sql": "DELETE FROM \"TrackCover\""
+      }
+    ],
+    "postcheck": []
+  },
+  {
+    "id": "data_migration.delete-embedded-artist-artwork",
+    "label": "Delete embedded artist artwork",
+    "summary": "Remove portrait BLOBs before dropping their storage column",
+    "operationClass": "data",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "table",
+        "name": "ArtistImage"
+      }
+    },
+    "precheck": [],
+    "execute": [
+      {
+        "description": "Remove portrait BLOBs before dropping their storage column",
+        "sql": "DELETE FROM \"ArtistImage\""
+      }
+    ],
+    "postcheck": []
+  },
+  {
+    "id": "dropColumn.ArtistImage.data",
+    "label": "Drop column \"data\" from \"ArtistImage\"",
+    "summary": "Drops column data on ArtistImage which is not in the contract",
+    "operationClass": "destructive",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "column",
+        "name": "data",
+        "table": "ArtistImage"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"data\" exists on \"ArtistImage\"",
+        "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM pragma_table_info(?1) WHERE \"name\" = ?2",
+        "params": [
+          "ArtistImage",
+          "data"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "column \"data\" on \"ArtistImage\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "drop column \"data\" from \"ArtistImage\"",
+        "sql": "ALTER TABLE \"ArtistImage\" DROP COLUMN \"data\""
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"data\" is gone from \"ArtistImage\"",
+        "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM pragma_table_info(?1) WHERE \"name\" = ?2",
+        "params": [
+          "ArtistImage",
+          "data"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "column \"data\" on \"ArtistImage\""
+        }
+      }
+    ]
+  },
+  {
+    "id": "dropColumn.ArtistImage.mimeType",
+    "label": "Drop column \"mimeType\" from \"ArtistImage\"",
+    "summary": "Drops column mimeType on ArtistImage which is not in the contract",
+    "operationClass": "destructive",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "column",
+        "name": "mimeType",
+        "table": "ArtistImage"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"mimeType\" exists on \"ArtistImage\"",
+        "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM pragma_table_info(?1) WHERE \"name\" = ?2",
+        "params": [
+          "ArtistImage",
+          "mimeType"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "column \"mimeType\" on \"ArtistImage\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "drop column \"mimeType\" from \"ArtistImage\"",
+        "sql": "ALTER TABLE \"ArtistImage\" DROP COLUMN \"mimeType\""
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"mimeType\" is gone from \"ArtistImage\"",
+        "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM pragma_table_info(?1) WHERE \"name\" = ?2",
+        "params": [
+          "ArtistImage",
+          "mimeType"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "column \"mimeType\" on \"ArtistImage\""
+        }
+      }
+    ]
+  },
+  {
+    "id": "dropColumn.TrackCover.data",
+    "label": "Drop column \"data\" from \"TrackCover\"",
+    "summary": "Drops column data on TrackCover which is not in the contract",
+    "operationClass": "destructive",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "column",
+        "name": "data",
+        "table": "TrackCover"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"data\" exists on \"TrackCover\"",
+        "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM pragma_table_info(?1) WHERE \"name\" = ?2",
+        "params": [
+          "TrackCover",
+          "data"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "column \"data\" on \"TrackCover\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "drop column \"data\" from \"TrackCover\"",
+        "sql": "ALTER TABLE \"TrackCover\" DROP COLUMN \"data\""
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"data\" is gone from \"TrackCover\"",
+        "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM pragma_table_info(?1) WHERE \"name\" = ?2",
+        "params": [
+          "TrackCover",
+          "data"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "column \"data\" on \"TrackCover\""
+        }
+      }
+    ]
+  },
+  {
+    "id": "dropColumn.TrackCover.mimeType",
+    "label": "Drop column \"mimeType\" from \"TrackCover\"",
+    "summary": "Drops column mimeType on TrackCover which is not in the contract",
+    "operationClass": "destructive",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "column",
+        "name": "mimeType",
+        "table": "TrackCover"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"mimeType\" exists on \"TrackCover\"",
+        "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM pragma_table_info(?1) WHERE \"name\" = ?2",
+        "params": [
+          "TrackCover",
+          "mimeType"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "column \"mimeType\" on \"TrackCover\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "drop column \"mimeType\" from \"TrackCover\"",
+        "sql": "ALTER TABLE \"TrackCover\" DROP COLUMN \"mimeType\""
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"mimeType\" is gone from \"TrackCover\"",
+        "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM pragma_table_info(?1) WHERE \"name\" = ?2",
+        "params": [
+          "TrackCover",
+          "mimeType"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "column \"mimeType\" on \"TrackCover\""
+        }
+      }
+    ]
+  }
+]

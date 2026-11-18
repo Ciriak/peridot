@@ -35,3 +35,14 @@ test("library landing pages keep their titles without descriptive subtitles", as
     }),
   );
 });
+
+test("liked songs uses the shared page-title format", async () => {
+  const [page, messages] = await Promise.all([
+    readFile(new URL("../app/pages/liked.vue", import.meta.url), "utf8"),
+    readFile(new URL("../i18n/locales/en-US.json", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(page, /useHead\(\{ title: t\("page\.liked\.title"\) \}\)/);
+  assert.match(page, /:title="t\('navigation\.likedSongs'\)"/);
+  assert.match(messages, /"page\.liked\.title": "Liked songs — Peridot"/);
+});

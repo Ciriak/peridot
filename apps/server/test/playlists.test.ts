@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
+import sharp from "sharp";
 import type {
   AddPlaylistItemResponse,
   PlaylistDetailResponse,
@@ -25,6 +26,23 @@ async function addFile(
 ) {
   const folder = path.join(context.root, "music", path.dirname(filename));
   await mkdir(folder, { recursive: true });
+  const coverIndex = Number(coverSeed);
+  const cover = coverSeed
+    ? await sharp({
+        create: {
+          background: {
+            b: 80,
+            g: 120,
+            r: Number.isFinite(coverIndex) ? coverIndex * 20 : 0,
+          },
+          channels: 3,
+          height: 16,
+          width: 16,
+        },
+      })
+        .jpeg()
+        .toBuffer()
+    : null;
   await writeFile(
     path.join(context.root, "music", filename),
     createTaggedMp3({
@@ -33,11 +51,11 @@ async function addFile(
       album: "Playlist Album",
       discNumber: 1,
       trackNumber: 1,
-      ...(coverSeed
+      ...(cover
         ? {
             cover: {
               mimeType: "image/jpeg",
-              data: Buffer.from(`cover-${coverSeed}`),
+              data: cover,
             },
           }
         : {}),

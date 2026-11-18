@@ -1,7 +1,7 @@
-import { createHash } from "node:crypto";
 import path from "node:path";
 import { and, or } from "@prisma/orm-sqlite/orm-client";
 import type { TrackMediaTypeOrigin } from "@peridot/contracts";
+import { pruneReferencedArtwork, type ArtworkCache } from "./artwork-cache.js";
 import {
   normalizeArtistCredits,
   normalizeOptionalArtistCredits,
@@ -48,7 +48,7 @@ import {
   type TaskService,
 } from "./tasks.js";
 
-const CURRENT_METADATA_VERSION = 7;
+const CURRENT_METADATA_VERSION = 8;
 const PROGRESS_WRITE_INTERVAL_MS = 250;
 const EVENT_LOOP_YIELD_INTERVAL_MS = 25;
 const JELLYFIN_PREPARE_CONCURRENCY = 6;
@@ -259,6 +259,7 @@ export class LibraryScanner {
     private readonly catalog?: CatalogService,
     private readonly jellyfin?: JellyfinClient,
     private readonly credentials?: CredentialStore,
+    private readonly artworkCache?: ArtworkCache,
   ) {}
 
   async prepareFile(
@@ -525,6 +526,9 @@ export class LibraryScanner {
       }
       throwIfAborted(signal);
       await this.removeUnusedCovers();
+      if (this.artworkCache) {
+        await pruneReferencedArtwork(this.database, this.artworkCache);
+      }
 
       const trackQuery = this.database.orm.Track.where({ available: 1 }).where(
         (track) => track.sourceId.in(sources.map((source) => source.id)),
@@ -986,17 +990,18 @@ export class LibraryScanner {
   }
 
   private async storeCover(cover: CoverImage | null): Promise<string | null> {
-    if (!cover) return null;
-    const hash = createHash("sha256").update(cover.data).digest("hex");
-    const existing = await this.database.orm.TrackCover.where({ hash }).first();
-    const stored =
-      existing ??
-      (await this.database.orm.TrackCover.create({
+    if (!cover || !this.artworkCache) return null;
+    try {
+      const hash = await this.artworkCache.store(cover.data);
+      const existing = await this.database.orm.TrackCover.where({
         hash,
-        mimeType: cover.mimeType,
-        data: Uint8Array.from(cover.data),
-      }));
-    return stored.id;
+      }).first();
+      const stored =
+        existing ?? (await this.database.orm.TrackCover.create({ hash }));
+      return stored.id;
+    } catch {
+      return null;
+    }
   }
 
   private async removeUnusedCovers(): Promise<void> {

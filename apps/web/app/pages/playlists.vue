@@ -9,6 +9,7 @@ import AutoLoadMore from "../components/AutoLoadMore.vue";
 import ListSearchBar from "../components/ListSearchBar.vue";
 import PlaylistCard from "../components/PlaylistCard.vue";
 import PlaylistNameDialog from "../components/PlaylistNameDialog.vue";
+import VirtualCardGrid from "../components/VirtualCardGrid.vue";
 import { useListSearch } from "../composables/use-list-search";
 import {
   usePlaylistActions,
@@ -104,24 +105,26 @@ onMounted(() => void load());
         {{ t("common.tryAgain") }}
       </Button>
     </div>
-    <div
+    <VirtualCardGrid
       v-else-if="items.length"
-      class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+      :items="items"
+      layout="standard"
+      :item-key="(playlist) => playlist.id"
+      :estimate-row-height="220"
     >
-      <PlaylistCard
-        v-for="playlist in items"
-        :key="playlist.id"
-        :playlist="playlist"
-      />
-      <AutoLoadMore
-        class="col-span-full"
-        :enabled="hasMore"
-        :loading="loadingMore"
-        :item-count="items.length"
-        :label="t('page.playlists.loadingMore')"
-        @load="loadMore"
-      />
-    </div>
+      <template #default="{ item }">
+        <PlaylistCard :playlist="item" />
+      </template>
+      <template #footer>
+        <AutoLoadMore
+          :enabled="hasMore"
+          :loading="loadingMore"
+          :item-count="items.length"
+          :label="t('page.playlists.loadingMore')"
+          @load="loadMore"
+        />
+      </template>
+    </VirtualCardGrid>
     <p
       v-else-if="loaded && searchQuery"
       role="status"

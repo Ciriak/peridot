@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { useI18n } from "#imports";
+import { useHead, useI18n } from "#imports";
 
 const { t } = useI18n();
+useHead({ title: t("page.liked.title") });
 </script>
 
 <template>
-  <LibraryScreen :title="t('page.liked.title')" favorites />
+  <LibraryScreen :title="t('navigation.likedSongs')" favorites />
 </template>

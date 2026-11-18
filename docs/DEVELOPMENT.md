@@ -55,8 +55,10 @@ cards, an all-tracks list, and artist playback actions. Artist names in the
 shared track list appear beneath each title and link to their derived artist
 pages, while visible album names link to their album details in every track-table
 variant. Artist credits in the fixed player and queue also link to their derived
-artist pages. Matched artist profiles can replace the local file-tag name with a
-provider canonical name and fill the card and detail portrait from Discogs.
+artist pages. Playlist tracks, Quick picks, the compact mobile player, and the
+playlist track picker use the same normalized artist links. Matched artist
+profiles can replace the local file-tag name with a provider canonical name and
+fill the card and detail portrait from Discogs.
 Portraits are downloaded into the local database and served through short-lived
 artist-scoped image URLs; MusicBrainz-only installations retain the semantic
 artist placeholder. Manual artist matching accepts the same signed-in user
@@ -65,10 +67,11 @@ the stable route and favorite identity. The fixed
 player streams available tracks from the authenticated server through a
 short-lived, track-scoped playback URL, with play/pause, seeking, volume,
 previous/next, persistent randomized playback, automatic advancement, and
-retryable loading and error states. Audio playback is owned by the application
-root, so entering fullscreen settings keeps the current track playing while its
-controls are hidden. Original files are served with HTTP range support and are
-not transcoded. One durable queue is
+retryable loading and error states. The desktop player artwork opens the current
+music track's album. Audio playback is owned by the application root, so entering
+fullscreen settings keeps the current track playing while its controls are
+hidden. Original files are served with HTTP range support and are not
+transcoded. One durable queue is
 stored per signed-in user on the server, while a browser-local snapshot scoped
 to that server and user records the complete queue, active track, and elapsed
 playback position. Reloading restores the same queue and track at its saved
@@ -199,8 +202,12 @@ only tracks that were saved.
 Settings → Library includes an enabled-by-default `Make my liked titles
 available offline` preference. It is stored separately for each server and
 user. While connected, the authenticated web app pages through the complete
-liked-track catalog and saves available tracks that are not already present in
-the per-track manifest. New or changed likes trigger the same synchronization.
+liked-song and liked-album catalogs. It saves available tracks that are not
+already present in the per-track manifest and saves all available tracks in
+liked albums. New or changed song or album likes trigger the same
+synchronization. A failed download does not stop later liked titles from being
+attempted in that pass. Hovering or focusing an active song or album download
+spinner shows the title, media type, and current percentage or starting state.
 Turning the preference off stops automatic saves; it does not remove existing
 offline copies because those may have been created manually.
 
@@ -495,7 +502,8 @@ Peridot resolves unmatched tracks in provider order in the background.
 Requests to each provider are rate-limited separately.
 Artist name and portrait matching runs after track matching in the same metadata
 task. Provider candidates are merged for correction, and matched artist names,
-portrait provenance, and cached image content are stored locally. Artist image
+portrait provenance, and the normalized portrait cache hash are stored locally.
+Portrait bytes live in the artwork cache. Artist image
 downloads accept only bounded HTTPS JPEG, PNG, or WebP responses from approved
 Discogs hosts.
 Each containing folder can supply an album fallback title when tracks have no
@@ -570,6 +578,16 @@ credentials, and the matching key is required to decrypt them. Automatic
 rollback is intentionally not performed: after a failed upgrade, stop the
 service, restore the selected snapshot and matching key, and run the previous
 image.
+
+After artwork BLOBs have been removed, stop the server and reclaim their freed
+SQLite pages with:
+
+```sh
+pnpm db:vacuum
+```
+
+The command requires free disk space at least 20% larger than the database and
+refuses to run without that headroom.
 
 To intentionally discard local catalog, account, server queue, and settings data
 and rebuild the development database from the migration baseline:
@@ -674,12 +692,15 @@ Successful browser playback starts are recorded with
 available from `GET /api/quick-picks`; the server returns up to eight ordered track
 and album entries with their current catalog summaries after applying seven-day
 exponential decay.
-Album covers are deduplicated by content hash in the local SQLite database and
-served through short-lived signed URLs keyed by the deduplicated cover ID, so
-browser image requests do not expose the user session and tracks sharing
-artwork reuse one browser-cache entry. Tracks without readable embedded or
-folder artwork keep the semantic music-note placeholder in album cards, album
-details, and the player.
+Album covers are normalized to WebP at no more than 400 pixels on either side,
+deduplicated by normalized content hash, and stored under `artwork/` beside the
+SQLite database (`/data/artwork` in Docker). SQLite stores only the cover
+identity and hash. A single background artwork worker performs the bounded
+image transform. Short-lived signed URLs keyed by the deduplicated cover ID keep
+browser image requests independent from the user session, and tracks sharing
+artwork reuse one browser-cache entry. Artist portraits use the same cache.
+Tracks without readable embedded or folder artwork keep the semantic music-note
+placeholder in album cards, album details, and the player.
 Administrators can search local directories recursively with
 `GET /api/admin/filesystem/search?query=<term>`; results are bounded and do not
 follow symbolic links.

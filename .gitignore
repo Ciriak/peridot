@@ -33,6 +33,7 @@ node_modules/
 dist/
 coverage/
 generated/
+apps/server/artwork/
 apps/android/dist-update/
 apps/android/*.zip
 .peridot/

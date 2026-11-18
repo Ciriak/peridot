@@ -13,7 +13,11 @@ import { useOfflineTracks } from "../composables/use-offline-tracks";
 import { useServer } from "../composables/use-server";
 import { useServerConnection } from "../composables/use-server-connection";
 import { icons } from "../lib/icons";
-import { formatTrackDuration, trackAlbumRoute } from "../lib/library";
+import {
+  formatTrackDuration,
+  trackAlbumRoute,
+  trackArtistNames,
+} from "../lib/library";
 import { isTrackPlayable } from "../lib/offline-playback";
 import LikeButton from "./LikeButton.vue";
 import TrackArtistLinks from "./TrackArtistLinks.vue";
@@ -179,7 +183,7 @@ function toggleEntryPlayback(entry: PlaylistEntryResponse) {
         <ScrollingText class="w-full text-xs text-muted-foreground">
           <TrackArtistLinks
             v-if="entry.track?.mediaType === 'music'"
-            :artists="entry.track.artists"
+            :artists="trackArtistNames(entry.track)"
           />
           <span v-else>{{ entry.artist }}</span>
         </ScrollingText>

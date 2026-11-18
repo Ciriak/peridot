@@ -181,6 +181,13 @@ function useCatalogInfiniteQuery<T>(options: {
   const { status } = useServerConnection();
   const { snapshot: offlineSnapshot } = useOfflineCatalog();
   const { errorMessage } = useLocalizedMessage();
+  const queryClient = useQueryClient();
+  function fetchPage(pageParam: string | null) {
+    if (!scope.value || !token.value) {
+      throw new Error("Peridot query scope is unavailable.");
+    }
+    return options.fetchPage(pageParam, scope.value, token.value);
+  }
   const query = useInfiniteQuery<
     CatalogPage<T>,
     Error,
@@ -189,12 +196,7 @@ function useCatalogInfiniteQuery<T>(options: {
     string | null
   >({
     queryKey: computed(() => options.queryKey()),
-    queryFn: ({ pageParam }) => {
-      if (!scope.value || !token.value) {
-        throw new Error("Peridot query scope is unavailable.");
-      }
-      return options.fetchPage(pageParam, scope.value, token.value);
-    },
+    queryFn: ({ pageParam }) => fetchPage(pageParam),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     enabled: computed(() => Boolean(scope.value && token.value)),
@@ -219,7 +221,27 @@ function useCatalogInfiniteQuery<T>(options: {
         if (queryFingerprint() !== recoveryFingerprint) {
           return { error: null };
         }
-        return query.refetch();
+        try {
+          await queryClient.infiniteQuery<
+            CatalogPage<T>,
+            Error,
+            InfiniteData<CatalogPage<T>, string | null>,
+            QueryKey,
+            string | null
+          >({
+            queryKey: options.queryKey(),
+            queryFn: ({ pageParam }) => fetchPage(pageParam),
+            initialPageParam: null,
+            getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+            pages: Math.max(1, query.data.value?.pages.length ?? 1),
+            staleTime: 0,
+            retry: false,
+            meta: { persist: true },
+          });
+          return { error: null };
+        } catch (reason) {
+          return { error: reason };
+        }
       },
     }).finally(() => {
       recoveringStaleCursor.value = false;

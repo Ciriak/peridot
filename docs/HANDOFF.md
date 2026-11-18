@@ -2,6 +2,167 @@
 
 Last updated: 2026-11-18.
 
+## Catalog paging no longer conflicts with library changes
+
+Track, album, artist, audiobook, and podcast lists now continue from stable
+sort-key plus ID cursors. New or changed catalog rows during a scan no longer
+turn the next page request into a `409`, and rows inserted before the current
+position do not duplicate the next page. Published-time track ordering keeps
+offset paging because of its explicit null ordering, but those offsets no longer
+depend on the catalog revision.
+
+Legacy offset cursors remain readable. When an incompatible cursor still
+reaches the web client, recovery now rebuilds the same number of loaded pages
+from the first page instead of refetching with the invalid cursor. All shared
+auto-load sentinels now show the Peridot spinner and loading label at the bottom
+while the next page or recovery runs. A sentinel must leave the viewport before
+it can request another page, so scroll anchoring no longer loads the complete
+collection automatically.
+
+Persisted catalog infinite queries now restore at most their first page.
+Clearing the active query cache once removed pages accumulated by the earlier
+cascade; the persistence bound prevents those pages from recurring. The separate
+offline catalog snapshot is unaffected.
+
+Catalog card grids use responsive-row virtualization with
+`@tanstack/vue-virtual`, and shared track tables virtualize fixed rows against
+the main content scroll element. The existing responsive layouts and gaps are
+unchanged. Long lists now mount only visible rows and their overscan instead of
+mounting every loaded card or track.
+
+Live mobile inspection reproduced the original page-append jump from about
+5,563px to 14,429px with a 218ms frame. Browser scroll anchoring was retaining
+the loading footer as rows were inserted. Scroll anchoring is now disabled for
+the complete virtual list root. A subsequent 40-frame scroll across a page
+append advanced in even 500px steps with no reversal while 8-12 card rows were
+mounted. The remaining append frame measured 173ms; catalog persistence now
+serializes only its first page instead of every loaded page, avoiding work that
+grows with the loaded collection.
+
+The server log-retention test now builds its expired and retained records from
+the actual pruning clock. Its previous fixed November timestamp started aging
+past the five-day cutover and failed in CI even though production retention
+behavior was correct.
+
+Checks completed:
+
+- Full workspace suite (247 web, 184 server, 17 UI, and 5 desktop tests)
+- Web type check
+- Production web build
+- `pnpm check`
+- `git diff --check`
+
+Known limits: append-frame latency was measured on the live mobile profile but
+not profiled on desktop. Published-time offset pages can still shift when rows
+are inserted before the current offset, although they no longer fail with
+`409`. Changes remain uncommitted on
+`feature/cover-art-worker`; no commit, push, tag, publication, or deployment was
+performed.
+
+Next: profile an append on the desktop layout and on a low-power phone if the
+remaining one-off page-append frame is still perceptible.
+
+## Track navigation and metadata progress polish
+
+Every music credit now uses the shared artist-link component across the main
+track table, playlist rows, Quick picks, queue and player metadata, and the
+playlist track picker. Playlist and picker credits respect the same artist
+normalization as the other catalog surfaces.
+
+The desktop fixed-player artwork now opens the current music track's album.
+Tracks without album or artist metadata keep non-navigational artwork, and the
+title retains its existing anchored album or artist fallback route.
+
+Liked songs now sets `Liked songs — Peridot` as its browser title and uses the
+shared navigation label for the visible heading, matching the other top-level
+library pages.
+
+Settings → Metadata now ties provider progress rings to the running shared
+metadata task. Every enabled provider row displays the same task progress,
+instead of following the briefly changing active-provider detail as matching
+falls back between providers. This removes the rapid spinner movement between
+rows without changing metadata execution or task progress persistence.
+
+Checks completed:
+
+- Focused navigation, playback, task-progress, and settings tests
+- Full web suite (245 passing)
+- Web type check
+- Targeted ESLint and Prettier checks
+- Production web build (144 PWA precache entries)
+- `git diff --check`
+
+Known limits: live browser visual confirmation was not run. All changes remain
+uncommitted alongside the existing offline-library work; no commit, push, tag,
+publication, or deployment was performed.
+
+Next: click artist credits from each track surface, open an album from the
+desktop player artwork, then run a refresh with multiple enabled providers and
+confirm every provider row keeps one stable progress ring.
+
+## Liked albums sync offline and download progress has details
+
+`Make my liked titles available offline` now covers both liked songs and liked
+albums. Each connected synchronization backfills both catalogs, saves every
+available album track through the existing per-track manifest, and retries after
+later connection, preference, or likes changes. A failed track or album no
+longer prevents later liked items from being attempted in the same pass.
+
+Active song and album progress spinners now open a theme-consistent tooltip on
+hover or focus. It shows the title, whether the item is a song or album, and the
+current percentage, or `Starting download…` when the server has not provided a
+content length.
+
+Checks completed:
+
+- Focused library setting and offline tests (27 passing)
+- Full web suite (243 passing)
+- Web type check
+- Targeted ESLint and Prettier checks
+- Production web build (144 PWA precache entries)
+- `git diff --check`
+
+Known limits: live browser visual QA did not run because Computer Use could not
+verify the active Brave URL. All changes are uncommitted; no commit, push, tag,
+publication, or deployment was performed.
+
+Next: enable the setting, like an album, confirm its available tracks receive
+offline copies, then hover and keyboard-focus the song and album progress
+spinners to verify the detail tooltip.
+
+## Artwork uses a bounded external WebP cache
+
+Album covers and artist portraits now pass through one background artwork worker
+and are stored as content-addressed WebP files under `/data/artwork`. Each image
+is limited to 400 pixels on its longest side, uses quality 75, rejects inputs
+above 40 million pixels, and has a 512 KiB output cap. SQLite stores only cover
+and portrait hashes.
+
+The migration removes embedded image columns and clears old artwork references.
+The track metadata-version bump and cleared artist matching signatures cause the
+next scans to regenerate artwork from local files, Jellyfin, or Discogs.
+Unreferenced files are pruned after scans, metadata tasks, and source removal.
+Migration backups now contain only catalog metadata rather than image bytes.
+
+Checks completed:
+
+- Full server suite: 183 passing
+- Workspace type check
+- `pnpm check`
+- `pnpm db:validate`
+- `pnpm build`
+- `git diff --check`
+
+Known limits: existing local development data is on an unrelated plugin
+migration that is absent from the current migration graph, so the local
+development database was not reconciled. No live VPS migration or full
+post-migration rescan was run. The change is uncommitted; no commit, push, tag,
+publication, or deployment was performed.
+
+Next: deploy the migration, run all-source and metadata scans to rebuild the
+artwork cache, stop the service, run `pnpm db:vacuum`, and verify database and
+`/data/artwork` sizes.
+
 ## Migration backup retention is limited to three snapshots
 
 The migration runner now retains the three newest pre-migration database

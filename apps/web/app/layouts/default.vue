@@ -13,6 +13,7 @@ import {
   nextTick,
   onBeforeUnmount,
   onMounted,
+  provide,
   ref,
   watch,
 } from "vue";
@@ -32,7 +33,9 @@ import { useUser } from "../composables/use-user";
 import { isTauriRuntime } from "../lib/desktop-runtime";
 import { gravatarUrl } from "../lib/gravatar";
 import { icons } from "../lib/icons";
+import { MAIN_SCROLL_ELEMENT_KEY } from "../lib/main-scroll";
 import {
+  trackAlbumRoute,
   trackAlbumTitleRoute,
   trackArtistNames,
   trackCoverUrl,
@@ -50,6 +53,7 @@ const searchInput = ref<{ $el?: HTMLInputElement } | null>(null);
 const shortcutModifier = ref<SearchShortcutModifier>("ctrl");
 const mobileNavigation = ref(false);
 const queueOpen = ref(false);
+const mainScrollElement = ref<HTMLElement | null>(null);
 const desktopRuntime = ref(false);
 const loadingRayAtRight = ref(false);
 let loadingRayFrame: number | undefined;
@@ -115,6 +119,7 @@ const navigation = [
   },
 ];
 const currentPath = computed(() => route.path);
+provide(MAIN_SCROLL_ELEMENT_KEY, mainScrollElement);
 const isNavigationActive = (target: string) =>
   target === "/"
     ? currentPath.value === "/"
@@ -136,6 +141,18 @@ const { artworkUrl: currentCoverImageUrl, failed: coverFailed } =
 const currentTrackTitleRoute = computed(() =>
   active.value ? trackAlbumTitleRoute(active.value) : null,
 );
+const currentArtworkRoute = computed(() => {
+  const track = active.value;
+  if (
+    !track ||
+    track.mediaType !== "music" ||
+    !track.album?.trim() ||
+    !track.artist.trim()
+  ) {
+    return null;
+  }
+  return trackAlbumRoute(track);
+});
 
 function toggleCurrentTrackLike() {
   if (currentTrackId.value)
@@ -386,6 +403,7 @@ onBeforeUnmount(stopLoadingRay);
           </div>
         </header>
         <main
+          ref="mainScrollElement"
           id="main-content"
           tabindex="-1"
           class="min-h-0 flex-1 overflow-y-auto p-4 md:p-6"
@@ -450,7 +468,6 @@ onBeforeUnmount(stopLoadingRay);
       <div class="hidden h-full w-full min-w-0 items-center gap-6 px-6 md:flex">
         <div class="flex min-w-0 items-center gap-3 md:flex-1">
           <div
-            aria-hidden="true"
             class="relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted text-muted-foreground md:size-20"
             :class="active && !currentTrackPlayable && 'opacity-60'"
           >
@@ -474,6 +491,15 @@ onBeforeUnmount(stopLoadingRay);
               loading="eager"
               class="absolute inset-0"
               @error="coverFailed = true"
+            />
+            <NuxtLink
+              v-if="currentArtworkRoute"
+              :to="currentArtworkRoute"
+              :aria-label="
+                t('player.openAlbum', { album: active?.album?.trim() ?? '' })
+              "
+              class="absolute inset-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              @dblclick.stop
             />
           </div>
           <div class="min-w-0 flex-1">

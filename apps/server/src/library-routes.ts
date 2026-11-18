@@ -4,6 +4,7 @@ import { realpath, stat } from "node:fs/promises";
 import { Readable } from "node:stream";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { PlaybackTokenResponse } from "@peridot/contracts";
+import { ARTWORK_MIME_TYPE, type ArtworkCache } from "./artwork-cache.js";
 import type { CredentialStore } from "./credential-store.js";
 import type { Database } from "./database.js";
 import { sendError } from "./http.js";
@@ -64,6 +65,7 @@ export async function registerLibraryRoutes(
   playbackTokens: PlaybackTokenService,
   jellyfin: JellyfinClient,
   credentials: CredentialStore,
+  artworkCache: ArtworkCache,
 ) {
   app.post("/api/library/scans", async (_request, reply) => {
     const task = await queueLibraryScan(tasks);
@@ -129,13 +131,11 @@ export async function registerLibraryRoutes(
     reply: Parameters<typeof sendError>[0],
     head: boolean,
   ) {
-    const cover = await database.orm.TrackCover.select(
-      "data",
-      "mimeType",
-    ).first({
+    const cover = await database.orm.TrackCover.select("hash").first({
       id: request.params.id,
     });
-    if (!cover) {
+    const file = cover ? await artworkCache.read(cover.hash) : null;
+    if (!file) {
       return sendError(
         reply,
         404,
@@ -144,12 +144,11 @@ export async function registerLibraryRoutes(
         message("api.message.coverNotFound"),
       );
     }
-    const data = Buffer.from(cover.data);
     reply
       .header("Cache-Control", "private, max-age=3600")
-      .header("Content-Type", cover.mimeType)
-      .header("Content-Length", data.length);
-    return head ? reply.send() : reply.send(data);
+      .header("Content-Type", ARTWORK_MIME_TYPE)
+      .header("Content-Length", file.size);
+    return head ? reply.send() : reply.send(createReadStream(file.path));
   }
 
   app.get<{ Params: { id: string } }>(

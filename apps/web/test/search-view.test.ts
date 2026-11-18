@@ -43,7 +43,7 @@ test("search uses one full-content route with recent and local results", async (
   assert.match(searchPage, /page\.search\.recent/);
   assert.match(searchPage, /useSearchRecents\(\)/);
   assert.match(searchPage, /@open="openAlbum\(album\)"/);
-  assert.match(searchPage, /:album="album"\s+compact/);
+  assert.match(searchPage, /<AlbumCard :album="item" compact/);
   assert.match(searchPage, /<ArtistCard/);
   assert.match(searchPage, /<MediaCollectionCard/);
   assert.match(searchPage, /<TrackTable/);
