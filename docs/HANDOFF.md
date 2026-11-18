@@ -1,6 +1,39 @@
 # Handoff
 
-Last updated: 2026-11-17.
+Last updated: 2026-11-18.
+
+## Catalog paging recovers from concurrent library changes
+
+The web catalog query now treats `stale_catalog_cursor` as transient. It keeps
+the loaded list visible, stops generic retries for that specific response, waits
+for catalog revision messages to settle for 500 ms, and refetches the infinite
+query from its first page. Recovery is coalesced per active query and makes at
+most three attempts. Other API and network errors continue through the normal
+user-facing error path.
+
+Tests cover stale-response classification, first-page retry behavior, unrelated
+request failures, catalog quiet-period extension, and composable integration.
+
+Checks completed:
+
+- `pnpm --filter @peridot/web test` — 239 passing
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Targeted ESLint and Prettier checks
+- `git diff --check`
+
+Known limits: this fix makes the existing revision-bound offset cursors
+self-healing in the web client. It does not yet replace offset paging with
+keyset paging, so a very long-running scan can still cause the client to wait
+before another page loads. Browser interaction during a live scan was not
+reproduced. Server, schema, and full workspace checks were not needed because
+only web query handling and documentation changed. Direct API consumers remain
+responsible for restarting stale cursors from the first page. Changes are
+uncommitted on `feature/plugin`; no commit, push, publication, or deployment was
+performed.
+
+Next: replace offset-based cursor pages with sort-key-plus-ID keyset cursors to
+avoid snapshot invalidation during normal scrolling.
 
 ## Docker deployment no longer includes Watchtower
 

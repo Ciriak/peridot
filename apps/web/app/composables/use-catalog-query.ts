@@ -12,7 +12,12 @@ import {
   type InfiniteData,
   type QueryKey,
 } from "@tanstack/vue-query";
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
+import {
+  catalogCursorSettler,
+  isStaleCatalogCursor,
+  recoverStaleCatalogCursor,
+} from "../lib/catalog-cursor-recovery";
 import {
   isAuthenticationRedirectError,
   listAlbums,
@@ -114,6 +119,7 @@ export function useCatalogRevision() {
     value: number,
     reason: "scan" | "metadata" | "reset" | "source" | "source-removal",
   ) {
+    catalogCursorSettler.markChanged();
     revision.value = Math.max(revision.value, value);
     if (removesOfflineCatalogSnapshot(reason)) {
       void resetOfflineCatalog();
@@ -192,8 +198,42 @@ function useCatalogInfiniteQuery<T>(options: {
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     enabled: computed(() => Boolean(scope.value && token.value)),
+    retry: (failureCount, error) =>
+      !isStaleCatalogCursor(error) && failureCount < 3,
     meta: { persist: true },
   });
+  const recoveringStaleCursor = ref(false);
+  let staleRecoveryPromise: Promise<boolean> | null = null;
+
+  function queryFingerprint() {
+    return JSON.stringify(options.queryKey());
+  }
+
+  function recoverStaleCursor(): Promise<boolean> {
+    if (staleRecoveryPromise) return staleRecoveryPromise;
+    const recoveryFingerprint = queryFingerprint();
+    recoveringStaleCursor.value = true;
+    staleRecoveryPromise = recoverStaleCatalogCursor({
+      waitForQuiet: catalogCursorSettler.waitForQuiet,
+      refetch: async () => {
+        if (queryFingerprint() !== recoveryFingerprint) {
+          return { error: null };
+        }
+        return query.refetch();
+      },
+    }).finally(() => {
+      recoveringStaleCursor.value = false;
+      staleRecoveryPromise = null;
+    });
+    return staleRecoveryPromise;
+  }
+
+  watch(
+    () => query.error.value,
+    (reason) => {
+      if (isStaleCatalogCursor(reason)) void recoverStaleCursor();
+    },
+  );
 
   const serverItems = computed(() => {
     const seen = new Set<string>();
@@ -223,17 +263,21 @@ function useCatalogInfiniteQuery<T>(options: {
       : blockingQueryLoading(loaded.value, query.isPending.value),
   );
   const loadingMore = computed(
-    () => !usingOffline.value && query.isFetchingNextPage.value,
+    () =>
+      !usingOffline.value &&
+      (query.isFetchingNextPage.value || recoveringStaleCursor.value),
   );
   const error = computed(() =>
     usingOffline.value
       ? null
-      : visibleQueryError(
-          loaded.value,
-          query.error.value
-            ? catalogErrorMessage(query.error.value, errorMessage)
-            : null,
-        ),
+      : isStaleCatalogCursor(query.error.value)
+        ? null
+        : visibleQueryError(
+            loaded.value,
+            query.error.value
+              ? catalogErrorMessage(query.error.value, errorMessage)
+              : null,
+          ),
   );
   const nextCursor = computed(
     () => query.data.value?.pages.at(-1)?.nextCursor ?? null,
@@ -258,7 +302,8 @@ function useCatalogInfiniteQuery<T>(options: {
     ) {
       return;
     }
-    await query.fetchNextPage();
+    const result = await query.fetchNextPage();
+    if (isStaleCatalogCursor(result.error)) await recoverStaleCursor();
   }
 
   return {

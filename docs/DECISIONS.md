@@ -1,5 +1,20 @@
 # Decisions
 
+## 2026-11-18: Stale catalog cursors recover invisibly
+
+Catalog cursors remain scoped to a catalog revision and query fingerprint
+because offset pages cannot safely cross a library mutation. Stale cursor
+conflicts are a transient synchronization signal rather than a user-facing
+failure. The web client suppresses them, waits briefly for catalog changes to
+settle, and refetches the infinite query from its first page. Recovery is
+coalesced per active catalog query and limited so repeated conflicts during a
+long scan cannot create an unbounded request loop.
+
+Stale cursor responses bypass the generic query retry policy. This prevents
+multiple retries of the same known-invalid cursor before the controlled
+first-page recovery runs. Other request failures retain the normal visible
+error path.
+
 ## 2026-11-17: Docker does not run or control Watchtower
 
 The Compose stack runs only the Peridot application container. It does not mount
