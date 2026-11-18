@@ -129,7 +129,7 @@ test("failed migrations preserve a verified pre-migration backup", async () => {
   });
 });
 
-test("backup retention keeps the five newest snapshots and unrelated files", async () => {
+test("backup retention keeps the three newest snapshots and unrelated files", async () => {
   await withTemporaryDatabase(async (databasePath) => {
     const source = new DatabaseSync(databasePath);
     source.exec("CREATE TABLE Sample (value TEXT)");
@@ -141,7 +141,7 @@ test("backup retention keeps the five newest snapshots and unrelated files", asy
     await writeFile(path.join(backupDirectory, "notes.txt"), "keep");
 
     const backups: string[] = [];
-    for (let index = 0; index < 6; index += 1) {
+    for (let index = 0; index < 4; index += 1) {
       backups.push(
         await createVerifiedBackup({
           databasePath,
@@ -154,10 +154,52 @@ test("backup retention keeps the five newest snapshots and unrelated files", asy
     }
 
     const entries = await readdir(backupDirectory);
-    assert.equal(entries.filter((entry) => entry.endsWith(".db")).length, 5);
+    assert.equal(entries.filter((entry) => entry.endsWith(".db")).length, 3);
     assert.equal(entries.includes("notes.txt"), true);
     assert.equal(entries.includes(path.basename(backups[0]!)), false);
-    assert.equal(entries.includes(path.basename(backups[5]!)), true);
+    assert.equal(entries.includes(path.basename(backups[3]!)), true);
+  });
+});
+
+test("startup prunes expired snapshots when no migration is pending", async () => {
+  await withTemporaryDatabase(async (databasePath) => {
+    const url = databaseUrl(databasePath);
+    await runPrismaCommand(
+      ["db", "update", "--db", url, "--no-interactive"],
+      true,
+    );
+
+    const backupDirectory = path.join(path.dirname(databasePath), "backups");
+    const backups: string[] = [];
+    for (let index = 0; index < 4; index += 1) {
+      backups.push(
+        await createVerifiedBackup({
+          databasePath,
+          fromContract: null,
+          toContract: "abcdef0123456789".repeat(4),
+          backupDirectory,
+          now: new Date(Date.UTC(2026, 0, 1, 0, 0, index)),
+        }),
+      );
+    }
+    const staleBackup = path.join(
+      backupDirectory,
+      "peridot-20250101T000000000Z-before-empty-to-abcdef01.db",
+    );
+    await writeFile(staleBackup, "stale snapshot");
+
+    const messages: string[] = [];
+    await runPendingMigrations({
+      databaseUrl: url,
+      info: (message) => messages.push(message),
+    });
+
+    const entries = await readdir(backupDirectory);
+    assert.equal(entries.filter((entry) => entry.endsWith(".db")).length, 3);
+    assert.equal(entries.includes(path.basename(backups[0]!)), false);
+    assert.equal(entries.includes(path.basename(backups[3]!)), true);
+    assert.equal(entries.includes(path.basename(staleBackup)), false);
+    assert.match(messages.join("\n"), /Pruned 1 expired database snapshot/);
   });
 });
 

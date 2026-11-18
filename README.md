@@ -73,7 +73,7 @@ without a GitHub sign-in.
 Peridot applies committed database migrations automatically before the server
 starts after an image update. When migrations are pending, it first writes a
 consistent SQLite snapshot to the `backups` directory beside the database. The
-container path is `/data/backups`, and the five newest snapshots are retained.
+container path is `/data/backups`, and the three newest snapshots are retained.
 
 If a migration fails, Peridot does not start the server. Review the container
 logs and keep the reported snapshot together with `peridot.db.key` or your

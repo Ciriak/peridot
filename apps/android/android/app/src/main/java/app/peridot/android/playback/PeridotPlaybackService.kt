@@ -292,6 +292,9 @@ class PeridotPlaybackService : MediaLibraryService() {
 
             ACTION_PLAY -> {
                 if (player.mediaItemCount == 0) restoreQueue()
+                lastError = null
+                playbackStartRetries = 0
+                playbackStartedTrackId = null
                 player.play()
                 publishSnapshot()
             }
@@ -551,7 +554,11 @@ class PeridotPlaybackService : MediaLibraryService() {
             },
             tracks = tracks.values.toList(),
             activeTrackId = trackId,
-            playing = player.isPlaying,
+            playing = playbackControlActive(
+                playWhenReady = player.playWhenReady,
+                playbackState = player.playbackState,
+                hasError = lastError != null,
+            ),
             loading = player.playbackState == Player.STATE_BUFFERING,
             positionMs = if (position == C.TIME_UNSET) 0 else position,
             durationMs = duration,

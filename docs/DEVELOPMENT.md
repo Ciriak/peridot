@@ -538,10 +538,11 @@ pnpm db:migrate
 The runner checks Prisma's migration status first. When migrations are pending
 for a non-empty database, it creates a consistent snapshot under the `backups`
 directory beside `DATABASE_URL`, verifies it with `PRAGMA integrity_check`, and
-keeps the five newest snapshots. A new empty database is migrated without a
-snapshot. Backup or migration failure stops before the server starts. The `db`
-ref is advanced only by `db:migrate:dev`; deployment applies never modify
-tracked refs.
+keeps the three newest snapshots. A new empty database is migrated without a
+snapshot. Retention is enforced on startup and whenever a new snapshot is
+created. Backup or migration failure stops before the server starts. The `db`
+ref is advanced only by `db:migrate:dev`; deployment applies never modify tracked
+refs.
 
 Make a schema change through the migration graph:
 

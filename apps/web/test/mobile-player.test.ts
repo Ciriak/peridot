@@ -102,6 +102,11 @@ test("the fullscreen mobile player exposes accessible complete controls", async 
   assert.match(player, /closeFullscreen\(\);\s+emit\("openQueue"\)/);
   assert.match(player, /<TrackContextMenu[\s\S]*:track="active"/);
   assert.match(player, /<TrackArtistLinks/);
+  assert.match(
+    player,
+    /v-else-if="loading"[\s\S]*<PeridotSpinner\s+:label="t\('player\.buffering'\)"[\s\S]*t\("player\.buffering"\)/,
+    "the fullscreen player visibly identifies buffering",
+  );
   assert.match(player, /:thumb-label="t\('player\.position'\)"/);
   assert.match(player, /@click="toggleRandomization"/);
   assert.match(player, /@click="previous"/);

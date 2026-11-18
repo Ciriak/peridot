@@ -2,6 +2,60 @@
 
 Last updated: 2026-11-18.
 
+## Migration backup retention is limited to three snapshots
+
+The migration runner now retains the three newest pre-migration database
+snapshots instead of five. Unrelated files in `/data/backups` remain untouched,
+and existing installations prune older matching snapshots during startup even
+when no migration is pending. README, development guidance, and the durable
+migration decision describe the new limit and its storage rationale.
+
+Checks completed:
+
+- Full server suite: 179 passing
+- Server type check
+- Focused ESLint and Prettier checks
+- `git diff --check`
+
+Known limits: no live VPS restart was run, so its existing snapshot count has
+not been verified. The change is uncommitted alongside the user's current
+Android playback work; no commit, push, tag, publication, or deployment was
+performed.
+
+Next: apply the image update to the VPS, restart the container, and confirm
+`/data/backups` retains only the three newest snapshots.
+
+## Android playback intent is visible while buffering
+
+The Android player now exposes requested playback state instead of audible
+playback state to the shared Vue interface. Pressing play immediately switches
+the control to pause while Media3 prepares or buffers, and it returns to play
+when the user pauses, playback ends, or a terminal error is reported.
+
+The fullscreen mobile player also shows a visible localized buffering status
+with the shared Peridot spinner while the native player is buffering.
+
+Checks completed:
+
+- Full web suite: 239 passing
+- Web type check
+- Android unit suite, including buffering, pause, completion, and failure states
+- `pnpm check`
+- Capacitor sync and Android debug APK build
+- Current debug APK installed on the connected Pixel 8
+- On-device confirmation that pressing play immediately shows the pause control
+- `git diff --check`
+
+Known limits: the deployed Peridot server still reports the Jellyfin source as
+unavailable, so a complete track could not be played after buffering. The device
+shows `Source error` after the failed stream request.
+
+The Android and web changes remain uncommitted alongside the user's current
+branch state. No commit, push, tag, publication, or deployment was performed.
+
+Next: restore Jellyfin connectivity for the deployed server, then rerun a source
+scan and verify sustained playback on the phone.
+
 ## Catalog paging recovers from concurrent library changes
 
 The web catalog query now treats `stale_catalog_cursor` as transient. It keeps

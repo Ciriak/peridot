@@ -1,5 +1,17 @@
 # Decisions
 
+## 2026-11-18: Android playback controls reflect requested playback
+
+Android playback snapshots expose the user's playback intent rather than
+Media3's audible `isPlaying` value. The shared interface therefore shows the
+pause control immediately after play is requested, including while the player is
+preparing, retrying, or buffering. The control returns to play when the user
+pauses, playback reaches its end, or a terminal error is reported.
+
+The fullscreen mobile player shows an explicit buffering status with the shared
+Peridot spinner. This distinguishes a requested stream that is waiting from a
+player that has no active playback.
+
 ## 2026-11-18: Stale catalog cursors recover invisibly
 
 Catalog cursors remain scoped to a catalog revision and query fingerprint
@@ -343,10 +355,14 @@ table creation.
 Production startup and the supported `pnpm start` path run `pnpm db:migrate`
 before Fastify binds. If migrations are pending for a non-empty database, the
 runner creates a consistent SQLite snapshot beside the database, verifies it
-with `PRAGMA integrity_check`, and retains the five newest snapshots. Backup,
+with `PRAGMA integrity_check`, and retains the three newest snapshots. Backup,
 integrity, or migration failure stops startup. Automatic restore is excluded
 because newer schema state must remain visible for operator recovery; recovery
 uses the reported snapshot, its matching credential key, and the previous image.
+Retention was reduced from five on 2026-11-18 because each snapshot includes
+embedded album and artist artwork stored in the database, so retained copies
+can multiply persistent volume use. Startup enforces the limit even when no
+migration is pending so an existing installation can reclaim excess snapshots.
 
 Development and CI use the same graph. `pnpm db:migrate:dev` applies migrations
 and advances the tracked `db` ref, while `pnpm db:migration:check` rejects a

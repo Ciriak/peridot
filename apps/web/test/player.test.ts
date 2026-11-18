@@ -166,6 +166,17 @@ test("the persistent player controls a native audio element", async () => {
     "The player switches directly from play to pause",
   );
   assert.match(
+    await readFile(
+      new URL(
+        "../../android/android/app/src/main/java/app/peridot/android/playback/PeridotPlaybackService.kt",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    /playing = playbackControlActive\([\s\S]*playWhenReady = player\.playWhenReady[\s\S]*playbackState = player\.playbackState[\s\S]*hasError = lastError != null/,
+    "Android exposes requested playback while Media3 is buffering",
+  );
+  assert.match(
     playerFooter,
     /<div\s+aria-hidden="true"\s+class="pointer-events-none absolute inset-y-0 left-0 -z-10 w-2\/3[\s\S]*<div class="absolute inset-0 opacity-40">[\s\S]*<Transition[\s\S]*<FadeInImage\s+v-if="currentCoverImageUrl && !coverFailed"[\s\S]*:src="currentCoverImageUrl"[\s\S]*scale-125 object-left blur-3xl/,
     "The decorative background stays mounted while its current cover is rendered",

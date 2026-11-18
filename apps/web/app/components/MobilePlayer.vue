@@ -4,6 +4,7 @@ import { Icon } from "@iconify/vue/offline";
 import { Button } from "@peridot/ui/components/ui/button";
 import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import { Slider } from "@peridot/ui/components/ui/slider";
+import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import {
   DialogContent,
   DialogDescription,
@@ -376,6 +377,13 @@ function openQueue() {
               >
                 {{ error }}
               </p>
+              <div
+                v-else-if="loading"
+                class="mt-2 flex items-center justify-center gap-2 text-sm text-muted-foreground"
+              >
+                <PeridotSpinner :label="t('player.buffering')" class="size-5" />
+                <span aria-hidden="true">{{ t("player.buffering") }}</span>
+              </div>
               <LikeButton
                 class="mt-3"
                 large

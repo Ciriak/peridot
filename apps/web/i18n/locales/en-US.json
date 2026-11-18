@@ -88,6 +88,7 @@
   "player.previous": "Previous track",
   "player.play": "Play track",
   "player.pause": "Pause track",
+  "player.buffering": "Buffering…",
   "player.next": "Next track",
   "player.enableShuffle": "Enable randomized playback",
   "player.disableShuffle": "Disable randomized playback",

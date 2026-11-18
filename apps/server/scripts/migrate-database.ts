@@ -16,7 +16,7 @@ import {
   runPrismaCommand,
 } from "./prisma-cli.js";
 
-const BACKUP_LIMIT = 5;
+const BACKUP_LIMIT = 3;
 const DEFAULT_DATABASE_URL = "file:./peridot.db";
 
 interface MigrationStatus {
@@ -195,6 +195,13 @@ export async function runPendingMigrations({
 }: RunMigrationsOptions = {}): Promise<MigrationRunResult> {
   const databasePath = databasePathFromUrl(databaseUrl);
   await ensureDatabaseFile(databasePath);
+  const removedBackups = await pruneMigrationBackups(
+    backupDirectory ?? path.join(path.dirname(databasePath), "backups"),
+    databasePath,
+  );
+  if (removedBackups.length) {
+    info(`Pruned ${removedBackups.length} expired database snapshot(s).`);
+  }
 
   const spaces = await readMigrationStatus(databaseUrl);
   const pending = spaces.flatMap((space) =>
