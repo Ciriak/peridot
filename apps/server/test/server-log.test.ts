@@ -121,7 +121,7 @@ test("server logs require an administrator", async () => {
 test("file logging removes entries older than its retention period", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "peridot-log-retention-"));
   const logPath = path.join(root, "peridot.log");
-  const now = Date.UTC(2026, 10, 17, 12);
+  const now = Date.now();
   const day = 24 * 60 * 60 * 1000;
   const lines = [
     JSON.stringify({ time: now - 6 * day, level: "info", msg: "expired" }),

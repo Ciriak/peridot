@@ -39,6 +39,11 @@ mounted. The remaining append frame measured 173ms; catalog persistence now
 serializes only its first page instead of every loaded page, avoiding work that
 grows with the loaded collection.
 
+The server log-retention test now builds its expired and retained records from
+the actual pruning clock. Its previous fixed November timestamp started aging
+past the five-day cutover and failed in CI even though production retention
+behavior was correct.
+
 Checks completed:
 
 - Full workspace suite (247 web, 184 server, 17 UI, and 5 desktop tests)
