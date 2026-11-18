@@ -495,7 +495,8 @@ Peridot resolves unmatched tracks in provider order in the background.
 Requests to each provider are rate-limited separately.
 Artist name and portrait matching runs after track matching in the same metadata
 task. Provider candidates are merged for correction, and matched artist names,
-portrait provenance, and cached image content are stored locally. Artist image
+portrait provenance, and the normalized portrait cache hash are stored locally.
+Portrait bytes live in the artwork cache. Artist image
 downloads accept only bounded HTTPS JPEG, PNG, or WebP responses from approved
 Discogs hosts.
 Each containing folder can supply an album fallback title when tracks have no
@@ -570,6 +571,16 @@ credentials, and the matching key is required to decrypt them. Automatic
 rollback is intentionally not performed: after a failed upgrade, stop the
 service, restore the selected snapshot and matching key, and run the previous
 image.
+
+After artwork BLOBs have been removed, stop the server and reclaim their freed
+SQLite pages with:
+
+```sh
+pnpm db:vacuum
+```
+
+The command requires free disk space at least 20% larger than the database and
+refuses to run without that headroom.
 
 To intentionally discard local catalog, account, server queue, and settings data
 and rebuild the development database from the migration baseline:
@@ -674,12 +685,15 @@ Successful browser playback starts are recorded with
 available from `GET /api/quick-picks`; the server returns up to eight ordered track
 and album entries with their current catalog summaries after applying seven-day
 exponential decay.
-Album covers are deduplicated by content hash in the local SQLite database and
-served through short-lived signed URLs keyed by the deduplicated cover ID, so
-browser image requests do not expose the user session and tracks sharing
-artwork reuse one browser-cache entry. Tracks without readable embedded or
-folder artwork keep the semantic music-note placeholder in album cards, album
-details, and the player.
+Album covers are normalized to WebP at no more than 400 pixels on either side,
+deduplicated by normalized content hash, and stored under `artwork/` beside the
+SQLite database (`/data/artwork` in Docker). SQLite stores only the cover
+identity and hash. A single background artwork worker performs the bounded
+image transform. Short-lived signed URLs keyed by the deduplicated cover ID keep
+browser image requests independent from the user session, and tracks sharing
+artwork reuse one browser-cache entry. Artist portraits use the same cache.
+Tracks without readable embedded or folder artwork keep the semantic music-note
+placeholder in album cards, album details, and the player.
 Administrators can search local directories recursively with
 `GET /api/admin/filesystem/search?query=<term>`; results are bounded and do not
 follow symbolic links.

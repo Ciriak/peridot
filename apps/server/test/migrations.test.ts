@@ -297,3 +297,189 @@ test("automatic media detection migration preserves the detected track type", as
     }
   });
 });
+
+test("artwork cache migration clears embedded images and references", async () => {
+  await withTemporaryDatabase(async (databasePath) => {
+    const url = databaseUrl(databasePath);
+    await runPrismaCommand(
+      [
+        "db",
+        "migrate",
+        "--db",
+        url,
+        "--to",
+        "20261117T1914_add_artwork_jobs",
+        "--no-interactive",
+      ],
+      true,
+    );
+
+    const database = new DatabaseSync(databasePath);
+    try {
+      database
+        .prepare(
+          `INSERT INTO "TrackCover"
+            ("createdAt", "data", "hash", "id", "mimeType", "updatedAt")
+           VALUES (?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          "2026-11-18T00:00:00.000Z",
+          new Uint8Array([1, 2, 3]),
+          "cover-hash",
+          "cover-id",
+          "image/png",
+          "2026-11-18T00:00:00.000Z",
+        );
+      database
+        .prepare(
+          `INSERT INTO "ArtistImage"
+            ("createdAt", "data", "hash", "id", "mimeType", "sourceUrl", "updatedAt")
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          "2026-11-18T00:00:00.000Z",
+          new Uint8Array([4, 5, 6]),
+          "portrait-hash",
+          "portrait-id",
+          "image/png",
+          "https://example.test/portrait.png",
+          "2026-11-18T00:00:00.000Z",
+        );
+      database
+        .prepare(
+          `INSERT INTO "ArtistMetadata"
+            ("artistId", "attemptedSignature", "displayName", "imageId",
+             "imageProviderKind", "updatedAt")
+           VALUES (?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          "artist-id",
+          "attempted",
+          "Artist",
+          "portrait-id",
+          "discogs",
+          "2026-11-18T00:00:00.000Z",
+        );
+      database
+        .prepare(
+          `INSERT INTO "Track"
+            ("id", "coverId", "createdAt", "fileModifiedAt", "fileSizeBytes",
+             "mimeType", "relativePath", "title", "artist", "updatedAt")
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          "track-id",
+          "cover-id",
+          "2026-11-18T00:00:00.000Z",
+          "2026-11-18T00:00:00.000Z",
+          1n,
+          "audio/mpeg",
+          "track.mp3",
+          "Track",
+          "Artist",
+          "2026-11-18T00:00:00.000Z",
+        );
+      database
+        .prepare(
+          `INSERT INTO "CatalogTrack"
+            ("albumArtist", "albumArtistCredits", "albumFolderKey", "artist",
+             "artistCredits", "available", "coverId", "id", "normalizedAlbum",
+             "normalizedArtist", "normalizedTitle", "title", "updatedAt")
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          "Artist",
+          '["Artist"]',
+          "folder",
+          "Artist",
+          '["Artist"]',
+          1,
+          "cover-id",
+          "track-id",
+          "",
+          "artist",
+          "track",
+          "Track",
+          "2026-11-18T00:00:00.000Z",
+        );
+      database
+        .prepare(
+          `INSERT INTO "CatalogAlbum"
+            ("artist", "coverId", "coverTrackId", "id", "normalizedArtist",
+             "normalizedTitle", "title", "trackCount", "updatedAt")
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          "Artist",
+          "cover-id",
+          "track-id",
+          "album-id",
+          "artist",
+          "track",
+          "Track",
+          1,
+          "2026-11-18T00:00:00.000Z",
+        );
+    } finally {
+      database.close();
+    }
+
+    await runPendingMigrations({
+      databaseUrl: url,
+      info: () => undefined,
+    });
+
+    const migrated = new DatabaseSync(databasePath, { readOnly: true });
+    try {
+      const track = migrated.prepare('SELECT "coverId" FROM "Track"').get();
+      assert.ok(track);
+      assert.equal(track.coverId, null);
+      const projectedTrack = migrated
+        .prepare('SELECT "coverId" FROM "CatalogTrack"')
+        .get();
+      assert.ok(projectedTrack);
+      assert.equal(projectedTrack.coverId, null);
+      const album = migrated
+        .prepare('SELECT "coverId", "coverTrackId" FROM "CatalogAlbum"')
+        .get();
+      assert.ok(album);
+      assert.equal(album.coverId, null);
+      assert.equal(album.coverTrackId, null);
+      const artist = migrated
+        .prepare(
+          'SELECT "attemptedSignature", "imageId", "imageProviderKind" FROM "ArtistMetadata"',
+        )
+        .get();
+      assert.ok(artist);
+      assert.equal(artist.attemptedSignature, null);
+      assert.equal(artist.imageId, null);
+      assert.equal(artist.imageProviderKind, null);
+      const coverCount = migrated
+        .prepare('SELECT COUNT(*) AS count FROM "TrackCover"')
+        .get();
+      assert.ok(coverCount);
+      assert.equal(coverCount.count, 0);
+      const portraitCount = migrated
+        .prepare('SELECT COUNT(*) AS count FROM "ArtistImage"')
+        .get();
+      assert.ok(portraitCount);
+      assert.equal(portraitCount.count, 0);
+      const coverColumns = migrated
+        .prepare(
+          "SELECT COUNT(*) AS count FROM pragma_table_info('TrackCover') WHERE name IN ('data', 'mimeType')",
+        )
+        .get();
+      assert.ok(coverColumns);
+      assert.equal(coverColumns.count, 0);
+      const portraitColumns = migrated
+        .prepare(
+          "SELECT COUNT(*) AS count FROM pragma_table_info('ArtistImage') WHERE name IN ('data', 'mimeType')",
+        )
+        .get();
+      assert.ok(portraitColumns);
+      assert.equal(portraitColumns.count, 0);
+    } finally {
+      migrated.close();
+    }
+  });
+});

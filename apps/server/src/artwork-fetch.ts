@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { pruneReferencedArtwork, type ArtworkCache } from "./artwork-cache.js";
 import type { CatalogService } from "./catalog.js";
 import type { CredentialStore } from "./credential-store.js";
 import type { Database } from "./database.js";
@@ -152,6 +152,7 @@ export class ArtworkService {
     private readonly jellyfin: JellyfinClient,
     private readonly catalog: CatalogService,
     private readonly credentials: CredentialStore,
+    private readonly artworkCache: ArtworkCache,
   ) {}
 
   async runTask(
@@ -315,6 +316,7 @@ export class ArtworkService {
     }
 
     await this.catalog.flushChanges();
+    await pruneReferencedArtwork(this.database, this.artworkCache);
     await updateProgress(true);
     return {
       details: artworkDetails({
@@ -385,14 +387,12 @@ export class ArtworkService {
   }
 
   private async storeCover(cover: CoverImage): Promise<string> {
-    const hash = createHash("sha256").update(cover.data).digest("hex");
+    const hash = await this.artworkCache.store(cover.data);
     const existing = await this.database.orm.TrackCover.first({ hash });
     const stored =
       existing ??
       (await this.database.orm.TrackCover.create({
         hash,
-        mimeType: cover.mimeType,
-        data: Uint8Array.from(cover.data),
       }));
     return stored.id;
   }

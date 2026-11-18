@@ -1,12 +1,22 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { TaskResponse } from "@peridot/contracts";
+import sharp from "sharp";
 import { createTestContext, waitForScan, waitForTask } from "./helpers.js";
 
 const API_KEY = "jellyfin-secret-api-key";
 const AUDIO_ID = "11111111-1111-1111-1111-111111111111";
 const ALBUM_ID = "22222222-2222-2222-2222-222222222222";
-const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
+const JPEG = await sharp({
+  create: {
+    background: "#00a63e",
+    channels: 3,
+    height: 32,
+    width: 32,
+  },
+})
+  .jpeg({ quality: 75 })
+  .toBuffer();
 const AUDIO = Buffer.from("jellyfin-audio-bytes");
 const LIBRARIES = [
   {
@@ -161,6 +171,13 @@ test("Jellyfin library discovery creates one auto-detected source per selected l
           new URL(url).searchParams.get("parentId") === "audio-library-id",
       ),
     );
+    const coverRequest = requestedUrls
+      .map((url) => new URL(url))
+      .find((url) => url.pathname === `/Items/${ALBUM_ID}/Images/Primary`);
+    assert.ok(coverRequest);
+    assert.equal(coverRequest.searchParams.get("maxWidth"), "400");
+    assert.equal(coverRequest.searchParams.get("maxHeight"), "400");
+    assert.equal(coverRequest.searchParams.get("quality"), "75");
     const books = await context.app.inject({
       method: "GET",
       url: "/api/audiobooks",

@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { TaskResponse } from "@peridot/contracts";
 import { buildApp } from "../src/app.js";
+import { artworkCacheDirectory } from "../src/artwork-cache.js";
 import { localCredentialKeyFile } from "../src/credential-store.js";
 import { createDatabase, type Database } from "../src/database.js";
 import { ServerLogBuffer, serverLogFilePath } from "../src/server-log.js";
@@ -15,6 +16,7 @@ export interface TestContext {
   database: Database;
   databaseUrl: string;
   credentialKeyFile: string;
+  artworkRoot: string;
   libraryRoot: string;
   root: string;
   authorization: { authorization: string };
@@ -125,6 +127,7 @@ export async function createTestContext(
     database,
     databaseUrl,
     credentialKeyFile,
+    artworkRoot: artworkCacheDirectory(databaseUrl),
     libraryRoot,
     root,
     authorization,

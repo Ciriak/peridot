@@ -520,9 +520,9 @@ export class JellyfinClient {
       `Items/${encodeURIComponent(itemId)}/Images/Primary`,
     );
     url.search = new URLSearchParams({
-      maxWidth: "600",
-      maxHeight: "600",
-      quality: "90",
+      maxWidth: "400",
+      maxHeight: "400",
+      quality: "75",
       ...(tag ? { tag } : {}),
     }).toString();
     const response = await this.request(url, apiKey, {

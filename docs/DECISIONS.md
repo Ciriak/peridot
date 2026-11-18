@@ -1,5 +1,26 @@
 # Decisions
 
+## 2026-11-18: Artwork uses a bounded external WebP cache
+
+Album covers and artist portraits are normalized through one background artwork
+worker to WebP quality 75 with neither dimension exceeding 400 pixels. Decoding
+is limited to 40 million input pixels, and output is capped at 512 KiB. The
+result is content-addressed as `/data/artwork/<sha256>.webp`; SQLite stores only
+the artwork identity and hash.
+
+This removes all image BLOBs from the catalog database, preventing migration
+snapshots from multiplying image storage. The migration intentionally does not
+preserve existing embedded image bytes: it clears cover and portrait references,
+deletes the old image rows, and drops the image-data columns. The track metadata
+version is increased and artist matching signatures are cleared so the next
+library and metadata scans regenerate artwork from configured sources.
+
+Artwork files not referenced by either track covers or artist portraits are
+pruned after scans, metadata tasks, and source removal. SQLite does not return
+deleted BLOB pages to the filesystem automatically, so the explicit
+`pnpm db:vacuum` command performs a preflight free-space check and then runs
+`VACUUM` while the server is stopped.
+
 ## 2026-11-18: Android playback controls reflect requested playback
 
 Android playback snapshots expose the user's playback intent rather than

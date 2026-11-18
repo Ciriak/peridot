@@ -7,7 +7,9 @@ import type {
   ResolveTracksResponse,
   TrackListResponse,
 } from "@peridot/contracts";
+import { createReadStream } from "node:fs";
 import type { FastifyInstance } from "fastify";
+import { ARTWORK_MIME_TYPE, type ArtworkCache } from "./artwork-cache.js";
 import { CatalogError, type CatalogService } from "./catalog.js";
 import { sendError } from "./http.js";
 import { message } from "./messages.js";
@@ -52,6 +54,7 @@ function handleCatalogError(
 export async function registerCatalogRoutes(
   app: FastifyInstance,
   catalog: CatalogService,
+  artworkCache: ArtworkCache,
 ) {
   app.get<{ Querystring: CursorQuery }>(
     "/api/tracks",
@@ -290,7 +293,8 @@ export async function registerCatalogRoutes(
     head: boolean,
   ) => {
     const image = await catalog.artistImage(request.params.id);
-    if (!image) {
+    const file = image ? await artworkCache.read(image.hash) : null;
+    if (!file) {
       return sendError(
         reply,
         404,
@@ -299,12 +303,11 @@ export async function registerCatalogRoutes(
         message("api.message.artistImageNotFound"),
       );
     }
-    const data = Buffer.from(image.data);
     reply
       .header("Cache-Control", "private, max-age=14400")
-      .header("Content-Length", data.byteLength)
-      .header("Content-Type", image.mimeType);
-    return head ? reply.send() : reply.send(data);
+      .header("Content-Length", file.size)
+      .header("Content-Type", ARTWORK_MIME_TYPE);
+    return head ? reply.send() : reply.send(createReadStream(file.path));
   };
 
   app.get<{ Params: { id: string } }>(

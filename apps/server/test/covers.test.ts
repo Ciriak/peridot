@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { test } from "node:test";
+import sharp from "sharp";
 import {
   createTaggedMp3,
   createTestContext,
@@ -10,7 +11,7 @@ import {
 } from "./helpers.js";
 
 const png = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nXQAAAAASUVORK5CYII=",
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWNgWGb3HwADcgHkhrgr6AAAAABJRU5ErkJggg==",
   "base64",
 );
 
@@ -58,8 +59,11 @@ test("embedded artwork is deduplicated and served through a signed URL", async (
       url: items[0]!.coverUrl!,
     });
     assert.equal(cover.statusCode, 200);
-    assert.equal(cover.headers["content-type"], "image/png");
-    assert.deepEqual(cover.rawPayload, png);
+    assert.equal(cover.headers["content-type"], "image/webp");
+    const metadata = await sharp(cover.rawPayload).metadata();
+    assert.equal(metadata.format, "webp");
+    assert.ok((metadata.width ?? 0) <= 400);
+    assert.ok((metadata.height ?? 0) <= 400);
 
     const unsigned = await context.app.inject({
       method: "GET",
@@ -77,6 +81,57 @@ test("embedded artwork is deduplicated and served through a signed URL", async (
       url: `${items[0]!.coverUrl!.split("?")[0]}?coverToken=${encodeURIComponent(playback.json().token)}`,
     });
     assert.equal(wrongToken.statusCode, 401);
+  } finally {
+    await context.close();
+  }
+});
+
+test("large artwork is normalized to webp with a 400 pixel maximum", async () => {
+  const context = await createTestContext();
+  try {
+    const largeCover = await sharp({
+      create: {
+        background: "#00a63e",
+        channels: 3,
+        height: 1200,
+        width: 800,
+      },
+    })
+      .png()
+      .toBuffer();
+    await writeFile(
+      path.join(context.libraryRoot, "large.mp3"),
+      createTaggedMp3({
+        title: "Large Artwork",
+        artist: "Elliot Lake",
+        album: "Night Sessions",
+        cover: { data: largeCover, mimeType: "image/png" },
+        discNumber: 1,
+        trackNumber: 1,
+      }),
+    );
+
+    await startScan(context);
+    const tracks = await context.app.inject({
+      method: "GET",
+      url: "/api/tracks",
+      headers: context.authorization,
+    });
+    const coverUrl = tracks.json<{
+      items: Array<{ coverUrl: string | null }>;
+    }>().items[0]?.coverUrl;
+    assert.ok(coverUrl);
+
+    const cover = await context.app.inject({
+      method: "GET",
+      url: coverUrl,
+    });
+    assert.equal(cover.statusCode, 200);
+    assert.equal(cover.headers["content-type"], "image/webp");
+    const metadata = await sharp(cover.rawPayload).metadata();
+    assert.equal(metadata.format, "webp");
+    assert.equal(metadata.width, 267);
+    assert.equal(metadata.height, 400);
   } finally {
     await context.close();
   }

@@ -15,6 +15,7 @@ import {
   parseStoredOptionalArtistCredits,
   serializeArtistCredits,
 } from "./artist-credits.js";
+import { pruneReferencedArtwork, type ArtworkCache } from "./artwork-cache.js";
 import type { CatalogService } from "./catalog.js";
 import type { CredentialStore } from "./credential-store.js";
 import type { Database } from "./database.js";
@@ -352,6 +353,7 @@ export class MetadataEnrichment {
     private readonly registry: MetadataResolverRegistry,
     private readonly credentials: CredentialStore,
     private readonly catalog?: CatalogService,
+    private readonly artworkCache?: ArtworkCache,
     private readonly portraitFetch: typeof fetch = fetch,
   ) {}
 
@@ -662,6 +664,9 @@ export class MetadataEnrichment {
         throw new DOMException("Stopped", "AbortError");
       }
       await this.removeUnusedArtistImages();
+      if (this.artworkCache) {
+        await pruneReferencedArtwork(this.database, this.artworkCache);
+      }
       await this.catalog?.flushChanges();
       return {
         details: metadataDetails(
@@ -1286,13 +1291,18 @@ export class MetadataEnrichment {
         message("api.message.providerUnavailable"),
       );
     }
-    const hash = createHash("sha256").update(data).digest("hex");
+    if (!this.artworkCache) {
+      throw new MetadataEnrichmentError(
+        "The artist portrait cache is unavailable.",
+        500,
+        message("api.message.providerUnavailable"),
+      );
+    }
+    const hash = await this.artworkCache.store(data);
     const existing = await this.database.orm.ArtistImage.first({ hash });
     if (existing) return existing;
     return this.database.orm.ArtistImage.create({
       hash,
-      mimeType,
-      data,
       sourceUrl: imageUrl.toString(),
     });
   }

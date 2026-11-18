@@ -71,6 +71,7 @@ import {
   updateManagedUser,
   UserManagementError,
 } from "./users.js";
+import { pruneReferencedArtwork, type ArtworkCache } from "./artwork-cache.js";
 
 export async function registerAdminRoutes(
   app: FastifyInstance,
@@ -86,6 +87,7 @@ export async function registerAdminRoutes(
   catalog?: CatalogService,
   sourceRefreshScheduler?: SourceRefreshScheduler,
   updates?: UpdateService,
+  artworkCache?: ArtworkCache,
 ) {
   await app.register(async (admin) => {
     admin.addHook("onRequest", async (request, reply) => {
@@ -450,6 +452,16 @@ export async function registerAdminRoutes(
           }
           await transaction.orm.Source.where({ id: source.id }).delete();
         });
+        if (artworkCache) {
+          try {
+            await pruneReferencedArtwork(database, artworkCache);
+          } catch (error) {
+            request.log.warn(
+              { err: error, sourceId: source.id },
+              "Could not prune removed source artwork",
+            );
+          }
+        }
         if (removedTrackIds.length && catalog) {
           try {
             for (const trackId of removedTrackIds) {

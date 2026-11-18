@@ -15,7 +15,8 @@
     "db:migrate:dev": "tsx scripts/migrate-database.ts --advance-ref db",
     "db:migration:plan": "prisma contract emit && prisma migration plan",
     "db:migration:check": "tsx scripts/check-migrations.ts",
-    "db:reset": "tsx scripts/reset-database.ts && pnpm db:migrate"
+    "db:reset": "tsx scripts/reset-database.ts && pnpm db:migrate",
+    "db:vacuum": "tsx scripts/vacuum-database.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.4.1",
@@ -26,6 +27,7 @@
     "croner": "10.0.1",
     "fastify": "5.12.8",
     "music-metadata": "12.3.5",
+    "sharp": "^0.35.5",
     "temporal-polyfill": "^1.0.4"
   },
   "devDependencies": {

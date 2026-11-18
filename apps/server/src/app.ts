@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
 import type { HealthResponse } from "@peridot/contracts";
 import { registerAuthRoutes, registerProtectedRoutes } from "./auth.js";
+import { ArtworkCache } from "./artwork-cache.js";
 import { CatalogService } from "./catalog.js";
 import { registerCatalogRoutes } from "./catalog-routes.js";
 import { loadServerConfig, type ServerConfig } from "./config.js";
@@ -81,6 +82,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
     );
   const database = options.database ?? createDatabase(config.databaseUrl);
   const ownsDatabase = options.database === undefined;
+  const artworkCache = new ArtworkCache(config.databaseUrl);
   let credentials: CredentialStore;
   try {
     const metadataProviderCredentials = (
@@ -142,6 +144,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
     registry,
     credentials,
     catalog,
+    artworkCache,
     options.discogsFetch ?? fetch,
   );
   const artworkService = new ArtworkService(
@@ -149,6 +152,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
     jellyfin,
     catalog,
     credentials,
+    artworkCache,
   );
   const logBuffer =
     options.logBuffer ??
@@ -169,6 +173,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
     catalog,
     jellyfin,
     credentials,
+    artworkCache,
   );
   tasks.registerExecutor("library_scan", (task, taskService, signal) =>
     scanner.runTask(task, taskService, signal),
@@ -272,8 +277,9 @@ export async function buildApp(options: BuildAppOptions = {}) {
         playbackTokens,
         jellyfin,
         credentials,
+        artworkCache,
       );
-      await registerCatalogRoutes(protectedApp, catalog);
+      await registerCatalogRoutes(protectedApp, catalog, artworkCache);
       await registerTaskRoutes(protectedApp, tasks);
       await registerLikeRoutes(protectedApp, database);
       await registerPlaylistRoutes(protectedApp, database, playbackTokens);
@@ -298,6 +304,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
         catalog,
         sourceRefreshScheduler,
         updateService,
+        artworkCache,
       );
     },
     (request) => playbackTokens.authorizeRequest(request.method, request.url),
@@ -316,6 +323,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
     metadataEnrichment.close();
     await tasks.close();
     await catalog.close();
+    await artworkCache.close();
     await logBuffer.close();
     logBuffer.onEntry(null);
     realtime.close();

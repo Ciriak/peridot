@@ -74,6 +74,8 @@ Peridot applies committed database migrations automatically before the server
 starts after an image update. When migrations are pending, it first writes a
 consistent SQLite snapshot to the `backups` directory beside the database. The
 container path is `/data/backups`, and the three newest snapshots are retained.
+Artwork is normalized separately into `/data/artwork` as deduplicated WebP
+files, so migration snapshots contain only catalog metadata.
 
 If a migration fails, Peridot does not start the server. Review the container
 logs and keep the reported snapshot together with `peridot.db.key` or your
@@ -81,6 +83,18 @@ configured `PERIDOT_CREDENTIAL_KEY`; provider credentials in database snapshots
 cannot be decrypted without the matching key. To roll back, stop the container,
 restore the database snapshot and its key on the same `/data` volume, then run
 the previous Peridot image.
+
+Album covers and artist portraits are regenerated from their configured sources
+after upgrading to the external artwork cache. To reclaim old SQLite BLOB pages
+after a migration, stop the server and run:
+
+```sh
+docker compose stop peridot
+docker compose run --rm --no-deps --entrypoint pnpm peridot db:vacuum
+docker compose up -d peridot
+```
+
+The process requires free disk space at least 20% larger than the database.
 
 ## Features
 

@@ -2,6 +2,39 @@
 
 Last updated: 2026-11-18.
 
+## Artwork uses a bounded external WebP cache
+
+Album covers and artist portraits now pass through one background artwork worker
+and are stored as content-addressed WebP files under `/data/artwork`. Each image
+is limited to 400 pixels on its longest side, uses quality 75, rejects inputs
+above 40 million pixels, and has a 512 KiB output cap. SQLite stores only cover
+and portrait hashes.
+
+The migration removes embedded image columns and clears old artwork references.
+The track metadata-version bump and cleared artist matching signatures cause the
+next scans to regenerate artwork from local files, Jellyfin, or Discogs.
+Unreferenced files are pruned after scans, metadata tasks, and source removal.
+Migration backups now contain only catalog metadata rather than image bytes.
+
+Checks completed:
+
+- Full server suite: 183 passing
+- Workspace type check
+- `pnpm check`
+- `pnpm db:validate`
+- `pnpm build`
+- `git diff --check`
+
+Known limits: existing local development data is on an unrelated plugin
+migration that is absent from the current migration graph, so the local
+development database was not reconciled. No live VPS migration or full
+post-migration rescan was run. The change is uncommitted; no commit, push, tag,
+publication, or deployment was performed.
+
+Next: deploy the migration, run all-source and metadata scans to rebuild the
+artwork cache, stop the service, run `pnpm db:vacuum`, and verify database and
+`/data/artwork` sizes.
+
 ## Migration backup retention is limited to three snapshots
 
 The migration runner now retains the three newest pre-migration database
