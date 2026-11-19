@@ -17,6 +17,7 @@ import type {
   SourceListResponse,
   TaskResponse,
   UpdateMetadataProviderRequest,
+  UpdatePluginEnabledRequest,
   UpdatePluginSettingsRequest,
   UpdateServerSettingsRequest,
   UpdateUserRequest,
@@ -271,7 +272,33 @@ export async function registerAdminRoutes(
             return sendError(
               reply,
               error.statusCode,
-              "invalid_plugin",
+              error.code === "plugin_disabled" || error.code === "not_installed"
+                ? error.code
+                : "invalid_plugin",
+              error.message,
+              error.messageDescriptor,
+            );
+          }
+          throw error;
+        }
+      },
+    );
+
+    admin.put<{
+      Params: { id: string };
+      Body: UpdatePluginEnabledRequest;
+    }>(
+      "/api/admin/plugins/:id/enabled",
+      async (request, reply): Promise<PluginResponse | undefined> => {
+        try {
+          if (!plugins) throw new Error("Plugin service is unavailable.");
+          return await plugins.updateEnabled(request.params.id, request.body);
+        } catch (error) {
+          if (error instanceof PluginError) {
+            return sendError(
+              reply,
+              error.statusCode,
+              error.code,
               error.message,
               error.messageDescriptor,
             );
@@ -385,7 +412,9 @@ export async function registerAdminRoutes(
             return sendError(
               reply,
               error.statusCode,
-              "invalid_plugin",
+              error.code === "plugin_disabled" || error.code === "not_installed"
+                ? error.code
+                : "invalid_plugin",
               error.message,
               error.messageDescriptor,
             );

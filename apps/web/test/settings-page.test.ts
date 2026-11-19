@@ -89,9 +89,25 @@ test("plugins have install and confirmed uninstall lifecycle controls", async ()
     readSource("../app/lib/peridot-client.ts"),
     readSource("../../../packages/contracts/src/index.ts"),
   ]);
+  const actionMenu = page.slice(
+    page.indexOf("<TooltipProvider", page.indexOf("plugin.enabled")),
+    page.indexOf("</TooltipProvider>") + "</TooltipProvider>".length,
+  );
   assert.match(page, /usePluginsQuery/);
   assert.match(page, /installPlugin/);
   assert.match(page, /uninstallPlugin/);
+  assert.match(page, /updatePluginEnabled/);
+  assert.match(page, /settings\.plugins\.restartRequiredHelp/);
+  assert.match(page, /settings\.plugins\.actions/);
+  assert.match(page, /icons\.more/);
+  assert.match(page, /<Switch/);
+  assert.doesNotMatch(page, /<Badge[^>]+plugin\.enabled/);
+  assert.match(
+    page,
+    /plugin\.enabled \? 'text-foreground' : 'text-destructive'/,
+  );
+  assert.match(actionMenu, /DropdownMenuRoot/);
+  assert.match(actionMenu, /settings\.plugins\.uninstall/);
   assert.match(page, /settings\.plugins\.uninstallWarning/);
   assert.match(page, /settings\.plugins\.uninstallRemote/);
   assert.match(page, /AlertDialogRoot/);
@@ -100,6 +116,7 @@ test("plugins have install and confirmed uninstall lifecycle controls", async ()
   assert.match(client, /\/api\/admin\/plugins/);
   assert.match(client, /sources\/discover/);
   assert.match(client, /updatePluginSettings/);
+  assert.match(client, /updatePluginEnabled/);
   assert.match(settings, /plugin\.settings\.fields/);
   assert.match(settings, /field\.secret/);
   assert.match(settings, /credentials/);
@@ -307,6 +324,8 @@ test("sources are managed on their own page with row action menus", async () => 
   assert.doesNotMatch(page, /chooseKind\('integration'\)/);
   assert.doesNotMatch(page, /settings\.sources\.jellyfin/);
   assert.match(page, /v-for="plugin in installedSourcePlugins"/);
+  assert.match(page, /plugin\.enabled/);
+  assert.match(page, /!plugin\.restartRequired/);
   assert.match(page, /chooseKind\(plugin\.id\)/);
   assert.match(page, /newPluginFields/);
   assert.match(page, /discoverPluginSourceOptions/);
@@ -613,6 +632,10 @@ test("server settings confirm before restarting the connected server", async () 
   assert.match(serverCard, /@click="requestRestart"/);
   assert.match(
     serverCard,
+    /variant="destructive"[\s\S]*?@click="requestRestart"/,
+  );
+  assert.match(
+    serverCard,
     /:disabled="restarting \|\| connectionStatus === 'lost'"/,
   );
   assert.match(page, /useServerConnection/);
@@ -623,6 +646,7 @@ test("server settings confirm before restarting the connected server", async () 
   assert.match(restartDialog, /settings\.server\.restartTitle/);
   assert.match(restartDialog, /settings\.server\.restartDescription/);
   assert.match(restartDialog, /<AlertDialogCancel as-child>/);
+  assert.match(restartDialog, /variant="destructive"/);
   assert.match(restartDialog, /@click="confirmRestart"/);
   assert.match(page, /settings\.server\.restartRequested/);
 });

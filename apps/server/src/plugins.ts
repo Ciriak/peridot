@@ -8,6 +8,7 @@ import type {
   PluginSettingsResponse,
   PluginSourceOptionResponse,
   PluginTrackReference,
+  UpdatePluginEnabledRequest,
   TaskKind,
   TaskResponse,
   UpdatePluginSettingsRequest,
@@ -23,6 +24,7 @@ import {
 import type { CatalogService } from "./catalog.js";
 import type { CredentialStore } from "./credential-store.js";
 import type { Database } from "./database.js";
+import { message } from "./messages.js";
 import type { PluginInstallationRow, SourceRow } from "./prisma/models.js";
 import {
   TaskExecutionError,
@@ -249,6 +251,7 @@ function installationRow(
 
 export class PluginService {
   private readonly definitions = new Map<string, PluginDefinition>();
+  private readonly activePlugins = new Set<string>();
 
   constructor(
     private readonly database: Database,
@@ -381,11 +384,19 @@ export class PluginService {
       await this.database.orm.PluginInstallation.create({
         pluginId: definition.manifest.id,
         installed: 1,
+        enabled: 1,
         installedAt: now,
         installSource: definition.manifest.installSource,
         installSourceLocator: definition.manifest.installSourceLocator,
         version: definition.manifest.version,
       });
+    }
+    const rows = await this.database.orm.PluginInstallation.all();
+    this.activePlugins.clear();
+    for (const row of rows) {
+      if (row.installed === 1 && row.enabled === 1) {
+        this.activePlugins.add(row.pluginId);
+      }
     }
   }
 
@@ -395,7 +406,7 @@ export class PluginService {
         const kind =
           `plugin:${definition.manifest.id}:${pluginTask.contribution.id}` as TaskKind;
         tasks.registerExecutor(kind, async (task, taskService, signal) => {
-          const installed = await this.requireInstalled(definition.manifest.id);
+          const installed = await this.requireEnabled(definition.manifest.id);
           const currentTask = installed.dataProcessor?.tasks.find(
             (candidate) =>
               candidate.contribution.id === pluginTask.contribution.id,
@@ -446,7 +457,7 @@ export class PluginService {
     taskId: string,
     tasks: TaskService,
   ): Promise<TaskResponse> {
-    const definition = await this.requireInstalled(pluginId);
+    const definition = await this.requireEnabled(pluginId);
     const pluginTask = definition.dataProcessor?.tasks.find(
       (candidate) => candidate.contribution.id === taskId,
     );
@@ -495,7 +506,13 @@ export class PluginService {
         const playlistGeneration = definition.contributions.some(
           (contribution) => contribution.kind === "playlist-generator",
         );
-        if (!row || (!recommendation && !playlistGeneration)) return [];
+        if (
+          !row ||
+          !this.activePlugins.has(definition.manifest.id) ||
+          (!recommendation && !playlistGeneration)
+        ) {
+          return [];
+        }
         const response: PluginProviderResponse = {
           id: definition.manifest.id,
           name: definition.manifest.name,
@@ -593,6 +610,7 @@ export class PluginService {
     });
     const update = {
       installed: 1,
+      enabled: 1,
       installedAt: now,
       installSource: definition.manifest.installSource,
       installSourceLocator: definition.manifest.installSourceLocator,
@@ -608,6 +626,27 @@ export class PluginService {
         ...update,
       });
     }
+    const row = await this.database.orm.PluginInstallation.firstOrThrow({
+      pluginId,
+    });
+    return this.toResponse(definition, installationRow(definition, row), row);
+  }
+
+  async updateEnabled(
+    pluginId: string,
+    input: UpdatePluginEnabledRequest,
+  ): Promise<PluginResponse> {
+    if (typeof input?.enabled !== "boolean") {
+      throw new PluginError(
+        "Plugin enabled state must be true or false.",
+        "invalid_configuration",
+        400,
+      );
+    }
+    const definition = await this.requireInstalled(pluginId);
+    await this.database.orm.PluginInstallation.where({ pluginId }).update({
+      enabled: input.enabled ? 1 : 0,
+    });
     const row = await this.database.orm.PluginInstallation.firstOrThrow({
       pluginId,
     });
@@ -679,6 +718,7 @@ export class PluginService {
       await transaction.orm.Source.where({ pluginId }).deleteAndCount();
       await transaction.orm.PluginInstallation.where({ pluginId }).update({
         installed: 0,
+        enabled: 0,
         installedAt: null,
         configuration: "{}",
         credentialCiphertext: null,
@@ -688,6 +728,7 @@ export class PluginService {
       tracks.flatMap((track) => (track.coverId ? [track.coverId] : [])),
     );
     await catalog.flushChanges();
+    this.activePlugins.delete(pluginId);
     const row = await this.database.orm.PluginInstallation.firstOrThrow({
       pluginId,
     });
@@ -699,7 +740,7 @@ export class PluginService {
     configuration: PluginSourceConfiguration,
     signal?: AbortSignal,
   ): Promise<PluginSourceOptionResponse[]> {
-    const definition = await this.requireInstalled(pluginId);
+    const definition = await this.requireEnabled(pluginId);
     if (!definition.source) {
       throw new PluginError(
         "This plugin does not provide library sources.",
@@ -718,7 +759,7 @@ export class PluginService {
     configuration: PluginSourceConfiguration,
     signal?: AbortSignal,
   ) {
-    const definition = await this.requireInstalled(pluginId);
+    const definition = await this.requireEnabled(pluginId);
     if (!definition.source) {
       throw new PluginError(
         "This plugin does not provide library sources.",
@@ -734,7 +775,7 @@ export class PluginService {
 
   async sourceAdapter(source: SourceRow) {
     if (source.kind !== "plugin" || !source.pluginId) return null;
-    const definition = await this.requireInstalled(source.pluginId);
+    const definition = await this.requireEnabled(source.pluginId);
     return definition.source ?? null;
   }
 
@@ -744,7 +785,7 @@ export class PluginService {
     limit: number,
     signal?: AbortSignal,
   ): Promise<PluginRecommendationCandidate[]> {
-    const definition = await this.requireInstalled(pluginId);
+    const definition = await this.requireEnabled(pluginId);
     const provider = definition.recommendationProvider;
     if (!provider?.similar) {
       throw new PluginError(
@@ -771,7 +812,7 @@ export class PluginService {
     limit: number,
     signal?: AbortSignal,
   ): Promise<PluginRecommendationCandidate[]> {
-    const definition = await this.requireInstalled(pluginId);
+    const definition = await this.requireEnabled(pluginId);
     const provider = definition.recommendationProvider;
     if (!provider?.forYou) {
       throw new PluginError(
@@ -804,7 +845,7 @@ export class PluginService {
     },
     signal?: AbortSignal,
   ): Promise<{ name: string | null; items: PluginRecommendationCandidate[] }> {
-    const definition = await this.requireInstalled(pluginId);
+    const definition = await this.requireEnabled(pluginId);
     const generator = definition.playlistGenerator;
     if (!generator) {
       throw new PluginError(
@@ -871,13 +912,22 @@ export class PluginService {
   }
 
   async installedDefinitions(): Promise<PluginDefinition[]> {
-    const rows = await this.database.orm.PluginInstallation.where({
-      installed: 1,
-    }).all();
-    const installed = new Set(rows.map((row) => row.pluginId));
     return [...this.definitions.values()].filter((definition) =>
-      installed.has(definition.manifest.id),
+      this.activePlugins.has(definition.manifest.id),
     );
+  }
+
+  private async requireEnabled(pluginId: string): Promise<PluginDefinition> {
+    const definition = await this.requireInstalled(pluginId);
+    if (!this.activePlugins.has(pluginId)) {
+      throw new PluginError(
+        "The plugin is disabled. Restart the server to apply plugin changes.",
+        "plugin_disabled",
+        409,
+        message("api.message.pluginDisabled"),
+      );
+    }
+    return definition;
   }
 
   private async runtimeConfiguration(definition: PluginDefinition): Promise<{
@@ -933,6 +983,10 @@ export class PluginService {
       permissions: [...definition.manifest.permissions],
       contributions: contributionResponses(definition),
       installed: installation.installed,
+      enabled: row?.enabled === 1,
+      restartRequired:
+        installation.installed &&
+        (row?.enabled === 1) !== this.activePlugins.has(definition.manifest.id),
       installedAt: installation.installedAt?.toISOString() ?? null,
       installSource: installation.installSource,
       installSourceLocator: installation.installSourceLocator,

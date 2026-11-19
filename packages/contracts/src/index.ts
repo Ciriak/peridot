@@ -483,7 +483,11 @@ export type TaskStatus =
   "queued" | "running" | "completed" | "failed" | "interrupted" | "stopped";
 
 export type TaskKind =
-  "library_scan" | "metadata_fetch" | "artwork_fetch" | `plugin:${string}`;
+  | "library_scan"
+  | "catalog_fetch"
+  | "metadata_fetch"
+  | "artwork_fetch"
+  | `plugin:${string}`;
 
 export const TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY =
   "metadata.activeProvider";
@@ -630,6 +634,10 @@ export interface UpdatePluginSettingsRequest {
   credentials?: Record<string, string>;
 }
 
+export interface UpdatePluginEnabledRequest {
+  enabled: boolean;
+}
+
 export interface PluginSourceDiscoveryDefinition {
   actionMessage: MessageDescriptor;
   helpMessage: MessageDescriptor | null;
@@ -699,6 +707,8 @@ export interface PluginResponse {
   permissions: string[];
   contributions: PluginContributionResponse[];
   installed: boolean;
+  enabled: boolean;
+  restartRequired: boolean;
   installedAt: string | null;
   installSource: PluginInstallSource;
   installSourceLocator: string;

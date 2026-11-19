@@ -1,6 +1,149 @@
 # Handoff
 
-Last updated: 2026-11-18.
+Last updated: 2026-11-19.
+
+## Progressive Jellyfin import and deferred catalog projection
+
+Jellyfin now requests 100-item pages and core imports at most 100 records per
+transaction. New tracks, lightweight catalog summaries, and artwork jobs use
+bulk inserts; unchanged rescan rows use one bulk update. Existing-ID lookup is
+one query per import batch. Each committed batch publishes a catalog revision,
+so title, artist, and album are visible while later Jellyfin pages are still
+being fetched.
+
+Changed tracks carry a persisted `catalogProjectionPending` flag. A new durable
+`catalog_fetch` child task performs full album, artist, contribution, and search
+projection after metadata matching and before artwork. Pending projection work
+is queued again at startup after interruption. SQLite now enables WAL and a
+five-second busy timeout, and transient writer contention retries the full
+100-item batch without retaining partial counts.
+
+Migration `20261119T1237_add_catalog_projection_pending` added the pending flag
+and index. The local database was migrated with a verified pre-migration backup,
+and the tracked `db` ref advanced to `8466b5a38d1f`.
+
+Checks completed:
+
+- Jellyfin suite: 11 passed; the new test blocks page two and verifies the first
+  100 catalog rows are already visible
+- Full server suite: 190 passed
+- Full web suite: 248 passed
+- `pnpm lint`
+- `pnpm format:check`
+- Web, contracts, and Jellyfin plugin type checks
+- `pnpm db:validate`
+- Disposable 300-file scan benchmark: 33.6 seconds with one worker, down from
+  45.8 seconds before WAL
+
+Known limits: full deferred catalog projection still uses the existing
+per-track album/artist/search projection path in 100-track batches. It no
+longer blocks discovery or basic browsing, but a complete 70,000-track
+projection may remain lengthy. A live 70,000-item Jellyfin run has not been
+timed. Server typecheck and build currently encounter the concurrently added,
+untracked `apps/server/src/openapi.ts`; that unrelated file was not modified.
+After the type error appeared, the complete web and server behavioral suites
+still passed, including OpenAPI.
+
+Changes remain uncommitted on `feature/plugin`, with the user's existing plugin
+and OpenAPI work preserved. No push, tag, publication, or deployment was
+performed.
+
+Next: run one real 70,000-item Jellyfin import, record discovery and deferred
+projection durations separately, then replace the remaining per-track
+projection loop with grouped album/artist updates if the background task remains
+too long.
+
+## API documentation is generated automatically
+
+The server now publishes an OpenAPI 3.1 system generated from its registered
+Fastify routes. The JSON document is available at `/api/openapi.json`, YAML at
+`/api/openapi.yaml`, and bundled Swagger UI at `/api/docs/`.
+
+Route summaries, security requirements, path and query parameters, request
+bodies, responses, shared schemas, binary media routes, and the realtime
+WebSocket contract are defined in `apps/server/src/openapi.ts`. The Swagger
+transform applies those definitions only to the generated document, leaving
+the existing Fastify validation and response serialization behavior unchanged.
+The document covers bearer sessions, scoped playback and artwork tokens, and
+the single-use realtime ticket.
+
+The OpenAPI tests verify that all registered API routes receive detailed
+metadata, public and protected operations use the correct security schemes,
+shared references resolve, and JSON, YAML, and Swagger UI are reachable.
+
+Checks completed so far:
+
+- Focused server routing suite: OpenAPI, auth, health, startup, and web serving
+  (15 passed)
+- Server type check
+- Server production build
+- Targeted ESLint and Prettier checks
+- `git diff --check`
+
+Known limits: documentation metadata is maintained alongside the route
+catalogue rather than extracted from the existing TypeScript contract
+interfaces, and a static OpenAPI artifact is not written during the build. The
+endpoints are public and are intended for self-hosted API discovery. Changes
+remain uncommitted alongside the existing plugin and catalog-projection work.
+
+The full server suite progressed through the catalog, artwork, auth, health,
+realtime, and multiple Jellyfin tests without a test assertion failure, but the
+test runner was terminated with Windows exit code `4294967295` before printing
+its final summary. The complete `pnpm check` run passed version validation and
+lint, then failed formatting because the pre-existing modified
+`apps/server/src/library-scanner.ts` is not formatted. A targeted Prettier check
+for all changed OpenAPI and documentation files passed, and the unrelated file
+was preserved.
+
+Next: rerun the complete server suite and workspace check after the existing
+`library-scanner.ts` change is formatted and the test-runner termination is
+understood.
+
+## Plugin enablement is separate from installation and restart-gated
+
+Plugins now have a persisted enabled state distinct from installation.
+Disabling an installed plugin keeps its settings, credentials, sources, tracks,
+and task history while removing its source, provider, and task contributions on
+the next server start. Re-enabling it restores those contributions on the next
+start. Plugin responses expose `enabled` and `restartRequired`.
+
+Settings → Admin → Plugins now provides an enable switch and shows when a
+restart is pending. The redundant enabled badge is omitted because the switch
+shows that state, and the disabled label uses the destructive color. Uninstall
+moved into the card's three-dot tooltip actions menu and remains
+confirmation-guarded. Source-plugin choices and task actions only appear for
+plugins that are installed, enabled, and active without a pending restart.
+
+The server persists desired enablement through
+`PUT /api/admin/plugins/:id/enabled`. Runtime activation is snapshotted when the
+plugin host initializes. Disabled plugin operations return a stable
+`plugin_disabled` conflict after restart. Uninstall still removes owned plugin
+data immediately.
+
+Migration `20261119T1051_add_plugin_enabled` added the required state column and
+indexed installation plus enablement. The local development database was
+migrated with a verified backup, and the tracked `db` ref advanced to
+`da8fb2c157d7`.
+
+Checks completed:
+
+- `pnpm --filter @peridot/server test` (187 passed)
+- `pnpm --filter @peridot/web test` (248 passed)
+- Shared UI tests (17 passed)
+- Desktop tests (5 passed)
+- Server and web type checks
+- `pnpm lint`
+- `pnpm db:validate`
+- Production web and server builds within `pnpm build`
+- `git diff --check`
+
+The full `pnpm build` reached Android assembly and failed because `JAVA_HOME`
+and Java are unavailable in this environment; web, server, contracts, player,
+SDK, and bundled plugin builds completed before that step. Browser visual QA was
+not available because the browser automation host was unavailable.
+
+Changes remain uncommitted on `dev`. No push, tag, publication, or deployment
+was performed.
 
 ## Plugin system supports recommendation and generated-playlist providers
 

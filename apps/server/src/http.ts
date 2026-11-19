@@ -20,6 +20,7 @@ const CODE_MESSAGE_KEYS: Record<string, string> = {
   invalid_source: "api.message.sourceInvalid",
   not_configured: "api.message.pluginNotConfigured",
   plugin_auth_failed: "api.message.sourcePluginAuthFailed",
+  plugin_disabled: "api.message.pluginDisabled",
   plugin_unavailable: "api.message.sourcePluginUnavailable",
   unsupported: "api.message.pluginUnsupported",
   invalid_task_page: "api.message.invalidTaskPage",

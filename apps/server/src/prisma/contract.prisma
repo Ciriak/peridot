@@ -132,6 +132,7 @@ model Track {
   externalCoverKey           String?
   available                  Int        @default(1)
   lastSeenScanId             String?
+  catalogProjectionPending   Int        @default(0)
   sourceId                   String?
   source                     Source?    @relation(fields: [sourceId], references: [id], onDelete: SetNull)
   artworkJob                 ArtworkJob?
@@ -144,6 +145,7 @@ model Track {
   @@index([mediaType])
   @@index([artist, album, title])
   @@index([sourceId])
+  @@index([catalogProjectionPending])
   @@index([coverId])
   @@index([metadataProviderKind, metadataExternalTrackId])
 }
@@ -286,6 +288,7 @@ model ServerSetting {
 model PluginInstallation {
   pluginId             String    @id
   installed            Int       @default(1)
+  enabled              Int       @default(1)
   installedAt          DateTime?
   installSource        String    @default("bundled")
   installSourceLocator String
@@ -295,7 +298,7 @@ model PluginInstallation {
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @onCreate(now()) @onUpdate(now())
 
-  @@index([installed])
+  @@index([installed, enabled])
 }
 
 model Source {

@@ -146,6 +146,8 @@ const installedSourcePlugins = computed(() =>
   pluginsQuery.items.value.filter(
     (plugin) =>
       plugin.installed &&
+      plugin.enabled &&
+      !plugin.restartRequired &&
       plugin.contributions.some(
         (contribution) => contribution.kind === "source",
       ),

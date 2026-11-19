@@ -508,7 +508,7 @@ watch(connectionStatus, (status) => {
         </div>
         <Button
           type="button"
-          variant="outline"
+          variant="destructive"
           size="sm"
           :disabled="restarting || connectionStatus === 'lost'"
           @click="requestRestart"
@@ -553,7 +553,11 @@ watch(connectionStatus, (status) => {
               }}</Button>
             </AlertDialogCancel>
             <AlertDialogAction as-child @click="confirmRestart">
-              <Button type="button" :disabled="restarting">
+              <Button
+                type="button"
+                variant="destructive"
+                :disabled="restarting"
+              >
                 <Icon :icon="icons.restart" aria-hidden="true" class="size-4" />
                 {{
                   restarting

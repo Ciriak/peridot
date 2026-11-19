@@ -20,6 +20,7 @@ import {
   waitForTask,
   waitForScan,
 } from "./helpers.js";
+import { buildApp } from "../src/app.js";
 
 const AUDIO_ID = "plugin-track-id";
 
@@ -73,6 +74,8 @@ test("Jellyfin is installed by default and can be uninstalled only with confirma
       .items.find((plugin) => plugin.id === "jellyfin");
     assert.ok(jellyfin);
     assert.equal(jellyfin.installed, true);
+    assert.equal(jellyfin.enabled, true);
+    assert.equal(jellyfin.restartRequired, false);
     assert.equal(jellyfin.installSource, "bundled");
     assert.ok(
       jellyfin.contributions.some(
@@ -126,6 +129,7 @@ test("Jellyfin is installed by default and can be uninstalled only with confirma
     });
     assert.equal(uninstalled.statusCode, 200, uninstalled.body);
     assert.equal(uninstalled.json<PluginResponse>().installed, false);
+    assert.equal(uninstalled.json<PluginResponse>().enabled, false);
     assert.equal(
       (
         await context.database.orm.Source.where({
@@ -171,6 +175,8 @@ test("Jellyfin is installed by default and can be uninstalled only with confirma
     });
     assert.equal(reinstalled.statusCode, 200, reinstalled.body);
     assert.equal(reinstalled.json<PluginResponse>().installed, true);
+    assert.equal(reinstalled.json<PluginResponse>().enabled, true);
+    assert.equal(reinstalled.json<PluginResponse>().restartRequired, true);
     assert.equal(
       (
         await context.database.orm.Source.where({
@@ -180,6 +186,81 @@ test("Jellyfin is installed by default and can be uninstalled only with confirma
       0,
     );
   } finally {
+    await context.close();
+  }
+});
+
+test("plugin enable changes wait for a server restart", async () => {
+  const context = await createTestContext({
+    jellyfinFetch: async (input) => jellyfinResponse(input),
+  });
+  let restartedApp: Awaited<ReturnType<typeof buildApp>> | undefined;
+  try {
+    const disabled = await context.app.inject({
+      method: "PUT",
+      url: "/api/admin/plugins/jellyfin/enabled",
+      headers: context.authorization,
+      payload: { enabled: false },
+    });
+    assert.equal(disabled.statusCode, 200, disabled.body);
+    const disabledPlugin = disabled.json<PluginResponse>();
+    assert.equal(disabledPlugin.enabled, false);
+    assert.equal(disabledPlugin.restartRequired, true);
+
+    const beforeRestart = await context.app.inject({
+      method: "POST",
+      url: "/api/admin/plugins/jellyfin/sources/discover",
+      headers: context.authorization,
+      payload: {
+        configuration: {
+          url: "http://plugin-jellyfin.test",
+          apiKey: "plugin-secret",
+        },
+      },
+    });
+    assert.equal(beforeRestart.statusCode, 200, beforeRestart.body);
+
+    await context.app.close();
+    restartedApp = await buildApp({
+      config: {
+        databaseUrl: context.databaseUrl,
+        libraryRoot: context.libraryRoot,
+        webOrigins: ["http://127.0.0.1:17430"],
+      },
+      database: context.database,
+      logger: false,
+    });
+    const listing = await restartedApp.inject({
+      method: "GET",
+      url: "/api/admin/plugins",
+      headers: context.authorization,
+    });
+    assert.equal(listing.statusCode, 200, listing.body);
+    const jellyfin = listing
+      .json<PluginListResponse>()
+      .items.find((plugin) => plugin.id === "jellyfin");
+    assert.ok(jellyfin);
+    assert.equal(jellyfin.enabled, false);
+    assert.equal(jellyfin.restartRequired, false);
+
+    const afterRestart = await restartedApp.inject({
+      method: "POST",
+      url: "/api/admin/plugins/jellyfin/sources/discover",
+      headers: context.authorization,
+      payload: {
+        configuration: {
+          url: "http://plugin-jellyfin.test",
+          apiKey: "plugin-secret",
+        },
+      },
+    });
+    assert.equal(afterRestart.statusCode, 409, afterRestart.body);
+    assert.equal(
+      afterRestart.json<{ error: { code: string } }>().error.code,
+      "plugin_disabled",
+    );
+  } finally {
+    await restartedApp?.close();
     await context.close();
   }
 });

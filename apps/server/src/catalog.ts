@@ -24,7 +24,12 @@ import {
 } from "./artist-credits.js";
 import { message } from "./messages.js";
 import type { PlaybackTokenService } from "./playback-tokens.js";
-import type { ArtistImageRow, ArtistMetadataRow } from "./prisma/models.js";
+import type {
+  ArtistImageRow,
+  ArtistMetadataRow,
+  TaskRow,
+  TrackRow,
+} from "./prisma/models.js";
 import {
   normalizeSearchText as normalize,
   searchTerms,
@@ -37,11 +42,13 @@ import {
 } from "./track-response.js";
 import { parseStoredGenres } from "./genres.js";
 import { storedMediaType, trackMediaFilter } from "./media.js";
+import type { TaskExecutionResult, TaskService } from "./tasks.js";
 
 const CATALOG_STATE_ID = "catalog";
 const PROJECTION_VERSION = 6;
 const CHANGE_THROTTLE_MS = 2_000;
 const BACKFILL_BATCH_SIZE = 500;
+const PROJECTION_BATCH_SIZE = 100;
 const DEFAULT_PAGE_SIZE = 100;
 const MAX_PAGE_SIZE = 200;
 const DEFAULT_CARD_PAGE_SIZE = 50;
@@ -96,6 +103,7 @@ export class CatalogError extends Error {
 
 type CursorValue = string | number | null;
 type CursorKey = Record<string, CursorValue>;
+type CatalogDatabase = Pick<Database, "orm" | "sql" | "execute">;
 
 interface CursorPayload {
   key?: CursorKey;
@@ -532,6 +540,108 @@ export class CatalogService {
     return this.lastRevision;
   }
 
+  async indexTrackSummary(
+    track: TrackRow,
+    database: CatalogDatabase = this.database,
+  ): Promise<void> {
+    const values = this.trackSummaryValues(track);
+    const updated = await database.orm.CatalogTrack.where({
+      id: track.id,
+    }).updateAndCount(values);
+    if (!updated) {
+      await database.orm.CatalogTrack.create({ id: track.id, ...values });
+    }
+  }
+
+  async insertTrackSummaries(
+    tracks: readonly TrackRow[],
+    database: CatalogDatabase = this.database,
+  ): Promise<void> {
+    if (!tracks.length) return;
+    const plan = database.sql.CatalogTrack.insert(
+      tracks.map((track) => ({
+        id: track.id,
+        ...this.trackSummaryValues(track),
+      })),
+    ).build();
+    await database.execute(plan);
+  }
+
+  markScanBatchChanged(sourceId: string | null): Promise<number> {
+    this.markChanged(sourceId, "scan");
+    return this.flushChanges();
+  }
+
+  async hasPendingProjection(sourceId: string | null = null): Promise<boolean> {
+    let query = this.database.orm.Track.where({
+      catalogProjectionPending: 1,
+    });
+    if (sourceId) query = query.where({ sourceId });
+    return Boolean(await query.select("id").first());
+  }
+
+  async runTask(
+    task: TaskRow,
+    tasks: TaskService,
+    signal: AbortSignal,
+  ): Promise<TaskExecutionResult> {
+    let scoped = this.database.orm.Track.where({
+      catalogProjectionPending: 1,
+    });
+    if (task.sourceId) scoped = scoped.where({ sourceId: task.sourceId });
+    const { count: total } = await scoped.aggregate((aggregate) => ({
+      count: aggregate.count(),
+    }));
+    let completed = 0;
+    await tasks.updateProgress(task.id, completed, total);
+    while (true) {
+      if (signal.aborted) {
+        throw new DOMException("Catalog projection was stopped.", "AbortError");
+      }
+      let query = this.database.orm.Track.where({
+        catalogProjectionPending: 1,
+      });
+      if (task.sourceId) query = query.where({ sourceId: task.sourceId });
+      const tracks = await query
+        .orderBy((track) => track.createdAt.asc())
+        .limit(PROJECTION_BATCH_SIZE)
+        .select("id")
+        .all();
+      if (!tracks.length) break;
+      for (const track of tracks) {
+        if (signal.aborted) {
+          throw new DOMException(
+            "Catalog projection was stopped.",
+            "AbortError",
+          );
+        }
+        await this.reindexTrack(track.id, "scan");
+        completed += 1;
+        if (completed % 10 === 0 || completed === total) {
+          await tasks.updateProgress(task.id, completed, total);
+        }
+      }
+    }
+    await tasks.updateProgress(task.id, completed, total);
+    await this.flushChanges();
+    return {
+      details: [
+        {
+          key: "source",
+          value: task.sourceName ?? "All sources",
+          labelMessage: message("task.detail.source"),
+          valueMessage: task.sourceName ? null : message("common.allSources"),
+        },
+        {
+          key: "tracks.processed",
+          value: String(completed),
+          labelMessage: message("task.detail.tracksProcessed"),
+          valueMessage: null,
+        },
+      ],
+    };
+  }
+
   async reindexTrack(
     trackId: string,
     reason: CatalogChange["reason"] = "scan",
@@ -678,6 +788,7 @@ export class CatalogService {
         await this.createSearchTerm("track", trackId, term);
       }
       this.markChanged(track.sourceId, reason);
+      await this.clearProjectionPending(trackId);
       return;
     }
 
@@ -731,6 +842,60 @@ export class CatalogService {
       );
     }
     this.markChanged(track.sourceId, reason);
+    await this.clearProjectionPending(trackId);
+  }
+
+  private async clearProjectionPending(trackId: string): Promise<void> {
+    await this.database.orm.Track.where({ id: trackId }).update({
+      catalogProjectionPending: 0,
+    });
+  }
+
+  private trackSummaryValues(track: TrackRow) {
+    const effective = effectiveTrackFields(track);
+    const trackMediaType = storedMediaType(track.mediaType);
+    const album = effective.album?.trim() || null;
+    const albumFolderKey = catalogAlbumFolderKey(
+      track.sourceId,
+      track.relativePath,
+    );
+    const albumReleaseKey = catalogAlbumReleaseKey(
+      track.metadataProviderId,
+      track.metadataExternalReleaseId,
+    );
+    const albumId =
+      track.available && album
+        ? catalogAlbumId({
+            mediaType: trackMediaType,
+            album,
+            albumArtists: effective.albumArtists,
+            albumReleaseKey,
+            albumFolderKey,
+          })
+        : null;
+    return {
+      mediaType: trackMediaType,
+      title: effective.title,
+      artist: effective.artist,
+      artistCredits: JSON.stringify(effective.artists),
+      albumArtist: effective.albumArtists.join(", "),
+      albumArtistCredits: JSON.stringify(effective.albumArtists),
+      album,
+      normalizedTitle: normalize(effective.title),
+      normalizedArtist: normalize(effective.artist),
+      normalizedAlbum: normalize(album ?? ""),
+      normalizedGenres: normalize(effective.genres.join(" ")),
+      durationMs: effective.durationMs,
+      publishedAt: track.publishedAt,
+      discNumber: effective.discNumber,
+      trackNumber: effective.trackNumber,
+      releaseYear: albumReleaseYear(track),
+      available: track.available,
+      coverId: track.coverId,
+      albumId,
+      albumFolderKey,
+      albumReleaseKey,
+    };
   }
 
   async removeTrack(trackId: string): Promise<void> {

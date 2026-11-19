@@ -292,6 +292,147 @@ test("Jellyfin auto-detects audiobooks, podcasts, and music within one library",
   }
 });
 
+test("Jellyfin publishes 100-item catalog batches before the scan completes", async () => {
+  let releaseSecondPage!: () => void;
+  let secondPageStarted = false;
+  const secondPageReady = new Promise<void>((resolve) => {
+    releaseSecondPage = resolve;
+  });
+  const items = Array.from({ length: 150 }, (_, index) => ({
+    Id: `batched-track-${index}`,
+    Name: `Batched track ${index}`,
+    Etag: `batched-track-${index}-v1`,
+    Container: "mp3",
+    RunTimeTicks: 10_000_000,
+    Artists: [`Batched artist ${index}`],
+    Album: `Batched album ${index}`,
+    AlbumId: `batched-album-${index}`,
+    MediaSources: [{ Container: "mp3", Size: 10 }],
+  }));
+  const requestedLimits: number[] = [];
+  const requestedStarts: number[] = [];
+  const context = await createTestContext({
+    jellyfinFetch: async (input) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      if (url.pathname === "/System/Info") {
+        return Response.json({ ServerName: "Batched Jellyfin" });
+      }
+      if (url.pathname === "/Library/VirtualFolders") {
+        return Response.json(LIBRARIES);
+      }
+      if (url.pathname === "/Items") {
+        const startIndex = Number(url.searchParams.get("startIndex"));
+        const limit = Number(url.searchParams.get("limit"));
+        requestedLimits.push(limit);
+        requestedStarts.push(startIndex);
+        if (startIndex === 100) {
+          secondPageStarted = true;
+          await secondPageReady;
+        }
+        return Response.json({
+          Items: items.slice(startIndex, startIndex + limit),
+          TotalRecordCount: items.length,
+        });
+      }
+      return new Response("not found", { status: 404 });
+    },
+  });
+  try {
+    const created = await context.app.inject({
+      method: "POST",
+      url: "/api/admin/sources",
+      headers: context.authorization,
+      payload: {
+        kind: "plugin",
+        pluginId: "jellyfin",
+        configuration: {
+          libraryId: "music-library-id",
+          url: "http://batched-jellyfin.example.test",
+          apiKey: API_KEY,
+        },
+      },
+    });
+    assert.equal(created.statusCode, 201, created.body);
+    const scanTask = created.json<{ task: TaskResponse }>().task;
+    const waitStarted = Date.now();
+    while (!secondPageStarted && Date.now() - waitStarted < 10_000) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    if (!secondPageStarted) {
+      const taskResponse = await context.app.inject({
+        method: "GET",
+        url: `/api/tasks/${scanTask.id}`,
+        headers: context.authorization,
+      });
+      const [{ count: trackCount }, { count: catalogCount }] =
+        await Promise.all([
+          context.database.orm.Track.aggregate((aggregate) => ({
+            count: aggregate.count(),
+          })),
+          context.database.orm.CatalogTrack.aggregate((aggregate) => ({
+            count: aggregate.count(),
+          })),
+        ]);
+      assert.fail(
+        `Jellyfin did not request its second page: ${JSON.stringify({
+          task: taskResponse.json(),
+          trackCount,
+          catalogCount,
+          requestedStarts,
+          secondPageStarted,
+        })}`,
+      );
+    }
+
+    const partial = await context.app.inject({
+      method: "GET",
+      url: "/api/tracks?limit=100",
+      headers: context.authorization,
+    });
+    assert.equal(partial.statusCode, 200, partial.body);
+    const partialTracks = partial.json<{
+      items: Array<{ title: string; artist: string; album: string | null }>;
+      totalCount: number;
+    }>();
+    assert.equal(partialTracks.totalCount, 100);
+    assert.equal(partialTracks.items.length, 100);
+    assert.ok(
+      partialTracks.items.every(
+        (track) =>
+          track.title.startsWith("Batched track ") &&
+          track.artist.startsWith("Batched artist ") &&
+          track.album?.startsWith("Batched album "),
+      ),
+    );
+    const running = await context.app.inject({
+      method: "GET",
+      url: `/api/tasks/${scanTask.id}`,
+      headers: context.authorization,
+    });
+    assert.equal(running.json<TaskResponse>().status, "running");
+
+    releaseSecondPage();
+    const result = await waitForScan(context, scanTask.id);
+    assert.equal(result.status, "completed", JSON.stringify(result));
+    assert.equal(result.createdCount, items.length);
+    assert.equal(result.catalogStatus, "completed");
+    assert.ok(requestedLimits.length >= 2);
+    assert.ok(requestedLimits.every((limit) => limit === 100));
+    assert.deepEqual(requestedStarts, [0, 100]);
+    assert.equal(
+      (
+        await context.database.orm.Track.where({
+          catalogProjectionPending: 1,
+        }).all()
+      ).length,
+      0,
+    );
+  } finally {
+    releaseSecondPage();
+    await context.close();
+  }
+});
+
 test("Jellyfin sources validate, import audio only, encrypt credentials, proxy playback, and remove cleanly", async () => {
   const authorizationHeaders: string[] = [];
   const requestedUrls: string[] = [];
@@ -689,7 +830,22 @@ test("Jellyfin rescans use item versions and mark remotely deleted audio unavail
       changedScanResponse.json<{ id: string }>().id,
     );
     assert.equal(changedScan.updatedCount, 1);
-    assert.equal(changedScan.unavailableCount, 1);
+    const tracksBeforeReconciliation = await context.database.orm.Track.where({
+      sourceId: source.id,
+    }).all();
+    assert.equal(
+      changedScan.unavailableCount,
+      1,
+      JSON.stringify({
+        scan: changedScan,
+        tracks: tracksBeforeReconciliation.map((track) => ({
+          externalId: track.externalId,
+          available: track.available,
+          lastSeenScanId: track.lastSeenScanId,
+        })),
+        changedScanId: changedScanResponse.json<{ id: string }>().id,
+      }),
+    );
 
     const changed = await context.database.orm.Track.firstOrThrow({
       externalId: "33333333-3333-3333-3333-333333333333",

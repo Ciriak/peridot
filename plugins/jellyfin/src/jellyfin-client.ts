@@ -4,7 +4,7 @@ function message(key: string): MessageDescriptor {
   return { key };
 }
 
-const AUDIO_PAGE_SIZE = 500;
+const AUDIO_PAGE_SIZE = 100;
 const MAX_COVER_BYTES = 5 * 1024 * 1024;
 const DEFAULT_REQUEST_TIMEOUT_MS = 60_000;
 const AUDIO_TYPES = new Map<string, { extension: string; mimeType: string }>([

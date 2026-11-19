@@ -4,6 +4,7 @@ import { Icon } from "@iconify/vue/offline";
 import type { PluginResponse } from "@peridot/contracts";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
+import { Switch } from "@peridot/ui/components/ui/switch";
 import {
   AlertDialogAction,
   AlertDialogCancel,
@@ -13,6 +14,16 @@ import {
   AlertDialogPortal,
   AlertDialogRoot,
   AlertDialogTitle,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuPortal,
+  DropdownMenuRoot,
+  DropdownMenuTrigger,
+  TooltipContent,
+  TooltipPortal,
+  TooltipProvider,
+  TooltipRoot,
+  TooltipTrigger,
 } from "reka-ui";
 import {
   useAdminSourcesQuery,
@@ -31,6 +42,7 @@ import {
   installPlugin,
   isAuthenticationRedirectError,
   uninstallPlugin,
+  updatePluginEnabled,
 } from "../../lib/peridot-client";
 
 definePageMeta({ layout: "settings" });
@@ -48,6 +60,7 @@ const { invalidate: invalidateCatalog, resetOfflineCatalog } =
 const allowed = computed(() => user.value?.role === "admin");
 const pageError = ref("");
 const installingId = ref<string | null>(null);
+const updatingEnabledId = ref<string | null>(null);
 const uninstalling = ref(false);
 const removeOpen = ref(false);
 const pendingUninstall = ref<PluginResponse | null>(null);
@@ -80,6 +93,37 @@ async function install(plugin: PluginResponse) {
     pageError.value = errorMessage(reason, "settings.plugins.installError");
   } finally {
     installingId.value = null;
+  }
+}
+
+async function setEnabled(plugin: PluginResponse, enabled: boolean) {
+  if (
+    !address.value ||
+    !token.value ||
+    updatingEnabledId.value ||
+    plugin.enabled === enabled
+  ) {
+    return;
+  }
+  updatingEnabledId.value = plugin.id;
+  pageError.value = "";
+  try {
+    await updatePluginEnabled(address.value, token.value, plugin.id, {
+      enabled,
+    });
+    await Promise.all([
+      pluginsQuery.refresh(),
+      sourcesQuery.load(true),
+      providerQuery.refresh(),
+    ]);
+  } catch (reason) {
+    if (isAuthenticationRedirectError(reason)) return;
+    pageError.value = errorMessage(
+      reason,
+      "settings.plugins.enabledUpdateError",
+    );
+  } finally {
+    updatingEnabledId.value = null;
   }
 }
 
@@ -160,7 +204,7 @@ function pluginSettingsSaved() {
         :key="plugin.id"
         class="rounded-lg border bg-card p-5 text-card-foreground"
       >
-        <div class="flex items-start gap-3">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-start">
           <Icon
             :icon="plugin.icon === 'jellyfin' ? icons.jellyfin : icons.plugins"
             aria-hidden="true"
@@ -169,12 +213,11 @@ function pluginSettingsSaved() {
           <div class="min-w-0 flex-1 space-y-2">
             <div class="flex flex-wrap items-center gap-2">
               <h4 class="font-semibold">{{ plugin.name }}</h4>
-              <Badge :variant="plugin.installed ? 'default' : 'secondary'">
-                {{
-                  plugin.installed
-                    ? t("settings.plugins.installed")
-                    : t("settings.plugins.notInstalled")
-                }}
+              <Badge v-if="!plugin.installed" :variant="'secondary'">
+                {{ t("settings.plugins.notInstalled") }}
+              </Badge>
+              <Badge v-else-if="plugin.restartRequired" :variant="'secondary'">
+                {{ t("settings.plugins.restartRequired") }}
               </Badge>
               <span class="text-xs text-muted-foreground">
                 {{ t("settings.plugins.version", { version: plugin.version }) }}
@@ -185,6 +228,12 @@ function pluginSettingsSaved() {
             </p>
             <p class="text-xs text-muted-foreground">
               {{ contributionLabel(plugin) }}
+            </p>
+            <p
+              v-if="plugin.restartRequired"
+              class="text-xs font-medium text-warning"
+            >
+              {{ t("settings.plugins.restartRequiredHelp") }}
             </p>
           </div>
           <Button
@@ -200,18 +249,90 @@ function pluginSettingsSaved() {
                 : t("settings.plugins.install")
             }}
           </Button>
-          <Button
-            v-else
-            type="button"
-            variant="outline"
-            size="sm"
-            @click="askUninstall(plugin)"
-          >
-            {{ t("settings.plugins.uninstall") }}
-          </Button>
+          <div v-else class="flex shrink-0 items-center gap-2 self-start">
+            <span
+              class="text-sm font-medium"
+              :class="plugin.enabled ? 'text-foreground' : 'text-destructive'"
+            >
+              {{
+                plugin.enabled
+                  ? t("settings.plugins.enabled")
+                  : t("settings.plugins.disabled")
+              }}
+            </span>
+            <Switch
+              :model-value="plugin.enabled"
+              :disabled="updatingEnabledId !== null || uninstalling"
+              :aria-label="
+                t('settings.plugins.toggle', { plugin: plugin.name })
+              "
+              @update:model-value="setEnabled(plugin, $event)"
+            />
+            <TooltipProvider :delay-duration="150">
+              <TooltipRoot>
+                <DropdownMenuRoot>
+                  <TooltipTrigger as-child>
+                    <DropdownMenuTrigger as-child>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        :aria-label="
+                          t('settings.plugins.actions', {
+                            plugin: plugin.name,
+                          })
+                        "
+                      >
+                        <Icon
+                          :icon="icons.more"
+                          aria-hidden="true"
+                          class="size-4"
+                        />
+                      </Button>
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipPortal>
+                    <TooltipContent
+                      side="bottom"
+                      align="end"
+                      :side-offset="6"
+                      class="z-50 rounded-md border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md"
+                    >
+                      {{ t("settings.plugins.actionsLabel") }}
+                    </TooltipContent>
+                  </TooltipPortal>
+                  <DropdownMenuPortal>
+                    <DropdownMenuContent
+                      class="z-50 w-44 rounded-lg border bg-popover p-1 text-popover-foreground shadow-lg"
+                    >
+                      <DropdownMenuItem
+                        :disabled="uninstalling"
+                        class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm text-destructive outline-none data-disabled:cursor-default data-disabled:opacity-50"
+                        @select="askUninstall(plugin)"
+                      >
+                        <Icon
+                          :icon="icons.trash"
+                          aria-hidden="true"
+                          class="size-4"
+                        />
+                        {{ t("settings.plugins.uninstall") }}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenuPortal>
+                </DropdownMenuRoot>
+              </TooltipRoot>
+            </TooltipProvider>
+          </div>
         </div>
-        <PluginSettingsForm :plugin="plugin" @saved="pluginSettingsSaved" />
-        <PluginTaskActions :plugin="plugin" />
+        <PluginSettingsForm
+          v-if="plugin.installed"
+          :plugin="plugin"
+          @saved="pluginSettingsSaved"
+        />
+        <PluginTaskActions
+          v-if="plugin.installed && plugin.enabled && !plugin.restartRequired"
+          :plugin="plugin"
+        />
       </article>
     </div>
   </section>

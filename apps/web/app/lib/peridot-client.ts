@@ -62,6 +62,7 @@ import type {
   UpdatePlaylistRequest,
   UpdateUserProfileRequest,
   UpdateMetadataProviderRequest,
+  UpdatePluginEnabledRequest,
   UpdatePluginSettingsRequest,
   UpdateServerSettingsRequest,
   UpdateStatusResponse,
@@ -621,6 +622,20 @@ export function updatePluginSettings(
   return authenticatedRequestJson<PluginResponse>(
     serverAddress,
     `/api/admin/plugins/${encodeURIComponent(pluginId)}/settings`,
+    token,
+    { method: "PUT", body: JSON.stringify(request) },
+  );
+}
+
+export function updatePluginEnabled(
+  serverAddress: string,
+  token: string,
+  pluginId: string,
+  request: UpdatePluginEnabledRequest,
+) {
+  return authenticatedRequestJson<PluginResponse>(
+    serverAddress,
+    `/api/admin/plugins/${encodeURIComponent(pluginId)}/enabled`,
     token,
     { method: "PUT", body: JSON.stringify(request) },
   );

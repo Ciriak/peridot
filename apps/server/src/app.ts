@@ -10,10 +10,15 @@ import { CatalogService } from "./catalog.js";
 import { registerCatalogRoutes } from "./catalog-routes.js";
 import { loadServerConfig, type ServerConfig } from "./config.js";
 import { CredentialStore } from "./credential-store.js";
-import { createDatabase, type Database } from "./database.js";
+import {
+  configureDatabase,
+  createDatabase,
+  type Database,
+} from "./database.js";
 import { DiscogsClient, DiscogsResolver } from "./discogs.js";
 import { registerLibraryRoutes } from "./library-routes.js";
 import { registerLikeRoutes } from "./like-routes.js";
+import { registerOpenApi, registerOpenApiRoutes } from "./openapi.js";
 import { registerPlaylistRoutes } from "./playlist-routes.js";
 import { LibraryScanner } from "./library-scanner.js";
 import { registerLocalDiscoveryRoute } from "./local-discovery.js";
@@ -33,7 +38,7 @@ import { ArtworkService, hasPendingArtworkJobs } from "./artwork-fetch.js";
 import { PluginService } from "./plugins.js";
 import { registerPluginRoutes } from "./plugin-routes.js";
 import { registerTaskRoutes } from "./task-routes.js";
-import { queueArtworkFetch, TaskService } from "./tasks.js";
+import { queueArtworkFetch, queueCatalogFetch, TaskService } from "./tasks.js";
 import { ensureServerSettings } from "./server-settings.js";
 import { SourceRefreshScheduler } from "./source-refresh-scheduler.js";
 import { ensureDefaultSource } from "./sources.js";
@@ -84,6 +89,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
     );
   const database = options.database ?? createDatabase(config.databaseUrl);
   const ownsDatabase = options.database === undefined;
+  await configureDatabase(database);
   const artworkCache = new ArtworkCache(config.databaseUrl);
   let credentials: CredentialStore;
   try {
@@ -191,6 +197,9 @@ export async function buildApp(options: BuildAppOptions = {}) {
   tasks.registerExecutor("metadata_fetch", (task, taskService, signal) =>
     metadataEnrichment.runTask(task, taskService, signal),
   );
+  tasks.registerExecutor("catalog_fetch", (task, taskService, signal) =>
+    catalog.runTask(task, taskService, signal),
+  );
   tasks.registerExecutor("artwork_fetch", (task, taskService, signal) =>
     artworkService.runTask(task, taskService, signal),
   );
@@ -203,6 +212,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
         : { stream: logBuffer.stream, level: "debug" },
     logController: new LogController({ disableRequestLogging: true }),
   });
+  await registerOpenApi(app);
   let backfillImmediate: ReturnType<typeof setImmediate> | undefined;
   app.addHook("onListen", async () => {
     if (options.enableUpdateCheckScheduler ?? false) {
@@ -273,6 +283,9 @@ export async function buildApp(options: BuildAppOptions = {}) {
   await sourceRefreshScheduler.initialize(
     options.enableSourceRefreshScheduler ?? false,
   );
+  if (await catalog.hasPendingProjection()) {
+    await queueCatalogFetch(tasks);
+  }
   if (await hasPendingArtworkJobs(database, null)) {
     await queueArtworkFetch(tasks);
   }
@@ -321,6 +334,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
     (request) => playbackTokens.authorizeRequest(request.method, request.url),
     (sessionId) => realtime.disconnectSession(sessionId),
   );
+  await registerOpenApiRoutes(app);
   if (options.webRoot) {
     await registerWebApplication(app, { webRoot: options.webRoot });
   }

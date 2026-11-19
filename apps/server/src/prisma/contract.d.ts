@@ -19,7 +19,7 @@ import type {
 } from '@prisma/orm-sqlite/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'b91674bc063489d8959b6f40b8130847a63d7b56156a8065b9c26bdc2ee14cde'>;
+  StorageHashBase<'8466b5a38d1fae0b36b2c3f0e74773a784afb6f6418df750f9e4c16c11e92bdc'>;
 export type ExecutionHash =
   ExecutionHashBase<'af5db9c2d052d8692ee1f1a70221c2da0712097bb5b307d7d3a15319aaae43d9'>;
 export type ProfileHash =
@@ -426,6 +426,7 @@ export namespace Models {
     configuration: FieldOutputTypes['__unbound__']['PluginInstallation']['configuration'];
     createdAt: FieldOutputTypes['__unbound__']['PluginInstallation']['createdAt'];
     credentialCiphertext: FieldOutputTypes['__unbound__']['PluginInstallation']['credentialCiphertext'];
+    enabled: FieldOutputTypes['__unbound__']['PluginInstallation']['enabled'];
     installSource: FieldOutputTypes['__unbound__']['PluginInstallation']['installSource'];
     installSourceLocator: FieldOutputTypes['__unbound__']['PluginInstallation']['installSourceLocator'];
     installed: FieldOutputTypes['__unbound__']['PluginInstallation']['installed'];
@@ -519,6 +520,7 @@ export namespace Models {
     artist: FieldOutputTypes['__unbound__']['Track']['artist'];
     artistCredits: FieldOutputTypes['__unbound__']['Track']['artistCredits'];
     available: FieldOutputTypes['__unbound__']['Track']['available'];
+    catalogProjectionPending: FieldOutputTypes['__unbound__']['Track']['catalogProjectionPending'];
     coverId: FieldOutputTypes['__unbound__']['Track']['coverId'];
     createdAt: FieldOutputTypes['__unbound__']['Track']['createdAt'];
     discNumber: FieldOutputTypes['__unbound__']['Track']['discNumber'];
@@ -2118,6 +2120,16 @@ type ContractBase = Omit<
                   readonly nullable: true;
                   readonly many: false;
                 };
+                readonly enabled: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '1'>;
+                  };
+                  readonly many: false;
+                };
                 readonly installSource: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
@@ -2173,9 +2185,9 @@ type ContractBase = Omit<
               uniques: readonly [];
               indexes: readonly [
                 {
-                  readonly name: 'PluginInstallation_installed_idx_fe8abdbf';
-                  readonly prefix: 'PluginInstallation_installed_idx';
-                  readonly columns: readonly ['installed'];
+                  readonly name: 'PluginInstallation_installed_enabled_idx_506a1df3';
+                  readonly prefix: 'PluginInstallation_installed_enabled_idx';
+                  readonly columns: readonly ['installed', 'enabled'];
                   readonly unique: false;
                 },
               ];
@@ -2775,6 +2787,16 @@ type ContractBase = Omit<
                   };
                   readonly many: false;
                 };
+                readonly catalogProjectionPending: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
+                  };
+                  readonly many: false;
+                };
                 readonly coverId: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
@@ -3061,6 +3083,12 @@ type ContractBase = Omit<
                   readonly name: 'Track_available_idx_1b9f4739';
                   readonly prefix: 'Track_available_idx';
                   readonly columns: readonly ['available'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'Track_catalogProjectionPending_idx_95e4c1ad';
+                  readonly prefix: 'Track_catalogProjectionPending_idx';
+                  readonly columns: readonly ['catalogProjectionPending'];
                   readonly unique: false;
                 },
                 {
@@ -4552,6 +4580,10 @@ type ContractBase = Omit<
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
+              readonly enabled: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
               readonly installSource: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
@@ -4589,6 +4621,7 @@ type ContractBase = Omit<
                 readonly configuration: { readonly column: 'configuration' };
                 readonly createdAt: { readonly column: 'createdAt' };
                 readonly credentialCiphertext: { readonly column: 'credentialCiphertext' };
+                readonly enabled: { readonly column: 'enabled' };
                 readonly installSource: { readonly column: 'installSource' };
                 readonly installSourceLocator: { readonly column: 'installSourceLocator' };
                 readonly installed: { readonly column: 'installed' };
@@ -5031,6 +5064,10 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
               };
+              readonly catalogProjectionPending: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
               readonly coverId: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
@@ -5236,6 +5273,7 @@ type ContractBase = Omit<
                 readonly artist: { readonly column: 'artist' };
                 readonly artistCredits: { readonly column: 'artistCredits' };
                 readonly available: { readonly column: 'available' };
+                readonly catalogProjectionPending: { readonly column: 'catalogProjectionPending' };
                 readonly coverId: { readonly column: 'coverId' };
                 readonly createdAt: { readonly column: 'createdAt' };
                 readonly discNumber: { readonly column: 'discNumber' };

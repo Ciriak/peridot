@@ -182,6 +182,7 @@ export type PluginErrorCode =
   | "invalid_response"
   | "unsupported"
   | "not_installed"
+  | "plugin_disabled"
   | "confirmation_required";
 
 export class PluginError extends Error {

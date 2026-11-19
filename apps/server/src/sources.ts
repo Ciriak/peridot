@@ -290,7 +290,9 @@ export async function discoverPluginSources(
     return await plugins.discoverSources(pluginId, configuration);
   } catch (error) {
     if (error instanceof PluginError) {
-      if (error.code === "not_installed") throw error;
+      if (error.code === "not_installed" || error.code === "plugin_disabled") {
+        throw error;
+      }
       throw new SourceError(error.message, error.messageDescriptor);
     }
     throw error;

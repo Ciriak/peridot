@@ -71,6 +71,8 @@ const activeRows = computed(() => orderedActiveTasks(activeTasks.value));
 
 function taskKindLabel(task: TaskResponse): string {
   if (task.kind === "library_scan") return t("settings.tasks.libraryScan");
+  if (task.kind === "catalog_fetch")
+    return t("settings.tasks.catalogProjection");
   if (task.kind === "metadata_fetch") return t("settings.tasks.metadataMatch");
   if (task.kind === "artwork_fetch") return t("settings.tasks.artworkFetch");
   return t("settings.tasks.pluginTask");

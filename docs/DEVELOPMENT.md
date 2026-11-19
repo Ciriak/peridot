@@ -453,14 +453,18 @@ scan. Disabling the schedule prevents both startup and recurring automatic
 scans while retaining manual rescans.
 Administrators can manage where the server gets raw audio files from
 Settings → Admin → Sources. The add-source dialog offers a folder inside the
-server or any installed plugin that contributes library sources. Existing URL
-sources remain listed and removable for compatibility, but the dialog no longer
-offers URL creation. Folder sources seed from `MUSIC_LIBRARY_PATH` on first
-launch.
+server or any installed, enabled plugin that contributes library sources and is
+active after the latest start. Existing URL sources remain listed and removable
+for compatibility, but the dialog no longer offers URL creation. Folder sources
+seed from `MUSIC_LIBRARY_PATH` on first launch.
 Settings → Admin → Plugins lists every bundled plugin, its version, permissions,
-contribution kinds, and installed state. Installation is persisted separately
-from source configuration. The installed Jellyfin plugin supplies source fields
-through the generic source dialog; the web app does not own Jellyfin form logic.
+contribution kinds, and installed, enabled, and pending-restart state.
+Installation is persisted separately from source configuration. Installed
+plugins have an enable switch; lifecycle changes are saved immediately and take
+effect when the server restarts. Uninstall appears in the plugin card's
+three-dot actions menu and requires confirmation. Enabled plugins that are fully
+active after the latest start supply source fields through the generic source
+dialog; the web app does not own Jellyfin form logic.
 Plugins with plugin-level `settingsFields` render the same generic settings form;
 secret fields are write-only and stored with the plugin credential scope.
 Installed recommendation providers appear automatically in the music-track
@@ -474,14 +478,19 @@ Uninstalling a plugin requires explicit confirmation. The server stops its
 active tasks and deletes its sources, tracks, artwork jobs and orphaned covers,
 encrypted source credentials, task history, track likes, play events, queue
 items, and playlist entries. External Jellyfin data is never deleted.
-The Jellyfin plugin requests `Audio` and `AudioBook` items, pages through the
-complete result set, and returns protocol-neutral track records to the core
-scanner. Item IDs and ETags provide stable identity and change detection.
+The Jellyfin plugin requests `Audio` and `AudioBook` items in 100-item pages and
+returns protocol-neutral track records to the shared core scanner. Core commits
+at most 100 records per transaction, bulk-inserts new tracks, artwork jobs, and
+minimal catalog rows, then publishes the catalog revision before requesting the
+next page. Item IDs and ETags provide stable identity and change detection.
 Static audio and byte-range requests are proxied through Peridot with the
 encrypted API key remaining server-side. Unsupported containers are skipped and
 reported in the scan error count. Tracks become playable before cover artwork;
 changed image identities create durable jobs that fetch up to six distinct
-covers concurrently. Core task failures, partial-completion warnings, and
+covers concurrently. Basic title, artist, and album fields are visible before
+album/artist/search projections finish. A durable `catalog_fetch` task performs
+the complete projection after discovery and resumes from persisted pending
+flags after restart. Core task failures, partial-completion warnings, and
 startup interruptions are written to the administrator log.
 Source rows show the current available file count and latest successful sync
 time. The Settings sidebar shows the number of configured sources beside
@@ -723,10 +732,12 @@ coalesce into the existing task. Administrators stop an active task with
 `POST /api/admin/tasks/:id/stop`.
 Administrators list bundled plugins with `GET /api/admin/plugins`, install with
 `POST /api/admin/plugins/:id/install`, and uninstall with
-`POST /api/admin/plugins/:id/uninstall` plus `{ "confirm": true }`.
-They update plugin-level settings through
-`PUT /api/admin/plugins/:id/settings`. Signed-in users list installed service
-providers with `GET /api/plugins/providers`.
+`POST /api/admin/plugins/:id/uninstall` plus `{ "confirm": true }`. They persist
+desired enablement through `PUT /api/admin/plugins/:id/enabled` with
+`{ "enabled": boolean }`; active contributions update when the server restarts.
+Plugin responses include `enabled` and `restartRequired`. Administrators update
+plugin-level settings through `PUT /api/admin/plugins/:id/settings`. Signed-in
+users list active service providers with `GET /api/plugins/providers`.
 Administrators start a data-processor job with
 `POST /api/admin/plugins/:id/tasks/:task`; it returns a normal shared task
 response and uses the existing progress, cancellation, realtime, and history
@@ -791,6 +802,28 @@ formatting; eslint-config-prettier prevents conflicting style rules.
 Run `pnpm check` to check lint and formatting, `pnpm lint:fix` for automatic lint
 fixes, and `pnpm format` to format files. CI checks both lint and formatting.
 Type checking remains a separate `pnpm typecheck` command.
+
+## OpenAPI documentation
+
+Fastify generates the API document from its registered routes. The complete
+OpenAPI 3.1 specification is available while the server is running:
+
+- `GET /api/openapi.json`
+- `GET /api/openapi.yaml`
+- `GET /api/docs/` for the bundled Swagger UI
+
+Route summaries, authentication requirements, request bodies, query
+parameters, responses, and shared schemas are maintained in
+`apps/server/src/openapi.ts`. The Swagger transform applies that documentation
+layer without changing Fastify request validation or response serialization.
+Public onboarding, discovery, and health routes opt out of bearer
+authentication; playback and artwork routes document their scoped query
+tokens.
+
+Add or update the corresponding operation entry whenever a route is added,
+renamed, or changed. `pnpm --filter @peridot/server test` covers the generated
+document, rejects undocumented route fallbacks, and verifies that every local
+schema reference resolves.
 
 ## Commit messages
 

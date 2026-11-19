@@ -1975,6 +1975,13 @@
                   "kind": "scalar"
                 }
               },
+              "enabled": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
               "installSource": {
                 "nullable": false,
                 "type": {
@@ -2036,6 +2043,9 @@
                 },
                 "credentialCiphertext": {
                   "column": "credentialCiphertext"
+                },
+                "enabled": {
+                  "column": "enabled"
                 },
                 "installSource": {
                   "column": "installSource"
@@ -2802,6 +2812,13 @@
                   "kind": "scalar"
                 }
               },
+              "catalogProjectionPending": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
               "coverId": {
                 "nullable": true,
                 "type": {
@@ -3150,6 +3167,9 @@
                 },
                 "available": {
                   "column": "available"
+                },
+                "catalogProjectionPending": {
+                  "column": "catalogProjectionPending"
                 },
                 "coverId": {
                   "column": "coverId"
@@ -5285,6 +5305,15 @@
                   "dataType": "sqlite/text",
                   "nullable": true
                 },
+                "enabled": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "default": {
+                    "kind": "literal",
+                    "value": "1"
+                  },
+                  "nullable": false
+                },
                 "installSource": {
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
@@ -5333,10 +5362,11 @@
               "indexes": [
                 {
                   "columns": [
-                    "installed"
+                    "installed",
+                    "enabled"
                   ],
-                  "name": "PluginInstallation_installed_idx_fe8abdbf",
-                  "prefix": "PluginInstallation_installed_idx",
+                  "name": "PluginInstallation_installed_enabled_idx_506a1df3",
+                  "prefix": "PluginInstallation_installed_enabled_idx",
                   "unique": false
                 }
               ],
@@ -5995,6 +6025,15 @@
                   },
                   "nullable": false
                 },
+                "catalogProjectionPending": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "default": {
+                    "kind": "literal",
+                    "value": "0"
+                  },
+                  "nullable": false
+                },
                 "coverId": {
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
@@ -6265,6 +6304,14 @@
                   ],
                   "name": "Track_available_idx_1b9f4739",
                   "prefix": "Track_available_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "catalogProjectionPending"
+                  ],
+                  "name": "Track_catalogProjectionPending_idx_95e4c1ad",
+                  "prefix": "Track_catalogProjectionPending_idx",
                   "unique": false
                 },
                 {
@@ -6647,7 +6694,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "b91674bc063489d8959b6f40b8130847a63d7b56156a8065b9c26bdc2ee14cde"
+    "storageHash": "8466b5a38d1fae0b36b2c3f0e74773a784afb6f6418df750f9e4c16c11e92bdc"
   },
   "execution": {
     "executionHash": "af5db9c2d052d8692ee1f1a70221c2da0712097bb5b307d7d3a15319aaae43d9",

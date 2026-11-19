@@ -69,7 +69,7 @@ export async function hasPendingArtworkJobs(
 }
 
 export async function syncArtworkJob(
-  database: Database,
+  database: Pick<Database, "orm">,
   input: {
     trackId: string;
     sourceId: string;
