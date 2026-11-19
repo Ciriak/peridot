@@ -1,5 +1,16 @@
 # Peridot handoff
 
+## Eager Jellyfin cover import
+
+Jellyfin scans now prefetch each unique source cover with bounded concurrency and
+attach the stored cover before creating or updating its tracks. Tracks sharing an
+album cover reuse one fetch and one cached image. Failed or missing eager fetches
+remain non-fatal and are retried through the existing artwork job path.
+
+This removes the usual coverless catalog window during Jellyfin imports, while
+retaining artwork as best-effort work rather than making a cover failure fail the
+source scan.
+
 ## Direct built-in source integrations
 
 Peridot now uses trusted built-in source integrations instead of an installable
@@ -41,7 +52,11 @@ retains a stopped entry in terminal history.
 - `pnpm --filter @peridot/web exec node --test test/peridot-client.test.ts test/settings-page.test.ts test/i18n.test.ts` (39 passing)
 - `pnpm --filter @peridot/web exec node --test test/settings-page.test.ts` (16 passing)
 - `pnpm --filter @peridot/server typecheck`
+- `pnpm --filter @peridot/server exec tsx scripts/run-tests.ts` with
+  `PERIDOT_TEST_FILES=jellyfin.test.ts` (11 passing)
 - `pnpm --filter @peridot/server test` (188 passing)
+- `pnpm lint`
+- `pnpm format:check`
 - `pnpm --filter @peridot/web typecheck`
 - `pnpm --filter @peridot/web test` (248 passing)
 - `pnpm test` (458 passing across contracts, desktop, player, server, UI, and web)
@@ -62,15 +77,24 @@ retains a stopped entry in terminal history.
   separately.
 - Android APK assembly was not verified because `java` is unavailable in this
   environment.
+- Eager Jellyfin artwork adds one bounded image-fetch phase per source batch on
+  uncached cover changes. Real-server scan timing at large library sizes has not
+  been measured.
 - Live browser visual QA of the task controls and a live Jellyfin instance were
   not used in this implementation run.
 
 ## Uncommitted changes
 
-The task cancellation and source-removal code is in current `HEAD` (`b5036d0`).
-Only this handoff update remains uncommitted.
+Eager Jellyfin cover import changes are uncommitted in
+`apps/server/src/library-scanner.ts`, `apps/server/test/jellyfin.test.ts`,
+`docs/DECISIONS.md`, `docs/DEVELOPMENT.md`, and this handoff.
 
 ## Next
+
+Measure first-scan and unchanged-rescan duration against a large real Jellyfin
+library, especially albums whose tracks span page boundaries. If duplicate cover
+requests appear across pages, carry the fetched-cover map for the full scan rather
+than resetting it per 100-item batch.
 
 Run the Sources screen against a real Jellyfin server at desktop and mobile
 widths, then exercise a full scan, playback, artwork retry, rescan, and removal

@@ -64,12 +64,13 @@ run independently or together and share the durable task queue.
 Jellyfin requests `Audio` and `AudioBook` items in pages of 100. Core commits at
 most 100 records per transaction and publishes catalog changes before requesting
 the next page. Jellyfin IDs and ETags provide stable identity and change
-detection.
+detection. Unique cover images referenced by each page are fetched in parallel
+with bounded concurrency and attached before their tracks commit. Failed cover
+fetches do not fail the scan; the existing artwork job retries them afterward.
 
 Playback and byte-range requests are proxied through Peridot while the Jellyfin
 API key remains server-side. Artwork uses the same integration boundary and a
-deduplicated WebP cache. Tracks become available before deferred artwork jobs
-finish.
+deduplicated WebP cache.
 
 Removing any source stops its tasks and deletes its source-owned tracks and
 catalog projections. Built-in integration removal also deletes the associated

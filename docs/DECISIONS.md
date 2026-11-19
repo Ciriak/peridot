@@ -1,5 +1,16 @@
 # Peridot decisions
 
+## 2026-11-19: Jellyfin cover art is fetched eagerly during scans
+
+Cover images referenced by Jellyfin scan items are fetched once per unique
+source cover with bounded concurrency while the source batch is being imported.
+The stored image is attached before its tracks enter the catalog, so a normal
+album import does not expose a temporary coverless state.
+
+Artwork retrieval remains best-effort. Missing or failed eager fetches leave the
+track available and create an artwork job so a later artwork task or rescan can
+retry the cover.
+
 ## 2026-11-19: Cancelling queued tasks removes them from task history
 
 Administrator cancellation deletes a task that is still queued because it has not

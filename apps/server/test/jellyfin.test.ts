@@ -899,7 +899,7 @@ test("a failed Jellyfin scan writes an error to the administrator log", async ()
   }
 });
 
-test("Jellyfin artwork fetches use bounded concurrency", async () => {
+test("Jellyfin eager artwork fetches use bounded concurrency", async () => {
   let activeCovers = 0;
   let maximumActiveCovers = 0;
   const items = Array.from({ length: 12 }, (_, index) => ({
@@ -957,8 +957,8 @@ test("Jellyfin artwork fetches use bounded concurrency", async () => {
       },
     });
     assert.equal(created.statusCode, 201, created.body);
-    const task = created.json<{ task: TaskResponse }>().task;
-    const completed = await waitForScan(context, task.id);
+    const source = created.json<{ id: string; task: TaskResponse }>();
+    const completed = await waitForScan(context, source.task.id);
     assert.equal(completed.status, "completed");
     assert.equal(completed.createdCount, items.length);
     assert.ok(
@@ -968,6 +968,10 @@ test("Jellyfin artwork fetches use bounded concurrency", async () => {
     assert.ok(
       maximumActiveCovers <= 6,
       "Jellyfin artwork concurrency should remain bounded",
+    );
+    assert.equal(
+      await context.database.orm.ArtworkJob.first({ sourceId: source.id }),
+      null,
     );
   } finally {
     await context.close();
@@ -1037,7 +1041,7 @@ test("failed Jellyfin artwork remains pending and retries after a rescan", async
     const first = await waitForScan(context, source.task.id);
     assert.equal(first.artworkStatus, "completed");
     assert.equal(first.artworkErrorCount, 1);
-    assert.equal(coverRequests, 1);
+    assert.equal(coverRequests, 2);
     const pending = await context.database.orm.ArtworkJob.firstOrThrow({
       sourceId: source.id,
     });
@@ -1052,10 +1056,10 @@ test("failed Jellyfin artwork remains pending and retries after a rescan", async
     });
     assert.equal(rescan.statusCode, 202, rescan.body);
     const second = await waitForScan(context, rescan.json<{ id: string }>().id);
-    assert.equal(second.artworkStatus, "completed");
+    assert.equal(second.artworkStatus, "skipped");
     assert.equal(second.artworkErrorCount, 0);
-    assert.equal(second.artworkRetrievedCount, 1);
-    assert.equal(coverRequests, 2);
+    assert.equal(second.artworkRetrievedCount, 0);
+    assert.equal(coverRequests, 3);
     assert.equal(
       await context.database.orm.ArtworkJob.first({ sourceId: source.id }),
       null,
@@ -1069,34 +1073,30 @@ test("failed Jellyfin artwork remains pending and retries after a rescan", async
   }
 });
 
-test("Jellyfin tracks become available before deferred artwork finishes", async () => {
-  let releaseFirstCover!: () => void;
-  let releaseRemainingCovers!: () => void;
-  let firstCoverReleased = false;
-  let remainingCoversReleased = false;
-  const firstCoverReady = new Promise<void>((resolve) => {
-    releaseFirstCover = () => {
-      if (firstCoverReleased) return;
-      firstCoverReleased = true;
+test("Jellyfin tracks include file artwork when they enter the catalog", async () => {
+  let releaseCover!: () => void;
+  let coverReleased = false;
+  let coverRequests = 0;
+  const coverReady = new Promise<void>((resolve) => {
+    releaseCover = () => {
+      if (coverReleased) return;
+      coverReleased = true;
       resolve();
     };
   });
-  const remainingCoversReady = new Promise<void>((resolve) => {
-    releaseRemainingCovers = () => {
-      if (remainingCoversReleased) return;
-      remainingCoversReleased = true;
-      resolve();
-    };
+  let markCoverStarted!: () => void;
+  const coverStarted = new Promise<void>((resolve) => {
+    markCoverStarted = resolve;
   });
   const items = Array.from({ length: 4 }, (_, index) => ({
     Id: `deferred-track-${index}`,
     Name: `Deferred track ${index}`,
     Etag: `deferred-track-${index}-v1`,
     Container: "mp3",
-    Album: `Deferred album ${index}`,
-    AlbumId: `deferred-album-${index}`,
-    AlbumPrimaryImageTag: `deferred-cover-${index}`,
-    Artists: [`Deferred artist ${index}`],
+    Album: "Deferred album",
+    AlbumId: "deferred-album",
+    AlbumPrimaryImageTag: "deferred-cover",
+    Artists: ["Deferred artist"],
     MediaSources: [{ Container: "mp3", Size: 10 }],
   }));
   const context = await createTestContext({
@@ -1114,19 +1114,10 @@ test("Jellyfin tracks become available before deferred artwork finishes", async 
           TotalRecordCount: items.length,
         });
       }
-      if (url.pathname === "/Items/deferred-album-0/Images/Primary") {
-        await firstCoverReady;
-        return new Response(JPEG, {
-          headers: {
-            "content-type": "image/jpeg",
-            "content-length": String(JPEG.length),
-          },
-        });
-      }
-      if (
-        /^\/Items\/deferred-album-\d+\/Images\/Primary$/u.test(url.pathname)
-      ) {
-        await remainingCoversReady;
+      if (url.pathname === "/Items/deferred-album/Images/Primary") {
+        coverRequests += 1;
+        markCoverStarted();
+        await coverReady;
         return new Response(JPEG, {
           headers: {
             "content-type": "image/jpeg",
@@ -1152,83 +1143,37 @@ test("Jellyfin tracks become available before deferred artwork finishes", async 
     });
     assert.equal(created.statusCode, 201, created.body);
     const scanTask = created.json<{ task: TaskResponse }>().task;
-    const scan = await waitForTask(context, scanTask.id);
-    assert.equal(scan.status, "completed");
-
-    const tracksBeforeArtwork = await context.app.inject({
+    await coverStarted;
+    const beforeCover = await context.app.inject({
       method: "GET",
       url: "/api/tracks",
       headers: context.authorization,
     });
-    const deferredTracks = tracksBeforeArtwork.json<{
-      items: Array<{ id: string; title: string; coverUrl: string | null }>;
-    }>().items;
-    assert.equal(deferredTracks.length, items.length);
-    assert.ok(deferredTracks.every((track) => track.coverUrl === null));
+    assert.equal(beforeCover.statusCode, 200);
+    assert.equal(beforeCover.json<{ items: unknown[] }>().items.length, 0);
 
-    const playbackToken = await context.app.inject({
-      method: "POST",
-      url: `/api/tracks/${deferredTracks[0]!.id}/playback-token`,
+    releaseCover();
+    const scan = await waitForTask(context, scanTask.id);
+    assert.equal(scan.status, "completed");
+
+    const tracks = await context.app.inject({
+      method: "GET",
+      url: "/api/tracks",
       headers: context.authorization,
     });
-    assert.equal(playbackToken.statusCode, 200, playbackToken.body);
-
-    const metadataTask = await context.database.orm.Task.where({
-      parentTaskId: scan.id,
-      kind: "metadata_fetch",
-    }).firstOrThrow();
-    await waitForTask(context, metadataTask.id);
-    let artworkTask: TaskResponse | null = null;
-    for (let attempt = 0; attempt < 500; attempt += 1) {
-      const response = await context.app.inject({
-        method: "GET",
-        url: `/api/tasks?status=active&limit=50`,
-        headers: context.authorization,
-      });
-      artworkTask =
-        response
-          .json<{ items: TaskResponse[] }>()
-          .items.find(
-            (task) =>
-              task.kind === "artwork_fetch" && task.parentTaskId === scan.id,
-          ) ?? null;
-      if (artworkTask) break;
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-    assert.ok(artworkTask);
-
-    releaseFirstCover();
-
-    let partiallyProcessed: TaskResponse | null = null;
-    for (let attempt = 0; attempt < 1_500; attempt += 1) {
-      const response = await context.app.inject({
-        method: "GET",
-        url: `/api/tasks/${artworkTask.id}`,
-        headers: context.authorization,
-      });
-      const current = response.json<TaskResponse>();
-      if (
-        current.status === "running" &&
-        current.progress.completed !== null &&
-        current.progress.completed > 0 &&
-        current.progress.completed < items.length
-      ) {
-        partiallyProcessed = current;
-        break;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-    assert.ok(partiallyProcessed);
-    assert.equal(partiallyProcessed.progress.total, items.length);
-
-    releaseRemainingCovers();
-    const completedArtwork = await waitForTask(context, artworkTask.id);
-    assert.equal(completedArtwork.status, "completed");
-    const withCovers = await context.database.orm.Track.all();
-    assert.ok(withCovers.every((track) => track.coverId));
+    const importedTracks = tracks.json<{
+      items: Array<{ id: string; title: string; coverUrl: string | null }>;
+    }>().items;
+    assert.equal(importedTracks.length, items.length);
+    assert.ok(importedTracks.every((track) => Boolean(track.coverUrl)));
+    assert.equal(
+      new Set(importedTracks.map((track) => track.coverUrl)).size,
+      1,
+    );
+    assert.equal(coverRequests, 1);
+    assert.equal(await context.database.orm.ArtworkJob.first(), null);
   } finally {
-    releaseFirstCover();
-    releaseRemainingCovers();
+    releaseCover();
     await context.close();
   }
 });

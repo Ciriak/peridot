@@ -51,6 +51,7 @@ const CURRENT_METADATA_VERSION = 8;
 const PROGRESS_WRITE_INTERVAL_MS = 250;
 const EVENT_LOOP_YIELD_INTERVAL_MS = 25;
 const IMPORT_BATCH_SIZE = 100;
+const REMOTE_ARTWORK_CONCURRENCY = 6;
 
 interface DiscoveredFile {
   absolutePath: string;
@@ -78,7 +79,7 @@ interface ScanCounts {
 }
 
 interface CoverImage {
-  data: Buffer;
+  data: Uint8Array;
   mimeType: string;
 }
 
@@ -789,6 +790,7 @@ export class LibraryScanner {
       ),
     );
     const unchanged: Array<{
+      item: SourceIntegrationTrackRecord;
       track: TrackRow;
       coverKey: string | null;
     }> = [];
@@ -796,12 +798,28 @@ export class LibraryScanner {
       item: SourceIntegrationTrackRecord;
       track: TrackRow;
       coverKey: string | null;
-      queueArtwork: boolean;
     }> = [];
     const created: SourceIntegrationTrackRecord[] = [];
+    const coverIds = new Map<string, string>();
+    const missingCovers = new Map<
+      string,
+      { itemId: string; tag: string | null }
+    >();
     for (const item of items) {
       const existing = existingByExternalId.get(item.externalId) ?? null;
       const coverKey = remoteCoverKey(item);
+      if (coverKey && item.cover) {
+        if (
+          existing?.coverId &&
+          (existing.externalCoverKey === null ||
+            existing.externalCoverKey === coverKey)
+        ) {
+          coverIds.set(coverKey, existing.coverId);
+          missingCovers.delete(coverKey);
+        } else if (!coverIds.has(coverKey)) {
+          missingCovers.set(coverKey, item.cover);
+        }
+      }
       if (!existing) {
         created.push(item);
         continue;
@@ -812,20 +830,24 @@ export class LibraryScanner {
         mediaType(existing.mediaType) === item.mediaType &&
         trackMediaTypeOrigin(existing.mediaTypeOrigin) === item.mediaTypeOrigin;
       if (isUnchanged) {
-        unchanged.push({ track: existing, coverKey });
+        unchanged.push({ item, track: existing, coverKey });
         continue;
       }
-      const existingCoverUsable = Boolean(
-        existing.coverId &&
-        (existing.externalCoverKey === null ||
-          existing.externalCoverKey === coverKey),
-      );
       changed.push({
         item,
         track: existing,
         coverKey,
-        queueArtwork: Boolean(coverKey && !existingCoverUsable),
       });
+    }
+    if (missingCovers.size) {
+      const fetchedCovers = await this.fetchRemoteCovers(
+        [...missingCovers],
+        source,
+        signal,
+      );
+      for (const [key, coverId] of fetchedCovers) {
+        if (coverId) coverIds.set(key, coverId);
+      }
     }
     const trackDataFor = (
       item: SourceIntegrationTrackRecord,
@@ -883,19 +905,35 @@ export class LibraryScanner {
           lastSeenScanId: scanId,
         });
       }
-      for (const { track, coverKey } of unchanged) {
+      for (const { item, track, coverKey } of unchanged) {
         throwIfAborted(signal);
         const wasUnavailable = !track.available;
+        const currentCoverUsable = Boolean(
+          track.coverId &&
+          (track.externalCoverKey === null ||
+            track.externalCoverKey === coverKey),
+        );
+        const coverId =
+          (coverKey ? coverIds.get(coverKey) : null) ??
+          (currentCoverUsable ? track.coverId : null);
+        const coverChanged = coverId !== track.coverId;
         const update = {
           ...(wasUnavailable ? { catalogProjectionPending: 1 } : {}),
-          ...(track.coverId && track.externalCoverKey === null && coverKey
+          ...(coverChanged ? { coverId } : {}),
+          ...(coverKey && track.externalCoverKey !== coverKey
             ? { externalCoverKey: coverKey }
             : {}),
         };
         if (Object.keys(update).length) {
           await transaction.orm.Track.where({ id: track.id }).update(update);
         }
-        if (wasUnavailable && this.catalog) {
+        await syncArtworkJob(transaction, {
+          trackId: track.id,
+          sourceId: source.source.id,
+          externalCoverItemId: coverId ? null : (item.cover?.itemId ?? null),
+          externalCoverTag: coverId ? null : (item.cover?.tag ?? null),
+        });
+        if ((wasUnavailable || coverChanged) && this.catalog) {
           await this.catalog.indexTrackSummary(
             { ...track, available: 1, ...update },
             transaction,
@@ -904,9 +942,16 @@ export class LibraryScanner {
         counts.unchangedCount += 1;
       }
 
-      for (const { item, track: existing, coverKey, queueArtwork } of changed) {
+      for (const { item, track: existing, coverKey } of changed) {
         throwIfAborted(signal);
-        const coverId = coverKey ? (existing.coverId ?? null) : null;
+        const existingCoverUsable = Boolean(
+          existing.coverId &&
+          (existing.externalCoverKey === null ||
+            existing.externalCoverKey === coverKey),
+        );
+        const coverId =
+          (coverKey ? coverIds.get(coverKey) : null) ??
+          (existingCoverUsable ? existing.coverId : null);
         const trackData = trackDataFor(item, coverId);
         await transaction.orm.Track.where({ id: existing.id }).update(
           trackData,
@@ -917,22 +962,21 @@ export class LibraryScanner {
             transaction,
           );
         }
-        if (queueArtwork || !coverKey) {
-          await syncArtworkJob(transaction, {
-            trackId: existing.id,
-            sourceId: source.source.id,
-            externalCoverItemId: queueArtwork
-              ? (item.cover?.itemId ?? null)
-              : null,
-            externalCoverTag: queueArtwork ? (item.cover?.tag ?? null) : null,
-          });
-        }
+        await syncArtworkJob(transaction, {
+          trackId: existing.id,
+          sourceId: source.source.id,
+          externalCoverItemId: coverId ? null : (item.cover?.itemId ?? null),
+          externalCoverTag: coverId ? null : (item.cover?.tag ?? null),
+        });
         counts.updatedCount += 1;
       }
 
       if (created.length) {
         const rows = created.map((item) => ({
-          ...trackDataFor(item, null),
+          ...trackDataFor(
+            item,
+            item.cover ? (coverIds.get(remoteCoverKey(item)!) ?? null) : null,
+          ),
           sourceId: source.source.id,
         }));
         const inserted = await transaction.query(
@@ -958,7 +1002,7 @@ export class LibraryScanner {
           const item = track.externalId
             ? itemByExternalId.get(track.externalId)
             : null;
-          return item?.cover
+          return item?.cover && !track.coverId
             ? [
                 {
                   trackId: track.id,
@@ -980,6 +1024,72 @@ export class LibraryScanner {
     if (this.catalog) {
       await this.catalog.markScanBatchChanged(source.source.id);
     }
+  }
+
+  private async fetchRemoteCovers(
+    covers: readonly (readonly [
+      string,
+      { itemId: string; tag: string | null },
+    ])[],
+    source: IntegrationSourceWork,
+    signal: AbortSignal,
+  ): Promise<Map<string, string | null>> {
+    const coverIds = new Map<string, string | null>();
+    let nextIndex = 0;
+    const pending = new Map<
+      number,
+      Promise<{ key: string; cover: CoverImage | null }>
+    >();
+
+    while (nextIndex < covers.length || pending.size) {
+      throwIfAborted(signal);
+      while (
+        nextIndex < covers.length &&
+        pending.size < REMOTE_ARTWORK_CONCURRENCY
+      ) {
+        const index = nextIndex;
+        const entry = covers[nextIndex++];
+        if (!entry) break;
+        const [key, reference] = entry;
+        pending.set(
+          index,
+          source.integration
+            .artwork({
+              source: source.handle,
+              reference,
+              signal,
+            })
+            .then(
+              (cover) => ({
+                key,
+                cover: cover
+                  ? { data: cover.data, mimeType: cover.mimeType }
+                  : null,
+              }),
+              (error: unknown) => {
+                if (signal.aborted) throw error;
+                return { key, cover: null };
+              },
+            ),
+        );
+      }
+      if (!pending.size) break;
+
+      const completed = await Promise.race(
+        [...pending].map(async ([index, promise]) => ({
+          index,
+          result: await promise,
+        })),
+      );
+      pending.delete(completed.index);
+      coverIds.set(
+        completed.result.key,
+        await this.storeCover(completed.result.cover),
+      );
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+
+    return coverIds;
   }
 
   private async applyRemoteBatchWithRetry(
