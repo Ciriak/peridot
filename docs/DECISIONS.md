@@ -1,5 +1,27 @@
 # Peridot decisions
 
+## 2026-11-19: Partial task failures remain completed with warning state
+
+Durable tasks use `completed` for successful execution even when some items could
+not be processed. The task response distinguishes that outcome with
+`api.message.taskCompletedWithErrors`, and Settings → Tasks labels it
+“Completed with errors” using the warning token instead of presenting it as a
+terminal failure.
+
+The persisted `failureSummary` remains available for logs, while the localized
+`failureMessage` provides user-facing copy. Older completed task rows without a
+stored failure message derive the same completion warning when serialized.
+
+## 2026-11-19: Built-in plugins receive a 60-second startup allowance
+
+Fastify's default 10-second plugin timeout can expire while Swagger UI performs
+its first filesystem-backed initialization in a constrained deployment. Peridot
+allows built-in plugins 60 seconds to initialize instead of treating a slow
+container startup as a permanent failure.
+
+The limit remains finite so a plugin deadlock still fails startup and the
+container health check can report the failure.
+
 ## 2026-11-19: Offline downloads are persistent device tasks
 
 The liked-titles preference is stored on the user account. A device verifies it
@@ -17,6 +39,19 @@ Completed task history is retained for 30 days and capped at 100 entries.
 
 The browser file-download action is separate from offline storage. It continues
 to download a file directly and does not create an offline task.
+
+## 2026-11-19: Server and offline work share one task display
+
+Settings → Tasks is available to every signed-in user and combines durable
+server work with device offline-download work in one active list and one history
+list. Server rows remain administrator-only; device rows use the signed-in
+user's scoped IndexedDB queue. The topbar and Tasks navigation expose one
+combined activity indicator instead of separate server and download indicators.
+
+Task actions remain scoped to their owner: server queue and stop requests still
+use the administrator task API, while download cancel, stop, and retry continue
+to update only the local device queue. Mixing the rows in one view avoids
+parallel task surfaces without changing either execution model.
 
 ## 2026-11-19: Source removal preserves catalog and user references
 

@@ -18,7 +18,6 @@ import {
   watch,
 } from "vue";
 import FadeInImage from "../components/FadeInImage.vue";
-import DownloadTaskIndicator from "../components/DownloadTaskIndicator.vue";
 import LikeButton from "../components/LikeButton.vue";
 import MobilePlayer from "../components/MobilePlayer.vue";
 import QueueDrawer from "../components/QueueDrawer.vue";
@@ -380,7 +379,6 @@ onBeforeUnmount(stopLoadingRay);
             </KbdGroup>
           </div>
           <div class="ml-auto flex shrink-0 items-center gap-2">
-            <DownloadTaskIndicator />
             <TaskProgressIndicator />
             <Button as-child variant="ghost" size="icon" class="rounded-full">
               <NuxtLink

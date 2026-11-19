@@ -90,6 +90,27 @@ test("tasks authenticate list access and reject invalid pagination", async () =>
   }
 });
 
+test("completed tasks with partial errors use completed warning messaging", async () => {
+  const context = await createTestContext();
+  try {
+    const completed = await context.database.orm.Task.create({
+      kind: "artwork_fetch",
+      status: "completed",
+      title: "Library artwork retrieval",
+      completedAt: new Date(),
+      failureSummary: "Some configured artwork sources are unavailable.",
+    });
+    const response = toTaskResponse(completed);
+    assert.equal(response.status, "completed");
+    assert.deepEqual(
+      response.failureMessage,
+      message("api.message.taskCompletedWithErrors"),
+    );
+  } finally {
+    await context.close();
+  }
+});
+
 test("task service runs FIFO, coalesces queued duplicates, and reports progress", async () => {
   const context = await createTestContext();
   await context.app.close();

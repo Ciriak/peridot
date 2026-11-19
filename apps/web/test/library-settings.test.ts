@@ -248,6 +248,7 @@ test("the Library setting persists and drives automatic liked-track saving", asy
   assert.match(pageSource, /:icon="icons\.cloudDownload"/);
   assert.match(pageSource, /settings\.library\.largeCatalogOfflineUnavailable/);
   assert.match(pageSource, /syncStatus === 'too-large'/);
+  assert.doesNotMatch(pageSource, /downloadTasks|id="download-tasks"/);
   assert.match(syncSource, /likedTitlesOffline/);
   assert.match(syncSource, /downloadTasks\.cancelLikedTitles/);
   assert.match(syncSource, /saveLikedTitles/);

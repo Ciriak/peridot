@@ -192,7 +192,9 @@ export function toTaskResponse(task: TaskRow): TaskResponse {
               ? "api.message.taskInterrupted"
               : task.status === "stopped"
                 ? "api.message.taskStopped"
-                : "api.message.taskFailedGeneric",
+                : task.status === "completed"
+                  ? "api.message.taskCompletedWithErrors"
+                  : "api.message.taskFailedGeneric",
           )
         : null),
     createdAt: task.createdAt.toISOString(),
@@ -416,7 +418,7 @@ export class TaskService {
       status: string;
       completedAt: Date;
       failureSummary: string | null;
-      failureMessage?: string | null;
+      failureMessage: string | null;
       details?: string;
       progressCompleted?: number | null;
       progressTotal?: number | null;
@@ -424,6 +426,9 @@ export class TaskService {
       status: "completed",
       completedAt: new Date(),
       failureSummary,
+      failureMessage: serializeMessage(
+        failureSummary ? message("api.message.taskCompletedWithErrors") : null,
+      ),
     };
     if (result.details) {
       update.details = JSON.stringify(normalizeTaskDetails(result.details));

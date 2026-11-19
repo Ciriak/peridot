@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { APPLICATION_PLUGIN_TIMEOUT_MS } from "../src/app.js";
 import { openApiRouteKeys } from "../src/openapi.js";
 import { createTestContext } from "./helpers.js";
 
@@ -60,6 +61,10 @@ function collectSchemaReferences(value: unknown, references: string[] = []) {
 test("OpenAPI endpoints publish every documented API route", async () => {
   const context = await createTestContext();
   try {
+    assert.equal(
+      context.app.initialConfig.pluginTimeout,
+      APPLICATION_PLUGIN_TIMEOUT_MS,
+    );
     const response = await context.app.inject({
       method: "GET",
       url: "/api/openapi.json",

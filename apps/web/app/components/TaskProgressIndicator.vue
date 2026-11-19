@@ -11,30 +11,94 @@ import {
 } from "reka-ui";
 import { computed } from "vue";
 import { useLocalizedMessage } from "../composables/use-localized-message";
+import { useOfflineDownloadTasks } from "../composables/use-offline-download-tasks";
 import { useServerConnection } from "../composables/use-server-connection";
 import { useTasks } from "../composables/use-tasks";
 import { useUser } from "../composables/use-user";
 import { icons } from "../lib/icons";
 import { topbarStatus } from "../lib/server-connection";
 import {
+  activeTaskPercent,
   orderedActiveTasks,
-  overallTaskProgress,
   taskProgressMessage,
   taskStatusMessage,
 } from "../lib/task-progress";
 
+interface TaskProgressRow {
+  key: string;
+  title: string;
+  statusLabel: string;
+  progressLabel: string;
+  progress: number | null;
+  running: boolean;
+  status: string;
+  createdAt: string;
+}
+
 const { t, translate } = useLocalizedMessage();
-const { activeTasks, hasActiveTasks } = useTasks();
+const { activeTasks: serverActiveTasks } = useTasks();
+const downloadTasks = useOfflineDownloadTasks();
 const { status: connectionStatus } = useServerConnection();
 const { user } = useUser();
-const canViewTaskProgress = computed(() => user.value?.role === "admin");
-const taskRows = computed(() => orderedActiveTasks(activeTasks.value));
-const overallProgress = computed(() => overallTaskProgress(taskRows.value));
+const canViewServerTasks = computed(() => user.value?.role === "admin");
+const rows = computed<TaskProgressRow[]>(() => {
+  const rank = (status: string) =>
+    status === "running" ? 0 : status === "queued" ? 1 : 2;
+  return [
+    ...(canViewServerTasks.value
+      ? orderedActiveTasks(serverActiveTasks.value).map((task) => ({
+          key: `server:${task.id}`,
+          title: translate(task.titleMessage),
+          statusLabel: translate(taskStatusMessage(task)),
+          progressLabel: translate(taskProgressMessage(task)),
+          progress: activeTaskPercent(task),
+          running: task.status === "running",
+          status: task.status,
+          createdAt: task.createdAt,
+        }))
+      : []),
+    ...downloadTasks
+      .orderedTasks()
+      .filter(downloadTasks.isActive)
+      .map((task) => ({
+        key: `download:${task.id}`,
+        title: translate(task.titleMessage),
+        statusLabel: t(`downloadTasks.status.${task.status}`),
+        progressLabel:
+          task.progress.total === null
+            ? t("downloadTasks.preparing")
+            : t("downloadTasks.progress", {
+                completed: task.progress.completed,
+                total: task.progress.total,
+              }),
+        progress: downloadTasks.progressForTask(task),
+        running: task.status === "running",
+        status: task.status,
+        createdAt: task.createdAt,
+      })),
+  ].sort((left, right) => {
+    const statusDifference = rank(left.status) - rank(right.status);
+    if (statusDifference !== 0) return statusDifference;
+    return (
+      new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
+    );
+  });
+});
+const overallProgress = computed(() => {
+  if (!rows.value.length || !rows.value.some((row) => row.running)) {
+    return null;
+  }
+  if (rows.value.some((row) => row.progress === null)) return null;
+  return (
+    rows.value.reduce((total, row) => total + (row.progress ?? 0), 0) /
+    rows.value.length
+  );
+});
 const status = computed(() =>
-  topbarStatus(connectionStatus.value, hasActiveTasks.value),
+  topbarStatus(connectionStatus.value, rows.value.length > 0),
 );
 const progressLabel = computed(() => {
-  const count = taskRows.value.length;
+  const count = rows.value.length;
   if (overallProgress.value === null) {
     return t("components.taskProgress.unavailable", { count }, count);
   }
@@ -78,14 +142,11 @@ const progressLabel = computed(() => {
       </TooltipPortal>
     </TooltipRoot>
   </TooltipProvider>
-  <TooltipProvider
-    v-else-if="canViewTaskProgress && status === 'task-progress'"
-    :delay-duration="150"
-  >
+  <TooltipProvider v-else-if="status === 'task-progress'" :delay-duration="150">
     <TooltipRoot>
       <TooltipTrigger as-child>
         <NuxtLink
-          to="/settings/tasks"
+          to="/settings/tasks#active-tasks"
           :aria-label="t('components.taskProgress.open')"
           class="flex size-6 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
@@ -110,31 +171,29 @@ const progressLabel = computed(() => {
               {{
                 t(
                   "components.taskProgress.active",
-                  { count: taskRows.length },
-                  taskRows.length,
+                  { count: rows.length },
+                  rows.length,
                 )
               }}
             </span>
           </div>
           <ul class="max-h-64 space-y-1 overflow-y-auto pr-1">
             <li
-              v-for="task in taskRows"
-              :key="task.id"
+              v-for="row in rows"
+              :key="row.key"
               class="rounded-md px-1 py-1.5"
             >
               <p class="truncate text-sm font-medium">
-                {{ translate(task.titleMessage) }}
+                {{ row.title }}
               </p>
               <p class="text-xs text-muted-foreground">
                 <span
                   :class="
-                    task.status === 'running'
-                      ? 'font-medium text-primary'
-                      : 'font-medium'
+                    row.running ? 'font-medium text-primary' : 'font-medium'
                   "
-                  >{{ translate(taskStatusMessage(task)) }}</span
+                  >{{ row.statusLabel }}</span
                 >
-                · {{ translate(taskProgressMessage(task)) }}
+                · {{ row.progressLabel }}
               </p>
             </li>
           </ul>

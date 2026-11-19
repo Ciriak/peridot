@@ -16,16 +16,17 @@ test("settings is a fullscreen routed area with a separate administrator group",
     layout.indexOf("const adminCategories"),
     layout.indexOf("];", layout.indexOf("const adminCategories")) + 2,
   );
-  for (const category of ["account", "library", "playback"]) {
+  for (const category of ["account", "library", "tasks", "playback"]) {
     assert.match(layout, new RegExp(`to: "/settings/${category}"`));
   }
   assert.match(commonCategories, /labelKey: "settings\.profile"/);
   assert.doesNotMatch(commonCategories, /settings\.account"/);
-  for (const category of ["tasks", "users", "sources", "metadata", "server"]) {
+  for (const category of ["users", "sources", "metadata", "server"]) {
     assert.match(adminCategories, new RegExp(`to: "/settings/${category}"`));
   }
   assert.match(adminCategories, /labelKey: "settings\.users"/);
-  assert.doesNotMatch(commonCategories, /to: "\/settings\/tasks"/);
+  assert.match(commonCategories, /labelKey: "settings\.tasks"/);
+  assert.doesNotMatch(adminCategories, /to: "\/settings\/tasks"/);
   assert.doesNotMatch(commonCategories, /to: "\/settings\/plugins"/);
   assert.match(layout, /user\?\.role === 'admin'/);
   assert.match(layout, /aria-labelledby="admin-settings-heading"/);
@@ -50,7 +51,9 @@ test("settings is a fullscreen routed area with a separate administrator group",
   assert.match(layout, /activeMetadataTasks/);
   assert.match(layout, /activeTasks/);
   assert.match(layout, /metadataTaskProgress/);
-  assert.match(layout, /activeTaskProgress/);
+  assert.match(layout, /activeTaskCount/);
+  assert.match(layout, /combinedTaskProgress/);
+  assert.match(layout, /useOfflineDownloadTasks/);
   assert.match(layout, /item\.to === '\/settings\/tasks'/);
   assert.match(layout, /item\.to === '\/settings\/metadata'/);
   assert.match(layout, /settings\.tasks\.progressFor/);
@@ -449,24 +452,30 @@ test("tasks have a settings view for active work and paginated history", async (
   const page = await readSource("../app/pages/settings/tasks.vue");
   assert.match(page, /useUser/);
   assert.match(page, /canManageTasks/);
-  assert.match(page, /v-if="!canManageTasks"/);
-  assert.match(page, /settings\.tasks\.adminRequired/);
+  assert.doesNotMatch(page, /v-if="!canManageTasks"/);
+  assert.doesNotMatch(page, /settings\.tasks\.adminRequired/);
+  assert.match(page, /useOfflineDownloadTasks/);
+  assert.match(page, /isDownloadTaskTerminal/);
+  assert.match(page, /downloadActiveRow/);
+  assert.match(page, /downloadHistoryRow/);
+  assert.match(page, /downloadTasks\.cancel/);
+  assert.match(page, /downloadTasks\.retry/);
+  assert.match(page, /downloadTasks\.progressForTask/);
   assert.match(
     page,
-    /onMounted\(\(\) => \{\s+if \(!canManageTasks\.value\) return;/,
+    /onMounted\(\(\) => \{\s+void downloadTasks\.refresh\(\);\s+if \(!canManageTasks\.value\) return;/,
   );
   assert.match(page, /useTasks/);
   assert.match(page, /isCancellingTask/);
   assert.match(page, /cancelTask/);
   assert.match(page, /settings\.tasks\.cancelTask/);
   assert.match(page, /icons\.close/);
-  assert.match(page, /v-if="task\.status === 'queued'"/);
+  assert.match(page, /v-if="row\.action === 'cancel'"/);
   assert.match(page, /size="icon-sm"/);
   assert.match(page, /class="size-5"/);
   assert.match(page, /settings\.tasks\.stop/);
   assert.match(page, /settings\.tasks\.stopping/);
-  assert.match(page, /taskActionLabel\(task\)/);
-  assert.match(page, /@click="changeActiveTask\(task\)"/);
+  assert.match(page, /runRowAction\(row\)/);
   assert.match(page, /orderedActiveTasks\(activeTasks\.value\)/);
   assert.match(page, /useTaskHistoryQuery/);
   assert.match(page, /historyQuery\.loadMore\(\)/);
@@ -485,18 +494,19 @@ test("tasks have a settings view for active work and paginated history", async (
   assert.match(page, /visibleDetails\(task\)/);
   assert.match(page, /estimatedTaskRemainingMs/);
   assert.match(page, /formatRemainingDuration/);
-  assert.match(page, /taskRemainingLabel\(task\)/);
-  assert.match(page, /taskQueuedLabel\(task\)/);
+  assert.match(page, /serverRemainingLabel\(task\)/);
+  assert.match(page, /serverQueuedLabel\(task\)/);
+  assert.match(page, /downloadRemainingLabel\(task\)/);
+  assert.match(page, /downloadQueuedLabel\(task\)/);
   assert.match(page, /settings\.tasks\.remaining/);
   assert.match(page, /settings\.tasks\.lessThanMinute/);
   assert.match(page, /useIntervalFn\(update, 10_000/);
   assert.match(page, /formatTimeAgo/);
   assert.match(page, /useNow/);
-  assert.match(page, /taskHistoryTimestamp\(task\)/);
-  assert.match(page, /taskHistoryTimeTitle\(task\)/);
+  assert.match(page, /formatTimeAgo\(timestamp, now\.value, locale\.value\)/);
   assert.match(
     page,
-    /<time\s+:datetime="taskHistoryTimestamp\(task\)"\s+:title="taskHistoryTimeTitle\(task\)"/,
+    /<time\s+v-if="row\.timeLabel && row\.timeDateTime"\s+:datetime="row\.timeDateTime"\s+:title="row\.timeTitle \?\? undefined"/,
   );
 });
 

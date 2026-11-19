@@ -9,6 +9,7 @@ import {
   activeTaskForMetadataProvider,
   activeTaskForSource,
   activeTaskPercent,
+  estimatedRemainingMs,
   estimatedTaskRemainingMs,
   orderedActiveTasks,
   overallTaskProgress,
@@ -133,6 +134,10 @@ test("remaining time requires stable, determinate running progress", () => {
       }),
       now,
     ),
+    190_000,
+  );
+  assert.equal(
+    estimatedRemainingMs("2026-11-11T10:00:00.000Z", 5, 100, now),
     190_000,
   );
   assert.equal(
@@ -310,6 +315,15 @@ test("task labels distinguish queued, determinate, and indeterminate work", () =
     "settings.tasks.status.completed",
   );
   assert.equal(
+    taskStatusMessage(
+      task({
+        status: "completed",
+        failureMessage: { key: "api.message.taskCompletedWithErrors" },
+      }),
+    ).key,
+    "settings.tasks.status.completedWithErrors",
+  );
+  assert.equal(
     taskStatusMessage(task({ status: "failed" })).key,
     "settings.tasks.status.failed",
   );
@@ -335,7 +349,21 @@ test("task labels distinguish queued, determinate, and indeterminate work", () =
   );
 });
 
-test("the topbar shares connection loss and exposes task progress to admins", async () => {
+test("task history renders partial completion with a completed warning", async () => {
+  const page = await readFile(
+    new URL("../app/pages/settings/tasks.vue", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(
+    page,
+    /task\.status === "completed" && task\.failureMessage[\s\S]*?"completed_with_errors"/,
+  );
+  assert.match(page, /taskFailureMessageClass\(row\)/);
+  assert.match(page, /:class="taskFailureMessageClass\(row\)"/);
+});
+
+test("the topbar shares connection loss and combines server and download work", async () => {
   const [layout, indicator] = await Promise.all([
     readFile(new URL("../app/layouts/default.vue", import.meta.url), "utf8"),
     readFile(
@@ -348,19 +376,17 @@ test("the topbar shares connection loss and exposes task progress to admins", as
   assert.doesNotMatch(layout, /Fetching metadata/);
   assert.match(indicator, /useServerConnection/);
   assert.match(indicator, /useUser/);
+  assert.match(indicator, /useOfflineDownloadTasks/);
   assert.match(
     indicator,
-    /canViewTaskProgress = computed\(\(\) => user\.value\?\.role === "admin"\)/,
+    /canViewServerTasks = computed\(\(\) => user\.value\?\.role === "admin"\)/,
   );
   assert.match(
     indicator,
-    /topbarStatus\(connectionStatus\.value, hasActiveTasks\.value\)/,
+    /topbarStatus\(connectionStatus\.value, rows\.value\.length > 0\)/,
   );
   assert.match(indicator, /v-if="status === 'connection-lost'"/);
-  assert.match(
-    indicator,
-    /v-else-if="canViewTaskProgress && status === 'task-progress'"/,
-  );
+  assert.match(indicator, /v-else-if="status === 'task-progress'"/);
   assert.match(indicator, /:icon="icons\.networkOff"/);
   assert.match(indicator, /text-foreground/);
   assert.doesNotMatch(indicator, /text-destructive|border-destructive/);
@@ -374,11 +400,12 @@ test("the topbar shares connection loss and exposes task progress to admins", as
   );
   assert.match(indicator, /t\("components\.taskProgress\.offlineBadge"\)/);
   assert.match(indicator, /<TooltipTrigger as-child>/);
-  assert.match(indicator, /<NuxtLink\s+to="\/settings\/tasks"/);
+  assert.match(indicator, /<NuxtLink\s+to="\/settings\/tasks#active-tasks"/);
   assert.match(indicator, /t\('components\.taskProgress\.open'\)/);
   assert.match(indicator, /:value="overallProgress"/);
-  assert.match(indicator, /overallTaskProgress\(taskRows\.value\)/);
-  assert.match(indicator, /orderedActiveTasks\(activeTasks\.value\)/);
+  assert.match(indicator, /const overallProgress = computed/);
+  assert.match(indicator, /orderedActiveTasks\(serverActiveTasks\.value\)/);
+  assert.match(indicator, /downloadTasks\s*\.orderedTasks\(\)/);
   assert.match(indicator, /taskStatusMessage\(task\)/);
   assert.match(indicator, /taskProgressMessage\(task\)/);
   assert.match(indicator, /max-h-64[\s\S]*?overflow-y-auto/);

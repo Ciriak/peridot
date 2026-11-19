@@ -104,9 +104,24 @@ export function estimatedTaskRemainingMs(
     return null;
   }
 
-  const startedAt = new Date(task.startedAt).getTime();
+  return estimatedRemainingMs(
+    task.startedAt,
+    task.progress.completed,
+    task.progress.total,
+    now,
+  );
+}
+
+export function estimatedRemainingMs(
+  startedAtValue: string | null,
+  completed: number,
+  total: number,
+  now: Date,
+): number | null {
+  if (startedAtValue === null) return null;
+
+  const startedAt = new Date(startedAtValue).getTime();
   const elapsed = now.getTime() - startedAt;
-  const { completed, total } = task.progress;
   if (
     !Number.isFinite(startedAt) ||
     !Number.isFinite(elapsed) ||
@@ -144,6 +159,9 @@ export function overallTaskProgress(
 }
 
 export function taskStatusMessage(task: TaskResponse): MessageDescriptor {
+  if (task.status === "completed" && task.failureMessage) {
+    return message("settings.tasks.status.completedWithErrors");
+  }
   switch (task.status) {
     case "running":
       return message("settings.tasks.status.running");

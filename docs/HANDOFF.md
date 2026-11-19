@@ -1,5 +1,112 @@
 # Peridot handoff
 
+## Unified server and offline task display
+
+Settings → Tasks is now a common settings destination for every signed-in user.
+It combines durable server work with local offline-download work in the same
+active and history lists. Administrators see server tasks; every user sees their
+own device downloads, including paused work and retryable failures. Queue, stop,
+and retry actions continue to call the correct server or device queue.
+
+The separate Library download panel and standalone download indicator have been
+removed. The topbar, Tasks navigation item, and task page use one combined
+indicator, and local downloads now receive the same conservative remaining-time
+estimate treatment as eligible server tasks.
+
+Verification:
+
+- `pnpm test`
+- `pnpm typecheck`
+- `pnpm --filter @peridot/web build`
+- `pnpm lint`
+- Focused Prettier checks on changed web files and tests
+
+Known limits:
+
+- Browser visual QA at desktop and mobile widths has not been run for the merged
+  task list.
+- Download workers still run only while the app process is open.
+
+Known checks:
+
+- `pnpm format:check` still reports the pre-existing formatting issue in
+  `apps/desktop/src-tauri/tauri.conf.json`; changed task files pass focused
+  Prettier checks.
+
+Feature files:
+
+- `apps/web/app/pages/settings/tasks.vue`
+- `apps/web/app/components/TaskProgressIndicator.vue`
+- `apps/web/app/layouts/settings.vue`
+- `apps/web/app/pages/settings/library.vue`
+- `apps/web/app/lib/task-progress.ts`
+
+Uncommitted changes:
+
+- Unified task rendering, navigation, indicator, translations, tests, decisions,
+  development notes, and this handoff.
+- Concurrent task-completion messaging and deployment startup changes were
+  preserved.
+
+Next:
+
+- Exercise the merged list at desktop and mobile widths with one running server
+  task, one queued server task, and one active offline download.
+
+## Completed tasks with partial errors
+
+Library artwork retrieval and other durable tasks can finish with some items
+unprocessed. These executions now remain `completed`, display “Completed with
+errors” with warning styling, and explain that some items could not be processed
+instead of showing the terminal-failure message. Existing completed rows are
+corrected when serialized through the API.
+
+Verification:
+
+- `pnpm --filter @peridot/server test` (196 passing)
+- `pnpm --filter @peridot/web test` (259 passing)
+- Server and web type checks
+- Focused ESLint and Prettier checks
+
+Uncommitted changes:
+
+- Task completion messaging, Settings → Tasks styling, translations, tests,
+  decision record, and this handoff.
+
+Next:
+
+- Confirm the updated warning copy and badge styling in the running web client.
+
+## Deployment startup timeout
+
+Deployed startup failed after migrations completed because Fastify's default
+10-second plugin limit expired while `@fastify/swagger-ui` initialized. The
+same build and OpenAPI routes start successfully locally, so the server now
+allows built-in plugins up to 60 seconds during slow container filesystem or CPU
+initialization. The timeout remains finite to surface an actual plugin
+deadlock.
+
+Verification:
+
+- Server tests (40 passing)
+- `pnpm --filter @peridot/server typecheck`
+- `pnpm --filter @peridot/server build`
+- Built server production-path startup; `/api/health` and `/api/docs/` both
+  returned 200
+
+Uncommitted changes:
+
+- Fastify plugin timeout, OpenAPI regression assertion, decision record, and
+  this handoff.
+- Concurrent changes in `apps/web/app/lib/task-progress.ts` and
+  `apps/web/app/pages/settings/tasks.vue` were present during verification and
+  were left untouched.
+
+Next:
+
+- Rebuild the development image, redeploy it, and confirm `/api/health` and
+  `/api/docs/` respond after startup.
+
 ## Account-synced offline downloads
 
 The “Make my liked titles available offline” switch is now stored per user on the
@@ -14,7 +121,8 @@ Queue state is scoped by server and user in IndexedDB. Work runs one task and on
 track at a time, resumes after reload, pauses while disconnected, retries failed
 items twice, preserves successful downloads, and supports cancel and manual
 retry. The topbar shows active download progress for members and administrators,
-and Settings → Library exposes active work and recent task history.
+and Settings → Tasks exposes active work and recent task history together with
+server work.
 
 The browser's direct file-download action remains separate. Successful task
 completion now emits the offline-save toast; enqueueing a task does not claim the
@@ -45,7 +153,8 @@ Feature files:
 
 - `apps/web/app/lib/download-tasks.ts`
 - `apps/web/app/composables/use-offline-download-tasks.ts`
-- `apps/web/app/pages/settings/library.vue`
+- `apps/web/app/pages/settings/tasks.vue`
+- `apps/web/app/components/TaskProgressIndicator.vue`
 - `apps/server/src/auth.ts`
 - `apps/server/migrations/app/20261119T2112_user_preferences`
 

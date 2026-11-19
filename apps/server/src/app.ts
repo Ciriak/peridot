@@ -65,6 +65,8 @@ import {
 import { registerWebApplication } from "./web-server.js";
 import { SourceRemovalRegistry } from "./source-removal.js";
 
+export const APPLICATION_PLUGIN_TIMEOUT_MS = 60_000;
+
 export interface BuildAppOptions {
   config?: ServerConfig;
   database?: Database;
@@ -214,6 +216,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
   logBuffer.onEntry((entry) => realtime.publishLog(entry));
   catalog.setPublisher((change) => realtime.publishCatalog(change));
   const app = Fastify({
+    pluginTimeout: APPLICATION_PLUGIN_TIMEOUT_MS,
     logger:
       options.logger === false
         ? false

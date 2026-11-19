@@ -6,13 +6,18 @@ import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { ProgressCircle } from "@peridot/ui/components/ui/progress-circle";
 import { computed, ref, watch } from "vue";
-import DownloadTaskIndicator from "../components/DownloadTaskIndicator.vue";
 import TaskProgressIndicator from "../components/TaskProgressIndicator.vue";
 import { useAdminSourcesQuery } from "../composables/use-admin-queries";
+import { useOfflineDownloadTasks } from "../composables/use-offline-download-tasks";
 import { useTasks } from "../composables/use-tasks";
 import { useUser } from "../composables/use-user";
+import { downloadTaskProgressPercent } from "../lib/download-tasks";
 import { icons } from "../lib/icons";
-import { isActiveTaskStatus, overallTaskProgress } from "../lib/task-progress";
+import {
+  activeTaskPercent,
+  isActiveTaskStatus,
+  overallTaskProgress,
+} from "../lib/task-progress";
 
 const route = useRoute();
 const { t, n } = useI18n();
@@ -23,6 +28,7 @@ const {
   load: loadSources,
 } = useAdminSourcesQuery();
 const { tasks } = useTasks();
+const { activeTasks: activeDownloadTasks } = useOfflineDownloadTasks();
 const runtimeConfig = useRuntimeConfig();
 const appVersion = runtimeConfig.public.appVersion;
 const environment = runtimeConfig.public.environment;
@@ -32,6 +38,9 @@ const sourceCount = computed(() => sources.value.length);
 const activeTasks = computed(() =>
   tasks.value.filter((task) => isActiveTaskStatus(task.status)),
 );
+const activeServerTasks = computed(() =>
+  user.value?.role === "admin" ? activeTasks.value : [],
+);
 const activeMetadataTasks = computed(() =>
   tasks.value.filter(
     (task) => task.kind === "metadata_fetch" && isActiveTaskStatus(task.status),
@@ -40,9 +49,26 @@ const activeMetadataTasks = computed(() =>
 const metadataTaskProgress = computed(() =>
   overallTaskProgress(activeMetadataTasks.value),
 );
-const activeTaskProgress = computed(() =>
-  overallTaskProgress(activeTasks.value),
+const activeTaskCount = computed(
+  () => activeServerTasks.value.length + activeDownloadTasks.value.length,
 );
+const combinedTaskProgress = computed(() => {
+  const taskCount = activeTaskCount.value;
+  if (!taskCount) return null;
+  const hasRunningTask =
+    activeServerTasks.value.some((task) => task.status === "running") ||
+    activeDownloadTasks.value.some((task) => task.status === "running");
+  if (!hasRunningTask) return null;
+  const values = [
+    ...activeServerTasks.value.map(activeTaskPercent),
+    ...activeDownloadTasks.value.map(downloadTaskProgressPercent),
+  ];
+  if (values.some((value) => value === null)) return null;
+  return (
+    values.reduce<number>((total, value) => total + (value ?? 0), 0) /
+    values.length
+  );
+});
 const commonCategories = [
   { labelKey: "settings.profile", to: "/settings/account", icon: icons.user },
   {
@@ -50,6 +76,7 @@ const commonCategories = [
     to: "/settings/library",
     icon: icons.library,
   },
+  { labelKey: "settings.tasks", to: "/settings/tasks", icon: icons.restart },
   {
     labelKey: "settings.playback",
     to: "/settings/playback",
@@ -57,7 +84,6 @@ const commonCategories = [
   },
 ];
 const adminCategories = [
-  { labelKey: "settings.tasks", to: "/settings/tasks", icon: icons.restart },
   { labelKey: "settings.users", to: "/settings/users", icon: icons.user },
   { labelKey: "settings.sources", to: "/settings/sources", icon: icons.folder },
   {
@@ -151,6 +177,17 @@ watch(tasks, (current) => {
               <Icon :icon="item.icon" aria-hidden="true" class="size-5" />{{
                 t(item.labelKey)
               }}
+              <ProgressCircle
+                v-if="item.to === '/settings/tasks' && activeTaskCount > 0"
+                size="sm"
+                :value="combinedTaskProgress"
+                :label="
+                  t('settings.tasks.progressFor', {
+                    title: t('settings.tasks'),
+                  })
+                "
+                class="ml-auto size-4"
+              />
             </NuxtLink>
           </Button>
         </div>
@@ -185,17 +222,6 @@ watch(tasks, (current) => {
                 t(item.labelKey)
               }}
               <span class="ml-auto flex items-center gap-2">
-                <ProgressCircle
-                  v-if="item.to === '/settings/tasks' && activeTasks.length"
-                  size="sm"
-                  :value="activeTaskProgress"
-                  :label="
-                    t('settings.tasks.progressFor', {
-                      title: t('settings.tasks'),
-                    })
-                  "
-                  class="size-4"
-                />
                 <ProgressCircle
                   v-if="
                     item.to === '/settings/metadata' &&
@@ -253,7 +279,6 @@ watch(tasks, (current) => {
         /></Button>
         <h1 class="text-lg font-semibold">{{ t("settings.title") }}</h1>
         <div class="ml-auto flex items-center gap-2">
-          <DownloadTaskIndicator />
           <TaskProgressIndicator />
         </div>
       </header>

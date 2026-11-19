@@ -124,7 +124,8 @@ IndexedDB.
 Offline audio and download-task state are persisted separately from query cache.
 All offline-save controls enqueue a device task; the shared worker resolves the
 current catalog target, skips existing copies, and downloads one track at a time.
-Tasks resume from IndexedDB after reload and surface in Settings → Library.
+Tasks resume from IndexedDB after reload and surface alongside server work in
+Settings → Tasks.
 
 User preferences use `GET /api/users/me/preferences`,
 `PUT /api/users/me/preferences`, and
