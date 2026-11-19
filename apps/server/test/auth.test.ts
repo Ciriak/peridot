@@ -256,6 +256,75 @@ test("users can update their unique display name without ending their session", 
   }
 });
 
+test("user preferences initialize once, remain account-scoped, and update", async () => {
+  const context = await createTestContext();
+  try {
+    const initial = await context.app.inject({
+      method: "GET",
+      url: "/api/users/me/preferences",
+      headers: context.authorization,
+    });
+    assert.equal(initial.statusCode, 200);
+    assert.deepEqual(initial.json(), {
+      likedTitlesOffline: true,
+      initialized: false,
+    });
+
+    const initialized = await context.app.inject({
+      method: "POST",
+      url: "/api/users/me/preferences/initialize",
+      headers: context.authorization,
+      payload: { likedTitlesOffline: false },
+    });
+    assert.equal(initialized.statusCode, 200);
+    assert.deepEqual(initialized.json(), {
+      likedTitlesOffline: false,
+      initialized: true,
+    });
+
+    const losingInitializer = await context.app.inject({
+      method: "POST",
+      url: "/api/users/me/preferences/initialize",
+      headers: context.authorization,
+      payload: { likedTitlesOffline: true },
+    });
+    assert.equal(losingInitializer.statusCode, 200);
+    assert.deepEqual(losingInitializer.json(), {
+      likedTitlesOffline: false,
+      initialized: true,
+    });
+
+    const updated = await context.app.inject({
+      method: "PUT",
+      url: "/api/users/me/preferences",
+      headers: context.authorization,
+      payload: { likedTitlesOffline: true },
+    });
+    assert.equal(updated.statusCode, 200);
+    assert.deepEqual(updated.json(), {
+      likedTitlesOffline: true,
+      initialized: true,
+    });
+
+    const invalid = await context.app.inject({
+      method: "PUT",
+      url: "/api/users/me/preferences",
+      headers: context.authorization,
+      payload: { likedTitlesOffline: "yes" },
+    });
+    assert.equal(invalid.statusCode, 400);
+    assert.equal(invalid.json().error.code, "invalid_user_preferences");
+
+    const unauthenticated = await context.app.inject({
+      method: "GET",
+      url: "/api/users/me/preferences",
+    });
+    assert.equal(unauthenticated.statusCode, 401);
+  } finally {
+    await context.close();
+  }
+});
+
 test("the configured web origin can call onboarding endpoints", async () => {
   const context = await createTestContext();
   try {

@@ -2,8 +2,16 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import type {
+  AlbumListResponse,
+  LikeListResponse,
+  PlaylistDetailResponse,
+  QueueResponse,
+  TrackListResponse,
+} from "@peridot/contracts";
 import {
   createMemberSession,
+  createTaggedMp3,
   createTestContext,
   createWav,
   startScan,
@@ -172,7 +180,7 @@ test("administrators can add and remove path and url sources", async () => {
     assert.deepEqual(removed.json(), {
       sourceId: createdSource.id,
       unavailableTrackCount: 1,
-      affectedAlbumCount: 1,
+      affectedAlbumCount: 0,
       affectedArtistCount: 1,
       durationMs: removed.json().durationMs,
     });
@@ -209,6 +217,185 @@ test("administrators can add and remove path and url sources", async () => {
         .json<{ items: Array<{ id: string }> }>()
         .items.some((source) => source.id === createdSource.id),
       false,
+    );
+  } finally {
+    await context.close();
+  }
+});
+
+test("source removal preserves personal references and revives them when re-added", async () => {
+  const context = await createTestContext();
+  const albumDirectory = path.join(context.libraryRoot, "Preserved Album");
+  try {
+    await mkdir(albumDirectory);
+    await writeFile(
+      path.join(albumDirectory, "track.mp3"),
+      createTaggedMp3({
+        title: "Preserved Track",
+        artist: "Preserved Artist",
+        albumArtist: "Preserved Artist",
+        album: "Preserved Album",
+        discNumber: 1,
+        trackNumber: 1,
+      }),
+    );
+    await startScan(context);
+
+    const tracks = await context.app.inject({
+      method: "GET",
+      url: "/api/tracks?availability=all",
+      headers: context.authorization,
+    });
+    const track = tracks.json<TrackListResponse>().items[0];
+    assert.ok(track);
+    assert.ok(track.albumId);
+    assert.ok(track.album);
+
+    const likedTrack = await context.app.inject({
+      method: "POST",
+      url: "/api/likes",
+      headers: context.authorization,
+      payload: { kind: "track", trackId: track.id },
+    });
+    assert.equal(likedTrack.statusCode, 200);
+    const likedAlbum = await context.app.inject({
+      method: "POST",
+      url: "/api/likes",
+      headers: context.authorization,
+      payload: {
+        kind: "album",
+        albumId: track.albumId,
+        title: track.album,
+        artist: track.artist,
+      },
+    });
+    assert.equal(likedAlbum.statusCode, 200);
+
+    const playlist = await context.app.inject({
+      method: "POST",
+      url: "/api/playlists",
+      headers: context.authorization,
+      payload: { name: "Preserved playlist" },
+    });
+    assert.equal(playlist.statusCode, 201);
+    const playlistId = playlist.json<PlaylistDetailResponse>().id;
+    const added = await context.app.inject({
+      method: "POST",
+      url: `/api/playlists/${playlistId}/items`,
+      headers: context.authorization,
+      payload: { kind: "catalog", trackId: track.id },
+    });
+    assert.equal(added.statusCode, 201);
+
+    const queued = await context.app.inject({
+      method: "PUT",
+      url: "/api/queue",
+      headers: context.authorization,
+      payload: {
+        trackIds: [track.id],
+        activeTrackId: track.id,
+        shuffleEnabled: false,
+        shuffleTrackIds: [],
+      },
+    });
+    assert.equal(queued.statusCode, 200);
+
+    const source = await context.database.orm.Source.firstOrThrow({
+      path: context.libraryRoot,
+    });
+    const removed = await context.app.inject({
+      method: "DELETE",
+      url: `/api/admin/sources/${source.id}`,
+      headers: context.authorization,
+    });
+    assert.equal(removed.statusCode, 200);
+
+    const likedAfterRemoval = await context.app.inject({
+      method: "GET",
+      url: "/api/likes",
+      headers: context.authorization,
+    });
+    const liked = likedAfterRemoval.json<LikeListResponse>();
+    assert.deepEqual(
+      liked.tracks.map((item) => item.trackId),
+      [track.id],
+    );
+    assert.deepEqual(
+      liked.albums.map((item) => item.albumId),
+      [track.albumId],
+    );
+
+    const unavailableLikedTracks = await context.app.inject({
+      method: "GET",
+      url: "/api/tracks?liked=true&availability=all",
+      headers: context.authorization,
+    });
+    assert.equal(unavailableLikedTracks.statusCode, 200);
+    assert.equal(
+      unavailableLikedTracks.json<TrackListResponse>().items[0]?.available,
+      false,
+    );
+
+    const normalAlbums = await context.app.inject({
+      method: "GET",
+      url: "/api/albums",
+      headers: context.authorization,
+    });
+    assert.equal(normalAlbums.json<AlbumListResponse>().items.length, 0);
+    const likedAlbums = await context.app.inject({
+      method: "GET",
+      url: "/api/albums?liked=true",
+      headers: context.authorization,
+    });
+    assert.equal(
+      likedAlbums.json<AlbumListResponse>().items[0]?.available,
+      false,
+    );
+
+    const playlistAfterRemoval = await context.app.inject({
+      method: "GET",
+      url: `/api/playlists/${playlistId}`,
+      headers: context.authorization,
+    });
+    const playlistEntry =
+      playlistAfterRemoval.json<PlaylistDetailResponse>().entries[0];
+    assert.equal(playlistEntry?.track?.id, track.id);
+    assert.equal(playlistEntry?.available, false);
+    const queueAfterRemoval = await context.app.inject({
+      method: "GET",
+      url: "/api/queue",
+      headers: context.authorization,
+    });
+    assert.deepEqual(queueAfterRemoval.json<QueueResponse>().trackIds, [
+      track.id,
+    ]);
+
+    const restored = await context.app.inject({
+      method: "POST",
+      url: "/api/admin/sources",
+      headers: context.authorization,
+      payload: { kind: "path", path: context.libraryRoot },
+    });
+    assert.equal(restored.statusCode, 201);
+    const restoredSource = restored.json<{
+      id: string;
+      task: { id: string };
+    }>();
+    assert.equal(restoredSource.id, source.id);
+    await waitForScan(context, restoredSource.task.id);
+
+    const restoredTracks = await context.app.inject({
+      method: "GET",
+      url: "/api/tracks?availability=all",
+      headers: context.authorization,
+    });
+    assert.equal(
+      restoredTracks.json<TrackListResponse>().items[0]?.id,
+      track.id,
+    );
+    assert.equal(
+      restoredTracks.json<TrackListResponse>().items[0]?.available,
+      true,
     );
   } finally {
     await context.close();

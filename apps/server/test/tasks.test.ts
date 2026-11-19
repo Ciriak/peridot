@@ -459,10 +459,9 @@ test("deleting a source stops relevant work and preserves unrelated tasks", asyn
       url: `/api/admin/sources/${source.id}`,
       headers: context.authorization,
     });
-    assert.equal(removed.statusCode, 204);
-    assert.equal(
-      await context.database.orm.Source.first({ id: source.id }),
-      null,
+    assert.equal(removed.statusCode, 200);
+    assert.ok(
+      (await context.database.orm.Source.first({ id: source.id }))?.removedAt,
     );
     assert.equal(
       (await context.database.orm.Task.first({ id: relevant.id }))?.status,

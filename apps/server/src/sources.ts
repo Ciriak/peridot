@@ -186,8 +186,8 @@ export async function createSource(
     typeof value.name === "string" && value.name.trim()
       ? value.name.trim()
       : null;
-  const { count: position } = await database.orm.Source.where(
-    (source) => source.removedAt.isNull(),
+  const { count: position } = await database.orm.Source.where((source) =>
+    source.removedAt.isNull(),
   ).aggregate((aggregate) => ({ count: aggregate.count() }));
 
   if (kind === "path") {
@@ -315,10 +315,7 @@ export async function createSource(
         sourceIdentity: validated.identity,
         configuration: JSON.stringify(validated.configuration),
         credentialCiphertext: Object.keys(validated.credentials).length
-          ? credentials.encrypt(
-              JSON.stringify(validated.credentials),
-              "source",
-            )
+          ? credentials.encrypt(JSON.stringify(validated.credentials), "source")
           : null,
         removedAt: null,
         position,

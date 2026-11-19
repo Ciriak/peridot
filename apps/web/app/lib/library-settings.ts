@@ -1,4 +1,5 @@
-export const LIBRARY_SETTINGS_STORAGE_VERSION = 1;
+export const LIBRARY_SETTINGS_STORAGE_VERSION = 2;
+const LEGACY_LIBRARY_SETTINGS_STORAGE_VERSION = 1;
 export const LIBRARY_SETTINGS_STORAGE_PREFIX = "peridot:library-settings";
 
 export interface LibrarySettingsScope {
@@ -33,14 +34,19 @@ export function librarySettingsStorageKey(scope: LibrarySettingsScope): string {
   return `${LIBRARY_SETTINGS_STORAGE_PREFIX}:v${LIBRARY_SETTINGS_STORAGE_VERSION}:${encodeURIComponent(scope.serverAddress)}:${encodeURIComponent(scope.userId)}`;
 }
 
+function legacyLibrarySettingsStorageKey(scope: LibrarySettingsScope): string {
+  return `${LIBRARY_SETTINGS_STORAGE_PREFIX}:v${LEGACY_LIBRARY_SETTINGS_STORAGE_VERSION}:${encodeURIComponent(scope.serverAddress)}:${encodeURIComponent(scope.userId)}`;
+}
+
 export function parsePersistedLibrarySettings(
   raw: string,
   scope: LibrarySettingsScope,
+  version = LIBRARY_SETTINGS_STORAGE_VERSION,
 ): LibrarySettings | null {
   try {
     const candidate = JSON.parse(raw) as Partial<StoredLibrarySettings>;
     if (
-      candidate.version !== LIBRARY_SETTINGS_STORAGE_VERSION ||
+      candidate.version !== version ||
       candidate.serverAddress !== scope.serverAddress ||
       candidate.userId !== scope.userId ||
       typeof candidate.likedTitlesOffline !== "boolean"
@@ -59,12 +65,37 @@ export function readPersistedLibrarySettings(
   scope: LibrarySettingsScope,
 ): LibrarySettings {
   try {
-    const raw = storage.getItem(librarySettingsStorageKey(scope));
-    return raw
-      ? (parsePersistedLibrarySettings(raw, scope) ?? defaultLibrarySettings())
+    const current = storage.getItem(librarySettingsStorageKey(scope));
+    if (current) {
+      return (
+        parsePersistedLibrarySettings(current, scope) ??
+        defaultLibrarySettings()
+      );
+    }
+    const legacy = storage.getItem(legacyLibrarySettingsStorageKey(scope));
+    return legacy
+      ? (parsePersistedLibrarySettings(
+          legacy,
+          scope,
+          LEGACY_LIBRARY_SETTINGS_STORAGE_VERSION,
+        ) ?? defaultLibrarySettings())
       : defaultLibrarySettings();
   } catch {
     return defaultLibrarySettings();
+  }
+}
+
+export function hasPersistedLibrarySettings(
+  storage: LibrarySettingsStorage,
+  scope: LibrarySettingsScope,
+): boolean {
+  try {
+    return Boolean(
+      storage.getItem(librarySettingsStorageKey(scope)) ??
+      storage.getItem(legacyLibrarySettingsStorageKey(scope)),
+    );
+  } catch {
+    return false;
   }
 }
 

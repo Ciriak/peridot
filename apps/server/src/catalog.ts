@@ -1004,9 +1004,7 @@ export class CatalogService {
       const ids = batch.map(([id]) => id);
       const rows =
         table === "CatalogAlbum"
-          ? await database.orm.CatalogAlbum.where((row) =>
-              row.id.in(ids),
-            ).all()
+          ? await database.orm.CatalogAlbum.where((row) => row.id.in(ids)).all()
           : await database.orm.CatalogArtist.where((row) =>
               row.id.in(ids),
             ).all();

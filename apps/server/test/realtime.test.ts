@@ -140,6 +140,9 @@ test("realtime rejects origins and member log subscriptions", async () => {
       await nextMessage();
       const error = await nextMessage();
       assert.equal(error.type, "error");
+      socket.send(JSON.stringify({ type: "subscribe", topics: ["sources"] }));
+      const sourcesError = await nextMessage();
+      assert.equal(sourcesError.type, "error");
     } finally {
       socket.terminate();
     }
@@ -158,7 +161,9 @@ test("catalog events are constant-size revision markers", async () => {
     );
     try {
       const nextMessage = messageQueue(socket);
-      socket.send(JSON.stringify({ type: "subscribe", topics: ["catalog"] }));
+      socket.send(
+        JSON.stringify({ type: "subscribe", topics: ["sources", "catalog"] }),
+      );
       await nextMessage();
       await nextMessage();
       const response = await context.app.inject({
@@ -202,7 +207,9 @@ test("source removal emits a structural catalog event", async () => {
     );
     try {
       const nextMessage = messageQueue(socket);
-      socket.send(JSON.stringify({ type: "subscribe", topics: ["catalog"] }));
+      socket.send(
+        JSON.stringify({ type: "subscribe", topics: ["sources", "catalog"] }),
+      );
       await nextMessage();
       await nextMessage();
 
@@ -211,9 +218,16 @@ test("source removal emits a structural catalog event", async () => {
         url: `/api/admin/sources/${sourceId}`,
         headers: context.authorization,
       });
-      assert.equal(removed.statusCode, 204);
-      const event = (await nextMessage()) as RealtimeCatalogChangedEvent;
+      assert.equal(removed.statusCode, 200);
+      const sourcePhases: string[] = [];
+      let event = (await nextMessage()) as RealtimeServerMessage;
+      while (event.type === "source.removal.progress") {
+        sourcePhases.push(event.phase);
+        event = (await nextMessage()) as RealtimeServerMessage;
+      }
       assert.equal(event.type, "catalog.changed");
+      assert.deepEqual(sourcePhases, ["stopping", "tracks", "catalog"]);
+      event = event as RealtimeCatalogChangedEvent;
       assert.equal(event.reason, "source-removal");
       assert.equal(event.sourceId, sourceId);
     } finally {

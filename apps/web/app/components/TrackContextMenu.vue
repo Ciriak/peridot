@@ -57,7 +57,6 @@ import {
   notifyMetadataReverted,
   notifyMetadataUpdateFailed,
   notifyOfflineTrackFailed,
-  notifyOfflineTrackSaved,
 } from "../lib/toasts";
 import AddTrackToPlaylistDialog from "./AddTrackToPlaylistDialog.vue";
 import DownloadProgressTooltip from "./DownloadProgressTooltip.vue";
@@ -135,9 +134,7 @@ async function toggleOffline() {
     }
     return;
   }
-  if (await saveOffline(props.track)) {
-    notifyOfflineTrackSaved(props.track.title);
-  } else {
+  if (!(await saveOffline(props.track))) {
     notifyOfflineTrackFailed(
       props.track.title,
       offlineError.value ?? t("error.apiUnavailable"),

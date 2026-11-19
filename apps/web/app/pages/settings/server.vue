@@ -47,6 +47,7 @@ import { useRealtime } from "../../composables/use-realtime";
 import { useSession } from "../../composables/use-session";
 import { useServerConnection } from "../../composables/use-server-connection";
 import { useUser } from "../../composables/use-user";
+import { clearDownloadTasks } from "../../lib/download-tasks";
 import { icons } from "../../lib/icons";
 import { clearAllOfflineTracks } from "../../lib/offline-audio";
 import { clearAllPeridotQueries } from "../../lib/query-persister";
@@ -326,7 +327,11 @@ async function confirmDisconnect() {
   address.value = null;
   token.value = null;
   user.value = null;
-  await Promise.all([clearAllPeridotQueries(), clearAllOfflineTracks()]);
+  await Promise.all([
+    clearAllPeridotQueries(),
+    clearAllOfflineTracks(),
+    clearDownloadTasks(),
+  ]);
   try {
     if (currentAddress && currentToken) {
       await revokeSession(currentAddress, currentToken);

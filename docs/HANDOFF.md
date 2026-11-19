@@ -1,5 +1,166 @@
 # Peridot handoff
 
+## Account-synced offline downloads
+
+The “Make my liked titles available offline” switch is now stored per user on the
+server. After a successful sign-in or authenticated startup, the web client
+verifies the preference before starting automatic liked-item work. An account
+without a stored value is initialized once from the device's legacy local choice
+when present, otherwise from the enabled default.
+
+All offline saves now enter one persistent device queue: liked songs and albums,
+individual tracks, albums, audiobook and podcast collections, and playlists.
+Queue state is scoped by server and user in IndexedDB. Work runs one task and one
+track at a time, resumes after reload, pauses while disconnected, retries failed
+items twice, preserves successful downloads, and supports cancel and manual
+retry. The topbar shows active download progress for members and administrators,
+and Settings → Library exposes active work and recent task history.
+
+The browser's direct file-download action remains separate. Successful task
+completion now emits the offline-save toast; enqueueing a task does not claim the
+file is already available.
+
+Verification:
+
+- `pnpm test` (server 195, web 258, UI 17, desktop 5)
+- `pnpm typecheck`
+- `pnpm lint`
+- `pnpm format:check`
+- `pnpm version:check`
+- `pnpm db:validate` (16-migration graph current)
+- `pnpm build` (server, web, desktop, and Android APK assembly)
+- `pnpm db:migrate:dev` applied the preference migration and advanced `db`
+
+Known limits:
+
+- Download workers run while the app is open; tasks resume after relaunch but do
+  not continue after the process is terminated.
+- Automatic liked downloads include liked songs and tracks in liked albums, not
+  liked audiobooks or podcast episodes.
+- Existing accounts are seeded by the first upgraded device that verifies an
+  uninitialized preference. That first device wins if several upgraded devices
+  connect concurrently.
+
+Feature files:
+
+- `apps/web/app/lib/download-tasks.ts`
+- `apps/web/app/composables/use-offline-download-tasks.ts`
+- `apps/web/app/pages/settings/library.vue`
+- `apps/server/src/auth.ts`
+- `apps/server/migrations/app/20261119T2112_user_preferences`
+
+Uncommitted changes:
+
+- Account preference contract/API, migration, generated artifacts, and DB ref.
+- Device queue implementation, task UI, offline-save integration, translations,
+  tests, decision record, development notes, and this handoff.
+- Concurrent source-removal, task-estimate, and other in-progress changes remain
+  in the worktree and were not reverted.
+
+## Resilient source removal
+
+Source removal is now synchronous rather than a background task. The Sources
+page keeps the source row visible with live realtime progress while the server
+marks its tracks and catalog projections unavailable in bounded batches. A
+successful removal returns counts for unavailable tracks and affected albums and
+artists; failures roll back the transaction.
+
+Removed sources retain hidden tombstones and their track IDs. Likes, liked
+albums, playlists, queues, play history, catalog artwork, and offline copies are
+retained. Normal browse and search exclude unavailable entries; Likes requests
+unavailable tracks explicitly. Downloaded tracks remain playable even when the
+connected server no longer has the source. Re-adding the same path, URL, or
+integration identity restores the same source and track IDs and queues a scan.
+
+The migration backfills catalog source ownership and available album/artist
+counts. Source removal clears source configuration and encrypted credentials;
+integration credentials must be entered again when the source is re-added.
+
+Verification:
+
+- `pnpm --filter @peridot/server test` (195 passing)
+- `pnpm --filter @peridot/web test` (257 passing)
+- `pnpm --filter @peridot/server typecheck`
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm typecheck`
+- `pnpm lint`
+- `pnpm db:validate` (16-migration graph current)
+- `pnpm format:check`
+- `pnpm exec turbo run build --filter=!@peridot/android`
+
+Known limits:
+
+- There is no automatic purge for unavailable records.
+- Re-adding a source with changed files adds new records for new paths while old
+  unavailable IDs remain historical.
+
+Uncommitted changes:
+
+- Source-removal implementation refinements, migration backfills, tests, and
+  the decision/development/handoff updates.
+- Concurrent authentication, user-preference, task-estimate, and offline
+  download-queue work was preserved.
+
+## Task remaining-time estimates
+
+Settings → Tasks now replaces the start timestamp for eligible running tasks
+with a localized `<duration> Remaining` label. Estimates require determinate
+progress, a valid start time, at least 10 seconds elapsed, at least 5% progress,
+and remaining work. The calculation uses average elapsed time per completed item
+and rounds durations upward through minutes, hours, and days.
+
+Queued tasks retain their queued timestamp. Running tasks without a reliable
+estimate show no timestamp. The settings page refreshes the estimate every 10
+seconds and also responds to realtime task updates.
+
+Verification:
+
+- `pnpm --filter @peridot/web exec node --test --test-name-pattern "tasks have a settings view" test/settings-page.test.ts`
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Focused ESLint on all changed web and test files
+- Focused Prettier check on all changed web, test, and i18n files
+- `pnpm --filter @peridot/web test` (248 passing, 5 unrelated pre-existing
+  failures in album, like-state, offline-playback, playlist, and source-page
+  tests)
+- `pnpm lint` reaches unrelated unused-destructuring errors in
+  `apps/web/app/pages/settings/sources.vue`.
+- `pnpm format:check` reports unrelated formatting changes across the
+  in-progress server, contract, and source-removal work.
+
+Known limits:
+
+- The estimate assumes a roughly linear task rate based on average progress
+  since the task started.
+- Early progress spikes and long stalls can temporarily make the estimate
+  optimistic or pessimistic.
+
+Feature files:
+
+- `apps/web/app/lib/task-progress.ts`
+- `apps/web/app/lib/relative-time.ts`
+- `apps/web/app/pages/settings/tasks.vue`
+- `apps/web/i18n/locales/en-US.json`
+- `apps/web/test/task-progress.test.ts`
+- `apps/web/test/relative-time.test.ts`
+- `apps/web/test/settings-page.test.ts`
+- `apps/web/test/i18n.test.ts`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
+
+Uncommitted changes:
+
+- The task ETA implementation, tests, translations, decision record, and this
+  handoff.
+- Concurrent authentication, user-preference, source-removal, contract, and
+  server-test changes were preserved and not modified by this work.
+
+Next:
+
+- Exercise Settings → Tasks with a long-running scan at desktop and mobile
+  widths and compare a few observed completion times with the displayed
+  estimate.
+
 ## Automatic task retries
 
 Failed durable task executions now return the same task to the queue for up to

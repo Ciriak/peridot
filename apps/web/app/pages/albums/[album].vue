@@ -91,6 +91,7 @@ const {
   loadMore: loadMoreTracks,
 } = useCatalogTrackQuery(() => ({
   albumId: album.value?.id ?? "__peridot_missing_album__",
+  availability: album.value?.available ? "available" : ("all" as const),
   sort: trackSort.value.field === "number" ? "track" : trackSort.value.field,
   direction: trackSort.value.direction,
 }));
@@ -103,7 +104,7 @@ const albumActive = computed(() => {
 const albumPlayable = computed(
   () =>
     Boolean(album.value?.trackCount) &&
-    (serverStatus.value !== "lost" ||
+    (album.value?.available ||
       savedTracks.value.some(
         (saved) => saved.track.albumId === album.value?.id,
       )),
@@ -139,7 +140,7 @@ async function playWholeAlbum() {
     }
     playCollection(saved);
   };
-  if (serverStatus.value === "lost") {
+  if (serverStatus.value === "lost" || !album.value.available) {
     await playSavedTracks();
     return;
   }
@@ -317,6 +318,9 @@ onMounted(() => {
             {{
               t("count.track", { count: album.trackCount }, album.trackCount)
             }}
+          </Badge>
+          <Badge v-if="!album.available" variant="secondary">
+            {{ t("trackTable.unavailable") }}
           </Badge>
           <span class="text-sm text-muted-foreground">
             <template v-if="album.releaseYear">

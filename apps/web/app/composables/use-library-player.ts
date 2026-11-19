@@ -183,8 +183,8 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
           (trackId) => trackId !== currentTrackId.value,
         ) ||
           (repeatMode.value === "all" &&
-            repeatCycleTrackIds.value.some(
-              (trackId) => nextPlayableQueueIds.includes(trackId),
+            repeatCycleTrackIds.value.some((trackId) =>
+              nextPlayableQueueIds.includes(trackId),
             ));
   });
   const durationSeconds = computed(() => {
@@ -332,7 +332,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     return trackIds.filter((trackId) => {
       if (offlineSavedTrackIdSet.value.has(trackId)) return true;
       const track = tracksById.get(trackId);
-      return Boolean(track?.available);
+      return serverStatus.value !== "lost" && Boolean(track?.available);
     });
   }
 

@@ -1,15 +1,7 @@
 import type { MediaType } from "@peridot/contracts";
 import { computed, toValue, type MaybeRefOrGetter } from "vue";
-import { loadCollectionTracks } from "../lib/catalog-collections";
-import { isAuthenticationRedirectError } from "../lib/peridot-client";
-import {
-  notifyOfflineCollectionFailed,
-  notifyOfflineCollectionSaved,
-} from "../lib/toasts";
-import { useLocalizedMessage } from "./use-localized-message";
+import { notifyOfflineCollectionFailed } from "../lib/toasts";
 import { useOfflineTracks } from "./use-offline-tracks";
-import { useServer } from "./use-server";
-import { useSession } from "./use-session";
 
 export interface OfflineMediaCollection {
   id: string;
@@ -22,16 +14,13 @@ export function useOfflineMediaCollection(
   mediaType: Exclude<MediaType, "music">,
 ) {
   const collection = computed(() => toValue(collectionSource));
-  const { address } = useServer();
-  const { token } = useSession();
-  const { errorMessage } = useLocalizedMessage();
   const {
     savedTracks,
     error,
     canSave,
     isAlbumPending,
     albumProgressFor,
-    saveAlbum,
+    saveCollection,
     removeAlbum,
   } = useOfflineTracks();
 
@@ -66,26 +55,13 @@ export function useOfflineMediaCollection(
       }
       return removed;
     }
-    if (!address.value || !token.value || !canSave.value) return false;
+    if (!canSave.value) return false;
     error.value = null;
-    try {
-      const tracks = await loadCollectionTracks(address.value, token.value, {
-        collectionId: current.id,
-        mediaType,
-      });
-      const saved = await saveAlbum(current.id, tracks);
-      if (saved) {
-        notifyOfflineCollectionSaved(current.title);
-      } else if (error.value) {
-        notifyOfflineCollectionFailed(current.title, error.value);
-      }
-      return saved;
-    } catch (reason) {
-      if (isAuthenticationRedirectError(reason)) return false;
-      error.value = errorMessage(reason, "error.offlineAlbumLoad");
+    const saved = await saveCollection(current.id, mediaType, current.title);
+    if (!saved && error.value) {
       notifyOfflineCollectionFailed(current.title, error.value);
-      return false;
     }
+    return saved;
   }
 
   return { allSaved, pending, progress, canToggle, toggle };

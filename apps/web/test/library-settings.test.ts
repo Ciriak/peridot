@@ -9,6 +9,7 @@ import type {
 } from "@peridot/contracts";
 import {
   defaultLibrarySettings,
+  hasPersistedLibrarySettings,
   librarySettingsStorageKey,
   parsePersistedLibrarySettings,
   readPersistedLibrarySettings,
@@ -104,7 +105,8 @@ test("liked titles are available offline by default for each server and user", (
     readPersistedLibrarySettings(storage, { ...scope, userId: "user-2" }),
     { likedTitlesOffline: true },
   );
-  assert.match(librarySettingsStorageKey(scope), /library-settings:v1:/);
+  assert.match(librarySettingsStorageKey(scope), /library-settings:v2:/);
+  assert.equal(hasPersistedLibrarySettings(storage, scope), true);
 });
 
 test("invalid library settings fall back to the enabled default", () => {
@@ -121,6 +123,23 @@ test("invalid library settings fall back to the enabled default", () => {
   assert.equal(parsePersistedLibrarySettings("not-json", scope), null);
   assert.deepEqual(readPersistedLibrarySettings(storage, scope), {
     likedTitlesOffline: true,
+  });
+});
+
+test("legacy device preferences are available for account initialization", () => {
+  const storage = createStorage();
+  storage.setItem(
+    `peridot:library-settings:v1:${encodeURIComponent(scope.serverAddress)}:${encodeURIComponent(scope.userId)}`,
+    JSON.stringify({
+      version: 1,
+      ...scope,
+      likedTitlesOffline: false,
+    }),
+  );
+
+  assert.equal(hasPersistedLibrarySettings(storage, scope), true);
+  assert.deepEqual(readPersistedLibrarySettings(storage, scope), {
+    likedTitlesOffline: false,
   });
 });
 
@@ -199,17 +218,26 @@ test("automatic liked-album saving continues after one album fails", async () =>
 });
 
 test("the Library setting persists and drives automatic liked-track saving", async () => {
-  const [pageSource, syncSource, appSource] = await Promise.all([
-    readFile(
-      new URL("../app/pages/settings/library.vue", import.meta.url),
-      "utf8",
-    ),
-    readFile(
-      new URL("../app/components/LikedTitlesOfflineSync.vue", import.meta.url),
-      "utf8",
-    ),
-    readFile(new URL("../app/app.vue", import.meta.url), "utf8"),
-  ]);
+  const [pageSource, syncSource, appSource, settingsSource] = await Promise.all(
+    [
+      readFile(
+        new URL("../app/pages/settings/library.vue", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL(
+          "../app/components/LikedTitlesOfflineSync.vue",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+      readFile(new URL("../app/app.vue", import.meta.url), "utf8"),
+      readFile(
+        new URL("../app/composables/use-library-settings.ts", import.meta.url),
+        "utf8",
+      ),
+    ],
+  );
 
   assert.match(
     pageSource,
@@ -220,14 +248,18 @@ test("the Library setting persists and drives automatic liked-track saving", asy
   assert.match(pageSource, /:icon="icons\.cloudDownload"/);
   assert.match(pageSource, /settings\.library\.largeCatalogOfflineUnavailable/);
   assert.match(pageSource, /syncStatus === 'too-large'/);
-  assert.match(syncSource, /liked: true/);
-  assert.match(syncSource, /loadAllLikedTracks/);
-  assert.match(syncSource, /loadAllLikedAlbums/);
-  assert.match(syncSource, /listAlbums/);
-  assert.match(syncSource, /loadCollectionTracks/);
-  assert.match(syncSource, /saveAlbum/);
-  assert.match(syncSource, /saveLikedAlbumsOffline/);
+  assert.match(syncSource, /likedTitlesOffline/);
+  assert.match(syncSource, /downloadTasks\.cancelLikedTitles/);
+  assert.match(syncSource, /saveLikedTitles/);
+  assert.match(syncSource, /startDownloadWorker/);
   assert.match(syncSource, /likesRevision/);
-  assert.match(syncSource, /save,/);
   assert.match(appSource, /<LikedTitlesOfflineSync \/>/);
+  assert.match(settingsSource, /fetchUserPreferences/);
+  assert.match(
+    settingsSource,
+    /hasPersistedLibrarySettings\(\s+window\.localStorage/,
+  );
+  assert.match(settingsSource, /initializeUserPreferences/);
+  assert.match(settingsSource, /updateUserPreferences/);
+  assert.match(settingsSource, /verification\.value === "verified"/);
 });

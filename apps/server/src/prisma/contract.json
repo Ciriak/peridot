@@ -3588,6 +3588,13 @@
                   "kind": "scalar"
                 }
               },
+              "likedTitlesOffline": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
               "normalizedDisplayName": {
                 "nullable": false,
                 "type": {
@@ -3634,6 +3641,9 @@
                 },
                 "id": {
                   "column": "id"
+                },
+                "likedTitlesOffline": {
+                  "column": "likedTitlesOffline"
                 },
                 "normalizedDisplayName": {
                   "column": "normalizedDisplayName"
@@ -6727,6 +6737,11 @@
                   "dataType": "sqlite/text",
                   "nullable": false
                 },
+                "likedTitlesOffline": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "nullable": true
+                },
                 "normalizedDisplayName": {
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
@@ -6787,7 +6802,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "e21b21dd96034f070368e9232b262ad5ae208d084ef3f77ed93e3ef3673607f6"
+    "storageHash": "91a3040941397282f212b07fb898bfaf79a2b6a35ef99b50cb2c34caedd47971"
   },
   "execution": {
     "executionHash": "97fc046b1d4dab2bdb7c66c465182d63cb742a8cf7a04ee2e990ce77c078f512",

@@ -222,9 +222,9 @@ test("sources are managed on their own page with row action menus", async () => 
   assert.match(page, /useAdminSourcesQuery/);
   assert.match(page, /createSource/);
   assert.match(page, /deleteSource/);
-  assert.match(page, /removeOptimistically/);
-  assert.match(page, /void deleteSource\(/);
-  assert.doesNotMatch(page, /await deleteSource\(/);
+  assert.match(page, /await deleteSource\(/);
+  assert.match(page, /source\.removal\.progress/);
+  assert.match(page, /sourceRemovalLabel\(source\)/);
   assert.match(page, /reorderSources/);
   assert.match(page, /useSortable/);
   assert.match(page, /handle: "\.drag-handle"/);
@@ -232,7 +232,7 @@ test("sources are managed on their own page with row action menus", async () => 
   assert.match(page, /class="flex items-center/);
   assert.match(
     page,
-    /class="drag-handle cursor-grab rounded-md p-1 text-muted-foreground active:cursor-grabbing"\s*:aria-label="t\('settings\.sources\.drag'\)"/,
+    /class="drag-handle cursor-grab rounded-md p-1 text-muted-foreground active:cursor-grabbing"[\s\S]*?:aria-label="t\('settings\.sources\.drag'\)"/,
   );
   assert.match(page, /AlertDialogRoot/);
   assert.match(page, /DialogRoot/);
@@ -315,7 +315,10 @@ test("sources are managed on their own page with row action menus", async () => 
   );
   assert.match(page, /activeTaskForSource\(tasks\.value, source\.id\)/);
   assert.match(page, /sourceTaskProgress\(task\)/);
-  assert.match(page, /v-if="sourceTask\(source\)"/);
+  assert.match(
+    page,
+    /v-if="sourceTask\(source\) && !sourceIsRemoving\(source\)"/,
+  );
   assert.match(page, /:value="sourceProgress\(source\)"/);
   assert.match(page, /settings\.sources\.progress/);
   assert.match(page, /TooltipProvider/);
@@ -480,7 +483,13 @@ test("tasks have a settings view for active work and paginated history", async (
   assert.match(page, /@load="loadMoreHistory"/);
   assert.doesNotMatch(page, /@click="loadMoreHistory"/);
   assert.match(page, /visibleDetails\(task\)/);
-  assert.match(page, /taskTimeLabel\(task\)/);
+  assert.match(page, /estimatedTaskRemainingMs/);
+  assert.match(page, /formatRemainingDuration/);
+  assert.match(page, /taskRemainingLabel\(task\)/);
+  assert.match(page, /taskQueuedLabel\(task\)/);
+  assert.match(page, /settings\.tasks\.remaining/);
+  assert.match(page, /settings\.tasks\.lessThanMinute/);
+  assert.match(page, /useIntervalFn\(update, 10_000/);
   assert.match(page, /formatTimeAgo/);
   assert.match(page, /useNow/);
   assert.match(page, /taskHistoryTimestamp\(task\)/);

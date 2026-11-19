@@ -52,6 +52,7 @@ import type {
   TaskListResponse,
   TaskResponse,
   TrackListResponse,
+  UpdateUserPreferencesRequest,
   UpdatePlaylistRequest,
   UpdateUserProfileRequest,
   UpdateMetadataProviderRequest,
@@ -59,6 +60,7 @@ import type {
   UpdateStatusResponse,
   UpdateUserRequest,
   UserListResponse,
+  UserPreferencesResponse,
   UserResponse,
 } from "@peridot/contracts";
 import { localizedError, message } from "./messages.ts";
@@ -311,6 +313,40 @@ export function updateUserProfile(
     "/api/users/me",
     token,
     { method: "PUT", body: JSON.stringify(profile) },
+  );
+}
+
+export function fetchUserPreferences(serverAddress: string, token: string) {
+  return authenticatedRequestJson<UserPreferencesResponse>(
+    serverAddress,
+    "/api/users/me/preferences",
+    token,
+  );
+}
+
+export function initializeUserPreferences(
+  serverAddress: string,
+  token: string,
+  preferences: UpdateUserPreferencesRequest,
+) {
+  return authenticatedRequestJson<UserPreferencesResponse>(
+    serverAddress,
+    "/api/users/me/preferences/initialize",
+    token,
+    { method: "POST", body: JSON.stringify(preferences) },
+  );
+}
+
+export function updateUserPreferences(
+  serverAddress: string,
+  token: string,
+  preferences: UpdateUserPreferencesRequest,
+) {
+  return authenticatedRequestJson<UserPreferencesResponse>(
+    serverAddress,
+    "/api/users/me/preferences",
+    token,
+    { method: "PUT", body: JSON.stringify(preferences) },
   );
 }
 

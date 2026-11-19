@@ -190,6 +190,28 @@ export function notifyOfflineAlbumSaved(albumTitle: string) {
   addToast(offlineSaveSuccessToast("album", albumTitle));
 }
 
+export function notifyDownloadTaskEnded(
+  title: string,
+  completedWithErrors: boolean,
+) {
+  addToast({
+    titleMessage: message(
+      completedWithErrors
+        ? "toast.downloadTaskPartialTitle"
+        : "toast.downloadTaskCompletedTitle",
+    ),
+    descriptionMessage: message(
+      completedWithErrors
+        ? "toast.downloadTaskPartial"
+        : "toast.downloadTaskCompleted",
+      { item: title },
+    ),
+    status: completedWithErrors ? "error" : "success",
+    duration: completedWithErrors ? 8000 : 5000,
+    kind: completedWithErrors ? "error" : "success",
+  });
+}
+
 export function notifyOfflineTrackFailed(
   trackTitle: string,
   detailMessage: string,

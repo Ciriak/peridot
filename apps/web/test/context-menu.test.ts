@@ -41,7 +41,7 @@ test("track rows expose a Reka context menu with playback, favorites, offline st
   assert.match(menu, /useOfflineTracks\(\)/);
   assert.match(menu, /saveOffline\(props\.track\)/);
   assert.match(menu, /removeOffline\(props\.track\.id\)/);
-  assert.match(menu, /notifyOfflineTrackSaved\(props\.track\.title\)/);
+  assert.doesNotMatch(menu, /notifyOfflineTrackSaved/);
   assert.match(menu, /context\.makeAvailableOffline/);
   assert.match(menu, /context\.removeOfflineCopy/);
   assert.match(menu, /downloadTrack\(props\.track\.id\)/);

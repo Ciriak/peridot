@@ -25,9 +25,7 @@ const queryOptions = computed(() => ({
       : (sort.value?.field ?? "title"),
   direction: sort.value?.direction ?? ("asc" as const),
   query: searchQuery.value || undefined,
-  ...(props.favorites
-    ? { liked: true, availability: "all" as const }
-    : {}),
+  ...(props.favorites ? { liked: true, availability: "all" as const } : {}),
 }));
 const {
   tracks,

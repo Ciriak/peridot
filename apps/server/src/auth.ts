@@ -10,6 +10,7 @@ import type {
   AuthStatusResponse,
   PasswordResetRequest,
   PasswordResetRequestResponse,
+  UserPreferencesResponse,
   UserResponse,
 } from "@peridot/contracts";
 import type { FastifyInstance, FastifyRequest } from "fastify";
@@ -46,6 +47,28 @@ interface ProfileBody {
 interface CompletePasswordResetBody {
   token?: unknown;
   password?: unknown;
+}
+
+interface UserPreferencesBody {
+  likedTitlesOffline?: unknown;
+}
+
+function publicPreferences(user: {
+  likedTitlesOffline: number | null;
+}): UserPreferencesResponse {
+  return {
+    likedTitlesOffline:
+      user.likedTitlesOffline === null ? true : user.likedTitlesOffline !== 0,
+    initialized: user.likedTitlesOffline !== null,
+  };
+}
+
+function preferencesValue(
+  body: UserPreferencesBody | undefined,
+): boolean | null {
+  return typeof body?.likedTitlesOffline === "boolean"
+    ? body.likedTitlesOffline
+    : null;
 }
 
 export function publicUser(user: {
@@ -483,6 +506,65 @@ export async function registerProtectedRoutes(
         }).firstOrThrow();
         request.authenticatedUser = publicUser(updated);
         return request.authenticatedUser;
+      },
+    );
+    protectedApp.get(
+      "/api/users/me/preferences",
+      async (request): Promise<UserPreferencesResponse> => {
+        const user = await database.orm.User.where({
+          id: request.authenticatedUser!.id,
+        }).firstOrThrow();
+        return publicPreferences(user);
+      },
+    );
+    protectedApp.put<{ Body: UserPreferencesBody }>(
+      "/api/users/me/preferences",
+      async (request, reply) => {
+        const likedTitlesOffline = preferencesValue(request.body);
+        if (likedTitlesOffline === null) {
+          return sendError(
+            reply,
+            400,
+            "invalid_user_preferences",
+            "likedTitlesOffline must be a boolean",
+            message("api.message.invalidUserPreferences"),
+          );
+        }
+        await database.orm.User.where({
+          id: request.authenticatedUser!.id,
+        }).update({
+          likedTitlesOffline: likedTitlesOffline ? 1 : 0,
+        });
+        const user = await database.orm.User.where({
+          id: request.authenticatedUser!.id,
+        }).firstOrThrow();
+        return publicPreferences(user);
+      },
+    );
+    protectedApp.post<{ Body: UserPreferencesBody }>(
+      "/api/users/me/preferences/initialize",
+      async (request, reply) => {
+        const likedTitlesOffline = preferencesValue(request.body);
+        if (likedTitlesOffline === null) {
+          return sendError(
+            reply,
+            400,
+            "invalid_user_preferences",
+            "likedTitlesOffline must be a boolean",
+            message("api.message.invalidUserPreferences"),
+          );
+        }
+        await database.orm.User.where({
+          id: request.authenticatedUser!.id,
+        })
+          .where((user) => user.likedTitlesOffline.isNull())
+          .update({
+            likedTitlesOffline: likedTitlesOffline ? 1 : 0,
+          });
+        const user = await database.orm.User.where({
+          id: request.authenticatedUser!.id,
+        }).firstOrThrow();
+        return publicPreferences(user);
       },
     );
     protectedApp.delete("/api/auth/session", async (request, reply) => {

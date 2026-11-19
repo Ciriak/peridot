@@ -165,7 +165,7 @@ test("playlist offline saving reuses the per-track manifest", async () => {
     "utf8",
   );
   assert.match(source, /async function savePlaylist/);
-  assert.match(source, /saveOfflineCollection\(tracks/);
+  assert.match(source, /downloadTasks\.enqueuePlaylist\(/);
   assert.match(source, /async function removePlaylist/);
   assert.match(source, /removeTrackForOffline/);
 });

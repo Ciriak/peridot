@@ -1,5 +1,9 @@
-import type { TrackResponse } from "@peridot/contracts";
-import { useI18n, useState } from "#imports";
+import type {
+  AlbumSummaryResponse,
+  MediaType,
+  TrackResponse,
+} from "@peridot/contracts";
+import { useState } from "#imports";
 import { computed, ref, watch } from "vue";
 import {
   readSavedOfflineTrack,
@@ -8,9 +12,8 @@ import {
   saveTrackForOffline,
   type SavedOfflineTrack,
 } from "../lib/offline-audio";
-import { saveOfflineCollection } from "../lib/offline-collection";
-import { isAuthenticationRedirectError } from "../lib/peridot-client";
 import { useLocalizedMessage } from "./use-localized-message";
+import { useOfflineDownloadTasks } from "./use-offline-download-tasks";
 import { useServerConnection } from "./use-server-connection";
 import { useQueryScope } from "./use-query-scope";
 import { useSession } from "./use-session";
@@ -19,7 +22,6 @@ export function useOfflineTracks() {
   const { scope } = useQueryScope();
   const { token } = useSession();
   const { status } = useServerConnection();
-  const { t } = useI18n();
   const { errorMessage } = useLocalizedMessage();
   const playerSavedTrackIds = useState<string[]>(
     "player-offline-saved-track-ids",
@@ -28,14 +30,6 @@ export function useOfflineTracks() {
   const savedTracks = useState<SavedOfflineTrack[]>(
     "player-offline-saved-tracks",
     () => [],
-  );
-  const saveProgress = useState<Record<string, number | null>>(
-    "player-offline-save-progress",
-    () => ({}),
-  );
-  const albumSaveProgress = useState<Record<string, number | null>>(
-    "player-offline-album-save-progress",
-    () => ({}),
   );
   const pendingTrackIds = useState<string[]>(
     "player-offline-pending-track-ids",
@@ -47,44 +41,7 @@ export function useOfflineTracks() {
   );
   const loaded = ref(false);
   const error = ref<string | null>(null);
-
-  function setProgress(
-    values: Record<string, number | null>,
-    key: string,
-    progress: number | null | undefined,
-  ) {
-    if (
-      Object.prototype.hasOwnProperty.call(values, key) &&
-      values[key] === progress
-    ) {
-      return values;
-    }
-    const next = { ...values };
-    if (progress === undefined) {
-      delete next[key];
-    } else {
-      next[key] = progress;
-    }
-    return next;
-  }
-
-  function setTrackProgress(
-    trackId: string,
-    progress: number | null | undefined,
-  ) {
-    saveProgress.value = setProgress(saveProgress.value, trackId, progress);
-  }
-
-  function setAlbumProgress(
-    albumId: string,
-    progress: number | null | undefined,
-  ) {
-    albumSaveProgress.value = setProgress(
-      albumSaveProgress.value,
-      albumId,
-      progress,
-    );
-  }
+  const downloadTasks = useOfflineDownloadTasks();
 
   async function refresh() {
     if (!scope.value) {
@@ -108,34 +65,55 @@ export function useOfflineTracks() {
   }
 
   function isPending(trackId: string): boolean {
-    return pendingTrackIds.value.includes(trackId);
+    return (
+      pendingTrackIds.value.includes(trackId) ||
+      downloadTasks.tasks.value.some(
+        (task) =>
+          downloadTasks.isActive(task) &&
+          task.request.kind === "track" &&
+          task.request.track.id === trackId,
+      )
+    );
   }
 
   function progressFor(trackId: string): number | null | undefined {
-    return Object.prototype.hasOwnProperty.call(saveProgress.value, trackId)
-      ? saveProgress.value[trackId]
-      : undefined;
+    const task = downloadTasks.tasks.value.find(
+      (candidate) =>
+        downloadTasks.isActive(candidate) &&
+        candidate.request.kind === "track" &&
+        candidate.request.track.id === trackId,
+    );
+    return task ? downloadTasks.progressForTask(task) : undefined;
   }
 
   function isAlbumPending(albumId: string): boolean {
-    return pendingAlbumIds.value.includes(albumId);
+    return (
+      pendingAlbumIds.value.includes(albumId) ||
+      downloadTasks.tasks.value.some(
+        (task) =>
+          downloadTasks.isActive(task) &&
+          ((task.request.kind === "album" &&
+            task.request.album.id === albumId) ||
+            (task.request.kind === "playlist" &&
+              task.request.playlistId === albumId) ||
+            (task.request.kind === "collection" &&
+              task.request.collectionId === albumId)),
+      )
+    );
   }
 
   function albumProgressFor(albumId: string): number | null | undefined {
-    return Object.prototype.hasOwnProperty.call(
-      albumSaveProgress.value,
-      albumId,
-    )
-      ? albumSaveProgress.value[albumId]
-      : undefined;
-  }
-
-  function saveFailureMessage(reason: unknown): string | null {
-    if (isAuthenticationRedirectError(reason)) return null;
-    return reason instanceof DOMException &&
-      reason.name === "QuotaExceededError"
-      ? t("error.offlineQuotaExceeded")
-      : errorMessage(reason, "error.offlineSave");
+    const task = downloadTasks.tasks.value.find(
+      (candidate) =>
+        downloadTasks.isActive(candidate) &&
+        ((candidate.request.kind === "album" &&
+          candidate.request.album.id === albumId) ||
+          (candidate.request.kind === "playlist" &&
+            candidate.request.playlistId === albumId) ||
+          (candidate.request.kind === "collection" &&
+            candidate.request.collectionId === albumId)),
+    );
+    return task ? downloadTasks.progressForTask(task) : undefined;
   }
 
   async function saveTrack(
@@ -163,72 +141,28 @@ export function useOfflineTracks() {
   async function save(track: TrackResponse): Promise<boolean> {
     if (!scope.value || !token.value) return false;
     if (isPending(track.id)) return false;
-    pendingTrackIds.value = [...pendingTrackIds.value, track.id];
-    setTrackProgress(track.id, null);
     error.value = null;
-    try {
-      await saveTrack(track, (progress) =>
-        setTrackProgress(track.id, progress),
-      );
-      return true;
-    } catch (reason) {
-      error.value = saveFailureMessage(reason);
-      return false;
-    } finally {
-      pendingTrackIds.value = pendingTrackIds.value.filter(
-        (trackId) => trackId !== track.id,
-      );
-      setTrackProgress(track.id, undefined);
-    }
+    return Boolean(await downloadTasks.enqueueTrack(track));
   }
 
-  async function saveAlbum(
-    albumId: string,
-    tracks: TrackResponse[],
+  async function saveAlbum(album: AlbumSummaryResponse): Promise<boolean> {
+    if (!scope.value || !token.value || isAlbumPending(album.id)) return false;
+    error.value = null;
+    return Boolean(await downloadTasks.enqueueAlbum(album));
+  }
+
+  async function saveCollection(
+    collectionId: string,
+    mediaType: Exclude<MediaType, "music">,
+    title: string,
   ): Promise<boolean> {
-    if (!scope.value || !token.value || isAlbumPending(albumId)) return false;
-    if (tracks.some((track) => track.available && isPending(track.id))) {
+    if (!scope.value || !token.value || isAlbumPending(collectionId)) {
       return false;
     }
-
-    const startedTrackIds: string[] = [];
-    pendingAlbumIds.value = [...pendingAlbumIds.value, albumId];
     error.value = null;
-    setAlbumProgress(albumId, null);
-    try {
-      const result = await saveOfflineCollection(tracks, {
-        isSaved,
-        onProgress: (progress) => setAlbumProgress(albumId, progress),
-        save: async (track, onCollectionProgress) => {
-          pendingTrackIds.value = [...pendingTrackIds.value, track.id];
-          startedTrackIds.push(track.id);
-          setTrackProgress(track.id, null);
-          await saveTrack(track, (progress) => {
-            setTrackProgress(track.id, progress);
-            onCollectionProgress?.(progress);
-          });
-        },
-      });
-      if (!result.total) {
-        error.value = t("error.offlineAlbumEmpty");
-        return false;
-      }
-      if (result.failure) {
-        error.value = saveFailureMessage(result.failure.reason);
-        return false;
-      }
-      return true;
-    } finally {
-      const started = new Set(startedTrackIds);
-      pendingTrackIds.value = pendingTrackIds.value.filter(
-        (trackId) => !started.has(trackId),
-      );
-      for (const trackId of started) setTrackProgress(trackId, undefined);
-      pendingAlbumIds.value = pendingAlbumIds.value.filter(
-        (pendingId) => pendingId !== albumId,
-      );
-      setAlbumProgress(albumId, undefined);
-    }
+    return Boolean(
+      await downloadTasks.enqueueCollection(collectionId, mediaType, title),
+    );
   }
 
   async function remove(trackId: string): Promise<boolean> {
@@ -293,53 +227,17 @@ export function useOfflineTracks() {
 
   async function savePlaylist(
     playlistId: string,
-    tracks: TrackResponse[],
+    title: string,
   ): Promise<boolean> {
-    if (!scope.value || !token.value || isAlbumPending(playlistId)) {
+    if (!scope.value || !token.value || isAlbumPending(playlistId))
       return false;
-    }
-    if (tracks.some((track) => track.available && isPending(track.id))) {
-      return false;
-    }
-
-    const startedTrackIds: string[] = [];
-    pendingAlbumIds.value = [...pendingAlbumIds.value, playlistId];
     error.value = null;
-    setAlbumProgress(playlistId, null);
-    try {
-      const result = await saveOfflineCollection(tracks, {
-        isSaved,
-        onProgress: (progress) => setAlbumProgress(playlistId, progress),
-        save: async (track, onCollectionProgress) => {
-          pendingTrackIds.value = [...pendingTrackIds.value, track.id];
-          startedTrackIds.push(track.id);
-          setTrackProgress(track.id, null);
-          await saveTrack(track, (progress) => {
-            setTrackProgress(track.id, progress);
-            onCollectionProgress?.(progress);
-          });
-        },
-      });
-      if (!result.total) {
-        error.value = t("error.offlinePlaylistEmpty");
-        return false;
-      }
-      if (result.failure) {
-        error.value = saveFailureMessage(result.failure.reason);
-        return false;
-      }
-      return true;
-    } finally {
-      const started = new Set(startedTrackIds);
-      pendingTrackIds.value = pendingTrackIds.value.filter(
-        (trackId) => !started.has(trackId),
-      );
-      for (const trackId of started) setTrackProgress(trackId, undefined);
-      pendingAlbumIds.value = pendingAlbumIds.value.filter(
-        (pendingId) => pendingId !== playlistId,
-      );
-      setAlbumProgress(playlistId, undefined);
-    }
+    return Boolean(await downloadTasks.enqueuePlaylist(playlistId, title));
+  }
+
+  async function saveLikedTitles() {
+    if (!scope.value || !token.value) return null;
+    return downloadTasks.enqueueLikedTitles();
   }
 
   async function removePlaylist(
@@ -402,6 +300,24 @@ export function useOfflineTracks() {
     () => status.value !== "lost" && Boolean(scope.value && token.value),
   );
 
+  async function startDownloadWorker() {
+    if (!loaded.value) await refresh();
+    downloadTasks.start({
+      isSaved,
+      save: async (track, onProgress) => {
+        await saveTrack(track, onProgress);
+      },
+    });
+  }
+
+  function refreshDownloadTasks() {
+    return downloadTasks.refresh();
+  }
+
+  async function clearDownloadQueue() {
+    await downloadTasks.clear(scope.value);
+  }
+
   watch(
     () => scope.value,
     () => void refresh(),
@@ -421,11 +337,17 @@ export function useOfflineTracks() {
     albumProgressFor,
     save,
     saveAlbum,
+    saveCollection,
     savePlaylist,
+    saveLikedTitles,
     remove,
     removeAlbum,
     removePlaylist,
     resolve,
     tracksMatching,
+    downloadTasks,
+    startDownloadWorker,
+    refreshDownloadTasks,
+    clearDownloadQueue,
   };
 }

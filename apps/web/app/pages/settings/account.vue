@@ -19,6 +19,7 @@ import { useSession } from "../../composables/use-session";
 import { useUser } from "../../composables/use-user";
 import { useLocalizedMessage } from "../../composables/use-localized-message";
 import { icons } from "../../lib/icons";
+import { clearDownloadTasks } from "../../lib/download-tasks";
 import { clearAllOfflineTracks } from "../../lib/offline-audio";
 import {
   isAuthenticationRedirectError,
@@ -99,7 +100,11 @@ async function confirmLogout() {
   const currentToken = token.value;
   token.value = null;
   user.value = null;
-  await Promise.all([clearAllPeridotQueries(), clearAllOfflineTracks()]);
+  await Promise.all([
+    clearAllPeridotQueries(),
+    clearAllOfflineTracks(),
+    clearDownloadTasks(),
+  ]);
   try {
     if (currentAddress && currentToken) {
       await revokeSession(currentAddress, currentToken);

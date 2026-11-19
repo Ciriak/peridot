@@ -74,11 +74,13 @@ Playback and byte-range requests are proxied through Peridot while the Jellyfin
 API key remains server-side. Artwork uses the same integration boundary and a
 deduplicated WebP cache.
 
-Removing any source stops its tasks and deletes its source-owned tracks and
-catalog projections. Built-in integration removal also deletes the associated
-artwork jobs, orphaned covers, encrypted credentials, task history, likes, play
-events, queue items, and playlist entries. External provider data is never
-deleted.
+Removing any source stops its tasks, retains a hidden source tombstone, and marks
+its tracks and catalog projections unavailable in one transaction. Likes,
+playlists, queues, play events, playlist entries, catalog artwork, and offline
+copies are retained. Source configuration and encrypted credentials are cleared,
+and queued artwork jobs are removed. Normal catalog queries exclude unavailable
+entries; personal surfaces can request them explicitly. Re-adding the same source
+identity restores the tombstone and track IDs before queuing a scan.
 
 ## API summary
 
@@ -118,6 +120,17 @@ The Nuxt application is a client-rendered SPA/PWA with a persistent settings
 area, sidebar, main content surface, and fixed bottom player. Authenticated server
 state is cached with TanStack Query and persisted per server and user in
 IndexedDB.
+
+Offline audio and download-task state are persisted separately from query cache.
+All offline-save controls enqueue a device task; the shared worker resolves the
+current catalog target, skips existing copies, and downloads one track at a time.
+Tasks resume from IndexedDB after reload and surface in Settings → Library.
+
+User preferences use `GET /api/users/me/preferences`,
+`PUT /api/users/me/preferences`, and
+`POST /api/users/me/preferences/initialize` for the one-time account migration.
+The client verifies preferences after authentication before starting automatic
+liked-title downloads.
 
 The shared UI uses standard Tailwind utilities, shadcn-vue variants, theme tokens,
 and bundled Basil Iconify SVG data. Do not add component CSS, inline visual

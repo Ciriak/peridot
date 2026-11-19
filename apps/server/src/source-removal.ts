@@ -18,15 +18,10 @@ export class SourceRemovalRegistry {
   private readonly active = new Map<string, SourceRemovalProgressResponse>();
 
   constructor(
-    private readonly publish: (
-      progress: SourceRemovalProgressResponse,
-    ) => void,
+    private readonly publish: (progress: SourceRemovalProgressResponse) => void,
   ) {}
 
-  start(
-    sourceId: string,
-    total: number,
-  ): SourceRemovalProgressResponse {
+  start(sourceId: string, total: number): SourceRemovalProgressResponse {
     if (this.active.has(sourceId)) {
       throw new SourceRemovalError(
         "source_removal_in_progress",

@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { formatTimeAgo } from "../app/lib/relative-time.ts";
+import {
+  formatRemainingDuration,
+  formatTimeAgo,
+} from "../app/lib/relative-time.ts";
 
 const now = new Date("2026-11-13T12:00:00.000Z");
 
@@ -39,5 +42,32 @@ test("time-ago labels use longer elapsed units and the requested locale", () => 
   assert.equal(
     formatTimeAgo("2026-11-13T11:45:00.000Z", now, "fr-FR"),
     "il y a 15 minutes",
+  );
+});
+
+test("remaining durations round up to the next useful unit", () => {
+  assert.equal(
+    formatRemainingDuration(59_000, "en-US", "less than a minute"),
+    "less than a minute",
+  );
+  assert.equal(
+    formatRemainingDuration(60_000, "en-US", "less than a minute"),
+    "1 minute",
+  );
+  assert.equal(
+    formatRemainingDuration(60_001, "en-US", "less than a minute"),
+    "2 minutes",
+  );
+  assert.equal(
+    formatRemainingDuration(59 * 60_000, "en-US", "less than a minute"),
+    "59 minutes",
+  );
+  assert.equal(
+    formatRemainingDuration(60 * 60_000, "en-US", "less than a minute"),
+    "1 hour",
+  );
+  assert.equal(
+    formatRemainingDuration(25 * 60 * 60_000, "en-US", "less than a minute"),
+    "2 days",
   );
 });

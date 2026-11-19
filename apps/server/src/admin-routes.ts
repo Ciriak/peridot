@@ -433,10 +433,7 @@ export async function registerAdminRoutes(
 
     admin.delete<{ Params: { id: string } }>(
       "/api/admin/sources/:id",
-      async (
-        request,
-        reply,
-      ): Promise<SourceRemovalResponse | undefined> => {
+      async (request, reply): Promise<SourceRemovalResponse | undefined> => {
         const source = await database.orm.Source.first({
           id: request.params.id,
         });
@@ -474,7 +471,6 @@ export async function registerAdminRoutes(
 
         try {
           await tasks.stopForSource(source.id);
-          sourceRemovals.update(source.id, "tracks", 0, total);
           const result = await database.transaction(async (transaction) => {
             const unavailable = await catalog.markSourceUnavailable(
               source.id,
@@ -489,12 +485,7 @@ export async function registerAdminRoutes(
                 await new Promise<void>((resolve) => setImmediate(resolve));
               },
             );
-            sourceRemovals.update(
-              source.id,
-              "catalog",
-              total,
-              total,
-            );
+            sourceRemovals.update(source.id, "catalog", total, total);
             await transaction.orm.ArtworkJob.where({
               sourceId: source.id,
             }).deleteAndCount();

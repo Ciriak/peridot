@@ -9,7 +9,10 @@ export function isTrackPlayable(
   track: TrackResponse,
   availability: PlaybackAvailability,
 ): boolean {
-  return availability.savedTrackIds.has(track.id) || track.available;
+  return (
+    availability.savedTrackIds.has(track.id) ||
+    (!availability.serverLost && track.available)
+  );
 }
 
 export function playableTracks(

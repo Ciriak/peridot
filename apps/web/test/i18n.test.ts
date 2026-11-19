@@ -54,6 +54,10 @@ test("en-US messages interpolate and pluralize", () => {
     "67% (8 of 12)",
   );
   assert.equal(
+    i18n.global.t("settings.tasks.remaining", { duration: "5 minutes" }),
+    "5 minutes Remaining",
+  );
+  assert.equal(
     i18n.global.t("provider.musicbrainz.contact.placeholder"),
     "you@example.com",
   );

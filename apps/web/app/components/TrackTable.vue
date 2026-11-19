@@ -19,10 +19,7 @@ import { useOfflineTracks } from "../composables/use-offline-tracks";
 import { useServer } from "../composables/use-server";
 import { useServerConnection } from "../composables/use-server-connection";
 import { icons } from "../lib/icons";
-import {
-  notifyOfflineTrackFailed,
-  notifyOfflineTrackSaved,
-} from "../lib/toasts";
+import { notifyOfflineTrackFailed } from "../lib/toasts";
 import {
   defaultTrackSort,
   formatTrackDuration,
@@ -169,9 +166,7 @@ async function toggleOffline(track: TrackResponse) {
     }
     return;
   }
-  if (await saveOffline(track)) {
-    notifyOfflineTrackSaved(track.title);
-  } else {
+  if (!(await saveOffline(track))) {
     notifyOfflineTrackFailed(
       track.title,
       offlineError.value ?? t("error.apiUnavailable"),

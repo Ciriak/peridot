@@ -61,7 +61,7 @@ export function useOfflinePlaylist(
       }
       return removed;
     }
-    const saved = await savePlaylist(current.id, availableTracks.value);
+    const saved = await savePlaylist(current.id, current.name);
     if (!saved && error.value) {
       notifyOfflinePlaylistFailed(current.name, error.value);
     }

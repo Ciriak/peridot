@@ -12,7 +12,7 @@ export function playlistPlayableTracks(
   return entries.flatMap((entry) => {
     if (!entry.track) return [];
     return availability.savedTrackIds.has(entry.track.id) ||
-      entry.track.available
+      (!availability.serverLost && entry.track.available)
       ? [entry.track]
       : [];
   });

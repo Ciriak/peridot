@@ -24,6 +24,15 @@ export interface UpdateUserProfileRequest {
   displayName: string;
 }
 
+export interface UserPreferencesResponse {
+  likedTitlesOffline: boolean;
+  initialized: boolean;
+}
+
+export interface UpdateUserPreferencesRequest {
+  likedTitlesOffline: boolean;
+}
+
 export interface UserListResponse {
   items: UserResponse[];
 }
@@ -855,8 +864,7 @@ export interface RealtimeCatalogChangedEvent {
   changedCount: number;
 }
 
-export interface RealtimeSourceRemovalProgressEvent
-  extends SourceRemovalProgressResponse {
+export interface RealtimeSourceRemovalProgressEvent extends SourceRemovalProgressResponse {
   type: "source.removal.progress";
   eventId: number;
   occurredAt: string;

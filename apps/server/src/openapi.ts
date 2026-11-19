@@ -169,6 +169,13 @@ const schemas: Record<string, SchemaObject> = {
   UpdateUserProfileRequest: objectSchema({
     displayName: stringSchema,
   }),
+  UserPreferencesResponse: objectSchema({
+    likedTitlesOffline: booleanSchema,
+    initialized: booleanSchema,
+  }),
+  UpdateUserPreferencesRequest: objectSchema({
+    likedTitlesOffline: booleanSchema,
+  }),
   CreateUserRequest: objectSchema({
     email: stringSchema,
     displayName: stringSchema,
@@ -1054,6 +1061,23 @@ const routes: Record<string, OpenApiOperation> = {
     "Update the signed-in user's profile",
     ref("UserResponse"),
     { body: ref("UpdateUserProfileRequest") },
+  ),
+  "GET /api/users/me/preferences": jsonOperation(
+    "Users",
+    "Get the signed-in user's preferences",
+    ref("UserPreferencesResponse"),
+  ),
+  "PUT /api/users/me/preferences": jsonOperation(
+    "Users",
+    "Update the signed-in user's preferences",
+    ref("UserPreferencesResponse"),
+    { body: ref("UpdateUserPreferencesRequest") },
+  ),
+  "POST /api/users/me/preferences/initialize": jsonOperation(
+    "Users",
+    "Initialize preferences when no server value exists",
+    ref("UserPreferencesResponse"),
+    { body: ref("UpdateUserPreferencesRequest") },
   ),
   "GET /api/tracks": jsonOperation(
     "Catalog",

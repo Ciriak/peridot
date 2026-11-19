@@ -590,11 +590,12 @@ test("Jellyfin sources validate, import audio only, encrypt credentials, proxy p
       url: `/api/admin/sources/${source.id}`,
       headers: context.authorization,
     });
-    assert.equal(removed.statusCode, 204);
-    assert.equal(
-      await context.database.orm.Track.where({ id: track.id }).first(),
-      null,
-    );
+    assert.equal(removed.statusCode, 200);
+    const retained = await context.database.orm.Track.where({
+      id: track.id,
+    }).first();
+    assert.equal(retained?.available, 0);
+    assert.equal(retained?.sourceId, source.id);
   } finally {
     await context.close();
   }

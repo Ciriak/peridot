@@ -9,6 +9,7 @@ import {
   activeTaskForMetadataProvider,
   activeTaskForSource,
   activeTaskPercent,
+  estimatedTaskRemainingMs,
   orderedActiveTasks,
   overallTaskProgress,
   runningMetadataTask,
@@ -119,6 +120,82 @@ test("active source work prefers the running task for that source", () => {
 test("queued source work renders as indeterminate progress", () => {
   assert.equal(sourceTaskProgress(task({ status: "queued" })), null);
   assert.equal(sourceTaskProgress(task()), 66.66666666666666);
+});
+
+test("remaining time requires stable, determinate running progress", () => {
+  const now = new Date("2026-11-11T10:00:10.000Z");
+
+  assert.equal(
+    estimatedTaskRemainingMs(
+      task({
+        startedAt: "2026-11-11T10:00:00.000Z",
+        progress: { state: "determinate", completed: 5, total: 100 },
+      }),
+      now,
+    ),
+    190_000,
+  );
+  assert.equal(
+    estimatedTaskRemainingMs(
+      task({
+        status: "queued",
+        startedAt: "2026-11-11T10:00:00.000Z",
+        progress: { state: "determinate", completed: 5, total: 100 },
+      }),
+      now,
+    ),
+    null,
+  );
+  assert.equal(
+    estimatedTaskRemainingMs(
+      task({
+        startedAt: "2026-11-11T10:00:00.000Z",
+        progress: { state: "indeterminate", completed: null, total: null },
+      }),
+      now,
+    ),
+    null,
+  );
+  assert.equal(
+    estimatedTaskRemainingMs(
+      task({
+        startedAt: null,
+        progress: { state: "determinate", completed: 5, total: 100 },
+      }),
+      now,
+    ),
+    null,
+  );
+  assert.equal(
+    estimatedTaskRemainingMs(
+      task({
+        startedAt: "2026-11-11T10:00:01.000Z",
+        progress: { state: "determinate", completed: 5, total: 100 },
+      }),
+      now,
+    ),
+    null,
+  );
+  assert.equal(
+    estimatedTaskRemainingMs(
+      task({
+        startedAt: "2026-11-11T10:00:00.000Z",
+        progress: { state: "determinate", completed: 4, total: 100 },
+      }),
+      now,
+    ),
+    null,
+  );
+  assert.equal(
+    estimatedTaskRemainingMs(
+      task({
+        startedAt: "2026-11-11T10:00:00.000Z",
+        progress: { state: "determinate", completed: 100, total: 100 },
+      }),
+      now,
+    ),
+    null,
+  );
 });
 
 test("metadata progress is attached only to the provider being fetched", () => {

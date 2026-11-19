@@ -7,6 +7,8 @@ import {
 import { message } from "./messages.ts";
 
 const ACTIVE_STATUSES = new Set<TaskStatus>(["queued", "running"]);
+const MIN_ESTIMATE_ELAPSED_MS = 10_000;
+const MIN_ESTIMATE_PROGRESS = 0.05;
 
 export function isActiveTaskStatus(status: TaskStatus): boolean {
   return ACTIVE_STATUSES.has(status);
@@ -88,6 +90,37 @@ export function activeTaskPercent(task: TaskResponse): number | null {
 
   const percent = (task.progress.completed / task.progress.total) * 100;
   return Math.min(100, Math.max(0, percent));
+}
+
+export function estimatedTaskRemainingMs(
+  task: TaskResponse,
+  now: Date,
+): number | null {
+  if (
+    task.status !== "running" ||
+    task.startedAt === null ||
+    task.progress.state !== "determinate"
+  ) {
+    return null;
+  }
+
+  const startedAt = new Date(task.startedAt).getTime();
+  const elapsed = now.getTime() - startedAt;
+  const { completed, total } = task.progress;
+  if (
+    !Number.isFinite(startedAt) ||
+    !Number.isFinite(elapsed) ||
+    elapsed < MIN_ESTIMATE_ELAPSED_MS ||
+    total <= 0 ||
+    completed <= 0 ||
+    completed >= total ||
+    completed / total < MIN_ESTIMATE_PROGRESS
+  ) {
+    return null;
+  }
+
+  const remaining = elapsed * ((total - completed) / completed);
+  return Number.isFinite(remaining) && remaining > 0 ? remaining : null;
 }
 
 export function sourceTaskProgress(task: TaskResponse): number | null {

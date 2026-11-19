@@ -1,5 +1,55 @@
 # Peridot decisions
 
+## 2026-11-19: Offline downloads are persistent device tasks
+
+The liked-titles preference is stored on the user account. A device verifies it
+from `GET /api/users/me/preferences` after authentication. If the account has no
+stored value, the device conditionally initializes it from that device's prior
+local choice, or from the enabled default when no prior choice exists. The
+server value then becomes authoritative on every device.
+
+Track, album, audiobook, podcast, playlist, and liked-title offline saves all
+enter one persistent per-server/user device queue. The queue stores task state
+and target descriptors in IndexedDB but never stores credentials. It runs one
+task and one download at a time, resumes interrupted work after restart, pauses
+while disconnected, retries failed items twice, and preserves completed files.
+Completed task history is retained for 30 days and capped at 100 entries.
+
+The browser file-download action is separate from offline storage. It continues
+to download a file directly and does not create an offline task.
+
+## 2026-11-19: Source removal preserves catalog and user references
+
+Removing a source keeps a hidden source tombstone and all of its track rows,
+marks those tracks unavailable, and retains catalog projections, likes,
+playlists, queues, history, and offline downloads. Normal browse, search, and
+recommendation queries exclude unavailable entries. Personal surfaces can opt
+into unavailable records, and an explicitly downloaded audio copy remains
+playable after its source is gone.
+
+Removal updates tracks and projections in bounded batches inside one
+transaction and publishes live administrator-only progress over the realtime
+connection. It is not a background task. The `DELETE` response is the durable
+completion boundary; concurrent removal attempts receive a conflict.
+
+Adding the same path, URL, or built-in integration identity later restores the
+same source and track IDs and queues a scan, so likes and saved references
+reconnect automatically. Source configuration and credentials are cleared when
+the source is removed and credentials must be supplied again.
+
+## 2026-11-19: Task remaining-time estimates use conservative observed progress
+
+Settings → Tasks replaces a running task's start timestamp with a
+`<duration> Remaining` estimate when the task has a valid start time,
+determinate progress, at least 10 seconds of elapsed execution, at least 5%
+progress, and work remaining.
+
+The estimate divides elapsed execution time by completed items and multiplies by
+remaining items. Durations round up to minutes, hours, or days with `Intl`
+formatting. Queued tasks continue to show their queued timestamp, and running
+tasks without a reliable estimate show no timestamp. A historical duration model
+or additional dependency is not required for this first implementation.
+
 ## 2026-11-19: Failed task executions retry twice
 
 When a durable task executor reports a failed run, the task returns to the queue

@@ -25,7 +25,9 @@ import {
   fetchQuickPicks,
   fetchServerSettings,
   fetchUpdateStatus,
+  fetchUserPreferences,
   getTask,
+  initializeUserPreferences,
   isAuthenticationRedirectError,
   listArtistMetadataCandidates,
   listDirectories,
@@ -62,6 +64,7 @@ import {
   updateMetadataProvider,
   updatePlaylist,
   updateServerSettings,
+  updateUserPreferences,
   updateUserProfile,
 } from "../app/lib/peridot-client.ts";
 
@@ -936,6 +939,51 @@ test("profile updates send and return the display name", async (context) => {
   );
   assert.deepEqual(JSON.parse(String(request?.body)), {
     displayName: "New Name",
+  });
+});
+
+test("preference calls verify, initialize, and update the signed-in user", async (context) => {
+  const originalFetch = globalThis.fetch;
+  context.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  const requests: Array<{ input: string; init?: RequestInit }> = [];
+  globalThis.fetch = async (input, init) => {
+    requests.push({ input: String(input), init });
+    return Response.json({
+      likedTitlesOffline:
+        init?.method === undefined ? false : init.method === "PUT",
+      initialized: true,
+    });
+  };
+
+  await fetchUserPreferences("http://127.0.0.1:17430", "session-token");
+  await initializeUserPreferences("http://127.0.0.1:17430", "session-token", {
+    likedTitlesOffline: false,
+  });
+  await updateUserPreferences("http://127.0.0.1:17430", "session-token", {
+    likedTitlesOffline: true,
+  });
+
+  assert.deepEqual(
+    requests.map((request) => request.input),
+    [
+      "http://127.0.0.1:17430/api/users/me/preferences",
+      "http://127.0.0.1:17430/api/users/me/preferences/initialize",
+      "http://127.0.0.1:17430/api/users/me/preferences",
+    ],
+  );
+  assert.equal(requests[0]?.init?.method, undefined);
+  assert.equal(requests[1]?.init?.method, "POST");
+  assert.equal(requests[2]?.init?.method, "PUT");
+  for (const request of requests) {
+    assert.equal(
+      new Headers(request.init?.headers).get("Authorization"),
+      "Bearer session-token",
+    );
+  }
+  assert.deepEqual(JSON.parse(String(requests[2]?.init?.body)), {
+    likedTitlesOffline: true,
   });
 });
 

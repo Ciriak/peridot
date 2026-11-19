@@ -91,7 +91,10 @@ test("track, album, and artist likes share accessible persistent state wiring", 
     "Like hover colors the button without reacting to card hover",
   );
   assert.match(library, /useCatalogTrackQuery/);
-  assert.match(library, /props\.favorites \? \{ liked: true \}/);
+  assert.match(
+    library,
+    /props\.favorites\s*\? \{ liked: true, availability: "all" as const \}/,
+  );
   assert.match(
     library,
     /props\.favorites && likesLoaded\.value\s*\? filterTracks\(\s*tracks\.value,\s*"",\s*likedTrackIds\.value,?\s*\)/,

@@ -7,6 +7,7 @@ model User {
   normalizedDisplayName String   @unique
   passwordHash          String
   role                  String
+  likedTitlesOffline    Int?
   bootstrapKey          String?  @unique
   createdAt             DateTime @default(now())
   updatedAt             DateTime @onCreate(now()) @onUpdate(now())

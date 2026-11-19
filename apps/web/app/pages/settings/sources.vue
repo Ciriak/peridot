@@ -115,9 +115,7 @@ const adding = ref(false);
 const addError = ref("");
 const removeOpen = ref(false);
 const pendingDelete = ref<SourceResponse | null>(null);
-const removalProgress = ref<
-  Record<string, SourceRemovalProgressResponse>
->({});
+const removalProgress = ref<Record<string, SourceRemovalProgressResponse>>({});
 let unsubscribeRemovals: (() => void) | undefined;
 const sourceRefreshEnabled = ref(true);
 const sourceRefreshCron = ref("0 3 * * *");
@@ -504,12 +502,13 @@ onMounted(() => {
   if (allowed.value) {
     unsubscribeRemovals = realtime.subscribe(["sources"], (message) => {
       if (message.type !== "source.removal.progress") return;
-      const {
-        eventId: _eventId,
-        occurredAt: _occurredAt,
-        type: _type,
-        ...progress
-      } = message;
+      const progress: SourceRemovalProgressResponse = {
+        operationId: message.operationId,
+        sourceId: message.sourceId,
+        phase: message.phase,
+        completed: message.completed,
+        total: message.total,
+      };
       removalProgress.value = {
         ...removalProgress.value,
         [progress.sourceId]: progress,
@@ -585,7 +584,9 @@ onBeforeUnmount(() => {
           <button
             type="button"
             class="drag-handle cursor-grab rounded-md p-1 text-muted-foreground active:cursor-grabbing"
-            :class="sourceIsRemoving(source) && 'pointer-events-none opacity-40'"
+            :class="
+              sourceIsRemoving(source) && 'pointer-events-none opacity-40'
+            "
             :disabled="sourceIsRemoving(source)"
             :aria-label="t('settings.sources.drag')"
           >

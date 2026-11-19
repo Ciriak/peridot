@@ -36,7 +36,7 @@ test("albums have list and detail routes with derived groups", async () => {
   assert.match(albumCard, /:to="albumRoute\(album\)"/);
   assert.match(
     albumCard,
-    /<\/NuxtLink>\s+<ScrollingText class="w-full text-xs text-muted-foreground">\s+<TrackArtistLinks :artists="album\.artists" \/>/,
+    /<\/NuxtLink>[\s\S]*<Badge v-if="!album\.available"[\s\S]*<ScrollingText class="w-full text-xs text-muted-foreground">\s+<TrackArtistLinks :artists="album\.artists" \/>/,
     "Album card artist credits link to their artist pages",
   );
   assert.match(albumCard, /useLikes\(\)/);

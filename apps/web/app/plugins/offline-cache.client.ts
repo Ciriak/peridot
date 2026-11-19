@@ -1,5 +1,6 @@
 import { defineNuxtPlugin } from "#imports";
 import { watch } from "vue";
+import { clearDownloadTasks } from "../lib/download-tasks";
 import { clearAllOfflineTracks } from "../lib/offline-audio";
 import { clearOfflineCatalog } from "../lib/offline-catalog";
 import { clearAllPeridotQueries } from "../lib/query-persister";
@@ -26,6 +27,7 @@ export default defineNuxtPlugin(() => {
         await Promise.all([
           clearAllPeridotQueries(),
           clearAllOfflineTracks(),
+          clearDownloadTasks(),
           clearOfflineCatalog(),
         ]);
         return;
@@ -36,6 +38,7 @@ export default defineNuxtPlugin(() => {
         await Promise.all([
           clearAllPeridotQueries(),
           clearAllOfflineTracks(),
+          clearDownloadTasks(),
           clearOfflineCatalog(),
         ]);
       }

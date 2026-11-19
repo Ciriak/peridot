@@ -92,6 +92,7 @@ const {
 } = useCatalogTrackQuery(() => ({
   mediaType: props.mediaType,
   collectionId: collection.value?.id ?? "__peridot_missing_collection__",
+  availability: collection.value?.available ? "available" : ("all" as const),
   sort: collectionSort.value,
   direction: trackSort.value.direction,
 }));
@@ -119,7 +120,7 @@ const collectionActive = computed(
 const collectionPlayable = computed(
   () =>
     itemCount.value > 0 &&
-    (serverStatus.value !== "lost" ||
+    (collection.value?.available ||
       savedTracks.value.some(
         (saved) => saved.track.albumId === collection.value?.id,
       )),
@@ -200,7 +201,7 @@ async function playWholeCollection() {
     }
     playCollection(saved);
   };
-  if (serverStatus.value === "lost") {
+  if (serverStatus.value === "lost" || !current.available) {
     await playSavedTracks();
     return;
   }
@@ -353,6 +354,9 @@ onMounted(() => {
           />
           <Badge variant="secondary">
             {{ t(countKey, { count: itemCount }, itemCount) }}
+          </Badge>
+          <Badge v-if="!collection.available" variant="secondary">
+            {{ t("trackTable.unavailable") }}
           </Badge>
           <span class="text-sm text-muted-foreground">
             <template

@@ -517,6 +517,13 @@ test("offline playback uses only saved copies while disconnected", () => {
         savedTrackIds: new Set(["track-1"]),
       },
     ),
+    true,
+  );
+  assert.equal(
+    isTrackPlayable(
+      { ...track, available: false },
+      { serverLost: false, savedTrackIds: new Set() },
+    ),
     false,
   );
 });
@@ -552,7 +559,7 @@ test("the fixed player shares saved-track availability across controls", async (
   assert.match(layout, /:disabled="!currentTrackPlayable"/);
 });
 
-test("offline saves show progress and success toasts without removal toasts", async () => {
+test("offline saves use shared task progress without removal toasts", async () => {
   const [table, albumAction, toasts, locale] = await Promise.all([
     readFile(
       new URL("../app/components/TrackTable.vue", import.meta.url),
@@ -575,24 +582,19 @@ test("offline saves show progress and success toasts without removal toasts", as
     table,
     /if \(!\(await removeOffline\(track\.id\)\)\) \{[\s\S]*?notifyOfflineTrackFailed/,
   );
-  assert.match(
-    table,
-    /if \(await saveOffline\(track\)\) \{\s*notifyOfflineTrackSaved\(track\.title\);\s*\} else \{[\s\S]*?notifyOfflineTrackFailed/,
-  );
-  assert.match(table, /notifyOfflineTrackSaved\(track\.title\)/);
-  assert.match(albumAction, /notifyOfflineAlbumSaved\(currentAlbum\.title\)/);
-  assert.match(toasts, /notifyOfflineTrackSaved/);
-  assert.match(toasts, /notifyOfflineAlbumSaved/);
+  assert.match(table, /if \(!\(await saveOffline\(track\)\)\)/);
+  assert.doesNotMatch(table, /notifyOfflineTrackSaved\(track\.title\)/);
+  assert.match(albumAction, /saveAlbum\(currentAlbum\)/);
+  assert.doesNotMatch(albumAction, /notifyOfflineAlbumSaved/);
+  assert.match(toasts, /notifyDownloadTaskEnded/);
   assert.doesNotMatch(toasts, /toast\.offlineRemoved/);
-  assert.equal(messages["toast.offlineSavedTitle"], "Saved for offline");
-  assert.equal(messages["toast.offlineSaved"], "{track} is available offline.");
   assert.equal(
-    messages["toast.albumOfflineSavedTitle"],
-    "Album saved for offline",
+    messages["toast.downloadTaskCompletedTitle"],
+    "Download complete",
   );
   assert.equal(
-    messages["toast.albumOfflineSaved"],
-    "{album} is available offline.",
+    messages["toast.downloadTaskCompleted"],
+    "{item} is available offline.",
   );
   assert.equal(messages["toast.offlineRemovedTitle"], undefined);
   assert.equal(messages["toast.offlineRemoved"], undefined);
@@ -643,8 +645,8 @@ test("offline progress spinners show song and album download details", async () 
   assert.equal(messages["downloadProgress.percent"], "{percent}% downloaded");
 });
 
-test("album offline controls load and save the complete album collection", async () => {
-  const [button, action, card, detail, menu] = await Promise.all([
+test("album offline controls use the shared album download task", async () => {
+  const [button, action, card, detail, menu, tasks] = await Promise.all([
     readFile(
       new URL("../app/components/AlbumOfflineButton.vue", import.meta.url),
       "utf8",
@@ -665,12 +667,19 @@ test("album offline controls load and save the complete album collection", async
       new URL("../app/components/AlbumContextMenu.vue", import.meta.url),
       "utf8",
     ),
+    readFile(
+      new URL(
+        "../app/composables/use-offline-download-tasks.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
   ]);
 
-  assert.match(action, /loadCollectionTracks\(/);
-  assert.match(action, /albumId: currentAlbum\.id/);
-  assert.match(action, /saveAlbum\(currentAlbum\.id, tracks\)/);
+  assert.match(action, /saveAlbum\(currentAlbum\)/);
   assert.match(action, /removeAlbum\(currentAlbum\.id\)/);
+  assert.match(tasks, /loadCollectionTracks\(/);
+  assert.match(tasks, /albumId: task\.request\.album\.id/);
   assert.match(button, /<ProgressCircle/);
   assert.match(button, /:aria-pressed="allSaved"/);
   assert.doesNotMatch(button, /showLabel|visibleLabel|<span/);

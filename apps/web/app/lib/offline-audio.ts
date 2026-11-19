@@ -7,12 +7,17 @@ import {
   get,
   set,
 } from "idb-keyval";
-import { createPlaybackToken, trackAudioUrl } from "./peridot-client.ts";
+import {
+  createPlaybackToken,
+  PeridotNetworkError,
+  trackAudioUrl,
+} from "./peridot-client.ts";
 import { trackCoverUrl } from "./library.ts";
 import { clearOfflineArtwork, loadArtworkBlob } from "./offline-artwork.ts";
 import type { PeridotQueryScope } from "./query-keys";
 import { isAndroidRuntime } from "./android-runtime.ts";
 import { PeridotMedia, trackResponseFromAndroid } from "./android-playback.ts";
+import { reportServerReachability } from "./server-connectivity.ts";
 
 export const OFFLINE_AUDIO_CACHE = "peridot-offline-audio-v1";
 export const OFFLINE_TRACK_DATABASE = "peridot-web-offline-tracks-v1";
@@ -244,9 +249,15 @@ export async function saveTrackForOffline(
     token,
     savedTrack.id,
   );
-  const response = await fetch(
-    trackAudioUrl(scope.serverAddress, savedTrack.id, issued.token),
-  );
+  let response: Response;
+  try {
+    response = await fetch(
+      trackAudioUrl(scope.serverAddress, savedTrack.id, issued.token),
+    );
+  } catch {
+    reportServerReachability(false);
+    throw new PeridotNetworkError();
+  }
   if (!response.ok) {
     throw new Error("The audio file could not be saved.");
   }

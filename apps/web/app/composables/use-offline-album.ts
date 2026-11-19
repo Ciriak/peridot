@@ -1,23 +1,12 @@
 import type { AlbumSummaryResponse } from "@peridot/contracts";
 import { computed, toValue, type MaybeRefOrGetter } from "vue";
-import { loadCollectionTracks } from "../lib/catalog-collections";
-import { isAuthenticationRedirectError } from "../lib/peridot-client";
-import {
-  notifyOfflineAlbumFailed,
-  notifyOfflineAlbumSaved,
-} from "../lib/toasts";
-import { useLocalizedMessage } from "./use-localized-message";
+import { notifyOfflineAlbumFailed } from "../lib/toasts";
 import { useOfflineTracks } from "./use-offline-tracks";
-import { useServer } from "./use-server";
-import { useSession } from "./use-session";
 
 export function useOfflineAlbum(
   albumSource: MaybeRefOrGetter<AlbumSummaryResponse | null>,
 ) {
   const album = computed(() => toValue(albumSource));
-  const { address } = useServer();
-  const { token } = useSession();
-  const { errorMessage } = useLocalizedMessage();
   const {
     savedTracks,
     error,
@@ -62,25 +51,13 @@ export function useOfflineAlbum(
       return removed;
     }
 
-    if (!address.value || !token.value || !canSave.value) return false;
+    if (!canSave.value) return false;
     error.value = null;
-    try {
-      const tracks = await loadCollectionTracks(address.value, token.value, {
-        albumId: currentAlbum.id,
-      });
-      const saved = await saveAlbum(currentAlbum.id, tracks);
-      if (saved) {
-        notifyOfflineAlbumSaved(currentAlbum.title);
-      } else if (error.value) {
-        notifyOfflineAlbumFailed(currentAlbum.title, error.value);
-      }
-      return saved;
-    } catch (reason) {
-      if (isAuthenticationRedirectError(reason)) return false;
-      error.value = errorMessage(reason, "error.offlineAlbumLoad");
+    const saved = await saveAlbum(currentAlbum);
+    if (!saved && error.value) {
       notifyOfflineAlbumFailed(currentAlbum.title, error.value);
-      return false;
     }
+    return saved;
   }
 
   return {

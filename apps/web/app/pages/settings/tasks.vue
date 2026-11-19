@@ -29,12 +29,16 @@ import { useLocalizedMessage } from "../../composables/use-localized-message";
 import { icons } from "../../lib/icons";
 import {
   activeTaskPercent,
+  estimatedTaskRemainingMs,
   isActiveTaskStatus,
   orderedActiveTasks,
   taskProgressMessage,
   taskStatusMessage,
 } from "../../lib/task-progress";
-import { formatTimeAgo } from "../../lib/relative-time";
+import {
+  formatRemainingDuration,
+  formatTimeAgo,
+} from "../../lib/relative-time";
 import { isAuthenticationRedirectError } from "../../lib/peridot-client";
 
 definePageMeta({ layout: "settings" });
@@ -42,7 +46,7 @@ definePageMeta({ layout: "settings" });
 const { t, d, locale } = useI18n();
 const { errorMessage, translate } = useLocalizedMessage();
 const now = useNow({
-  scheduler: (update) => useIntervalFn(update, 60_000, { immediate: true }),
+  scheduler: (update) => useIntervalFn(update, 10_000, { immediate: true }),
 });
 
 const { address } = useServer();
@@ -101,22 +105,21 @@ function taskCircleProgress(task: TaskResponse): number | null {
   return task.status === "running" ? activeTaskPercent(task) : null;
 }
 
-function taskTimeLabel(task: TaskResponse): string {
-  if (task.status === "running" && task.startedAt) {
-    return t("settings.tasks.started", {
-      date: d(new Date(task.startedAt), "medium"),
-    });
-  }
-  if (task.completedAt) {
-    return t(
-      task.status === "completed"
-        ? "settings.tasks.completed"
-        : "settings.tasks.ended",
-      { date: d(new Date(task.completedAt), "medium") },
-    );
-  }
+function taskQueuedLabel(task: TaskResponse): string {
   return t("settings.tasks.queued", {
     date: d(new Date(task.createdAt), "medium"),
+  });
+}
+
+function taskRemainingLabel(task: TaskResponse): string | null {
+  const remaining = estimatedTaskRemainingMs(task, now.value);
+  if (remaining === null) return null;
+  return t("settings.tasks.remaining", {
+    duration: formatRemainingDuration(
+      remaining,
+      locale.value,
+      t("settings.tasks.lessThanMinute"),
+    ),
   });
 }
 
@@ -321,9 +324,15 @@ onMounted(() => {
                 <span class="font-medium text-foreground">
                   {{ translate(taskProgressMessage(task)) }}
                 </span>
-                <time :datetime="task.startedAt ?? task.createdAt">
-                  {{ taskTimeLabel(task) }}
+                <time
+                  v-if="task.status === 'queued'"
+                  :datetime="task.createdAt"
+                >
+                  {{ taskQueuedLabel(task) }}
                 </time>
+                <span v-else-if="taskRemainingLabel(task)">
+                  {{ taskRemainingLabel(task) }}
+                </span>
               </div>
             </div>
           </div>

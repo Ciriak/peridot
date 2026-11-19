@@ -44,3 +44,42 @@ export function formatTimeAgo(
   }
   return formatter.format(-Math.floor(elapsedSeconds / YEAR_SECONDS), "year");
 }
+
+function formatUnit(
+  value: number,
+  unit: "minute" | "hour" | "day",
+  locale: string,
+): string {
+  return new Intl.NumberFormat(locale, {
+    style: "unit",
+    unit,
+    unitDisplay: "long",
+  }).format(value);
+}
+
+export function formatRemainingDuration(
+  milliseconds: number,
+  locale: string,
+  lessThanMinuteLabel: string,
+): string {
+  if (!Number.isFinite(milliseconds) || milliseconds <= 0) {
+    return lessThanMinuteLabel;
+  }
+
+  const seconds = Math.ceil(milliseconds / SECOND_MS);
+  if (seconds < MINUTE_SECONDS) return lessThanMinuteLabel;
+
+  if (seconds < HOUR_SECONDS) {
+    const minutes = Math.ceil(seconds / MINUTE_SECONDS);
+    if (minutes < MINUTE_SECONDS) {
+      return formatUnit(minutes, "minute", locale);
+    }
+  }
+
+  if (seconds < DAY_SECONDS) {
+    const hours = Math.ceil(seconds / HOUR_SECONDS);
+    if (hours < 24) return formatUnit(hours, "hour", locale);
+  }
+
+  return formatUnit(Math.ceil(seconds / DAY_SECONDS), "day", locale);
+}
