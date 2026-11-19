@@ -5,12 +5,12 @@ import { Readable } from "node:stream";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { PlaybackTokenResponse } from "@peridot/contracts";
 import { ARTWORK_MIME_TYPE, type ArtworkCache } from "./artwork-cache.js";
-import type { CredentialStore } from "./credential-store.js";
+import { PluginError } from "@peridot/plugin-sdk";
 import type { Database } from "./database.js";
 import { sendError } from "./http.js";
-import { JellyfinClient, JellyfinError } from "./jellyfin.js";
 import { message } from "./messages.js";
 import type { PlaybackTokenService } from "./playback-tokens.js";
+import type { PluginService } from "./plugins.js";
 import { queueLibraryScan, toTaskResponse, type TaskService } from "./tasks.js";
 import { toTrackResponse } from "./track-response.js";
 
@@ -63,9 +63,8 @@ export async function registerLibraryRoutes(
   database: Database,
   tasks: TaskService,
   playbackTokens: PlaybackTokenService,
-  jellyfin: JellyfinClient,
-  credentials: CredentialStore,
   artworkCache: ArtworkCache,
+  plugins: PluginService,
 ) {
   app.post("/api/library/scans", async (_request, reply) => {
     const task = await queueLibraryScan(tasks);
@@ -187,10 +186,8 @@ export async function registerLibraryRoutes(
         : null;
     if (!libraryRoot) {
       if (
-        track.source?.kind === "integration" &&
-        track.source.integration === "jellyfin" &&
-        track.source.url &&
-        track.source.credentialCiphertext &&
+        track.source?.kind === "plugin" &&
+        track.source.pluginId &&
         track.externalId
       ) {
         const controller = new AbortController();
@@ -198,26 +195,31 @@ export async function registerLibraryRoutes(
         request.raw.once("aborted", abort);
         reply.raw.once("close", abort);
         try {
-          const apiKey = credentials.decrypt(
-            track.source.credentialCiphertext,
-            "source",
-          );
-          const upstream = await jellyfin.audio(
-            track.source.url,
-            apiKey,
-            track.externalId,
-            track.externalContainer ?? mimeExtension(track.mimeType),
-            request.headers.range,
-            head ? "HEAD" : "GET",
-            controller.signal,
-          );
+          const adapter = await plugins.sourceAdapter(track.source);
+          if (!adapter) {
+            return sendError(
+              reply,
+              404,
+              "track_not_found",
+              "Available track not found",
+              message("api.message.trackNotFound"),
+            );
+          }
+          const upstream = await adapter.openAudio({
+            source: plugins.sourceHandle(track.source),
+            externalId: track.externalId,
+            container: track.externalContainer ?? mimeExtension(track.mimeType),
+            range: request.headers.range,
+            method: head ? "HEAD" : "GET",
+            signal: controller.signal,
+          });
           if (upstream.status === 401 || upstream.status === 403) {
             return sendError(
               reply,
               502,
-              "jellyfin_auth_failed",
-              "Jellyfin rejected the saved API key.",
-              message("api.message.jellyfinInvalidCredentials"),
+              "plugin_auth_failed",
+              "The source plugin rejected its saved credentials.",
+              message("api.message.sourcePluginAuthFailed"),
             );
           }
           if (upstream.status === 404 || upstream.status === 410) {
@@ -247,9 +249,9 @@ export async function registerLibraryRoutes(
             return sendError(
               reply,
               502,
-              "jellyfin_unavailable",
-              "Jellyfin could not provide this track.",
-              message("api.message.jellyfinUnavailable"),
+              "plugin_unavailable",
+              "The source plugin could not provide this track.",
+              message("api.message.sourcePluginUnavailable"),
             );
           }
 
@@ -282,13 +284,13 @@ export async function registerLibraryRoutes(
           );
         } catch (error) {
           if (controller.signal.aborted) return reply;
-          if (error instanceof JellyfinError) {
+          if (error instanceof PluginError) {
             return sendError(
               reply,
               error.statusCode,
               error.code === "invalid_credentials"
-                ? "jellyfin_auth_failed"
-                : "jellyfin_unavailable",
+                ? "plugin_auth_failed"
+                : "plugin_unavailable",
               error.message,
               error.messageDescriptor,
             );

@@ -10,15 +10,15 @@ import {
 import { Icon } from "@iconify/vue/offline";
 import type {
   CreateSourceRequest,
-  JellyfinLibraryResponse,
-  SourceKind,
+  PluginResponse,
+  PluginSourceFieldDefinition,
+  PluginSourceOptionResponse,
   SourceResponse,
 } from "@peridot/contracts";
 import { Button } from "@peridot/ui/components/ui/button";
 import { Input } from "@peridot/ui/components/ui/input";
 import { ProgressCircle } from "@peridot/ui/components/ui/progress-circle";
 import { Switch } from "@peridot/ui/components/ui/switch";
-import jellyfinIcon from "@peridot/ui/assets/jellyfin-icon.webp";
 import { useSortable } from "@vueuse/integrations/useSortable";
 import {
   AlertDialogAction,
@@ -52,6 +52,7 @@ import { useSession } from "../../composables/use-session";
 import { useCatalogRevision } from "../../composables/use-catalog-query";
 import {
   useAdminSourcesQuery,
+  usePluginsQuery,
   useServerSettingsQuery,
 } from "../../composables/use-admin-queries";
 import { useTasks } from "../../composables/use-tasks";
@@ -61,7 +62,7 @@ import { icons } from "../../lib/icons";
 import {
   createSource,
   deleteSource,
-  discoverJellyfinLibraries,
+  discoverPluginSources,
   isAuthenticationRedirectError,
   reorderSources,
 } from "../../lib/peridot-client";
@@ -92,6 +93,7 @@ const allowed = computed(() => user.value?.role === "admin");
 const serverLost = computed(() => serverStatus.value === "lost");
 
 const sourcesQuery = useAdminSourcesQuery();
+const pluginsQuery = usePluginsQuery();
 const serverSettings = useServerSettingsQuery();
 const { invalidate: invalidateCatalog, resetOfflineCatalog } =
   useCatalogRevision();
@@ -100,14 +102,13 @@ const sourceList = ref<HTMLElement | null>(null);
 const loading = sourcesQuery.loading;
 const pageError = ref("");
 const addOpen = ref(false);
-type SourceChoice = "path" | "jellyfin";
+type SourceChoice = "path" | string;
 const newKind = ref<SourceChoice | null>(null);
 const newPath = ref("");
-const newUrl = ref("");
-const newApiKey = ref("");
-const newLibraryId = ref("");
-const jellyfinLibraries = ref<JellyfinLibraryResponse[]>([]);
-const discoveringLibraries = ref(false);
+const newPlugin = ref<PluginResponse | null>(null);
+const newConfiguration = ref<Record<string, string>>({});
+const pluginOptions = ref<PluginSourceOptionResponse[]>([]);
+const discoveringSources = ref(false);
 const adding = ref(false);
 const addError = ref("");
 const removeOpen = ref(false);
@@ -141,27 +142,65 @@ useSortable(sourceList, sources, {
   onEnd: () => void persistOrder(),
 });
 
+const installedSourcePlugins = computed(() =>
+  pluginsQuery.items.value.filter(
+    (plugin) =>
+      plugin.installed &&
+      plugin.enabled &&
+      !plugin.restartRequired &&
+      plugin.contributions.some(
+        (contribution) => contribution.kind === "source",
+      ),
+  ),
+);
+
+const newPluginFields = computed<PluginSourceFieldDefinition[]>(() => {
+  const contribution = newPlugin.value?.contributions.find(
+    (candidate) => candidate.kind === "source",
+  );
+  return contribution?.kind === "source"
+    ? contribution.configurationFields.filter((field) => field.visible)
+    : [];
+});
+
+const newPluginDiscovery = computed(() => {
+  const contribution = newPlugin.value?.contributions.find(
+    (candidate) => candidate.kind === "source",
+  );
+  return contribution?.kind === "source" ? contribution.discovery : null;
+});
+
+function sourcePlugin(source: SourceResponse): PluginResponse | null {
+  return (
+    pluginsQuery.items.value.find((plugin) => plugin.id === source.pluginId) ??
+    null
+  );
+}
+
 function sourceLabel(source: SourceResponse | null): string {
   if (!source) return "";
   if (source.kind === "path") return source.path ?? "";
   if (source.kind === "url") return source.url ?? "";
-  return source.name || source.url || source.integration || "";
+  return source.name || source.pluginId || "";
 }
 
-function sourceKindIcon(kind: SourceKind) {
-  if (kind === "path") return icons.folder;
-  if (kind === "url") return icons.globe;
+function sourceKindIcon(source: SourceResponse) {
+  if (source.kind === "path") return icons.folder;
+  if (source.kind === "url") return icons.globe;
+  if (sourcePlugin(source)?.icon === "jellyfin") return icons.jellyfin;
   return icons.plugins;
 }
 
-function sourceKindLabel(kind: SourceKind): string {
-  if (kind === "path") return t("settings.sources.path");
-  if (kind === "url") return t("settings.sources.url");
-  return t("settings.sources.jellyfin");
+function sourceKindLabel(source: SourceResponse): string {
+  if (source.kind === "path") return t("settings.sources.path");
+  if (source.kind === "url") return t("settings.sources.url");
+  return sourcePlugin(source)?.name ?? source.pluginId ?? t("settings.plugins");
 }
 
-function isJellyfin(source: SourceResponse): boolean {
-  return source.kind === "integration" && source.integration === "jellyfin";
+function sourceDetail(source: SourceResponse): string | null {
+  if (source.kind === "path") return source.path;
+  if (source.kind === "url") return source.url;
+  return source.configuration?.url ?? null;
 }
 
 function sourceTask(source: SourceResponse) {
@@ -204,7 +243,7 @@ function sourceLastSync(source: SourceResponse): string {
 async function loadSources() {
   if (!allowed.value) return;
   pageError.value = "";
-  await sourcesQuery.load(true);
+  await Promise.all([sourcesQuery.load(true), pluginsQuery.load(true)]);
 }
 
 watch(
@@ -224,36 +263,51 @@ function openAddDialog() {
   addError.value = "";
   newKind.value = null;
   newPath.value = "";
-  newUrl.value = "";
-  newApiKey.value = "";
-  newLibraryId.value = "";
-  jellyfinLibraries.value = [];
+  newPlugin.value = null;
+  newConfiguration.value = {};
+  pluginOptions.value = [];
   addOpen.value = true;
 }
 
 function chooseKind(kind: SourceChoice) {
   addError.value = "";
   newKind.value = kind;
+  if (kind === "path") {
+    newPlugin.value = null;
+    return;
+  }
+  const plugin =
+    installedSourcePlugins.value.find((candidate) => candidate.id === kind) ??
+    null;
+  newPlugin.value = plugin;
+  newConfiguration.value = {};
+  const contribution = plugin?.contributions.find(
+    (candidate) => candidate.kind === "source",
+  );
+  if (contribution?.kind === "source") {
+    for (const field of contribution.configurationFields) {
+      newConfiguration.value[field.key] =
+        newConfiguration.value[field.key] ?? "";
+    }
+  }
 }
 
 function closeAddDialog() {
   addOpen.value = false;
   newKind.value = null;
   newPath.value = "";
-  newUrl.value = "";
-  newApiKey.value = "";
-  newLibraryId.value = "";
-  jellyfinLibraries.value = [];
+  newPlugin.value = null;
+  newConfiguration.value = {};
+  pluginOptions.value = [];
 }
 
 function handleDialogBack() {
   if (newKind.value) {
     newKind.value = null;
     newPath.value = "";
-    newUrl.value = "";
-    newApiKey.value = "";
-    newLibraryId.value = "";
-    jellyfinLibraries.value = [];
+    newPlugin.value = null;
+    newConfiguration.value = {};
+    pluginOptions.value = [];
     addError.value = "";
   } else {
     closeAddDialog();
@@ -262,14 +316,16 @@ function handleDialogBack() {
 
 function canAdd(): boolean {
   if (newKind.value === "path") return Boolean(newPath.value.trim());
-  if (newKind.value === "jellyfin") {
-    return Boolean(
-      newUrl.value.trim() &&
-      newApiKey.value.trim() &&
-      newLibraryId.value.trim(),
-    );
-  }
-  return false;
+  if (!newPlugin.value) return false;
+  const contribution = newPlugin.value.contributions.find(
+    (candidate) => candidate.kind === "source",
+  );
+  return (
+    contribution?.kind === "source" &&
+    contribution.configurationFields
+      .filter((field) => field.required)
+      .every((field) => Boolean(newConfiguration.value[field.key]?.trim()))
+  );
 }
 
 async function addSource() {
@@ -283,12 +339,11 @@ async function addSource() {
       path: newPath.value,
     };
   } else {
+    if (!newPlugin.value) return;
     body = {
-      kind: "integration",
-      integration: "jellyfin",
-      url: newUrl.value,
-      apiKey: newApiKey.value,
-      libraryId: newLibraryId.value,
+      kind: "plugin",
+      pluginId: newPlugin.value.id,
+      configuration: newConfiguration.value,
     };
   }
   try {
@@ -300,10 +355,7 @@ async function addSource() {
     closeAddDialog();
     notifySourceMutation("added", sourceLabel(source));
     await loadSources();
-    if (
-      source.kind === "path" ||
-      (source.kind === "integration" && source.integration === "jellyfin")
-    ) {
+    if (source.kind === "path" || source.kind === "plugin") {
       if (source.task) {
         trackTask(source.task);
       } else {
@@ -318,33 +370,42 @@ async function addSource() {
   }
 }
 
-async function discoverLibraries() {
-  if (!address.value || !token.value) return;
-  discoveringLibraries.value = true;
+async function discoverPluginSourceOptions() {
+  if (!address.value || !token.value || !newPlugin.value) return;
+  discoveringSources.value = true;
   addError.value = "";
   try {
-    const response = await discoverJellyfinLibraries(
+    const response = await discoverPluginSources(
       address.value,
       token.value,
-      {
-        url: newUrl.value,
-        apiKey: newApiKey.value,
-      },
+      newPlugin.value.id,
+      { configuration: newConfiguration.value },
     );
-    jellyfinLibraries.value = response.items;
-    if (!response.items.some((library) => library.id === newLibraryId.value)) {
-      newLibraryId.value = response.items[0]?.id ?? "";
+    pluginOptions.value = response.items;
+    const first = response.items[0];
+    if (first) {
+      newConfiguration.value = {
+        ...newConfiguration.value,
+        ...first.configuration,
+      };
     }
   } catch (reason) {
     if (isAuthenticationRedirectError(reason)) return;
     addError.value = errorMessage(reason, "settings.sources.addError");
   } finally {
-    discoveringLibraries.value = false;
+    discoveringSources.value = false;
   }
 }
 
+function selectPluginSource(option: PluginSourceOptionResponse) {
+  newConfiguration.value = {
+    ...newConfiguration.value,
+    ...option.configuration,
+  };
+}
+
 async function rescan(source: SourceResponse) {
-  if (source.kind !== "path" && !isJellyfin(source)) return;
+  if (source.kind !== "path" && source.kind !== "plugin") return;
   pageError.value = "";
   try {
     await queueSourceScan(source.id);
@@ -525,19 +586,12 @@ onMounted(() => {
           </button>
           <span
             role="img"
-            :aria-label="sourceKindLabel(source.kind)"
-            :title="sourceKindLabel(source.kind)"
+            :aria-label="sourceKindLabel(source)"
+            :title="sourceKindLabel(source)"
             class="flex size-6 shrink-0 items-center justify-center text-muted-foreground"
           >
-            <img
-              v-if="isJellyfin(source)"
-              :src="jellyfinIcon"
-              alt=""
-              class="size-5 object-contain"
-            />
             <Icon
-              v-else
-              :icon="sourceKindIcon(source.kind)"
+              :icon="sourceKindIcon(source)"
               aria-hidden="true"
               class="size-5"
             />
@@ -551,12 +605,12 @@ onMounted(() => {
                 source.path
               }}</span>
             </template>
-            <template v-else-if="isJellyfin(source)">
+            <template v-else-if="source.kind === 'plugin'">
               <span class="block font-medium">{{
-                source.name || "Jellyfin"
+                source.name || source.pluginId
               }}</span>
               <span class="block truncate text-xs text-muted-foreground">{{
-                source.url
+                sourceDetail(source)
               }}</span>
             </template>
             <span v-else class="block truncate">
@@ -644,7 +698,7 @@ onMounted(() => {
               >
                 <DropdownMenuItem
                   :disabled="
-                    (source.kind !== 'path' && !isJellyfin(source)) ||
+                    (source.kind !== 'path' && source.kind !== 'plugin') ||
                     serverLost
                   "
                   class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none data-disabled:cursor-default data-disabled:opacity-50"
@@ -790,13 +844,21 @@ onMounted(() => {
             {{ t("settings.sources.path") }}
           </Button>
           <Button
+            v-for="plugin in installedSourcePlugins"
+            :key="plugin.id"
             type="button"
             variant="outline"
             class="justify-start"
-            @click="chooseKind('jellyfin')"
+            @click="chooseKind(plugin.id)"
           >
-            <img :src="jellyfinIcon" alt="" class="size-5 object-contain" />
-            {{ t("settings.sources.jellyfin") }}
+            <Icon
+              :icon="
+                plugin.icon === 'jellyfin' ? icons.jellyfin : icons.plugins
+              "
+              aria-hidden="true"
+              class="size-5"
+            />
+            {{ plugin.name }}
           </Button>
         </div>
 
@@ -812,67 +874,83 @@ onMounted(() => {
           </div>
 
           <div v-else class="space-y-4">
-            <div class="space-y-2">
-              <label for="jellyfin-url" class="text-sm font-medium">
-                {{ t("settings.sources.jellyfinUrl") }}
+            <div
+              v-for="field in newPluginFields"
+              :key="field.key"
+              class="space-y-2"
+            >
+              <label
+                :for="`plugin-source-${field.key}`"
+                class="text-sm font-medium"
+              >
+                {{ translate(field.labelMessage) }}
               </label>
               <Input
-                id="jellyfin-url"
-                v-model="newUrl"
-                type="url"
-                :placeholder="t('settings.sources.jellyfinUrlPlaceholder')"
+                :id="`plugin-source-${field.key}`"
+                v-model="newConfiguration[field.key]"
+                :type="field.type === 'password' ? 'password' : field.type"
+                :required="field.required"
+                :autocomplete="field.secret ? 'off' : undefined"
+                :placeholder="
+                  field.placeholderMessage
+                    ? translate(field.placeholderMessage)
+                    : undefined
+                "
               />
-            </div>
-            <div class="space-y-2">
-              <label for="jellyfin-api-key" class="text-sm font-medium">
-                {{ t("settings.sources.jellyfinApiKey") }}
-              </label>
-              <Input
-                id="jellyfin-api-key"
-                v-model="newApiKey"
-                type="password"
-                autocomplete="off"
-              />
-              <p class="text-sm text-muted-foreground">
-                {{ t("settings.sources.jellyfinApiKeyHelp") }}
+              <p v-if="field.helpMessage" class="text-sm text-muted-foreground">
+                {{ translate(field.helpMessage) }}
               </p>
             </div>
             <Button
+              v-if="newPluginDiscovery"
               type="button"
               variant="outline"
               :disabled="
-                discoveringLibraries ||
-                !newUrl.trim() ||
-                !newApiKey.trim() ||
+                discoveringSources ||
+                newPluginFields.some(
+                  (field) =>
+                    field.required && !newConfiguration[field.key]?.trim(),
+                ) ||
                 serverLost
               "
-              @click="discoverLibraries"
+              @click="discoverPluginSourceOptions"
             >
               {{
-                discoveringLibraries
-                  ? t("settings.sources.loadingLibraries")
-                  : t("settings.sources.loadLibraries")
+                discoveringSources
+                  ? t("settings.sources.loadingOptions")
+                  : translate(newPluginDiscovery.actionMessage)
               }}
             </Button>
-            <div v-if="jellyfinLibraries.length" class="space-y-2">
+            <p
+              v-if="newPluginDiscovery?.helpMessage"
+              class="text-sm text-muted-foreground"
+            >
+              {{ translate(newPluginDiscovery.helpMessage) }}
+            </p>
+            <div v-if="pluginOptions.length" class="space-y-2">
               <p class="text-sm font-medium">
-                {{ t("settings.sources.jellyfinLibrary") }}
+                {{ t("settings.sources.availableSources") }}
               </p>
               <div class="grid gap-2">
                 <Button
-                  v-for="library in jellyfinLibraries"
-                  :key="library.id"
+                  v-for="option in pluginOptions"
+                  :key="option.id"
                   type="button"
-                  :variant="newLibraryId === library.id ? 'default' : 'outline'"
+                  :variant="
+                    newConfiguration.libraryId ===
+                    option.configuration.libraryId
+                      ? 'default'
+                      : 'outline'
+                  "
                   class="justify-start"
-                  @click="newLibraryId = library.id"
+                  @click="selectPluginSource(option)"
                 >
                   <Icon
                     :icon="icons.library"
                     aria-hidden="true"
                     class="size-4"
                   />
-                  {{ library.name }}
+                  {{ option.label }}
                 </Button>
               </div>
             </div>

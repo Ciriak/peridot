@@ -3,15 +3,19 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import type {
   DirectorySearchResponse,
-  JellyfinLibraryResponse,
   MessageDescriptor,
+  PluginSourceOptionResponse,
   SourceKind,
   SourceResponse,
 } from "@peridot/contracts";
+import {
+  PluginError,
+  type PluginSourceConfiguration,
+} from "@peridot/plugin-sdk";
 import type { CredentialStore } from "./credential-store.js";
 import type { Database } from "./database.js";
-import { JellyfinClient, JellyfinError } from "./jellyfin.js";
 import { message } from "./messages.js";
+import type { PluginService } from "./plugins.js";
 import type { SourceRow } from "./prisma/models.js";
 
 const DIRECTORY_ENTRY_LIMIT = 100;
@@ -49,15 +53,50 @@ function toSourceResponse(
   return {
     id: source.id,
     kind: source.kind as SourceKind,
-    externalLibraryCollectionType: source.externalLibraryCollectionType,
     name: source.name,
     path: source.path,
     url: source.url,
-    integration: source.integration,
-    externalLibraryId: source.externalLibraryId,
+    pluginId: source.pluginId,
+    configuration: parseSourceConfiguration(source.configuration),
     fileCount,
     lastSyncedAt: lastSyncedAt?.toISOString() ?? null,
   };
+}
+
+function parseSourceConfiguration(
+  value: string | null,
+): Record<string, string> | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return null;
+    }
+    return Object.fromEntries(
+      Object.entries(parsed)
+        .filter(
+          (entry): entry is [string, string] => typeof entry[1] === "string",
+        )
+        .slice(0, 64),
+    );
+  } catch {
+    return null;
+  }
+}
+
+function pluginConfiguration(value: unknown): PluginSourceConfiguration {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new SourceError(
+      "Enter the plugin source configuration.",
+      message("api.message.sourceInvalid"),
+    );
+  }
+  const entries = Object.entries(value)
+    .filter((entry): entry is [string, string] => typeof entry[1] === "string")
+    .slice(0, 64);
+  return Object.fromEntries(
+    entries.map(([key, entry]) => [key.trim().slice(0, 80), entry]),
+  );
 }
 
 export async function ensureDefaultSource(
@@ -112,7 +151,7 @@ export async function listSources(
 export async function createSource(
   database: Database,
   body: unknown,
-  jellyfin: JellyfinClient,
+  plugins: PluginService,
   credentials: CredentialStore,
 ): Promise<SourceResponse> {
   const value = (body ?? {}) as {
@@ -120,12 +159,11 @@ export async function createSource(
     name?: unknown;
     path?: unknown;
     url?: unknown;
-    integration?: unknown;
-    apiKey?: unknown;
-    libraryId?: unknown;
+    pluginId?: unknown;
+    configuration?: unknown;
   };
   const kind = value.kind;
-  if (kind !== "path" && kind !== "url" && kind !== "integration") {
+  if (kind !== "path" && kind !== "url" && kind !== "plugin") {
     throw new SourceError(
       "Choose a valid source type.",
       message("api.message.sourceInvalid"),
@@ -192,114 +230,69 @@ export async function createSource(
     return toSourceResponse(source);
   }
 
-  const integration =
-    typeof value.integration === "string"
-      ? value.integration.trim().toLowerCase()
-      : "";
-  if (!integration) {
+  const pluginId =
+    typeof value.pluginId === "string" ? value.pluginId.trim() : "";
+  if (!pluginId) {
     throw new SourceError(
-      "Choose an integration.",
-      message("api.message.sourceIntegrationRequired"),
+      "Choose a plugin source type.",
+      message("api.message.sourcePluginRequired"),
     );
   }
-  if (integration !== "jellyfin") {
-    throw new SourceError(
-      "Choose a supported integration.",
-      message("api.message.sourceIntegrationRequired"),
-    );
-  }
-  const url = normalizeIntegrationUrl(value.url);
-  if (!url) {
-    throw new SourceError(
-      "Enter a valid Jellyfin server URL.",
-      message("api.message.jellyfinUrlInvalid"),
-    );
-  }
-  const apiKey = typeof value.apiKey === "string" ? value.apiKey.trim() : "";
-  if (!apiKey || apiKey.length > 1_024) {
-    throw new SourceError(
-      "Enter a Jellyfin API key.",
-      message("api.message.jellyfinApiKeyRequired"),
-    );
-  }
-  const libraryId =
-    typeof value.libraryId === "string" ? value.libraryId.trim() : "";
-  if (!libraryId) {
-    throw new SourceError(
-      "Choose a Jellyfin library.",
-      message("api.message.jellyfinLibraryMissing"),
-    );
-  }
-  const duplicate = await database.orm.Source.where({
-    kind: "integration",
-    integration,
-    url,
-    externalLibraryId: libraryId,
-  }).first();
-  if (duplicate) {
-    throw new SourceError(
-      "This integration is already a source.",
-      message("api.message.sourceIntegrationDuplicate"),
-    );
-  }
-  let sourceName: string;
-  let selectedLibraryName: string;
-  let selectedLibraryCollectionType: string | null;
+  const configuration = pluginConfiguration(value.configuration);
+  let validated;
   try {
-    const info = await jellyfin.validate(url, apiKey);
-    sourceName = info.name;
-    const libraries = await jellyfin.listLibraries(url, apiKey);
-    const library = libraries.find((item) => item.id === libraryId);
-    if (!library) {
-      throw new SourceError(
-        "Choose an available Jellyfin library.",
-        message("api.message.jellyfinLibraryMissing"),
-      );
-    }
-    selectedLibraryName = library.name;
-    selectedLibraryCollectionType = library.collectionType;
+    validated = await plugins.validateSource(pluginId, configuration);
   } catch (error) {
-    if (error instanceof JellyfinError) {
+    if (error instanceof PluginError) {
+      if (error.code === "not_installed") throw error;
       throw new SourceError(error.message, error.messageDescriptor);
     }
     throw error;
   }
+  const duplicate = await database.orm.Source.where({
+    kind: "plugin",
+    pluginId,
+    pluginSourceIdentity: validated.identity,
+  }).first();
+  if (duplicate) {
+    throw new SourceError(
+      "This plugin source is already configured.",
+      message("api.message.sourcePluginDuplicate"),
+    );
+  }
   const source = await database.orm.Source.create({
     kind,
-    name: name || selectedLibraryName || sourceName,
-    url,
-    integration,
-    externalLibraryId: libraryId,
-    externalLibraryCollectionType: selectedLibraryCollectionType,
-    credentialCiphertext: credentials.encrypt(apiKey, "source"),
+    name: name || validated.name,
+    pluginId,
+    pluginSourceIdentity: validated.identity,
+    configuration: JSON.stringify(validated.configuration),
+    ...(Object.keys(validated.credentials).length
+      ? {
+          credentialCiphertext: credentials.encrypt(
+            JSON.stringify(validated.credentials),
+            "source",
+          ),
+        }
+      : {}),
     position,
   });
   return toSourceResponse(source);
 }
 
-export async function listJellyfinLibraries(
-  jellyfin: JellyfinClient,
+export async function discoverPluginSources(
+  plugins: PluginService,
+  pluginId: string,
   body: unknown,
-): Promise<JellyfinLibraryResponse[]> {
-  const value = (body ?? {}) as { url?: unknown; apiKey?: unknown };
-  const url = normalizeIntegrationUrl(value.url);
-  if (!url) {
-    throw new SourceError(
-      "Enter a valid Jellyfin server URL.",
-      message("api.message.jellyfinUrlInvalid"),
-    );
-  }
-  const apiKey = typeof value.apiKey === "string" ? value.apiKey.trim() : "";
-  if (!apiKey || apiKey.length > 1_024) {
-    throw new SourceError(
-      "Enter a Jellyfin API key.",
-      message("api.message.jellyfinApiKeyRequired"),
-    );
-  }
+): Promise<PluginSourceOptionResponse[]> {
+  const value = (body ?? {}) as { configuration?: unknown };
+  const configuration = pluginConfiguration(value.configuration);
   try {
-    return await jellyfin.listLibraries(url, apiKey);
+    return await plugins.discoverSources(pluginId, configuration);
   } catch (error) {
-    if (error instanceof JellyfinError) {
+    if (error instanceof PluginError) {
+      if (error.code === "not_installed" || error.code === "plugin_disabled") {
+        throw error;
+      }
       throw new SourceError(error.message, error.messageDescriptor);
     }
     throw error;
@@ -336,28 +329,6 @@ function normalizeSourceUrl(value: unknown): string | null {
   }
   if (!["http:", "https:"].includes(url.protocol) || !url.hostname) return null;
   if (url.username || url.password) return null;
-  return url.toString();
-}
-
-function normalizeIntegrationUrl(value: unknown): string | null {
-  if (typeof value !== "string" || !value.trim()) return null;
-  let url: URL;
-  try {
-    url = new URL(value.trim());
-  } catch {
-    return null;
-  }
-  if (
-    !["http:", "https:"].includes(url.protocol) ||
-    !url.hostname ||
-    url.username ||
-    url.password ||
-    url.search ||
-    url.hash
-  ) {
-    return null;
-  }
-  url.pathname = `${url.pathname.replace(/\/+$/, "")}/`;
   return url.toString();
 }
 

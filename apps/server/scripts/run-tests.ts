@@ -14,14 +14,24 @@ try {
   });
 
   const testDirectory = path.resolve(process.cwd(), "test");
+  const requestedFiles = new Set(
+    (process.env.PERIDOT_TEST_FILES ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
+  );
   const testFiles = (await readdir(testDirectory))
-    .filter((entry) => entry.endsWith(".test.ts"))
+    .filter(
+      (entry) =>
+        entry.endsWith(".test.ts") &&
+        (!requestedFiles.size || requestedFiles.has(entry)),
+    )
     .sort()
     .map((entry) => path.join(testDirectory, entry));
 
   const child = spawn(
     process.execPath,
-    ["--import", "tsx", "--test", ...testFiles],
+    ["--import", "tsx", "--test", ...process.argv.slice(2), ...testFiles],
     {
       cwd: process.cwd(),
       env: {
@@ -39,3 +49,5 @@ try {
 } finally {
   await rm(root, { recursive: true, force: true });
 }
+
+process.exit(process.exitCode ?? 0);

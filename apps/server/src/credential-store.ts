@@ -12,6 +12,7 @@ const CREDENTIAL_AAD = {
     "peridot-metadata-provider-credential:v1",
     "utf8",
   ),
+  plugin: Buffer.from("peridot-plugin-credential:v1", "utf8"),
   source: Buffer.from("peridot-source-credential:v1", "utf8"),
 } as const;
 
@@ -19,6 +20,7 @@ export type CredentialPurpose = keyof typeof CREDENTIAL_AAD;
 
 export interface StoredCredentialCiphertexts {
   metadataProvider: readonly string[];
+  plugin: readonly string[];
   source: readonly string[];
 }
 
@@ -144,17 +146,23 @@ export class CredentialStore {
     storedCredentials: readonly string[] | StoredCredentialCiphertexts = [],
   ): Promise<CredentialStore> {
     const groups: StoredCredentialCiphertexts = Array.isArray(storedCredentials)
-      ? { metadataProvider: storedCredentials, source: [] }
+      ? {
+          metadataProvider: storedCredentials,
+          plugin: [],
+          source: [],
+        }
       : (storedCredentials as StoredCredentialCiphertexts);
     const storedCredentialCount =
-      groups.metadataProvider.length + groups.source.length;
+      groups.metadataProvider.length +
+      groups.plugin.length +
+      groups.source.length;
     if (encodedKey) {
       const store = new CredentialStore(encodedKey);
       try {
         store.validateStoredCredentials(groups);
       } catch {
         throw new CredentialStoreError(
-          "PERIDOT_CREDENTIAL_KEY cannot decrypt the existing integration credentials.",
+          "PERIDOT_CREDENTIAL_KEY cannot decrypt the existing plugin credentials.",
           503,
         );
       }
@@ -174,7 +182,7 @@ export class CredentialStore {
       store.validateStoredCredentials(groups);
     } catch {
       throw new CredentialStoreError(
-        "The local credential encryption key cannot decrypt the existing integration credentials. Set PERIDOT_CREDENTIAL_KEY to the previous key and restart Peridot once to migrate it.",
+        "The local credential encryption key cannot decrypt the existing plugin credentials. Set PERIDOT_CREDENTIAL_KEY to the previous key and restart Peridot once to migrate it.",
         503,
       );
     }
@@ -199,6 +207,9 @@ export class CredentialStore {
   ): void {
     for (const ciphertext of storedCredentials.metadataProvider) {
       this.decrypt(ciphertext, "metadata-provider");
+    }
+    for (const ciphertext of storedCredentials.plugin) {
+      this.decrypt(ciphertext, "plugin");
     }
     for (const ciphertext of storedCredentials.source) {
       this.decrypt(ciphertext, "source");

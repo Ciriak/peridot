@@ -45,6 +45,12 @@ test("track rows expose a Reka context menu with playback, favorites, offline st
   assert.match(menu, /context\.makeAvailableOffline/);
   assert.match(menu, /context\.removeOfflineCopy/);
   assert.match(menu, /downloadTrack\(props\.track\.id\)/);
+  assert.match(menu, /usePluginProviders\(\)/);
+  assert.match(menu, /fetchSimilarPluginTracks\(/);
+  assert.match(menu, /playCollection\(/);
+  assert.match(menu, /context\.listenSimilar/);
+  assert.match(menu, /v-if="music && similarProviders\.length"/);
+  assert.match(menu, /recommendationMethods\.includes\("similar"\)/);
   assert.match(menu, /context\.goToAlbum/);
   assert.match(menu, /<Icon :icon="icons\.album" aria-hidden="true" \/>/);
   assert.match(menu, /context\.goToArtist/);

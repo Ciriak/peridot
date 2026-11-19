@@ -20,7 +20,8 @@ function createdAt(task: TaskResponse): number {
 function taskKindPriority(task: TaskResponse): number {
   if (task.kind === "library_scan") return 0;
   if (task.kind === "metadata_fetch") return 1;
-  if (task.kind === "artwork_fetch") return 2;
+  if (task.kind === "catalog_fetch") return 2;
+  if (task.kind === "artwork_fetch") return 3;
   return 1;
 }
 

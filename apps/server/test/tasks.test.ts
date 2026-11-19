@@ -228,7 +228,7 @@ test("task service runs FIFO, coalesces queued duplicates, and reports progress"
   }
 });
 
-test("scans and metadata matching run before queued artwork retrieval", async () => {
+test("scans, metadata, and catalog projection run before artwork retrieval", async () => {
   const context = await createTestContext();
   await context.app.close();
   const tasks = new TaskService(context.database);
@@ -243,6 +243,10 @@ test("scans and metadata matching run before queued artwork retrieval", async ()
     events.push(`finish:${task.kind}`);
   });
   tasks.registerExecutor("metadata_fetch", async (task) => {
+    events.push(`start:${task.kind}`);
+    events.push(`finish:${task.kind}`);
+  });
+  tasks.registerExecutor("catalog_fetch", async (task) => {
     events.push(`start:${task.kind}`);
     events.push(`finish:${task.kind}`);
   });
@@ -266,15 +270,22 @@ test("scans and metadata matching run before queued artwork retrieval", async ()
       kind: "metadata_fetch",
       title: "Metadata",
     });
+    const catalog = await tasks.enqueue({
+      kind: "catalog_fetch",
+      title: "Catalog",
+    });
 
     releaseScan();
     await waitForStatus(tasks, metadata.id, "completed");
+    await waitForStatus(tasks, catalog.id, "completed");
     await waitForStatus(tasks, artwork.id, "completed");
     assert.deepEqual(events, [
       "start:library_scan",
       "finish:library_scan",
       "start:metadata_fetch",
       "finish:metadata_fetch",
+      "start:catalog_fetch",
+      "finish:catalog_fetch",
       "start:artwork_fetch",
       "finish:artwork_fetch",
     ]);

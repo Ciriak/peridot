@@ -26,29 +26,14 @@ test("audiobook file and release metadata is classified as an audiobook", () => 
   }
 });
 
-test("Jellyfin item and library metadata is classified with Jellyfin provenance", () => {
-  assert.deepEqual(detectMediaType({ jellyfinItemType: "AudioBook" }), {
-    mediaType: "audiobook",
-    origin: "jellyfin",
-  });
-  assert.deepEqual(
-    detectMediaType({ jellyfinLibraryCollectionType: "books" }),
-    { mediaType: "audiobook", origin: "jellyfin" },
-  );
-  assert.deepEqual(detectMediaType({ jellyfinTags: ["Podcast"] }), {
-    mediaType: "podcast",
-    origin: "jellyfin",
-  });
-});
-
 test("podcast evidence wins when other audiobook evidence is also present", () => {
   assert.deepEqual(
     detectMediaType({
       extension: ".m4b",
-      jellyfinLibraryCollectionType: "books",
-      jellyfinTags: ["podcast"],
+      releaseTypes: ["Audiobook"],
+      podcast: true,
     }),
-    { mediaType: "podcast", origin: "jellyfin" },
+    { mediaType: "podcast", origin: "embedded" },
   );
 });
 

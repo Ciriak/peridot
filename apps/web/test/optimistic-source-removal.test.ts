@@ -8,12 +8,11 @@ function source(id: string): SourceResponse {
   return {
     id,
     kind: "path",
-    externalLibraryCollectionType: null,
     name: id,
     path: `/music/${id}`,
     url: null,
-    integration: null,
-    externalLibraryId: null,
+    pluginId: null,
+    configuration: null,
     fileCount: 0,
     lastSyncedAt: null,
   };

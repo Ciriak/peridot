@@ -938,7 +938,9 @@ test("members can replace and revert a manual metadata match", async () => {
       url: "/api/tracks",
       headers: member,
     });
-    const track = tracks.json<{ items: Array<{ id: string }> }>().items[0]!;
+    assert.equal(tracks.statusCode, 200, tracks.body);
+    const track = tracks.json<{ items: Array<{ id: string }> }>().items[0];
+    assert.ok(track, tracks.body);
 
     const candidates = await context.app.inject({
       method: "GET",

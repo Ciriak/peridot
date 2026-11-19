@@ -1,5 +1,92 @@
 # Decisions
 
+## 2026-11-19: OpenAPI documentation is generated from Fastify routes
+
+The server exposes an automatically generated OpenAPI 3.1 document at
+`/api/openapi.json`, a YAML equivalent at `/api/openapi.yaml`, and bundled
+Swagger UI at `/api/docs/`. `@fastify/swagger` discovers the routes at runtime,
+so endpoint additions and path changes cannot silently drift away from the
+published path list.
+
+Detailed route metadata and shared schemas live in `apps/server/src/openapi.ts`
+and are applied through Swagger's route transform. They are intentionally kept
+separate from Fastify's runtime request and response schemas: adding response
+documentation must not introduce response serialization that strips undeclared
+fields. Request and query schemas document the validation already performed by
+the handlers.
+
+The document includes bearer session security, scoped playback and artwork
+token schemes, the single-use realtime ticket, common API error responses, and
+the behaviorally significant binary and WebSocket routes. The documentation
+endpoints are public and contain no credentials. Server tests reject a route
+that falls back to generic metadata and reject dangling schema references.
+
+## 2026-11-19: Jellyfin discovery publishes lightweight catalog batches
+
+Jellyfin requests 100 items per provider page. Core handles those records in
+100-item import batches: it loads existing provider IDs once, bulk-inserts new
+tracks, summaries, and artwork jobs, bulk-updates unchanged tracks, and then
+publishes one catalog revision. The scan does not run the full album, artist,
+search-term, and contribution projection for every remote item before fetching
+the next page.
+
+Each imported or changed track records `catalogProjectionPending`. A durable
+`catalog_fetch` task consumes the pending rows in 100-item batches after the
+library scan. The task is queued as a child of the scan, restarted from persisted
+state when necessary, and ordered after metadata matching and before artwork.
+This keeps title, artist, and album visible immediately while preserving the
+complete catalog projection.
+
+SQLite connections enable WAL and a five-second busy timeout. Reads from the
+catalog can therefore continue while a scan batch commits; transient writer
+contention is retried without retaining partial batch counts.
+
+## 2026-11-19: Plugin enablement is persisted and restart-gated
+
+Plugin installation and enablement are separate lifecycle states. Disabling an
+installed plugin preserves its settings, credentials, sources, tracks, and task
+history while removing its source, provider, and task contributions after the
+server restarts. Re-enabling it restores those contributions on the next start.
+
+The desired enabled state is persisted immediately, but runtime activation is
+snapshotted when the plugin host starts. Plugin responses expose the persisted
+state and whether a restart is pending, and the Settings page shows that state
+without pretending the change has already reached the running server. Uninstall
+remains the destructive lifecycle action and removes runtime activation
+immediately with the plugin's owned data.
+
+The plugin card uses a switch for enablement. Uninstall is kept in the card's
+three-dot actions menu and still requires confirmation.
+
+## 2026-11-18: Non-source plugins use typed service contributions
+
+The plugin host executes recommendation-provider and playlist-generator
+contributions in addition to library sources. Recommendation providers can
+return similar or For You candidates, while playlist generators can create
+prompt- or seed-based transient playlists. Results cross the core boundary as
+exact source ID plus external track ID references; the host resolves those to
+available catalog tracks and reports unmatched entries without title or artist
+guessing.
+
+Non-source plugins store connection settings and encrypted credentials on their
+installation record. Secret values remain server-side. The shared track context
+menu discovers installed, configured providers at runtime, so adding a provider
+does not require another context-menu or route implementation.
+
+Data-processor plugins expose named jobs as validated
+`plugin:<plugin-id>:<task-id>` tasks. The core supplies cancellation, progress,
+persistence, realtime updates, and the existing task UI; plugin code still
+executes only in the trusted server process.
+
+## 2026-11-18: Plugin migration follows the artwork-cache schema
+
+The rebased plugin schema migrates from `dev`'s external artwork-cache contract
+to the merged plugin and artwork contract. The pre-rebase plugin migration
+branched from an older contract, so it was replaced with a linear migration.
+The new migration installs the bundled Jellyfin plugin and copies existing
+Jellyfin source configuration into generic plugin fields before dropping the
+legacy columns.
+
 ## 2026-11-18: Catalog paging uses stable keyset cursors
 
 Track, album, artist, audiobook, and podcast listing cursors use the active
@@ -120,6 +207,28 @@ Stale cursor responses bypass the generic query retry policy. This prevents
 multiple retries of the same known-invalid cursor before the controlled
 first-page recovery runs. Other request failures retain the normal visible
 error path.
+
+## 2026-11-17: Jellyfin is a trusted bundled source plugin
+
+Peridot loads Jellyfin through a generic plugin host backed by
+`@peridot/plugin-sdk`. The Jellyfin package owns protocol-specific discovery,
+configuration validation, scan mapping, media classification evidence, artwork
+requests, and audio proxying. Core owns storage, tasks, catalog projections,
+credentials, HTTP range handling, and plugin lifecycle.
+
+Installation is separate from enablement: administrators can install, enable,
+disable, or uninstall a plugin, and uninstall requires explicit confirmation.
+Jellyfin starts installed and enabled for existing and new databases.
+Uninstalling purges its local sources, tracks, artwork, encrypted credentials,
+task history, and track-linked user state, but never deletes data from the
+Jellyfin server.
+
+Plugin manifests reserve source, display, playlist-generation, and
+data-processing contribution kinds. Only source execution is implemented in
+this milestone. Installation records include source type, locator, and version
+so a future catalog can support GitHub-hosted packages without changing source
+or lifecycle storage. Executable code remains bundled and trusted for now;
+remote packages require a sandboxed runtime and package verification.
 
 ## 2026-11-17: Docker does not run or control Watchtower
 
@@ -244,8 +353,10 @@ exposed through the structured Settings reader.
 
 Android launcher icons use `#121312` as an opaque background across legacy and
 adaptive icon paths. The green Peridot mark retains its source artwork margin
-inside that canvas and is centered and rendered at 80% of its earlier source
-scale, leaving roughly 28% canvas padding at the artwork's narrowest side.
+inside that canvas and is centered and rendered at 70% of its original source
+scale, leaving roughly 30% canvas padding at the artwork's narrowest side. The
+additional inset keeps the mark clear of curved launcher masks without making
+the legacy square mark visually undersized.
 
 Legacy square and circular launcher PNGs contain the background themselves.
 Adaptive icons use the `ic_launcher_background` color resource and a transparent

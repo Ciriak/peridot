@@ -2,17 +2,23 @@ import Fastify, { LogController } from "fastify";
 import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
 import type { HealthResponse } from "@peridot/contracts";
+import type { PluginDefinition } from "@peridot/plugin-sdk";
+import { createJellyfinPlugin } from "@peridot/plugin-jellyfin";
 import { registerAuthRoutes, registerProtectedRoutes } from "./auth.js";
 import { ArtworkCache } from "./artwork-cache.js";
 import { CatalogService } from "./catalog.js";
 import { registerCatalogRoutes } from "./catalog-routes.js";
 import { loadServerConfig, type ServerConfig } from "./config.js";
 import { CredentialStore } from "./credential-store.js";
-import { createDatabase, type Database } from "./database.js";
+import {
+  configureDatabase,
+  createDatabase,
+  type Database,
+} from "./database.js";
 import { DiscogsClient, DiscogsResolver } from "./discogs.js";
-import { JellyfinClient } from "./jellyfin.js";
 import { registerLibraryRoutes } from "./library-routes.js";
 import { registerLikeRoutes } from "./like-routes.js";
+import { registerOpenApi, registerOpenApiRoutes } from "./openapi.js";
 import { registerPlaylistRoutes } from "./playlist-routes.js";
 import { LibraryScanner } from "./library-scanner.js";
 import { registerLocalDiscoveryRoute } from "./local-discovery.js";
@@ -29,8 +35,10 @@ import {
 } from "./playback-tokens.js";
 import { registerAdminRoutes } from "./admin-routes.js";
 import { ArtworkService, hasPendingArtworkJobs } from "./artwork-fetch.js";
+import { PluginService } from "./plugins.js";
+import { registerPluginRoutes } from "./plugin-routes.js";
 import { registerTaskRoutes } from "./task-routes.js";
-import { queueArtworkFetch, TaskService } from "./tasks.js";
+import { queueArtworkFetch, queueCatalogFetch, TaskService } from "./tasks.js";
 import { ensureServerSettings } from "./server-settings.js";
 import { SourceRefreshScheduler } from "./source-refresh-scheduler.js";
 import { ensureDefaultSource } from "./sources.js";
@@ -58,8 +66,7 @@ export interface BuildAppOptions {
   metadataRequestIntervalMs?: number;
   discogsFetch?: typeof fetch;
   discogsRequestIntervalMs?: number;
-  jellyfinFetch?: typeof fetch;
-  jellyfinRequestTimeoutMs?: number;
+  plugins?: readonly PluginDefinition[];
   enableSourceRefreshScheduler?: boolean;
   enableUpdateCheckScheduler?: boolean;
   updateCheckSchedulerOptions?: UpdateCheckSchedulerOptions;
@@ -82,6 +89,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
     );
   const database = options.database ?? createDatabase(config.databaseUrl);
   const ownsDatabase = options.database === undefined;
+  await configureDatabase(database);
   const artworkCache = new ArtworkCache(config.databaseUrl);
   let credentials: CredentialStore;
   try {
@@ -99,11 +107,19 @@ export async function buildApp(options: BuildAppOptions = {}) {
     ).flatMap((source) =>
       source.credentialCiphertext ? [source.credentialCiphertext] : [],
     );
+    const pluginCredentials = (
+      await database.orm.PluginInstallation.where((plugin) =>
+        plugin.credentialCiphertext.isNotNull(),
+      ).all()
+    ).flatMap((plugin) =>
+      plugin.credentialCiphertext ? [plugin.credentialCiphertext] : [],
+    );
     credentials = await CredentialStore.fromConfig(
       config.credentialEncryptionKey,
       config.databaseUrl,
       {
         metadataProvider: metadataProviderCredentials,
+        plugin: pluginCredentials,
         source: sourceCredentials,
       },
     );
@@ -133,9 +149,10 @@ export async function buildApp(options: BuildAppOptions = {}) {
       ),
     );
   const playbackTokens = new PlaybackTokenService();
-  const jellyfin = new JellyfinClient(
-    options.jellyfinFetch ?? fetch,
-    options.jellyfinRequestTimeoutMs,
+  const plugins = new PluginService(
+    database,
+    credentials,
+    options.plugins ?? [createJellyfinPlugin()],
   );
   const catalog = new CatalogService(database, playbackTokens);
   const realtime = new RealtimeHub(database);
@@ -149,9 +166,8 @@ export async function buildApp(options: BuildAppOptions = {}) {
   );
   const artworkService = new ArtworkService(
     database,
-    jellyfin,
+    plugins,
     catalog,
-    credentials,
     artworkCache,
   );
   const logBuffer =
@@ -167,12 +183,12 @@ export async function buildApp(options: BuildAppOptions = {}) {
     (task) => realtime.publishTask(task),
     (level, message) => logBuffer.add(level, message),
   );
+  plugins.registerTaskExecutors(tasks);
   const scanner = new LibraryScanner(
     database,
     metadataEnrichment,
     catalog,
-    jellyfin,
-    credentials,
+    plugins,
     artworkCache,
   );
   tasks.registerExecutor("library_scan", (task, taskService, signal) =>
@@ -180,6 +196,9 @@ export async function buildApp(options: BuildAppOptions = {}) {
   );
   tasks.registerExecutor("metadata_fetch", (task, taskService, signal) =>
     metadataEnrichment.runTask(task, taskService, signal),
+  );
+  tasks.registerExecutor("catalog_fetch", (task, taskService, signal) =>
+    catalog.runTask(task, taskService, signal),
   );
   tasks.registerExecutor("artwork_fetch", (task, taskService, signal) =>
     artworkService.runTask(task, taskService, signal),
@@ -193,6 +212,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
         : { stream: logBuffer.stream, level: "debug" },
     logController: new LogController({ disableRequestLogging: true }),
   });
+  await registerOpenApi(app);
   let backfillImmediate: ReturnType<typeof setImmediate> | undefined;
   app.addHook("onListen", async () => {
     if (options.enableUpdateCheckScheduler ?? false) {
@@ -253,6 +273,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
   await logBuffer.loadPersistedHistory();
   await ensureDefaultSource(database, config.libraryRoot);
   await ensureDefaultMetadataProvider(database);
+  await plugins.initialize();
   await tasks.initialize();
   const sourceRefreshScheduler = new SourceRefreshScheduler(
     database,
@@ -262,6 +283,9 @@ export async function buildApp(options: BuildAppOptions = {}) {
   await sourceRefreshScheduler.initialize(
     options.enableSourceRefreshScheduler ?? false,
   );
+  if (await catalog.hasPendingProjection()) {
+    await queueCatalogFetch(tasks);
+  }
   if (await hasPendingArtworkJobs(database, null)) {
     await queueArtworkFetch(tasks);
   }
@@ -275,11 +299,11 @@ export async function buildApp(options: BuildAppOptions = {}) {
         database,
         tasks,
         playbackTokens,
-        jellyfin,
-        credentials,
         artworkCache,
+        plugins,
       );
       await registerCatalogRoutes(protectedApp, catalog, artworkCache);
+      await registerPluginRoutes(protectedApp, database, plugins, catalog);
       await registerTaskRoutes(protectedApp, tasks);
       await registerLikeRoutes(protectedApp, database);
       await registerPlaylistRoutes(protectedApp, database, playbackTokens);
@@ -300,7 +324,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
           }
         },
         options.restartServer,
-        jellyfin,
+        plugins,
         catalog,
         sourceRefreshScheduler,
         updateService,
@@ -310,6 +334,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
     (request) => playbackTokens.authorizeRequest(request.method, request.url),
     (sessionId) => realtime.disconnectSession(sessionId),
   );
+  await registerOpenApiRoutes(app);
   if (options.webRoot) {
     await registerWebApplication(app, { webRoot: options.webRoot });
   }

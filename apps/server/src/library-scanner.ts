@@ -1,7 +1,13 @@
 import path from "node:path";
-import { and, or } from "@prisma/orm-sqlite/orm-client";
+import { or } from "@prisma/orm-sqlite/orm-client";
 import type { TrackMediaTypeOrigin } from "@peridot/contracts";
 import { pruneReferencedArtwork, type ArtworkCache } from "./artwork-cache.js";
+import {
+  PluginError,
+  type PluginSourceAdapter,
+  type PluginSourceHandle,
+  type PluginTrackRecord,
+} from "@peridot/plugin-sdk";
 import {
   normalizeArtistCredits,
   normalizeOptionalArtistCredits,
@@ -13,25 +19,17 @@ import {
   syncArtworkJob,
 } from "./artwork-fetch.js";
 import type { CatalogService } from "./catalog.js";
-import type { CredentialStore } from "./credential-store.js";
 import type { Database } from "./database.js";
 import { serializeGenres } from "./genres.js";
-import {
-  JellyfinClient,
-  JellyfinError,
-  type JellyfinAudioItem,
-} from "./jellyfin.js";
 import type { MetadataEnrichment } from "./metadata-enrichment.js";
-import {
-  detectMediaType,
-  type DetectedMediaType,
-} from "./media-classification.js";
+import { detectMediaType } from "./media-classification.js";
 import {
   collectionFallbackTitle,
   mediaType,
   parsePublishedAt,
 } from "./media.js";
 import { message } from "./messages.js";
+import type { PluginService } from "./plugins.js";
 import type { SourceRow, TaskRow, TrackRow } from "./prisma/models.js";
 import {
   type ScanWorkerCover,
@@ -41,6 +39,7 @@ import { ScanWorkerPool } from "./scan-worker-pool.js";
 import { readScanWorkerSettings } from "./server-settings.js";
 import {
   queueArtworkFetch,
+  queueCatalogFetch,
   queueMetadataFetch,
   scanDetails,
   TaskExecutionError,
@@ -51,7 +50,7 @@ import {
 const CURRENT_METADATA_VERSION = 8;
 const PROGRESS_WRITE_INTERVAL_MS = 250;
 const EVENT_LOOP_YIELD_INTERVAL_MS = 25;
-const JELLYFIN_PREPARE_CONCURRENCY = 6;
+const IMPORT_BATCH_SIZE = 100;
 
 interface DiscoveredFile {
   absolutePath: string;
@@ -65,18 +64,10 @@ interface SourceFile extends DiscoveredFile {
   sourceId: string;
 }
 
-interface JellyfinSource {
-  id: string;
-  name: string;
-  url: string;
-  apiKey: string;
-  libraryCollectionType: string | null;
-  libraryId: string | null;
-}
-
-interface RemoteSourceItem {
-  source: JellyfinSource;
-  item: JellyfinAudioItem;
+interface PluginSourceWork {
+  source: SourceRow;
+  adapter: PluginSourceAdapter;
+  handle: PluginSourceHandle;
 }
 
 interface ScanCounts {
@@ -110,28 +101,8 @@ type PreparedFile =
       existing: TrackRow | null;
     };
 
-type PreparedRemoteItem =
-  | {
-      kind: "unchanged";
-      remote: RemoteSourceItem;
-      existing: TrackRow;
-    }
-  | {
-      kind: "changed";
-      remote: RemoteSourceItem;
-      existing: TrackRow | null;
-      detected: DetectedMediaType;
-      coverKey: string | null;
-      queueArtwork: boolean;
-    }
-  | {
-      kind: "failed";
-      remote: RemoteSourceItem;
-      existing: TrackRow | null;
-    };
-
 function trackMediaTypeOrigin(value: string): TrackMediaTypeOrigin {
-  return value === "jellyfin" || value === "embedded" ? value : "fallback";
+  return value === "source" || value === "embedded" ? value : "fallback";
 }
 
 function positiveInteger(value: number | null | undefined): number | null {
@@ -197,9 +168,9 @@ function coverImage(cover: ScanWorkerCover | null): CoverImage | null {
     : null;
 }
 
-function remoteCoverKey(item: JellyfinAudioItem): string | null {
-  return item.coverItemId
-    ? externalCoverKey(item.coverItemId, item.coverTag)
+function remoteCoverKey(item: PluginTrackRecord): string | null {
+  return item.cover
+    ? externalCoverKey(item.cover.itemId, item.cover.tag)
     : null;
 }
 
@@ -257,8 +228,7 @@ export class LibraryScanner {
     private readonly database: Database,
     private readonly metadataEnrichment?: MetadataEnrichment,
     private readonly catalog?: CatalogService,
-    private readonly jellyfin?: JellyfinClient,
-    private readonly credentials?: CredentialStore,
+    private readonly plugins?: PluginService,
     private readonly artworkCache?: ArtworkCache,
   ) {}
 
@@ -325,13 +295,7 @@ export class LibraryScanner {
         const source = await this.database.orm.Source.first({
           id: task.sourceId,
         });
-        if (
-          !source ||
-          (source.kind !== "path" &&
-            !(
-              source.kind === "integration" && source.integration === "jellyfin"
-            ))
-        ) {
+        if (!source || (source.kind !== "path" && source.kind !== "plugin")) {
           throw new TaskExecutionError(
             "The selected music source is no longer available.",
             "failed",
@@ -340,24 +304,25 @@ export class LibraryScanner {
         }
         requestedSource = source;
       }
-      const sourceQuery = this.database.orm.Source;
+      const sourceQuery = this.database.orm.Source.orderBy([
+        (source) => source.position.asc(),
+        (source) => source.createdAt.asc(),
+      ]);
+      const installedPlugins = new Set(
+        (await this.plugins?.installedDefinitions())?.map(
+          (definition) => definition.manifest.id,
+        ) ?? [],
+      );
       const sources = requestedSource
         ? [requestedSource]
-        : await sourceQuery
-            .where((source) =>
-              or(
-                source.kind.eq("path"),
-                and(
-                  source.kind.eq("integration"),
-                  source.integration.eq("jellyfin"),
-                ),
-              ),
-            )
-            .orderBy([
-              (source) => source.position.asc(),
-              (source) => source.createdAt.asc(),
-            ])
-            .all();
+        : (await sourceQuery.all()).filter(
+            (source) =>
+              source.kind === "path" ||
+              (source.kind === "plugin" &&
+                Boolean(
+                  source.pluginId && installedPlugins.has(source.pluginId),
+                )),
+          );
       if (sources.length === 0) {
         throw new TaskExecutionError(
           "No music library sources are configured.",
@@ -370,7 +335,7 @@ export class LibraryScanner {
         (requestedSource ? task.sourceName : null) ||
         "All sources";
       const files: SourceFile[] = [];
-      const jellyfinSources: JellyfinSource[] = [];
+      const pluginSources: PluginSourceWork[] = [];
       for (const source of sources) {
         throwIfAborted(signal);
         if (source.kind === "path") {
@@ -394,39 +359,29 @@ export class LibraryScanner {
           }
           continue;
         }
-        if (
-          !this.jellyfin ||
-          !this.credentials ||
-          source.integration !== "jellyfin" ||
-          !source.url ||
-          !source.credentialCiphertext
-        ) {
+        if (!this.plugins || source.kind !== "plugin" || !source.pluginId) {
           throw new TaskExecutionError(
-            "The selected Jellyfin source is not fully configured.",
+            "The selected plugin source is not fully configured.",
             "failed",
             message("api.message.sourceUnavailable"),
           );
         }
-        const apiKey = this.credentials.decrypt(
-          source.credentialCiphertext,
-          "source",
-        );
-        const remoteSource: JellyfinSource = {
-          id: source.id,
-          name:
-            source.name ||
-            task.sourceName ||
-            new URL(source.url).host ||
-            "Jellyfin",
-          url: source.url,
-          apiKey,
-          libraryCollectionType: source.externalLibraryCollectionType,
-          libraryId: source.externalLibraryId,
-        };
-        jellyfinSources.push(remoteSource);
+        const adapter = await this.plugins.sourceAdapter(source);
+        if (!adapter) {
+          throw new TaskExecutionError(
+            "The selected plugin source is not available.",
+            "failed",
+            message("api.message.sourceUnavailable"),
+          );
+        }
+        pluginSources.push({
+          source,
+          adapter,
+          handle: this.plugins.sourceHandle(source),
+        });
       }
       let discoveredCount = files.length;
-      let progressTotal: number | null = jellyfinSources.length
+      let progressTotal: number | null = pluginSources.length
         ? null
         : discoveredCount;
       let processedItems = 0;
@@ -477,23 +432,17 @@ export class LibraryScanner {
         await updateProgress();
       }
       await updateProgress(true);
-      for (const source of jellyfinSources) {
+      for (const source of pluginSources) {
         throwIfAborted(signal);
         let sourceTotal: number | null = null;
-        if (!this.jellyfin) {
-          throw new TaskExecutionError(
-            "The selected Jellyfin source is not available.",
-            "failed",
-            message("api.message.sourceUnavailable"),
-          );
-        }
-        const remote = await this.jellyfin.listAudio(
-          source.url,
-          source.apiKey,
-          source.libraryId,
-          async (page) => {
+        let sourceProcessed = 0;
+        await source.adapter.scan({
+          source: source.handle,
+          signal,
+          onPage: async (page) => {
             throwIfAborted(signal);
             sourceTotal = page.totalCount ?? sourceTotal;
+            sourceProcessed = page.processedCount;
             unsupportedCount += page.unsupportedCount;
             processedItems += page.unsupportedCount;
             discoveredCount =
@@ -503,25 +452,31 @@ export class LibraryScanner {
             progressTotal = discoveredCount;
             await updateProgress(true);
 
-            for await (const prepared of this.prepareRemoteItems(
-              page.items.map((item) => ({ source, item })),
-              signal,
-            )) {
-              throwIfAborted(signal);
-              await this.applyPreparedRemoteItem(prepared, task.id, counts);
-              processedItems += 1;
-              if (shouldYield(lastYieldAt)) {
-                await yieldToEventLoop();
-                lastYieldAt = Date.now();
-              }
-              await updateProgress();
+            for (
+              let offset = 0;
+              offset < page.items.length;
+              offset += IMPORT_BATCH_SIZE
+            ) {
+              const batch = page.items.slice(
+                offset,
+                offset + IMPORT_BATCH_SIZE,
+              );
+              await this.applyRemoteBatchWithRetry(
+                batch,
+                source,
+                task.id,
+                counts,
+                signal,
+              );
+              processedItems += batch.length;
+              lastYieldAt = Date.now();
+              await yieldToEventLoop();
+              await updateProgress(true);
             }
             await updateProgress(true);
           },
-          signal,
-        );
-        completedRemoteTotal +=
-          sourceTotal ?? remote.totalCount ?? remote.processedCount;
+        });
+        completedRemoteTotal += sourceTotal ?? sourceProcessed;
         discoveredCount = files.length + completedRemoteTotal;
       }
       throwIfAborted(signal);
@@ -538,19 +493,48 @@ export class LibraryScanner {
           or(track.lastSeenScanId.isNull(), track.lastSeenScanId.neq(task.id)),
         )
         .all();
-      for (const track of unavailableTracks) {
-        await this.database.orm.Track.where({ id: track.id }).update({
-          available: 0,
+      for (
+        let offset = 0;
+        offset < unavailableTracks.length;
+        offset += IMPORT_BATCH_SIZE
+      ) {
+        const batch = unavailableTracks.slice(
+          offset,
+          offset + IMPORT_BATCH_SIZE,
+        );
+        await this.database.transaction(async (transaction) => {
+          for (const track of batch) {
+            await transaction.orm.Track.where({ id: track.id }).update({
+              available: 0,
+              catalogProjectionPending: 1,
+            });
+            await transaction.orm.CatalogTrack.where({ id: track.id }).update({
+              available: 0,
+              albumId: null,
+            });
+            await transaction.orm.ArtworkJob.where({
+              trackId: track.id,
+            }).deleteAndCount();
+          }
         });
-        await this.database.orm.ArtworkJob.where({
-          trackId: track.id,
-        }).deleteAndCount();
-        await this.catalog?.reindexTrack(track.id, "scan");
-        if (shouldYield(lastYieldAt)) {
-          await yieldToEventLoop();
-          lastYieldAt = Date.now();
+        if (this.catalog) {
+          await this.catalog.markScanBatchChanged(requestedSource?.id ?? null);
         }
+        await yieldToEventLoop();
       }
+      const unavailableCount = (
+        await this.database.orm.Track.where({ available: 0 })
+          .where((track) =>
+            track.sourceId.in(sources.map((source) => source.id)),
+          )
+          .where((track) =>
+            or(
+              track.lastSeenScanId.isNull(),
+              track.lastSeenScanId.neq(task.id),
+            ),
+          )
+          .all()
+      ).length;
       const syncedAt = new Date();
       for (const source of sources) {
         await this.database.orm.Source.where({ id: source.id }).update({
@@ -566,6 +550,19 @@ export class LibraryScanner {
         .first();
       if (this.metadataEnrichment && musicTrack) {
         await queueMetadataFetch(tasks, {
+          source: requestedSource
+            ? {
+                id: requestedSource.id,
+                name: requestedSource.name || "Library source",
+              }
+            : null,
+          parentTaskId: task.id,
+        });
+      }
+      if (
+        await this.catalog?.hasPendingProjection(requestedSource?.id ?? null)
+      ) {
+        await queueCatalogFetch(tasks, {
           source: requestedSource
             ? {
                 id: requestedSource.id,
@@ -596,7 +593,7 @@ export class LibraryScanner {
           created: counts.createdCount,
           updated: counts.updatedCount,
           unchanged: counts.unchangedCount,
-          unavailable: unavailableTracks.length,
+          unavailable: unavailableCount,
           errors: counts.errorCount + unsupportedCount,
         }),
       };
@@ -609,7 +606,7 @@ export class LibraryScanner {
         );
       }
       if (error instanceof TaskExecutionError) throw error;
-      if (error instanceof JellyfinError) {
+      if (error instanceof PluginError) {
         throw new TaskExecutionError(
           error.message,
           "failed",
@@ -782,209 +779,243 @@ export class LibraryScanner {
     }
   }
 
-  private async *prepareRemoteItems(
-    remoteItems: readonly RemoteSourceItem[],
+  private async applyRemoteBatch(
+    items: readonly PluginTrackRecord[],
+    source: PluginSourceWork,
+    scanId: string,
+    counts: ScanCounts,
     signal: AbortSignal,
-  ): AsyncGenerator<PreparedRemoteItem> {
-    let nextIndex = 0;
-    const pending = new Map<number, Promise<PreparedRemoteItem>>();
-    while (nextIndex < remoteItems.length || pending.size) {
-      throwIfAborted(signal);
-      let startedAny = false;
-      while (
-        nextIndex < remoteItems.length &&
-        pending.size < JELLYFIN_PREPARE_CONCURRENCY
-      ) {
-        const index = nextIndex;
-        const remote = remoteItems[nextIndex++];
-        if (!remote) break;
-        pending.set(index, this.prepareRemoteItem(remote, signal));
-        startedAny = true;
-      }
-      if (startedAny) await yieldToEventLoop();
-      if (!pending.size) break;
-      const completed = await Promise.race(
-        [...pending].map(async ([index, promise]) => ({
-          index,
-          prepared: await promise,
-        })),
-      );
-      pending.delete(completed.index);
-      yield completed.prepared;
-      if (signal.aborted) return;
-    }
-  }
-
-  private async prepareRemoteItem(
-    remote: RemoteSourceItem,
-    signal: AbortSignal,
-  ): Promise<PreparedRemoteItem> {
-    const { source, item } = remote;
-    let existing: TrackRow | null = null;
-    try {
-      throwIfAborted(signal);
-      existing = await this.database.orm.Track.where({
-        sourceId: source.id,
-        externalId: item.externalId,
-      }).first();
-      const detected = detectMediaType({
-        jellyfinItemType: item.jellyfinItemType,
-        jellyfinLibraryCollectionType: source.libraryCollectionType,
-        jellyfinTags: item.jellyfinTags,
-        jellyfinProviderIds: item.jellyfinProviderIds,
-      });
+  ): Promise<void> {
+    throwIfAborted(signal);
+    if (!items.length) return;
+    const existingTracks = await this.database.orm.Track.where({
+      sourceId: source.source.id,
+    })
+      .where((track) =>
+        track.externalId.in(items.map((item) => item.externalId)),
+      )
+      .all();
+    const existingByExternalId = new Map(
+      existingTracks.flatMap((track) =>
+        track.externalId ? [[track.externalId, track] as const] : [],
+      ),
+    );
+    const unchanged: Array<{
+      track: TrackRow;
+      coverKey: string | null;
+    }> = [];
+    const changed: Array<{
+      item: PluginTrackRecord;
+      track: TrackRow;
+      coverKey: string | null;
+      queueArtwork: boolean;
+    }> = [];
+    const created: PluginTrackRecord[] = [];
+    for (const item of items) {
+      const existing = existingByExternalId.get(item.externalId) ?? null;
       const coverKey = remoteCoverKey(item);
-      const unchanged =
-        existing?.externalVersion === item.externalVersion &&
-        existing.metadataVersion >= CURRENT_METADATA_VERSION &&
-        mediaType(existing.mediaType) === detected.mediaType &&
-        trackMediaTypeOrigin(existing.mediaTypeOrigin) === detected.origin;
-      if (existing && unchanged) {
-        return { kind: "unchanged", remote, existing };
+      if (!existing) {
+        created.push(item);
+        continue;
       }
-
+      const isUnchanged =
+        existing.externalVersion === item.externalVersion &&
+        existing.metadataVersion >= CURRENT_METADATA_VERSION &&
+        mediaType(existing.mediaType) === item.mediaType &&
+        trackMediaTypeOrigin(existing.mediaTypeOrigin) === item.mediaTypeOrigin;
+      if (isUnchanged) {
+        unchanged.push({ track: existing, coverKey });
+        continue;
+      }
       const existingCoverUsable = Boolean(
-        existing?.coverId &&
+        existing.coverId &&
         (existing.externalCoverKey === null ||
           existing.externalCoverKey === coverKey),
       );
-      return {
-        kind: "changed",
-        remote,
-        existing,
-        detected,
+      changed.push({
+        item,
+        track: existing,
         coverKey,
         queueArtwork: Boolean(coverKey && !existingCoverUsable),
+      });
+    }
+    const trackDataFor = (item: PluginTrackRecord, coverId: string | null) => {
+      const coverKey = remoteCoverKey(item);
+      const artistCredits = normalizeArtistCredits(
+        item.artists.length ? item.artists : ["Unknown artist"],
+      );
+      const itemAlbumArtists = normalizeOptionalArtistCredits(
+        item.albumArtists,
+      );
+      const albumArtists =
+        item.mediaType !== "music" && itemAlbumArtists.length === 0
+          ? artistCredits
+          : itemAlbumArtists;
+      return {
+        mediaType: item.mediaType,
+        mediaTypeOrigin: item.mediaTypeOrigin,
+        relativePath: item.relativePath,
+        title: item.title,
+        artist: artistCredits.join(", "),
+        artistCredits: serializeArtistCredits(artistCredits),
+        albumArtist: albumArtists.length ? albumArtists.join(", ") : null,
+        albumArtistCredits: albumArtists.length
+          ? JSON.stringify(albumArtists)
+          : null,
+        album: item.album,
+        genres: serializeGenres(item.genres),
+        discNumber: item.discNumber,
+        trackNumber: item.trackNumber,
+        durationMs: item.durationMs,
+        publishedAt: item.publishedAt ?? parsePublishedAt(item.fileModifiedAt),
+        coverId,
+        mimeType: item.mimeType,
+        fileSizeBytes: item.fileSizeBytes,
+        fileModifiedAt: item.fileModifiedAt,
+        externalId: item.externalId,
+        externalVersion: item.externalVersion,
+        externalContainer: item.container,
+        externalCoverKey: coverKey,
+        available: 1,
+        lastSeenScanId: scanId,
+        catalogProjectionPending: 1,
+        metadataVersion: CURRENT_METADATA_VERSION,
       };
-    } catch (error) {
-      if (signal.aborted) throw error;
-      return { kind: "failed", remote, existing };
+    };
+
+    await this.database.transaction(async (transaction) => {
+      if (unchanged.length) {
+        await transaction.orm.Track.where((track) =>
+          track.id.in(unchanged.map(({ track }) => track.id)),
+        ).update({
+          available: 1,
+          lastSeenScanId: scanId,
+        });
+      }
+      for (const { track, coverKey } of unchanged) {
+        throwIfAborted(signal);
+        const wasUnavailable = !track.available;
+        const update = {
+          ...(wasUnavailable ? { catalogProjectionPending: 1 } : {}),
+          ...(track.coverId && track.externalCoverKey === null && coverKey
+            ? { externalCoverKey: coverKey }
+            : {}),
+        };
+        if (Object.keys(update).length) {
+          await transaction.orm.Track.where({ id: track.id }).update(update);
+        }
+        if (wasUnavailable && this.catalog) {
+          await this.catalog.indexTrackSummary(
+            { ...track, available: 1, ...update },
+            transaction,
+          );
+        }
+        counts.unchangedCount += 1;
+      }
+
+      for (const { item, track: existing, coverKey, queueArtwork } of changed) {
+        throwIfAborted(signal);
+        const coverId = coverKey ? (existing.coverId ?? null) : null;
+        const trackData = trackDataFor(item, coverId);
+        await transaction.orm.Track.where({ id: existing.id }).update(
+          trackData,
+        );
+        if (this.catalog) {
+          await this.catalog.indexTrackSummary(
+            { ...existing, ...trackData },
+            transaction,
+          );
+        }
+        if (queueArtwork || !coverKey) {
+          await syncArtworkJob(transaction, {
+            trackId: existing.id,
+            sourceId: source.source.id,
+            externalCoverItemId: queueArtwork
+              ? (item.cover?.itemId ?? null)
+              : null,
+            externalCoverTag: queueArtwork ? (item.cover?.tag ?? null) : null,
+          });
+        }
+        counts.updatedCount += 1;
+      }
+
+      if (created.length) {
+        const rows = created.map((item) => ({
+          ...trackDataFor(item, null),
+          sourceId: source.source.id,
+        }));
+        const inserted = await transaction.query(
+          transaction.sql.Track.insert(rows)
+            .returning("id", "externalId")
+            .build(),
+        );
+        const newIds = inserted.flatMap(({ externalId }) =>
+          externalId ? [externalId] : [],
+        );
+        const newTracks = await transaction.orm.Track.where({
+          sourceId: source.source.id,
+        })
+          .where((track) => track.externalId.in(newIds))
+          .all();
+        if (this.catalog) {
+          await this.catalog.insertTrackSummaries(newTracks, transaction);
+        }
+        const itemByExternalId = new Map(
+          created.map((item) => [item.externalId, item] as const),
+        );
+        const artworkJobs = newTracks.flatMap((track) => {
+          const item = track.externalId
+            ? itemByExternalId.get(track.externalId)
+            : null;
+          return item?.cover
+            ? [
+                {
+                  trackId: track.id,
+                  sourceId: source.source.id,
+                  externalCoverItemId: item.cover.itemId,
+                  externalCoverTag: item.cover.tag,
+                },
+              ]
+            : [];
+        });
+        if (artworkJobs.length) {
+          await transaction.execute(
+            transaction.sql.ArtworkJob.insert(artworkJobs).build(),
+          );
+        }
+        counts.createdCount += newTracks.length;
+      }
+    });
+    if (this.catalog) {
+      await this.catalog.markScanBatchChanged(source.source.id);
     }
   }
 
-  private async applyPreparedRemoteItem(
-    prepared: PreparedRemoteItem,
+  private async applyRemoteBatchWithRetry(
+    items: readonly PluginTrackRecord[],
+    source: PluginSourceWork,
     scanId: string,
     counts: ScanCounts,
+    signal: AbortSignal,
   ): Promise<void> {
-    const { remote } = prepared;
-    const { source, item } = remote;
-    if (prepared.kind === "unchanged") {
-      const wasUnavailable = !prepared.existing.available;
-      const coverKey = remoteCoverKey(item);
-      await this.database.orm.Track.where({ id: prepared.existing.id }).update({
-        available: 1,
-        lastSeenScanId: scanId,
-        ...(prepared.existing.coverId &&
-        prepared.existing.externalCoverKey === null &&
-        coverKey
-          ? { externalCoverKey: coverKey }
-          : {}),
-      });
-      if (wasUnavailable) {
-        await this.catalog?.reindexTrack(prepared.existing.id, "scan");
-      }
-      counts.unchangedCount += 1;
-      return;
-    }
-
-    if (prepared.kind === "failed") {
-      counts.errorCount += 1;
-      if (prepared.existing) {
-        try {
-          await this.database.orm.Track.where({
-            id: prepared.existing.id,
-          }).update({
-            fileSizeBytes: item.fileSizeBytes,
-            fileModifiedAt: item.fileModifiedAt,
-            externalVersion: item.externalVersion,
-            available: 1,
-            lastSeenScanId: scanId,
-          });
-          await this.catalog?.reindexTrack(prepared.existing.id, "scan");
-        } catch {
-          // Preserve the error count when the fallback write also fails.
+    const initial = { ...counts };
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      throwIfAborted(signal);
+      try {
+        await this.applyRemoteBatch(items, source, scanId, counts, signal);
+        return;
+      } catch (error) {
+        Object.assign(counts, initial);
+        if (
+          attempt === 7 ||
+          !(error instanceof Error) ||
+          !/database is locked/i.test(error.message)
+        ) {
+          throw error;
         }
-      }
-      return;
-    }
-
-    const { detected, coverKey, queueArtwork } = prepared;
-    const coverId = coverKey ? (prepared.existing?.coverId ?? null) : null;
-
-    const artistCredits = normalizeArtistCredits(
-      item.artists.length ? item.artists : ["Unknown artist"],
-    );
-    const itemAlbumArtists = normalizeOptionalArtistCredits(item.albumArtists);
-    const albumArtists =
-      detected.mediaType !== "music" && itemAlbumArtists.length === 0
-        ? artistCredits
-        : itemAlbumArtists;
-    const relativePath = `jellyfin/${item.albumId ?? "unknown"}/${item.externalId}`;
-    const trackData = {
-      mediaType: detected.mediaType,
-      mediaTypeOrigin: detected.origin,
-      relativePath,
-      title: item.title,
-      artist: artistCredits.join(", "),
-      artistCredits: serializeArtistCredits(artistCredits),
-      albumArtist: albumArtists.length ? albumArtists.join(", ") : null,
-      albumArtistCredits: albumArtists.length
-        ? JSON.stringify(albumArtists)
-        : null,
-      album: item.album,
-      genres: serializeGenres(item.genres),
-      discNumber: item.discNumber,
-      trackNumber: item.trackNumber,
-      durationMs: item.durationMs,
-      publishedAt: item.publishedAt ?? parsePublishedAt(item.fileModifiedAt),
-      coverId,
-      mimeType: item.mimeType,
-      fileSizeBytes: item.fileSizeBytes,
-      fileModifiedAt: item.fileModifiedAt,
-      externalId: item.externalId,
-      externalVersion: item.externalVersion,
-      externalContainer: item.container,
-      externalCoverKey: coverKey,
-      available: 1,
-      lastSeenScanId: scanId,
-      metadataVersion: CURRENT_METADATA_VERSION,
-    };
-    if (prepared.existing) {
-      await this.database.orm.Track.where({ id: prepared.existing.id }).update(
-        trackData,
-      );
-      await this.catalog?.reindexTrack(prepared.existing.id, "scan");
-      counts.updatedCount += 1;
-      if (queueArtwork) {
-        await syncArtworkJob(this.database, {
-          trackId: prepared.existing.id,
-          sourceId: source.id,
-          externalCoverItemId: item.coverItemId,
-          externalCoverTag: item.coverTag,
-        });
-      } else if (!coverKey) {
-        await syncArtworkJob(this.database, {
-          trackId: prepared.existing.id,
-          sourceId: source.id,
-          externalCoverItemId: null,
-          externalCoverTag: null,
-        });
-      }
-    } else {
-      const created = await this.database.orm.Track.create({
-        ...trackData,
-        sourceId: source.id,
-      });
-      await this.catalog?.reindexTrack(created.id, "scan");
-      counts.createdCount += 1;
-      if (queueArtwork) {
-        await syncArtworkJob(this.database, {
-          trackId: created.id,
-          sourceId: source.id,
-          externalCoverItemId: item.coverItemId,
-          externalCoverTag: item.coverTag,
-        });
+        await new Promise<void>((resolve) =>
+          setTimeout(resolve, 50 * (attempt + 1)),
+        );
       }
     }
   }

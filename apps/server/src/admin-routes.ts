@@ -5,8 +5,7 @@ import type {
   CreateSourceRequest,
   CreateSourceResponse,
   DirectoryListResponse,
-  DiscoverJellyfinLibrariesRequest,
-  JellyfinLibraryListResponse,
+  DiscoverPluginSourcesRequest,
   LogListResponse,
   MetadataProviderDefinitionListResponse,
   MetadataProviderListResponse,
@@ -16,18 +15,24 @@ import type {
   RestartServerResponse,
   ServerSettingsResponse,
   SourceListResponse,
+  TaskResponse,
   UpdateMetadataProviderRequest,
+  UpdatePluginEnabledRequest,
+  UpdatePluginSettingsRequest,
   UpdateServerSettingsRequest,
   UpdateUserRequest,
   UserListResponse,
   UpdateStatusResponse,
+  PluginListResponse,
+  PluginResponse,
+  PluginSourceOptionListResponse,
 } from "@peridot/contracts";
+import { PluginError } from "@peridot/plugin-sdk";
 import type { FastifyInstance } from "fastify";
 import type { CatalogService } from "./catalog.js";
 import type { CredentialStore } from "./credential-store.js";
 import type { Database } from "./database.js";
 import { sendError } from "./http.js";
-import type { JellyfinClient } from "./jellyfin.js";
 import { message } from "./messages.js";
 import type { MetadataEnrichment } from "./metadata-enrichment.js";
 import {
@@ -49,10 +54,11 @@ import {
 } from "./server-settings.js";
 import type { SourceRefreshScheduler } from "./source-refresh-scheduler.js";
 import { UpdateError, type UpdateService } from "./updates.js";
+import type { PluginService } from "./plugins.js";
 import {
   createSource,
+  discoverPluginSources,
   listDirectoryEntries,
-  listJellyfinLibraries,
   listSources,
   reorderSources,
   searchDirectoryEntries,
@@ -83,7 +89,7 @@ export async function registerAdminRoutes(
   metadataCredentials: CredentialStore,
   onSessionsRevoked?: (sessionIds: string[]) => void,
   restartServer?: () => void,
-  jellyfin?: JellyfinClient,
+  plugins?: PluginService,
   catalog?: CatalogService,
   sourceRefreshScheduler?: SourceRefreshScheduler,
   updates?: UpdateService,
@@ -247,20 +253,172 @@ export async function registerAdminRoutes(
       items: await listSources(database),
     }));
 
-    admin.post<{ Body: DiscoverJellyfinLibrariesRequest }>(
-      "/api/admin/integrations/jellyfin/libraries",
+    admin.get("/api/admin/plugins", async (): Promise<PluginListResponse> => {
+      if (!plugins) throw new Error("Plugin service is unavailable.");
+      return plugins.list();
+    });
+
+    admin.put<{
+      Params: { id: string };
+      Body: UpdatePluginSettingsRequest;
+    }>(
+      "/api/admin/plugins/:id/settings",
+      async (request, reply): Promise<PluginResponse | undefined> => {
+        try {
+          if (!plugins) throw new Error("Plugin service is unavailable.");
+          return await plugins.updateSettings(request.params.id, request.body);
+        } catch (error) {
+          if (error instanceof PluginError) {
+            return sendError(
+              reply,
+              error.statusCode,
+              error.code === "plugin_disabled" || error.code === "not_installed"
+                ? error.code
+                : "invalid_plugin",
+              error.message,
+              error.messageDescriptor,
+            );
+          }
+          throw error;
+        }
+      },
+    );
+
+    admin.put<{
+      Params: { id: string };
+      Body: UpdatePluginEnabledRequest;
+    }>(
+      "/api/admin/plugins/:id/enabled",
+      async (request, reply): Promise<PluginResponse | undefined> => {
+        try {
+          if (!plugins) throw new Error("Plugin service is unavailable.");
+          return await plugins.updateEnabled(request.params.id, request.body);
+        } catch (error) {
+          if (error instanceof PluginError) {
+            return sendError(
+              reply,
+              error.statusCode,
+              error.code,
+              error.message,
+              error.messageDescriptor,
+            );
+          }
+          throw error;
+        }
+      },
+    );
+
+    admin.post<{ Params: { id: string; task: string } }>(
+      "/api/admin/plugins/:id/tasks/:task",
+      async (request, reply): Promise<TaskResponse | undefined> => {
+        try {
+          if (!plugins) throw new Error("Plugin service is unavailable.");
+          return reply
+            .code(202)
+            .send(
+              await plugins.enqueueTask(
+                request.params.id,
+                request.params.task,
+                tasks,
+              ),
+            );
+        } catch (error) {
+          if (error instanceof PluginError) {
+            return sendError(
+              reply,
+              error.statusCode,
+              error.code,
+              error.message,
+              error.messageDescriptor,
+            );
+          }
+          throw error;
+        }
+      },
+    );
+
+    admin.post<{ Params: { id: string } }>(
+      "/api/admin/plugins/:id/install",
+      async (request, reply): Promise<PluginResponse | undefined> => {
+        try {
+          if (!plugins) throw new Error("Plugin service is unavailable.");
+          return await plugins.install(request.params.id);
+        } catch (error) {
+          if (error instanceof PluginError) {
+            return sendError(
+              reply,
+              error.statusCode,
+              "invalid_plugin",
+              error.message,
+              error.messageDescriptor,
+            );
+          }
+          throw error;
+        }
+      },
+    );
+
+    admin.post<{
+      Params: { id: string };
+      Body: { confirm?: boolean };
+    }>(
+      "/api/admin/plugins/:id/uninstall",
+      async (request, reply): Promise<PluginResponse | undefined> => {
+        try {
+          if (!plugins || !catalog) {
+            throw new Error("Plugin service is unavailable.");
+          }
+          return await plugins.uninstall(
+            request.params.id,
+            tasks,
+            catalog,
+            request.body?.confirm,
+          );
+        } catch (error) {
+          if (error instanceof PluginError) {
+            return sendError(
+              reply,
+              error.statusCode,
+              "invalid_plugin",
+              error.message,
+              error.messageDescriptor,
+            );
+          }
+          throw error;
+        }
+      },
+    );
+
+    admin.post<{
+      Params: { id: string };
+      Body: DiscoverPluginSourcesRequest;
+    }>(
+      "/api/admin/plugins/:id/sources/discover",
       async (
         request,
         reply,
-      ): Promise<JellyfinLibraryListResponse | undefined> => {
+      ): Promise<PluginSourceOptionListResponse | undefined> => {
         try {
-          if (!jellyfin) {
-            throw new Error("Jellyfin client is unavailable.");
-          }
+          if (!plugins) throw new Error("Plugin service is unavailable.");
           return {
-            items: await listJellyfinLibraries(jellyfin, request.body),
+            items: await discoverPluginSources(
+              plugins,
+              request.params.id,
+              request.body,
+            ),
           };
         } catch (error) {
+          if (error instanceof PluginError) {
+            return sendError(
+              reply,
+              error.statusCode,
+              error.code === "plugin_disabled" || error.code === "not_installed"
+                ? error.code
+                : "invalid_plugin",
+              error.message,
+              error.messageDescriptor,
+            );
+          }
           if (error instanceof SourceError) {
             return sendError(
               reply,
@@ -352,25 +510,22 @@ export async function registerAdminRoutes(
       "/api/admin/sources",
       async (request, reply) => {
         try {
-          if (!jellyfin) {
-            throw new Error("Jellyfin client is unavailable.");
-          }
+          if (!plugins) throw new Error("Plugin service is unavailable.");
           const source = await createSource(
             database,
             request.body,
-            jellyfin,
+            plugins,
             metadataCredentials,
           );
           const task =
-            (source.kind === "path" && source.path) ||
-            (source.kind === "integration" && source.integration === "jellyfin")
+            (source.kind === "path" && source.path) || source.kind === "plugin"
               ? await queueLibraryScan(tasks, {
                   id: source.id,
                   name:
                     source.name ||
                     (source.path
                       ? path.basename(source.path)
-                      : (source.url ?? "Jellyfin")),
+                      : (source.pluginId ?? "Plugin source")),
                 })
               : null;
           const response: CreateSourceResponse = {
@@ -379,6 +534,15 @@ export async function registerAdminRoutes(
           };
           return reply.code(201).send(response);
         } catch (error) {
+          if (error instanceof PluginError) {
+            return sendError(
+              reply,
+              error.statusCode,
+              "invalid_plugin",
+              error.message,
+              error.messageDescriptor,
+            );
+          }
           if (error instanceof SourceError) {
             return sendError(
               reply,
@@ -432,10 +596,7 @@ export async function registerAdminRoutes(
         }
         await tasks.stopForSource(source.id);
         let removedTrackIds: string[] = [];
-        if (
-          source.kind === "integration" &&
-          source.integration === "jellyfin"
-        ) {
+        if (source.kind === "plugin") {
           removedTrackIds = (
             await database.orm.Track.where({
               sourceId: source.id,
@@ -523,20 +684,21 @@ export async function registerAdminRoutes(
         }
         if (
           (source.kind !== "path" || !source.path) &&
-          !(
-            source.kind === "integration" &&
-            source.integration === "jellyfin" &&
-            source.url &&
-            source.credentialCiphertext
-          )
+          source.kind !== "plugin"
         ) {
           return sendError(
             reply,
             400,
             "source_not_rescanable",
-            "Only configured folder and Jellyfin sources can be rescanned.",
+            "Only configured folder and plugin sources can be rescanned.",
             message("api.message.sourceNotRescanable"),
           );
+        }
+        if (source.kind === "plugin") {
+          if (!plugins || !source.pluginId) {
+            throw new Error("Plugin service is unavailable.");
+          }
+          await plugins.requireInstalled(source.pluginId);
         }
         const task = await queueLibraryScan(tasks, {
           id: source.id,
@@ -544,7 +706,7 @@ export async function registerAdminRoutes(
             source.name ||
             (source.path
               ? path.basename(source.path)
-              : (source.url ?? "Jellyfin")),
+              : (source.pluginId ?? "Plugin source")),
         });
         return reply.code(202).send(toTaskResponse(task));
       },

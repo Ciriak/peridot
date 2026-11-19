@@ -81,6 +81,55 @@ test("/settings redirects to account and /plugins redirects into settings", asyn
   assert.match(plugins, /navigateTo\("\/settings\/plugins"/);
 });
 
+test("plugins have install and confirmed uninstall lifecycle controls", async () => {
+  const [page, settings, tasks, client, contracts] = await Promise.all([
+    readSource("../app/pages/settings/plugins.vue"),
+    readSource("../app/components/PluginSettingsForm.vue"),
+    readSource("../app/components/PluginTaskActions.vue"),
+    readSource("../app/lib/peridot-client.ts"),
+    readSource("../../../packages/contracts/src/index.ts"),
+  ]);
+  const actionMenu = page.slice(
+    page.indexOf("<TooltipProvider", page.indexOf("plugin.enabled")),
+    page.indexOf("</TooltipProvider>") + "</TooltipProvider>".length,
+  );
+  assert.match(page, /usePluginsQuery/);
+  assert.match(page, /installPlugin/);
+  assert.match(page, /uninstallPlugin/);
+  assert.match(page, /updatePluginEnabled/);
+  assert.match(page, /settings\.plugins\.restartRequiredHelp/);
+  assert.match(page, /settings\.plugins\.actions/);
+  assert.match(page, /icons\.more/);
+  assert.match(page, /<Switch/);
+  assert.doesNotMatch(page, /<Badge[^>]+plugin\.enabled/);
+  assert.match(
+    page,
+    /plugin\.enabled \? 'text-foreground' : 'text-destructive'/,
+  );
+  assert.match(actionMenu, /DropdownMenuRoot/);
+  assert.match(actionMenu, /settings\.plugins\.uninstall/);
+  assert.match(page, /settings\.plugins\.uninstallWarning/);
+  assert.match(page, /settings\.plugins\.uninstallRemote/);
+  assert.match(page, /AlertDialogRoot/);
+  assert.match(page, /plugin\.contributions/);
+  assert.match(page, /PluginSettingsForm/);
+  assert.match(client, /\/api\/admin\/plugins/);
+  assert.match(client, /sources\/discover/);
+  assert.match(client, /updatePluginSettings/);
+  assert.match(client, /updatePluginEnabled/);
+  assert.match(settings, /plugin\.settings\.fields/);
+  assert.match(settings, /field\.secret/);
+  assert.match(settings, /credentials/);
+  assert.match(tasks, /data-processor/);
+  assert.match(tasks, /runPluginTask/);
+  assert.match(client, /runPluginTask/);
+  assert.match(
+    contracts,
+    /"recommendation-provider"[\s\S]*"playlist-generator"/,
+  );
+  assert.match(contracts, /PluginInstallSource = "bundled" \| "github"/);
+});
+
 test("settings shows app metadata and profile owns confirmed logout", async () => {
   const [layout, page, config, packageSource] = await Promise.all([
     readSource("../app/layouts/settings.vue"),
@@ -259,9 +308,9 @@ test("sources are managed on their own page with row action menus", async () => 
     /v-else class="text-sm text-muted-foreground">[\s\S]*?<\/div>\s*<section aria-labelledby="source-refresh-heading"/,
   );
   assert.match(page, /:datetime="source\.lastSyncedAt"/);
-  assert.match(page, /sourceKindIcon\(source\.kind\)/);
-  assert.match(page, /sourceKindLabel\(source\.kind\)/);
-  assert.match(page, /:title="sourceKindLabel\(source\.kind\)"/);
+  assert.match(page, /sourceKindIcon\(source\)/);
+  assert.match(page, /sourceKindLabel\(source\)/);
+  assert.match(page, /:title="sourceKindLabel\(source\)"/);
   assert.match(page, /block font-medium/);
   assert.match(page, /block break-all text-xs text-muted-foreground/);
   assert.doesNotMatch(page, /Badge variant="secondary">\{\{ source\.kind/);
@@ -273,19 +322,16 @@ test("sources are managed on their own page with row action menus", async () => 
   assert.doesNotMatch(page, /settings\.sources\.externalUrl/);
   assert.doesNotMatch(page, /id="source-url"/);
   assert.doesNotMatch(page, /chooseKind\('integration'\)/);
-  assert.match(page, /@peridot\/ui\/assets\/jellyfin-icon\.webp/);
-  assert.match(page, /chooseKind\('jellyfin'\)/);
-  assert.match(page, /settings\.sources\.jellyfinUrl/);
-  assert.match(page, /settings\.sources\.jellyfinApiKey/);
-  assert.match(page, /id="jellyfin-url"/);
-  assert.match(page, /id="jellyfin-api-key"/);
-  assert.match(page, /integration: "jellyfin"/);
-  assert.match(page, /url: newUrl\.value/);
-  assert.match(page, /apiKey: newApiKey\.value/);
-  assert.match(
-    page,
-    /if \(kind === "url"\) return t\("settings\.sources\.url"\)/,
-  );
+  assert.doesNotMatch(page, /settings\.sources\.jellyfin/);
+  assert.match(page, /v-for="plugin in installedSourcePlugins"/);
+  assert.match(page, /plugin\.enabled/);
+  assert.match(page, /!plugin\.restartRequired/);
+  assert.match(page, /chooseKind\(plugin\.id\)/);
+  assert.match(page, /newPluginFields/);
+  assert.match(page, /discoverPluginSourceOptions/);
+  assert.match(page, /kind: "plugin"/);
+  assert.match(page, /pluginId: newPlugin\.value\.id/);
+  assert.match(page, /configuration: newConfiguration\.value/);
   assert.match(
     page,
     /:title="source\.kind === 'path' \? \(source\.path \?\? ''\) : undefined"/,
@@ -312,7 +358,7 @@ test("sources are managed on their own page with row action menus", async () => 
   );
   assert.match(page, /data-disabled:cursor-default/);
   assert.match(page, /queueSourceScan/);
-  assert.match(page, /!isJellyfin\(source\)/);
+  assert.match(page, /source\.kind !== 'plugin'/);
   assert.match(page, /settings\.sources\.actions/);
   assert.match(
     page,
@@ -586,6 +632,10 @@ test("server settings confirm before restarting the connected server", async () 
   assert.match(serverCard, /@click="requestRestart"/);
   assert.match(
     serverCard,
+    /variant="destructive"[\s\S]*?@click="requestRestart"/,
+  );
+  assert.match(
+    serverCard,
     /:disabled="restarting \|\| connectionStatus === 'lost'"/,
   );
   assert.match(page, /useServerConnection/);
@@ -596,6 +646,7 @@ test("server settings confirm before restarting the connected server", async () 
   assert.match(restartDialog, /settings\.server\.restartTitle/);
   assert.match(restartDialog, /settings\.server\.restartDescription/);
   assert.match(restartDialog, /<AlertDialogCancel as-child>/);
+  assert.match(restartDialog, /variant="destructive"/);
   assert.match(restartDialog, /@click="confirmRestart"/);
   assert.match(page, /settings\.server\.restartRequested/);
 });

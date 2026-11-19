@@ -4,6 +4,8 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { TaskResponse } from "@peridot/contracts";
+import type { PluginDefinition } from "@peridot/plugin-sdk";
+import { createJellyfinPlugin } from "@peridot/plugin-jellyfin";
 import { buildApp } from "../src/app.js";
 import { artworkCacheDirectory } from "../src/artwork-cache.js";
 import { localCredentialKeyFile } from "../src/credential-store.js";
@@ -39,6 +41,7 @@ export interface TestContextOptions {
   updateService?: UpdateService;
   webRoot?: string;
   persistedLogLines?: string[];
+  additionalPlugins?: readonly PluginDefinition[];
 }
 
 export async function createTestContext(
@@ -96,10 +99,15 @@ export async function createTestContext(
     metadataFetch,
     metadataRequestIntervalMs,
     discogsFetch,
-    ...(options.jellyfinFetch ? { jellyfinFetch: options.jellyfinFetch } : {}),
-    ...(options.jellyfinRequestTimeoutMs !== undefined
-      ? { jellyfinRequestTimeoutMs: options.jellyfinRequestTimeoutMs }
-      : {}),
+    plugins: [
+      createJellyfinPlugin({
+        ...(options.jellyfinFetch ? { fetch: options.jellyfinFetch } : {}),
+        ...(options.jellyfinRequestTimeoutMs !== undefined
+          ? { requestTimeoutMs: options.jellyfinRequestTimeoutMs }
+          : {}),
+      }),
+      ...(options.additionalPlugins ?? []),
+    ],
     ...(options.discogsRequestIntervalMs !== undefined
       ? { discogsRequestIntervalMs: options.discogsRequestIntervalMs }
       : { discogsRequestIntervalMs: 0 }),
@@ -286,6 +294,7 @@ function taskResult(
   scan: TaskResponse,
   metadata: TaskResponse | null,
   artwork: TaskResponse | null = null,
+  catalog: TaskResponse | null = null,
 ) {
   return {
     id: scan.id,
@@ -315,6 +324,10 @@ function taskResult(
       ? taskDetailNumber(metadata, "metadata.failed")
       : 0,
     metadataFailureMessage: metadata?.failureMessage ?? null,
+    catalogStatus: catalog?.status ?? "skipped",
+    catalogProcessedCount: catalog
+      ? taskDetailNumber(catalog, "tracks.processed")
+      : 0,
     artworkStatus: artwork?.status ?? "skipped",
     artworkRetrievedCount: artwork
       ? taskDetailNumber(artwork, "artwork.retrieved")
@@ -330,9 +343,11 @@ function taskResult(
     startedAt: scan.startedAt,
     completedAt: scan.completedAt,
     metadataTaskId: metadata?.id ?? null,
+    catalogTaskId: catalog?.id ?? null,
     artworkTaskId: artwork?.id ?? null,
     scan,
     metadata,
+    catalog,
     artwork,
   };
 }
@@ -341,7 +356,7 @@ export async function waitForTask(
   context: TestContext,
   taskId: string,
 ): Promise<TaskResponse> {
-  for (let attempt = 0; attempt < 500; attempt += 1) {
+  for (let attempt = 0; attempt < 3_000; attempt += 1) {
     const response = await context.app.inject({
       method: "GET",
       url: `/api/tasks/${taskId}`,
@@ -367,30 +382,30 @@ export async function waitForScan(
   if (scan.status !== "completed") return taskResult(scan, null);
 
   let metadata: TaskResponse | null = null;
-  for (let attempt = 0; attempt < 500; attempt += 1) {
-    const child = await context.database.orm.Task.where({
-      parentTaskId: scan.id,
-      kind: "metadata_fetch",
-    }).first();
-    if (child) {
-      metadata = await waitForTask(context, child.id);
-      break;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 10));
+  const metadataChild = await context.database.orm.Task.where({
+    parentTaskId: scan.id,
+    kind: "metadata_fetch",
+  }).first();
+  if (metadataChild) {
+    metadata = await waitForTask(context, metadataChild.id);
+  }
+  let catalog: TaskResponse | null = null;
+  const catalogChild = await context.database.orm.Task.where({
+    parentTaskId: scan.id,
+    kind: "catalog_fetch",
+  }).first();
+  if (catalogChild) {
+    catalog = await waitForTask(context, catalogChild.id);
   }
   let artwork: TaskResponse | null = null;
-  for (let attempt = 0; attempt < 500; attempt += 1) {
-    const child = await context.database.orm.Task.where({
-      parentTaskId: scan.id,
-      kind: "artwork_fetch",
-    }).first();
-    if (child) {
-      artwork = await waitForTask(context, child.id);
-      break;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 10));
+  const artworkChild = await context.database.orm.Task.where({
+    parentTaskId: scan.id,
+    kind: "artwork_fetch",
+  }).first();
+  if (artworkChild) {
+    artwork = await waitForTask(context, artworkChild.id);
   }
-  return taskResult(scan, metadata, artwork);
+  return taskResult(scan, metadata, artwork, catalog);
 }
 
 export async function startScan(

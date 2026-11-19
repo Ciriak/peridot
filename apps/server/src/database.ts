@@ -22,3 +22,16 @@ export function sqliteFilePath(databaseUrl: string): string {
 export function createDatabase(databaseUrl: string): Database {
   return sqlite({ contract, path: sqliteFilePath(databaseUrl) });
 }
+
+export async function configureDatabase(database: Database): Promise<void> {
+  await database.query(
+    database.raw.sql`PRAGMA busy_timeout = 5000`
+      .returnsRow({ timeout: "sqlite/integer@1" })
+      .build(),
+  );
+  await database.query(
+    database.raw.sql`PRAGMA journal_mode = WAL`
+      .returnsRow({ journal_mode: "sqlite/text@1" })
+      .build(),
+  );
+}

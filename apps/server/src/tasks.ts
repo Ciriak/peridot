@@ -150,19 +150,25 @@ export function toTaskResponse(task: TaskRow): TaskResponse {
       ? task.sourceName
         ? message("task.title.sourceScan", { source: task.sourceName })
         : message("task.title.libraryScan")
-      : task.kind === "metadata_fetch"
+      : task.kind === "catalog_fetch"
         ? task.sourceName
-          ? message("task.title.sourceMetadataMatch", {
+          ? message("task.title.sourceCatalogProjection", {
               source: task.sourceName,
             })
-          : message("task.title.metadataMatch")
-        : task.kind === "artwork_fetch"
+          : message("task.title.catalogProjection")
+        : task.kind === "metadata_fetch"
           ? task.sourceName
-            ? message("task.title.sourceArtworkFetch", {
+            ? message("task.title.sourceMetadataMatch", {
                 source: task.sourceName,
               })
-            : message("task.title.artworkFetch")
-          : message("task.title.plugin", { task: task.title }));
+            : message("task.title.metadataMatch")
+          : task.kind === "artwork_fetch"
+            ? task.sourceName
+              ? message("task.title.sourceArtworkFetch", {
+                  source: task.sourceName,
+                })
+              : message("task.title.artworkFetch")
+            : message("task.title.plugin", { task: task.title }));
   return {
     id: task.id,
     kind: task.kind as TaskKind,
@@ -198,6 +204,7 @@ export function toTaskResponse(task: TaskRow): TaskResponse {
 function isTaskKind(value: string): value is TaskKind {
   return (
     value === "library_scan" ||
+    value === "catalog_fetch" ||
     value === "metadata_fetch" ||
     value === "artwork_fetch" ||
     PLUGIN_TASK_KIND.test(value)
@@ -207,7 +214,8 @@ function isTaskKind(value: string): value is TaskKind {
 function queuedTaskPriority(kind: string): number {
   if (kind === "library_scan") return 0;
   if (kind === "metadata_fetch") return 1;
-  if (kind === "artwork_fetch") return 2;
+  if (kind === "catalog_fetch") return 2;
+  if (kind === "artwork_fetch") return 3;
   return 1;
 }
 
@@ -785,6 +793,37 @@ export function queueMetadataFetch(
     sourceId: options.source?.id ?? null,
     sourceName: options.source?.name ?? null,
     forceRefresh: options.force ?? false,
+    details: [
+      {
+        key: "source",
+        value: options.source?.name ?? "All sources",
+        labelMessage: message("task.detail.source"),
+        valueMessage: options.source ? null : message("common.allSources"),
+      },
+    ],
+  });
+}
+
+export function queueCatalogFetch(
+  tasks: TaskService,
+  options: {
+    source?: { id: string; name: string } | null;
+    parentTaskId?: string | null;
+  } = {},
+): Promise<TaskRow> {
+  return tasks.enqueue({
+    kind: "catalog_fetch",
+    title: options.source
+      ? `${options.source.name} catalog projection`
+      : "Library catalog projection",
+    titleMessage: options.source
+      ? message("task.title.sourceCatalogProjection", {
+          source: options.source.name,
+        })
+      : message("task.title.catalogProjection"),
+    parentTaskId: options.parentTaskId ?? null,
+    sourceId: options.source?.id ?? null,
+    sourceName: options.source?.name ?? null,
     details: [
       {
         key: "source",
