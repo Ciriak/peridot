@@ -124,17 +124,12 @@ const taskStatusSchema = enumeration(
   "interrupted",
   "stopped",
 );
-const taskKindSchema = {
-  anyOf: [
-    enumeration(
-      "library_scan",
-      "catalog_fetch",
-      "metadata_fetch",
-      "artwork_fetch",
-    ),
-    { type: "string", pattern: "^plugin:" },
-  ],
-};
+const taskKindSchema = enumeration(
+  "library_scan",
+  "catalog_fetch",
+  "metadata_fetch",
+  "artwork_fetch",
+);
 
 const schemas: Record<string, SchemaObject> = {
   MessageParams: {
@@ -673,22 +668,20 @@ const schemas: Record<string, SchemaObject> = {
   }),
   SourceResponse: objectSchema({
     id: stringSchema,
-    kind: enumeration("path", "url", "plugin"),
+    kind: enumeration("path", "url", "jellyfin"),
     name: nullable(stringSchema),
     path: nullable(stringSchema),
     url: nullable(stringSchema),
-    pluginId: nullable(stringSchema),
     configuration: nullable(stringRecordSchema),
     fileCount: integerSchema,
     lastSyncedAt: nullable(dateTimeSchema),
   }),
   CreateSourceResponse: objectSchema({
     id: stringSchema,
-    kind: enumeration("path", "url", "plugin"),
+    kind: enumeration("path", "url", "jellyfin"),
     name: nullable(stringSchema),
     path: nullable(stringSchema),
     url: nullable(stringSchema),
-    pluginId: nullable(stringSchema),
     configuration: nullable(stringRecordSchema),
     fileCount: integerSchema,
     lastSyncedAt: nullable(dateTimeSchema),
@@ -707,10 +700,12 @@ const schemas: Record<string, SchemaObject> = {
         url: stringSchema,
       }),
       objectSchema({
-        kind: { const: "plugin" },
-        pluginId: stringSchema,
+        kind: { const: "jellyfin" },
         name: nullable(stringSchema),
-        configuration: stringRecordSchema,
+        url: stringSchema,
+        apiKey: stringSchema,
+        libraryId: stringSchema,
+        collectionType: nullable(stringSchema),
       }),
     ],
   },
@@ -720,141 +715,17 @@ const schemas: Record<string, SchemaObject> = {
   ReorderSourcesRequest: objectSchema({
     ids: arrayOf(stringSchema),
   }),
-  PluginConfigurationFieldDefinition: objectSchema({
-    key: stringSchema,
-    labelMessage: ref("MessageDescriptor"),
-    type: enumeration("text", "url", "password"),
-    required: booleanSchema,
-    secret: booleanSchema,
-    visible: booleanSchema,
-    placeholderMessage: nullable(ref("MessageDescriptor")),
-    helpMessage: nullable(ref("MessageDescriptor")),
-  }),
-  PluginSettingsResponse: objectSchema({
-    fields: arrayOf(ref("PluginConfigurationFieldDefinition")),
+  DiscoverSourceIntegrationRequest: objectSchema({
     configuration: stringRecordSchema,
-    configured: booleanSchema,
+    credentials: stringRecordSchema,
   }),
-  PluginSourceContributionResponse: objectSchema({
-    kind: { const: "source" },
-    configurationFields: arrayOf(ref("PluginConfigurationFieldDefinition")),
-    discovery: nullable(
-      objectSchema({
-        actionMessage: ref("MessageDescriptor"),
-        helpMessage: nullable(ref("MessageDescriptor")),
-      }),
-    ),
-  }),
-  PluginContributionResponse: {
-    oneOf: [
-      ref("PluginSourceContributionResponse"),
-      objectSchema({
-        kind: { const: "recommendation-provider" },
-        methods: arrayOf(enumeration("similar", "for-you")),
-      }),
-      objectSchema({
-        kind: { const: "playlist-generator" },
-        supportsPrompt: booleanSchema,
-        supportsSeed: booleanSchema,
-      }),
-      objectSchema({
-        kind: { const: "data-processor" },
-        tasks: arrayOf(
-          objectSchema({
-            id: stringSchema,
-            titleMessage: ref("MessageDescriptor"),
-          }),
-        ),
-      }),
-      objectSchema({ kind: { const: "display" } }),
-    ],
-  },
-  PluginResponse: objectSchema({
-    id: stringSchema,
-    name: stringSchema,
-    descriptionMessage: ref("MessageDescriptor"),
-    version: stringSchema,
-    sdkVersion: stringSchema,
-    capabilities: arrayOf(stringSchema),
-    permissions: arrayOf(stringSchema),
-    contributions: arrayOf(ref("PluginContributionResponse")),
-    installed: booleanSchema,
-    enabled: booleanSchema,
-    restartRequired: booleanSchema,
-    installedAt: nullable(dateTimeSchema),
-    installSource: enumeration("bundled", "github"),
-    installSourceLocator: stringSchema,
-    icon: nullable(stringSchema),
-    settings: ref("PluginSettingsResponse"),
-  }),
-  PluginListResponse: objectSchema({
-    items: arrayOf(ref("PluginResponse")),
-  }),
-  PluginProviderResponse: objectSchema({
-    id: stringSchema,
-    name: stringSchema,
-    descriptionMessage: ref("MessageDescriptor"),
-    version: stringSchema,
-    recommendationMethods: arrayOf(enumeration("similar", "for-you")),
-    playlistGeneration: booleanSchema,
-    configured: booleanSchema,
-  }),
-  PluginProviderListResponse: objectSchema({
-    items: arrayOf(ref("PluginProviderResponse")),
-  }),
-  PluginRecommendedTrackResponse: objectSchema({
-    track: ref("TrackResponse"),
-    score: nullable(numberSchema),
-    reason: nullable(stringSchema),
-  }),
-  PluginRecommendationListResponse: objectSchema({
-    items: arrayOf(ref("PluginRecommendedTrackResponse")),
-    unmatchedCount: integerSchema,
-  }),
-  PluginGeneratedPlaylistResponse: objectSchema({
-    items: arrayOf(ref("PluginRecommendedTrackResponse")),
-    unmatchedCount: integerSchema,
-    name: nullable(stringSchema),
-  }),
-  PluginSimilarTracksRequest: objectSchema({
-    trackId: stringSchema,
-    limit: integerSchema,
-  }),
-  PluginForYouTracksRequest: objectSchema(
-    {
-      limit: integerSchema,
-    },
-    [],
-  ),
-  GeneratePluginPlaylistRequest: objectSchema(
-    {
-      name: stringSchema,
-      prompt: stringSchema,
-      seedTrackId: stringSchema,
-      limit: integerSchema,
-    },
-    [],
-  ),
-  UpdatePluginSettingsRequest: objectSchema(
-    {
-      configuration: stringRecordSchema,
-      credentials: stringRecordSchema,
-    },
-    ["configuration"],
-  ),
-  UpdatePluginEnabledRequest: objectSchema({
-    enabled: booleanSchema,
-  }),
-  DiscoverPluginSourcesRequest: objectSchema({
-    configuration: stringRecordSchema,
-  }),
-  PluginSourceOptionResponse: objectSchema({
+  SourceIntegrationOptionResponse: objectSchema({
     id: stringSchema,
     label: stringSchema,
     configuration: stringRecordSchema,
   }),
-  PluginSourceOptionListResponse: objectSchema({
-    items: arrayOf(ref("PluginSourceOptionResponse")),
+  SourceIntegrationOptionListResponse: objectSchema({
+    items: arrayOf(ref("SourceIntegrationOptionResponse")),
   }),
   MetadataProviderFieldDefinition: objectSchema({
     key: stringSchema,
@@ -1441,29 +1312,6 @@ const routes: Record<string, OpenApiOperation> = {
     ref("PlaylistDetailResponse"),
     { body: ref("ReorderPlaylistItemsRequest") },
   ),
-  "GET /api/plugins/providers": jsonOperation(
-    "Plugins",
-    "List configured plugin providers",
-    ref("PluginProviderListResponse"),
-  ),
-  "POST /api/plugins/:id/recommendations/similar": jsonOperation(
-    "Plugins",
-    "Get recommendations similar to a track",
-    ref("PluginRecommendationListResponse"),
-    { body: ref("PluginSimilarTracksRequest") },
-  ),
-  "POST /api/plugins/:id/recommendations/for-you": jsonOperation(
-    "Plugins",
-    "Get personalized recommendations",
-    ref("PluginRecommendationListResponse"),
-    { body: ref("PluginForYouTracksRequest") },
-  ),
-  "POST /api/plugins/:id/playlists/generate": jsonOperation(
-    "Plugins",
-    "Generate a transient playlist",
-    ref("PluginGeneratedPlaylistResponse"),
-    { body: ref("GeneratePluginPlaylistRequest") },
-  ),
   "GET /api/queue": jsonOperation(
     "Queue",
     "Get the current playback queue",
@@ -1603,49 +1451,11 @@ const routes: Record<string, OpenApiOperation> = {
     "Stop a background task",
     ref("TaskResponse"),
   ),
-  "GET /api/admin/plugins": jsonOperation(
-    "Plugins",
-    "List installed plugins",
-    ref("PluginListResponse"),
-  ),
-  "PUT /api/admin/plugins/:id/settings": jsonOperation(
-    "Plugins",
-    "Update plugin settings",
-    ref("PluginResponse"),
-    { body: ref("UpdatePluginSettingsRequest") },
-  ),
-  "PUT /api/admin/plugins/:id/enabled": jsonOperation(
-    "Plugins",
-    "Enable or disable a plugin",
-    ref("PluginResponse"),
-    { body: ref("UpdatePluginEnabledRequest") },
-  ),
-  "POST /api/admin/plugins/:id/tasks/:task": jsonOperation(
-    "Plugins",
-    "Run a plugin data task",
-    ref("TaskResponse"),
-    { status: 202 },
-  ),
-  "POST /api/admin/plugins/:id/install": jsonOperation(
-    "Plugins",
-    "Install a bundled plugin",
-    ref("PluginResponse"),
-  ),
-  "POST /api/admin/plugins/:id/uninstall": jsonOperation(
-    "Plugins",
-    "Uninstall a plugin and its local data",
-    ref("PluginResponse"),
-    {
-      body: objectSchema({
-        confirm: { const: true },
-      }),
-    },
-  ),
-  "POST /api/admin/plugins/:id/sources/discover": jsonOperation(
-    "Plugins",
-    "Discover source choices from a plugin",
-    ref("PluginSourceOptionListResponse"),
-    { body: ref("DiscoverPluginSourcesRequest") },
+  "POST /api/admin/source-integrations/:kind/discover": jsonOperation(
+    "Sources",
+    "Discover source choices from a built-in integration",
+    ref("SourceIntegrationOptionListResponse"),
+    { body: ref("DiscoverSourceIntegrationRequest") },
   ),
   "GET /api/admin/metadata-providers/definitions": jsonOperation(
     "Metadata providers",
@@ -1807,10 +1617,6 @@ const tags = [
     description: "Background work and cancellation.",
   },
   {
-    name: "Plugins",
-    description: "Plugin installation, settings, sources, and providers.",
-  },
-  {
     name: "Realtime",
     description: "Authenticated realtime WebSocket subscription.",
   },
@@ -1862,7 +1668,7 @@ function operationId(method: string, path: string): string {
 function fallbackTag(method: string, path: string): string {
   if (path.startsWith("/api/admin/users")) return "User management";
   if (path.startsWith("/api/admin/sources")) return "Sources";
-  if (path.startsWith("/api/admin/plugins")) return "Plugins";
+  if (path.startsWith("/api/admin/source-integrations")) return "Sources";
   if (path.startsWith("/api/admin/metadata")) return "Metadata providers";
   if (path.startsWith("/api/admin/filesystem")) return "Filesystem";
   if (path.startsWith("/api/admin/logs")) return "Logs";
@@ -1878,7 +1684,6 @@ function fallbackTag(method: string, path: string): string {
   if (path.startsWith("/api/likes")) return "Likes";
   if (path.startsWith("/api/queue")) return "Queue";
   if (path.startsWith("/api/quick-picks")) return "Quick picks";
-  if (path.startsWith("/api/plugins")) return "Plugins";
   if (path.startsWith("/api/tasks")) return "Tasks";
   if (path.startsWith("/api/realtime")) return "Realtime";
   if (path.startsWith("/api/covers")) return "Artwork";

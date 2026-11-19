@@ -46,7 +46,6 @@ test("app layout respects the owner's Tailwind and shadcn styling authority", as
     "../app/pages/settings/account.vue",
     "../app/pages/settings/library.vue",
     "../app/pages/settings/playback.vue",
-    "../app/pages/settings/plugins.vue",
     "../app/pages/settings/tasks.vue",
     "../app/pages/settings/users.vue",
     "../app/pages/settings/sources.vue",

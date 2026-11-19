@@ -19,8 +19,7 @@ import type {
   CreateUserRequest,
   DirectoryListResponse,
   DirectorySearchResponse,
-  DiscoverPluginSourcesRequest,
-  GeneratePluginPlaylistRequest,
+  DiscoverSourceIntegrationRequest,
   LikeListResponse,
   LikeResponse,
   LikeTarget,
@@ -34,14 +33,7 @@ import type {
   PasswordResetRequestResponse,
   PlaylistDetailResponse,
   PlaylistListResponse,
-  PluginForYouTracksRequest,
-  PluginGeneratedPlaylistResponse,
-  PluginListResponse,
-  PluginProviderListResponse,
-  PluginRecommendationListResponse,
-  PluginResponse,
-  PluginSimilarTracksRequest,
-  PluginSourceOptionListResponse,
+  SourceIntegrationOptionListResponse,
   PodcastListResponse,
   PodcastSummaryResponse,
   QuickPickListResponse,
@@ -62,8 +54,6 @@ import type {
   UpdatePlaylistRequest,
   UpdateUserProfileRequest,
   UpdateMetadataProviderRequest,
-  UpdatePluginEnabledRequest,
-  UpdatePluginSettingsRequest,
   UpdateServerSettingsRequest,
   UpdateStatusResponse,
   UpdateUserRequest,
@@ -555,144 +545,15 @@ export function deleteSource(
   );
 }
 
-export function listPlugins(serverAddress: string, token: string) {
-  return authenticatedRequestJson<PluginListResponse>(
-    serverAddress,
-    "/api/admin/plugins",
-    token,
-  );
-}
-
-export function listPluginProviders(serverAddress: string, token: string) {
-  return authenticatedRequestJson<PluginProviderListResponse>(
-    serverAddress,
-    "/api/plugins/providers",
-    token,
-  );
-}
-
-export function fetchSimilarPluginTracks(
+export function discoverIntegrationSources(
   serverAddress: string,
   token: string,
-  pluginId: string,
-  request: PluginSimilarTracksRequest,
+  kind: string,
+  request: DiscoverSourceIntegrationRequest,
 ) {
-  return authenticatedRequestJson<PluginRecommendationListResponse>(
+  return authenticatedRequestJson<SourceIntegrationOptionListResponse>(
     serverAddress,
-    `/api/plugins/${encodeURIComponent(pluginId)}/recommendations/similar`,
-    token,
-    { method: "POST", body: JSON.stringify(request) },
-  );
-}
-
-export function fetchForYouPluginTracks(
-  serverAddress: string,
-  token: string,
-  pluginId: string,
-  request: PluginForYouTracksRequest = {},
-) {
-  return authenticatedRequestJson<PluginRecommendationListResponse>(
-    serverAddress,
-    `/api/plugins/${encodeURIComponent(pluginId)}/recommendations/for-you`,
-    token,
-    { method: "POST", body: JSON.stringify(request) },
-  );
-}
-
-export function generatePluginPlaylist(
-  serverAddress: string,
-  token: string,
-  pluginId: string,
-  request: GeneratePluginPlaylistRequest,
-) {
-  return authenticatedRequestJson<PluginGeneratedPlaylistResponse>(
-    serverAddress,
-    `/api/plugins/${encodeURIComponent(pluginId)}/playlists/generate`,
-    token,
-    { method: "POST", body: JSON.stringify(request) },
-  );
-}
-
-export function updatePluginSettings(
-  serverAddress: string,
-  token: string,
-  pluginId: string,
-  request: UpdatePluginSettingsRequest,
-) {
-  return authenticatedRequestJson<PluginResponse>(
-    serverAddress,
-    `/api/admin/plugins/${encodeURIComponent(pluginId)}/settings`,
-    token,
-    { method: "PUT", body: JSON.stringify(request) },
-  );
-}
-
-export function updatePluginEnabled(
-  serverAddress: string,
-  token: string,
-  pluginId: string,
-  request: UpdatePluginEnabledRequest,
-) {
-  return authenticatedRequestJson<PluginResponse>(
-    serverAddress,
-    `/api/admin/plugins/${encodeURIComponent(pluginId)}/enabled`,
-    token,
-    { method: "PUT", body: JSON.stringify(request) },
-  );
-}
-
-export function runPluginTask(
-  serverAddress: string,
-  token: string,
-  pluginId: string,
-  taskId: string,
-) {
-  return authenticatedRequestJson<TaskResponse>(
-    serverAddress,
-    `/api/admin/plugins/${encodeURIComponent(pluginId)}/tasks/${encodeURIComponent(taskId)}`,
-    token,
-    { method: "POST" },
-  );
-}
-
-export function installPlugin(
-  serverAddress: string,
-  token: string,
-  pluginId: string,
-) {
-  return authenticatedRequestJson<PluginResponse>(
-    serverAddress,
-    `/api/admin/plugins/${encodeURIComponent(pluginId)}/install`,
-    token,
-    { method: "POST" },
-  );
-}
-
-export function uninstallPlugin(
-  serverAddress: string,
-  token: string,
-  pluginId: string,
-) {
-  return authenticatedRequestJson<PluginResponse>(
-    serverAddress,
-    `/api/admin/plugins/${encodeURIComponent(pluginId)}/uninstall`,
-    token,
-    {
-      method: "POST",
-      body: JSON.stringify({ confirm: true }),
-    },
-  );
-}
-
-export function discoverPluginSources(
-  serverAddress: string,
-  token: string,
-  pluginId: string,
-  request: DiscoverPluginSourcesRequest,
-) {
-  return authenticatedRequestJson<PluginSourceOptionListResponse>(
-    serverAddress,
-    `/api/admin/plugins/${encodeURIComponent(pluginId)}/sources/discover`,
+    `/api/admin/source-integrations/${encodeURIComponent(kind)}/discover`,
     token,
     { method: "POST", body: JSON.stringify(request) },
   );

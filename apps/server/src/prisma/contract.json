@@ -72,10 +72,6 @@
       "model": "PlaylistLike",
       "namespace": "__unbound__"
     },
-    "PluginInstallation": {
-      "model": "PluginInstallation",
-      "namespace": "__unbound__"
-    },
     "QueueItem": {
       "model": "QueueItem",
       "namespace": "__unbound__"
@@ -1952,127 +1948,6 @@
               "table": "PlaylistLike"
             }
           },
-          "PluginInstallation": {
-            "fields": {
-              "configuration": {
-                "nullable": false,
-                "type": {
-                  "codecId": "sqlite/text@1",
-                  "kind": "scalar"
-                }
-              },
-              "createdAt": {
-                "nullable": false,
-                "type": {
-                  "codecId": "sqlite/datetime@1",
-                  "kind": "scalar"
-                }
-              },
-              "credentialCiphertext": {
-                "nullable": true,
-                "type": {
-                  "codecId": "sqlite/text@1",
-                  "kind": "scalar"
-                }
-              },
-              "enabled": {
-                "nullable": false,
-                "type": {
-                  "codecId": "sqlite/integer@1",
-                  "kind": "scalar"
-                }
-              },
-              "installSource": {
-                "nullable": false,
-                "type": {
-                  "codecId": "sqlite/text@1",
-                  "kind": "scalar"
-                }
-              },
-              "installSourceLocator": {
-                "nullable": false,
-                "type": {
-                  "codecId": "sqlite/text@1",
-                  "kind": "scalar"
-                }
-              },
-              "installed": {
-                "nullable": false,
-                "type": {
-                  "codecId": "sqlite/integer@1",
-                  "kind": "scalar"
-                }
-              },
-              "installedAt": {
-                "nullable": true,
-                "type": {
-                  "codecId": "sqlite/datetime@1",
-                  "kind": "scalar"
-                }
-              },
-              "pluginId": {
-                "nullable": false,
-                "type": {
-                  "codecId": "sqlite/text@1",
-                  "kind": "scalar"
-                }
-              },
-              "updatedAt": {
-                "nullable": false,
-                "type": {
-                  "codecId": "sqlite/datetime@1",
-                  "kind": "scalar"
-                }
-              },
-              "version": {
-                "nullable": false,
-                "type": {
-                  "codecId": "sqlite/text@1",
-                  "kind": "scalar"
-                }
-              }
-            },
-            "relations": {},
-            "storage": {
-              "fields": {
-                "configuration": {
-                  "column": "configuration"
-                },
-                "createdAt": {
-                  "column": "createdAt"
-                },
-                "credentialCiphertext": {
-                  "column": "credentialCiphertext"
-                },
-                "enabled": {
-                  "column": "enabled"
-                },
-                "installSource": {
-                  "column": "installSource"
-                },
-                "installSourceLocator": {
-                  "column": "installSourceLocator"
-                },
-                "installed": {
-                  "column": "installed"
-                },
-                "installedAt": {
-                  "column": "installedAt"
-                },
-                "pluginId": {
-                  "column": "pluginId"
-                },
-                "updatedAt": {
-                  "column": "updatedAt"
-                },
-                "version": {
-                  "column": "version"
-                }
-              },
-              "namespaceId": "__unbound__",
-              "table": "PluginInstallation"
-            }
-          },
           "QueueItem": {
             "fields": {
               "createdAt": {
@@ -2478,24 +2353,17 @@
                   "kind": "scalar"
                 }
               },
-              "pluginId": {
-                "nullable": true,
-                "type": {
-                  "codecId": "sqlite/text@1",
-                  "kind": "scalar"
-                }
-              },
-              "pluginSourceIdentity": {
-                "nullable": true,
-                "type": {
-                  "codecId": "sqlite/text@1",
-                  "kind": "scalar"
-                }
-              },
               "position": {
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
+              "sourceIdentity": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
                   "kind": "scalar"
                 }
               },
@@ -2557,14 +2425,11 @@
                 "path": {
                   "column": "path"
                 },
-                "pluginId": {
-                  "column": "pluginId"
-                },
-                "pluginSourceIdentity": {
-                  "column": "pluginSourceIdentity"
-                },
                 "position": {
                   "column": "position"
+                },
+                "sourceIdentity": {
+                  "column": "sourceIdentity"
                 },
                 "updatedAt": {
                   "column": "updatedAt"
@@ -5280,103 +5145,6 @@
                 }
               ]
             },
-            "PluginInstallation": {
-              "columns": {
-                "configuration": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
-                  "default": {
-                    "kind": "literal",
-                    "value": "{}"
-                  },
-                  "nullable": false
-                },
-                "createdAt": {
-                  "codecId": "sqlite/datetime@1",
-                  "dataType": "sqlite/datetime",
-                  "default": {
-                    "expression": "now()",
-                    "kind": "function"
-                  },
-                  "nullable": false
-                },
-                "credentialCiphertext": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
-                  "nullable": true
-                },
-                "enabled": {
-                  "codecId": "sqlite/integer@1",
-                  "dataType": "sqlite/integer",
-                  "default": {
-                    "kind": "literal",
-                    "value": "1"
-                  },
-                  "nullable": false
-                },
-                "installSource": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
-                  "default": {
-                    "kind": "literal",
-                    "value": "bundled"
-                  },
-                  "nullable": false
-                },
-                "installSourceLocator": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
-                  "nullable": false
-                },
-                "installed": {
-                  "codecId": "sqlite/integer@1",
-                  "dataType": "sqlite/integer",
-                  "default": {
-                    "kind": "literal",
-                    "value": "1"
-                  },
-                  "nullable": false
-                },
-                "installedAt": {
-                  "codecId": "sqlite/datetime@1",
-                  "dataType": "sqlite/datetime",
-                  "nullable": true
-                },
-                "pluginId": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
-                  "nullable": false
-                },
-                "updatedAt": {
-                  "codecId": "sqlite/datetime@1",
-                  "dataType": "sqlite/datetime",
-                  "nullable": false
-                },
-                "version": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
-                  "nullable": false
-                }
-              },
-              "foreignKeys": [],
-              "indexes": [
-                {
-                  "columns": [
-                    "installed",
-                    "enabled"
-                  ],
-                  "name": "PluginInstallation_installed_enabled_idx_506a1df3",
-                  "prefix": "PluginInstallation_installed_enabled_idx",
-                  "unique": false
-                }
-              ],
-              "primaryKey": {
-                "columns": [
-                  "pluginId"
-                ]
-              },
-              "uniques": []
-            },
             "QueueItem": {
               "columns": {
                 "createdAt": {
@@ -5784,16 +5552,6 @@
                   "dataType": "sqlite/text",
                   "nullable": true
                 },
-                "pluginId": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
-                  "nullable": true
-                },
-                "pluginSourceIdentity": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
-                  "nullable": true
-                },
                 "position": {
                   "codecId": "sqlite/integer@1",
                   "dataType": "sqlite/integer",
@@ -5802,6 +5560,11 @@
                     "value": "0"
                   },
                   "nullable": false
+                },
+                "sourceIdentity": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
                 },
                 "updatedAt": {
                   "codecId": "sqlite/datetime@1",
@@ -5826,14 +5589,6 @@
                 },
                 {
                   "columns": [
-                    "pluginId"
-                  ],
-                  "name": "Source_pluginId_idx_32c3e11d",
-                  "prefix": "Source_pluginId_idx",
-                  "unique": false
-                },
-                {
-                  "columns": [
                     "position"
                   ],
                   "name": "Source_position_idx_82a01784",
@@ -5846,7 +5601,14 @@
                   "id"
                 ]
               },
-              "uniques": []
+              "uniques": [
+                {
+                  "columns": [
+                    "kind",
+                    "sourceIdentity"
+                  ]
+                }
+              ]
             },
             "Task": {
               "columns": {
@@ -6694,10 +6456,10 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "8466b5a38d1fae0b36b2c3f0e74773a784afb6f6418df750f9e4c16c11e92bdc"
+    "storageHash": "b7404da89f184c311c251f7ebbaa77db518dfc1bcd75c2392dd6a3d3bf3b84a0"
   },
   "execution": {
-    "executionHash": "af5db9c2d052d8692ee1f1a70221c2da0712097bb5b307d7d3a15319aaae43d9",
+    "executionHash": "85edb6c43666162916bbb345e5da90f53ec36d044ed381921f3de575cd433dc6",
     "mutations": {
       "defaults": [
         {
@@ -6979,21 +6741,6 @@
           "ref": {
             "entry": "PlaylistLike",
             "field": "id",
-            "namespace": "__unbound__"
-          }
-        },
-        {
-          "onCreate": {
-            "id": "timestampNow",
-            "kind": "generator"
-          },
-          "onUpdate": {
-            "id": "timestampNow",
-            "kind": "generator"
-          },
-          "ref": {
-            "entry": "PluginInstallation",
-            "field": "updatedAt",
             "namespace": "__unbound__"
           }
         },

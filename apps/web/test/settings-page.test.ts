@@ -21,14 +21,7 @@ test("settings is a fullscreen routed area with a separate administrator group",
   }
   assert.match(commonCategories, /labelKey: "settings\.profile"/);
   assert.doesNotMatch(commonCategories, /settings\.account"/);
-  for (const category of [
-    "plugins",
-    "tasks",
-    "users",
-    "sources",
-    "metadata",
-    "server",
-  ]) {
+  for (const category of ["tasks", "users", "sources", "metadata", "server"]) {
     assert.match(adminCategories, new RegExp(`to: "/settings/${category}"`));
   }
   assert.match(adminCategories, /labelKey: "settings\.users"/);
@@ -61,73 +54,33 @@ test("settings is a fullscreen routed area with a separate administrator group",
   assert.match(layout, /item\.to === '\/settings\/tasks'/);
   assert.match(layout, /item\.to === '\/settings\/metadata'/);
   assert.match(layout, /settings\.tasks\.progressFor/);
-  for (const page of [
-    "plugins",
-    "tasks",
-    "users",
-    "sources",
-    "metadata",
-    "server",
-  ]) {
+  for (const page of ["tasks", "users", "sources", "metadata", "server"]) {
     const source = await readSource(`../app/pages/settings/${page}.vue`);
     assert.match(source, /layout: "settings"/);
   }
 });
 
-test("/settings redirects to account and /plugins redirects into settings", async () => {
+test("/settings redirects to account", async () => {
   const index = await readSource("../app/pages/settings/index.vue");
   assert.match(index, /navigateTo\("\/settings\/account"/);
-  const plugins = await readSource("../app/pages/plugins.vue");
-  assert.match(plugins, /navigateTo\("\/settings\/plugins"/);
 });
 
-test("plugins have install and confirmed uninstall lifecycle controls", async () => {
-  const [page, settings, tasks, client, contracts] = await Promise.all([
-    readSource("../app/pages/settings/plugins.vue"),
-    readSource("../app/components/PluginSettingsForm.vue"),
-    readSource("../app/components/PluginTaskActions.vue"),
+test("Jellyfin is a direct built-in source integration", async () => {
+  const [page, client, contracts] = await Promise.all([
+    readSource("../app/pages/settings/sources.vue"),
     readSource("../app/lib/peridot-client.ts"),
     readSource("../../../packages/contracts/src/index.ts"),
   ]);
-  const actionMenu = page.slice(
-    page.indexOf("<TooltipProvider", page.indexOf("plugin.enabled")),
-    page.indexOf("</TooltipProvider>") + "</TooltipProvider>".length,
-  );
-  assert.match(page, /usePluginsQuery/);
-  assert.match(page, /installPlugin/);
-  assert.match(page, /uninstallPlugin/);
-  assert.match(page, /updatePluginEnabled/);
-  assert.match(page, /settings\.plugins\.restartRequiredHelp/);
-  assert.match(page, /settings\.plugins\.actions/);
-  assert.match(page, /icons\.more/);
-  assert.match(page, /<Switch/);
-  assert.doesNotMatch(page, /<Badge[^>]+plugin\.enabled/);
-  assert.match(
-    page,
-    /plugin\.enabled \? 'text-foreground' : 'text-destructive'/,
-  );
-  assert.match(actionMenu, /DropdownMenuRoot/);
-  assert.match(actionMenu, /settings\.plugins\.uninstall/);
-  assert.match(page, /settings\.plugins\.uninstallWarning/);
-  assert.match(page, /settings\.plugins\.uninstallRemote/);
-  assert.match(page, /AlertDialogRoot/);
-  assert.match(page, /plugin\.contributions/);
-  assert.match(page, /PluginSettingsForm/);
-  assert.match(client, /\/api\/admin\/plugins/);
-  assert.match(client, /sources\/discover/);
-  assert.match(client, /updatePluginSettings/);
-  assert.match(client, /updatePluginEnabled/);
-  assert.match(settings, /plugin\.settings\.fields/);
-  assert.match(settings, /field\.secret/);
-  assert.match(settings, /credentials/);
-  assert.match(tasks, /data-processor/);
-  assert.match(tasks, /runPluginTask/);
-  assert.match(client, /runPluginTask/);
-  assert.match(
-    contracts,
-    /"recommendation-provider"[\s\S]*"playlist-generator"/,
-  );
-  assert.match(contracts, /PluginInstallSource = "bundled" \| "github"/);
+  assert.match(page, /chooseKind\('jellyfin'\)/);
+  assert.match(page, /discoverJellyfinLibraries/);
+  assert.match(page, /newJellyfinUrl/);
+  assert.match(page, /newJellyfinApiKey/);
+  assert.match(page, /newJellyfinLibraryId/);
+  assert.match(page, /kind: "jellyfin"/);
+  assert.match(client, /source-integrations\/\$\{encodeURIComponent\(kind\)\}/);
+  assert.doesNotMatch(client, /api\/admin\/plugins|api\/plugins/);
+  assert.match(contracts, /SourceIntegrationKind = "jellyfin"/);
+  assert.match(contracts, /CreateJellyfinSourceRequest/);
 });
 
 test("settings shows app metadata and profile owns confirmed logout", async () => {
@@ -322,16 +275,12 @@ test("sources are managed on their own page with row action menus", async () => 
   assert.doesNotMatch(page, /settings\.sources\.externalUrl/);
   assert.doesNotMatch(page, /id="source-url"/);
   assert.doesNotMatch(page, /chooseKind\('integration'\)/);
-  assert.doesNotMatch(page, /settings\.sources\.jellyfin/);
-  assert.match(page, /v-for="plugin in installedSourcePlugins"/);
-  assert.match(page, /plugin\.enabled/);
-  assert.match(page, /!plugin\.restartRequired/);
-  assert.match(page, /chooseKind\(plugin\.id\)/);
-  assert.match(page, /newPluginFields/);
-  assert.match(page, /discoverPluginSourceOptions/);
-  assert.match(page, /kind: "plugin"/);
-  assert.match(page, /pluginId: newPlugin\.value\.id/);
-  assert.match(page, /configuration: newConfiguration\.value/);
+  assert.match(page, /chooseKind\('jellyfin'\)/);
+  assert.match(page, /newJellyfinUrl/);
+  assert.match(page, /newJellyfinApiKey/);
+  assert.match(page, /discoverJellyfinLibraries/);
+  assert.match(page, /kind: "jellyfin"/);
+  assert.match(page, /libraryId: newJellyfinLibraryId\.value/);
   assert.match(
     page,
     /:title="source\.kind === 'path' \? \(source\.path \?\? ''\) : undefined"/,
@@ -358,7 +307,7 @@ test("sources are managed on their own page with row action menus", async () => 
   );
   assert.match(page, /data-disabled:cursor-default/);
   assert.match(page, /queueSourceScan/);
-  assert.match(page, /source\.kind !== 'plugin'/);
+  assert.match(page, /source\.kind !== 'jellyfin'/);
   assert.match(page, /settings\.sources\.actions/);
   assert.match(
     page,

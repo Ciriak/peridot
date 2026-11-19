@@ -285,30 +285,13 @@ model ServerSetting {
   updatedAt            DateTime @onCreate(now()) @onUpdate(now())
 }
 
-model PluginInstallation {
-  pluginId             String    @id
-  installed            Int       @default(1)
-  enabled              Int       @default(1)
-  installedAt          DateTime?
-  installSource        String    @default("bundled")
-  installSourceLocator String
-  version              String
-  configuration        String    @default("{}")
-  credentialCiphertext String?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @onCreate(now()) @onUpdate(now())
-
-  @@index([installed, enabled])
-}
-
 model Source {
   id                   String   @id @onCreate(cuid(2))
   kind                 String
   name                 String?
   path                 String?
   url                  String?
-  pluginId             String?
-  pluginSourceIdentity String?
+  sourceIdentity       String?
   configuration        String?
   credentialCiphertext String?
   lastSyncedAt         DateTime?
@@ -318,8 +301,8 @@ model Source {
   updatedAt            DateTime @onCreate(now()) @onUpdate(now())
 
   @@index([kind])
-  @@index([pluginId])
   @@index([position])
+  @@unique([kind, sourceIdentity])
 }
 
 model MetadataProvider {

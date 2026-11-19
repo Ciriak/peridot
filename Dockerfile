@@ -18,8 +18,6 @@ COPY . .
 
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @peridot/contracts build
-RUN pnpm --filter @peridot/plugin-sdk build
-RUN pnpm --filter @peridot/plugin-jellyfin build
 RUN pnpm --filter @peridot/server build
 RUN pnpm --filter @peridot/web generate
 

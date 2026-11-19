@@ -2,8 +2,6 @@ import Fastify, { LogController } from "fastify";
 import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
 import type { HealthResponse } from "@peridot/contracts";
-import type { PluginDefinition } from "@peridot/plugin-sdk";
-import { createJellyfinPlugin } from "@peridot/plugin-jellyfin";
 import { registerAuthRoutes, registerProtectedRoutes } from "./auth.js";
 import { ArtworkCache } from "./artwork-cache.js";
 import { CatalogService } from "./catalog.js";
@@ -35,8 +33,12 @@ import {
 } from "./playback-tokens.js";
 import { registerAdminRoutes } from "./admin-routes.js";
 import { ArtworkService, hasPendingArtworkJobs } from "./artwork-fetch.js";
-import { PluginService } from "./plugins.js";
-import { registerPluginRoutes } from "./plugin-routes.js";
+import { createJellyfinIntegration } from "./jellyfin/index.js";
+import {
+  SourceIntegrationRegistry,
+  SourceIntegrationService,
+  type SourceIntegrationDefinition,
+} from "./source-integrations.js";
 import { registerTaskRoutes } from "./task-routes.js";
 import { queueArtworkFetch, queueCatalogFetch, TaskService } from "./tasks.js";
 import { ensureServerSettings } from "./server-settings.js";
@@ -66,7 +68,7 @@ export interface BuildAppOptions {
   metadataRequestIntervalMs?: number;
   discogsFetch?: typeof fetch;
   discogsRequestIntervalMs?: number;
-  plugins?: readonly PluginDefinition[];
+  sourceIntegrations?: readonly SourceIntegrationDefinition[];
   enableSourceRefreshScheduler?: boolean;
   enableUpdateCheckScheduler?: boolean;
   updateCheckSchedulerOptions?: UpdateCheckSchedulerOptions;
@@ -107,19 +109,11 @@ export async function buildApp(options: BuildAppOptions = {}) {
     ).flatMap((source) =>
       source.credentialCiphertext ? [source.credentialCiphertext] : [],
     );
-    const pluginCredentials = (
-      await database.orm.PluginInstallation.where((plugin) =>
-        plugin.credentialCiphertext.isNotNull(),
-      ).all()
-    ).flatMap((plugin) =>
-      plugin.credentialCiphertext ? [plugin.credentialCiphertext] : [],
-    );
     credentials = await CredentialStore.fromConfig(
       config.credentialEncryptionKey,
       config.databaseUrl,
       {
         metadataProvider: metadataProviderCredentials,
-        plugin: pluginCredentials,
         source: sourceCredentials,
       },
     );
@@ -149,10 +143,11 @@ export async function buildApp(options: BuildAppOptions = {}) {
       ),
     );
   const playbackTokens = new PlaybackTokenService();
-  const plugins = new PluginService(
-    database,
+  const sourceIntegrations = new SourceIntegrationService(
+    new SourceIntegrationRegistry(
+      options.sourceIntegrations ?? [createJellyfinIntegration()],
+    ),
     credentials,
-    options.plugins ?? [createJellyfinPlugin()],
   );
   const catalog = new CatalogService(database, playbackTokens);
   const realtime = new RealtimeHub(database);
@@ -166,7 +161,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
   );
   const artworkService = new ArtworkService(
     database,
-    plugins,
+    sourceIntegrations,
     catalog,
     artworkCache,
   );
@@ -183,12 +178,11 @@ export async function buildApp(options: BuildAppOptions = {}) {
     (task) => realtime.publishTask(task),
     (level, message) => logBuffer.add(level, message),
   );
-  plugins.registerTaskExecutors(tasks);
   const scanner = new LibraryScanner(
     database,
+    sourceIntegrations,
     metadataEnrichment,
     catalog,
-    plugins,
     artworkCache,
   );
   tasks.registerExecutor("library_scan", (task, taskService, signal) =>
@@ -273,7 +267,6 @@ export async function buildApp(options: BuildAppOptions = {}) {
   await logBuffer.loadPersistedHistory();
   await ensureDefaultSource(database, config.libraryRoot);
   await ensureDefaultMetadataProvider(database);
-  await plugins.initialize();
   await tasks.initialize();
   const sourceRefreshScheduler = new SourceRefreshScheduler(
     database,
@@ -300,10 +293,9 @@ export async function buildApp(options: BuildAppOptions = {}) {
         tasks,
         playbackTokens,
         artworkCache,
-        plugins,
+        sourceIntegrations,
       );
       await registerCatalogRoutes(protectedApp, catalog, artworkCache);
-      await registerPluginRoutes(protectedApp, database, plugins, catalog);
       await registerTaskRoutes(protectedApp, tasks);
       await registerLikeRoutes(protectedApp, database);
       await registerPlaylistRoutes(protectedApp, database, playbackTokens);
@@ -324,7 +316,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
           }
         },
         options.restartServer,
-        plugins,
+        sourceIntegrations,
         catalog,
         sourceRefreshScheduler,
         updateService,

@@ -19,9 +19,9 @@ import type {
 } from '@prisma/orm-sqlite/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'8466b5a38d1fae0b36b2c3f0e74773a784afb6f6418df750f9e4c16c11e92bdc'>;
+  StorageHashBase<'b7404da89f184c311c251f7ebbaa77db518dfc1bcd75c2392dd6a3d3bf3b84a0'>;
 export type ExecutionHash =
-  ExecutionHashBase<'af5db9c2d052d8692ee1f1a70221c2da0712097bb5b307d7d3a15319aaae43d9'>;
+  ExecutionHashBase<'85edb6c43666162916bbb345e5da90f53ec36d044ed381921f3de575cd433dc6'>;
 export type ProfileHash =
   ProfileHashBase<'260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53'>;
 
@@ -422,20 +422,6 @@ export namespace Models {
     user: User;
     readonly [RelationKeys]?: 'playlist' | 'user';
   };
-  export type PluginInstallation = {
-    configuration: FieldOutputTypes['__unbound__']['PluginInstallation']['configuration'];
-    createdAt: FieldOutputTypes['__unbound__']['PluginInstallation']['createdAt'];
-    credentialCiphertext: FieldOutputTypes['__unbound__']['PluginInstallation']['credentialCiphertext'];
-    enabled: FieldOutputTypes['__unbound__']['PluginInstallation']['enabled'];
-    installSource: FieldOutputTypes['__unbound__']['PluginInstallation']['installSource'];
-    installSourceLocator: FieldOutputTypes['__unbound__']['PluginInstallation']['installSourceLocator'];
-    installed: FieldOutputTypes['__unbound__']['PluginInstallation']['installed'];
-    installedAt: FieldOutputTypes['__unbound__']['PluginInstallation']['installedAt'];
-    pluginId: FieldOutputTypes['__unbound__']['PluginInstallation']['pluginId'];
-    updatedAt: FieldOutputTypes['__unbound__']['PluginInstallation']['updatedAt'];
-    version: FieldOutputTypes['__unbound__']['PluginInstallation']['version'];
-    readonly [RelationKeys]?: never;
-  };
   export type QueueItem = {
     createdAt: FieldOutputTypes['__unbound__']['QueueItem']['createdAt'];
     position: FieldOutputTypes['__unbound__']['QueueItem']['position'];
@@ -484,9 +470,8 @@ export namespace Models {
     lastSyncedAt: FieldOutputTypes['__unbound__']['Source']['lastSyncedAt'];
     name: FieldOutputTypes['__unbound__']['Source']['name'];
     path: FieldOutputTypes['__unbound__']['Source']['path'];
-    pluginId: FieldOutputTypes['__unbound__']['Source']['pluginId'];
-    pluginSourceIdentity: FieldOutputTypes['__unbound__']['Source']['pluginSourceIdentity'];
     position: FieldOutputTypes['__unbound__']['Source']['position'];
+    sourceIdentity: FieldOutputTypes['__unbound__']['Source']['sourceIdentity'];
     updatedAt: FieldOutputTypes['__unbound__']['Source']['updatedAt'];
     url: FieldOutputTypes['__unbound__']['Source']['url'];
     artworkJobs: ArtworkJob[];
@@ -623,7 +608,6 @@ export declare const models: {
   Playlist: Models.Playlist;
   PlaylistItem: Models.PlaylistItem;
   PlaylistLike: Models.PlaylistLike;
-  PluginInstallation: Models.PluginInstallation;
   QueueItem: Models.QueueItem;
   QueueState: Models.QueueState;
   ServerSetting: Models.ServerSetting;
@@ -2095,104 +2079,6 @@ type ContractBase = Omit<
                 },
               ];
             };
-            readonly PluginInstallation: {
-              columns: {
-                readonly configuration: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/text@1', '{}'>;
-                  };
-                  readonly many: false;
-                };
-                readonly createdAt: {
-                  readonly dataType: 'sqlite/datetime';
-                  readonly codecId: 'sqlite/datetime@1';
-                  readonly nullable: false;
-                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
-                  readonly many: false;
-                };
-                readonly credentialCiphertext: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly enabled: {
-                  readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/integer@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '1'>;
-                  };
-                  readonly many: false;
-                };
-                readonly installSource: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/text@1', 'bundled'>;
-                  };
-                  readonly many: false;
-                };
-                readonly installSourceLocator: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly installed: {
-                  readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/integer@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '1'>;
-                  };
-                  readonly many: false;
-                };
-                readonly installedAt: {
-                  readonly dataType: 'sqlite/datetime';
-                  readonly codecId: 'sqlite/datetime@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly pluginId: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly updatedAt: {
-                  readonly dataType: 'sqlite/datetime';
-                  readonly codecId: 'sqlite/datetime@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly version: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-              };
-              primaryKey: { readonly columns: readonly ['pluginId'] };
-              uniques: readonly [];
-              indexes: readonly [
-                {
-                  readonly name: 'PluginInstallation_installed_enabled_idx_506a1df3';
-                  readonly prefix: 'PluginInstallation_installed_enabled_idx';
-                  readonly columns: readonly ['installed', 'enabled'];
-                  readonly unique: false;
-                },
-              ];
-              foreignKeys: readonly [];
-            };
             readonly QueueItem: {
               columns: {
                 readonly createdAt: {
@@ -2542,18 +2428,6 @@ type ContractBase = Omit<
                   readonly nullable: true;
                   readonly many: false;
                 };
-                readonly pluginId: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly pluginSourceIdentity: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
                 readonly position: {
                   readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/integer@1';
@@ -2562,6 +2436,12 @@ type ContractBase = Omit<
                     readonly kind: 'literal';
                     readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
                   };
+                  readonly many: false;
+                };
+                readonly sourceIdentity: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
                   readonly many: false;
                 };
                 readonly updatedAt: {
@@ -2578,18 +2458,12 @@ type ContractBase = Omit<
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
-              uniques: readonly [];
+              uniques: readonly [{ readonly columns: readonly ['kind', 'sourceIdentity'] }];
               indexes: readonly [
                 {
                   readonly name: 'Source_kind_idx_c9ca668f';
                   readonly prefix: 'Source_kind_idx';
                   readonly columns: readonly ['kind'];
-                  readonly unique: false;
-                },
-                {
-                  readonly name: 'Source_pluginId_idx_32c3e11d';
-                  readonly prefix: 'Source_pluginId_idx';
-                  readonly columns: readonly ['pluginId'];
                   readonly unique: false;
                 },
                 {
@@ -3458,10 +3332,6 @@ type ContractBase = Omit<
     readonly PlaylistLike: {
       readonly namespace: '__unbound__' & NamespaceId;
       readonly model: 'PlaylistLike';
-    };
-    readonly PluginInstallation: {
-      readonly namespace: '__unbound__' & NamespaceId;
-      readonly model: 'PluginInstallation';
     };
     readonly QueueItem: {
       readonly namespace: '__unbound__' & NamespaceId;
@@ -4566,72 +4436,6 @@ type ContractBase = Omit<
               };
             };
           };
-          readonly PluginInstallation: {
-            readonly fields: {
-              readonly configuration: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly createdAt: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
-              };
-              readonly credentialCiphertext: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly enabled: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-              };
-              readonly installSource: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly installSourceLocator: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly installed: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-              };
-              readonly installedAt: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
-              };
-              readonly pluginId: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly updatedAt: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
-              };
-              readonly version: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-            };
-            readonly relations: Record<string, never>;
-            readonly storage: {
-              readonly table: 'PluginInstallation';
-              readonly namespaceId: '__unbound__';
-              readonly fields: {
-                readonly configuration: { readonly column: 'configuration' };
-                readonly createdAt: { readonly column: 'createdAt' };
-                readonly credentialCiphertext: { readonly column: 'credentialCiphertext' };
-                readonly enabled: { readonly column: 'enabled' };
-                readonly installSource: { readonly column: 'installSource' };
-                readonly installSourceLocator: { readonly column: 'installSourceLocator' };
-                readonly installed: { readonly column: 'installed' };
-                readonly installedAt: { readonly column: 'installedAt' };
-                readonly pluginId: { readonly column: 'pluginId' };
-                readonly updatedAt: { readonly column: 'updatedAt' };
-                readonly version: { readonly column: 'version' };
-              };
-            };
-          };
           readonly QueueItem: {
             readonly fields: {
               readonly createdAt: {
@@ -4883,17 +4687,13 @@ type ContractBase = Omit<
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
-              readonly pluginId: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly pluginSourceIdentity: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
               readonly position: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly sourceIdentity: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
               readonly updatedAt: {
                 readonly nullable: false;
@@ -4929,9 +4729,8 @@ type ContractBase = Omit<
                 readonly lastSyncedAt: { readonly column: 'lastSyncedAt' };
                 readonly name: { readonly column: 'name' };
                 readonly path: { readonly column: 'path' };
-                readonly pluginId: { readonly column: 'pluginId' };
-                readonly pluginSourceIdentity: { readonly column: 'pluginSourceIdentity' };
                 readonly position: { readonly column: 'position' };
+                readonly sourceIdentity: { readonly column: 'sourceIdentity' };
                 readonly updatedAt: { readonly column: 'updatedAt' };
                 readonly url: { readonly column: 'url' };
               };
@@ -5723,15 +5522,6 @@ type ContractBase = Omit<
           readonly ref: {
             readonly entry: 'PlaylistLike';
             readonly field: 'id';
-            readonly namespace: '__unbound__';
-          };
-        },
-        {
-          readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
-          readonly onUpdate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
-          readonly ref: {
-            readonly entry: 'PluginInstallation';
-            readonly field: 'updatedAt';
             readonly namespace: '__unbound__';
           };
         },

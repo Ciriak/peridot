@@ -23,10 +23,10 @@ Inspect git status and recent commits before editing; preserve unrelated changes
 
 ## Product constraints
 
-Self-hosted and local-first. External integrations are optional plugins with
-user-provided credentials and user-controlled services. No embedded shared keys.
-Do not load untrusted plugins into Fastify or expose credentials to browser code.
-The plugin SDK is an initial contract, not a secure runtime or stable public API.
+Self-hosted and local-first. External integrations are trusted built-ins shipped
+with Peridot, use user-provided credentials, and connect only to user-controlled
+services. No embedded shared keys. Do not load execution code supplied by users
+or external services into Fastify, and never expose credentials to browser code.
 Follow the brand and architecture recorded in docs/PROJECT.md.
 
 ## Handoff

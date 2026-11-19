@@ -12,7 +12,6 @@ export type MetadataProviderRow = Scalars<Models.MetadataProvider>;
 export type PlaylistRow = Scalars<Models.Playlist>;
 export type PlaylistItemRow = Scalars<Models.PlaylistItem>;
 export type PlaylistLikeRow = Scalars<Models.PlaylistLike>;
-export type PluginInstallationRow = Scalars<Models.PluginInstallation>;
 export type SourceRow = Scalars<Models.Source>;
 export type TrackLikeRow = Scalars<Models.TrackLike>;
 export type TrackPlayEventRow = Scalars<Models.TrackPlayEvent>;

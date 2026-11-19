@@ -8,8 +8,8 @@ can work from repository documentation.
 ## Product requirements
 
 Peridot is a flexible, self-hosted music platform for organizing and listening to
-an owner's music collection. Core owns users, the canonical library, audio, and
-playlists. Optional plugins extend capabilities through versioned contracts.
+an owner's music collection. Core owns users, the canonical library, audio,
+playlists, and trusted built-in source integrations.
 
 The core audio library also supports audiobooks and locally stored podcast
 episodes as first-class browse categories. Media type is detected per track
@@ -17,15 +17,15 @@ from authoritative Jellyfin and embedded metadata. One source may contain music,
 books, and shows; ambiguous tracks default to music. Classification is
 automatic only and does not use title- or folder-name heuristics.
 
-- In-app marketplace for plugin discovery, permissions, installation, and updates.
 - Playlist account linking and synchronization: Spotify, Deezer, SoundCloud,
   YouTube Music. Keep external track references and show unmatched local tracks.
 - MusicBrainz and Discogs metadata enrichment with provenance.
 - AudioMuse-AI compatibility via an optional connector to the user's own service.
 - User-provided API keys and user-hosted services. No mandatory cloud service,
   embedded provider keys, or Peridot-hosted credential proxy.
-- Secure plugin isolation, scoped credentials, and explicit permissions. Never run
-  arbitrary marketplace plugin code in the main server process.
+- Jellyfin is a direct built-in library source. Future integrations are trusted
+  built-ins behind the same internal source interface and ship with Peridot.
+- Never load untrusted integration code into the server process.
 - OpenSubsonic compatibility is a target requiring future interoperability tests.
 
 Provider availability and API policies must be revalidated before implementation.
@@ -34,12 +34,12 @@ Playlist synchronization concerns references and matching against local audio.
 ## Architecture direction
 
 TypeScript, pnpm workspaces, Turborepo, Nuxt/Vue web, Fastify server, Prisma,
-shared UI/player/contracts/plugin SDK packages, and a future desktop client.
+shared UI/player/contracts packages, and a future desktop client.
 Use shadcn-vue for the component system as interactive screens are introduced.
 
 The foundation uses SQLite as a provisional local development starting point.
-Desktop shell, production storage, authentication, plugin RPC/isolation, and
-marketplace trust/distribution protocols still require implementation decisions.
+Desktop shell, production storage, authentication, and additional built-in
+source integrations still require implementation decisions.
 
 Production deployment uses immutable multi-architecture GHCR images. The web
 application, authenticated API, audio, and realtime traffic share one Fastify
@@ -79,8 +79,8 @@ motion, visible keyboard focus, and accessible contrast.
    list real tracks, classify music, audiobooks, and podcasts, and play one
    through an authenticated audio endpoint.
 3. Users, playlists, matching, and playback persistence.
-4. Plugin SDK v1, credential handling, isolated runtime, one trusted provider.
-5. Marketplace and further providers; desktop packaging; OpenSubsonic verification.
+4. Direct built-in source integrations with Jellyfin as the first implementation.
+5. Further built-in providers; desktop packaging; OpenSubsonic verification.
 
 ## Branch policy
 

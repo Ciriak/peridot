@@ -11,7 +11,6 @@ function source(id: string): SourceResponse {
     name: id,
     path: `/music/${id}`,
     url: null,
-    pluginId: null,
     configuration: null,
     fileCount: 0,
     lastSyncedAt: null,
