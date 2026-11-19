@@ -79,7 +79,7 @@ test("tasks authenticate list access and reject invalid pagination", async () =>
       url: "/api/tasks",
       headers: context.authorization,
       payload: {
-        kind: "plugin:test:untrusted",
+        kind: "unsupported_task",
         title: "Should not be accepted",
       },
     });
@@ -111,17 +111,17 @@ test("task service runs FIFO, coalesces queued duplicates, and reports progress"
     determinateSeen = resolve;
   });
 
-  tasks.registerExecutor("plugin:test:blocker", async (task) => {
+  tasks.registerExecutor("catalog_fetch", async (task) => {
     events.push(`start:${task.id}`);
     await blocker;
     events.push(`finish:${task.id}`);
   });
-  tasks.registerExecutor("plugin:test:coalesced", async (task) => {
+  tasks.registerExecutor("metadata_fetch", async (task) => {
     events.push(`start:${task.id}`);
     await delay();
     events.push(`finish:${task.id}`);
   });
-  tasks.registerExecutor("plugin:test:progress", async (task, service) => {
+  tasks.registerExecutor("artwork_fetch", async (task, service) => {
     events.push(`start:${task.id}`);
     await service.updateProgress(task.id, null, null);
     indeterminateSeen();
@@ -131,7 +131,7 @@ test("task service runs FIFO, coalesces queued duplicates, and reports progress"
     return {
       details: [
         {
-          key: "plugin.item",
+          key: "source.item",
           value: "one",
           labelMessage: message("task.detail.added"),
           valueMessage: null,
@@ -155,20 +155,20 @@ test("task service runs FIFO, coalesces queued duplicates, and reports progress"
 
   try {
     const blockerTask = await tasks.enqueue({
-      kind: "plugin:test:blocker",
+      kind: "catalog_fetch",
       title: "Blocking task",
     });
     await waitForStatus(tasks, blockerTask.id, "running");
 
     const [first, duplicate] = await Promise.all([
       tasks.enqueue({
-        kind: "plugin:test:coalesced",
+        kind: "metadata_fetch",
         title: "Coalesced task",
         sourceId: "source-1",
         sourceName: "Music",
       }),
       tasks.enqueue({
-        kind: "plugin:test:coalesced",
+        kind: "metadata_fetch",
         title: "Coalesced task",
         sourceId: "source-1",
         sourceName: "Music",
@@ -177,7 +177,7 @@ test("task service runs FIFO, coalesces queued duplicates, and reports progress"
     assert.equal(first.id, duplicate.id);
 
     const progressTask = await tasks.enqueue({
-      kind: "plugin:test:progress",
+      kind: "artwork_fetch",
       title: "Progress task",
     });
     const queuedList = await tasks.list("active");
@@ -218,7 +218,7 @@ test("task service runs FIFO, coalesces queued duplicates, and reports progress"
       `start:${progressTask.id}`,
     ]);
     const completed = toTaskResponse((await tasks.get(progressTask.id))!);
-    assert.equal(completed.kind, "plugin:test:progress");
+    assert.equal(completed.kind, "artwork_fetch");
     assert.equal(completed.details[0]?.value, "one");
   } finally {
     releaseBlocker();
@@ -296,7 +296,7 @@ test("scans, metadata, and catalog projection run before artwork retrieval", asy
   }
 });
 
-test("running and queued tasks can be stopped without running queued work", async () => {
+test("queued tasks are removed and running tasks are stopped", async () => {
   const context = await createTestContext();
   await context.app.close();
   const tasks = new TaskService(context.database);
@@ -309,47 +309,44 @@ test("running and queued tasks can be stopped without running queued work", asyn
   const sawAbort = new Promise<void>((resolve) => {
     aborted = resolve;
   });
-  tasks.registerExecutor(
-    "plugin:test:stoppable",
-    async (task, _service, signal) => {
-      events.push(`start:${task.id}`);
-      started();
-      await new Promise<void>((_, reject) => {
-        signal.addEventListener(
-          "abort",
-          () => {
-            aborted();
-            reject(signal.reason);
-          },
-          { once: true },
-        );
-      });
-    },
-  );
+  tasks.registerExecutor("library_scan", async (task, _service, signal) => {
+    events.push(`start:${task.id}`);
+    started();
+    await new Promise<void>((_, reject) => {
+      signal.addEventListener(
+        "abort",
+        () => {
+          aborted();
+          reject(signal.reason);
+        },
+        { once: true },
+      );
+    });
+  });
   await tasks.initialize();
 
   try {
     const running = await tasks.enqueue({
-      kind: "plugin:test:stoppable",
+      kind: "library_scan",
       title: "Running work",
       sourceId: "source-a",
       sourceName: "Source A",
     });
     await sawStart;
     const queued = await tasks.enqueue({
-      kind: "plugin:test:stoppable",
+      kind: "library_scan",
       title: "Queued work",
       sourceId: "source-b",
       sourceName: "Source B",
     });
 
-    await tasks.stop(queued.id);
-    await tasks.stop(running.id);
+    const removedQueued = await tasks.cancel(queued.id);
+    const stoppedRunning = await tasks.cancel(running.id);
     await sawAbort;
 
-    const stoppedQueued = await tasks.get(queued.id);
-    const stoppedRunning = await tasks.get(running.id);
-    assert.equal(stoppedQueued?.status, "stopped");
+    const cancelledQueued = await tasks.get(queued.id);
+    assert.equal(removedQueued?.status, "queued");
+    assert.equal(cancelledQueued, null);
     assert.equal(stoppedRunning?.status, "stopped");
     assert.equal(
       stoppedRunning?.failureMessage,
@@ -362,26 +359,43 @@ test("running and queued tasks can be stopped without running queued work", asyn
   }
 });
 
-test("administrators stop active tasks", async () => {
+test("administrators cancel queued and running tasks", async () => {
   const context = await createTestContext();
   const member = await createMemberSession(context);
   try {
-    const task = await context.database.orm.Task.create({
+    const running = await context.database.orm.Task.create({
       kind: "library_scan",
       status: "running",
       title: "Running scan",
       startedAt: new Date(),
     });
-    const memberStop = await context.app.inject({
+    const queued = await context.database.orm.Task.create({
+      kind: "library_scan",
+      status: "queued",
+      title: "Queued scan",
+    });
+    const memberCancel = await context.app.inject({
       method: "POST",
-      url: `/api/admin/tasks/${task.id}/stop`,
+      url: `/api/admin/tasks/${queued.id}/cancel`,
       headers: member,
     });
-    assert.equal(memberStop.statusCode, 403);
+    assert.equal(memberCancel.statusCode, 403);
+
+    const removed = await context.app.inject({
+      method: "POST",
+      url: `/api/admin/tasks/${queued.id}/cancel`,
+      headers: context.authorization,
+    });
+    assert.equal(removed.statusCode, 200);
+    assert.equal(removed.json<TaskResponse>().status, "queued");
+    assert.equal(
+      await context.database.orm.Task.first({ id: queued.id }),
+      null,
+    );
 
     const stopped = await context.app.inject({
       method: "POST",
-      url: `/api/admin/tasks/${task.id}/stop`,
+      url: `/api/admin/tasks/${running.id}/cancel`,
       headers: context.authorization,
     });
     assert.equal(stopped.statusCode, 200);
@@ -393,7 +407,7 @@ test("administrators stop active tasks", async () => {
 
     const missing = await context.app.inject({
       method: "POST",
-      url: "/api/admin/tasks/missing/stop",
+      url: "/api/admin/tasks/missing/cancel",
       headers: context.authorization,
     });
     assert.equal(missing.statusCode, 404);
@@ -491,11 +505,11 @@ test("task failures and restart interruptions are visible in server logs", async
       ),
     );
 
-    tasks.registerExecutor("plugin:test:failure-log", async () => {
+    tasks.registerExecutor("catalog_fetch", async () => {
       throw new Error("Jellyfin request failed");
     });
     const failed = await tasks.enqueue({
-      kind: "plugin:test:failure-log",
+      kind: "catalog_fetch",
       title: "Broken Jellyfin sync",
       sourceName: "Media server",
     });
@@ -520,14 +534,14 @@ test("terminal task history is bounded to thirty days and five hundred rows", as
   try {
     const oldCompletedAt = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
     const old = await context.database.orm.Task.create({
-      kind: "plugin:test:history",
+      kind: "library_scan",
       status: "completed",
       title: "Old task",
       completedAt: oldCompletedAt,
     });
     for (let index = 0; index < 505; index += 1) {
       await context.database.orm.Task.create({
-        kind: "plugin:test:history",
+        kind: "library_scan",
         status: "completed",
         title: `Task ${index}`,
         completedAt: new Date(),
@@ -575,10 +589,10 @@ test("queued child tasks do not run after an interrupted parent", async () => {
   }
 });
 
-test("plugin task details have fixed count and field bounds", () => {
+test("background task details have fixed count and field bounds", () => {
   const details = normalizeTaskDetails(
     Array.from({ length: 20 }, (_, index) => ({
-      key: `plugin.detail.${index}`,
+      key: `task.detail.${index}`,
       value: "x".repeat(400),
       labelMessage: message("task.detail.added"),
       valueMessage: null,
@@ -612,7 +626,7 @@ test("metadata progress identifies the provider currently being fetched", () => 
   );
 });
 
-test("plugin task details are bounded and source paths are not exposed", async () => {
+test("background task details are bounded and source paths are not exposed", async () => {
   const context = await createTestContext();
   try {
     const privatePath = path.join(context.root, "private-source");

@@ -67,10 +67,7 @@ test("en-US messages interpolate and pluralize", () => {
     i18n.global.t("settings.sources.path"),
     "Server internal folder",
   );
-  assert.equal(
-    i18n.global.t("plugin.jellyfin.description"),
-    "Read music, audiobooks, and podcasts from a Jellyfin library you control.",
-  );
+  assert.equal(i18n.global.t("settings.sources.jellyfin.title"), "Jellyfin");
   assert.equal(
     i18n.global.t("trackTable.genres", { genres: "Electronic, Ambient" }),
     "Genres: Electronic, Ambient",

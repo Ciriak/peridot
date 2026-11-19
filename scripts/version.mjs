@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const rootPackagePath = path.join(root, "package.json");
-const workspaceRoots = ["apps", "packages", "plugins"];
+const workspaceRoots = ["apps", "packages"];
 const checkOnly = process.argv.includes("--check");
 
 async function readJson(filePath) {

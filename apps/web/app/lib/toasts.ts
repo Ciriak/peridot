@@ -331,15 +331,3 @@ export function notifyQueueSaveFailed(detailMessage: string) {
     kind: "error",
   });
 }
-
-export function notifySimilarTracksFailed(detailMessage: string) {
-  addToast({
-    titleMessage: message("toast.similarTracksFailedTitle"),
-    descriptionMessage: message("toast.similarTracksFailed", {
-      message: detailMessage,
-    }),
-    status: "error",
-    duration: 8000,
-    kind: "error",
-  });
-}

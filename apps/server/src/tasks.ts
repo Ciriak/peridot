@@ -36,8 +36,6 @@ const MAX_TITLE_LENGTH = 160;
 const MAX_FAILURE_SUMMARY_LENGTH = 500;
 const TERMINAL_TASK_LIMIT = 500;
 const TERMINAL_TASK_AGE_MS = 30 * 24 * 60 * 60 * 1000;
-const PLUGIN_TASK_KIND =
-  /^plugin:[a-z0-9][a-z0-9._-]{0,63}:[a-z0-9][a-z0-9._-]{0,63}$/;
 
 export interface EnqueueTaskInput {
   kind: TaskKind;
@@ -168,7 +166,7 @@ export function toTaskResponse(task: TaskRow): TaskResponse {
                   source: task.sourceName,
                 })
               : message("task.title.artworkFetch")
-            : message("task.title.plugin", { task: task.title }));
+            : message("task.title.custom", { task: task.title }));
   return {
     id: task.id,
     kind: task.kind as TaskKind,
@@ -206,8 +204,7 @@ function isTaskKind(value: string): value is TaskKind {
     value === "library_scan" ||
     value === "catalog_fetch" ||
     value === "metadata_fetch" ||
-    value === "artwork_fetch" ||
-    PLUGIN_TASK_KIND.test(value)
+    value === "artwork_fetch"
   );
 }
 
@@ -469,6 +466,20 @@ export class TaskService {
   }
 
   async stop(id: string): Promise<TaskRow | null> {
+    await this.stopTasks([id]);
+    return this.get(id);
+  }
+
+  async cancel(id: string): Promise<TaskRow | null> {
+    const task = await this.get(id);
+    if (!task) return null;
+    if (task.status === "queued") {
+      const removed = await this.database.orm.Task.where({
+        id,
+        status: "queued",
+      }).deleteAndCount();
+      if (removed > 0) return task;
+    }
     await this.stopTasks([id]);
     return this.get(id);
   }

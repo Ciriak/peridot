@@ -5,7 +5,7 @@ import library from "@iconify-icons/basil/stack-outline";
 import heart from "@iconify-icons/basil/heart-outline";
 import heartFilled from "@iconify-icons/basil/heart-solid";
 import playlist from "@iconify-icons/basil/rows-outline";
-import plugins from "@iconify-icons/basil/apps-outline";
+import metadata from "@iconify-icons/basil/document-outline";
 import close from "@iconify-icons/basil/cross-outline";
 import menu from "@iconify-icons/basil/menu-outline";
 import plus from "@iconify-icons/basil/plus-outline";
@@ -61,7 +61,7 @@ export const icons = {
   playlist,
   queue: playlist,
   addToQueue: playlist,
-  plugins,
+  metadata,
   close,
   menu,
   plus,

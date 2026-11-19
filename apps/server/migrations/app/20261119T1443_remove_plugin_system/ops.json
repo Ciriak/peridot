@@ -1,0 +1,304 @@
+[
+  {
+    "id": "recreateTable.Source",
+    "label": "Recreate table Source",
+    "summary": "Recreates table Source to apply schema changes: database/Source/unique:kind,sourceIdentity; database/Source/column:sourceIdentity",
+    "operationClass": "destructive",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "table",
+        "name": "Source"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"Source\" exists",
+        "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
+        "params": [
+          "table",
+          "Source"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"Source\""
+        }
+      },
+      {
+        "description": "ensure temp table \"_prisma_new_Source\" does not exist",
+        "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
+        "params": [
+          "table",
+          "_prisma_new_Source"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "temp table \"_prisma_new_Source\""
+        }
+      },
+      {
+        "description": "ensure table \"Source\" has exactly the columns the rebuild copies or leaves out (configuration, createdAt, credentialCiphertext, id, kind, lastSyncedAt, name, path, pluginId, pluginSourceIdentity, position, updatedAt, url)",
+        "sql": "SELECT (SELECT COUNT(*) FROM pragma_table_info('Source')) = 13 AND (SELECT COUNT(*) FROM pragma_table_info('Source') WHERE name IN ('configuration', 'createdAt', 'credentialCiphertext', 'id', 'kind', 'lastSyncedAt', 'name', 'path', 'pluginId', 'pluginSourceIdentity', 'position', 'updatedAt', 'url')) = 13"
+      }
+    ],
+    "execute": [
+      {
+        "description": "create new table \"_prisma_new_Source\" with desired schema",
+        "sql": "CREATE TABLE \"_prisma_new_Source\" (\n  \"configuration\" TEXT,\n  \"createdAt\" TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')) NOT NULL,\n  \"credentialCiphertext\" TEXT,\n  \"id\" TEXT NOT NULL,\n  \"kind\" TEXT NOT NULL,\n  \"lastSyncedAt\" TEXT,\n  \"name\" TEXT,\n  \"path\" TEXT,\n  \"position\" INTEGER DEFAULT 0 NOT NULL,\n  \"sourceIdentity\" TEXT,\n  \"updatedAt\" TEXT NOT NULL,\n  \"url\" TEXT,\n  PRIMARY KEY (\"id\"),\n  UNIQUE (\"kind\", \"sourceIdentity\")\n)"
+      },
+      {
+        "description": "copy data from \"Source\" to \"_prisma_new_Source\"",
+        "sql": "INSERT INTO \"_prisma_new_Source\" (\"configuration\", \"createdAt\", \"credentialCiphertext\", \"id\", \"kind\", \"lastSyncedAt\", \"name\", \"path\", \"position\", \"updatedAt\", \"url\") SELECT \"configuration\", \"createdAt\", \"credentialCiphertext\", \"id\", \"kind\", \"lastSyncedAt\", \"name\", \"path\", \"position\", \"updatedAt\", \"url\" FROM \"Source\""
+      },
+      {
+        "description": "drop old table \"Source\"",
+        "sql": "DROP TABLE \"Source\""
+      },
+      {
+        "description": "rename \"_prisma_new_Source\" to \"Source\"",
+        "sql": "ALTER TABLE \"_prisma_new_Source\" RENAME TO \"Source\""
+      },
+      {
+        "description": "recreate index \"Source_kind_idx_c9ca668f\" on \"Source\"",
+        "sql": "CREATE INDEX \"Source_kind_idx_c9ca668f\" ON \"Source\" (\"kind\")"
+      },
+      {
+        "description": "recreate index \"Source_position_idx_82a01784\" on \"Source\"",
+        "sql": "CREATE INDEX \"Source_position_idx_82a01784\" ON \"Source\" (\"position\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"Source\" exists",
+        "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
+        "params": [
+          "table",
+          "Source"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"Source\""
+        }
+      },
+      {
+        "description": "verify temp table \"_prisma_new_Source\" is gone",
+        "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
+        "params": [
+          "table",
+          "_prisma_new_Source"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "temp table \"_prisma_new_Source\""
+        }
+      },
+      {
+        "description": "verify \"Source\" is stored as the rebuilt table",
+        "sql": "SELECT (SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'Source') = 'CREATE TABLE \"Source\" (\n  \"configuration\" TEXT,\n  \"createdAt\" TEXT DEFAULT (strftime(''%Y-%m-%dT%H:%M:%fZ'',''now'')) NOT NULL,\n  \"credentialCiphertext\" TEXT,\n  \"id\" TEXT NOT NULL,\n  \"kind\" TEXT NOT NULL,\n  \"lastSyncedAt\" TEXT,\n  \"name\" TEXT,\n  \"path\" TEXT,\n  \"position\" INTEGER DEFAULT 0 NOT NULL,\n  \"sourceIdentity\" TEXT,\n  \"updatedAt\" TEXT NOT NULL,\n  \"url\" TEXT,\n  PRIMARY KEY (\"id\"),\n  UNIQUE (\"kind\", \"sourceIdentity\")\n)'"
+      },
+      {
+        "description": "verify \"sourceIdentity\" nullability on \"Source\"",
+        "sql": "SELECT COUNT(*) > 0 FROM pragma_table_info('Source') WHERE name = 'sourceIdentity' AND \"notnull\" = 0"
+      },
+      {
+        "description": "verify unique constraint (kind, sourceIdentity) on \"Source\"",
+        "sql": "SELECT EXISTS (SELECT 1 FROM pragma_index_list('Source') l WHERE l.\"unique\" = 1 AND (SELECT COUNT(*) FROM pragma_index_info(l.name)) = 2 AND (SELECT COUNT(*) FROM pragma_index_info(l.name) WHERE name IN ('kind', 'sourceIdentity')) = 2)"
+      },
+      {
+        "description": "verify \"Source\" has no unique constraint besides the expected ones",
+        "sql": "SELECT NOT EXISTS (SELECT 1 FROM pragma_index_list('Source') l WHERE l.origin = 'u' AND NOT (((SELECT COUNT(*) FROM pragma_index_info(l.name)) = 2 AND (SELECT COUNT(*) FROM pragma_index_info(l.name) WHERE name IN ('kind', 'sourceIdentity')) = 2)))"
+      }
+    ]
+  },
+  {
+    "id": "dropColumn.Source.pluginSourceIdentity",
+    "label": "Drop column \"pluginSourceIdentity\" from \"Source\"",
+    "summary": "Drops column pluginSourceIdentity on Source which is not in the contract",
+    "operationClass": "destructive",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "column",
+        "name": "pluginSourceIdentity",
+        "table": "Source"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"pluginSourceIdentity\" exists on \"Source\"",
+        "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM pragma_table_info(?1) WHERE \"name\" = ?2",
+        "params": [
+          "Source",
+          "pluginSourceIdentity"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "column \"pluginSourceIdentity\" on \"Source\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "drop column \"pluginSourceIdentity\" from \"Source\"",
+        "sql": "ALTER TABLE \"Source\" DROP COLUMN \"pluginSourceIdentity\""
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"pluginSourceIdentity\" is gone from \"Source\"",
+        "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM pragma_table_info(?1) WHERE \"name\" = ?2",
+        "params": [
+          "Source",
+          "pluginSourceIdentity"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "column \"pluginSourceIdentity\" on \"Source\""
+        }
+      }
+    ]
+  },
+  {
+    "id": "dropColumn.Source.pluginId",
+    "label": "Drop column \"pluginId\" from \"Source\"",
+    "summary": "Drops column pluginId on Source which is not in the contract",
+    "operationClass": "destructive",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "column",
+        "name": "pluginId",
+        "table": "Source"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"pluginId\" exists on \"Source\"",
+        "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM pragma_table_info(?1) WHERE \"name\" = ?2",
+        "params": [
+          "Source",
+          "pluginId"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "column \"pluginId\" on \"Source\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "drop column \"pluginId\" from \"Source\"",
+        "sql": "ALTER TABLE \"Source\" DROP COLUMN \"pluginId\""
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"pluginId\" is gone from \"Source\"",
+        "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM pragma_table_info(?1) WHERE \"name\" = ?2",
+        "params": [
+          "Source",
+          "pluginId"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "column \"pluginId\" on \"Source\""
+        }
+      }
+    ]
+  },
+  {
+    "id": "dropIndex.Source.Source_pluginId_idx_32c3e11d",
+    "label": "Drop index Source_pluginId_idx_32c3e11d on Source",
+    "summary": "Drops index Source_pluginId_idx_32c3e11d on Source which is not in the contract",
+    "operationClass": "widening",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "index",
+        "name": "Source_pluginId_idx_32c3e11d",
+        "table": "Source"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"Source_pluginId_idx_32c3e11d\" exists",
+        "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
+        "params": [
+          "index",
+          "Source_pluginId_idx_32c3e11d"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "index \"Source_pluginId_idx_32c3e11d\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "drop index \"Source_pluginId_idx_32c3e11d\"",
+        "sql": "DROP INDEX IF EXISTS \"Source_pluginId_idx_32c3e11d\""
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"Source_pluginId_idx_32c3e11d\" is gone",
+        "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
+        "params": [
+          "index",
+          "Source_pluginId_idx_32c3e11d"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "index \"Source_pluginId_idx_32c3e11d\""
+        }
+      }
+    ]
+  },
+  {
+    "id": "dropTable.PluginInstallation",
+    "label": "Drop table \"PluginInstallation\"",
+    "summary": "Drops table PluginInstallation which is not in the contract",
+    "operationClass": "destructive",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "table",
+        "name": "PluginInstallation"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"PluginInstallation\" exists",
+        "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
+        "params": [
+          "table",
+          "PluginInstallation"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"PluginInstallation\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "drop table \"PluginInstallation\"",
+        "sql": "DROP TABLE \"PluginInstallation\""
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"PluginInstallation\" is gone",
+        "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
+        "params": [
+          "table",
+          "PluginInstallation"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"PluginInstallation\""
+        }
+      }
+    ]
+  }
+]

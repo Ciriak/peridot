@@ -4,19 +4,19 @@ import path from "node:path";
 import type {
   DirectorySearchResponse,
   MessageDescriptor,
-  PluginSourceOptionResponse,
+  SourceIntegrationOptionResponse,
   SourceKind,
   SourceResponse,
 } from "@peridot/contracts";
-import {
-  PluginError,
-  type PluginSourceConfiguration,
-} from "@peridot/plugin-sdk";
 import type { CredentialStore } from "./credential-store.js";
 import type { Database } from "./database.js";
 import { message } from "./messages.js";
-import type { PluginService } from "./plugins.js";
 import type { SourceRow } from "./prisma/models.js";
+import {
+  SourceIntegrationError,
+  type SourceIntegrationConfiguration,
+  type SourceIntegrationService,
+} from "./source-integrations.js";
 
 const DIRECTORY_ENTRY_LIMIT = 100;
 const DIRECTORY_SEARCH_RESULT_LIMIT = 100;
@@ -56,7 +56,6 @@ function toSourceResponse(
     name: source.name,
     path: source.path,
     url: source.url,
-    pluginId: source.pluginId,
     configuration: parseSourceConfiguration(source.configuration),
     fileCount,
     lastSyncedAt: lastSyncedAt?.toISOString() ?? null,
@@ -84,10 +83,13 @@ function parseSourceConfiguration(
   }
 }
 
-function pluginConfiguration(value: unknown): PluginSourceConfiguration {
+function integrationConfiguration(
+  value: unknown,
+  fallbackMessage: string,
+): SourceIntegrationConfiguration {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new SourceError(
-      "Enter the plugin source configuration.",
+      fallbackMessage,
       message("api.message.sourceInvalid"),
     );
   }
@@ -151,7 +153,7 @@ export async function listSources(
 export async function createSource(
   database: Database,
   body: unknown,
-  plugins: PluginService,
+  integrations: SourceIntegrationService,
   credentials: CredentialStore,
 ): Promise<SourceResponse> {
   const value = (body ?? {}) as {
@@ -159,11 +161,12 @@ export async function createSource(
     name?: unknown;
     path?: unknown;
     url?: unknown;
-    pluginId?: unknown;
-    configuration?: unknown;
+    apiKey?: unknown;
+    libraryId?: unknown;
+    collectionType?: unknown;
   };
   const kind = value.kind;
-  if (kind !== "path" && kind !== "url" && kind !== "plugin") {
+  if (kind !== "path" && kind !== "url" && kind !== "jellyfin") {
     throw new SourceError(
       "Choose a valid source type.",
       message("api.message.sourceInvalid"),
@@ -230,41 +233,45 @@ export async function createSource(
     return toSourceResponse(source);
   }
 
-  const pluginId =
-    typeof value.pluginId === "string" ? value.pluginId.trim() : "";
-  if (!pluginId) {
-    throw new SourceError(
-      "Choose a plugin source type.",
-      message("api.message.sourcePluginRequired"),
-    );
-  }
-  const configuration = pluginConfiguration(value.configuration);
+  const configuration = {
+    ...(typeof value.url === "string" ? { url: value.url } : {}),
+    ...(typeof value.libraryId === "string"
+      ? { libraryId: value.libraryId }
+      : {}),
+    ...(typeof value.collectionType === "string"
+      ? { libraryCollectionType: value.collectionType }
+      : {}),
+  };
+  const suppliedCredentials = {
+    ...(typeof value.apiKey === "string" ? { apiKey: value.apiKey } : {}),
+  };
   let validated;
   try {
-    validated = await plugins.validateSource(pluginId, configuration);
+    validated = await integrations.validateSource(kind, {
+      configuration,
+      credentials: suppliedCredentials,
+    });
   } catch (error) {
-    if (error instanceof PluginError) {
-      if (error.code === "not_installed") throw error;
+    if (error instanceof SourceIntegrationError) {
       throw new SourceError(error.message, error.messageDescriptor);
     }
     throw error;
   }
   const duplicate = await database.orm.Source.where({
-    kind: "plugin",
-    pluginId,
-    pluginSourceIdentity: validated.identity,
+    kind,
+    sourceIdentity: validated.identity,
   }).first();
   if (duplicate) {
     throw new SourceError(
-      "This plugin source is already configured.",
-      message("api.message.sourcePluginDuplicate"),
+      "This integration source is already configured.",
+      message("api.message.sourceIntegrationDuplicate"),
     );
   }
   const source = await database.orm.Source.create({
     kind,
     name: name || validated.name,
-    pluginId,
-    pluginSourceIdentity: validated.identity,
+    url: validated.configuration.url ?? null,
+    sourceIdentity: validated.identity,
     configuration: JSON.stringify(validated.configuration),
     ...(Object.keys(validated.credentials).length
       ? {
@@ -279,20 +286,30 @@ export async function createSource(
   return toSourceResponse(source);
 }
 
-export async function discoverPluginSources(
-  plugins: PluginService,
-  pluginId: string,
+export async function discoverIntegrationSources(
+  integrations: SourceIntegrationService,
+  kind: string,
   body: unknown,
-): Promise<PluginSourceOptionResponse[]> {
-  const value = (body ?? {}) as { configuration?: unknown };
-  const configuration = pluginConfiguration(value.configuration);
+): Promise<SourceIntegrationOptionResponse[]> {
+  const value = (body ?? {}) as {
+    configuration?: unknown;
+    credentials?: unknown;
+  };
+  const configuration = integrationConfiguration(
+    value.configuration,
+    "Enter the source integration configuration.",
+  );
+  const credentials = integrationConfiguration(
+    value.credentials,
+    "Enter the source integration credentials.",
+  );
   try {
-    return await plugins.discoverSources(pluginId, configuration);
+    return await integrations.discover(kind, {
+      configuration,
+      credentials,
+    });
   } catch (error) {
-    if (error instanceof PluginError) {
-      if (error.code === "not_installed" || error.code === "plugin_disabled") {
-        throw error;
-      }
+    if (error instanceof SourceIntegrationError) {
       throw new SourceError(error.message, error.messageDescriptor);
     }
     throw error;

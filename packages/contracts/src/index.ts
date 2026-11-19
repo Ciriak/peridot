@@ -99,53 +99,6 @@ export interface TrackResponse {
   liked: boolean;
 }
 
-export interface PluginTrackReference {
-  trackId: string;
-  sourceId: string;
-  sourcePluginId: string | null;
-  externalId: string | null;
-}
-
-export interface PluginRecommendationCandidate {
-  sourceId: string;
-  externalId: string;
-  score: number | null;
-  reason: string | null;
-}
-
-export interface PluginRecommendedTrackResponse {
-  track: TrackResponse;
-  score: number | null;
-  reason: string | null;
-}
-
-export interface PluginRecommendationListResponse {
-  items: PluginRecommendedTrackResponse[];
-  unmatchedCount: number;
-}
-
-export interface PluginSimilarTracksRequest {
-  trackId: string;
-  limit?: number;
-}
-
-export interface PluginForYouTracksRequest {
-  limit?: number;
-}
-
-export interface PluginGeneratedPlaylistResponse extends PluginRecommendationListResponse {
-  name: string | null;
-}
-
-export interface GeneratePluginPlaylistRequest {
-  name?: string;
-  prompt?: string;
-  seedTrackId?: string;
-  limit?: number;
-}
-
-export type PluginRecommendationMethod = "similar" | "for-you";
-
 export type CatalogSortField =
   "title" | "artist" | "album" | "duration" | "track" | "published";
 
@@ -483,11 +436,7 @@ export type TaskStatus =
   "queued" | "running" | "completed" | "failed" | "interrupted" | "stopped";
 
 export type TaskKind =
-  | "library_scan"
-  | "catalog_fetch"
-  | "metadata_fetch"
-  | "artwork_fetch"
-  | `plugin:${string}`;
+  "library_scan" | "catalog_fetch" | "metadata_fetch" | "artwork_fetch";
 
 export const TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY =
   "metadata.activeProvider";
@@ -545,7 +494,9 @@ export interface ApiErrorResponse {
   };
 }
 
-export type SourceKind = "path" | "url" | "plugin";
+export type SourceIntegrationKind = "jellyfin";
+
+export type SourceKind = "path" | "url" | SourceIntegrationKind;
 
 export interface SourceResponse {
   id: string;
@@ -553,7 +504,6 @@ export interface SourceResponse {
   name: string | null;
   path: string | null;
   url: string | null;
-  pluginId: string | null;
   configuration: Record<string, string> | null;
   fileCount: number;
   lastSyncedAt: string | null;
@@ -579,159 +529,33 @@ export interface CreateUrlSourceRequest {
   url: string;
 }
 
-export interface CreatePluginSourceRequest {
-  kind: "plugin";
-  pluginId: string;
+export interface CreateJellyfinSourceRequest {
+  kind: "jellyfin";
   name?: string | null;
-  configuration: Record<string, string>;
+  url: string;
+  apiKey: string;
+  libraryId: string;
+  collectionType: string | null;
 }
 
 export type CreateSourceRequest =
-  CreatePathSourceRequest | CreateUrlSourceRequest | CreatePluginSourceRequest;
+  | CreatePathSourceRequest
+  | CreateUrlSourceRequest
+  | CreateJellyfinSourceRequest;
 
-export type PluginCapability =
-  | "source"
-  | "display"
-  | "playlist:read"
-  | "playlist:write"
-  | "playlist:generate"
-  | "metadata:search"
-  | "metadata:enrich"
-  | "data:process"
-  | "recommendations:read"
-  | "recommendations:generate";
-
-export type PluginContributionKind =
-  | "source"
-  | "recommendation-provider"
-  | "display"
-  | "playlist-generator"
-  | "data-processor";
-
-export type PluginSourceFieldType = "text" | "url" | "password";
-
-export interface PluginConfigurationFieldDefinition {
-  key: string;
-  labelMessage: MessageDescriptor;
-  type: PluginSourceFieldType;
-  required: boolean;
-  secret: boolean;
-  visible: boolean;
-  placeholderMessage: MessageDescriptor | null;
-  helpMessage: MessageDescriptor | null;
-}
-
-export type PluginSourceFieldDefinition = PluginConfigurationFieldDefinition;
-
-export interface PluginSettingsResponse {
-  fields: PluginConfigurationFieldDefinition[];
-  configuration: Record<string, string>;
-  configured: boolean;
-}
-
-export interface UpdatePluginSettingsRequest {
-  configuration: Record<string, string>;
-  credentials?: Record<string, string>;
-}
-
-export interface UpdatePluginEnabledRequest {
-  enabled: boolean;
-}
-
-export interface PluginSourceDiscoveryDefinition {
-  actionMessage: MessageDescriptor;
-  helpMessage: MessageDescriptor | null;
-}
-
-export interface PluginSourceContributionResponse {
-  kind: "source";
-  configurationFields: PluginSourceFieldDefinition[];
-  discovery: PluginSourceDiscoveryDefinition | null;
-}
-
-export interface PluginRecommendationProviderContributionResponse {
-  kind: "recommendation-provider";
-  methods: PluginRecommendationMethod[];
-}
-
-export interface PluginPlaylistGeneratorContributionResponse {
-  kind: "playlist-generator";
-  supportsPrompt: boolean;
-  supportsSeed: boolean;
-}
-
-export interface PluginTaskContributionResponse {
-  id: string;
-  titleMessage: MessageDescriptor;
-}
-
-export interface PluginDataProcessorContributionResponse {
-  kind: "data-processor";
-  tasks: PluginTaskContributionResponse[];
-}
-
-export interface PluginDisplayContributionResponse {
-  kind: "display";
-}
-
-export interface PluginProviderResponse {
-  id: string;
-  name: string;
-  descriptionMessage: MessageDescriptor;
-  version: string;
-  recommendationMethods: PluginRecommendationMethod[];
-  playlistGeneration: boolean;
-  configured: boolean;
-}
-
-export interface PluginProviderListResponse {
-  items: PluginProviderResponse[];
-}
-
-export type PluginContributionResponse =
-  | PluginSourceContributionResponse
-  | PluginRecommendationProviderContributionResponse
-  | PluginPlaylistGeneratorContributionResponse
-  | PluginDataProcessorContributionResponse
-  | PluginDisplayContributionResponse;
-
-export type PluginInstallSource = "bundled" | "github";
-
-export interface PluginResponse {
-  id: string;
-  name: string;
-  descriptionMessage: MessageDescriptor;
-  version: string;
-  sdkVersion: string;
-  capabilities: PluginCapability[];
-  permissions: string[];
-  contributions: PluginContributionResponse[];
-  installed: boolean;
-  enabled: boolean;
-  restartRequired: boolean;
-  installedAt: string | null;
-  installSource: PluginInstallSource;
-  installSourceLocator: string;
-  icon: string | null;
-  settings: PluginSettingsResponse;
-}
-
-export interface PluginListResponse {
-  items: PluginResponse[];
-}
-
-export interface PluginSourceOptionResponse {
+export interface SourceIntegrationOptionResponse {
   id: string;
   label: string;
   configuration: Record<string, string>;
 }
 
-export interface PluginSourceOptionListResponse {
-  items: PluginSourceOptionResponse[];
+export interface SourceIntegrationOptionListResponse {
+  items: SourceIntegrationOptionResponse[];
 }
 
-export interface DiscoverPluginSourcesRequest {
+export interface DiscoverSourceIntegrationRequest {
   configuration: Record<string, string>;
+  credentials: Record<string, string>;
 }
 
 export interface ReorderSourcesRequest {

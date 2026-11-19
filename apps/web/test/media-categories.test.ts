@@ -4,7 +4,7 @@ import test from "node:test";
 import type { TrackResponse } from "@peridot/contracts";
 import { trackAlbumRoute } from "../app/lib/library.ts";
 import {
-  discoverPluginSources,
+  discoverIntegrationSources,
   listAudiobooks,
   listPodcastEpisodes,
   listPodcasts,
@@ -71,7 +71,7 @@ test("automatic media categories remain wired without classification controls", 
   assert.match(detail, /page\.audiobook\.chapters/);
   assert.match(detail, /page\.podcast\.episodes/);
   assert.match(detail, /allow-track-like="false"/);
-  assert.match(sources, /discoverPluginSources/);
+  assert.match(sources, /discoverIntegrationSources/);
   assert.doesNotMatch(
     sources,
     /newClassificationMode|changeClassification|classification\.autoHelp/,
@@ -164,15 +164,15 @@ test("category and source client calls use authenticated typed endpoints", async
     "token",
     "podcast-id",
   );
-  await discoverPluginSources(
+  await discoverIntegrationSources(
     "http://peridot.local:17430",
     "token",
     "jellyfin",
     {
       configuration: {
         url: "http://jellyfin.local:8096",
-        apiKey: "secret",
       },
+      credentials: { apiKey: "secret" },
     },
   );
 
@@ -190,8 +190,9 @@ test("category and source client calls use authenticated typed endpoints", async
   assert.ok(
     requests.some(
       (request) =>
-        request.url.endsWith("/api/admin/plugins/jellyfin/sources/discover") &&
-        request.method === "POST",
+        request.url.endsWith(
+          "/api/admin/source-integrations/jellyfin/discover",
+        ) && request.method === "POST",
     ),
   );
 });

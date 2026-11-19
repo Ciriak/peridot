@@ -4,13 +4,13 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { TaskResponse } from "@peridot/contracts";
-import type { PluginDefinition } from "@peridot/plugin-sdk";
-import { createJellyfinPlugin } from "@peridot/plugin-jellyfin";
 import { buildApp } from "../src/app.js";
 import { artworkCacheDirectory } from "../src/artwork-cache.js";
 import { localCredentialKeyFile } from "../src/credential-store.js";
 import { createDatabase, type Database } from "../src/database.js";
 import { ServerLogBuffer, serverLogFilePath } from "../src/server-log.js";
+import { createJellyfinIntegration } from "../src/jellyfin/index.js";
+import type { SourceIntegrationDefinition } from "../src/source-integrations.js";
 import type { UpdateService } from "../src/updates.js";
 
 export interface TestContext {
@@ -41,7 +41,7 @@ export interface TestContextOptions {
   updateService?: UpdateService;
   webRoot?: string;
   persistedLogLines?: string[];
-  additionalPlugins?: readonly PluginDefinition[];
+  additionalSourceIntegrations?: readonly SourceIntegrationDefinition[];
 }
 
 export async function createTestContext(
@@ -99,14 +99,14 @@ export async function createTestContext(
     metadataFetch,
     metadataRequestIntervalMs,
     discogsFetch,
-    plugins: [
-      createJellyfinPlugin({
+    sourceIntegrations: [
+      createJellyfinIntegration({
         ...(options.jellyfinFetch ? { fetch: options.jellyfinFetch } : {}),
         ...(options.jellyfinRequestTimeoutMs !== undefined
           ? { requestTimeoutMs: options.jellyfinRequestTimeoutMs }
           : {}),
       }),
-      ...(options.additionalPlugins ?? []),
+      ...(options.additionalSourceIntegrations ?? []),
     ],
     ...(options.discogsRequestIntervalMs !== undefined
       ? { discogsRequestIntervalMs: options.discogsRequestIntervalMs }

@@ -121,12 +121,6 @@ importers:
       '@peridot/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@peridot/plugin-jellyfin':
-        specifier: workspace:*
-        version: link:../../plugins/jellyfin
-      '@peridot/plugin-sdk':
-        specifier: workspace:*
-        version: link:../../packages/plugin-sdk
       '@prisma/orm-sqlite':
         specifier: 8.0.0-rc.23
         version: 8.0.0-rc.23(@prisma/cli-engine@0.9.0(@prisma/management-api-sdk@1.80.0)(magicast@0.5.5))(magicast@0.5.5)(temporal-polyfill@1.0.8)(typanion@3.14.0)(typescript@5.9.3)(vite@8.3.7(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))
@@ -284,12 +278,6 @@ importers:
 
   packages/player: {}
 
-  packages/plugin-sdk:
-    dependencies:
-      '@peridot/contracts':
-        specifier: workspace:*
-        version: link:../contracts
-
   packages/ui:
     dependencies:
       '@lucide/vue':
@@ -317,15 +305,6 @@ importers:
       vue:
         specifier: ^3.5.45
         version: 3.5.45(typescript@5.9.3)
-
-  plugins/jellyfin:
-    dependencies:
-      '@peridot/contracts':
-        specifier: workspace:*
-        version: link:../../packages/contracts
-      '@peridot/plugin-sdk':
-        specifier: workspace:*
-        version: link:../../packages/plugin-sdk
 
 packages:
 

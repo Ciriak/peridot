@@ -5,12 +5,14 @@ import { Readable } from "node:stream";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { PlaybackTokenResponse } from "@peridot/contracts";
 import { ARTWORK_MIME_TYPE, type ArtworkCache } from "./artwork-cache.js";
-import { PluginError } from "@peridot/plugin-sdk";
 import type { Database } from "./database.js";
 import { sendError } from "./http.js";
 import { message } from "./messages.js";
 import type { PlaybackTokenService } from "./playback-tokens.js";
-import type { PluginService } from "./plugins.js";
+import {
+  SourceIntegrationError,
+  type SourceIntegrationService,
+} from "./source-integrations.js";
 import { queueLibraryScan, toTaskResponse, type TaskService } from "./tasks.js";
 import { toTrackResponse } from "./track-response.js";
 
@@ -64,7 +66,7 @@ export async function registerLibraryRoutes(
   tasks: TaskService,
   playbackTokens: PlaybackTokenService,
   artworkCache: ArtworkCache,
-  plugins: PluginService,
+  sourceIntegrations: SourceIntegrationService,
 ) {
   app.post("/api/library/scans", async (_request, reply) => {
     const task = await queueLibraryScan(tasks);
@@ -186,8 +188,8 @@ export async function registerLibraryRoutes(
         : null;
     if (!libraryRoot) {
       if (
-        track.source?.kind === "plugin" &&
-        track.source.pluginId &&
+        track.source &&
+        sourceIntegrations.registry.has(track.source.kind) &&
         track.externalId
       ) {
         const controller = new AbortController();
@@ -195,18 +197,9 @@ export async function registerLibraryRoutes(
         request.raw.once("aborted", abort);
         reply.raw.once("close", abort);
         try {
-          const adapter = await plugins.sourceAdapter(track.source);
-          if (!adapter) {
-            return sendError(
-              reply,
-              404,
-              "track_not_found",
-              "Available track not found",
-              message("api.message.trackNotFound"),
-            );
-          }
-          const upstream = await adapter.openAudio({
-            source: plugins.sourceHandle(track.source),
+          const integration = sourceIntegrations.definition(track.source.kind);
+          const upstream = await integration.openAudio({
+            source: sourceIntegrations.sourceHandle(track.source),
             externalId: track.externalId,
             container: track.externalContainer ?? mimeExtension(track.mimeType),
             range: request.headers.range,
@@ -217,9 +210,9 @@ export async function registerLibraryRoutes(
             return sendError(
               reply,
               502,
-              "plugin_auth_failed",
-              "The source plugin rejected its saved credentials.",
-              message("api.message.sourcePluginAuthFailed"),
+              "source_integration_auth_failed",
+              "The source integration rejected its saved credentials.",
+              message("api.message.sourceIntegrationAuthFailed"),
             );
           }
           if (upstream.status === 404 || upstream.status === 410) {
@@ -249,9 +242,9 @@ export async function registerLibraryRoutes(
             return sendError(
               reply,
               502,
-              "plugin_unavailable",
-              "The source plugin could not provide this track.",
-              message("api.message.sourcePluginUnavailable"),
+              "source_integration_unavailable",
+              "The source integration could not provide this track.",
+              message("api.message.sourceIntegrationUnavailable"),
             );
           }
 
@@ -284,13 +277,13 @@ export async function registerLibraryRoutes(
           );
         } catch (error) {
           if (controller.signal.aborted) return reply;
-          if (error instanceof PluginError) {
+          if (error instanceof SourceIntegrationError) {
             return sendError(
               reply,
               error.statusCode,
               error.code === "invalid_credentials"
-                ? "plugin_auth_failed"
-                : "plugin_unavailable",
+                ? "source_integration_auth_failed"
+                : "source_integration_unavailable",
               error.message,
               error.messageDescriptor,
             );

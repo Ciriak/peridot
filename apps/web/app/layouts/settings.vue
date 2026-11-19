@@ -56,18 +56,13 @@ const commonCategories = [
   },
 ];
 const adminCategories = [
-  {
-    labelKey: "settings.plugins",
-    to: "/settings/plugins",
-    icon: icons.plugins,
-  },
   { labelKey: "settings.tasks", to: "/settings/tasks", icon: icons.restart },
   { labelKey: "settings.users", to: "/settings/users", icon: icons.user },
   { labelKey: "settings.sources", to: "/settings/sources", icon: icons.folder },
   {
     labelKey: "settings.metadata",
     to: "/settings/metadata",
-    icon: icons.plugins,
+    icon: icons.metadata,
   },
   { labelKey: "settings.server", to: "/settings/server", icon: icons.server },
 ];

@@ -1,13 +1,13 @@
-import {
-  PluginError,
-  type PluginSourceAdapter,
-  type PluginSourceHandle,
-} from "@peridot/plugin-sdk";
 import { pruneReferencedArtwork, type ArtworkCache } from "./artwork-cache.js";
 import type { CatalogService } from "./catalog.js";
 import type { Database } from "./database.js";
-import type { PluginService } from "./plugins.js";
 import type { ArtworkJobRow, TaskRow } from "./prisma/models.js";
+import {
+  SourceIntegrationError,
+  type SourceIntegrationDefinition,
+  type SourceIntegrationHandle,
+  type SourceIntegrationService,
+} from "./source-integrations.js";
 import {
   artworkDetails,
   type TaskExecutionResult,
@@ -25,8 +25,8 @@ interface CoverImage {
 }
 
 interface ArtworkSource {
-  handle: PluginSourceHandle;
-  adapter: PluginSourceAdapter;
+  handle: SourceIntegrationHandle;
+  integration: SourceIntegrationDefinition;
 }
 
 interface ArtworkGroup {
@@ -124,7 +124,7 @@ function errorSummary(error: unknown): string {
 export class ArtworkService {
   constructor(
     private readonly database: Database,
-    private readonly plugins: PluginService,
+    private readonly sourceIntegrations: SourceIntegrationService,
     private readonly catalog: CatalogService,
     private readonly artworkCache: ArtworkCache,
   ) {}
@@ -166,11 +166,10 @@ export class ArtworkService {
     ).all();
     const sources = new Map<string, ArtworkSource>();
     for (const source of sourceRows) {
-      const adapter = await this.plugins.sourceAdapter(source);
-      if (adapter) {
+      if (this.sourceIntegrations.registry.has(source.kind)) {
         sources.set(source.id, {
-          handle: this.plugins.sourceHandle(source),
-          adapter,
+          handle: this.sourceIntegrations.sourceHandle(source),
+          integration: this.sourceIntegrations.definition(source.kind),
         });
       }
     }
@@ -280,7 +279,7 @@ export class ArtworkService {
         ).deleteAndCount();
       } catch (error) {
         if (
-          error instanceof PluginError &&
+          error instanceof SourceIntegrationError &&
           (error.code === "invalid_credentials" || error.code === "unavailable")
         ) {
           unavailableSources.add(group.source.handle.id);
@@ -336,8 +335,8 @@ export class ArtworkService {
             if (unavailableSources.has(group.source.handle.id)) {
               return {
                 group,
-                error: new PluginError(
-                  "The source plugin could not provide artwork.",
+                error: new SourceIntegrationError(
+                  "The source integration could not provide artwork.",
                   "unavailable",
                   502,
                 ),
@@ -346,7 +345,7 @@ export class ArtworkService {
             try {
               return {
                 group,
-                cover: await group.source.adapter.artwork({
+                cover: await group.source.integration.artwork({
                   source: group.source.handle,
                   reference: {
                     itemId: group.externalCoverItemId,

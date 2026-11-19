@@ -3,12 +3,6 @@ import { or } from "@prisma/orm-sqlite/orm-client";
 import type { TrackMediaTypeOrigin } from "@peridot/contracts";
 import { pruneReferencedArtwork, type ArtworkCache } from "./artwork-cache.js";
 import {
-  PluginError,
-  type PluginSourceAdapter,
-  type PluginSourceHandle,
-  type PluginTrackRecord,
-} from "@peridot/plugin-sdk";
-import {
   normalizeArtistCredits,
   normalizeOptionalArtistCredits,
   serializeArtistCredits,
@@ -29,7 +23,6 @@ import {
   parsePublishedAt,
 } from "./media.js";
 import { message } from "./messages.js";
-import type { PluginService } from "./plugins.js";
 import type { SourceRow, TaskRow, TrackRow } from "./prisma/models.js";
 import {
   type ScanWorkerCover,
@@ -37,6 +30,13 @@ import {
 } from "./scan-worker-protocol.js";
 import { ScanWorkerPool } from "./scan-worker-pool.js";
 import { readScanWorkerSettings } from "./server-settings.js";
+import {
+  SourceIntegrationError,
+  type SourceIntegrationDefinition,
+  type SourceIntegrationHandle,
+  type SourceIntegrationService,
+  type SourceIntegrationTrackRecord,
+} from "./source-integrations.js";
 import {
   queueArtworkFetch,
   queueCatalogFetch,
@@ -64,10 +64,10 @@ interface SourceFile extends DiscoveredFile {
   sourceId: string;
 }
 
-interface PluginSourceWork {
+interface IntegrationSourceWork {
   source: SourceRow;
-  adapter: PluginSourceAdapter;
-  handle: PluginSourceHandle;
+  integration: SourceIntegrationDefinition;
+  handle: SourceIntegrationHandle;
 }
 
 interface ScanCounts {
@@ -168,7 +168,7 @@ function coverImage(cover: ScanWorkerCover | null): CoverImage | null {
     : null;
 }
 
-function remoteCoverKey(item: PluginTrackRecord): string | null {
+function remoteCoverKey(item: SourceIntegrationTrackRecord): string | null {
   return item.cover
     ? externalCoverKey(item.cover.itemId, item.cover.tag)
     : null;
@@ -226,9 +226,9 @@ async function yieldToEventLoop(): Promise<void> {
 export class LibraryScanner {
   constructor(
     private readonly database: Database,
+    private readonly sourceIntegrations: SourceIntegrationService,
     private readonly metadataEnrichment?: MetadataEnrichment,
     private readonly catalog?: CatalogService,
-    private readonly plugins?: PluginService,
     private readonly artworkCache?: ArtworkCache,
   ) {}
 
@@ -295,7 +295,11 @@ export class LibraryScanner {
         const source = await this.database.orm.Source.first({
           id: task.sourceId,
         });
-        if (!source || (source.kind !== "path" && source.kind !== "plugin")) {
+        if (
+          !source ||
+          (source.kind !== "path" &&
+            !this.sourceIntegrations.registry.has(source.kind))
+        ) {
           throw new TaskExecutionError(
             "The selected music source is no longer available.",
             "failed",
@@ -308,20 +312,12 @@ export class LibraryScanner {
         (source) => source.position.asc(),
         (source) => source.createdAt.asc(),
       ]);
-      const installedPlugins = new Set(
-        (await this.plugins?.installedDefinitions())?.map(
-          (definition) => definition.manifest.id,
-        ) ?? [],
-      );
       const sources = requestedSource
         ? [requestedSource]
         : (await sourceQuery.all()).filter(
             (source) =>
               source.kind === "path" ||
-              (source.kind === "plugin" &&
-                Boolean(
-                  source.pluginId && installedPlugins.has(source.pluginId),
-                )),
+              this.sourceIntegrations.registry.has(source.kind),
           );
       if (sources.length === 0) {
         throw new TaskExecutionError(
@@ -335,7 +331,7 @@ export class LibraryScanner {
         (requestedSource ? task.sourceName : null) ||
         "All sources";
       const files: SourceFile[] = [];
-      const pluginSources: PluginSourceWork[] = [];
+      const integrationSources: IntegrationSourceWork[] = [];
       for (const source of sources) {
         throwIfAborted(signal);
         if (source.kind === "path") {
@@ -359,29 +355,21 @@ export class LibraryScanner {
           }
           continue;
         }
-        if (!this.plugins || source.kind !== "plugin" || !source.pluginId) {
+        if (!this.sourceIntegrations.registry.has(source.kind)) {
           throw new TaskExecutionError(
-            "The selected plugin source is not fully configured.",
+            "The selected source integration is not available.",
             "failed",
             message("api.message.sourceUnavailable"),
           );
         }
-        const adapter = await this.plugins.sourceAdapter(source);
-        if (!adapter) {
-          throw new TaskExecutionError(
-            "The selected plugin source is not available.",
-            "failed",
-            message("api.message.sourceUnavailable"),
-          );
-        }
-        pluginSources.push({
+        integrationSources.push({
           source,
-          adapter,
-          handle: this.plugins.sourceHandle(source),
+          integration: this.sourceIntegrations.definition(source.kind),
+          handle: this.sourceIntegrations.sourceHandle(source),
         });
       }
       let discoveredCount = files.length;
-      let progressTotal: number | null = pluginSources.length
+      let progressTotal: number | null = integrationSources.length
         ? null
         : discoveredCount;
       let processedItems = 0;
@@ -432,11 +420,11 @@ export class LibraryScanner {
         await updateProgress();
       }
       await updateProgress(true);
-      for (const source of pluginSources) {
+      for (const source of integrationSources) {
         throwIfAborted(signal);
         let sourceTotal: number | null = null;
         let sourceProcessed = 0;
-        await source.adapter.scan({
+        await source.integration.scan({
           source: source.handle,
           signal,
           onPage: async (page) => {
@@ -606,7 +594,7 @@ export class LibraryScanner {
         );
       }
       if (error instanceof TaskExecutionError) throw error;
-      if (error instanceof PluginError) {
+      if (error instanceof SourceIntegrationError) {
         throw new TaskExecutionError(
           error.message,
           "failed",
@@ -780,8 +768,8 @@ export class LibraryScanner {
   }
 
   private async applyRemoteBatch(
-    items: readonly PluginTrackRecord[],
-    source: PluginSourceWork,
+    items: readonly SourceIntegrationTrackRecord[],
+    source: IntegrationSourceWork,
     scanId: string,
     counts: ScanCounts,
     signal: AbortSignal,
@@ -805,12 +793,12 @@ export class LibraryScanner {
       coverKey: string | null;
     }> = [];
     const changed: Array<{
-      item: PluginTrackRecord;
+      item: SourceIntegrationTrackRecord;
       track: TrackRow;
       coverKey: string | null;
       queueArtwork: boolean;
     }> = [];
-    const created: PluginTrackRecord[] = [];
+    const created: SourceIntegrationTrackRecord[] = [];
     for (const item of items) {
       const existing = existingByExternalId.get(item.externalId) ?? null;
       const coverKey = remoteCoverKey(item);
@@ -839,7 +827,10 @@ export class LibraryScanner {
         queueArtwork: Boolean(coverKey && !existingCoverUsable),
       });
     }
-    const trackDataFor = (item: PluginTrackRecord, coverId: string | null) => {
+    const trackDataFor = (
+      item: SourceIntegrationTrackRecord,
+      coverId: string | null,
+    ) => {
       const coverKey = remoteCoverKey(item);
       const artistCredits = normalizeArtistCredits(
         item.artists.length ? item.artists : ["Unknown artist"],
@@ -992,8 +983,8 @@ export class LibraryScanner {
   }
 
   private async applyRemoteBatchWithRetry(
-    items: readonly PluginTrackRecord[],
-    source: PluginSourceWork,
+    items: readonly SourceIntegrationTrackRecord[],
+    source: IntegrationSourceWork,
     scanId: string,
     counts: ScanCounts,
     signal: AbortSignal,
