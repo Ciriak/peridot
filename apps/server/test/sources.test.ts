@@ -153,12 +153,39 @@ test("administrators can add and remove path and url sources", async () => {
     assert.equal(scannedSource?.fileCount, 1);
     assert.ok(scannedSource?.lastSyncedAt);
 
+    const tracksBeforeRemoval = await context.app.inject({
+      method: "GET",
+      url: "/api/tracks",
+      headers: context.authorization,
+    });
+    const removedTrack = tracksBeforeRemoval
+      .json<{ items: Array<{ id: string }> }>()
+      .items.at(0);
+    assert.ok(removedTrack);
+
     const removed = await context.app.inject({
       method: "DELETE",
       url: `/api/admin/sources/${createdSource.id}`,
       headers: context.authorization,
     });
     assert.equal(removed.statusCode, 204);
+
+    const tracksAfterRemoval = await context.app.inject({
+      method: "GET",
+      url: "/api/tracks",
+      headers: context.authorization,
+    });
+    assert.deepEqual(tracksAfterRemoval.json().items, []);
+    assert.equal(
+      await context.database.orm.Track.where({ id: removedTrack.id }).first(),
+      null,
+    );
+    assert.equal(
+      await context.database.orm.CatalogTrack.where({
+        id: removedTrack.id,
+      }).first(),
+      null,
+    );
   } finally {
     await context.close();
   }

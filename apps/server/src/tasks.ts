@@ -470,6 +470,20 @@ export class TaskService {
     return this.get(id);
   }
 
+  async cancel(id: string): Promise<TaskRow | null> {
+    const task = await this.get(id);
+    if (!task) return null;
+    if (task.status === "queued") {
+      const removed = await this.database.orm.Task.where({
+        id,
+        status: "queued",
+      }).deleteAndCount();
+      if (removed > 0) return task;
+    }
+    await this.stopTasks([id]);
+    return this.get(id);
+  }
+
   async stopForSource(sourceId: string): Promise<TaskRow[]> {
     const active = await this.database.orm.Task.where((task) =>
       task.status.in([...ACTIVE_TASK_STATUSES]),

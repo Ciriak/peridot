@@ -2,11 +2,11 @@ import type { TaskListResponse, TaskResponse } from "@peridot/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
 import { computed, ref } from "vue";
 import {
+  cancelTask as requestCancelTask,
   listTasks,
   refreshMetadata,
   rescanSource,
   startLibraryScan,
-  stopTask as requestStopTask,
 } from "../lib/peridot-client";
 import { persistQueryKey } from "../lib/query-persister";
 import { queryKeys } from "../lib/query-keys";
@@ -47,7 +47,7 @@ export function useTasks() {
   const { token } = useSession();
   const { status } = useServerConnection();
   const queryClient = useQueryClient();
-  const stoppingTaskIds = ref<Set<string>>(new Set());
+  const cancellingTaskIds = ref<Set<string>>(new Set());
   const queryKey = computed(() =>
     scope.value ? queryKeys.tasks(scope.value, TASKS_QUERY_OPTIONS) : null,
   );
@@ -113,6 +113,17 @@ export function useTasks() {
     return track(nextTask);
   }
 
+  function remove(taskId: string): void {
+    if (!queryKey.value) return;
+    const current =
+      queryClient.getQueryData<TaskListResponse>(queryKey.value) ?? EMPTY_TASKS;
+    queryClient.setQueryData(
+      queryKey.value,
+      taskList(current.items.filter((task) => task.id !== taskId)),
+    );
+    void persistQueryKey(queryKey.value);
+  }
+
   async function refresh() {
     if (!scope.value || !token.value) return tasks.value;
     await query.refetch();
@@ -164,26 +175,30 @@ export function useTasks() {
     return queueMutation.mutateAsync({ kind: "metadata" });
   }
 
-  function isStoppingTask(taskId: string): boolean {
-    return stoppingTaskIds.value.has(taskId);
+  function isCancellingTask(taskId: string): boolean {
+    return cancellingTaskIds.value.has(taskId);
   }
 
-  async function stopTask(taskId: string) {
+  async function cancelTask(taskId: string) {
     if (!scope.value || !token.value) {
       throw new Error("Peridot query scope is unavailable.");
     }
-    stoppingTaskIds.value = new Set([...stoppingTaskIds.value, taskId]);
+    cancellingTaskIds.value = new Set([...cancellingTaskIds.value, taskId]);
     try {
-      const stopped = await requestStopTask(
+      const cancelled = await requestCancelTask(
         scope.value.serverAddress,
         token.value,
         taskId,
       );
-      track(stopped);
-      return stopped;
+      if (cancelled.status === "queued") {
+        remove(taskId);
+      } else {
+        track(cancelled);
+      }
+      return cancelled;
     } finally {
-      stoppingTaskIds.value = new Set(
-        [...stoppingTaskIds.value].filter((id) => id !== taskId),
+      cancellingTaskIds.value = new Set(
+        [...cancellingTaskIds.value].filter((id) => id !== taskId),
       );
     }
   }
@@ -203,7 +218,7 @@ export function useTasks() {
     queueLibraryScan,
     queueSourceScan,
     queueMetadataRefresh,
-    isStoppingTask,
-    stopTask,
+    isCancellingTask,
+    cancelTask,
   };
 }

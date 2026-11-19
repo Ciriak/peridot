@@ -7,6 +7,7 @@ import {
   useI18n,
   watch,
 } from "#imports";
+import { Icon } from "@iconify/vue/offline";
 import { useIntervalFn, useNow } from "@vueuse/core";
 import {
   TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY,
@@ -25,6 +26,7 @@ import { useTaskHistoryQuery } from "../../composables/use-admin-queries";
 import { useTasks } from "../../composables/use-tasks";
 import { useUser } from "../../composables/use-user";
 import { useLocalizedMessage } from "../../composables/use-localized-message";
+import { icons } from "../../lib/icons";
 import {
   activeTaskPercent,
   isActiveTaskStatus,
@@ -53,12 +55,12 @@ const {
   loading,
   loaded,
   refresh,
-  isStoppingTask,
-  stopTask,
+  isCancellingTask,
+  cancelTask,
 } = useTasks();
 const canManageTasks = computed(() => user.value?.role === "admin");
 const serverLost = computed(() => serverStatus.value === "lost");
-const stopError = ref("");
+const taskActionError = ref("");
 const historyQuery = useTaskHistoryQuery();
 const history = historyQuery.items;
 const historyLoading = historyQuery.loading;
@@ -147,13 +149,26 @@ async function loadMoreHistory() {
   await historyQuery.loadMore();
 }
 
-async function stopActiveTask(task: TaskResponse) {
-  stopError.value = "";
+function taskActionLabel(task: TaskResponse): string {
+  return t(
+    isCancellingTask(task.id)
+      ? "settings.tasks.stopping"
+      : "settings.tasks.stop",
+  );
+}
+
+async function changeActiveTask(task: TaskResponse) {
+  taskActionError.value = "";
   try {
-    await stopTask(task.id);
+    await cancelTask(task.id);
   } catch (reason) {
     if (isAuthenticationRedirectError(reason)) return;
-    stopError.value = errorMessage(reason, "settings.tasks.stopError");
+    taskActionError.value = errorMessage(
+      reason,
+      task.status === "queued"
+        ? "settings.tasks.cancelError"
+        : "settings.tasks.stopError",
+    );
   }
 }
 
@@ -213,8 +228,8 @@ onMounted(() => {
         </h3>
         <Badge variant="outline">{{ activeRows.length }}</Badge>
       </div>
-      <p v-if="stopError" role="alert" class="text-sm text-destructive">
-        {{ stopError }}
+      <p v-if="taskActionError" role="alert" class="text-sm text-destructive">
+        {{ taskActionError }}
       </p>
 
       <div
@@ -263,17 +278,38 @@ onMounted(() => {
                     {{ translate(taskStatusMessage(task)) }}
                   </Badge>
                   <Button
+                    v-if="task.status === 'queued'"
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    :disabled="isCancellingTask(task.id) || serverLost"
+                    :aria-label="
+                      t('settings.tasks.cancelTask', {
+                        title: translate(task.titleMessage),
+                      })
+                    "
+                    :title="
+                      t('settings.tasks.cancelTask', {
+                        title: translate(task.titleMessage),
+                      })
+                    "
+                    @click="changeActiveTask(task)"
+                  >
+                    <Icon
+                      :icon="icons.close"
+                      aria-hidden="true"
+                      class="size-5"
+                    />
+                  </Button>
+                  <Button
+                    v-else
                     type="button"
                     variant="outline"
                     size="sm"
-                    :disabled="isStoppingTask(task.id) || serverLost"
-                    @click="stopActiveTask(task)"
+                    :disabled="isCancellingTask(task.id) || serverLost"
+                    @click="changeActiveTask(task)"
                   >
-                    {{
-                      isStoppingTask(task.id)
-                        ? t("settings.tasks.stopping")
-                        : t("settings.tasks.stop")
-                    }}
+                    {{ taskActionLabel(task) }}
                   </Button>
                 </div>
               </div>

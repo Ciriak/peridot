@@ -71,9 +71,11 @@ API key remains server-side. Artwork uses the same integration boundary and a
 deduplicated WebP cache. Tracks become available before deferred artwork jobs
 finish.
 
-Removing a Jellyfin source stops its tasks and deletes its tracks, artwork jobs,
-orphaned covers, encrypted credentials, task history, likes, play events, queue
-items, and playlist entries. External Jellyfin data is never deleted.
+Removing any source stops its tasks and deletes its source-owned tracks and
+catalog projections. Built-in integration removal also deletes the associated
+artwork jobs, orphaned covers, encrypted credentials, task history, likes, play
+events, queue items, and playlist entries. External provider data is never
+deleted.
 
 ## API summary
 
@@ -100,7 +102,8 @@ Libraries are discovered with
 ```
 
 Scannable sources use `POST /api/admin/sources/:id/scans`. Administrators can
-stop tasks with `POST /api/admin/tasks/:id/stop`. Source reordering and removal
+cancel tasks with `POST /api/admin/tasks/:id/cancel`. Queued tasks are removed;
+running tasks stop and remain in terminal history. Source reordering and removal
 use the normal `/api/admin/sources` routes.
 
 Metadata providers remain separate from source integrations and are managed

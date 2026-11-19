@@ -656,10 +656,14 @@ export function getTask(serverAddress: string, token: string, taskId: string) {
   );
 }
 
-export function stopTask(serverAddress: string, token: string, taskId: string) {
+export function cancelTask(
+  serverAddress: string,
+  token: string,
+  taskId: string,
+) {
   return authenticatedRequestJson<TaskResponse>(
     serverAddress,
-    `/api/admin/tasks/${encodeURIComponent(taskId)}/stop`,
+    `/api/admin/tasks/${encodeURIComponent(taskId)}/cancel`,
     token,
     { method: "POST" },
   );

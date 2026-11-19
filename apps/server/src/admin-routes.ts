@@ -438,16 +438,13 @@ export async function registerAdminRoutes(
           );
         }
         await tasks.stopForSource(source.id);
-        let removedTrackIds: string[] = [];
-        if (sourceIntegrations?.registry.has(source.kind)) {
-          removedTrackIds = (
-            await database.orm.Track.where({
-              sourceId: source.id,
-            })
-              .select("id")
-              .all()
-          ).map((track) => track.id);
-        }
+        const removedTrackIds = (
+          await database.orm.Track.where({
+            sourceId: source.id,
+          })
+            .select("id")
+            .all()
+        ).map((track) => track.id);
         await database.transaction(async (transaction) => {
           if (removedTrackIds.length) {
             await transaction.orm.Track.where({
@@ -494,9 +491,9 @@ export async function registerAdminRoutes(
     );
 
     admin.post<{ Params: { id: string } }>(
-      "/api/admin/tasks/:id/stop",
+      "/api/admin/tasks/:id/cancel",
       async (request, reply) => {
-        const task = await tasks.stop(request.params.id);
+        const task = await tasks.cancel(request.params.id);
         if (!task) {
           return sendError(
             reply,

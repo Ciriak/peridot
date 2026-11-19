@@ -1446,9 +1446,9 @@ const routes: Record<string, OpenApiOperation> = {
     ref("TaskResponse"),
     { status: 202 },
   ),
-  "POST /api/admin/tasks/:id/stop": jsonOperation(
+  "POST /api/admin/tasks/:id/cancel": jsonOperation(
     "Tasks",
-    "Stop a background task",
+    "Cancel a queued task or stop a running task",
     ref("TaskResponse"),
   ),
   "POST /api/admin/source-integrations/:kind/discover": jsonOperation(

@@ -1,5 +1,18 @@
 # Peridot decisions
 
+## 2026-11-19: Cancelling queued tasks removes them from task history
+
+Administrator cancellation deletes a task that is still queued because it has not
+started. A running task is stopped and retained in terminal history so completed
+or partly completed work remains auditable.
+
+## 2026-11-19: Source removal deletes source-owned tracks
+
+Removing a folder, URL, or built-in integration source deletes every track owned
+by that source and its catalog projections. Deleting only the source record is
+not sufficient because the optional track relation would otherwise leave those
+tracks visible as source-less catalog entries.
+
 ## 2026-11-19: Jellyfin is a direct built-in source integration
 
 Jellyfin is part of the application and requires no installation or enablement

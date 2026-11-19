@@ -453,11 +453,17 @@ test("tasks have a settings view for active work and paginated history", async (
     /onMounted\(\(\) => \{\s+if \(!canManageTasks\.value\) return;/,
   );
   assert.match(page, /useTasks/);
-  assert.match(page, /isStoppingTask/);
-  assert.match(page, /stopTask/);
+  assert.match(page, /isCancellingTask/);
+  assert.match(page, /cancelTask/);
+  assert.match(page, /settings\.tasks\.cancelTask/);
+  assert.match(page, /icons\.close/);
+  assert.match(page, /v-if="task\.status === 'queued'"/);
+  assert.match(page, /size="icon-sm"/);
+  assert.match(page, /class="size-5"/);
   assert.match(page, /settings\.tasks\.stop/);
   assert.match(page, /settings\.tasks\.stopping/);
-  assert.match(page, /@click="stopActiveTask\(task\)"/);
+  assert.match(page, /taskActionLabel\(task\)/);
+  assert.match(page, /@click="changeActiveTask\(task\)"/);
   assert.match(page, /orderedActiveTasks\(activeTasks\.value\)/);
   assert.match(page, /useTaskHistoryQuery/);
   assert.match(page, /historyQuery\.loadMore\(\)/);

@@ -23,8 +23,13 @@ uses the server URL and API key to discover libraries, then stores the selected
 library and collection type. Scans, artwork retrieval, playback ranges, rescans,
 and source removal all use the standard source and task surfaces.
 
+Source removal now deletes source-owned tracks and their catalog projections for
+every source kind. Previously this cleanup ran only for built-in integrations,
+so removing a folder source left its tracks visible as source-less rows.
+
 ## Verification
 
+- `pnpm --filter @peridot/server exec tsx scripts/run-tests.ts --test-name-pattern "administrators can add and remove path and url sources"` (38 passing)
 - `pnpm --filter @peridot/server typecheck`
 - `pnpm --filter @peridot/server test` (188 passing)
 - `pnpm --filter @peridot/web typecheck`
@@ -42,6 +47,9 @@ and source removal all use the standard source and task surfaces.
   or remotely downloaded runtime code is intentionally unsupported.
 - The database was rebuilt from the final contract; no data-transfer migration
   was authored because reset was explicitly allowed.
+- Existing source-less tracks are not backfilled or deleted by a migration. The
+  five rows already in the local development database remain until removed
+  separately.
 - Android APK assembly was not verified because `java` is unavailable in this
   environment.
 - Live browser visual QA and a live Jellyfin instance were not used in this
@@ -51,4 +59,5 @@ and source removal all use the standard source and task surfaces.
 
 Run the Sources screen against a real Jellyfin server at desktop and mobile
 widths, then exercise a full scan, playback, artwork retry, rescan, and removal
-cycle.
+cycle. Remove or rebuild the local development database when the pre-existing
+source-less tracks should be cleared.

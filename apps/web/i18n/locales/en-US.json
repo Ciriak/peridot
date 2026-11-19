@@ -552,6 +552,8 @@
   "settings.tasks.status.failed": "Failed",
   "settings.tasks.status.interrupted": "Interrupted",
   "settings.tasks.status.stopped": "Stopped",
+  "settings.tasks.cancelError": "Could not cancel the task.",
+  "settings.tasks.cancelTask": "Cancel {title}",
   "settings.tasks.stop": "Stop",
   "settings.tasks.stopping": "Stopping…",
   "settings.tasks.stopError": "Could not stop the task.",

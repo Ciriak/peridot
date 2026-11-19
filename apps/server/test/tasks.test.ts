@@ -296,7 +296,7 @@ test("scans, metadata, and catalog projection run before artwork retrieval", asy
   }
 });
 
-test("running and queued tasks can be stopped without running queued work", async () => {
+test("queued tasks are removed and running tasks are stopped", async () => {
   const context = await createTestContext();
   await context.app.close();
   const tasks = new TaskService(context.database);
@@ -340,13 +340,13 @@ test("running and queued tasks can be stopped without running queued work", asyn
       sourceName: "Source B",
     });
 
-    await tasks.stop(queued.id);
-    await tasks.stop(running.id);
+    const removedQueued = await tasks.cancel(queued.id);
+    const stoppedRunning = await tasks.cancel(running.id);
     await sawAbort;
 
-    const stoppedQueued = await tasks.get(queued.id);
-    const stoppedRunning = await tasks.get(running.id);
-    assert.equal(stoppedQueued?.status, "stopped");
+    const cancelledQueued = await tasks.get(queued.id);
+    assert.equal(removedQueued?.status, "queued");
+    assert.equal(cancelledQueued, null);
     assert.equal(stoppedRunning?.status, "stopped");
     assert.equal(
       stoppedRunning?.failureMessage,
@@ -359,26 +359,43 @@ test("running and queued tasks can be stopped without running queued work", asyn
   }
 });
 
-test("administrators stop active tasks", async () => {
+test("administrators cancel queued and running tasks", async () => {
   const context = await createTestContext();
   const member = await createMemberSession(context);
   try {
-    const task = await context.database.orm.Task.create({
+    const running = await context.database.orm.Task.create({
       kind: "library_scan",
       status: "running",
       title: "Running scan",
       startedAt: new Date(),
     });
-    const memberStop = await context.app.inject({
+    const queued = await context.database.orm.Task.create({
+      kind: "library_scan",
+      status: "queued",
+      title: "Queued scan",
+    });
+    const memberCancel = await context.app.inject({
       method: "POST",
-      url: `/api/admin/tasks/${task.id}/stop`,
+      url: `/api/admin/tasks/${queued.id}/cancel`,
       headers: member,
     });
-    assert.equal(memberStop.statusCode, 403);
+    assert.equal(memberCancel.statusCode, 403);
+
+    const removed = await context.app.inject({
+      method: "POST",
+      url: `/api/admin/tasks/${queued.id}/cancel`,
+      headers: context.authorization,
+    });
+    assert.equal(removed.statusCode, 200);
+    assert.equal(removed.json<TaskResponse>().status, "queued");
+    assert.equal(
+      await context.database.orm.Task.first({ id: queued.id }),
+      null,
+    );
 
     const stopped = await context.app.inject({
       method: "POST",
-      url: `/api/admin/tasks/${task.id}/stop`,
+      url: `/api/admin/tasks/${running.id}/cancel`,
       headers: context.authorization,
     });
     assert.equal(stopped.statusCode, 200);
@@ -390,7 +407,7 @@ test("administrators stop active tasks", async () => {
 
     const missing = await context.app.inject({
       method: "POST",
-      url: "/api/admin/tasks/missing/stop",
+      url: "/api/admin/tasks/missing/cancel",
       headers: context.authorization,
     });
     assert.equal(missing.statusCode, 404);
