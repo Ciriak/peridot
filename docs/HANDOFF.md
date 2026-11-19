@@ -27,9 +27,19 @@ Source removal now deletes source-owned tracks and their catalog projections for
 every source kind. Previously this cleanup ran only for built-in integrations,
 so removing a folder source left its tracks visible as source-less rows.
 
+## Task cancellation
+
+Settings â†’ Tasks uses a small icon-only close control for queued tasks and keeps
+the Stop control for running tasks. Cancelling queued work deletes its task row,
+so it is removed from active work and terminal history. Stopping running work
+retains a stopped entry in terminal history.
+
 ## Verification
 
 - `pnpm --filter @peridot/server exec tsx scripts/run-tests.ts --test-name-pattern "administrators can add and remove path and url sources"` (38 passing)
+- `pnpm --filter @peridot/server exec tsx scripts/run-tests.ts --test-name-pattern "queued tasks are removed|administrators cancel queued and running tasks|OpenAPI endpoints publish every documented API route"` (39 passing)
+- `pnpm --filter @peridot/web exec node --test test/peridot-client.test.ts test/settings-page.test.ts test/i18n.test.ts` (39 passing)
+- `pnpm --filter @peridot/web exec node --test test/settings-page.test.ts` (16 passing)
 - `pnpm --filter @peridot/server typecheck`
 - `pnpm --filter @peridot/server test` (188 passing)
 - `pnpm --filter @peridot/web typecheck`
@@ -52,8 +62,13 @@ so removing a folder source left its tracks visible as source-less rows.
   separately.
 - Android APK assembly was not verified because `java` is unavailable in this
   environment.
-- Live browser visual QA and a live Jellyfin instance were not used in this
-  implementation run.
+- Live browser visual QA of the task controls and a live Jellyfin instance were
+  not used in this implementation run.
+
+## Uncommitted changes
+
+The task cancellation and source-removal code is in current `HEAD` (`b5036d0`).
+Only this handoff update remains uncommitted.
 
 ## Next
 
@@ -61,3 +76,7 @@ Run the Sources screen against a real Jellyfin server at desktop and mobile
 widths, then exercise a full scan, playback, artwork retry, rescan, and removal
 cycle. Remove or rebuild the local development database when the pre-existing
 source-less tracks should be cleared.
+
+Open Settings â†’ Tasks with one running and one queued task, then verify that the
+queued close control removes only that row and the running Stop control retains
+its stopped history entry.
