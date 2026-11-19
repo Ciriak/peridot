@@ -30,7 +30,7 @@ Checks completed:
 - Full web suite: 248 passed
 - `pnpm lint`
 - `pnpm format:check`
-- Web, contracts, and Jellyfin plugin type checks
+- Server, web, contracts, and Jellyfin plugin type checks and builds
 - `pnpm db:validate`
 - Disposable 300-file scan benchmark: 33.6 seconds with one worker, down from
   45.8 seconds before WAL
@@ -39,10 +39,7 @@ Known limits: full deferred catalog projection still uses the existing
 per-track album/artist/search projection path in 100-track batches. It no
 longer blocks discovery or basic browsing, but a complete 70,000-track
 projection may remain lengthy. A live 70,000-item Jellyfin run has not been
-timed. Server typecheck and build currently encounter the concurrently added,
-untracked `apps/server/src/openapi.ts`; that unrelated file was not modified.
-After the type error appeared, the complete web and server behavioral suites
-still passed, including OpenAPI.
+timed.
 
 Changes remain uncommitted on `feature/plugin`, with the user's existing plugin
 and OpenAPI work preserved. No push, tag, publication, or deployment was

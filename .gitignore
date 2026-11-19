@@ -34,6 +34,7 @@ dist/
 coverage/
 generated/
 apps/server/artwork/
+apps/server/backups/
 apps/android/dist-update/
 apps/android/*.zip
 .peridot/
