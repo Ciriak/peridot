@@ -2,6 +2,7 @@
 import { useI18n } from "#imports";
 import type { TrackResponse } from "@peridot/contracts";
 import { Icon } from "@iconify/vue/offline";
+import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { ProgressCircle } from "@peridot/ui/components/ui/progress-circle";
 import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
@@ -135,6 +136,10 @@ function isUnavailable(track: TrackResponse): boolean {
     serverLost: serverStatus.value === "lost",
     savedTrackIds: savedTrackIds.value,
   });
+}
+
+function isOfflineOnly(track: TrackResponse): boolean {
+  return !track.available && isSavedOffline(track.id);
 }
 
 function loadMoreRows() {
@@ -415,6 +420,17 @@ watch(
                   aria-hidden="true"
                   class="size-4 shrink-0 text-primary"
                 />
+                <Badge
+                  v-if="!item.track.available"
+                  variant="secondary"
+                  class="shrink-0"
+                >
+                  {{
+                    isOfflineOnly(item.track)
+                      ? t("trackTable.availableOffline")
+                      : t("trackTable.unavailable")
+                  }}
+                </Badge>
               </div>
               <ScrollingText class="w-full text-xs text-muted-foreground">
                 <template

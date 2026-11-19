@@ -158,7 +158,9 @@ export class DuplicateDetectionService {
     if (signal.aborted) throw new DOMException("Stopped", "AbortError");
     const [tracks, sources] = await Promise.all([
       allAvailableTracks(this.database),
-      this.database.orm.Source.orderBy((source) => source.position.asc()).all(),
+      this.database.orm.Source.where((source) => source.removedAt.isNull())
+        .orderBy((source) => source.position.asc())
+        .all(),
     ]);
     const sourcePosition = new Map(
       sources.map((source, index) => [source.id, source.position ?? index]),

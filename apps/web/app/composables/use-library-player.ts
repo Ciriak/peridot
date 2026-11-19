@@ -173,23 +173,18 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
   );
   const canGoNext = computed(() => {
     if (!currentTrackId.value) return false;
-    const playableQueueIds =
-      serverStatus.value === "lost"
-        ? normalizedQueue().filter((trackId) =>
-            offlineSavedTrackIdSet.value.has(trackId),
-          )
-        : normalizedQueue();
+    const nextPlayableQueueIds = playableQueueIds();
     return shuffleEnabled.value
       ? shuffleTrackIds.value.some((trackId) =>
-          playableQueueIds.includes(trackId),
+          nextPlayableQueueIds.includes(trackId),
         ) ||
-          (repeatMode.value === "all" && playableQueueIds.length > 1)
-      : playableQueueIds.some((trackId) => trackId !== currentTrackId.value) ||
+          (repeatMode.value === "all" && nextPlayableQueueIds.length > 1)
+      : nextPlayableQueueIds.some(
+          (trackId) => trackId !== currentTrackId.value,
+        ) ||
           (repeatMode.value === "all" &&
             repeatCycleTrackIds.value.some(
-              (trackId) =>
-                serverStatus.value !== "lost" ||
-                offlineSavedTrackIdSet.value.has(trackId),
+              (trackId) => nextPlayableQueueIds.includes(trackId),
             ));
   });
   const durationSeconds = computed(() => {
@@ -331,9 +326,14 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
 
   function playableQueueIds(): string[] {
     const trackIds = normalizedQueue();
-    return serverStatus.value === "lost"
-      ? trackIds.filter((trackId) => offlineSavedTrackIdSet.value.has(trackId))
-      : trackIds;
+    const tracksById = new Map(
+      resolvedQueueTracks.value.map((track) => [track.id, track]),
+    );
+    return trackIds.filter((trackId) => {
+      if (offlineSavedTrackIdSet.value.has(trackId)) return true;
+      const track = tracksById.get(trackId);
+      return Boolean(track?.available);
+    });
   }
 
   function persistLocalPlayerState() {
@@ -373,7 +373,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
   }
 
   function availableTrackIds(): Set<string> {
-    return new Set(queueTrackIds.value);
+    return new Set(playableQueueIds());
   }
 
   function normalizedQueue(
@@ -1278,6 +1278,28 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     async function prepareTrack(trackId: string, attempt: number) {
       const serverAddress = address.value;
       const sessionToken = token.value;
+      const selectedTrack = resolvedQueueTracks.value.find(
+        (track) => track.id === trackId,
+      );
+      if (
+        selectedTrack &&
+        !selectedTrack.available &&
+        offlineSavedTrackIdSet.value.has(trackId)
+      ) {
+        try {
+          error.value = null;
+          if (!(await loadOfflineTrack(trackId, attempt))) {
+            playing.value = false;
+            error.value = t("error.offlineTrackMissing");
+          }
+        } finally {
+          if (attempt === loadAttempt) {
+            loading.value = false;
+            loadingTrackId = null;
+          }
+        }
+        return;
+      }
       if (serverStatus.value === "lost") {
         try {
           error.value = null;

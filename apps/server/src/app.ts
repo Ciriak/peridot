@@ -63,6 +63,7 @@ import {
   type UpdateCheckSchedulerOptions,
 } from "./update-check-scheduler.js";
 import { registerWebApplication } from "./web-server.js";
+import { SourceRemovalRegistry } from "./source-removal.js";
 
 export interface BuildAppOptions {
   config?: ServerConfig;
@@ -158,6 +159,9 @@ export async function buildApp(options: BuildAppOptions = {}) {
   const catalog = new CatalogService(database, playbackTokens);
   const duplicateDetection = new DuplicateDetectionService(database, catalog);
   const realtime = new RealtimeHub(database);
+  const sourceRemovals = new SourceRemovalRegistry((progress) =>
+    realtime.publishSourceRemoval(progress),
+  );
   const metadataEnrichment = new MetadataEnrichment(
     database,
     registry,
@@ -338,6 +342,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
         sourceRefreshScheduler,
         updateService,
         artworkCache,
+        sourceRemovals,
       );
     },
     (request) => playbackTokens.authorizeRequest(request.method, request.url),

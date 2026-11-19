@@ -6,6 +6,7 @@ import type {
   PodcastSummaryResponse,
 } from "@peridot/contracts";
 import { Icon } from "@iconify/vue/offline";
+import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import { computed } from "vue";
@@ -102,7 +103,7 @@ const collectionActive = computed(
 const playable = computed(
   () =>
     itemCount.value > 0 &&
-    (serverStatus.value !== "lost" ||
+    (props.collection.available ||
       savedTracks.value.some(
         (saved) => saved.track.albumId === props.collection.id,
       )),
@@ -127,7 +128,7 @@ async function toggleCollectionPlayback() {
     );
     if (saved.length) playCollection(saved);
   };
-  if (serverStatus.value === "lost") {
+  if (serverStatus.value === "lost" || !props.collection.available) {
     await playSaved();
     return;
   }
@@ -219,6 +220,9 @@ async function toggleCollectionPlayback() {
             <ScrollingText class="w-full">{{ collection.title }}</ScrollingText>
           </h3>
         </NuxtLink>
+        <Badge v-if="!collection.available" variant="secondary" class="mt-1">
+          {{ t("trackTable.unavailable") }}
+        </Badge>
         <ScrollingText class="w-full text-xs text-muted-foreground">
           {{ creator }} · {{ t(countKey, { count: itemCount }, itemCount) }}
         </ScrollingText>

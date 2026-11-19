@@ -49,6 +49,7 @@ const PROJECTION_VERSION = 6;
 const CHANGE_THROTTLE_MS = 2_000;
 const BACKFILL_BATCH_SIZE = 500;
 const PROJECTION_BATCH_SIZE = 100;
+const SOURCE_REMOVAL_BATCH_SIZE = 500;
 const DEFAULT_PAGE_SIZE = 100;
 const MAX_PAGE_SIZE = 200;
 const DEFAULT_CARD_PAGE_SIZE = 50;
@@ -143,6 +144,12 @@ interface CardPageOptions {
   query?: string;
   liked?: string;
   artistId?: string;
+}
+
+export interface CatalogSourceUnavailableResult {
+  trackCount: number;
+  albumCount: number;
+  artistCount: number;
 }
 
 export type CatalogChangedPublisher = (change: CatalogChange) => void;
@@ -751,6 +758,7 @@ export class CatalogService {
       : null;
     const releaseYear = albumReleaseYear(track);
     const values = {
+      sourceId: track.sourceId,
       mediaType: trackMediaType,
       title: effective.title,
       artist: effective.artist,
@@ -769,7 +777,7 @@ export class CatalogService {
       releaseYear,
       available: track.available ? 1 : 0,
       coverId: track.coverId,
-      albumId: track.available && !hiddenDuplicate ? albumId : null,
+      albumId: !hiddenDuplicate && album ? albumId : null,
       albumFolderKey,
       albumReleaseKey,
       duplicateOfId: track.duplicateOfId,
@@ -778,36 +786,20 @@ export class CatalogService {
     await this.database.orm.CatalogTrack.create({ id: trackId, ...values });
     await this.yieldCatalogWork();
 
-    if (!track.available || hiddenDuplicate) {
-      const unavailableTerms = searchTerms([
-        effective.title,
-        effective.artist,
-        album,
-        ...effective.genres,
-        ...effective.artists,
-        ...effective.albumArtists,
-      ]);
-      for (const term of unavailableTerms) {
-        await this.createSearchTerm("track", trackId, term);
-      }
-      this.markChanged(track.sourceId, reason);
-      await this.clearProjectionPending(trackId);
-      return;
-    }
-
-    if (albumId && album) {
+    if (!hiddenDuplicate && albumId && album) {
       await this.refreshAlbum(albumId);
       await this.yieldCatalogWork();
     }
 
-    if (music) {
+    if (!hiddenDuplicate && music) {
       for (const artist of effective.artists) {
         const artistId = catalogArtistId(artist);
         await this.addArtistContribution(
           artistId,
           artist,
           albumId,
-          effective.durationMs,
+          track.available ? effective.durationMs : null,
+          track.available === 1,
         );
         const artistLink = await this.database.orm.CatalogTrackArtist.first({
           trackId,
@@ -836,6 +828,11 @@ export class CatalogService {
       await this.createSearchTerm("track", trackId, term);
     }
     await this.yieldCatalogWork();
+    if (!track.available || hiddenDuplicate) {
+      this.markChanged(track.sourceId, reason);
+      await this.clearProjectionPending(trackId);
+      return;
+    }
     if (propagateAlbumIdentity && albumId && albumReleaseKey) {
       await this.reindexBridgedAlbumSiblings(
         albumFolderKey,
@@ -877,6 +874,7 @@ export class CatalogService {
           })
         : null;
     return {
+      sourceId: track.sourceId,
       mediaType: trackMediaType,
       title: effective.title,
       artist: effective.artist,
@@ -895,11 +893,142 @@ export class CatalogService {
       releaseYear: albumReleaseYear(track),
       available: track.available,
       coverId: track.coverId,
-      albumId,
+      albumId: track.duplicateOfId || !album ? null : albumId,
       albumFolderKey,
       albumReleaseKey,
       duplicateOfId: track.duplicateOfId,
     };
+  }
+
+  async markSourceUnavailable(
+    sourceId: string,
+    database: CatalogDatabase = this.database,
+    onProgress?: (completed: number, total: number) => Promise<void> | void,
+  ): Promise<CatalogSourceUnavailableResult> {
+    const { count: total } = await database.orm.Track.where({
+      sourceId,
+    }).aggregate((aggregate) => ({ count: aggregate.count() }));
+    const unavailableByAlbum = new Map<string, number>();
+    const unavailableByArtist = new Map<string, number>();
+    let completed = 0;
+    let offset = 0;
+
+    await onProgress?.(completed, total);
+    while (true) {
+      const tracks = await database.orm.Track.where({ sourceId })
+        .orderBy((track) => track.id.asc())
+        .offset(offset)
+        .limit(SOURCE_REMOVAL_BATCH_SIZE)
+        .select("id", "available")
+        .all();
+      if (!tracks.length) break;
+
+      const trackIds = tracks.map((track) => track.id);
+      const projections = await database.orm.CatalogTrack.where((track) =>
+        track.id.in(trackIds),
+      ).all();
+      const availableProjectionIds = new Set(
+        projections
+          .filter((track) => Boolean(track.available))
+          .map((track) => track.id),
+      );
+      for (const track of projections) {
+        if (track.available && track.albumId) {
+          unavailableByAlbum.set(
+            track.albumId,
+            (unavailableByAlbum.get(track.albumId) ?? 0) + 1,
+          );
+        }
+      }
+      if (availableProjectionIds.size) {
+        const artistLinks = await database.orm.CatalogTrackArtist.where(
+          (link) => link.trackId.in([...availableProjectionIds]),
+        ).all();
+        for (const link of artistLinks) {
+          unavailableByArtist.set(
+            link.artistId,
+            (unavailableByArtist.get(link.artistId) ?? 0) + 1,
+          );
+        }
+      }
+
+      await database.orm.Track.where((track) =>
+        track.duplicateOfId.in(trackIds),
+      ).update({ duplicateOfId: null });
+      await database.orm.CatalogTrack.where((track) =>
+        track.duplicateOfId.in(trackIds),
+      ).update({ duplicateOfId: null });
+      await database.orm.Track.where((track) => track.id.in(trackIds)).update({
+        available: 0,
+        catalogProjectionPending: 0,
+      });
+      await database.orm.CatalogTrack.where((track) =>
+        track.id.in(trackIds),
+      ).update({
+        available: 0,
+        duplicateOfId: null,
+      });
+
+      completed += tracks.length;
+      offset += tracks.length;
+      await onProgress?.(completed, total);
+      if (tracks.length < SOURCE_REMOVAL_BATCH_SIZE) break;
+    }
+
+    await this.adjustSourceAvailabilityCounts(
+      database,
+      "CatalogAlbum",
+      unavailableByAlbum,
+    );
+    await this.adjustSourceAvailabilityCounts(
+      database,
+      "CatalogArtist",
+      unavailableByArtist,
+    );
+    this.markChanged(sourceId, "source-removal");
+    return {
+      trackCount: total,
+      albumCount: unavailableByAlbum.size,
+      artistCount: unavailableByArtist.size,
+    };
+  }
+
+  private async adjustSourceAvailabilityCounts(
+    database: CatalogDatabase,
+    table: "CatalogAlbum" | "CatalogArtist",
+    unavailableCounts: ReadonlyMap<string, number>,
+  ): Promise<void> {
+    const entries = [...unavailableCounts.entries()];
+    for (let offset = 0; offset < entries.length; offset += 100) {
+      const batch = entries.slice(offset, offset + 100);
+      const ids = batch.map(([id]) => id);
+      const rows =
+        table === "CatalogAlbum"
+          ? await database.orm.CatalogAlbum.where((row) =>
+              row.id.in(ids),
+            ).all()
+          : await database.orm.CatalogArtist.where((row) =>
+              row.id.in(ids),
+            ).all();
+      const byId = new Map(rows.map((row) => [row.id, row]));
+      for (const [id, count] of batch) {
+        const row = byId.get(id);
+        if (!row) continue;
+        const availableTrackCount = Math.max(
+          0,
+          row.availableTrackCount - count,
+        );
+        if (table === "CatalogAlbum") {
+          await database.orm.CatalogAlbum.where({ id }).update({
+            availableTrackCount,
+          });
+        } else {
+          await database.orm.CatalogArtist.where({ id }).update({
+            availableTrackCount,
+          });
+        }
+      }
+    }
   }
 
   async removeTrack(trackId: string): Promise<void> {
@@ -1293,6 +1422,9 @@ export class CatalogService {
     let query = this.database.orm.CatalogAlbum.where((album) =>
       album.trackCount.gt(0),
     ).where({ mediaType: "music" });
+    if (options.liked !== "true") {
+      query = query.where((album) => album.availableTrackCount.gt(0));
+    }
     if (options.artistId) {
       const artistAlbums = await this.database.orm.CatalogArtistAlbum.where({
         artistId: options.artistId,
@@ -1417,6 +1549,9 @@ export class CatalogService {
     let query = this.database.orm.CatalogAlbum.where((album) =>
       album.trackCount.gt(0),
     ).where({ mediaType });
+    if (options.liked !== "true") {
+      query = query.where((album) => album.availableTrackCount.gt(0));
+    }
     if (filterIds) query = query.where((album) => album.id.in([...filterIds]));
     const { count: totalCount } = await query.aggregate((aggregate) => ({
       count: aggregate.count(),
@@ -1467,6 +1602,7 @@ export class CatalogService {
           chapterCount: collection.trackCount,
           durationMs: collection.durationMs,
           releaseYear: collection.releaseYear,
+          available: collection.availableTrackCount > 0,
           liked: likedIds.has(collection.id),
         } satisfies AudiobookSummaryResponse;
       }
@@ -1480,6 +1616,7 @@ export class CatalogService {
         episodeCount: collection.trackCount,
         durationMs: collection.durationMs,
         latestPublishedAt: collection.latestPublishedAt?.toISOString() ?? null,
+        available: collection.availableTrackCount > 0,
         liked: likedIds.has(collection.id),
       } satisfies PodcastSummaryResponse;
     });
@@ -1551,6 +1688,7 @@ export class CatalogService {
         chapterCount: collection.trackCount,
         durationMs: collection.durationMs,
         releaseYear: collection.releaseYear,
+        available: collection.availableTrackCount > 0,
         liked,
       };
     }
@@ -1564,6 +1702,7 @@ export class CatalogService {
       episodeCount: collection.trackCount,
       durationMs: collection.durationMs,
       latestPublishedAt: collection.latestPublishedAt?.toISOString() ?? null,
+      available: collection.availableTrackCount > 0,
       liked,
     };
   }
@@ -1597,6 +1736,9 @@ export class CatalogService {
     let query = this.database.orm.CatalogArtist.where((artist) =>
       artist.trackCount.gt(0),
     );
+    if (options.liked !== "true") {
+      query = query.where((artist) => artist.availableTrackCount.gt(0));
+    }
     if (filterIds)
       query = query.where((artist) => artist.id.in([...filterIds]));
     const { count: totalCount } = await query.aggregate((aggregate) => ({
@@ -1880,6 +2022,7 @@ export class CatalogService {
       coverId: string | null;
       coverTrackId: string | null;
       trackCount: number;
+      availableTrackCount: number;
       durationMs: number | null;
       releaseYear: number | null;
     },
@@ -1909,6 +2052,7 @@ export class CatalogService {
       trackCount: album.trackCount,
       durationMs: album.durationMs,
       releaseYear: album.releaseYear,
+      available: album.availableTrackCount > 0,
       liked,
     };
   }
@@ -1940,6 +2084,7 @@ export class CatalogService {
       name: string;
       displayName: string;
       trackCount: number;
+      availableTrackCount: number;
       albumCount: number;
       durationMs: number | null;
     },
@@ -1954,6 +2099,7 @@ export class CatalogService {
       albumCount: artist.albumCount,
       trackCount: artist.trackCount,
       durationMs: artist.durationMs,
+      available: artist.availableTrackCount > 0,
       imageUrl:
         metadata?.imageId && metadataResponse?.portrait
           ? `/api/artists/${encodeURIComponent(artist.id)}/image?artistImageToken=${encodeURIComponent(this.playbackTokens.issueArtistImage(artist.id).token)}`
@@ -2027,19 +2173,23 @@ export class CatalogService {
     const tracks = (
       await this.database.orm.CatalogTrack.where({
         albumId,
-        available: 1,
       }).all()
     ).filter((track) => track.id !== excludedTrackId);
     if (!tracks.length) {
       await this.removeAlbum(albumId);
       return;
     }
+    const availableTracks = tracks.filter((track) => track.available);
+    const representativeTracks = availableTracks.length
+      ? availableTracks
+      : tracks;
     const first = [...tracks].sort(
       (left, right) =>
         left.normalizedTitle.localeCompare(right.normalizedTitle) ||
         left.id.localeCompare(right.id),
     )[0]!;
-    const coverTrack = tracks.find((track) => track.coverId) ?? first;
+    const coverTrack =
+      representativeTracks.find((track) => track.coverId) ?? first;
     const years = new Set(
       tracks.flatMap((track) =>
         track.releaseYear === null ? [] : [track.releaseYear],
@@ -2076,6 +2226,7 @@ export class CatalogService {
       coverTrackId: coverTrack.coverId ? coverTrack.id : null,
       artistCredits: JSON.stringify(albumArtists),
       trackCount: tracks.length,
+      availableTrackCount: availableTracks.length,
       durationMs: tracks.some((track) => track.durationMs !== null)
         ? tracks.reduce(
             (total, track) => total + finiteDuration(track.durationMs),
@@ -2113,6 +2264,7 @@ export class CatalogService {
     name: string,
     albumId: string | null,
     durationMs: number | null,
+    available: boolean,
   ) {
     const existing = await this.database.orm.CatalogArtist.first({
       id: artistId,
@@ -2150,6 +2302,8 @@ export class CatalogService {
       displayName,
       normalizedDisplayName: normalize(displayName),
       trackCount: (existing?.trackCount ?? 0) + 1,
+      availableTrackCount:
+        (existing?.availableTrackCount ?? 0) + (available ? 1 : 0),
       albumCount,
       durationMs:
         existing?.durationMs === null || existing?.durationMs === undefined
@@ -2176,7 +2330,11 @@ export class CatalogService {
 
   private async removeArtistContribution(
     artistId: string,
-    track: { albumId: string | null; durationMs: number | null },
+    track: {
+      albumId: string | null;
+      durationMs: number | null;
+      available: number;
+    },
     trackId: string,
   ) {
     const artist = await this.database.orm.CatalogArtist.first({
@@ -2205,6 +2363,10 @@ export class CatalogService {
       }
     }
     const trackCount = Math.max(0, artist.trackCount - 1);
+    const availableTrackCount = Math.max(
+      0,
+      artist.availableTrackCount - (track.available ? 1 : 0),
+    );
     const durationMs =
       artist.durationMs === null
         ? null
@@ -2230,6 +2392,7 @@ export class CatalogService {
     }
     await this.database.orm.CatalogArtist.where({ id: artistId }).update({
       trackCount,
+      availableTrackCount,
       albumCount,
       durationMs,
     });

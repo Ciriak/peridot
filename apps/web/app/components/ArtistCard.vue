@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from "#imports";
 import type { ArtistSummaryResponse } from "@peridot/contracts";
+import { Badge } from "@peridot/ui/components/ui/badge";
 import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import { artistLikeKey, artistRoute } from "../lib/library";
 import { useLikes } from "../composables/use-likes";
@@ -33,6 +34,9 @@ const {
           <h3 class="text-sm font-medium">
             <ScrollingText class="w-full">{{ artist.name }}</ScrollingText>
           </h3>
+          <Badge v-if="!artist.available" variant="secondary" class="mt-1">
+            {{ t("trackTable.unavailable") }}
+          </Badge>
           <p
             v-if="artist.name !== artist.localName"
             class="text-xs text-muted-foreground"

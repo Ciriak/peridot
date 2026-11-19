@@ -6,12 +6,14 @@ import type {
   MessageDescriptor,
   SourceIntegrationOptionResponse,
   SourceKind,
+  SourceRemovalProgressResponse,
   SourceResponse,
 } from "@peridot/contracts";
 import type { CredentialStore } from "./credential-store.js";
 import type { Database } from "./database.js";
 import { message } from "./messages.js";
 import type { SourceRow } from "./prisma/models.js";
+import type { SourceRemovalRegistry } from "./source-removal.js";
 import {
   SourceIntegrationError,
   type SourceIntegrationConfiguration,
@@ -49,6 +51,7 @@ function toSourceResponse(
   source: SourceRow,
   fileCount = 0,
   lastSyncedAt: Date | null = source.lastSyncedAt,
+  removal: SourceRemovalProgressResponse | null = null,
 ): SourceResponse {
   return {
     id: source.id,
@@ -59,6 +62,7 @@ function toSourceResponse(
     configuration: parseSourceConfiguration(source.configuration),
     fileCount,
     lastSyncedAt: lastSyncedAt?.toISOString() ?? null,
+    removal,
   };
 }
 
@@ -119,11 +123,16 @@ export async function ensureDefaultSource(
 
 export async function listSources(
   database: Database,
+  removals?: SourceRemovalRegistry,
 ): Promise<SourceResponse[]> {
-  const sources = await database.orm.Source.orderBy([
-    (source) => source.position.asc(),
-    (source) => source.createdAt.asc(),
-  ]).all();
+  const sources = await database.orm.Source.where((source) =>
+    source.removedAt.isNull(),
+  )
+    .orderBy([
+      (source) => source.position.asc(),
+      (source) => source.createdAt.asc(),
+    ])
+    .all();
   return Promise.all(
     sources.map(async (source) => {
       const [tracks, lastCompletedScan] = await Promise.all([
@@ -145,6 +154,7 @@ export async function listSources(
         source,
         tracks.count,
         source.lastSyncedAt ?? lastCompletedScan?.completedAt ?? null,
+        removals?.get(source.id) ?? null,
       );
     }),
   );
@@ -176,9 +186,9 @@ export async function createSource(
     typeof value.name === "string" && value.name.trim()
       ? value.name.trim()
       : null;
-  const { count: position } = await database.orm.Source.aggregate(
-    (aggregate) => ({ count: aggregate.count() }),
-  );
+  const { count: position } = await database.orm.Source.where(
+    (source) => source.removedAt.isNull(),
+  ).aggregate((aggregate) => ({ count: aggregate.count() }));
 
   if (kind === "path") {
     if (typeof value.path !== "string" || !value.path.trim()) {
@@ -195,6 +205,23 @@ export async function createSource(
       path: resolved,
     });
     if (duplicate) {
+      if (duplicate.removedAt) {
+        const restored = await database.orm.Source.where({
+          id: duplicate.id,
+        }).updateAndCount({
+          name,
+          path: resolved,
+          configuration: null,
+          credentialCiphertext: null,
+          removedAt: null,
+          position,
+        });
+        if (restored) {
+          return toSourceResponse(
+            await database.orm.Source.firstOrThrow({ id: duplicate.id }),
+          );
+        }
+      }
       throw new SourceError(
         "This folder is already a source.",
         message("api.message.sourceFolderDuplicate"),
@@ -219,6 +246,23 @@ export async function createSource(
     }
     const duplicate = await database.orm.Source.first({ kind: "url", url });
     if (duplicate) {
+      if (duplicate.removedAt) {
+        const restored = await database.orm.Source.where({
+          id: duplicate.id,
+        }).updateAndCount({
+          name,
+          url,
+          configuration: null,
+          credentialCiphertext: null,
+          removedAt: null,
+          position,
+        });
+        if (restored) {
+          return toSourceResponse(
+            await database.orm.Source.firstOrThrow({ id: duplicate.id }),
+          );
+        }
+      }
       throw new SourceError(
         "This URL is already a source.",
         message("api.message.sourceUrlDuplicate"),
@@ -262,6 +306,29 @@ export async function createSource(
     sourceIdentity: validated.identity,
   }).first();
   if (duplicate) {
+    if (duplicate.removedAt) {
+      const restored = await database.orm.Source.where({
+        id: duplicate.id,
+      }).updateAndCount({
+        name: name || validated.name,
+        url: validated.configuration.url ?? null,
+        sourceIdentity: validated.identity,
+        configuration: JSON.stringify(validated.configuration),
+        credentialCiphertext: Object.keys(validated.credentials).length
+          ? credentials.encrypt(
+              JSON.stringify(validated.credentials),
+              "source",
+            )
+          : null,
+        removedAt: null,
+        position,
+      });
+      if (restored) {
+        return toSourceResponse(
+          await database.orm.Source.firstOrThrow({ id: duplicate.id }),
+        );
+      }
+    }
     throw new SourceError(
       "This integration source is already configured.",
       message("api.message.sourceIntegrationDuplicate"),
@@ -359,7 +426,11 @@ export async function reorderSources(
       message("api.message.sourceOrderInvalid"),
     );
   }
-  const existing = await database.orm.Source.select("id").all();
+  const existing = await database.orm.Source.where((source) =>
+    source.removedAt.isNull(),
+  )
+    .select("id")
+    .all();
   const existingIds = new Set(existing.map((source) => source.id));
   if (
     ids.length !== existingIds.size ||
@@ -388,7 +459,9 @@ export interface PathSource {
 export async function getPathSources(
   database: Database,
 ): Promise<PathSource[]> {
-  const sources = await database.orm.Source.where({ kind: "path" }).all();
+  const sources = await database.orm.Source.where({ kind: "path" })
+    .where((source) => source.removedAt.isNull())
+    .all();
   return sources
     .filter((source): source is SourceRow & { path: string } =>
       Boolean(source.path),

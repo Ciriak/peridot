@@ -37,8 +37,13 @@ function addToast(content: {
 export function notifySourceMutation(
   action: SourceMutation,
   sourceLabel?: string,
+  unavailableTrackCount?: number,
 ) {
-  const content = sourceMutationToast(action, sourceLabel);
+  const content = sourceMutationToast(
+    action,
+    sourceLabel,
+    unavailableTrackCount,
+  );
   addToast(content);
 }
 

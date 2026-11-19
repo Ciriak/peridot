@@ -303,6 +303,7 @@ export class LibraryScanner {
         });
         if (
           !source ||
+          source.removedAt ||
           (source.kind !== "path" &&
             !this.sourceIntegrations.registry.has(source.kind))
         ) {
@@ -314,7 +315,9 @@ export class LibraryScanner {
         }
         requestedSource = source;
       }
-      const sourceQuery = this.database.orm.Source.orderBy([
+      const sourceQuery = this.database.orm.Source.where((source) =>
+        source.removedAt.isNull(),
+      ).orderBy([
         (source) => source.position.asc(),
         (source) => source.createdAt.asc(),
       ]);

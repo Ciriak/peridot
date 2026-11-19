@@ -15,6 +15,7 @@ import type {
   RestartServerResponse,
   ServerSettingsResponse,
   SourceListResponse,
+  SourceRemovalResponse,
   UpdateMetadataProviderRequest,
   UpdateServerSettingsRequest,
   UpdateUserRequest,
@@ -66,6 +67,10 @@ import {
   type TaskService,
 } from "./tasks.js";
 import {
+  SourceRemovalError,
+  type SourceRemovalRegistry,
+} from "./source-removal.js";
+import {
   createManagedUser,
   deleteManagedUser,
   listManagedUsers,
@@ -89,6 +94,7 @@ export async function registerAdminRoutes(
   sourceRefreshScheduler?: SourceRefreshScheduler,
   updates?: UpdateService,
   artworkCache?: ArtworkCache,
+  sourceRemovals?: SourceRemovalRegistry,
 ) {
   await app.register(async (admin) => {
     admin.addHook("onRequest", async (request, reply) => {
@@ -245,7 +251,7 @@ export async function registerAdminRoutes(
     });
 
     admin.get("/api/admin/sources", async (): Promise<SourceListResponse> => ({
-      items: await listSources(database),
+      items: await listSources(database, sourceRemovals),
     }));
 
     admin.post<{
@@ -427,11 +433,14 @@ export async function registerAdminRoutes(
 
     admin.delete<{ Params: { id: string } }>(
       "/api/admin/sources/:id",
-      async (request, reply) => {
+      async (
+        request,
+        reply,
+      ): Promise<SourceRemovalResponse | undefined> => {
         const source = await database.orm.Source.first({
           id: request.params.id,
         });
-        if (!source) {
+        if (!source || source.removedAt) {
           return sendError(
             reply,
             404,
@@ -440,57 +449,86 @@ export async function registerAdminRoutes(
             message("api.message.sourceNotFound"),
           );
         }
-        await tasks.stopForSource(source.id);
-        const removedTrackIds = (
-          await database.orm.Track.where({
-            sourceId: source.id,
-          })
-            .select("id")
-            .all()
-        ).map((track) => track.id);
-        await database.transaction(async (transaction) => {
-          if (removedTrackIds.length) {
-            await transaction.orm.Track.where({
+        if (!catalog || !sourceRemovals) {
+          throw new Error("Source removal services are unavailable.");
+        }
+        const { count: total } = await database.orm.Track.where({
+          sourceId: source.id,
+        }).aggregate((aggregate) => ({ count: aggregate.count() }));
+        const startedAt = Date.now();
+        let progress;
+        try {
+          progress = sourceRemovals.start(source.id, total);
+        } catch (error) {
+          if (error instanceof SourceRemovalError) {
+            return sendError(
+              reply,
+              409,
+              error.code,
+              error.message,
+              message("api.message.sourceRemovalInProgress"),
+            );
+          }
+          throw error;
+        }
+
+        try {
+          await tasks.stopForSource(source.id);
+          sourceRemovals.update(source.id, "tracks", 0, total);
+          const result = await database.transaction(async (transaction) => {
+            const unavailable = await catalog.markSourceUnavailable(
+              source.id,
+              transaction,
+              async (completed, taskTotal) => {
+                sourceRemovals.update(
+                  source.id,
+                  "tracks",
+                  completed,
+                  taskTotal,
+                );
+                await new Promise<void>((resolve) => setImmediate(resolve));
+              },
+            );
+            sourceRemovals.update(
+              source.id,
+              "catalog",
+              total,
+              total,
+            );
+            await transaction.orm.ArtworkJob.where({
               sourceId: source.id,
-            }).delete();
-          }
-          await transaction.orm.Source.where({ id: source.id }).delete();
-        });
-        if (artworkCache) {
-          try {
-            await pruneReferencedArtwork(database, artworkCache);
-          } catch (error) {
-            request.log.warn(
-              { err: error, sourceId: source.id },
-              "Could not prune removed source artwork",
+            }).deleteAndCount();
+            await transaction.orm.Source.where({
+              id: source.id,
+            }).update({
+              removedAt: new Date(),
+              configuration: null,
+              credentialCiphertext: null,
+            });
+            return unavailable;
+          });
+          await catalog.flushChanges();
+          if (artworkCache) {
+            await pruneReferencedArtwork(database, artworkCache).catch(
+              (error) => {
+                request.log.warn(
+                  { err: error, sourceId: source.id },
+                  "Could not prune removed source artwork",
+                );
+              },
             );
           }
+          await queueDuplicateDetection(tasks);
+          return {
+            sourceId: source.id,
+            unavailableTrackCount: result.trackCount,
+            affectedAlbumCount: result.albumCount,
+            affectedArtistCount: result.artistCount,
+            durationMs: Date.now() - startedAt,
+          };
+        } finally {
+          sourceRemovals.finish(progress.sourceId);
         }
-        if (removedTrackIds.length && catalog) {
-          try {
-            for (const trackId of removedTrackIds) {
-              await catalog.removeTrack(trackId);
-            }
-            await catalog.flushChanges();
-          } catch (error) {
-            request.log.error(
-              { err: error, sourceId: source.id },
-              "Could not clean up the removed source catalog",
-            );
-          }
-        }
-        if (catalog) {
-          try {
-            await catalog.markSourceRemoval(source.id);
-          } catch (error) {
-            request.log.error(
-              { err: error, sourceId: source.id },
-              "Could not publish the removed source catalog change",
-            );
-          }
-        }
-        await queueDuplicateDetection(tasks);
-        return reply.code(204).send();
       },
     );
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from "#imports";
 import { Icon } from "@iconify/vue/offline";
+import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import type { AlbumSummaryResponse } from "@peridot/contracts";
@@ -49,7 +50,7 @@ const albumActive = computed(() => {
 const albumPlayable = computed(
   () =>
     Boolean(props.album.trackCount) &&
-    (serverStatus.value !== "lost" ||
+    (props.album.available ||
       savedTracks.value.some(
         (saved) => saved.track.albumId === props.album.id,
       )),
@@ -66,7 +67,7 @@ async function toggleAlbumPlayback() {
     );
     if (saved.length) playCollection(saved);
   };
-  if (serverStatus.value === "lost") {
+  if (serverStatus.value === "lost" || !props.album.available) {
     await playSaved();
     return;
   }
@@ -161,6 +162,9 @@ async function toggleAlbumPlayback() {
               </ScrollingText>
             </h3>
           </NuxtLink>
+          <Badge v-if="!album.available" variant="secondary" class="mt-1">
+            {{ t("trackTable.unavailable") }}
+          </Badge>
           <ScrollingText class="w-full text-xs text-muted-foreground">
             <TrackArtistLinks :artists="album.artists" /> ·
             {{

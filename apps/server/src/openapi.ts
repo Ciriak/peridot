@@ -263,6 +263,7 @@ const schemas: Record<string, SchemaObject> = {
     trackCount: integerSchema,
     durationMs: nullable(integerSchema),
     releaseYear: nullable(integerSchema),
+    available: booleanSchema,
     liked: booleanSchema,
   }),
   AlbumListResponse: objectSchema({
@@ -281,6 +282,7 @@ const schemas: Record<string, SchemaObject> = {
     chapterCount: integerSchema,
     durationMs: nullable(integerSchema),
     releaseYear: nullable(integerSchema),
+    available: booleanSchema,
     liked: booleanSchema,
   }),
   AudiobookListResponse: objectSchema({
@@ -299,6 +301,7 @@ const schemas: Record<string, SchemaObject> = {
     episodeCount: integerSchema,
     durationMs: nullable(integerSchema),
     latestPublishedAt: nullable(dateTimeSchema),
+    available: booleanSchema,
     liked: booleanSchema,
   }),
   PodcastListResponse: objectSchema({
@@ -329,6 +332,7 @@ const schemas: Record<string, SchemaObject> = {
     durationMs: nullable(integerSchema),
     imageUrl: nullable(stringSchema),
     metadata: nullable(ref("ArtistMetadataResponse")),
+    available: booleanSchema,
     liked: booleanSchema,
   }),
   ArtistListResponse: objectSchema({
@@ -666,6 +670,13 @@ const schemas: Record<string, SchemaObject> = {
     activeCount: integerSchema,
     queuedCount: integerSchema,
   }),
+  SourceRemovalProgressResponse: objectSchema({
+    operationId: stringSchema,
+    sourceId: stringSchema,
+    phase: enumeration("stopping", "tracks", "catalog"),
+    completed: integerSchema,
+    total: integerSchema,
+  }),
   SourceResponse: objectSchema({
     id: stringSchema,
     kind: enumeration("path", "url", "jellyfin"),
@@ -675,6 +686,7 @@ const schemas: Record<string, SchemaObject> = {
     configuration: nullable(stringRecordSchema),
     fileCount: integerSchema,
     lastSyncedAt: nullable(dateTimeSchema),
+    removal: nullable(ref("SourceRemovalProgressResponse")),
   }),
   CreateSourceResponse: objectSchema({
     id: stringSchema,
@@ -685,6 +697,7 @@ const schemas: Record<string, SchemaObject> = {
     configuration: nullable(stringRecordSchema),
     fileCount: integerSchema,
     lastSyncedAt: nullable(dateTimeSchema),
+    removal: nullable(ref("SourceRemovalProgressResponse")),
     task: nullable(ref("TaskResponse")),
   }),
   CreateSourceRequest: {
@@ -711,6 +724,13 @@ const schemas: Record<string, SchemaObject> = {
   },
   SourceListResponse: objectSchema({
     items: arrayOf(ref("SourceResponse")),
+  }),
+  SourceRemovalResponse: objectSchema({
+    sourceId: stringSchema,
+    unavailableTrackCount: integerSchema,
+    affectedAlbumCount: integerSchema,
+    affectedArtistCount: integerSchema,
+    durationMs: integerSchema,
   }),
   ReorderSourcesRequest: objectSchema({
     ids: arrayOf(stringSchema),
@@ -1436,9 +1456,8 @@ const routes: Record<string, OpenApiOperation> = {
   ),
   "DELETE /api/admin/sources/:id": jsonOperation(
     "Sources",
-    "Delete a library source",
-    null,
-    { status: 204 },
+    "Remove a library source while retaining its catalog as unavailable",
+    ref("SourceRemovalResponse"),
   ),
   "POST /api/admin/sources/:id/scans": jsonOperation(
     "Sources",

@@ -4,10 +4,12 @@ import type {
   RealtimeCatalogChangedEvent,
   RealtimeLogAppendedEvent,
   RealtimeServerMessage,
+  RealtimeSourceRemovalProgressEvent,
   RealtimeSubscribeRequest,
   RealtimeTaskUpdatedEvent,
   RealtimeTicketResponse,
   RealtimeTopic,
+  SourceRemovalProgressResponse,
   TaskResponse,
   UserResponse,
 } from "@peridot/contracts";
@@ -20,7 +22,12 @@ const TICKET_TTL_MS = 30_000;
 const EVENT_BUFFER_SIZE = 512;
 const HEARTBEAT_INTERVAL_MS = 20_000;
 const MAX_BUFFERED_BYTES = 256 * 1024;
-const ALLOWED_TOPICS = new Set<RealtimeTopic>(["tasks", "catalog", "logs"]);
+const ALLOWED_TOPICS = new Set<RealtimeTopic>([
+  "tasks",
+  "catalog",
+  "logs",
+  "sources",
+]);
 
 export function redactRealtimeTicket(url: string): string {
   return url.replace(
@@ -49,6 +56,7 @@ interface ClientState {
 type RealtimeEvent =
   | RealtimeTaskUpdatedEvent
   | RealtimeCatalogChangedEvent
+  | RealtimeSourceRemovalProgressEvent
   | RealtimeLogAppendedEvent;
 
 function ticketHash(ticket: string): string {
@@ -58,6 +66,7 @@ function ticketHash(ticket: string): string {
 function topicForEvent(message: RealtimeServerMessage): RealtimeTopic | null {
   if (message.type === "task.updated") return "tasks";
   if (message.type === "catalog.changed") return "catalog";
+  if (message.type === "source.removal.progress") return "sources";
   if (message.type === "log.appended") return "logs";
   return null;
 }
@@ -173,6 +182,15 @@ export class RealtimeHub {
     });
   }
 
+  publishSourceRemoval(progress: SourceRemovalProgressResponse) {
+    this.publish({
+      type: "source.removal.progress",
+      eventId: this.sequence + 1,
+      occurredAt: new Date().toISOString(),
+      ...progress,
+    });
+  }
+
   disconnectSession(sessionId: string) {
     for (const state of this.clients.values()) {
       if (state.sessionId !== sessionId) continue;
@@ -233,11 +251,18 @@ export class RealtimeHub {
       });
     }
     const topics = [...new Set(message.topics)];
-    if (topics.includes("logs") && state.user.role !== "admin") {
+    if (
+      (topics.includes("logs") || topics.includes("sources")) &&
+      state.user.role !== "admin"
+    ) {
       return this.send(state, {
         type: "error",
         code: "forbidden_topic",
-        messageDescriptor: descriptor("api.message.realtimeLogsAdmin"),
+        messageDescriptor: descriptor(
+          topics.includes("sources")
+            ? "api.message.realtimeSourcesAdmin"
+            : "api.message.realtimeLogsAdmin",
+        ),
       });
     }
     state.topics = new Set(topics);

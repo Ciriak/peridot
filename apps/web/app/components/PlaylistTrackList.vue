@@ -176,7 +176,17 @@ function toggleEntryPlayback(entry: PlaylistEntryResponse) {
             aria-hidden="true"
             class="size-4 shrink-0 text-primary"
           />
-          <Badge v-if="!playable(entry)" variant="secondary">
+          <Badge
+            v-if="entry.track && !entry.track.available"
+            variant="secondary"
+          >
+            {{
+              playable(entry)
+                ? t("trackTable.availableOffline")
+                : t("playlistTracks.unavailable")
+            }}
+          </Badge>
+          <Badge v-else-if="!playable(entry)" variant="secondary">
             {{ t("playlistTracks.unavailable") }}
           </Badge>
         </div>

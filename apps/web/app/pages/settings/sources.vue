@@ -2,6 +2,7 @@
 import {
   computed,
   definePageMeta,
+  onBeforeUnmount,
   onMounted,
   ref,
   useI18n,
@@ -11,6 +12,7 @@ import { Icon } from "@iconify/vue/offline";
 import type {
   CreateSourceRequest,
   SourceIntegrationOptionResponse,
+  SourceRemovalProgressResponse,
   SourceResponse,
 } from "@peridot/contracts";
 import { Button } from "@peridot/ui/components/ui/button";
@@ -48,6 +50,7 @@ import { useServer } from "../../composables/use-server";
 import { useServerConnection } from "../../composables/use-server-connection";
 import { useSession } from "../../composables/use-session";
 import { useCatalogRevision } from "../../composables/use-catalog-query";
+import { useRealtime } from "../../composables/use-realtime";
 import {
   useAdminSourcesQuery,
   useServerSettingsQuery,
@@ -80,6 +83,7 @@ const { address } = useServer();
 const { token } = useSession();
 const { user } = useUser();
 const { status: serverStatus } = useServerConnection();
+const realtime = useRealtime();
 const {
   queueLibraryScan,
   queueSourceScan,
@@ -111,7 +115,10 @@ const adding = ref(false);
 const addError = ref("");
 const removeOpen = ref(false);
 const pendingDelete = ref<SourceResponse | null>(null);
-const pendingSourceDeletions = ref<Set<string>>(new Set());
+const removalProgress = ref<
+  Record<string, SourceRemovalProgressResponse>
+>({});
+let unsubscribeRemovals: (() => void) | undefined;
 const sourceRefreshEnabled = ref(true);
 const sourceRefreshCron = ref("0 3 * * *");
 const sourceRefreshSaving = ref(false);
@@ -189,6 +196,31 @@ function sourceTaskProgressLabel(source: SourceResponse): string {
   return task ? translate(taskProgressMessage(task)) : "";
 }
 
+function sourceRemoval(
+  source: SourceResponse,
+): SourceRemovalProgressResponse | null {
+  return removalProgress.value[source.id] ?? source.removal;
+}
+
+function sourceIsRemoving(source: SourceResponse): boolean {
+  return Boolean(sourceRemoval(source));
+}
+
+function sourceRemovalValue(source: SourceResponse): number | null {
+  const progress = sourceRemoval(source);
+  if (!progress || !progress.total) return null;
+  return Math.min(100, (progress.completed / progress.total) * 100);
+}
+
+function sourceRemovalLabel(source: SourceResponse): string {
+  const progress = sourceRemoval(source);
+  if (!progress) return "";
+  return t(`settings.sources.removalPhase.${progress.phase}`, {
+    completed: progress.completed,
+    total: progress.total,
+  });
+}
+
 function sourceFileCount(source: SourceResponse): string {
   const count = Number.isFinite(source.fileCount) ? source.fileCount : 0;
   return t("count.file", { count }, count);
@@ -211,9 +243,13 @@ async function loadSources() {
 watch(
   sourcesQuery.items,
   (items) => {
-    sources.value = items.filter(
-      (source) => !pendingSourceDeletions.value.has(source.id),
-    );
+    sources.value = items;
+    const next = { ...removalProgress.value };
+    for (const source of items) {
+      if (source.removal) next[source.id] = source.removal;
+      else delete next[source.id];
+    }
+    removalProgress.value = next;
   },
   { immediate: true },
 );
@@ -373,45 +409,51 @@ function askRemove(source: SourceResponse) {
   removeOpen.value = true;
 }
 
-function confirmRemove() {
+async function confirmRemove() {
   if (!pendingDelete.value) return;
   const removedSource = pendingDelete.value;
-  const rollback = sourcesQuery.removeOptimistically(removedSource.id);
-  if (!rollback) {
-    pageError.value = t("settings.sources.removeError");
-    return;
-  }
-
-  pendingSourceDeletions.value = new Set([
-    ...pendingSourceDeletions.value,
-    removedSource.id,
-  ]);
-  sources.value = sources.value.filter(
-    (source) => source.id !== removedSource.id,
-  );
   pendingDelete.value = null;
   removeOpen.value = false;
   pageError.value = "";
-  notifySourceMutation("removed", sourceLabel(removedSource));
+  removalProgress.value = {
+    ...removalProgress.value,
+    [removedSource.id]: {
+      operationId: "pending",
+      sourceId: removedSource.id,
+      phase: "stopping",
+      completed: 0,
+      total: removedSource.fileCount,
+    },
+  };
 
-  let removalFailed = false;
-  void deleteSource(address.value ?? "", token.value ?? "", removedSource.id)
-    .then(async () => {
-      await resetOfflineCatalog();
-      invalidateCatalog();
-    })
-    .catch((reason) => {
-      if (isAuthenticationRedirectError(reason)) return;
-      removalFailed = true;
-      pageError.value = errorMessage(reason, "settings.sources.removeError");
-    })
-    .finally(() => {
-      const remaining = new Set(pendingSourceDeletions.value);
-      remaining.delete(removedSource.id);
-      pendingSourceDeletions.value = remaining;
-
-      if (removalFailed) rollback();
-    });
+  try {
+    const result = await deleteSource(
+      address.value ?? "",
+      token.value ?? "",
+      removedSource.id,
+    );
+    sourcesQuery.removeOptimistically(removedSource.id);
+    sources.value = sources.value.filter(
+      (source) => source.id !== removedSource.id,
+    );
+    const next = { ...removalProgress.value };
+    delete next[removedSource.id];
+    removalProgress.value = next;
+    notifySourceMutation(
+      "removed",
+      sourceLabel(removedSource),
+      result.unavailableTrackCount,
+    );
+    await resetOfflineCatalog();
+    invalidateCatalog();
+  } catch (reason) {
+    const next = { ...removalProgress.value };
+    delete next[removedSource.id];
+    removalProgress.value = next;
+    if (isAuthenticationRedirectError(reason)) return;
+    pageError.value = errorMessage(reason, "settings.sources.removeError");
+    await loadSources();
+  }
 }
 
 async function persistOrder() {
@@ -459,6 +501,25 @@ function changeSourceRefreshEnabled(enabled: boolean) {
 onMounted(() => {
   void loadSources();
   void serverSettings.load();
+  if (allowed.value) {
+    unsubscribeRemovals = realtime.subscribe(["sources"], (message) => {
+      if (message.type !== "source.removal.progress") return;
+      const {
+        eventId: _eventId,
+        occurredAt: _occurredAt,
+        type: _type,
+        ...progress
+      } = message;
+      removalProgress.value = {
+        ...removalProgress.value,
+        [progress.sourceId]: progress,
+      };
+    });
+  }
+});
+
+onBeforeUnmount(() => {
+  unsubscribeRemovals?.();
 });
 </script>
 
@@ -518,11 +579,14 @@ onMounted(() => {
           v-for="source in sources"
           :key="source.id"
           class="flex items-center gap-2 rounded-md border p-2"
+          :class="sourceIsRemoving(source) && 'bg-muted/40'"
           :title="source.kind === 'path' ? (source.path ?? '') : undefined"
         >
           <button
             type="button"
             class="drag-handle cursor-grab rounded-md p-1 text-muted-foreground active:cursor-grabbing"
+            :class="sourceIsRemoving(source) && 'pointer-events-none opacity-40'"
+            :disabled="sourceIsRemoving(source)"
             :aria-label="t('settings.sources.drag')"
           >
             <Icon :icon="icons.drag" aria-hidden="true" class="size-4" />
@@ -571,8 +635,25 @@ onMounted(() => {
               </time>
               <span v-else>{{ sourceLastSync(source) }}</span>
             </span>
+            <span
+              v-if="sourceIsRemoving(source)"
+              class="mt-2 flex items-center gap-2 text-xs text-muted-foreground"
+              role="status"
+              aria-live="polite"
+            >
+              <ProgressCircle
+                size="sm"
+                :value="sourceRemovalValue(source)"
+                :label="sourceRemovalLabel(source)"
+                class="size-4"
+              />
+              {{ sourceRemovalLabel(source) }}
+            </span>
           </div>
-          <TooltipProvider v-if="sourceTask(source)" :delay-duration="150">
+          <TooltipProvider
+            v-if="sourceTask(source) && !sourceIsRemoving(source)"
+            :delay-duration="150"
+          >
             <TooltipRoot>
               <TooltipTrigger as-child>
                 <ProgressCircle
@@ -619,6 +700,7 @@ onMounted(() => {
                 type="button"
                 variant="ghost"
                 size="icon-sm"
+                :disabled="sourceIsRemoving(source)"
                 :aria-label="
                   t('settings.sources.actions', {
                     source: sourceFolderName(sourceLabel(source)),
@@ -642,7 +724,8 @@ onMounted(() => {
                 <DropdownMenuItem
                   :disabled="
                     (source.kind !== 'path' && source.kind !== 'jellyfin') ||
-                    serverLost
+                    serverLost ||
+                    sourceIsRemoving(source)
                   "
                   class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none data-disabled:cursor-default data-disabled:opacity-50"
                   @select="rescan(source)"
@@ -655,7 +738,7 @@ onMounted(() => {
                   {{ t("settings.sources.rescan") }}
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  :disabled="serverLost"
+                  :disabled="serverLost || sourceIsRemoving(source)"
                   class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm text-destructive outline-none data-disabled:cursor-default data-disabled:opacity-50"
                   @select="askRemove(source)"
                 >

@@ -34,6 +34,7 @@ import type {
   PlaylistDetailResponse,
   PlaylistListResponse,
   SourceIntegrationOptionListResponse,
+  SourceRemovalResponse,
   PodcastListResponse,
   PodcastSummaryResponse,
   QuickPickListResponse,
@@ -537,7 +538,7 @@ export function deleteSource(
   token: string,
   sourceId: string,
 ) {
-  return authenticatedRequestJson<void>(
+  return authenticatedRequestJson<SourceRemovalResponse>(
     serverAddress,
     `/api/admin/sources/${sourceId}`,
     token,

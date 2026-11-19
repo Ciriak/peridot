@@ -14,6 +14,7 @@ export interface SourceToastContent {
 export function sourceMutationToast(
   action: SourceMutation,
   sourceLabel = "",
+  unavailableTrackCount?: number,
 ): SourceToastContent {
   const label = sourceLabel.trim();
 
@@ -31,9 +32,19 @@ export function sourceMutationToast(
 
   return {
     titleMessage: message("toast.sourceRemovedTitle"),
-    descriptionMessage: label
-      ? message("toast.sourceRemoved", { source: label })
-      : message("toast.sourceRemovedGeneric"),
+    descriptionMessage:
+      unavailableTrackCount !== undefined
+        ? message(
+            "toast.sourceRemovedCount",
+            {
+              source: label || "The source",
+              count: unavailableTrackCount,
+            },
+            unavailableTrackCount,
+          )
+        : label
+          ? message("toast.sourceRemoved", { source: label })
+          : message("toast.sourceRemovedGeneric"),
     status: "success",
     kind: "success",
     duration: 5000,

@@ -11,12 +11,10 @@ export function playlistPlayableTracks(
 ): TrackResponse[] {
   return entries.flatMap((entry) => {
     if (!entry.track) return [];
-    if (availability.serverLost) {
-      return availability.savedTrackIds.has(entry.track.id)
-        ? [entry.track]
-        : [];
-    }
-    return entry.track.available ? [entry.track] : [];
+    return availability.savedTrackIds.has(entry.track.id) ||
+      entry.track.available
+      ? [entry.track]
+      : [];
   });
 }
 

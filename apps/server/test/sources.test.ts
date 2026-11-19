@@ -168,7 +168,14 @@ test("administrators can add and remove path and url sources", async () => {
       url: `/api/admin/sources/${createdSource.id}`,
       headers: context.authorization,
     });
-    assert.equal(removed.statusCode, 204);
+    assert.equal(removed.statusCode, 200);
+    assert.deepEqual(removed.json(), {
+      sourceId: createdSource.id,
+      unavailableTrackCount: 1,
+      affectedAlbumCount: 1,
+      affectedArtistCount: 1,
+      durationMs: removed.json().durationMs,
+    });
 
     const tracksAfterRemoval = await context.app.inject({
       method: "GET",
@@ -176,15 +183,32 @@ test("administrators can add and remove path and url sources", async () => {
       headers: context.authorization,
     });
     assert.deepEqual(tracksAfterRemoval.json().items, []);
+    const retainedTrack = await context.database.orm.Track.where({
+      id: removedTrack.id,
+    }).first();
+    assert.equal(retainedTrack?.available, 0);
+    assert.equal(retainedTrack?.sourceId, createdSource.id);
+    const retainedProjection = await context.database.orm.CatalogTrack.where({
+      id: removedTrack.id,
+    }).first();
+    assert.equal(retainedProjection?.available, 0);
+    assert.equal(retainedProjection?.sourceId, createdSource.id);
+    const retainedSource = await context.database.orm.Source.where({
+      id: createdSource.id,
+    }).first();
+    assert.ok(retainedSource?.removedAt);
+    assert.equal(retainedSource?.credentialCiphertext, null);
+
+    const sourcesAfterRemoval = await context.app.inject({
+      method: "GET",
+      url: "/api/admin/sources",
+      headers: context.authorization,
+    });
     assert.equal(
-      await context.database.orm.Track.where({ id: removedTrack.id }).first(),
-      null,
-    );
-    assert.equal(
-      await context.database.orm.CatalogTrack.where({
-        id: removedTrack.id,
-      }).first(),
-      null,
+      sourcesAfterRemoval
+        .json<{ items: Array<{ id: string }> }>()
+        .items.some((source) => source.id === createdSource.id),
+      false,
     );
   } finally {
     await context.close();
