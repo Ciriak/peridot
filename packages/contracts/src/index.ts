@@ -119,6 +119,7 @@ export interface ResolveTracksRequest {
 
 export interface ResolveTracksResponse {
   items: TrackResponse[];
+  aliases: Record<string, string>;
 }
 
 export interface AlbumSummaryResponse {
@@ -436,7 +437,11 @@ export type TaskStatus =
   "queued" | "running" | "completed" | "failed" | "interrupted" | "stopped";
 
 export type TaskKind =
-  "library_scan" | "catalog_fetch" | "metadata_fetch" | "artwork_fetch";
+  | "library_scan"
+  | "catalog_fetch"
+  | "metadata_fetch"
+  | "artwork_fetch"
+  | "duplicate_detection";
 
 export const TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY =
   "metadata.activeProvider";
@@ -822,7 +827,8 @@ export interface RealtimeCatalogChangedEvent {
   occurredAt: string;
   revision: number;
   sourceId: string | null;
-  reason: "scan" | "metadata" | "reset" | "source" | "source-removal";
+  reason:
+    "scan" | "metadata" | "reset" | "source" | "source-removal" | "duplicate";
   changedCount: number;
 }
 

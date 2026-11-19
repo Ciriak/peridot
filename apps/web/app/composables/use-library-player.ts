@@ -222,6 +222,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     const sessionToken = token.value;
     try {
       const items: TrackResponse[] = [];
+      const aliases: Record<string, string> = {};
       for (let index = 0; index < missingIds.length; index += 200) {
         const result = await resolveTracks(
           serverAddress,
@@ -229,6 +230,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
           missingIds.slice(index, index + 200),
         );
         items.push(...result.items);
+        Object.assign(aliases, result.aliases);
       }
       if (
         version !== queueHydrationVersion ||
@@ -237,10 +239,31 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
       ) {
         return;
       }
+      const remappedIds = [
+        ...new Set(requestedIds.map((trackId) => aliases[trackId] ?? trackId)),
+      ];
+      if (
+        remappedIds.length !== queueTrackIds.value.length ||
+        remappedIds.some(
+          (trackId, index) => queueTrackIds.value[index] !== trackId,
+        )
+      ) {
+        queueTrackIds.value = remappedIds;
+        activeTrackId.value = activeTrackId.value
+          ? (aliases[activeTrackId.value] ?? activeTrackId.value)
+          : null;
+        shuffleTrackIds.value = [
+          ...new Set(
+            shuffleTrackIds.value
+              .map((trackId) => aliases[trackId] ?? trackId)
+              .filter((trackId) => trackId !== activeTrackId.value),
+          ),
+        ];
+      }
       const resolved = mergePlayerQueueTracks(
         queueTracks.value,
         items,
-        requestedIds,
+        remappedIds,
       );
       if (!haveSameTrackReferences(resolved, queueTracks.value)) {
         queueTracks.value = resolved;

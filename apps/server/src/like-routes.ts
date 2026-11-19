@@ -11,6 +11,7 @@ import type {
 } from "@peridot/contracts";
 import type { FastifyInstance } from "fastify";
 import type { Database } from "./database.js";
+import { canonicalTrackId } from "./duplicate-resolver.js";
 import { sendError } from "./http.js";
 import { message } from "./messages.js";
 import type {
@@ -212,8 +213,9 @@ export async function registerLikeRoutes(
     const userId = request.authenticatedUser!.id;
 
     if (target.kind === "track") {
+      const resolvedTrackId = await canonicalTrackId(database, target.trackId);
       const track = await database.orm.Track.select("id").first({
-        id: target.trackId,
+        id: resolvedTrackId,
       });
       if (!track) {
         return sendError(
@@ -378,8 +380,9 @@ export async function registerLikeRoutes(
     const userId = request.authenticatedUser!.id;
 
     if (target.kind === "track") {
+      const resolvedTrackId = await canonicalTrackId(database, target.trackId);
       const track = await database.orm.Track.select("id").first({
-        id: target.trackId,
+        id: resolvedTrackId,
       });
       if (!track) {
         return sendError(

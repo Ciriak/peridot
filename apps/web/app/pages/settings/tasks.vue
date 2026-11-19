@@ -77,6 +77,8 @@ function taskKindLabel(task: TaskResponse): string {
     return t("settings.tasks.catalogProjection");
   if (task.kind === "metadata_fetch") return t("settings.tasks.metadataMatch");
   if (task.kind === "artwork_fetch") return t("settings.tasks.artworkFetch");
+  if (task.kind === "duplicate_detection")
+    return t("settings.tasks.duplicateDetection");
   return task.kind;
 }
 

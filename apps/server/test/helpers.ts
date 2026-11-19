@@ -389,6 +389,13 @@ export async function waitForScan(
   if (metadataChild) {
     metadata = await waitForTask(context, metadataChild.id);
   }
+  const duplicateChild = await context.database.orm.Task.where({
+    parentTaskId: scan.id,
+    kind: "duplicate_detection",
+  }).first();
+  if (duplicateChild) {
+    await waitForTask(context, duplicateChild.id);
+  }
   let catalog: TaskResponse | null = null;
   const catalogChild = await context.database.orm.Task.where({
     parentTaskId: scan.id,

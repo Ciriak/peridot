@@ -11,10 +11,12 @@ import {
   MetadataEnrichment,
   MetadataEnrichmentError,
 } from "./metadata-enrichment.js";
+import { queueDuplicateDetection, type TaskService } from "./tasks.js";
 
 export async function registerTrackMetadataRoutes(
   app: FastifyInstance,
   metadataEnrichment: MetadataEnrichment,
+  tasks: TaskService,
 ) {
   app.get<{
     Params: { id: string };
@@ -48,6 +50,7 @@ export async function registerTrackMetadataRoutes(
   }>("/api/tracks/:id/metadata", async (request, reply) => {
     try {
       await metadataEnrichment.apply(request.params.id, request.body);
+      await queueDuplicateDetection(tasks);
       return reply.code(204).send();
     } catch (error) {
       if (error instanceof MetadataEnrichmentError) {
@@ -76,6 +79,7 @@ export async function registerTrackMetadataRoutes(
           message("api.message.trackNotFound"),
         );
       }
+      await queueDuplicateDetection(tasks);
       return reply.code(204).send();
     },
   );

@@ -20,6 +20,7 @@ import {
   type JellyfinAudioItem,
   type JellyfinLibraryResponse,
 } from "./client.js";
+import { providerRecordingIdentityKeys } from "../track-identities.js";
 
 function message(key: string): MessageDescriptor {
   return { key };
@@ -183,6 +184,11 @@ function trackRecord(
     fileModifiedAt: item.fileModifiedAt,
     mimeType: item.mimeType,
     container: item.container,
+    recordingIdentityKeys: providerRecordingIdentityKeys(
+      item.jellyfinProviderIds,
+    ),
+    audioLossless: item.audioLossless,
+    audioBitrate: item.audioBitrate,
     cover: item.coverItemId
       ? { itemId: item.coverItemId, tag: item.coverTag }
       : null,

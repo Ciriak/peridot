@@ -56,6 +56,9 @@ export interface SourceIntegrationTrackRecord {
   fileModifiedAt: Date;
   mimeType: string;
   container: string;
+  recordingIdentityKeys: readonly string[];
+  audioLossless: boolean;
+  audioBitrate: number | null;
   cover: {
     itemId: string;
     tag: string | null;

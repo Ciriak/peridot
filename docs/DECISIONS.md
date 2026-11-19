@@ -1,5 +1,32 @@
 # Peridot decisions
 
+## 2026-11-19: Duplicate detection is automatic and catalog-level
+
+Tracks are compared across every configured source and media type using
+recording-level MusicBrainz, ISRC, and AcoustID identities first. Tracks without
+identities may match only when normalized titles and artist sets agree and known
+durations are within one second; audiobook chapters and podcast episodes must
+also share their collection title.
+
+The best available copy remains canonical, ranked by lossless status, bitrate,
+file size, metadata and artwork completeness, configured source order, import
+time, then track ID. Other copies are hidden through `duplicateOfId` without
+changing source availability or deleting files. Catalog searches, cards, and
+counts exclude hidden copies. Likes, play history, queues, and playlist entries
+move to the canonical copy, while track APIs and persisted client queues resolve
+old IDs through aliases.
+
+Durable duplicate detection runs after scans and metadata changes, after source
+order or membership changes, and once at startup when the algorithm version
+changes. There is no manual review or override workflow.
+
+## 2026-11-19: Android media controls do not request notification permission
+
+Media-session notifications are exempt from Android 13's
+`POST_NOTIFICATIONS` runtime permission. Peridot omits that permission and
+keeps a Media3 controller connected while its Capacitor plugin is active so the
+raw service transport commands produce the platform media player and controls.
+
 ## 2026-11-19: Jellyfin cover art is fetched eagerly during scans
 
 Cover images referenced by Jellyfin scan items are fetched once per unique

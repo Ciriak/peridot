@@ -114,7 +114,8 @@ interface CursorPayload {
 interface CatalogChange {
   revision: number;
   sourceId: string | null;
-  reason: "scan" | "metadata" | "reset" | "source" | "source-removal";
+  reason:
+    "scan" | "metadata" | "reset" | "source" | "source-removal" | "duplicate";
   changedCount: number;
 }
 
@@ -663,6 +664,7 @@ export class CatalogService {
     }
     const trackMediaType = storedMediaType(track.mediaType);
     const music = trackMediaType === "music";
+    const hiddenDuplicate = Boolean(track.duplicateOfId);
     const effective = effectiveTrackFields(track);
     const album = effective.album?.trim() || null;
     const normalizedAlbum = normalize(album ?? "");
@@ -767,15 +769,16 @@ export class CatalogService {
       releaseYear,
       available: track.available ? 1 : 0,
       coverId: track.coverId,
-      albumId: track.available ? albumId : null,
+      albumId: track.available && !hiddenDuplicate ? albumId : null,
       albumFolderKey,
       albumReleaseKey,
+      duplicateOfId: track.duplicateOfId,
     };
 
     await this.database.orm.CatalogTrack.create({ id: trackId, ...values });
     await this.yieldCatalogWork();
 
-    if (!track.available) {
+    if (!track.available || hiddenDuplicate) {
       const unavailableTerms = searchTerms([
         effective.title,
         effective.artist,
@@ -895,6 +898,7 @@ export class CatalogService {
       albumId,
       albumFolderKey,
       albumReleaseKey,
+      duplicateOfId: track.duplicateOfId,
     };
   }
 
@@ -1102,7 +1106,9 @@ export class CatalogService {
       };
     }
 
-    let query = this.database.orm.CatalogTrack;
+    let query = this.database.orm.CatalogTrack.where((track) =>
+      track.duplicateOfId.isNull(),
+    );
     if (availability !== null) query = query.where({ available: availability });
     if (requestedMediaType !== "all") {
       query = query.where({ mediaType: requestedMediaType });
@@ -1213,29 +1219,48 @@ export class CatalogService {
       );
     }
     const unique = [...new Set(ids)];
-    let indexed = unique.length
+    const aliases: Record<string, string> = {};
+    const canonicalIds: string[] = [];
+    for (const requestedId of unique) {
+      let canonicalId = requestedId;
+      const visited = new Set<string>();
+      while (!visited.has(canonicalId) && visited.size < 16) {
+        visited.add(canonicalId);
+        const row = await this.database.orm.Track.select("duplicateOfId").first(
+          {
+            id: canonicalId,
+          },
+        );
+        if (!row?.duplicateOfId) break;
+        canonicalId = row.duplicateOfId;
+      }
+      if (canonicalId !== requestedId) aliases[requestedId] = canonicalId;
+      if (!canonicalIds.includes(canonicalId)) canonicalIds.push(canonicalId);
+    }
+    let indexed = canonicalIds.length
       ? await this.database.orm.CatalogTrack.where((track) =>
-          track.id.in(unique),
+          track.id.in(canonicalIds),
         ).all()
       : [];
     const indexedIdsBefore = new Set(indexed.map((track) => track.id));
-    const missingIds = unique.filter((id) => !indexedIdsBefore.has(id));
+    const missingIds = canonicalIds.filter((id) => !indexedIdsBefore.has(id));
     if (missingIds.length) {
       for (const trackId of missingIds) {
         await this.reindexTrack(trackId, "source");
       }
       indexed = await this.database.orm.CatalogTrack.where((track) =>
-        track.id.in(unique),
+        track.id.in(canonicalIds),
       ).all();
     }
     const indexedIds = indexed.map((track) => track.id);
     const tracks = await this.hydrateTracks(indexedIds, userId);
     const byId = new Map(tracks.map((track) => [track.id, track]));
     return {
-      items: unique.flatMap((id) => {
+      items: canonicalIds.flatMap((id) => {
         const track = byId.get(id);
         return track ? [track] : [];
       }),
+      aliases,
     };
   }
 

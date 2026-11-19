@@ -1,17 +1,16 @@
 package app.peridot.android.playback
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.os.Build
-import androidx.core.app.ActivityCompat
-import androidx.core.content.edit
+import android.content.ComponentName
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
-import androidx.media3.common.util.UnstableApi
+import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -26,6 +25,7 @@ class PeridotMediaPlugin : Plugin() {
     private lateinit var playbackStore: PlaybackStore
     private lateinit var offlineStore: OfflineStore
     private lateinit var api: PeridotApiClient
+    private var controllerFuture: ListenableFuture<MediaController>? = null
     private var unsubscribe: (() -> Unit)? = null
 
     override fun load() {
@@ -40,13 +40,25 @@ class PeridotMediaPlugin : Plugin() {
                 JSObject().put("snapshot", JSObject(snapshot.toJson().toString())),
             )
         }
+        connectPlaybackController()
     }
 
     override fun handleOnDestroy() {
         unsubscribe?.invoke()
         unsubscribe = null
+        controllerFuture?.let { MediaController.releaseFuture(it) }
+        controllerFuture = null
         scope.cancel()
         super.handleOnDestroy()
+    }
+
+    private fun connectPlaybackController() {
+        val token = SessionToken(
+            context,
+            ComponentName(context, PeridotPlaybackService::class.java),
+        )
+        // Raw service intents need a connected controller to publish platform media controls.
+        controllerFuture = MediaController.Builder(context, token).buildAsync()
     }
 
     @PluginMethod
@@ -98,32 +110,8 @@ class PeridotMediaPlugin : Plugin() {
 
     @PluginMethod
     fun play(call: PluginCall) {
-        requestPlaybackNotificationPermission()
         PeridotPlaybackService.command(context, PeridotPlaybackService.ACTION_PLAY)
         call.resolve()
-    }
-
-    private fun requestPlaybackNotificationPermission() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
-        if (
-            ActivityCompat.checkSelfPermission(
-                context,
-                Manifest.permission.POST_NOTIFICATIONS,
-            ) == PackageManager.PERMISSION_GRANTED
-        ) {
-            return
-        }
-        val preferences = context.getSharedPreferences(
-            "peridot-notifications",
-            android.content.Context.MODE_PRIVATE,
-        )
-        if (preferences.getBoolean(NOTIFICATION_PERMISSION_REQUESTED, false)) return
-        preferences.edit { putBoolean(NOTIFICATION_PERMISSION_REQUESTED, true) }
-        ActivityCompat.requestPermissions(
-            activity,
-            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-            PLAYBACK_NOTIFICATION_REQUEST_CODE,
-        )
     }
 
     @PluginMethod
@@ -279,11 +267,5 @@ class PeridotMediaPlugin : Plugin() {
     fun clearOfflineTracks(call: PluginCall) {
         sessions.read()?.let(offlineStore::clear)
         call.resolve()
-    }
-
-    private companion object {
-        const val NOTIFICATION_PERMISSION_REQUESTED =
-            "playback-notification-permission-requested"
-        const val PLAYBACK_NOTIFICATION_REQUEST_CODE = 7404
     }
 }

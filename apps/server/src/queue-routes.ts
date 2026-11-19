@@ -1,6 +1,7 @@
 import type { QueueResponse, ReplaceQueueRequest } from "@peridot/contracts";
 import type { FastifyInstance } from "fastify";
 import type { Database } from "./database.js";
+import { canonicalTrackId } from "./duplicate-resolver.js";
 import { sendError } from "./http.js";
 import { message } from "./messages.js";
 
@@ -126,13 +127,31 @@ export async function registerQueueRoutes(
       );
     }
 
+    const canonicalIds = await Promise.all(
+      queue.trackIds.map((trackId) => canonicalTrackId(database, trackId)),
+    );
+    const remappedTrackIds = [...new Set(canonicalIds)];
+    const activeTrackId = queue.activeTrackId
+      ? await canonicalTrackId(database, queue.activeTrackId)
+      : null;
+    const remappedShuffleIds = [
+      ...new Set(
+        await Promise.all(
+          queue.shuffleTrackIds.map((trackId) =>
+            canonicalTrackId(database, trackId),
+          ),
+        ),
+      ),
+    ].filter((trackId) => trackId !== activeTrackId);
     const existingTracks =
-      queue.trackIds.length > 0
-        ? await database.orm.Track.where((track) => track.id.in(queue.trackIds))
+      remappedTrackIds.length > 0
+        ? await database.orm.Track.where((track) =>
+            track.id.in(remappedTrackIds),
+          )
             .select("id")
             .all()
         : [];
-    if (existingTracks.length !== queue.trackIds.length) {
+    if (existingTracks.length !== remappedTrackIds.length) {
       return sendError(
         reply,
         400,
@@ -144,12 +163,12 @@ export async function registerQueueRoutes(
 
     const userId = request.authenticatedUser!.id;
     const randomPositions = new Map(
-      queue.shuffleTrackIds.map((trackId, position) => [trackId, position]),
+      remappedShuffleIds.map((trackId, position) => [trackId, position]),
     );
     await database.transaction(async (transaction) => {
       await transaction.orm.QueueState.where({ userId }).deleteAndCount();
       await transaction.orm.QueueItem.where({ userId }).deleteAndCount();
-      for (const [position, trackId] of queue.trackIds.entries()) {
+      for (const [position, trackId] of remappedTrackIds.entries()) {
         await transaction.orm.QueueItem.create({
           userId,
           trackId,
@@ -157,10 +176,10 @@ export async function registerQueueRoutes(
           randomPosition: randomPositions.get(trackId) ?? null,
         });
       }
-      if (queue.activeTrackId || queue.shuffleEnabled) {
+      if (activeTrackId || queue.shuffleEnabled) {
         await transaction.orm.QueueState.create({
           userId,
-          activeTrackId: queue.activeTrackId,
+          activeTrackId,
           shuffleEnabled: queue.shuffleEnabled ? 1 : 0,
         });
       }

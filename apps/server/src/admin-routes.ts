@@ -59,6 +59,7 @@ import {
   SourceError,
 } from "./sources.js";
 import {
+  queueDuplicateDetection,
   queueLibraryScan,
   queueMetadataFetch,
   toTaskResponse,
@@ -404,9 +405,11 @@ export async function registerAdminRoutes(
       "/api/admin/sources/order",
       async (request, reply) => {
         try {
-          return {
+          const result = {
             items: await reorderSources(database, request.body?.ids),
           };
+          await queueDuplicateDetection(tasks);
+          return result;
         } catch (error) {
           if (error instanceof SourceError) {
             return sendError(
@@ -486,6 +489,7 @@ export async function registerAdminRoutes(
             );
           }
         }
+        await queueDuplicateDetection(tasks);
         return reply.code(204).send();
       },
     );
@@ -657,6 +661,7 @@ export async function registerAdminRoutes(
       }
       const artistCount = await metadataEnrichment.resetAllArtists();
       const trackCount = await metadataEnrichment.resetAll();
+      await queueDuplicateDetection(tasks);
       const response: ResetMetadataResponse = {
         trackCount,
         artistCount,
@@ -666,6 +671,7 @@ export async function registerAdminRoutes(
 
     admin.post("/api/admin/metadata/refresh", async (_request, reply) => {
       const task = await queueMetadataFetch(tasks, { force: true });
+      await queueDuplicateDetection(tasks, task.id);
       return reply.code(202).send(toTaskResponse(task));
     });
 

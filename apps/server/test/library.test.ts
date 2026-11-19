@@ -169,7 +169,7 @@ test("scans track, disc, and album tags and backfills legacy metadata once", asy
     assert.equal(firstTrack.mimeType, "audio/mpeg");
     assert.equal(firstTrack.discNumber, 2);
     assert.equal(firstTrack.trackNumber, 5);
-    assert.equal(firstTrack.metadataVersion, 8);
+    assert.equal(firstTrack.metadataVersion, 9);
 
     await context.database.orm.Track.where({ id: firstTrack.id }).update({
       metadataVersion: 0,
@@ -183,7 +183,7 @@ test("scans track, disc, and album tags and backfills legacy metadata once", asy
     });
     assert.equal(backfilledTrack.discNumber, 2);
     assert.equal(backfilledTrack.trackNumber, 5);
-    assert.equal(backfilledTrack.metadataVersion, 8);
+    assert.equal(backfilledTrack.metadataVersion, 9);
 
     const unchangedScan = await startScan(context);
     assert.equal(unchangedScan.unchangedCount, 1);

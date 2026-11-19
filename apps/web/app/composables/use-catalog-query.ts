@@ -4,6 +4,7 @@ import type {
   ArtistSummaryResponse,
   AudiobookSummaryResponse,
   PodcastSummaryResponse,
+  RealtimeCatalogChangedEvent,
   TrackResponse,
 } from "@peridot/contracts";
 import {
@@ -117,7 +118,7 @@ export function useCatalogRevision() {
 
   function applyRevision(
     value: number,
-    reason: "scan" | "metadata" | "reset" | "source" | "source-removal",
+    reason: RealtimeCatalogChangedEvent["reason"],
   ) {
     catalogCursorSettler.markChanged();
     revision.value = Math.max(revision.value, value);

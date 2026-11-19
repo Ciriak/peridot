@@ -42,6 +42,10 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "The scan worker failed.";
 }
 
+function tagValues(value: string | string[] | undefined): string[] {
+  return Array.isArray(value) ? value : value ? [value] : [];
+}
+
 async function listDirectory(directory: string): Promise<ScanDirectoryResult> {
   const entries = await readdir(directory, { withFileTypes: true });
   const directories: string[] = [];
@@ -150,6 +154,16 @@ async function parseMetadata(filePath: string): Promise<ScanWorkerMetadata> {
     durationSeconds: Number.isFinite(metadata.format.duration)
       ? metadata.format.duration!
       : null,
+    audioLossless: metadata.format.lossless === true,
+    audioBitrate:
+      metadata.format.bitrate !== undefined &&
+      Number.isFinite(metadata.format.bitrate) &&
+      metadata.format.bitrate > 0
+        ? Math.round(metadata.format.bitrate)
+        : null,
+    musicBrainzRecordingIds: tagValues(metadata.common.musicbrainz_recordingid),
+    isrcs: tagValues(metadata.common.isrc),
+    acoustIds: tagValues(metadata.common.acoustid_id),
     releasedate: metadata.common.releasedate ?? null,
     originaldate: metadata.common.originaldate ?? null,
     date: metadata.common.date ?? null,

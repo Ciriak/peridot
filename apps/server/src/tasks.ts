@@ -166,7 +166,9 @@ export function toTaskResponse(task: TaskRow): TaskResponse {
                   source: task.sourceName,
                 })
               : message("task.title.artworkFetch")
-            : message("task.title.custom", { task: task.title }));
+            : task.kind === "duplicate_detection"
+              ? message("task.title.duplicateDetection")
+              : message("task.title.custom", { task: task.title }));
   return {
     id: task.id,
     kind: task.kind as TaskKind,
@@ -204,15 +206,17 @@ function isTaskKind(value: string): value is TaskKind {
     value === "library_scan" ||
     value === "catalog_fetch" ||
     value === "metadata_fetch" ||
-    value === "artwork_fetch"
+    value === "artwork_fetch" ||
+    value === "duplicate_detection"
   );
 }
 
 function queuedTaskPriority(kind: string): number {
   if (kind === "library_scan") return 0;
   if (kind === "metadata_fetch") return 1;
-  if (kind === "catalog_fetch") return 2;
-  if (kind === "artwork_fetch") return 3;
+  if (kind === "duplicate_detection") return 2;
+  if (kind === "catalog_fetch") return 3;
+  if (kind === "artwork_fetch") return 4;
   return 1;
 }
 
@@ -812,6 +816,19 @@ export function queueMetadataFetch(
         valueMessage: options.source ? null : message("common.allSources"),
       },
     ],
+  });
+}
+
+export function queueDuplicateDetection(
+  tasks: TaskService,
+  parentTaskId: string | null = null,
+): Promise<TaskRow> {
+  return tasks.enqueue({
+    kind: "duplicate_detection",
+    title: "Duplicate track detection",
+    titleMessage: message("task.title.duplicateDetection"),
+    parentTaskId,
+    details: [],
   });
 }
 

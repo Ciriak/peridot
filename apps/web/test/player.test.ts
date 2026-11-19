@@ -64,8 +64,13 @@ test("the persistent player controls a native audio element", async () => {
   );
   assert.match(
     player,
-    /mergePlayerQueueTracks\(\s*queueTracks\.value,\s*items,\s*requestedIds,?\s*\)/,
+    /mergePlayerQueueTracks\(\s*queueTracks\.value,\s*items,\s*remappedIds,?\s*\)/,
     "Queue hydration preserves already-resolved track objects",
+  );
+  assert.match(
+    player,
+    /aliases\[trackId\] \?\? trackId/,
+    "Queue hydration applies canonical duplicate aliases",
   );
   assert.match(
     player,

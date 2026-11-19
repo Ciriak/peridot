@@ -52,6 +52,10 @@
       "model": "CatalogTrackArtist",
       "namespace": "__unbound__"
     },
+    "DuplicateDetectionState": {
+      "model": "DuplicateDetectionState",
+      "namespace": "__unbound__"
+    },
     "MetadataProvider": {
       "model": "MetadataProvider",
       "namespace": "__unbound__"
@@ -1190,6 +1194,13 @@
                   "kind": "scalar"
                 }
               },
+              "duplicateOfId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
               "durationMs": {
                 "nullable": true,
                 "type": {
@@ -1311,6 +1322,9 @@
                 "discNumber": {
                   "column": "discNumber"
                 },
+                "duplicateOfId": {
+                  "column": "duplicateOfId"
+                },
                 "durationMs": {
                   "column": "durationMs"
                 },
@@ -1391,6 +1405,77 @@
               },
               "namespaceId": "__unbound__",
               "table": "CatalogTrackArtist"
+            }
+          },
+          "DuplicateDetectionState": {
+            "fields": {
+              "algorithmVersion": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
+              "groupCount": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
+              "hiddenCount": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "lastCompletedAt": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                }
+              },
+              "updatedAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "algorithmVersion": {
+                  "column": "algorithmVersion"
+                },
+                "groupCount": {
+                  "column": "groupCount"
+                },
+                "hiddenCount": {
+                  "column": "hiddenCount"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "lastCompletedAt": {
+                  "column": "lastCompletedAt"
+                },
+                "updatedAt": {
+                  "column": "updatedAt"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "DuplicateDetectionState"
             }
           },
           "MetadataProvider": {
@@ -2670,6 +2755,20 @@
                   "kind": "scalar"
                 }
               },
+              "audioBitrate": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
+              "audioLossless": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
               "available": {
                 "nullable": false,
                 "type": {
@@ -2702,6 +2801,13 @@
                 "nullable": true,
                 "type": {
                   "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
+              "duplicateOfId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
                   "kind": "scalar"
                 }
               },
@@ -2943,6 +3049,13 @@
                   "kind": "scalar"
                 }
               },
+              "recordingIdentityKeys": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
               "relativePath": {
                 "nullable": false,
                 "type": {
@@ -3030,6 +3143,12 @@
                 "artistCredits": {
                   "column": "artistCredits"
                 },
+                "audioBitrate": {
+                  "column": "audioBitrate"
+                },
+                "audioLossless": {
+                  "column": "audioLossless"
+                },
                 "available": {
                   "column": "available"
                 },
@@ -3044,6 +3163,9 @@
                 },
                 "discNumber": {
                   "column": "discNumber"
+                },
+                "duplicateOfId": {
+                  "column": "duplicateOfId"
                 },
                 "durationMs": {
                   "column": "durationMs"
@@ -3146,6 +3268,9 @@
                 },
                 "publishedAt": {
                   "column": "publishedAt"
+                },
+                "recordingIdentityKeys": {
+                  "column": "recordingIdentityKeys"
                 },
                 "relativePath": {
                   "column": "relativePath"
@@ -4418,6 +4543,11 @@
                   "dataType": "sqlite/integer",
                   "nullable": true
                 },
+                "duplicateOfId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
                 "durationMs": {
                   "codecId": "sqlite/integer@1",
                   "dataType": "sqlite/integer",
@@ -4514,6 +4644,14 @@
                   ],
                   "name": "CatalogTrack_available_id_idx_2e938ac3",
                   "prefix": "CatalogTrack_available_id_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "duplicateOfId"
+                  ],
+                  "name": "CatalogTrack_duplicateOfId_idx_28ac86a0",
+                  "prefix": "CatalogTrack_duplicateOfId_idx",
                   "unique": false
                 },
                 {
@@ -4621,6 +4759,60 @@
                   ]
                 }
               ]
+            },
+            "DuplicateDetectionState": {
+              "columns": {
+                "algorithmVersion": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "default": {
+                    "kind": "literal",
+                    "value": "0"
+                  },
+                  "nullable": false
+                },
+                "groupCount": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "default": {
+                    "kind": "literal",
+                    "value": "0"
+                  },
+                  "nullable": false
+                },
+                "hiddenCount": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "default": {
+                    "kind": "literal",
+                    "value": "0"
+                  },
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "lastCompletedAt": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/datetime",
+                  "nullable": true
+                },
+                "updatedAt": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/datetime",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
             },
             "MetadataProvider": {
               "columns": {
@@ -5778,6 +5970,20 @@
                   "dataType": "sqlite/text",
                   "nullable": true
                 },
+                "audioBitrate": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "nullable": true
+                },
+                "audioLossless": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "default": {
+                    "kind": "literal",
+                    "value": "0"
+                  },
+                  "nullable": false
+                },
                 "available": {
                   "codecId": "sqlite/integer@1",
                   "dataType": "sqlite/integer",
@@ -5813,6 +6019,11 @@
                 "discNumber": {
                   "codecId": "sqlite/integer@1",
                   "dataType": "sqlite/integer",
+                  "nullable": true
+                },
+                "duplicateOfId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
                   "nullable": true
                 },
                 "durationMs": {
@@ -6001,6 +6212,15 @@
                   "dataType": "sqlite/datetime",
                   "nullable": true
                 },
+                "recordingIdentityKeys": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "default": {
+                    "kind": "literal",
+                    "value": "[]"
+                  },
+                  "nullable": false
+                },
                 "relativePath": {
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
@@ -6082,6 +6302,14 @@
                   ],
                   "name": "Track_coverId_idx_daf0cb52",
                   "prefix": "Track_coverId_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "duplicateOfId"
+                  ],
+                  "name": "Track_duplicateOfId_idx_28ac86a0",
+                  "prefix": "Track_duplicateOfId_idx",
                   "unique": false
                 },
                 {
@@ -6456,10 +6684,10 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "b7404da89f184c311c251f7ebbaa77db518dfc1bcd75c2392dd6a3d3bf3b84a0"
+    "storageHash": "3af44e392cfe091c4eb40494da1fc426edf497151a03039f9f1566b9cbbe1f72"
   },
   "execution": {
-    "executionHash": "85edb6c43666162916bbb345e5da90f53ec36d044ed381921f3de575cd433dc6",
+    "executionHash": "97fc046b1d4dab2bdb7c66c465182d63cb742a8cf7a04ee2e990ce77c078f512",
     "mutations": {
       "defaults": [
         {
@@ -6641,6 +6869,21 @@
           "ref": {
             "entry": "CatalogTrackArtist",
             "field": "id",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "onUpdate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "DuplicateDetectionState",
+            "field": "updatedAt",
             "namespace": "__unbound__"
           }
         },

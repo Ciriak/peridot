@@ -27,6 +27,11 @@ interface JellyfinNameId {
 interface JellyfinMediaSource {
   Container?: string | null;
   Size?: number | null;
+  MediaStreams?: Array<{
+    Type?: string | null;
+    BitRate?: number | null;
+    IsLossless?: boolean | null;
+  }> | null;
 }
 
 interface JellyfinItem {
@@ -107,6 +112,8 @@ export interface JellyfinAudioItem {
   fileModifiedAt: Date;
   mimeType: string;
   container: string;
+  audioLossless: boolean;
+  audioBitrate: number | null;
   coverItemId: string | null;
   coverTag: string | null;
 }
@@ -233,6 +240,9 @@ function toAudioItem(item: JellyfinItem): {
     return null;
   })();
   const size = item.MediaSources?.[0]?.Size;
+  const audioStream = item.MediaSources?.[0]?.MediaStreams?.find(
+    (stream) => stream.Type?.trim().toLowerCase() === "audio",
+  );
 
   return {
     value: {
@@ -278,6 +288,14 @@ function toAudioItem(item: JellyfinItem): {
       fileModifiedAt,
       mimeType: type.mimeType,
       container: type.container,
+      audioLossless: audioStream?.IsLossless === true,
+      audioBitrate:
+        audioStream?.BitRate !== null &&
+        audioStream?.BitRate !== undefined &&
+        Number.isFinite(audioStream.BitRate) &&
+        audioStream.BitRate > 0
+          ? Math.round(audioStream.BitRate)
+          : null,
       coverItemId,
       coverTag,
     },

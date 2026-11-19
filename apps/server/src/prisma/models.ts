@@ -7,6 +7,9 @@ export type ArtistLikeRow = Scalars<Models.ArtistLike>;
 export type ArtistMetadataRow = Scalars<Models.ArtistMetadata>;
 export type ArtworkJobRow = Scalars<Models.ArtworkJob>;
 export type CatalogArtistRow = Scalars<Models.CatalogArtist>;
+export type CatalogTrackRow = Scalars<Models.CatalogTrack>;
+export type DuplicateDetectionStateRow =
+  Scalars<Models.DuplicateDetectionState>;
 export type TaskRow = Scalars<Models.Task>;
 export type MetadataProviderRow = Scalars<Models.MetadataProvider>;
 export type PlaylistRow = Scalars<Models.Playlist>;

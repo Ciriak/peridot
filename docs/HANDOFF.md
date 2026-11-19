@@ -1,5 +1,96 @@
 # Peridot handoff
 
+## Automatic duplicate track hiding
+
+Peridot now groups the same recording across all sources and media types,
+keeps the best-quality copy visible, and hides the remaining copies through a
+dedicated duplicate-detection task. Detection runs after scans and metadata
+changes, after source order or membership changes, and during a versioned
+startup backfill.
+
+MusicBrainz recording IDs, ISRCs, and AcoustIDs are captured from local tags and
+Jellyfin provider IDs. Conservative fallback matching uses normalized title,
+artist set, known duration within one second, and collection identity for
+audiobooks and podcasts. Canonical copies are selected by lossless status,
+bitrate, file size, metadata completeness, source order, import time, and track
+ID.
+
+Catalog lists, searches, artwork cards, and collection counts exclude hidden
+copies. Existing likes, play events, queue entries, active queue state, and
+playlist items move to the canonical copy. `/api/tracks/resolve` returns aliases
+so persisted browser queues replace stale hidden IDs.
+
+Verification:
+
+- `pnpm --filter @peridot/server test` (191 passing)
+- `pnpm --filter @peridot/web test` (248 passing)
+- `pnpm typecheck`
+- `pnpm db:validate`
+- `pnpm lint`
+- `pnpm build`
+- `pnpm version:check`
+
+The root `pnpm test` reached successful web and package test results but one
+concurrent run hit a Node/V8 loader crash in `jellyfin.test.ts`. Running the
+server suite alone passed all 191 tests, including all 11 Jellyfin tests.
+`pnpm exec turbo run test --filter=!@peridot/android --concurrency=1` also
+completed all six test tasks successfully.
+
+Known limits:
+
+- Fallback matching does not use audio fingerprints, so re-encodes with missing
+  recording identities must still agree on title, artists, and duration.
+- There is no administrator review or manual unhide workflow; canonical changes
+  are automatic.
+- Existing local and Jellyfin tracks receive recording identities on their next
+  scan because the scan metadata version advanced.
+
+Known checks:
+
+- `pnpm format:check` reports only the unrelated in-progress
+  `apps/desktop/src-tauri/tauri.conf.json`.
+
+Uncommitted duplicate work:
+
+- Server contract, migration, scanner, tasks, catalog, API resolution, and
+  duplicate service files.
+- Shared contracts, task labels, player alias handling, and duplicate tests.
+
+Unrelated in-progress Android media-control changes remain uncommitted in the
+same worktree.
+
+## Android native media controls
+
+The Android bridge now keeps a Media3 `MediaController` connected for the
+Capacitor plugin lifetime. Raw playback service intents previously updated the
+session but did not publish the Android media player and notification; the
+connected controller completes that platform path.
+
+`POST_NOTIFICATIONS` and its one-time runtime prompt were removed. Android media
+session notifications are exempt from that permission, and the playback
+notification now works with notification permission denied.
+
+Verification:
+
+- `.\gradlew.bat testDebugUnitTest`
+- `ANDROID_SERIAL=emulator-5554 .\gradlew.bat connectedDebugAndroidTest`
+  (4 passing on API 37)
+- `pnpm --filter @peridot/android typecheck`
+- `pnpm --filter @peridot/android lint`
+- `pnpm version:check`
+
+Known checks:
+
+- `pnpm format:check` and the root `pnpm lint` currently fail only in unrelated
+  in-progress server/web changes outside this Android fix.
+
+Uncommitted Android changes:
+
+- `apps/android/android/app/src/main/AndroidManifest.xml`
+- `apps/android/android/app/src/main/java/app/peridot/android/playback/PeridotMediaPlugin.kt`
+- `apps/android/android/app/src/test/java/app/peridot/android/playback/AndroidAutoManifestTest.kt`
+- `apps/android/android/app/src/androidTest/java/app/peridot/android/playback/PeridotPlaybackCommandTest.kt`
+
 ## Eager Jellyfin cover import
 
 Jellyfin scans now prefetch each unique source cover with bounded concurrency and

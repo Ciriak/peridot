@@ -38,6 +38,11 @@ export interface ScanWorkerMetadata {
   discNumber: number | null;
   trackNumber: number | null;
   durationSeconds: number | null;
+  audioLossless: boolean;
+  audioBitrate: number | null;
+  musicBrainzRecordingIds: string[];
+  isrcs: string[];
+  acoustIds: string[];
   releasedate: string | null;
   originaldate: string | null;
   date: string | null;

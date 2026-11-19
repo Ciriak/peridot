@@ -31,6 +31,10 @@ import {
 import { ScanWorkerPool } from "./scan-worker-pool.js";
 import { readScanWorkerSettings } from "./server-settings.js";
 import {
+  localRecordingIdentityKeys,
+  serializeRecordingIdentityKeys,
+} from "./track-identities.js";
+import {
   SourceIntegrationError,
   type SourceIntegrationDefinition,
   type SourceIntegrationHandle,
@@ -40,6 +44,7 @@ import {
 import {
   queueArtworkFetch,
   queueCatalogFetch,
+  queueDuplicateDetection,
   queueMetadataFetch,
   scanDetails,
   TaskExecutionError,
@@ -47,7 +52,7 @@ import {
   type TaskService,
 } from "./tasks.js";
 
-const CURRENT_METADATA_VERSION = 8;
+const CURRENT_METADATA_VERSION = 9;
 const PROGRESS_WRITE_INTERVAL_MS = 250;
 const EVENT_LOOP_YIELD_INTERVAL_MS = 25;
 const IMPORT_BATCH_SIZE = 100;
@@ -548,6 +553,7 @@ export class LibraryScanner {
           parentTaskId: task.id,
         });
       }
+      await queueDuplicateDetection(tasks, task.id);
       if (
         await this.catalog?.hasPendingProjection(requestedSource?.id ?? null)
       ) {
@@ -690,6 +696,9 @@ export class LibraryScanner {
         Number.isFinite(metadata.durationSeconds)
           ? Math.round(metadata.durationSeconds * 1000)
           : null;
+      const recordingIdentityKeys = serializeRecordingIdentityKeys(
+        localRecordingIdentityKeys(metadata),
+      );
       const taggedPublishedAt = parsePublishedAt(
         metadata.releasedate,
         metadata.originaldate,
@@ -718,6 +727,9 @@ export class LibraryScanner {
         durationMs,
         publishedAt,
         coverId,
+        recordingIdentityKeys,
+        audioLossless: metadata.audioLossless ? 1 : 0,
+        audioBitrate: metadata.audioBitrate,
         mimeType: file.mimeType,
         fileSizeBytes: file.size,
         fileModifiedAt: file.modifiedAt,
@@ -882,6 +894,11 @@ export class LibraryScanner {
         durationMs: item.durationMs,
         publishedAt: item.publishedAt ?? parsePublishedAt(item.fileModifiedAt),
         coverId,
+        recordingIdentityKeys: serializeRecordingIdentityKeys(
+          item.recordingIdentityKeys,
+        ),
+        audioLossless: item.audioLossless ? 1 : 0,
+        audioBitrate: item.audioBitrate,
         mimeType: item.mimeType,
         fileSizeBytes: item.fileSizeBytes,
         fileModifiedAt: item.fileModifiedAt,

@@ -19,9 +19,9 @@ import type {
 } from '@prisma/orm-sqlite/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'b7404da89f184c311c251f7ebbaa77db518dfc1bcd75c2392dd6a3d3bf3b84a0'>;
+  StorageHashBase<'3af44e392cfe091c4eb40494da1fc426edf497151a03039f9f1566b9cbbe1f72'>;
 export type ExecutionHash =
-  ExecutionHashBase<'85edb6c43666162916bbb345e5da90f53ec36d044ed381921f3de575cd433dc6'>;
+  ExecutionHashBase<'97fc046b1d4dab2bdb7c66c465182d63cb742a8cf7a04ee2e990ce77c078f512'>;
 export type ProfileHash =
   ProfileHashBase<'260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53'>;
 
@@ -342,6 +342,7 @@ export namespace Models {
     available: FieldOutputTypes['__unbound__']['CatalogTrack']['available'];
     coverId: FieldOutputTypes['__unbound__']['CatalogTrack']['coverId'];
     discNumber: FieldOutputTypes['__unbound__']['CatalogTrack']['discNumber'];
+    duplicateOfId: FieldOutputTypes['__unbound__']['CatalogTrack']['duplicateOfId'];
     durationMs: FieldOutputTypes['__unbound__']['CatalogTrack']['durationMs'];
     id: FieldOutputTypes['__unbound__']['CatalogTrack']['id'];
     mediaType: FieldOutputTypes['__unbound__']['CatalogTrack']['mediaType'];
@@ -360,6 +361,15 @@ export namespace Models {
     artistId: FieldOutputTypes['__unbound__']['CatalogTrackArtist']['artistId'];
     id: FieldOutputTypes['__unbound__']['CatalogTrackArtist']['id'];
     trackId: FieldOutputTypes['__unbound__']['CatalogTrackArtist']['trackId'];
+    readonly [RelationKeys]?: never;
+  };
+  export type DuplicateDetectionState = {
+    algorithmVersion: FieldOutputTypes['__unbound__']['DuplicateDetectionState']['algorithmVersion'];
+    groupCount: FieldOutputTypes['__unbound__']['DuplicateDetectionState']['groupCount'];
+    hiddenCount: FieldOutputTypes['__unbound__']['DuplicateDetectionState']['hiddenCount'];
+    id: FieldOutputTypes['__unbound__']['DuplicateDetectionState']['id'];
+    lastCompletedAt: FieldOutputTypes['__unbound__']['DuplicateDetectionState']['lastCompletedAt'];
+    updatedAt: FieldOutputTypes['__unbound__']['DuplicateDetectionState']['updatedAt'];
     readonly [RelationKeys]?: never;
   };
   export type MetadataProvider = {
@@ -504,11 +514,14 @@ export namespace Models {
     albumArtistCredits: FieldOutputTypes['__unbound__']['Track']['albumArtistCredits'];
     artist: FieldOutputTypes['__unbound__']['Track']['artist'];
     artistCredits: FieldOutputTypes['__unbound__']['Track']['artistCredits'];
+    audioBitrate: FieldOutputTypes['__unbound__']['Track']['audioBitrate'];
+    audioLossless: FieldOutputTypes['__unbound__']['Track']['audioLossless'];
     available: FieldOutputTypes['__unbound__']['Track']['available'];
     catalogProjectionPending: FieldOutputTypes['__unbound__']['Track']['catalogProjectionPending'];
     coverId: FieldOutputTypes['__unbound__']['Track']['coverId'];
     createdAt: FieldOutputTypes['__unbound__']['Track']['createdAt'];
     discNumber: FieldOutputTypes['__unbound__']['Track']['discNumber'];
+    duplicateOfId: FieldOutputTypes['__unbound__']['Track']['duplicateOfId'];
     durationMs: FieldOutputTypes['__unbound__']['Track']['durationMs'];
     externalContainer: FieldOutputTypes['__unbound__']['Track']['externalContainer'];
     externalCoverKey: FieldOutputTypes['__unbound__']['Track']['externalCoverKey'];
@@ -543,6 +556,7 @@ export namespace Models {
     metadataVersion: FieldOutputTypes['__unbound__']['Track']['metadataVersion'];
     mimeType: FieldOutputTypes['__unbound__']['Track']['mimeType'];
     publishedAt: FieldOutputTypes['__unbound__']['Track']['publishedAt'];
+    recordingIdentityKeys: FieldOutputTypes['__unbound__']['Track']['recordingIdentityKeys'];
     relativePath: FieldOutputTypes['__unbound__']['Track']['relativePath'];
     sourceId: FieldOutputTypes['__unbound__']['Track']['sourceId'];
     title: FieldOutputTypes['__unbound__']['Track']['title'];
@@ -603,6 +617,7 @@ export declare const models: {
   CatalogState: Models.CatalogState;
   CatalogTrack: Models.CatalogTrack;
   CatalogTrackArtist: Models.CatalogTrackArtist;
+  DuplicateDetectionState: Models.DuplicateDetectionState;
   MetadataProvider: Models.MetadataProvider;
   PasswordResetToken: Models.PasswordResetToken;
   Playlist: Models.Playlist;
@@ -1479,6 +1494,12 @@ type ContractBase = Omit<
                   readonly nullable: true;
                   readonly many: false;
                 };
+                readonly duplicateOfId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
                 readonly durationMs: {
                   readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/integer@1';
@@ -1582,6 +1603,12 @@ type ContractBase = Omit<
                   readonly unique: false;
                 },
                 {
+                  readonly name: 'CatalogTrack_duplicateOfId_idx_28ac86a0';
+                  readonly prefix: 'CatalogTrack_duplicateOfId_idx';
+                  readonly columns: readonly ['duplicateOfId'];
+                  readonly unique: false;
+                },
+                {
                   readonly name: 'CatalogTrack_mediaType_available_id_idx_16156cf2';
                   readonly prefix: 'CatalogTrack_mediaType_available_id_idx';
                   readonly columns: readonly ['mediaType', 'available', 'id'];
@@ -1651,6 +1678,62 @@ type ContractBase = Omit<
                   readonly unique: false;
                 },
               ];
+              foreignKeys: readonly [];
+            };
+            readonly DuplicateDetectionState: {
+              columns: {
+                readonly algorithmVersion: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
+                  };
+                  readonly many: false;
+                };
+                readonly groupCount: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
+                  };
+                  readonly many: false;
+                };
+                readonly hiddenCount: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
+                  };
+                  readonly many: false;
+                };
+                readonly id: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly lastCompletedAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly updatedAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [];
               foreignKeys: readonly [];
             };
             readonly MetadataProvider: {
@@ -2651,6 +2734,22 @@ type ContractBase = Omit<
                   readonly nullable: true;
                   readonly many: false;
                 };
+                readonly audioBitrate: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly audioLossless: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
+                  };
+                  readonly many: false;
+                };
                 readonly available: {
                   readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/integer@1';
@@ -2687,6 +2786,12 @@ type ContractBase = Omit<
                 readonly discNumber: {
                   readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly duplicateOfId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
                   readonly nullable: true;
                   readonly many: false;
                 };
@@ -2910,6 +3015,16 @@ type ContractBase = Omit<
                   readonly nullable: true;
                   readonly many: false;
                 };
+                readonly recordingIdentityKeys: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/text@1', '[]'>;
+                  };
+                  readonly many: false;
+                };
                 readonly relativePath: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
@@ -2969,6 +3084,12 @@ type ContractBase = Omit<
                   readonly name: 'Track_coverId_idx_daf0cb52';
                   readonly prefix: 'Track_coverId_idx';
                   readonly columns: readonly ['coverId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'Track_duplicateOfId_idx_28ac86a0';
+                  readonly prefix: 'Track_duplicateOfId_idx';
+                  readonly columns: readonly ['duplicateOfId'];
                   readonly unique: false;
                 },
                 {
@@ -3312,6 +3433,10 @@ type ContractBase = Omit<
     readonly CatalogTrackArtist: {
       readonly namespace: '__unbound__' & NamespaceId;
       readonly model: 'CatalogTrackArtist';
+    };
+    readonly DuplicateDetectionState: {
+      readonly namespace: '__unbound__' & NamespaceId;
+      readonly model: 'DuplicateDetectionState';
     };
     readonly MetadataProvider: {
       readonly namespace: '__unbound__' & NamespaceId;
@@ -3992,6 +4117,10 @@ type ContractBase = Omit<
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
               };
+              readonly duplicateOfId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
               readonly durationMs: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
@@ -4057,6 +4186,7 @@ type ContractBase = Omit<
                 readonly available: { readonly column: 'available' };
                 readonly coverId: { readonly column: 'coverId' };
                 readonly discNumber: { readonly column: 'discNumber' };
+                readonly duplicateOfId: { readonly column: 'duplicateOfId' };
                 readonly durationMs: { readonly column: 'durationMs' };
                 readonly id: { readonly column: 'id' };
                 readonly mediaType: { readonly column: 'mediaType' };
@@ -4095,6 +4225,47 @@ type ContractBase = Omit<
                 readonly artistId: { readonly column: 'artistId' };
                 readonly id: { readonly column: 'id' };
                 readonly trackId: { readonly column: 'trackId' };
+              };
+            };
+          };
+          readonly DuplicateDetectionState: {
+            readonly fields: {
+              readonly algorithmVersion: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly groupCount: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly hiddenCount: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly lastCompletedAt: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly updatedAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly table: 'DuplicateDetectionState';
+              readonly namespaceId: '__unbound__';
+              readonly fields: {
+                readonly algorithmVersion: { readonly column: 'algorithmVersion' };
+                readonly groupCount: { readonly column: 'groupCount' };
+                readonly hiddenCount: { readonly column: 'hiddenCount' };
+                readonly id: { readonly column: 'id' };
+                readonly lastCompletedAt: { readonly column: 'lastCompletedAt' };
+                readonly updatedAt: { readonly column: 'updatedAt' };
               };
             };
           };
@@ -4859,6 +5030,14 @@ type ContractBase = Omit<
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
+              readonly audioBitrate: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly audioLossless: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
               readonly available: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
@@ -4878,6 +5057,10 @@ type ContractBase = Omit<
               readonly discNumber: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly duplicateOfId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
               readonly durationMs: {
                 readonly nullable: true;
@@ -5015,6 +5198,10 @@ type ContractBase = Omit<
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
               };
+              readonly recordingIdentityKeys: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
               readonly relativePath: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
@@ -5071,11 +5258,14 @@ type ContractBase = Omit<
                 readonly albumArtistCredits: { readonly column: 'albumArtistCredits' };
                 readonly artist: { readonly column: 'artist' };
                 readonly artistCredits: { readonly column: 'artistCredits' };
+                readonly audioBitrate: { readonly column: 'audioBitrate' };
+                readonly audioLossless: { readonly column: 'audioLossless' };
                 readonly available: { readonly column: 'available' };
                 readonly catalogProjectionPending: { readonly column: 'catalogProjectionPending' };
                 readonly coverId: { readonly column: 'coverId' };
                 readonly createdAt: { readonly column: 'createdAt' };
                 readonly discNumber: { readonly column: 'discNumber' };
+                readonly duplicateOfId: { readonly column: 'duplicateOfId' };
                 readonly durationMs: { readonly column: 'durationMs' };
                 readonly externalContainer: { readonly column: 'externalContainer' };
                 readonly externalCoverKey: { readonly column: 'externalCoverKey' };
@@ -5116,6 +5306,7 @@ type ContractBase = Omit<
                 readonly metadataVersion: { readonly column: 'metadataVersion' };
                 readonly mimeType: { readonly column: 'mimeType' };
                 readonly publishedAt: { readonly column: 'publishedAt' };
+                readonly recordingIdentityKeys: { readonly column: 'recordingIdentityKeys' };
                 readonly relativePath: { readonly column: 'relativePath' };
                 readonly sourceId: { readonly column: 'sourceId' };
                 readonly title: { readonly column: 'title' };
@@ -5455,6 +5646,15 @@ type ContractBase = Omit<
           readonly ref: {
             readonly entry: 'CatalogTrackArtist';
             readonly field: 'id';
+            readonly namespace: '__unbound__';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly onUpdate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'DuplicateDetectionState';
+            readonly field: 'updatedAt';
             readonly namespace: '__unbound__';
           };
         },

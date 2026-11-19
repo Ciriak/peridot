@@ -11,6 +11,7 @@ import type {
 } from "@peridot/contracts";
 import type { FastifyInstance } from "fastify";
 import type { Database } from "./database.js";
+import { canonicalTrackId } from "./duplicate-resolver.js";
 import { sendError } from "./http.js";
 import { message } from "./messages.js";
 import type { PlaybackTokenService } from "./playback-tokens.js";
@@ -499,7 +500,14 @@ export async function registerPlaylistRoutes(
         );
       }
 
-      const key = identityKey(parsed);
+      const normalized =
+        parsed.kind === "catalog"
+          ? {
+              ...parsed,
+              trackId: await canonicalTrackId(database, parsed.trackId),
+            }
+          : parsed;
+      const key = identityKey(normalized);
       const existing = await database.orm.PlaylistItem.where({
         playlistId: playlist.id,
         identityKey: key,
@@ -533,8 +541,10 @@ export async function registerPlaylistRoutes(
 
       let snapshot: PlaylistExternalTrackReference | null = null;
       let trackId: string | null = null;
-      if (parsed.kind === "catalog") {
-        const track = await database.orm.Track.first({ id: parsed.trackId });
+      if (normalized.kind === "catalog") {
+        const track = await database.orm.Track.first({
+          id: normalized.trackId,
+        });
         if (!track) {
           return sendError(
             reply,
@@ -555,7 +565,7 @@ export async function registerPlaylistRoutes(
         };
         trackId = track.id;
       } else {
-        snapshot = parsed.reference;
+        snapshot = normalized.reference;
       }
 
       const last = await database.orm.PlaylistItem.where({
@@ -572,10 +582,12 @@ export async function registerPlaylistRoutes(
           identityKey: key,
           trackId,
           externalProvider:
-            parsed.kind === "external" ? parsed.reference.provider : null,
+            normalized.kind === "external"
+              ? normalized.reference.provider
+              : null,
           externalTrackId:
-            parsed.kind === "external"
-              ? parsed.reference.externalTrackId
+            normalized.kind === "external"
+              ? normalized.reference.externalTrackId
               : null,
           snapshotTitle: snapshot!.title,
           snapshotArtist: snapshot!.artist,

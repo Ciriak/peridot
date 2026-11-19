@@ -14,6 +14,7 @@ import {
   type Database,
 } from "./database.js";
 import { DiscogsClient, DiscogsResolver } from "./discogs.js";
+import { DuplicateDetectionService } from "./duplicate-detection.js";
 import { registerLibraryRoutes } from "./library-routes.js";
 import { registerLikeRoutes } from "./like-routes.js";
 import { registerOpenApi, registerOpenApiRoutes } from "./openapi.js";
@@ -40,7 +41,12 @@ import {
   type SourceIntegrationDefinition,
 } from "./source-integrations.js";
 import { registerTaskRoutes } from "./task-routes.js";
-import { queueArtworkFetch, queueCatalogFetch, TaskService } from "./tasks.js";
+import {
+  queueArtworkFetch,
+  queueCatalogFetch,
+  queueDuplicateDetection,
+  TaskService,
+} from "./tasks.js";
 import { ensureServerSettings } from "./server-settings.js";
 import { SourceRefreshScheduler } from "./source-refresh-scheduler.js";
 import { ensureDefaultSource } from "./sources.js";
@@ -150,6 +156,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
     credentials,
   );
   const catalog = new CatalogService(database, playbackTokens);
+  const duplicateDetection = new DuplicateDetectionService(database, catalog);
   const realtime = new RealtimeHub(database);
   const metadataEnrichment = new MetadataEnrichment(
     database,
@@ -196,6 +203,9 @@ export async function buildApp(options: BuildAppOptions = {}) {
   );
   tasks.registerExecutor("artwork_fetch", (task, taskService, signal) =>
     artworkService.runTask(task, taskService, signal),
+  );
+  tasks.registerExecutor("duplicate_detection", (task, taskService, signal) =>
+    duplicateDetection.runTask(task, taskService, signal),
   );
   logBuffer.onEntry((entry) => realtime.publishLog(entry));
   catalog.setPublisher((change) => realtime.publishCatalog(change));
@@ -268,6 +278,9 @@ export async function buildApp(options: BuildAppOptions = {}) {
   await ensureDefaultSource(database, config.libraryRoot);
   await ensureDefaultMetadataProvider(database);
   await tasks.initialize();
+  if (await duplicateDetection.needsRun()) {
+    await queueDuplicateDetection(tasks);
+  }
   const sourceRefreshScheduler = new SourceRefreshScheduler(
     database,
     tasks,
@@ -301,7 +314,11 @@ export async function buildApp(options: BuildAppOptions = {}) {
       await registerPlaylistRoutes(protectedApp, database, playbackTokens);
       await registerQuickPickRoutes(protectedApp, database, catalog);
       await registerQueueRoutes(protectedApp, database);
-      await registerTrackMetadataRoutes(protectedApp, metadataEnrichment);
+      await registerTrackMetadataRoutes(
+        protectedApp,
+        metadataEnrichment,
+        tasks,
+      );
       await registerAdminRoutes(
         protectedApp,
         database,

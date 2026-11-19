@@ -226,7 +226,7 @@ class PeridotPlaybackService : MediaLibraryService() {
         val sessionActivity = PendingIntent.getActivity(
             this,
             0,
-            Intent(this, MainActivity::class.java),
+            playerActivityIntent(this),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         librarySession = MediaLibrarySession.Builder(this, player, callback)
@@ -626,6 +626,14 @@ class PeridotPlaybackService : MediaLibraryService() {
         const val ARTIST_PREFIX = "artist"
         const val PLAYLIST_PREFIX = "playlist"
         const val PLAYBACK_NOTIFICATION_CHANNEL_ID = "peridot_playback"
+        const val PLAYER_DEEP_LINK = "peridot://player"
+
+        fun playerActivityIntent(context: Context): Intent =
+            Intent(context, MainActivity::class.java).apply {
+                action = Intent.ACTION_VIEW
+                data = Uri.parse(PLAYER_DEEP_LINK)
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
 
         fun command(context: Context, action: String, configure: Intent.() -> Unit = {}) {
             val intent = Intent(context, PeridotPlaybackService::class.java).apply {

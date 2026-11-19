@@ -6,6 +6,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { PlaybackTokenResponse } from "@peridot/contracts";
 import { ARTWORK_MIME_TYPE, type ArtworkCache } from "./artwork-cache.js";
 import type { Database } from "./database.js";
+import { canonicalTrack } from "./duplicate-resolver.js";
 import { sendError } from "./http.js";
 import { message } from "./messages.js";
 import type { PlaybackTokenService } from "./playback-tokens.js";
@@ -76,7 +77,7 @@ export async function registerLibraryRoutes(
   app.get<{ Params: { id: string } }>(
     "/api/tracks/:id",
     async (request, reply) => {
-      const track = await database.orm.Track.first({ id: request.params.id });
+      const track = await canonicalTrack(database, request.params.id);
       if (!track)
         return sendError(
           reply,
@@ -106,9 +107,7 @@ export async function registerLibraryRoutes(
   app.post<{ Params: { id: string } }>(
     "/api/tracks/:id/playback-token",
     async (request, reply) => {
-      const track = await database.orm.Track.select("id", "available").first({
-        id: request.params.id,
-      });
+      const track = await canonicalTrack(database, request.params.id);
       if (!track || !track.available) {
         return sendError(
           reply,
@@ -167,11 +166,15 @@ export async function registerLibraryRoutes(
     reply: Parameters<typeof sendError>[0],
     head: boolean,
   ) {
-    const track = await database.orm.Track.where({
-      id: request.params.id,
-    })
-      .include("source")
-      .first();
+    const canonicalSourceTrack = await canonicalTrack(
+      database,
+      request.params.id,
+    );
+    const track = canonicalSourceTrack
+      ? await database.orm.Track.where({ id: canonicalSourceTrack.id })
+          .include("source")
+          .first()
+      : null;
     if (!track || !track.available) {
       return sendError(
         reply,

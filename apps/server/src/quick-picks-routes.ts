@@ -6,6 +6,7 @@ import type {
 import type { FastifyInstance } from "fastify";
 import type { CatalogService } from "./catalog.js";
 import type { Database } from "./database.js";
+import { canonicalTrack } from "./duplicate-resolver.js";
 import { sendError } from "./http.js";
 import { message } from "./messages.js";
 import { rankQuickPicks } from "./quick-picks.js";
@@ -18,9 +19,7 @@ export async function registerQuickPickRoutes(
   app.post<{ Params: { id: string } }>(
     "/api/tracks/:id/plays",
     async (request, reply) => {
-      const track = await database.orm.Track.select("id", "available").first({
-        id: request.params.id,
-      });
+      const track = await canonicalTrack(database, request.params.id);
       if (!track?.available) {
         return sendError(
           reply,
