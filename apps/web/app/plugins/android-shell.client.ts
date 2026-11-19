@@ -31,9 +31,9 @@ export default defineNuxtPlugin(() => {
     if (destination) await router.push(destination);
   }
 
-  void CapacitorApp.getLaunchUrl().then((launch) =>
-    openMobilePlayerFromUrl(launch?.url),
-  ).catch(() => undefined);
+  void CapacitorApp.getLaunchUrl()
+    .then((launch) => openMobilePlayerFromUrl(launch?.url))
+    .catch(() => undefined);
   void CapacitorApp.addListener("appUrlOpen", ({ url }) => {
     void openMobilePlayerFromUrl(url).catch(() => undefined);
   });

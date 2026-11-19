@@ -20,12 +20,17 @@ Durable duplicate detection runs after scans and metadata changes, after source
 order or membership changes, and once at startup when the algorithm version
 changes. There is no manual review or override workflow.
 
-## 2026-11-19: Android media controls do not request notification permission
+## 2026-11-19: Android media notification opens the full player without runtime permission
 
 Media-session notifications are exempt from Android 13's
 `POST_NOTIFICATIONS` runtime permission. Peridot omits that permission and
 keeps a Media3 controller connected while its Capacitor plugin is active so the
 raw service transport commands produce the platform media player and controls.
+
+The media session activity uses the `peridot://player` deep link. The Android
+web shell handles both cold launches and `appUrlOpen` events by adding the
+existing `player=fullscreen` route query. Routes without the shared player
+layout are redirected through the home route first.
 
 ## 2026-11-19: Jellyfin cover art is fetched eagerly during scans
 

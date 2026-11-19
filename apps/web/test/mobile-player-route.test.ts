@@ -86,12 +86,27 @@ test("the media session deep link leaves layouts without a player", () => {
 });
 
 test("the Android shell handles cold and warm media session launches", async () => {
-  const source = await readFile(
-    new URL("../app/plugins/android-shell.client.ts", import.meta.url),
-    "utf8",
-  );
+  const [source, playbackService] = await Promise.all([
+    readFile(
+      new URL("../app/plugins/android-shell.client.ts", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../../android/android/app/src/main/java/app/peridot/android/playback/PeridotPlaybackService.kt",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  ]);
 
   assert.match(source, /CapacitorApp\.getLaunchUrl\(\)/);
   assert.match(source, /CapacitorApp\.addListener\(\s*"appUrlOpen"/);
   assert.match(source, /mobilePlayerNavigationForLaunchUrl/);
+  assert.ok(
+    playbackService.includes(
+      `const val PLAYER_DEEP_LINK = "${MOBILE_PLAYER_DEEP_LINK}"`,
+    ),
+  );
+  assert.match(playbackService, /playerActivityIntent\(this\)/);
 });

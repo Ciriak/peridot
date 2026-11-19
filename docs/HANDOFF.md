@@ -56,9 +56,6 @@ Uncommitted duplicate work:
   duplicate service files.
 - Shared contracts, task labels, player alias handling, and duplicate tests.
 
-Unrelated in-progress Android media-control changes remain uncommitted in the
-same worktree.
-
 ## Android native media controls
 
 The Android bridge now keeps a Media3 `MediaController` connected for the
@@ -70,26 +67,47 @@ connected controller completes that platform path.
 session notifications are exempt from that permission, and the playback
 notification now works with notification permission denied.
 
+Tapping the media notification opens the existing mobile fullscreen player.
+The media session uses a `peridot://player` launch intent, and the Android shell
+handles both cold and warm launches. Routes that cannot host the shared player
+layout, such as Settings, return through Home before opening the player.
+
 Verification:
 
 - `.\gradlew.bat testDebugUnitTest`
 - `ANDROID_SERIAL=emulator-5554 .\gradlew.bat connectedDebugAndroidTest`
-  (4 passing on API 37)
+  (6 passing on API 37, including a cold-launch WebView route check)
+- `pnpm --filter @peridot/web test` (251 passing)
+- `pnpm --filter @peridot/web typecheck`
 - `pnpm --filter @peridot/android typecheck`
 - `pnpm --filter @peridot/android lint`
+- `pnpm --filter @peridot/android build`
 - `pnpm version:check`
 
 Known checks:
 
-- `pnpm format:check` and the root `pnpm lint` currently fail only in unrelated
-  in-progress server/web changes outside this Android fix.
+- `pnpm format:check` reports only the unrelated
+  `apps/desktop/src-tauri/tauri.conf.json`.
 
-Uncommitted Android changes:
+Feature files:
 
 - `apps/android/android/app/src/main/AndroidManifest.xml`
 - `apps/android/android/app/src/main/java/app/peridot/android/playback/PeridotMediaPlugin.kt`
+- `apps/android/android/app/src/main/java/app/peridot/android/playback/PeridotPlaybackService.kt`
 - `apps/android/android/app/src/test/java/app/peridot/android/playback/AndroidAutoManifestTest.kt`
 - `apps/android/android/app/src/androidTest/java/app/peridot/android/playback/PeridotPlaybackCommandTest.kt`
+- `apps/android/android/app/src/androidTest/java/app/peridot/android/playback/PeridotPlayerIntentTest.kt`
+- `apps/web/app/lib/mobile-player-route.ts`
+- `apps/web/app/plugins/android-shell.client.ts`
+- `apps/web/test/mobile-player-route.test.ts`
+
+Uncommitted notification-player follow-up:
+
+- `apps/android/android/app/src/androidTest/java/app/peridot/android/playback/PeridotPlayerIntentTest.kt`
+- `apps/web/app/plugins/android-shell.client.ts`
+- `apps/web/test/mobile-player-route.test.ts`
+- `docs/DECISIONS.md`
+- `docs/HANDOFF.md`
 
 ## Eager Jellyfin cover import
 
