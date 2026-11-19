@@ -109,28 +109,24 @@ test("track collection routes follow the normalized media type", () => {
   };
 
   assert.equal(
-    (trackAlbumRoute(base) as { name: string }).name,
-    "album-detail",
+    trackAlbumRoute(base),
+    "/albums/Collection?artist=Creator&id=collection-id",
   );
   assert.equal(
-    (
-      trackAlbumRoute({
-        ...base,
-        mediaType: "audiobook",
-        albumId: "audiobook-id",
-      }) as { name: string }
-    ).name,
-    "audiobook-detail",
+    trackAlbumRoute({
+      ...base,
+      mediaType: "audiobook",
+      albumId: "audiobook-id",
+    }),
+    "/audiobooks/Collection?author=Creator&id=audiobook-id",
   );
   assert.equal(
-    (
-      trackAlbumRoute({
-        ...base,
-        mediaType: "podcast",
-        albumId: "podcast-id",
-      }) as { name: string }
-    ).name,
-    "podcast-detail",
+    trackAlbumRoute({
+      ...base,
+      mediaType: "podcast",
+      albumId: "podcast-id",
+    }),
+    "/podcasts/Collection?publisher=Creator&id=podcast-id",
   );
 });
 

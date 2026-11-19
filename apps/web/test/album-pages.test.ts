@@ -137,7 +137,7 @@ test("albums have list and detail routes with derived groups", async () => {
   assert.match(detailPage, /<LikeButton/);
   assert.match(
     detailPage,
-    /<AlbumOfflineButton\s+:album="album"\s+class="absolute right-4 top-4"\s+\/>/,
+    /<div class="absolute right-4 top-4">\s+<AlbumOfflineButton :album="album"\s+\/>\s+<\/div>/,
     "Album details place an icon-only whole-album offline action at the top right",
   );
   assert.match(
@@ -189,6 +189,11 @@ test("albums have list and detail routes with derived groups", async () => {
     trackTable,
     /@dblclick\.stop/,
     "Track controls do not also trigger row playback",
+  );
+  assert.match(
+    trackTable,
+    /showArtists !== false[\s\S]*?item\.track\.mediaType === 'music'[\s\S]*?<NuxtLink\s+:to="artistRoute\(\{ name: artist \}\)"[\s\S]*?hover:underline/,
+    "Album track-list artists use direct links with the standard link treatment",
   );
   assert.match(
     trackTable,

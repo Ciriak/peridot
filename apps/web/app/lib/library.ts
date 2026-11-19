@@ -310,10 +310,21 @@ export function findArtist(
 }
 
 export function artistRoute(artist: { name: string; localName?: string }) {
-  return {
-    name: "artist-detail",
-    params: { artist: artist.localName ?? artist.name },
-  };
+  return `/artists/${encodeURIComponent(artist.localName ?? artist.name)}`;
+}
+
+function routeQuery(query: Record<string, string | undefined>): string {
+  const entries = Object.entries(query).filter(
+    (entry): entry is [string, string] => Boolean(entry[1]),
+  );
+  return entries.length
+    ? `?${entries
+        .map(
+          ([key, value]) =>
+            `${encodeURIComponent(key)}=${encodeURIComponent(value)}`,
+        )
+        .join("&")}`
+    : "";
 }
 
 export function groupAlbums(tracks: readonly TrackResponse[]): AlbumGroup[] {
@@ -390,36 +401,28 @@ export function findAlbum(
 export function albumRoute(
   album: Pick<AlbumGroup, "title" | "artist"> & { id?: string },
 ) {
-  return {
-    name: "album-detail",
-    params: { album: album.title },
-    query: {
-      artist: album.artist,
-      ...(album.id ? { id: album.id } : {}),
-    },
-  };
+  return `/albums/${encodeURIComponent(album.title)}${routeQuery({
+    artist: album.artist,
+    id: album.id,
+  })}`;
 }
 
 export function trackAlbumRoute(track: TrackResponse) {
   if (track.mediaType === "audiobook") {
-    return {
-      name: "audiobook-detail",
-      params: { book: track.album?.trim() ?? "" },
-      query: {
+    return `/audiobooks/${encodeURIComponent(track.album?.trim() ?? "")}${routeQuery(
+      {
         author: track.artist,
-        ...(track.albumId ? { id: track.albumId } : {}),
+        id: track.albumId ?? undefined,
       },
-    };
+    )}`;
   }
   if (track.mediaType === "podcast") {
-    return {
-      name: "podcast-detail",
-      params: { show: track.album?.trim() ?? "" },
-      query: {
+    return `/podcasts/${encodeURIComponent(track.album?.trim() ?? "")}${routeQuery(
+      {
         publisher: track.artist,
-        ...(track.albumId ? { id: track.albumId } : {}),
+        id: track.albumId ?? undefined,
       },
-    };
+    )}`;
   }
   return albumRoute({
     title: track.album?.trim() ?? "",
@@ -446,10 +449,7 @@ export function trackIdFromTitleHash(hash: string): string | null {
 
 export function trackAlbumTitleRoute(track: TrackResponse) {
   if (!track.album?.trim() || !track.artist.trim()) return null;
-  return {
-    ...trackAlbumRoute(track),
-    hash: `#${trackTitleAnchorId(track.id)}`,
-  };
+  return `${trackAlbumRoute(track)}#${encodeURIComponent(trackTitleAnchorId(track.id))}`;
 }
 
 export function filterTracks(

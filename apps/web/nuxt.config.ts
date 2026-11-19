@@ -157,7 +157,7 @@ export default defineNuxtConfig({
           installPrompt: false,
         },
         devOptions: {
-          enabled: true,
+          enabled: false,
         },
         manifest: {
           name: "Peridot",

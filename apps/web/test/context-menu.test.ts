@@ -64,7 +64,11 @@ test("track rows expose a Reka context menu with playback, favorites, offline st
   assert.match(menu, /candidate\.details/);
   assert.match(menu, /genres: candidate\.genres/);
   assert.match(menu, /context\.metadataGenres/);
-  assert.match(trackTable, /item\.track\.genres\.join\(" · "\)/);
+  assert.doesNotMatch(
+    trackTable,
+    /track\.genres|trackTable\.genres/,
+    "Track lists do not render genre categories beside artists",
+  );
 
   const offlineActionIndex = menu.indexOf('@select="toggleOffline"');
   const downloadActionIndex = menu.indexOf('@select="download"');

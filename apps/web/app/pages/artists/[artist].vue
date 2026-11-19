@@ -175,7 +175,12 @@ watch(
       matches.find(
         (candidate) =>
           candidate.localName.toLowerCase() === artistName.value.toLowerCase(),
-      ) ?? null;
+      ) ??
+      matches.find(
+        (candidate) =>
+          candidate.name.toLowerCase() === artistName.value.toLowerCase(),
+      ) ??
+      null;
     const changed = nextArtist?.id !== artist.value?.id;
     artist.value = nextArtist;
     if (nextArtist && changed) {

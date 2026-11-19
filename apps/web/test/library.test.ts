@@ -174,10 +174,11 @@ test("shared track rows always show linked artists beneath the title", async () 
 
   assert.match(
     table,
-    /<ScrollingText class="w-full text-xs text-muted-foreground">\s*<TrackArtistLinks[\s\S]*?showArtists !== false[\s\S]*?item\.track\.mediaType === 'music'[\s\S]*?:artists="trackArtistNames\(item\.track\)"/,
+    /<ScrollingText class="w-full text-xs text-muted-foreground">[\s\S]*?showArtists !== false[\s\S]*?item\.track\.mediaType === 'music'[\s\S]*?<NuxtLink\s+:to="artistRoute\(\{ name: artist \}\)"/,
+    "Track-list artist credits render as direct links",
   );
   assert.doesNotMatch(table, />\s*Artist\s*<Icon/);
-  assert.equal(table.match(/<TrackArtistLinks/g)?.length, 1);
+  assert.doesNotMatch(table, /<TrackArtistLinks/);
 });
 
 test("shared track lists show cover artwork beside every title", async () => {
@@ -584,19 +585,16 @@ test("artist tracks sort by album and disc, with albumless tracks last", () => {
 });
 
 test("artist links preserve names that need URL encoding", () => {
-  assert.deepEqual(artistRoute({ name: "AC/DC & Friends" }), {
-    name: "artist-detail",
-    params: { artist: "AC/DC & Friends" },
-  });
-  assert.deepEqual(
+  assert.equal(
+    artistRoute({ name: "AC/DC & Friends" }),
+    "/artists/AC%2FDC%20%26%20Friends",
+  );
+  assert.equal(
     artistRoute({
       name: "AC/DC",
       localName: "AC/DC & Friends",
     }),
-    {
-      name: "artist-detail",
-      params: { artist: "AC/DC & Friends" },
-    },
+    "/artists/AC%2FDC%20%26%20Friends",
   );
 });
 
@@ -714,22 +712,17 @@ test("album links encode title and artist without losing identity", () => {
     },
   ]);
   assert.ok(album);
-  assert.deepEqual(albumRoute(album), {
-    name: "album-detail",
-    params: { album: "Night/Sessions & More" },
-    query: { artist: "Elliot Lake", id: "album-night-sessions" },
-  });
-  assert.deepEqual(
+  assert.equal(
+    albumRoute(album),
+    "/albums/Night%2FSessions%20%26%20More?artist=Elliot%20Lake&id=album-night-sessions",
+  );
+  assert.equal(
     trackAlbumRoute({
       ...tracks[0]!,
       album: "  Night/Sessions & More  ",
       artist: "  Elliot Lake  ",
     }),
-    {
-      name: "album-detail",
-      params: { album: "Night/Sessions & More" },
-      query: { artist: "Elliot Lake", id: "album-night-sessions" },
-    },
+    "/albums/Night%2FSessions%20%26%20More?artist=Elliot%20Lake&id=album-night-sessions",
   );
 });
 
@@ -741,19 +734,14 @@ test("player track titles link to their anchored album title", () => {
   );
   assert.equal(trackIdFromTitleHash("#track-title-"), null);
   assert.equal(trackIdFromTitleHash("#other-anchor"), null);
-  assert.deepEqual(
+  assert.equal(
     trackAlbumTitleRoute({
       ...tracks[0]!,
       id: "track / one",
       album: "  Night/Sessions & More  ",
       artist: "  Elliot Lake  ",
     }),
-    {
-      name: "album-detail",
-      params: { album: "Night/Sessions & More" },
-      query: { artist: "Elliot Lake", id: "album-night-sessions" },
-      hash: "#track-title-track / one",
-    },
+    "/albums/Night%2FSessions%20%26%20More?artist=Elliot%20Lake&id=album-night-sessions#track-title-track%20%2F%20one",
   );
   assert.equal(trackAlbumTitleRoute(tracks[1]!), null);
 });

@@ -40,6 +40,11 @@ test("artists have list and detail routes with artist-scoped content", async () 
   assert.match(detailPage, /artistMatches/);
   assert.match(
     detailPage,
+    /candidate\.localName\.toLowerCase\(\) === artistName\.value\.toLowerCase\(\),\s*\)\s*\?\?\s*matches\.find\(\s*\(candidate\) =>\s*candidate\.name\.toLowerCase\(\) === artistName\.value\.toLowerCase\(\)/,
+    "Artist links resolve both library names and metadata display names",
+  );
+  assert.match(
+    detailPage,
     /const artistLoading = computed\(\s+\(\) => artistMatchesLoading\.value && !artist\.value,?\s+\);/,
     "Artist detail loading is blocking only until cached matches resolve",
   );
@@ -115,7 +120,8 @@ test("artist names link from navigation and track lists", async () => {
   assert.match(albumDetail, /<TrackArtistLinks :artists="album\.artists" \/>/);
   assert.match(
     trackTable,
-    /<TrackArtistLinks[\s\S]*?showArtists !== false[\s\S]*?item\.track\.mediaType === 'music'[\s\S]*?:artists="trackArtistNames\(item\.track\)"/,
+    /showArtists !== false[\s\S]*?item\.track\.mediaType === 'music'[\s\S]*?<NuxtLink\s+:to="artistRoute\(\{ name: artist \}\)"/,
+    "Artist-page track rows link every music artist directly",
   );
   assert.match(
     trackTable,

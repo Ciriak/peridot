@@ -43,8 +43,15 @@ async function waitFor(predicate: () => boolean, timeoutMs = 1_000) {
 }
 
 test("Nuxt builds a client-rendered installable offline shell", async () => {
-  const [config, indexIcon, maskableIcon] = await Promise.all([
+  const [config, devReset, indexIcon, maskableIcon] = await Promise.all([
     readFile(new URL("../nuxt.config.ts", import.meta.url), "utf8"),
+    readFile(
+      new URL(
+        "../app/plugins/service-worker-dev-reset.client.ts",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
     access(new URL("../public/pwa-192x192.png", import.meta.url)),
     access(new URL("../public/pwa-maskable-512x512.png", import.meta.url)),
   ]);
@@ -52,7 +59,14 @@ test("Nuxt builds a client-rendered installable offline shell", async () => {
   assert.match(config, /ssr: false/);
   assert.match(config, /modules: \["@nuxtjs\/i18n", "@vite-pwa\/nuxt"\]/);
   assert.match(config, /registerType: "autoUpdate"/);
-  assert.match(config, /devOptions: \{\s*enabled: true,?\s*\}/);
+  assert.match(
+    config,
+    /devOptions: \{\s*enabled: false,?\s*\}/,
+    "Development avoids a service-worker cache that can serve stale app code",
+  );
+  assert.match(devReset, /import\.meta\.dev/);
+  assert.match(devReset, /registration\.unregister\(\)/);
+  assert.match(devReset, /caches\.delete\(key\)/);
   assert.match(config, /navigateFallback: "\/"/);
   assert.match(config, /additionalManifestEntries/);
   assert.match(config, /rel: "manifest", href: "\/manifest.webmanifest"/);
@@ -663,7 +677,7 @@ test("album offline controls load and save the complete album collection", async
   assert.doesNotMatch(card, /<AlbumOfflineButton/);
   assert.match(
     detail,
-    /<AlbumOfflineButton\s+:album="album"\s+class="absolute right-4 top-4"/,
+    /<div class="absolute right-4 top-4">\s+<AlbumOfflineButton :album="album"/,
   );
   assert.match(menu, /@select="toggleAlbumOffline"/);
 });

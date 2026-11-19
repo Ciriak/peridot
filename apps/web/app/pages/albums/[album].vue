@@ -240,7 +240,9 @@ onMounted(() => {
       aria-labelledby="album-heading"
       class="relative flex flex-col gap-6 rounded-lg border bg-card p-6 text-card-foreground sm:flex-row sm:items-end"
     >
-      <AlbumOfflineButton :album="album" class="absolute right-4 top-4" />
+      <div class="absolute right-4 top-4">
+        <AlbumOfflineButton :album="album" />
+      </div>
       <div
         aria-hidden="true"
         class="relative flex size-40 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted text-muted-foreground"

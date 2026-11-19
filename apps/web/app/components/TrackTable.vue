@@ -10,7 +10,6 @@ import AutoLoadMore from "./AutoLoadMore.vue";
 import DownloadProgressTooltip from "./DownloadProgressTooltip.vue";
 import LikeButton from "./LikeButton.vue";
 import TrackArtwork from "./TrackArtwork.vue";
-import TrackArtistLinks from "./TrackArtistLinks.vue";
 import TrackContextMenu from "./TrackContextMenu.vue";
 import { useMainScrollVirtualizer } from "../composables/use-main-scroll-virtualizer";
 import { useLikes } from "../composables/use-likes";
@@ -28,6 +27,7 @@ import {
   formatTrackDuration,
   formatTrackNumber,
   nextTrackSort,
+  artistRoute,
   trackArtistNames,
   trackAlbumRoute,
   trackTitleAnchorId,
@@ -417,23 +417,31 @@ watch(
                 />
               </div>
               <ScrollingText class="w-full text-xs text-muted-foreground">
-                <TrackArtistLinks
+                <template
                   v-if="
                     showArtists !== false && item.track.mediaType === 'music'
                   "
-                  :artists="trackArtistNames(item.track)"
-                />
-                <template v-else>{{ item.track.artist }}</template>
-                <span
-                  v-if="item.track.genres.length"
-                  :aria-label="
-                    t('trackTable.genres', {
-                      genres: item.track.genres.join(', '),
-                    })
-                  "
                 >
-                  · {{ item.track.genres.join(" · ") }}
-                </span>
+                  <template
+                    v-for="(artist, artistIndex) in trackArtistNames(
+                      item.track,
+                    )"
+                    :key="artist"
+                  >
+                    <NuxtLink
+                      :to="artistRoute({ name: artist })"
+                      class="rounded-sm hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      @dblclick.stop
+                      >{{ artist }}</NuxtLink
+                    ><template
+                      v-if="
+                        artistIndex < trackArtistNames(item.track).length - 1
+                      "
+                      >,
+                    </template>
+                  </template>
+                </template>
+                <template v-else>{{ item.track.artist }}</template>
               </ScrollingText>
             </div>
           </div>
