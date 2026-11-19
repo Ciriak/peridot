@@ -1,5 +1,17 @@
 # Peridot decisions
 
+## 2026-11-19: Failed task executions retry twice
+
+When a durable task executor reports a failed run, the task returns to the queue
+and starts again, up to two additional attempts. The original task row and its
+source, parent, and force-refresh context are retained; retry progress and failure
+fields are cleared before each new run.
+
+Cancellation, server interruption, parent failure, missing executors, and completed
+runs with partial errors are not automatically retried. Administrator cancellation
+can still remove a queued retry or stop a running retry. A task becomes terminally
+failed only after its third failed execution.
+
 ## 2026-11-19: Duplicate detection is automatic and catalog-level
 
 Tracks are compared across every configured source and media type using

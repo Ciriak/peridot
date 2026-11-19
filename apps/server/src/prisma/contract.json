@@ -723,6 +723,13 @@
                   "kind": "scalar"
                 }
               },
+              "availableTrackCount": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
               "coverId": {
                 "nullable": true,
                 "type": {
@@ -820,6 +827,9 @@
                 "artistId": {
                   "column": "artistId"
                 },
+                "availableTrackCount": {
+                  "column": "availableTrackCount"
+                },
                 "coverId": {
                   "column": "coverId"
                 },
@@ -864,6 +874,13 @@
           "CatalogArtist": {
             "fields": {
               "albumCount": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
+              "availableTrackCount": {
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/integer@1",
@@ -932,6 +949,9 @@
               "fields": {
                 "albumCount": {
                   "column": "albumCount"
+                },
+                "availableTrackCount": {
+                  "column": "availableTrackCount"
                 },
                 "displayName": {
                   "column": "displayName"
@@ -1264,6 +1284,13 @@
                   "kind": "scalar"
                 }
               },
+              "sourceId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
               "title": {
                 "nullable": false,
                 "type": {
@@ -1351,6 +1378,9 @@
                 },
                 "releaseYear": {
                   "column": "releaseYear"
+                },
+                "sourceId": {
+                  "column": "sourceId"
                 },
                 "title": {
                   "column": "title"
@@ -2445,6 +2475,13 @@
                   "kind": "scalar"
                 }
               },
+              "removedAt": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/datetime@1",
+                  "kind": "scalar"
+                }
+              },
               "sourceIdentity": {
                 "nullable": true,
                 "type": {
@@ -2512,6 +2549,9 @@
                 },
                 "position": {
                   "column": "position"
+                },
+                "removedAt": {
+                  "column": "removedAt"
                 },
                 "sourceIdentity": {
                   "column": "sourceIdentity"
@@ -2606,6 +2646,13 @@
                   "kind": "scalar"
                 }
               },
+              "retryCount": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/integer@1",
+                  "kind": "scalar"
+                }
+              },
               "sourceId": {
                 "nullable": true,
                 "type": {
@@ -2691,6 +2738,9 @@
                 },
                 "progressTotal": {
                   "column": "progressTotal"
+                },
+                "retryCount": {
+                  "column": "retryCount"
                 },
                 "sourceId": {
                   "column": "sourceId"
@@ -4134,6 +4184,15 @@
                   "dataType": "sqlite/text",
                   "nullable": true
                 },
+                "availableTrackCount": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "default": {
+                    "kind": "literal",
+                    "value": "0"
+                  },
+                  "nullable": false
+                },
                 "coverId": {
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
@@ -4253,6 +4312,15 @@
             "CatalogArtist": {
               "columns": {
                 "albumCount": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "default": {
+                    "kind": "literal",
+                    "value": "0"
+                  },
+                  "nullable": false
+                },
+                "availableTrackCount": {
                   "codecId": "sqlite/integer@1",
                   "dataType": "sqlite/integer",
                   "default": {
@@ -4601,6 +4669,11 @@
                   "dataType": "sqlite/integer",
                   "nullable": true
                 },
+                "sourceId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
                 "title": {
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
@@ -4662,6 +4735,14 @@
                   ],
                   "name": "CatalogTrack_mediaType_available_id_idx_16156cf2",
                   "prefix": "CatalogTrack_mediaType_available_id_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "sourceId"
+                  ],
+                  "name": "CatalogTrack_sourceId_idx_d92a2571",
+                  "prefix": "CatalogTrack_sourceId_idx",
                   "unique": false
                 },
                 {
@@ -5753,6 +5834,11 @@
                   },
                   "nullable": false
                 },
+                "removedAt": {
+                  "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/datetime",
+                  "nullable": true
+                },
                 "sourceIdentity": {
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
@@ -5785,6 +5871,14 @@
                   ],
                   "name": "Source_position_idx_82a01784",
                   "prefix": "Source_position_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "removedAt"
+                  ],
+                  "name": "Source_removedAt_idx_fef869bb",
+                  "prefix": "Source_removedAt_idx",
                   "unique": false
                 }
               ],
@@ -5870,6 +5964,15 @@
                   "codecId": "sqlite/integer@1",
                   "dataType": "sqlite/integer",
                   "nullable": true
+                },
+                "retryCount": {
+                  "codecId": "sqlite/integer@1",
+                  "dataType": "sqlite/integer",
+                  "default": {
+                    "kind": "literal",
+                    "value": "0"
+                  },
+                  "nullable": false
                 },
                 "sourceId": {
                   "codecId": "sqlite/text@1",
@@ -6684,7 +6787,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "3af44e392cfe091c4eb40494da1fc426edf497151a03039f9f1566b9cbbe1f72"
+    "storageHash": "e21b21dd96034f070368e9232b262ad5ae208d084ef3f77ed93e3ef3673607f6"
   },
   "execution": {
     "executionHash": "97fc046b1d4dab2bdb7c66c465182d63cb742a8cf7a04ee2e990ce77c078f512",

@@ -60,6 +60,8 @@ runtime code is not supported.
 Adding a folder or Jellyfin source queues its source-scoped scan. A successful
 scan queues linked metadata matching for the same source. Source scans can be
 run independently or together and share the durable task queue.
+Failed executor runs automatically return to the queue up to two times before
+the task becomes terminally failed.
 
 Jellyfin requests `Audio` and `AudioBook` items in pages of 100. Core commits at
 most 100 records per transaction and publishes catalog changes before requesting

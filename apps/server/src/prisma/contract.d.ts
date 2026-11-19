@@ -19,7 +19,7 @@ import type {
 } from '@prisma/orm-sqlite/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'3af44e392cfe091c4eb40494da1fc426edf497151a03039f9f1566b9cbbe1f72'>;
+  StorageHashBase<'e21b21dd96034f070368e9232b262ad5ae208d084ef3f77ed93e3ef3673607f6'>;
 export type ExecutionHash =
   ExecutionHashBase<'97fc046b1d4dab2bdb7c66c465182d63cb742a8cf7a04ee2e990ce77c078f512'>;
 export type ProfileHash =
@@ -283,6 +283,7 @@ export namespace Models {
     artist: FieldOutputTypes['__unbound__']['CatalogAlbum']['artist'];
     artistCredits: FieldOutputTypes['__unbound__']['CatalogAlbum']['artistCredits'];
     artistId: FieldOutputTypes['__unbound__']['CatalogAlbum']['artistId'];
+    availableTrackCount: FieldOutputTypes['__unbound__']['CatalogAlbum']['availableTrackCount'];
     coverId: FieldOutputTypes['__unbound__']['CatalogAlbum']['coverId'];
     coverTrackId: FieldOutputTypes['__unbound__']['CatalogAlbum']['coverTrackId'];
     durationMs: FieldOutputTypes['__unbound__']['CatalogAlbum']['durationMs'];
@@ -299,6 +300,7 @@ export namespace Models {
   };
   export type CatalogArtist = {
     albumCount: FieldOutputTypes['__unbound__']['CatalogArtist']['albumCount'];
+    availableTrackCount: FieldOutputTypes['__unbound__']['CatalogArtist']['availableTrackCount'];
     displayName: FieldOutputTypes['__unbound__']['CatalogArtist']['displayName'];
     durationMs: FieldOutputTypes['__unbound__']['CatalogArtist']['durationMs'];
     id: FieldOutputTypes['__unbound__']['CatalogArtist']['id'];
@@ -352,6 +354,7 @@ export namespace Models {
     normalizedTitle: FieldOutputTypes['__unbound__']['CatalogTrack']['normalizedTitle'];
     publishedAt: FieldOutputTypes['__unbound__']['CatalogTrack']['publishedAt'];
     releaseYear: FieldOutputTypes['__unbound__']['CatalogTrack']['releaseYear'];
+    sourceId: FieldOutputTypes['__unbound__']['CatalogTrack']['sourceId'];
     title: FieldOutputTypes['__unbound__']['CatalogTrack']['title'];
     trackNumber: FieldOutputTypes['__unbound__']['CatalogTrack']['trackNumber'];
     updatedAt: FieldOutputTypes['__unbound__']['CatalogTrack']['updatedAt'];
@@ -481,6 +484,7 @@ export namespace Models {
     name: FieldOutputTypes['__unbound__']['Source']['name'];
     path: FieldOutputTypes['__unbound__']['Source']['path'];
     position: FieldOutputTypes['__unbound__']['Source']['position'];
+    removedAt: FieldOutputTypes['__unbound__']['Source']['removedAt'];
     sourceIdentity: FieldOutputTypes['__unbound__']['Source']['sourceIdentity'];
     updatedAt: FieldOutputTypes['__unbound__']['Source']['updatedAt'];
     url: FieldOutputTypes['__unbound__']['Source']['url'];
@@ -499,6 +503,7 @@ export namespace Models {
     parentTaskId: FieldOutputTypes['__unbound__']['Task']['parentTaskId'];
     progressCompleted: FieldOutputTypes['__unbound__']['Task']['progressCompleted'];
     progressTotal: FieldOutputTypes['__unbound__']['Task']['progressTotal'];
+    retryCount: FieldOutputTypes['__unbound__']['Task']['retryCount'];
     sourceId: FieldOutputTypes['__unbound__']['Task']['sourceId'];
     sourceName: FieldOutputTypes['__unbound__']['Task']['sourceName'];
     startedAt: FieldOutputTypes['__unbound__']['Task']['startedAt'];
@@ -1104,6 +1109,16 @@ type ContractBase = Omit<
                   readonly nullable: true;
                   readonly many: false;
                 };
+                readonly availableTrackCount: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
+                  };
+                  readonly many: false;
+                };
                 readonly coverId: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
@@ -1216,6 +1231,16 @@ type ContractBase = Omit<
             readonly CatalogArtist: {
               columns: {
                 readonly albumCount: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
+                  };
+                  readonly many: false;
+                };
+                readonly availableTrackCount: {
                   readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/integer@1';
                   readonly nullable: false;
@@ -1562,6 +1587,12 @@ type ContractBase = Omit<
                   readonly nullable: true;
                   readonly many: false;
                 };
+                readonly sourceId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
                 readonly title: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
@@ -1612,6 +1643,12 @@ type ContractBase = Omit<
                   readonly name: 'CatalogTrack_mediaType_available_id_idx_16156cf2';
                   readonly prefix: 'CatalogTrack_mediaType_available_id_idx';
                   readonly columns: readonly ['mediaType', 'available', 'id'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'CatalogTrack_sourceId_idx_d92a2571';
+                  readonly prefix: 'CatalogTrack_sourceId_idx';
+                  readonly columns: readonly ['sourceId'];
                   readonly unique: false;
                 },
                 {
@@ -2521,6 +2558,12 @@ type ContractBase = Omit<
                   };
                   readonly many: false;
                 };
+                readonly removedAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
                 readonly sourceIdentity: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
@@ -2553,6 +2596,12 @@ type ContractBase = Omit<
                   readonly name: 'Source_position_idx_82a01784';
                   readonly prefix: 'Source_position_idx';
                   readonly columns: readonly ['position'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'Source_removedAt_idx_fef869bb';
+                  readonly prefix: 'Source_removedAt_idx';
+                  readonly columns: readonly ['removedAt'];
                   readonly unique: false;
                 },
               ];
@@ -2633,6 +2682,16 @@ type ContractBase = Omit<
                   readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/integer@1';
                   readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly retryCount: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
+                  };
                   readonly many: false;
                 };
                 readonly sourceId: {
@@ -3850,6 +3909,10 @@ type ContractBase = Omit<
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
+              readonly availableTrackCount: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
               readonly coverId: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
@@ -3907,6 +3970,7 @@ type ContractBase = Omit<
                 readonly artist: { readonly column: 'artist' };
                 readonly artistCredits: { readonly column: 'artistCredits' };
                 readonly artistId: { readonly column: 'artistId' };
+                readonly availableTrackCount: { readonly column: 'availableTrackCount' };
                 readonly coverId: { readonly column: 'coverId' };
                 readonly coverTrackId: { readonly column: 'coverTrackId' };
                 readonly durationMs: { readonly column: 'durationMs' };
@@ -3925,6 +3989,10 @@ type ContractBase = Omit<
           readonly CatalogArtist: {
             readonly fields: {
               readonly albumCount: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly availableTrackCount: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
               };
@@ -3967,6 +4035,7 @@ type ContractBase = Omit<
               readonly namespaceId: '__unbound__';
               readonly fields: {
                 readonly albumCount: { readonly column: 'albumCount' };
+                readonly availableTrackCount: { readonly column: 'availableTrackCount' };
                 readonly displayName: { readonly column: 'displayName' };
                 readonly durationMs: { readonly column: 'durationMs' };
                 readonly id: { readonly column: 'id' };
@@ -4157,6 +4226,10 @@ type ContractBase = Omit<
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
               };
+              readonly sourceId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
               readonly title: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
@@ -4196,6 +4269,7 @@ type ContractBase = Omit<
                 readonly normalizedTitle: { readonly column: 'normalizedTitle' };
                 readonly publishedAt: { readonly column: 'publishedAt' };
                 readonly releaseYear: { readonly column: 'releaseYear' };
+                readonly sourceId: { readonly column: 'sourceId' };
                 readonly title: { readonly column: 'title' };
                 readonly trackNumber: { readonly column: 'trackNumber' };
                 readonly updatedAt: { readonly column: 'updatedAt' };
@@ -4862,6 +4936,10 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
               };
+              readonly removedAt: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
               readonly sourceIdentity: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
@@ -4901,6 +4979,7 @@ type ContractBase = Omit<
                 readonly name: { readonly column: 'name' };
                 readonly path: { readonly column: 'path' };
                 readonly position: { readonly column: 'position' };
+                readonly removedAt: { readonly column: 'removedAt' };
                 readonly sourceIdentity: { readonly column: 'sourceIdentity' };
                 readonly updatedAt: { readonly column: 'updatedAt' };
                 readonly url: { readonly column: 'url' };
@@ -4953,6 +5032,10 @@ type ContractBase = Omit<
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
               };
+              readonly retryCount: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
               readonly sourceId: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
@@ -4998,6 +5081,7 @@ type ContractBase = Omit<
                 readonly parentTaskId: { readonly column: 'parentTaskId' };
                 readonly progressCompleted: { readonly column: 'progressCompleted' };
                 readonly progressTotal: { readonly column: 'progressTotal' };
+                readonly retryCount: { readonly column: 'retryCount' };
                 readonly sourceId: { readonly column: 'sourceId' };
                 readonly sourceName: { readonly column: 'sourceName' };
                 readonly startedAt: { readonly column: 'startedAt' };

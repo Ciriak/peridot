@@ -131,6 +131,7 @@ export interface AlbumSummaryResponse {
   trackCount: number;
   durationMs: number | null;
   releaseYear: number | null;
+  available: boolean;
   liked: boolean;
 }
 
@@ -151,6 +152,7 @@ export interface AudiobookSummaryResponse {
   chapterCount: number;
   durationMs: number | null;
   releaseYear: number | null;
+  available: boolean;
   liked: boolean;
 }
 
@@ -164,6 +166,7 @@ export interface PodcastSummaryResponse {
   episodeCount: number;
   durationMs: number | null;
   latestPublishedAt: string | null;
+  available: boolean;
   liked: boolean;
 }
 
@@ -190,6 +193,7 @@ export interface ArtistSummaryResponse {
   durationMs: number | null;
   imageUrl: string | null;
   metadata: ArtistMetadataResponse | null;
+  available: boolean;
   liked: boolean;
 }
 
@@ -503,6 +507,16 @@ export type SourceIntegrationKind = "jellyfin";
 
 export type SourceKind = "path" | "url" | SourceIntegrationKind;
 
+export type SourceRemovalPhase = "stopping" | "tracks" | "catalog";
+
+export interface SourceRemovalProgressResponse {
+  operationId: string;
+  sourceId: string;
+  phase: SourceRemovalPhase;
+  completed: number;
+  total: number;
+}
+
 export interface SourceResponse {
   id: string;
   kind: SourceKind;
@@ -512,6 +526,7 @@ export interface SourceResponse {
   configuration: Record<string, string> | null;
   fileCount: number;
   lastSyncedAt: string | null;
+  removal: SourceRemovalProgressResponse | null;
 }
 
 export interface CreateSourceResponse extends SourceResponse {
@@ -520,6 +535,14 @@ export interface CreateSourceResponse extends SourceResponse {
 
 export interface SourceListResponse {
   items: SourceResponse[];
+}
+
+export interface SourceRemovalResponse {
+  sourceId: string;
+  unavailableTrackCount: number;
+  affectedAlbumCount: number;
+  affectedArtistCount: number;
+  durationMs: number;
 }
 
 export interface CreatePathSourceRequest {
@@ -779,7 +802,7 @@ export interface LogListResponse {
   items: LogEntryResponse[];
 }
 
-export type RealtimeTopic = "tasks" | "catalog" | "logs";
+export type RealtimeTopic = "tasks" | "catalog" | "logs" | "sources";
 
 export interface RealtimeTicketResponse {
   ticket: string;
@@ -832,6 +855,13 @@ export interface RealtimeCatalogChangedEvent {
   changedCount: number;
 }
 
+export interface RealtimeSourceRemovalProgressEvent
+  extends SourceRemovalProgressResponse {
+  type: "source.removal.progress";
+  eventId: number;
+  occurredAt: string;
+}
+
 export interface RealtimeLogAppendedEvent {
   type: "log.appended";
   eventId: number;
@@ -846,4 +876,5 @@ export type RealtimeServerMessage =
   | RealtimeErrorMessage
   | RealtimeTaskUpdatedEvent
   | RealtimeCatalogChangedEvent
+  | RealtimeSourceRemovalProgressEvent
   | RealtimeLogAppendedEvent;

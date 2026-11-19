@@ -36,6 +36,7 @@ const MAX_TITLE_LENGTH = 160;
 const MAX_FAILURE_SUMMARY_LENGTH = 500;
 const TERMINAL_TASK_LIMIT = 500;
 const TERMINAL_TASK_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+export const MAX_TASK_RETRIES = 2;
 
 export interface EnqueueTaskInput {
   kind: TaskKind;
@@ -469,6 +470,58 @@ export class TaskService {
     this.publishTask(id, true);
   }
 
+  private async retryOrFail(
+    id: string,
+    failure: TaskExecutionError,
+  ): Promise<void> {
+    const task = await this.database.orm.Task.first({ id });
+    if (task?.status !== "running") return;
+    if (failure.status === "failed" && task.retryCount < MAX_TASK_RETRIES) {
+      const retryCount = task.retryCount + 1;
+      const retried = await this.database.orm.Task.where({
+        id,
+        status: "running",
+      }).updateAndCount({
+        status: "queued",
+        retryCount,
+        startedAt: null,
+        completedAt: null,
+        failureSummary: null,
+        failureMessage: null,
+        progressCompleted: null,
+        progressTotal: null,
+        details: "[]",
+      });
+      if (retried > 0) {
+        this.logPublisher?.(
+          "warn",
+          `Task retry ${retryCount}/${MAX_TASK_RETRIES}: ${
+            task.title
+          }. ${failure.message}`,
+        );
+        this.publishTask(id, true);
+        this.kick();
+        return;
+      }
+    }
+    const summary = boundedText(failure.message, MAX_FAILURE_SUMMARY_LENGTH);
+    const failed = await this.database.orm.Task.where({
+      id,
+      status: "running",
+    }).updateAndCount({
+      status: failure.status,
+      completedAt: new Date(),
+      failureSummary: summary,
+      failureMessage: serializeMessage(failure.messageDescriptor),
+    });
+    if (failed === 0) return;
+    this.logPublisher?.(
+      failure.status === "interrupted" ? "warn" : "error",
+      `Task ${failure.status}: ${task.title}. ${summary}`,
+    );
+    this.publishTask(id, true);
+  }
+
   async stop(id: string): Promise<TaskRow | null> {
     await this.stopTasks([id]);
     return this.get(id);
@@ -747,12 +800,7 @@ export class TaskService {
                   "failed",
                   message("api.message.taskFailedGeneric"),
                 );
-          await this.fail(
-            running.id,
-            failure.message,
-            failure.status,
-            failure.messageDescriptor,
-          );
+          await this.retryOrFail(running.id, failure);
         }
       } finally {
         this.runningTasks.delete(running.id);

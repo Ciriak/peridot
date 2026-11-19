@@ -8,6 +8,7 @@ import {
 } from "@peridot/contracts";
 import { createMemberSession, createTestContext } from "./helpers.js";
 import {
+  MAX_TASK_RETRIES,
   metadataDetails,
   normalizeTaskDetails,
   TaskService,
@@ -521,6 +522,70 @@ test("task failures and restart interruptions are visible in server logs", async
           entry.message.includes("Task failed: Broken Jellyfin sync."),
       ),
     );
+  } finally {
+    await tasks.close();
+    await context.close();
+  }
+});
+
+test("failed task executions are retried twice before terminal failure", async () => {
+  const context = await createTestContext();
+  await context.app.close();
+  const tasks = new TaskService(context.database);
+  const seenRetryCounts: number[] = [];
+  tasks.registerExecutor("catalog_fetch", async (task) => {
+    seenRetryCounts.push(task.retryCount);
+    throw new Error("Catalog request failed");
+  });
+  await tasks.initialize();
+
+  try {
+    const queued = await tasks.enqueue({
+      kind: "catalog_fetch",
+      title: "Retry exhausted catalog task",
+    });
+    await waitForStatus(tasks, queued.id, "failed");
+
+    const failed = await tasks.get(queued.id);
+    assert.deepEqual(
+      seenRetryCounts,
+      Array.from({ length: MAX_TASK_RETRIES + 1 }, (_, index) => index),
+    );
+    assert.equal(failed?.status, "failed");
+    assert.equal(failed?.retryCount, MAX_TASK_RETRIES);
+    assert.equal(failed?.failureSummary, "The task could not be completed.");
+    assert.ok(failed?.completedAt);
+  } finally {
+    await tasks.close();
+    await context.close();
+  }
+});
+
+test("a failed task completes when an automatic retry succeeds", async () => {
+  const context = await createTestContext();
+  await context.app.close();
+  const tasks = new TaskService(context.database);
+  let executions = 0;
+  tasks.registerExecutor("catalog_fetch", async () => {
+    executions += 1;
+    if (executions <= MAX_TASK_RETRIES) {
+      throw new Error("Temporary catalog failure");
+    }
+  });
+  await tasks.initialize();
+
+  try {
+    const queued = await tasks.enqueue({
+      kind: "catalog_fetch",
+      title: "Eventually successful catalog task",
+    });
+    await waitForStatus(tasks, queued.id, "completed");
+
+    const completed = await tasks.get(queued.id);
+    assert.equal(executions, MAX_TASK_RETRIES + 1);
+    assert.equal(completed?.status, "completed");
+    assert.equal(completed?.retryCount, MAX_TASK_RETRIES);
+    assert.equal(completed?.failureSummary, null);
   } finally {
     await tasks.close();
     await context.close();

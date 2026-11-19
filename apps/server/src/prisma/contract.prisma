@@ -269,6 +269,7 @@ model Task {
   failureSummary    String?
   failureMessage    String?
   forceRefresh      Int       @default(0)
+  retryCount        Int       @default(0)
   createdAt         DateTime  @default(now())
   startedAt         DateTime?
   completedAt       DateTime?
@@ -301,12 +302,14 @@ model Source {
   credentialCiphertext String?
   lastSyncedAt         DateTime?
   position             Int      @default(0)
+  removedAt            DateTime?
   artworkJobs          ArtworkJob[]
   createdAt            DateTime @default(now())
   updatedAt            DateTime @onCreate(now()) @onUpdate(now())
 
   @@index([kind])
   @@index([position])
+  @@index([removedAt])
   @@unique([kind, sourceIdentity])
 }
 
@@ -334,6 +337,7 @@ model CatalogState {
 
 model CatalogTrack {
   id               String   @id
+  sourceId         String?
   mediaType        String   @default("music")
   title            String
   artist           String
@@ -365,6 +369,7 @@ model CatalogTrack {
   @@index([durationMs, id], map: "ct_duration")
   @@index([available, id])
   @@index([mediaType, available, id])
+  @@index([sourceId])
   @@index([albumId])
   @@index([albumFolderKey, normalizedAlbum, id])
   @@index([duplicateOfId])
@@ -391,6 +396,7 @@ model CatalogAlbum {
   coverTrackId     String?
   artistCredits    String?
   trackCount       Int      @default(0)
+  availableTrackCount Int   @default(0)
   durationMs       Int?
   releaseYear      Int?
   latestPublishedAt DateTime?
@@ -409,6 +415,7 @@ model CatalogArtist {
   displayName           String          @default("")
   normalizedDisplayName String          @default("")
   trackCount            Int             @default(0)
+  availableTrackCount   Int             @default(0)
   albumCount            Int             @default(0)
   durationMs            Int?
   updatedAt             DateTime        @onCreate(now()) @onUpdate(now())

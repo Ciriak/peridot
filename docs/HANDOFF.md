@@ -1,5 +1,49 @@
 # Peridot handoff
 
+## Automatic task retries
+
+Failed durable task executions now return the same task to the queue for up to
+two additional attempts. The initial run plus two retries retains the task ID,
+source and parent context, while stale progress, details, and failure state are
+cleared before each retry. Cancellation, interruption, parent failure, missing
+executors, and completed runs with partial errors remain terminal paths.
+
+The `Task.retryCount` migration is additive and defaults existing rows to zero.
+Behavioral tests cover exhaustion after three failed executions and recovery when
+a retry succeeds.
+
+Verification:
+
+- `pnpm --filter @peridot/server exec tsx scripts/run-tests.ts --test-name-pattern "failed task executions are retried|a failed task completes"` (40 passing)
+- `pnpm --filter @peridot/server test` (193 passing)
+- `pnpm --filter @peridot/server typecheck`
+- `pnpm --filter @peridot/server db:validate` (14-migration graph current)
+- `pnpm lint`
+- `pnpm format:check`
+- `pnpm --filter @peridot/server build`
+
+The additive migration was applied to the local development database and the `db`
+ref was advanced to `8dc83638331d`.
+
+Known limits:
+
+- Retries begin immediately from the durable queue; there is no backoff schedule.
+- The retry count is internal and is not exposed in the public task response.
+
+Feature files:
+
+- `apps/server/src/tasks.ts`
+- `apps/server/test/tasks.test.ts`
+- `apps/server/src/prisma/contract.prisma`
+- `apps/server/migrations/app/20261119T2046_retry_failed_tasks`
+- `apps/server/migrations/snapshots/8dc83638331d0248c225aa4c02d8fd63cf01fbd1c34c464d02566bdaf8e740c7`
+- `apps/server/migrations/app/refs/db.json`
+
+Uncommitted changes:
+
+- The server contract, retry migration and snapshot, DB ref, task service,
+  task tests, decisions, development notes, and this handoff.
+
 ## Automatic duplicate track hiding
 
 Peridot now groups the same recording across all sources and media types,

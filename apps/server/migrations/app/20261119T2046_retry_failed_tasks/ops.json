@@ -1,0 +1,54 @@
+[
+  {
+    "id": "column.Task.retryCount",
+    "label": "Add column retryCount on Task",
+    "summary": "Adds column retryCount on Task",
+    "operationClass": "additive",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "column",
+        "name": "retryCount",
+        "table": "Task"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"retryCount\" is missing",
+        "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM pragma_table_info(?1) WHERE \"name\" = ?2",
+        "params": [
+          "Task",
+          "retryCount"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "column \"retryCount\" on \"Task\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"retryCount\"",
+        "sql": "ALTER TABLE \"Task\" ADD COLUMN \"retryCount\" INTEGER DEFAULT 0 NOT NULL"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"retryCount\" exists",
+        "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM pragma_table_info(?1) WHERE \"name\" = ?2",
+        "params": [
+          "Task",
+          "retryCount"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "column \"retryCount\" on \"Task\""
+        }
+      },
+      {
+        "description": "verify column \"retryCount\" on \"Task\" has type INTEGER and is required",
+        "sql": "SELECT COUNT(*) > 0 FROM pragma_table_info('Task') WHERE name = 'retryCount' AND LOWER(type) = 'integer' AND \"notnull\" = 1"
+      }
+    ]
+  }
+]
