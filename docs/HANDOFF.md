@@ -1,5 +1,27 @@
 # Peridot handoff
 
+## Queue endpoint TypeScript regression
+
+The queue absence test now probes GET and PUT with separate literal request
+objects. The previous method union bypassed Fastify's method-specific `inject`
+overloads, and its conditional `payload` conflicted with
+`exactOptionalPropertyTypes`. The test behavior and 404 assertions are
+unchanged.
+
+Verification:
+
+- `pnpm --filter @peridot/server typecheck`
+- `pnpm --filter @peridot/server exec tsx scripts/run-tests.ts --test-name-pattern "playback queue state is not exposed by the server"` (39 passing)
+- Focused Prettier check for `apps/server/test/queue.test.ts`
+
+Uncommitted changes:
+
+- The queue test typing correction and this handoff section.
+
+Next:
+
+- No follow-up required.
+
 ## Scrolled detail header dock
 
 Album, artist, playlist, audiobook, and podcast detail pages now show a compact
