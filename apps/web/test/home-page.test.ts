@@ -12,34 +12,57 @@ test("home greeting follows the local time of day", () => {
   assert.equal(homeGreetingPeriod(new Date(2026, 10, 13, 23, 59)), "evening");
 });
 
-test("home suggests albums and tracks from the catalog", async () => {
+test("home shows liked tracks and the quick-pick content without categories", async () => {
   const [homePage, albumPage] = await Promise.all([
     readFile(new URL("../app/pages/index.vue", import.meta.url), "utf8"),
     readFile(new URL("../app/pages/albums/index.vue", import.meta.url), "utf8"),
   ]);
 
-  assert.match(homePage, /useCatalogAlbumQuery/);
-  assert.match(homePage, /useCatalogTrackQuery/);
-  assert.match(homePage, /selectHomeAlbumSuggestions/);
-  assert.match(homePage, /selectHomeTrackSuggestions/);
-  assert.match(homePage, /likedArtistKeys/);
-  assert.doesNotMatch(homePage, /likedAlbumIds|likedTrackIds/);
-  assert.match(homePage, /limit: HOME_CANDIDATE_LIMIT/g);
-  assert.match(homePage, /<AlbumCard/);
-  assert.match(homePage, /:album="album"/);
-  assert.match(homePage, /<TrackTable/);
-  assert.match(homePage, /:tracks="suggestedTracks"/);
+  assert.match(homePage, /LIKED_TRACKS_PLAYLIST_ID/);
+  assert.match(homePage, /useQuickPicks/);
+  assert.match(homePage, /usePlaylistList\(\{ limit: 1 \}\)/);
+  assert.match(
+    homePage,
+    /<PlaylistCard v-if="likedPlaylist" :playlist="likedPlaylist"/,
+  );
+  assert.match(
+    homePage,
+    /import AlbumCard from "\.\.\/components\/AlbumCard\.vue"/,
+  );
+  assert.match(
+    homePage,
+    /<AlbumCard\s+v-if="item\.kind === 'album'"\s+:album="item\.album"\s+\/>/,
+    "Home renders album items with the same AlbumCard used by the album list",
+  );
+  assert.match(
+    homePage,
+    /<QuickPickTile v-else :item="item" layout="card" \/>/,
+  );
+  assert.match(homePage, /<QuickPickTile/);
+  assert.match(homePage, /:item="item"/);
+  assert.match(homePage, /layout="card"/);
+  assert.match(
+    homePage,
+    /useInteractionFrozenList\(quickPickItems\)/,
+    "Home keeps the quick-pick order stable during interactions",
+  );
+  assert.match(homePage, /@pointerenter="beginPointerInteraction"/);
+  assert.match(homePage, /@focusout="handleQuickPickFocusOut"/);
+  assert.doesNotMatch(homePage, /useCatalogAlbumQuery|useCatalogTrackQuery/);
+  assert.doesNotMatch(homePage, /useLikes/);
+  assert.doesNotMatch(homePage, /<TrackTable/);
   assert.match(homePage, /page\.home\.suggestions/);
   assert.match(homePage, /page\.home\.noSuggestions/);
-  assert.match(homePage, /page\.home\.playlists/);
-  assert.match(homePage, /void loadLikes\(\)/);
+  assert.doesNotMatch(homePage, /page\.home\.tracks/);
+  assert.doesNotMatch(homePage, /page\.home\.playlists/);
+  assert.doesNotMatch(homePage, /<h3/);
+  assert.match(homePage, /void loadPlaylists\(\)/);
+  assert.match(homePage, /void loadQuickPicks\(\)/);
   assert.match(homePage, /useUser\(\)/);
   assert.match(homePage, /HOME_GREETING_KEYS/);
   assert.match(homePage, /username: user\.value\?\.displayName \?\? ""/);
   assert.doesNotMatch(homePage, /page\.home\.heading/);
   assert.doesNotMatch(homePage, /page\.home\.description/);
-  assert.doesNotMatch(homePage, /liked: true/);
-  assert.doesNotMatch(homePage, /page\.home\.liked/);
   assert.doesNotMatch(homePage, /<ArtistCard/);
   assert.doesNotMatch(homePage, /useCatalogArtistQuery/);
   assert.doesNotMatch(homePage, /count\.suggestion/);
@@ -48,9 +71,17 @@ test("home suggests albums and tracks from the catalog", async () => {
   assert.doesNotMatch(homePage, /library-search/);
   assert.doesNotMatch(homePage, /<LibraryScreen/);
 
-  const gridClass = /grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-5/;
-  assert.match(homePage, gridClass);
+  assert.match(
+    homePage,
+    /grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5/,
+    "Liked tracks and quick picks share one equal-card grid",
+  );
   assert.match(albumPage, /<VirtualCardGrid[\s\S]*layout="wide"/);
+  assert.match(
+    albumPage,
+    /<AlbumCard :album="item" \/>/,
+    "The album list keeps its shared AlbumCard usage",
+  );
 });
 
 test("the standalone library route and navigation item are removed", async () => {

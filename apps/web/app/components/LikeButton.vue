@@ -43,7 +43,7 @@ const actionLabel = computed(() =>
       aria-hidden="true"
       class="transition-colors"
       :class="[
-        compact ? 'size-3' : large ? 'size-7' : 'size-6',
+        compact ? 'size-4' : large ? 'size-7' : 'size-6',
         liked && 'text-primary',
       ]"
     />

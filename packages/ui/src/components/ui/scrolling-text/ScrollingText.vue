@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { HTMLAttributes } from "vue";
-import { useMediaQuery, usePreferredReducedMotion } from "@vueuse/core";
+import { usePreferredReducedMotion } from "@vueuse/core";
 import { cn } from "cn";
 import {
   computed,
@@ -11,7 +11,6 @@ import {
   watch,
 } from "vue";
 import {
-  SCROLLING_TEXT_MOBILE_MEDIA_QUERY,
   scrollingTextActivatesAutomatically,
   scrollingTextKeyframes,
   scrollingTextLoopDuration,
@@ -34,9 +33,8 @@ const hovering = ref(false);
 const focused = ref(false);
 const overflowing = ref(false);
 const reducedMotion = usePreferredReducedMotion();
-const mobile = useMediaQuery(SCROLLING_TEXT_MOBILE_MEDIA_QUERY);
 const activatesAutomatically = computed(() =>
-  scrollingTextActivatesAutomatically(props.mode, mobile.value),
+  scrollingTextActivatesAutomatically(props.mode),
 );
 
 let animation: Animation | null = null;

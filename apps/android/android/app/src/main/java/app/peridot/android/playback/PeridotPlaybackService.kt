@@ -90,7 +90,7 @@ class PeridotPlaybackService : MediaLibraryService() {
 
         override fun onPlayerError(error: PlaybackException) {
             val failedTrackId = player.currentMediaItem?.mediaId?.substringAfter(':')
-            if (playbackStartedTrackId != failedTrackId) {
+            if (failedTrackId != null && playbackStartedTrackId != failedTrackId) {
                 val nextRetry = PlaybackStartRetryPolicy.nextRetryCount(playbackStartRetries)
                 if (nextRetry != null) {
                     playbackStartRetries = nextRetry
@@ -99,6 +99,10 @@ class PeridotPlaybackService : MediaLibraryService() {
                     publishSnapshot()
                     return
                 }
+            }
+            if (failedTrackId != null && skipFailedTrack(failedTrackId)) {
+                publishSnapshot()
+                return
             }
             lastError = error.message ?: "Playback failed."
             publishSnapshot()
@@ -275,6 +279,28 @@ class PeridotPlaybackService : MediaLibraryService() {
         activeQueue = queue
         activeTracks = queue.tracks.associateBy(TrackSnapshot::id)
         replaceQueue(queue, prepare = false)
+    }
+
+    private fun skipFailedTrack(failedTrackId: String): Boolean {
+        val currentIndex = player.currentMediaItemIndex
+        if (currentIndex == C.INDEX_UNSET) return false
+        val repeatMode = player.repeatMode
+        if (repeatMode == Player.REPEAT_MODE_ONE) {
+            player.repeatMode = Player.REPEAT_MODE_OFF
+        }
+        val nextIndex = player.nextMediaItemIndex
+        player.repeatMode = repeatMode
+        if (nextIndex == C.INDEX_UNSET || nextIndex == currentIndex) return false
+        val nextTrackId = player.getMediaItemAt(nextIndex).mediaId.substringAfter(':')
+        if (nextTrackId == failedTrackId) return false
+
+        lastError = null
+        playbackStartRetries = 0
+        playbackStartedTrackId = null
+        player.seekTo(nextIndex, 0L)
+        player.prepare()
+        player.play()
+        return true
     }
 
     private fun handleCommand(intent: Intent) {

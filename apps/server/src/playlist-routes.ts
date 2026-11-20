@@ -9,6 +9,10 @@ import type {
   ReorderPlaylistItemsRequest,
   TrackResponse,
 } from "@peridot/contracts";
+import {
+  LIKED_TRACKS_PLAYLIST_ID,
+  LIKED_TRACKS_PLAYLIST_NAME,
+} from "@peridot/contracts";
 import type { FastifyInstance } from "fastify";
 import type { Database } from "./database.js";
 import { canonicalTrackId } from "./duplicate-resolver.js";
@@ -125,6 +129,7 @@ function summaryFromDetail(
 ): PlaylistSummaryResponse {
   return {
     id: playlist.id,
+    kind: playlist.kind,
     name: playlist.name,
     trackCount: playlist.trackCount,
     availableTrackCount: playlist.availableTrackCount,
@@ -134,6 +139,103 @@ function summaryFromDetail(
     containsTrack: playlist.containsTrack,
     createdAt: playlist.createdAt,
     updatedAt: playlist.updatedAt,
+  };
+}
+
+function isLikedTracksPlaylist(playlistId: string): boolean {
+  return playlistId === LIKED_TRACKS_PLAYLIST_ID;
+}
+
+function sendAutomaticPlaylistReadOnly(reply: Parameters<typeof sendError>[0]) {
+  return sendError(
+    reply,
+    409,
+    "automatic_playlist_read_only",
+    "Automatic playlists cannot be edited or removed",
+    message("api.message.automaticPlaylistReadOnly"),
+  );
+}
+
+async function materializeLikedTracksPlaylist(
+  database: Database,
+  playbackTokens: PlaybackTokenService,
+  userId: string,
+  containsTrackId: string | null = null,
+): Promise<PlaylistDetailResponse> {
+  const likes = await database.orm.TrackLike.where({ userId })
+    .orderBy([(like) => like.createdAt.desc(), (like) => like.trackId.desc()])
+    .all();
+  const likedTrackIds = [...new Set(likes.map((like) => like.trackId))];
+  const [trackRows, projections] = await Promise.all([
+    likedTrackIds.length
+      ? database.orm.Track.where((track) => track.id.in(likedTrackIds)).all()
+      : Promise.resolve([]),
+    likedTrackIds.length
+      ? database.orm.CatalogTrack.where((track) =>
+          track.id.in(likedTrackIds),
+        ).all()
+      : Promise.resolve([]),
+  ]);
+  const trackById = new Map(trackRows.map((track) => [track.id, track]));
+  const albumIdByTrack = new Map(
+    projections.map((track) => [track.id, track.albumId]),
+  );
+  const musicLikes = likes.flatMap((like) => {
+    const track = trackById.get(like.trackId);
+    if (!track || track.mediaType !== "music" || track.duplicateOfId !== null) {
+      return [];
+    }
+    return [{ track, likedAt: like.createdAt }];
+  });
+  const entries = musicLikes.map(
+    ({ track }, position): PlaylistEntryResponse => {
+      const trackResponse = toTrackResponse(
+        track,
+        playbackTokens,
+        true,
+        albumIdByTrack.get(track.id) ?? null,
+      );
+      return {
+        id: `liked:${track.id}`,
+        position,
+        title: trackResponse.title,
+        artist: trackResponse.artist,
+        artists: trackResponse.artists,
+        album: trackResponse.album,
+        durationMs: trackResponse.durationMs,
+        coverUrl: trackResponse.coverUrl,
+        available: trackResponse.available,
+        liked: true,
+        track: trackResponse,
+        external: null,
+      };
+    },
+  );
+  const durations = entries.flatMap((entry) =>
+    entry.durationMs === null ? [] : [entry.durationMs],
+  );
+  const createdAt =
+    musicLikes.at(-1)?.likedAt.toISOString() ?? new Date(0).toISOString();
+  const updatedAt =
+    musicLikes[0]?.likedAt.toISOString() ?? new Date(0).toISOString();
+
+  return {
+    id: LIKED_TRACKS_PLAYLIST_ID,
+    kind: "liked-tracks",
+    name: LIKED_TRACKS_PLAYLIST_NAME,
+    trackCount: entries.length,
+    availableTrackCount: entries.filter((entry) => entry.available).length,
+    durationMs: durations.length
+      ? durations.reduce((total, duration) => total + duration, 0)
+      : null,
+    coverUrls: [],
+    liked: false,
+    containsTrack: containsTrackId
+      ? entries.some((entry) => entry.track?.id === containsTrackId)
+      : false,
+    createdAt,
+    updatedAt,
+    entries,
   };
 }
 
@@ -259,6 +361,7 @@ async function materializePlaylist(
 
   return {
     id: playlist.id,
+    kind: "manual",
     name: playlist.name,
     trackCount: entries.length,
     availableTrackCount: entries.filter((entry) => entry.available).length,
@@ -341,8 +444,24 @@ export async function registerPlaylistRoutes(
       }
       const userId = request.authenticatedUser!.id;
       const terms = searchTerms([request.query.query]);
-      let playlists: PlaylistRow[];
-      let totalCount: number;
+      const likedPlaylist = terms.every((term) =>
+        normalizeSearchText(LIKED_TRACKS_PLAYLIST_NAME).includes(term),
+      )
+        ? await materializeLikedTracksPlaylist(
+            database,
+            playbackTokens,
+            userId,
+            containsTrackId,
+          )
+        : null;
+      const automaticCount = likedPlaylist ? 1 : 0;
+      const manualOffset = Math.max(0, offset - automaticCount);
+      const manualLimit = Math.max(
+        0,
+        limit - (offset < automaticCount ? 1 : 0),
+      );
+      let playlists: PlaylistRow[] = [];
+      let manualTotalCount: number;
       if (terms.length) {
         const orderedPlaylists = await database.orm.Playlist.where({
           userId,
@@ -356,24 +475,28 @@ export async function registerPlaylistRoutes(
           const name = normalizeSearchText(playlist.name);
           return terms.every((term) => name.includes(term));
         });
-        totalCount = matchingPlaylists.length;
-        playlists = matchingPlaylists.slice(offset, offset + limit);
+        manualTotalCount = matchingPlaylists.length;
+        playlists = matchingPlaylists.slice(
+          manualOffset,
+          manualOffset + manualLimit,
+        );
       } else {
-        const [page, aggregate] = await Promise.all([
-          database.orm.Playlist.where({ userId })
+        const aggregate = await database.orm.Playlist.where({
+          userId,
+        }).aggregate((value) => ({
+          count: value.count(),
+        }));
+        manualTotalCount = aggregate.count;
+        if (manualLimit > 0) {
+          playlists = await database.orm.Playlist.where({ userId })
             .orderBy([
               (playlist) => playlist.updatedAt.desc(),
               (playlist) => playlist.id.desc(),
             ])
-            .offset(offset)
-            .limit(limit)
-            .all(),
-          database.orm.Playlist.where({ userId }).aggregate((value) => ({
-            count: value.count(),
-          })),
-        ]);
-        playlists = page;
-        totalCount = aggregate.count;
+            .offset(manualOffset)
+            .limit(manualLimit)
+            .all();
+        }
       }
       const details = await Promise.all(
         playlists.map((playlist) =>
@@ -386,11 +509,18 @@ export async function registerPlaylistRoutes(
           ),
         ),
       );
+      const items = [
+        ...(offset === 0 && likedPlaylist
+          ? [summaryFromDetail(likedPlaylist)]
+          : []),
+        ...details.map(summaryFromDetail),
+      ];
+      const totalCount = manualTotalCount + automaticCount;
       return {
-        items: details.map(summaryFromDetail),
+        items,
         totalCount,
         nextOffset:
-          offset + details.length < totalCount ? offset + details.length : null,
+          offset + items.length < totalCount ? offset + items.length : null,
       };
     },
   );
@@ -422,6 +552,9 @@ export async function registerPlaylistRoutes(
     "/api/playlists/:id",
     async (request, reply) => {
       const userId = request.authenticatedUser!.id;
+      if (isLikedTracksPlaylist(request.params.id)) {
+        return materializeLikedTracksPlaylist(database, playbackTokens, userId);
+      }
       const playlist = await loadOwnedPlaylist(
         database,
         userId,
@@ -436,6 +569,9 @@ export async function registerPlaylistRoutes(
     "/api/playlists/:id",
     async (request, reply) => {
       const userId = request.authenticatedUser!.id;
+      if (isLikedTracksPlaylist(request.params.id)) {
+        return sendAutomaticPlaylistReadOnly(reply);
+      }
       const playlist = await loadOwnedPlaylist(
         database,
         userId,
@@ -468,6 +604,9 @@ export async function registerPlaylistRoutes(
     "/api/playlists/:id",
     async (request, reply) => {
       const userId = request.authenticatedUser!.id;
+      if (isLikedTracksPlaylist(request.params.id)) {
+        return sendAutomaticPlaylistReadOnly(reply);
+      }
       const playlist = await loadOwnedPlaylist(
         database,
         userId,
@@ -483,6 +622,9 @@ export async function registerPlaylistRoutes(
     "/api/playlists/:id/items",
     async (request, reply) => {
       const userId = request.authenticatedUser!.id;
+      if (isLikedTracksPlaylist(request.params.id)) {
+        return sendAutomaticPlaylistReadOnly(reply);
+      }
       const playlist = await loadOwnedPlaylist(
         database,
         userId,
@@ -614,6 +756,9 @@ export async function registerPlaylistRoutes(
     "/api/playlists/:id/items/:itemId",
     async (request, reply) => {
       const userId = request.authenticatedUser!.id;
+      if (isLikedTracksPlaylist(request.params.id)) {
+        return sendAutomaticPlaylistReadOnly(reply);
+      }
       const playlist = await loadOwnedPlaylist(
         database,
         userId,
@@ -660,6 +805,9 @@ export async function registerPlaylistRoutes(
     Body: Partial<ReorderPlaylistItemsRequest>;
   }>("/api/playlists/:id/items/order", async (request, reply) => {
     const userId = request.authenticatedUser!.id;
+    if (isLikedTracksPlaylist(request.params.id)) {
+      return sendAutomaticPlaylistReadOnly(reply);
+    }
     const playlist = await loadOwnedPlaylist(
       database,
       userId,

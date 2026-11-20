@@ -21,8 +21,8 @@ import FadeInImage from "../components/FadeInImage.vue";
 import LikeButton from "../components/LikeButton.vue";
 import MobilePlayer from "../components/MobilePlayer.vue";
 import QueueDrawer from "../components/QueueDrawer.vue";
+import ServerConnectionIndicator from "../components/ServerConnectionIndicator.vue";
 import SidebarQuickPicks from "../components/SidebarQuickPicks.vue";
-import TaskProgressIndicator from "../components/TaskProgressIndicator.vue";
 import TrackContextMenu from "../components/TrackContextMenu.vue";
 import { useCachedArtwork } from "../composables/use-cached-artwork";
 import { useLikes } from "../composables/use-likes";
@@ -99,7 +99,11 @@ const {
 } = useLibraryPlayer();
 const navigation = [
   { labelKey: "navigation.home", to: "/", icon: icons.home },
-  { labelKey: "navigation.likedSongs", to: "/liked", icon: icons.heart },
+  {
+    labelKey: "navigation.likedSongs",
+    to: "/playlists/liked",
+    icon: icons.heart,
+  },
   {
     labelKey: "navigation.playlists",
     to: "/playlists",
@@ -136,8 +140,11 @@ const currentTrackLikeTarget = computed(() =>
 const currentCoverUrl = computed(() =>
   trackCoverUrl(address.value ?? "", active.value?.coverUrl ?? null),
 );
-const { artworkUrl: currentCoverImageUrl, failed: coverFailed } =
-  useCachedArtwork(currentCoverUrl);
+const {
+  artworkUrl: currentCoverImageUrl,
+  failed: coverFailed,
+  fromCache: coverFromCache,
+} = useCachedArtwork(currentCoverUrl);
 const currentTrackTitleRoute = computed(() =>
   active.value ? trackAlbumTitleRoute(active.value) : null,
 );
@@ -324,7 +331,7 @@ onBeforeUnmount(stopLoadingRay);
                 t(item.labelKey)
               }}
               <span
-                v-if="item.to === '/liked'"
+                v-if="item.to === '/playlists/liked'"
                 class="ml-auto text-xs text-muted-foreground"
                 >{{ likedTrackCount }}</span
               >
@@ -379,7 +386,7 @@ onBeforeUnmount(stopLoadingRay);
             </KbdGroup>
           </div>
           <div class="ml-auto flex shrink-0 items-center gap-2">
-            <TaskProgressIndicator />
+            <ServerConnectionIndicator />
             <Button as-child variant="ghost" size="icon" class="rounded-full">
               <NuxtLink
                 to="/settings/account"
@@ -450,6 +457,7 @@ onBeforeUnmount(stopLoadingRay);
               v-if="currentCoverImageUrl && !coverFailed"
               :key="currentCoverImageUrl"
               :src="currentCoverImageUrl"
+              :fade-in="!coverFromCache"
               loading="eager"
               class="absolute inset-0 scale-125 object-left blur-3xl"
             />
@@ -488,6 +496,7 @@ onBeforeUnmount(stopLoadingRay);
               v-if="currentCoverImageUrl && !coverFailed"
               :key="currentCoverImageUrl"
               :src="currentCoverImageUrl"
+              :fade-in="!coverFromCache"
               loading="eager"
               class="absolute inset-0"
               @error="coverFailed = true"

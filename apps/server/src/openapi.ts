@@ -350,6 +350,7 @@ const schemas: Record<string, SchemaObject> = {
   }),
   PlaylistSummaryResponse: objectSchema({
     id: stringSchema,
+    kind: enumeration("manual", "liked-tracks"),
     name: stringSchema,
     trackCount: integerSchema,
     availableTrackCount: integerSchema,
@@ -384,6 +385,7 @@ const schemas: Record<string, SchemaObject> = {
   }),
   PlaylistDetailResponse: objectSchema({
     id: stringSchema,
+    kind: enumeration("manual", "liked-tracks"),
     name: stringSchema,
     trackCount: integerSchema,
     availableTrackCount: integerSchema,
@@ -600,18 +602,6 @@ const schemas: Record<string, SchemaObject> = {
       }),
     ],
   },
-  QueueResponse: objectSchema({
-    trackIds: arrayOf(stringSchema),
-    activeTrackId: nullable(stringSchema),
-    shuffleEnabled: booleanSchema,
-    shuffleTrackIds: arrayOf(stringSchema),
-  }),
-  ReplaceQueueRequest: objectSchema({
-    trackIds: arrayOf(stringSchema),
-    activeTrackId: nullable(stringSchema),
-    shuffleEnabled: booleanSchema,
-    shuffleTrackIds: arrayOf(stringSchema),
-  }),
   QuickPickTrackResponse: objectSchema({
     kind: { const: "track" },
     key: stringSchema,
@@ -1298,7 +1288,7 @@ const routes: Record<string, OpenApiOperation> = {
   ),
   "GET /api/playlists": jsonOperation(
     "Playlists",
-    "List playlists",
+    "List manual and automatic playlists",
     ref("PlaylistListResponse"),
     {
       query: objectSchema(
@@ -1320,24 +1310,24 @@ const routes: Record<string, OpenApiOperation> = {
   ),
   "GET /api/playlists/:id": jsonOperation(
     "Playlists",
-    "Get a playlist",
+    "Get a manual or automatic playlist",
     ref("PlaylistDetailResponse"),
   ),
   "PATCH /api/playlists/:id": jsonOperation(
     "Playlists",
-    "Rename a playlist",
+    "Rename a manual playlist",
     ref("PlaylistDetailResponse"),
     { body: ref("UpdatePlaylistRequest") },
   ),
   "DELETE /api/playlists/:id": jsonOperation(
     "Playlists",
-    "Delete a playlist",
+    "Delete a manual playlist",
     null,
     { status: 204 },
   ),
   "POST /api/playlists/:id/items": operationWithResponses(
     "Playlists",
-    "Add an item to a playlist",
+    "Add an item to a manual playlist",
     {
       200: response(ref("AddPlaylistItemResponse"), "Item already present"),
       201: response(ref("AddPlaylistItemResponse"), "Playlist item added"),
@@ -1346,26 +1336,15 @@ const routes: Record<string, OpenApiOperation> = {
   ),
   "DELETE /api/playlists/:id/items/:itemId": jsonOperation(
     "Playlists",
-    "Remove a playlist item",
+    "Remove a manual playlist item",
     null,
     { status: 204 },
   ),
   "PUT /api/playlists/:id/items/order": jsonOperation(
     "Playlists",
-    "Reorder playlist items",
+    "Reorder manual playlist items",
     ref("PlaylistDetailResponse"),
     { body: ref("ReorderPlaylistItemsRequest") },
-  ),
-  "GET /api/queue": jsonOperation(
-    "Queue",
-    "Get the current playback queue",
-    ref("QueueResponse"),
-  ),
-  "PUT /api/queue": jsonOperation(
-    "Queue",
-    "Replace the current playback queue",
-    ref("QueueResponse"),
-    { body: ref("ReplaceQueueRequest") },
   ),
   "POST /api/tracks/:id/plays": jsonOperation(
     "Quick picks",
@@ -1648,10 +1627,6 @@ const tags = [
     description: "Private likes across catalog item types.",
   },
   {
-    name: "Queue",
-    description: "Durable per-user playback queue.",
-  },
-  {
     name: "Quick picks",
     description: "Playback-derived ranked suggestions.",
   },
@@ -1725,7 +1700,6 @@ function fallbackTag(method: string, path: string): string {
   if (path.startsWith("/api/podcasts")) return "Podcasts";
   if (path.startsWith("/api/playlists")) return "Playlists";
   if (path.startsWith("/api/likes")) return "Likes";
-  if (path.startsWith("/api/queue")) return "Queue";
   if (path.startsWith("/api/quick-picks")) return "Quick picks";
   if (path.startsWith("/api/tasks")) return "Tasks";
   if (path.startsWith("/api/realtime")) return "Realtime";

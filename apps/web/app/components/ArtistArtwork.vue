@@ -19,7 +19,11 @@ const { address } = useServer();
 const resolvedUrl = computed(() =>
   trackCoverUrl(address.value ?? "", props.imageUrl),
 );
-const { artworkUrl, failed: imageFailed } = useCachedArtwork(resolvedUrl);
+const {
+  artworkUrl,
+  failed: imageFailed,
+  fromCache,
+} = useCachedArtwork(resolvedUrl);
 </script>
 
 <template>
@@ -32,6 +36,7 @@ const { artworkUrl, failed: imageFailed } = useCachedArtwork(resolvedUrl);
     <FadeInImage
       v-if="artworkUrl && !imageFailed"
       :src="artworkUrl"
+      :fade-in="!fromCache"
       class="absolute inset-0"
       @error="imageFailed = true"
     />

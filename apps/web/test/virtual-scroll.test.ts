@@ -12,7 +12,7 @@ test("catalog card grids virtualize responsive rows against the main scroll", as
         "../app/pages/artists/[artist].vue",
         "../app/pages/audiobooks/index.vue",
         "../app/pages/podcasts/index.vue",
-        "../app/pages/playlists.vue",
+        "../app/pages/playlists/index.vue",
       ].map((path) => readFile(new URL(path, import.meta.url), "utf8")),
     );
 

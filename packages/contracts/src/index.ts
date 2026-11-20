@@ -213,8 +213,14 @@ export interface ArtistListResponse {
   catalogRevision: number;
 }
 
+export const LIKED_TRACKS_PLAYLIST_ID = "liked";
+export const LIKED_TRACKS_PLAYLIST_NAME = "Liked tracks";
+
+export type PlaylistKind = "manual" | "liked-tracks";
+
 export interface PlaylistSummaryResponse {
   id: string;
+  kind: PlaylistKind;
   name: string;
   trackCount: number;
   availableTrackCount: number;
@@ -358,20 +364,6 @@ export type QuickPickItemResponse =
 
 export interface QuickPickListResponse {
   items: QuickPickItemResponse[];
-}
-
-export interface QueueResponse {
-  trackIds: string[];
-  activeTrackId: string | null;
-  shuffleEnabled: boolean;
-  shuffleTrackIds: string[];
-}
-
-export interface ReplaceQueueRequest {
-  trackIds: string[];
-  activeTrackId?: string | null;
-  shuffleEnabled?: boolean;
-  shuffleTrackIds?: string[];
 }
 
 export interface TrackLikeResponse {

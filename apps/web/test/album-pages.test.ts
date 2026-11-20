@@ -36,7 +36,7 @@ test("albums have list and detail routes with derived groups", async () => {
   assert.match(albumCard, /:to="albumRoute\(album\)"/);
   assert.match(
     albumCard,
-    /<\/NuxtLink>[\s\S]*<Badge v-if="!album\.available"[\s\S]*<ScrollingText class="w-full text-xs text-muted-foreground">\s+<TrackArtistLinks :artists="album\.artists" \/>/,
+    /<\/NuxtLink>[\s\S]*<Badge v-if="!albumPlayable"[\s\S]*<ScrollingText class="w-full text-xs text-muted-foreground">\s+<TrackArtistLinks :artists="album\.artists" \/>/,
     "Album card artist credits link to their artist pages",
   );
   assert.match(albumCard, /useLikes\(\)/);
@@ -51,18 +51,20 @@ test("albums have list and detail routes with derived groups", async () => {
   assert.match(albumCard, /togglePlayback\(\)/);
   assert.match(
     albumCard,
-    /async function toggleAlbumPlayback\(\) \{\s+if \(albumActive\.value && playing\.value\) \{\s+togglePlayback\(\);\s+return;\s+\}\s+if \(!address\.value[^\n]*!albumPlayable\.value\) return;/,
-    "The album card pauses while playing but starts a collection from its first track otherwise",
+    /async function toggleAlbumPlayback\(\) \{[\s\S]*?await toggleCollectionPlayback\(albumTarget\.value, async \(\) => \{/,
+    "The album card starts the whole collection through the optimistic player target",
+  );
+  assert.match(
+    albumCard,
+    /if \(serverStatus\.value === "lost" \|\| !address\.value \|\| !token\.value\) \{\s+return saved;\s+\}/,
+    "Offline albums do not require live-server credentials to play saved tracks",
   );
   assert.match(
     albumCard,
     /t\('card\.playAlbum', \{\s+album: album\.title,\s+artist: album\.artist,\s+\}\)/,
     "The album card play label explains that playback starts from the first track",
   );
-  assert.match(
-    albumCard,
-    /albumActive && playing \? icons\.pause : icons\.play/,
-  );
+  assert.match(albumCard, /albumPlaybackActive \? icons\.pause : icons\.play/);
   assert.doesNotMatch(
     albumCard,
     /albumLoading|Loading \$\{album\.title\}/,
@@ -72,9 +74,51 @@ test("albums have list and detail routes with derived groups", async () => {
   assert.match(albumCard, /group-hover:opacity-100/);
   assert.doesNotMatch(albumCard, /group-focus-within:opacity-100/);
   assert.match(albumCard, /focus-visible:opacity-100/);
+  assert.match(albumCard, /max-sm:pointer-events-auto/);
+  assert.match(albumCard, /max-sm:size-11/);
+  assert.match(albumCard, /max-sm:opacity-100/);
+  assert.match(
+    albumCard,
+    /compact \? 'size-4 max-sm:size-5' : 'size-5 max-sm:size-6'/,
+    "The play icon grows on mobile-sized album cards",
+  );
   assert.match(albumCard, /cursor-pointer/);
   assert.match(albumCard, /compact \? 'icon-sm' : 'icon'/);
   assert.match(albumCard, /compact \? 'bottom-1 right-1' : 'bottom-2 right-2'/);
+  assert.match(
+    albumCard,
+    /:aria-disabled="!albumControlEnabled"[\s\S]*?@click\.prevent\.stop="toggleAlbumPlayback"/,
+    "Unavailable album cards expose a disabled, guarded play control",
+  );
+  assert.match(
+    albumCard,
+    /const albumControlEnabled = computed\(\s+\(\) => albumPlayable\.value \|\| \(albumActive\.value && playing\.value\),\s+\);/,
+    "An album that is currently playing can still be paused",
+  );
+  assert.match(
+    albumCard,
+    /const albumFullySaved = computed\(\s+\(\) =>\s+Boolean\(props\.album\.trackCount\) &&\s+savedTrackCount\.value >= props\.album\.trackCount,\s+\);/,
+    "Offline playback requires the whole album to be saved",
+  );
+  assert.match(
+    albumCard,
+    /const albumPlayable = computed\(\s+\(\) =>\s+Boolean\(props\.album\.trackCount\) &&\s+\(albumFullySaved\.value \|\|\s+\(serverStatus\.value !== "lost" && props\.album\.available\)\),\s+\);/,
+    "A partially saved album is unavailable offline",
+  );
+  assert.match(
+    albumCard,
+    /<TooltipProvider :delay-duration="150">\s+<TooltipRoot :disabled="albumControlEnabled">\s+<TooltipTrigger as-child>/,
+  );
+  assert.match(
+    albumCard,
+    /<TooltipContent\s+v-if="!albumControlEnabled"[\s\S]*?\{\{ t\("trackTable\.unavailable"\) \}\}/,
+    "Unavailable album cards explain the disabled play control in a tooltip",
+  );
+  assert.match(
+    albumCard,
+    /<Badge v-if="!albumPlayable" variant="secondary" class="mt-1">/,
+    "Partially available albums display their unavailable state",
+  );
   assert.doesNotMatch(
     detailPage,
     /<AlbumCard/,
@@ -100,11 +144,11 @@ test("albums have list and detail routes with derived groups", async () => {
     "Album detail does not override cached query loading state",
   );
   assert.match(detailPage, /route\.query\.artist/);
-  assert.match(detailPage, /playCollection\(/);
+  assert.match(detailPage, /toggleCollectionPlayback\(/);
   assert.match(detailPage, /togglePlayback\(\)/);
   assert.match(
     detailPage,
-    /function toggleAlbumPlayback\(\) \{\s+if \(albumActive\.value && playing\.value\) \{\s+togglePlayback\(\);\s+return;\s+\}\s+void playWholeAlbum\(\);/,
+    /function toggleAlbumPlayback\(\) \{[\s\S]*?void playWholeAlbum\(\);/,
     "The album header pauses while playing but starts a collection from its first track otherwise",
   );
   assert.match(
@@ -112,10 +156,7 @@ test("albums have list and detail routes with derived groups", async () => {
     /t\('card\.playAlbum', \{\s+album: album\.title,\s+artist: album\.artist,\s+\}\)/,
     "The album header play label explains that playback starts from the first track",
   );
-  assert.match(
-    detailPage,
-    /albumActive && playing \? icons\.pause : icons\.play/,
-  );
+  assert.match(detailPage, /albumPlaybackActive \? icons\.pause : icons\.play/);
   assert.doesNotMatch(
     detailPage,
     /albumPlaybackLoading/,
@@ -137,8 +178,18 @@ test("albums have list and detail routes with derived groups", async () => {
   assert.match(detailPage, /<LikeButton/);
   assert.match(
     detailPage,
-    /<div class="absolute right-4 top-4">\s+<AlbumOfflineButton :album="album"\s+\/>\s+<\/div>/,
-    "Album details place an icon-only whole-album offline action at the top right",
+    /<LikeButton\s+class="absolute right-4 top-4"/,
+    "Album details place the like action at the top right of the header",
+  );
+  assert.match(
+    detailPage,
+    /<AlbumContextMenu :album="album">\s+<section\s+aria-labelledby="album-heading"/,
+    "The whole album header is the context-menu trigger",
+  );
+  assert.doesNotMatch(
+    detailPage,
+    /<AlbumOfflineButton/,
+    "The album header does not render a separate offline action",
   );
   assert.match(
     detailPage,
@@ -192,8 +243,8 @@ test("albums have list and detail routes with derived groups", async () => {
   );
   assert.match(
     trackTable,
-    /showArtists !== false[\s\S]*?item\.track\.mediaType === 'music'[\s\S]*?<NuxtLink\s+:to="artistRoute\(\{ name: artist \}\)"[\s\S]*?hover:underline/,
-    "Album track-list artists use direct links with the standard link treatment",
+    /showArtists !== false[\s\S]*?item\.track\.mediaType === 'music'[\s\S]*?<TrackArtistLinks :artists="trackArtistNames\(item\.track\)" \/>/,
+    "Album track-list artists use the shared menu-aware artist links",
   );
   assert.match(
     trackTable,
@@ -207,8 +258,18 @@ test("albums have list and detail routes with derived groups", async () => {
   );
   assert.match(
     trackTable,
-    /:to="trackAlbumRoute\(item\.track\)"/,
-    "Track-list album names link to their album in every table variant",
+    /<AlbumLink :album="albumSummaryFromTrack\(item\.track\)" \/>/,
+    "Track-list album names use the shared menu-aware album link in every table variant",
+  );
+  assert.match(
+    trackTable,
+    /v-if="variant !== 'album'"\s+role="columnheader"[\s\S]*?trackTable\.offline[\s\S]*?v-if="allowTrackLike !== false"[\s\S]*?trackTable\.favorite/,
+    "The album track-list header replaces the offline column with the like column",
+  );
+  assert.match(
+    trackTable,
+    /v-if="variant !== 'album'"\s+role="cell"[\s\S]*?<DownloadProgressTooltip[\s\S]*?v-if="allowTrackLike !== false && item\.track\.mediaType === 'music'"[\s\S]*?<LikeButton/,
+    "The album track-list row replaces the offline action with the like button",
   );
   assert.doesNotMatch(
     trackTable,
@@ -218,8 +279,8 @@ test("albums have list and detail routes with derived groups", async () => {
   assert.match(detailPage, /t\("page\.album\.unavailable"\)/);
   assert.match(
     detailPage,
-    /<div class="mb-2">\s+<Button as-child variant="ghost" size="lg"/,
-    "The album back control is large with tighter page spacing",
+    /<BackButton \/>/,
+    "The album back control uses the shared history-aware button",
   );
   assert.doesNotMatch(
     detailPage,

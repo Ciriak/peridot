@@ -78,7 +78,7 @@ test("paginated app surfaces do not render manual load-more buttons", async () =
     "../app/pages/artists/index.vue",
     "../app/pages/artists/[artist].vue",
     "../app/pages/audiobooks/index.vue",
-    "../app/pages/playlists.vue",
+    "../app/pages/playlists/index.vue",
     "../app/pages/podcasts/index.vue",
     "../app/pages/search.vue",
     "../app/pages/settings/tasks.vue",

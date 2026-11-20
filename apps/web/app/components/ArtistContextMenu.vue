@@ -28,7 +28,7 @@ import {
   DialogRoot,
   DialogTitle,
 } from "reka-ui";
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { useCatalogRevision } from "../composables/use-catalog-query";
 import { useLikes } from "../composables/use-likes";
 import { useLibraryPlayer } from "../composables/use-library-player";
@@ -46,6 +46,7 @@ import {
   applyArtistMetadata,
   isAuthenticationRedirectError,
   isPeridotNetworkError,
+  listArtists,
   listArtistMetadataCandidates,
   revertArtistMetadata,
 } from "../lib/peridot-client";
@@ -57,7 +58,7 @@ import {
 } from "../lib/toasts";
 
 const props = defineProps<{
-  artist: ArtistSummaryResponse;
+  artist: string | ArtistSummaryResponse;
 }>();
 const { t } = useI18n();
 const { errorMessage } = useLocalizedMessage();
@@ -67,7 +68,7 @@ const queryClient = useQueryClient();
 const { status: serverStatus } = useServerConnection();
 const serverLost = computed(() => serverStatus.value === "lost");
 const { token } = useSession();
-const { playCollection } = useLibraryPlayer();
+const { toggleCollectionPlayback } = useLibraryPlayer();
 const { savedTracks, tracksMatching } = useOfflineTracks();
 const { invalidate: invalidateCatalog } = useCatalogRevision();
 const {
@@ -83,51 +84,125 @@ const metadataLoading = ref(false);
 const metadataError = ref("");
 const applyingMetadataId = ref("");
 const revertingMetadata = ref(false);
+const resolvingArtist = ref(false);
+const referenceName = computed(() =>
+  typeof props.artist === "string" ? props.artist : props.artist.name,
+);
+const resolvedArtist = ref<ArtistSummaryResponse | null>(
+  typeof props.artist === "string" ? null : props.artist,
+);
+const artistSummary = computed<ArtistSummaryResponse>(
+  () =>
+    resolvedArtist.value ?? {
+      id: "",
+      name: referenceName.value,
+      localName: referenceName.value,
+      albumCount: 0,
+      trackCount: 0,
+      durationMs: null,
+      imageUrl: null,
+      metadata: null,
+      available: false,
+      liked: false,
+    },
+);
 const target = computed<LikeTarget>(() => ({
   kind: "artist",
-  name: props.artist.localName,
+  name: artistSummary.value.localName,
 }));
 const playable = computed(() => {
-  if (!props.artist.trackCount) return false;
+  if (!artistSummary.value.id || !artistSummary.value.trackCount) return false;
   if (!serverLost.value) return true;
-  const localName = props.artist.localName.trim().toLowerCase();
+  const localName = artistSummary.value.localName.trim().toLowerCase();
   return savedTracks.value.some((saved) =>
     trackArtistNames(saved.track).some(
       (name) => name.trim().toLowerCase() === localName,
     ),
   );
 });
+const artistPlaybackTarget = computed(() => ({
+  kind: "artist" as const,
+  id: artistSummary.value.id,
+}));
+
+watch(
+  () => props.artist,
+  (value) => {
+    resolvedArtist.value = typeof value === "string" ? null : value;
+  },
+);
+
+async function onContextMenuOpen(open: boolean) {
+  if (!open || resolvedArtist.value?.id || resolvingArtist.value) return;
+  if (!scope.value || !token.value) return;
+  resolvingArtist.value = true;
+  try {
+    const result = await queryClient.fetchQuery({
+      queryKey: queryKeys.artists(scope.value, {
+        query: referenceName.value,
+        limit: 20,
+        sort: "name",
+      }),
+      queryFn: () =>
+        listArtists(scope.value!.serverAddress, token.value!, {
+          query: referenceName.value,
+          limit: 20,
+          sort: "name",
+        }),
+      staleTime: 60_000,
+    });
+    const normalized = referenceName.value.trim().toLowerCase();
+    resolvedArtist.value =
+      result.items.find(
+        (candidate) => candidate.localName.trim().toLowerCase() === normalized,
+      ) ??
+      result.items.find(
+        (candidate) => candidate.name.trim().toLowerCase() === normalized,
+      ) ??
+      null;
+  } catch {
+    resolvedArtist.value = null;
+  } finally {
+    resolvingArtist.value = false;
+  }
+}
 
 async function playArtist() {
-  if (!address.value || !token.value || !playable.value) return;
-  const playSaved = async () => {
-    const localName = props.artist.localName.trim().toLowerCase();
-    const saved = await tracksMatching((track) =>
-      trackArtistNames(track).some(
-        (name) => name.trim().toLowerCase() === localName,
-      ),
+  if (!playable.value) return;
+  try {
+    const result = await toggleCollectionPlayback(
+      artistPlaybackTarget.value,
+      async () => {
+        const localName = artistSummary.value.localName.trim().toLowerCase();
+        const saved = await tracksMatching((track) =>
+          trackArtistNames(track).some(
+            (name) => name.trim().toLowerCase() === localName,
+          ),
+        );
+        if (serverLost.value || !address.value || !token.value) return saved;
+        try {
+          return await loadCollectionTracks(address.value, token.value, {
+            artistId: artistSummary.value.id,
+          });
+        } catch (reason) {
+          if (isPeridotNetworkError(reason)) return saved;
+          throw reason;
+        }
+      },
     );
-    if (saved.length) {
-      playCollection(saved);
-    } else {
+    if (result === "empty") {
       notifyOfflineTrackFailed(
-        props.artist.name,
+        artistSummary.value.name,
         t("error.offlineCollectionEmpty"),
       );
     }
-  };
-  if (serverLost.value) {
-    await playSaved();
-    return;
-  }
-  try {
-    playCollection(
-      await loadCollectionTracks(address.value, token.value, {
-        artistId: props.artist.id,
-      }),
-    );
   } catch (reason) {
-    if (isPeridotNetworkError(reason)) await playSaved();
+    if (!isPeridotNetworkError(reason)) {
+      notifyOfflineTrackFailed(
+        artistSummary.value.name,
+        errorMessage(reason, "error.catalogLoad"),
+      );
+    }
   }
 }
 
@@ -148,14 +223,14 @@ async function searchMetadata() {
     const result = await queryClient.fetchQuery({
       queryKey: queryKeys.artistMetadataCandidates(
         scope.value,
-        props.artist.id,
+        artistSummary.value.id,
         queryValue,
       ),
       queryFn: () =>
         listArtistMetadataCandidates(
           scope.value!.serverAddress,
           token.value!,
-          props.artist.id,
+          artistSummary.value.id,
           queryValue,
         ),
       staleTime: 0,
@@ -188,11 +263,11 @@ async function chooseMetadata(candidate: ArtistMetadataCandidateResponse) {
     await applyArtistMetadata(
       address.value ?? "",
       token.value ?? "",
-      props.artist.id,
+      artistSummary.value.id,
       body,
     );
     metadataOpen.value = false;
-    notifyArtistMetadataMatched(props.artist.name);
+    notifyArtistMetadataMatched(artistSummary.value.name);
     invalidateCatalog();
   } catch (reason) {
     if (isAuthenticationRedirectError(reason)) return;
@@ -211,14 +286,14 @@ async function revertMetadata() {
     await revertArtistMetadata(
       address.value ?? "",
       token.value ?? "",
-      props.artist.id,
+      artistSummary.value.id,
     );
-    notifyArtistMetadataReverted(props.artist.name);
+    notifyArtistMetadataReverted(artistSummary.value.name);
     invalidateCatalog();
   } catch (reason) {
     if (isAuthenticationRedirectError(reason)) return;
     notifyMetadataUpdateFailed(
-      props.artist.name,
+      artistSummary.value.name,
       errorMessage(reason, "components.metadata.restoreError"),
     );
   } finally {
@@ -228,13 +303,13 @@ async function revertMetadata() {
 </script>
 
 <template>
-  <ContextMenu>
+  <ContextMenu @update:open="onContextMenuOpen">
     <ContextMenuTrigger as-child>
       <slot />
     </ContextMenuTrigger>
     <ContextMenuContent class="w-64">
       <ContextMenuLabel>
-        <ScrollingText class="w-full">{{ artist.name }}</ScrollingText>
+        <ScrollingText class="w-full">{{ artistSummary.name }}</ScrollingText>
       </ContextMenuLabel>
       <ContextMenuSeparator />
       <ContextMenuItem :disabled="!playable" @select="playArtist">
@@ -256,30 +331,33 @@ async function revertMetadata() {
         }}
       </ContextMenuItem>
       <ContextMenuItem as-child>
-        <NuxtLink :to="artistRoute(artist)">
+        <NuxtLink :to="artistRoute(artistSummary)">
           <Icon :icon="icons.user" aria-hidden="true" />
-          {{ t("context.openArtist", { artist: artist.name }) }}
+          {{ t("context.openArtist", { artist: artistSummary.name }) }}
         </NuxtLink>
       </ContextMenuItem>
-      <ContextMenuItem :disabled="serverLost" @select="openMetadataDialog">
+      <ContextMenuItem
+        :disabled="serverLost || !artistSummary.id"
+        @select="openMetadataDialog"
+      >
         <Icon :icon="icons.edit" aria-hidden="true" />
         {{
-          artist.metadata
+          artistSummary.metadata
             ? t("context.artistMetadataCorrect")
             : t("context.artistMetadataMatch")
         }}
       </ContextMenuItem>
-      <template v-if="artist.metadata">
+      <template v-if="artistSummary.metadata">
         <ContextMenuLabel class="text-xs">
           {{
             t("context.matchedWith", {
-              provider: artist.metadata.name.providerName,
+              provider: artistSummary.metadata.name.providerName,
             })
           }}
         </ContextMenuLabel>
         <ContextMenuItem as-child>
           <a
-            :href="artist.metadata.name.sourceUrl"
+            :href="artistSummary.metadata.name.sourceUrl"
             target="_blank"
             rel="noreferrer"
           >
@@ -288,7 +366,7 @@ async function revertMetadata() {
           </a>
         </ContextMenuItem>
         <ContextMenuItem
-          :disabled="revertingMetadata || serverLost"
+          :disabled="revertingMetadata || serverLost || !artistSummary.id"
           @select="revertMetadata"
         >
           <Icon :icon="icons.restart" aria-hidden="true" />
@@ -314,7 +392,7 @@ async function revertMetadata() {
         <DialogDescription class="mt-1 text-sm text-muted-foreground">
           {{
             t("context.artistMetadataDialogDescription", {
-              artist: artist.name,
+              artist: artistSummary.name,
             })
           }}
         </DialogDescription>

@@ -4,7 +4,6 @@ import test, { mock } from "node:test";
 import {
   isPeridotServerReachable,
   serverConnectionRestored,
-  topbarStatus,
 } from "../app/lib/server-connection.ts";
 import {
   reportServerReachability,
@@ -100,14 +99,6 @@ test("server health checks require the exact Peridot health signature", async ()
     }),
     false,
   );
-});
-
-test("a lost server connection replaces task progress in the topbar", () => {
-  assert.equal(topbarStatus("lost", false), "connection-lost");
-  assert.equal(topbarStatus("lost", true), "connection-lost");
-  assert.equal(topbarStatus("connected", true), "task-progress");
-  assert.equal(topbarStatus("connected", false), "idle");
-  assert.equal(topbarStatus("unknown", false), "idle");
 });
 
 test("only a lost connection becoming healthy is treated as back online", () => {

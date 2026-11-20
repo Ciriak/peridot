@@ -32,7 +32,13 @@ const props = defineProps<{
 const { t } = useI18n();
 const { address } = useServer();
 const { token } = useSession();
-const { active, playing, playCollection, togglePlayback } = useLibraryPlayer();
+const {
+  active,
+  playing,
+  toggleCollectionPlayback: togglePlayerCollectionPlayback,
+  togglePlayback,
+  isPlaybackTargetActive,
+} = useLibraryPlayer();
 const { savedTracks, tracksMatching } = useOfflineTracks();
 const { status: serverStatus } = useServerConnection();
 const {
@@ -95,10 +101,22 @@ const liked = computed(() =>
 const coverUrl = computed(() =>
   trackCoverUrl(address.value ?? "", props.collection.coverUrl),
 );
-const { artworkUrl: coverImageUrl, failed: coverFailed } =
-  useCachedArtwork(coverUrl);
+const {
+  artworkUrl: coverImageUrl,
+  failed: coverFailed,
+  fromCache: coverFromCache,
+} = useCachedArtwork(coverUrl);
 const collectionActive = computed(
   () => active.value?.albumId === props.collection.id,
+);
+const collectionTarget = computed(() => ({
+  kind: "collection" as const,
+  id: props.collection.id,
+}));
+const collectionPlaybackActive = computed(
+  () =>
+    isPlaybackTargetActive(collectionTarget.value) ||
+    (collectionActive.value && playing.value),
 );
 const playable = computed(
   () =>
@@ -117,30 +135,40 @@ const countKey = computed(() =>
 );
 
 async function toggleCollectionPlayback() {
-  if (collectionActive.value && playing.value) {
+  if (
+    collectionActive.value &&
+    playing.value &&
+    !isPlaybackTargetActive(collectionTarget.value)
+  ) {
     togglePlayback();
     return;
   }
-  if (!address.value || !token.value || !playable.value) return;
-  const playSaved = async () => {
-    const saved = await tracksMatching(
-      (track) => track.albumId === props.collection.id,
-    );
-    if (saved.length) playCollection(saved);
-  };
-  if (serverStatus.value === "lost" || !props.collection.available) {
-    await playSaved();
-    return;
-  }
+  if (!playable.value) return;
   try {
-    playCollection(
-      await loadCollectionTracks(address.value, token.value, {
-        collectionId: props.collection.id,
-        mediaType: props.collection.mediaType,
-      }),
-    );
-  } catch (reason) {
-    if (isPeridotNetworkError(reason)) await playSaved();
+    await togglePlayerCollectionPlayback(collectionTarget.value, async () => {
+      const saved = await tracksMatching(
+        (track) => track.albumId === props.collection.id,
+      );
+      if (
+        serverStatus.value === "lost" ||
+        !props.collection.available ||
+        !address.value ||
+        !token.value
+      ) {
+        return saved;
+      }
+      try {
+        return await loadCollectionTracks(address.value, token.value, {
+          collectionId: props.collection.id,
+          mediaType: props.collection.mediaType,
+        });
+      } catch (reason) {
+        if (isPeridotNetworkError(reason)) return saved;
+        throw reason;
+      }
+    });
+  } catch {
+    // The shared player exposes playback failures.
   }
 }
 </script>
@@ -169,6 +197,7 @@ async function toggleCollectionPlayback() {
             <FadeInImage
               v-if="coverImageUrl && !coverFailed"
               :src="coverImageUrl"
+              :fade-in="!coverFromCache"
               class="absolute inset-0"
               @error="coverFailed = true"
             />
@@ -180,7 +209,7 @@ async function toggleCollectionPlayback() {
           class="pointer-events-none absolute bottom-2 right-2 z-10 cursor-pointer rounded-full opacity-0 shadow-md transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
           :disabled="!playable"
           :aria-label="
-            collectionActive && playing
+            collectionPlaybackActive
               ? t('card.pauseCollection', {
                   collection: collection.title,
                 })
@@ -192,7 +221,7 @@ async function toggleCollectionPlayback() {
           @click.prevent.stop="toggleCollectionPlayback"
         >
           <Icon
-            :icon="collectionActive && playing ? icons.pause : icons.play"
+            :icon="collectionPlaybackActive ? icons.pause : icons.play"
             aria-hidden="true"
             class="size-5"
           />

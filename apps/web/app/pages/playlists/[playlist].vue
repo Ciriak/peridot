@@ -15,6 +15,8 @@ import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { computed, onMounted, ref } from "vue";
 import AddTracksToPlaylistDialog from "../../components/AddTracksToPlaylistDialog.vue";
+import BackButton from "../../components/BackButton.vue";
+import ListSearchBar from "../../components/ListSearchBar.vue";
 import LikeButton from "../../components/LikeButton.vue";
 import PlaylistCover from "../../components/PlaylistCover.vue";
 import PlaylistDeleteDialog from "../../components/PlaylistDeleteDialog.vue";
@@ -23,6 +25,7 @@ import PlaylistOfflineButton from "../../components/PlaylistOfflineButton.vue";
 import PlaylistTrackList from "../../components/PlaylistTrackList.vue";
 import { useLikes } from "../../composables/use-likes";
 import { useLibraryPlayer } from "../../composables/use-library-player";
+import { useListSearch } from "../../composables/use-list-search";
 import { useOfflineTracks } from "../../composables/use-offline-tracks";
 import {
   usePlaylist,
@@ -32,7 +35,10 @@ import { useServer } from "../../composables/use-server";
 import { useServerConnection } from "../../composables/use-server-connection";
 import { icons } from "../../lib/icons";
 import { formatTrackDuration, trackCoverUrl } from "../../lib/library";
-import { playlistPlayableTracks } from "../../lib/playlists";
+import {
+  filterPlaylistEntries,
+  playlistPlayableTracks,
+} from "../../lib/playlists";
 
 definePageMeta({ name: "playlist-detail" });
 
@@ -49,7 +55,10 @@ const activePlaylistId = useState<string | null>(
 );
 const playlistId = computed(() => String(route.params.playlist ?? ""));
 const { playlist, loading, error, load } = usePlaylist(playlistId);
+const { query, searchQuery, clear } = useListSearch();
+const automatic = computed(() => playlist.value?.kind === "liked-tracks");
 const {
+  likedTrackIds,
   loaded: likesLoaded,
   toggle: toggleLike,
   isPending: isLikePending,
@@ -73,8 +82,19 @@ const likeTarget = computed(() => ({
 const savedIds = computed(
   () => new Set(savedTracks.value.map((saved) => saved.track.id)),
 );
+const currentEntries = computed(() => {
+  const entries = playlist.value?.entries ?? [];
+  if (!automatic.value || !likesLoaded.value) return entries;
+  const liked = new Set(likedTrackIds.value);
+  return entries.filter((entry) => entry.track && liked.has(entry.track.id));
+});
+const filteredEntries = computed(() =>
+  automatic.value
+    ? filterPlaylistEntries(currentEntries.value, searchQuery.value)
+    : currentEntries.value,
+);
 const playableTracks = computed(() =>
-  playlistPlayableTracks(playlist.value?.entries ?? [], {
+  playlistPlayableTracks(currentEntries.value, {
     serverLost: status.value === "lost",
     savedTrackIds: savedIds.value,
   }),
@@ -82,6 +102,10 @@ const playableTracks = computed(() =>
 const playlistActive = computed(() =>
   Boolean(playlist.value && activePlaylistId.value === playlist.value.id),
 );
+const playlistTarget = computed(() => ({
+  kind: "playlist" as const,
+  id: playlist.value?.id ?? "",
+}));
 useHead(() => ({
   title: playlist.value
     ? t("page.playlist.title", { playlist: playlist.value.name })
@@ -91,7 +115,7 @@ useHead(() => ({
 function playFrom(track: TrackResponse) {
   if (!playlist.value || !playableTracks.value.length) return;
   activePlaylistId.value = playlist.value.id;
-  playCollection(playableTracks.value, track.id);
+  playCollection(playableTracks.value, track.id, playlistTarget.value);
 }
 
 function togglePlaylistPlayback() {
@@ -164,14 +188,7 @@ onMounted(() => void load());
 </script>
 
 <template>
-  <div class="mb-2">
-    <Button as-child variant="ghost" size="lg">
-      <NuxtLink to="/playlists">
-        <Icon :icon="icons.arrowLeft" aria-hidden="true" />
-        {{ t("page.playlist.back") }}
-      </NuxtLink>
-    </Button>
-  </div>
+  <BackButton />
 
   <div
     v-if="loading"
@@ -204,13 +221,17 @@ onMounted(() => void load());
         class="absolute right-4 top-4"
       />
       <div class="w-40 shrink-0">
-        <PlaylistCover :cover-urls="coverUrls" />
+        <PlaylistCover :cover-urls="coverUrls" :kind="playlist.kind" />
       </div>
       <div class="min-w-0 flex-1 space-y-3 pr-12">
         <p
           class="text-xs font-medium uppercase tracking-wide text-muted-foreground"
         >
-          {{ t("page.playlist.label") }}
+          {{
+            automatic
+              ? t("page.playlist.automaticLabel")
+              : t("page.playlist.label")
+          }}
         </p>
         <h1 id="playlist-heading" class="text-3xl font-semibold tracking-tight">
           <ScrollingText class="w-full">{{ playlist.name }}</ScrollingText>
@@ -234,6 +255,7 @@ onMounted(() => void load());
             />
           </Button>
           <LikeButton
+            v-if="!automatic"
             :liked="playlist.liked"
             :label="playlist.name"
             :pending="isLikePending(likeTarget)"
@@ -241,6 +263,7 @@ onMounted(() => void load());
             @toggle="toggleLike(likeTarget)"
           />
           <Button
+            v-if="!automatic"
             variant="ghost"
             size="icon-lg"
             :disabled="status === 'lost'"
@@ -251,6 +274,7 @@ onMounted(() => void load());
             <Icon :icon="icons.edit" aria-hidden="true" class="size-5" />
           </Button>
           <Button
+            v-if="!automatic"
             variant="ghost"
             size="icon-lg"
             :disabled="status === 'lost'"
@@ -264,8 +288,8 @@ onMounted(() => void load());
             {{
               t(
                 "count.track",
-                { count: playlist.trackCount },
-                playlist.trackCount,
+                { count: currentEntries.length },
+                currentEntries.length,
               )
             }}
           </Badge>
@@ -291,7 +315,20 @@ onMounted(() => void load());
         <h2 id="playlist-tracks-heading" class="text-lg font-semibold">
           {{ t("playlistTracks.heading") }}
         </h2>
+        <ListSearchBar
+          v-if="automatic && currentEntries.length"
+          v-model="query"
+          :label="
+            t('components.listSearch.label', {
+              collection: playlist.name,
+            })
+          "
+          :clear-label="t('components.listSearch.clear')"
+          class="w-full md:max-w-sm"
+          @clear="clear"
+        />
         <Button
+          v-if="!automatic"
           variant="outline"
           :disabled="status === 'lost' || mutating"
           @click="addOpen = true"
@@ -301,13 +338,35 @@ onMounted(() => void load());
         </Button>
       </div>
       <PlaylistTrackList
-        v-if="playlist.entries.length"
-        :entries="playlist.entries"
-        :editable="status !== 'lost' && !mutating"
+        v-if="filteredEntries.length"
+        :entries="filteredEntries"
+        :editable="!automatic && status !== 'lost' && !mutating"
+        :read-only="automatic"
+        :show-track-likes="!automatic"
         @play="playFrom"
         @remove="removeEntry"
         @reorder="reorder"
       />
+      <div
+        v-else-if="automatic"
+        role="status"
+        class="space-y-2 rounded-lg border bg-card p-6 text-card-foreground"
+      >
+        <p class="font-medium">
+          {{
+            currentEntries.length
+              ? t("page.playlist.noMatches")
+              : t("page.playlist.automaticEmptyTitle")
+          }}
+        </p>
+        <p class="text-sm text-muted-foreground">
+          {{
+            currentEntries.length
+              ? t("page.playlist.automaticNoMatches")
+              : t("page.playlist.automaticEmptyDescription")
+          }}
+        </p>
+      </div>
       <div
         v-else
         class="space-y-4 rounded-lg border bg-card p-6 text-card-foreground"
@@ -323,6 +382,7 @@ onMounted(() => void load());
     </section>
 
     <PlaylistNameDialog
+      v-if="!automatic"
       v-model:open="renameOpen"
       mode="rename"
       :initial-name="playlist.name"
@@ -331,12 +391,17 @@ onMounted(() => void load());
       @submit="rename"
     />
     <PlaylistDeleteDialog
+      v-if="!automatic"
       v-model:open="deleteOpen"
       :name="playlist.name"
       :pending="mutating"
       @confirm="removePlaylist"
     />
-    <AddTracksToPlaylistDialog v-model:open="addOpen" :playlist="playlist" />
+    <AddTracksToPlaylistDialog
+      v-if="!automatic"
+      v-model:open="addOpen"
+      :playlist="playlist"
+    />
   </template>
   <section
     v-else

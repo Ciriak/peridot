@@ -58,7 +58,7 @@ import {
   notifyMetadataUpdateFailed,
   notifyOfflineTrackFailed,
 } from "../lib/toasts";
-import AddTrackToPlaylistDialog from "./AddTrackToPlaylistDialog.vue";
+import AddTrackToPlaylistSubmenu from "./AddTrackToPlaylistSubmenu.vue";
 import DownloadProgressTooltip from "./DownloadProgressTooltip.vue";
 
 const props = defineProps<{ track: TrackResponse }>();
@@ -97,7 +97,6 @@ const {
 } = useLikes();
 const downloading = ref(false);
 const addingToQueue = ref(false);
-const playlistOpen = ref(false);
 const metadataOpen = ref(false);
 const metadataQuery = ref("");
 const candidates = ref<MetadataCandidateResponse[]>([]);
@@ -286,10 +285,7 @@ async function revertMetadata() {
         <Icon :icon="icons.addToQueue" aria-hidden="true" />
         {{ addingToQueue ? t("common.adding") : t("context.addToQueue") }}
       </ContextMenuItem>
-      <ContextMenuItem :disabled="serverLost" @select="playlistOpen = true">
-        <Icon :icon="icons.plus" aria-hidden="true" />
-        {{ t("context.addToPlaylist") }}
-      </ContextMenuItem>
+      <AddTrackToPlaylistSubmenu :disabled="serverLost" :track="track" />
       <ContextMenuItem
         v-if="music"
         :disabled="
@@ -448,8 +444,6 @@ async function revertMetadata() {
       </ContextMenuItem>
     </ContextMenuContent>
   </ContextMenu>
-
-  <AddTrackToPlaylistDialog v-model:open="playlistOpen" :track="track" />
 
   <DialogRoot v-model:open="metadataOpen">
     <DialogPortal>

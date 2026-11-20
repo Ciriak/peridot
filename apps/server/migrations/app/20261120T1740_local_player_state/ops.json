@@ -1,0 +1,96 @@
+[
+  {
+    "id": "dropTable.QueueItem",
+    "label": "Drop table \"QueueItem\"",
+    "summary": "Drops table QueueItem which is not in the contract",
+    "operationClass": "destructive",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "table",
+        "name": "QueueItem"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"QueueItem\" exists",
+        "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
+        "params": [
+          "table",
+          "QueueItem"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"QueueItem\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "drop table \"QueueItem\"",
+        "sql": "DROP TABLE \"QueueItem\""
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"QueueItem\" is gone",
+        "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
+        "params": [
+          "table",
+          "QueueItem"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"QueueItem\""
+        }
+      }
+    ]
+  },
+  {
+    "id": "dropTable.QueueState",
+    "label": "Drop table \"QueueState\"",
+    "summary": "Drops table QueueState which is not in the contract",
+    "operationClass": "destructive",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "table",
+        "name": "QueueState"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"QueueState\" exists",
+        "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
+        "params": [
+          "table",
+          "QueueState"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "table \"QueueState\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "drop table \"QueueState\"",
+        "sql": "DROP TABLE \"QueueState\""
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"QueueState\" is gone",
+        "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
+        "params": [
+          "table",
+          "QueueState"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "table \"QueueState\""
+        }
+      }
+    ]
+  }
+]

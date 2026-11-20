@@ -5,7 +5,7 @@ import test from "node:test";
 test("catalog metadata uses overflow-aware scrolling wherever it can be clipped", async () => {
   const surfaces = [
     ["../app/components/AddTracksToPlaylistDialog.vue", 2],
-    ["../app/components/AddTrackToPlaylistDialog.vue", 1],
+    ["../app/components/AddTrackToPlaylistSubmenu.vue", 1],
     ["../app/components/AlbumCard.vue", 2],
     ["../app/components/AlbumContextMenu.vue", 1],
     ["../app/components/ArtistCard.vue", 2],

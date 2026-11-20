@@ -174,11 +174,10 @@ test("shared track rows always show linked artists beneath the title", async () 
 
   assert.match(
     table,
-    /<ScrollingText class="w-full text-xs text-muted-foreground">[\s\S]*?showArtists !== false[\s\S]*?item\.track\.mediaType === 'music'[\s\S]*?<NuxtLink\s+:to="artistRoute\(\{ name: artist \}\)"/,
-    "Track-list artist credits render as direct links",
+    /<ScrollingText class="w-full text-xs text-muted-foreground">[\s\S]*?showArtists !== false[\s\S]*?item\.track\.mediaType === 'music'[\s\S]*?<TrackArtistLinks :artists="trackArtistNames\(item\.track\)" \/>/,
+    "Track-list artist credits render as shared menu-aware links",
   );
   assert.doesNotMatch(table, />\s*Artist\s*<Icon/);
-  assert.doesNotMatch(table, /<TrackArtistLinks/);
 });
 
 test("shared track lists show cover artwork beside every title", async () => {

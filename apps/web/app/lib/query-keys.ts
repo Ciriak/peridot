@@ -52,9 +52,6 @@ export const queryKeys = {
   quickPicks(scope: PeridotQueryScope) {
     return [...peridotScopeKey(scope), "quick-picks"];
   },
-  queue(scope: PeridotQueryScope) {
-    return [...peridotScopeKey(scope), "queue"];
-  },
   tasks(scope: PeridotQueryScope, options: Record<string, unknown> = {}) {
     return [...peridotScopeKey(scope), "tasks", options];
   },

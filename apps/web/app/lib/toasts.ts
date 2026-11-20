@@ -346,15 +346,3 @@ export function notifyPlaylistTrackAdded(
     kind: "success",
   });
 }
-
-export function notifyQueueSaveFailed(detailMessage: string) {
-  addToast({
-    titleMessage: message("toast.queueSaveFailedTitle"),
-    descriptionMessage: message("toast.queueSaveFailed", {
-      message: detailMessage,
-    }),
-    status: "error",
-    duration: 8000,
-    kind: "error",
-  });
-}

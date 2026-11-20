@@ -7,7 +7,9 @@ import { Button } from "@peridot/ui/components/ui/button";
 import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { computed, onMounted, ref, watch } from "vue";
-import AlbumOfflineButton from "../../components/AlbumOfflineButton.vue";
+import AlbumContextMenu from "../../components/AlbumContextMenu.vue";
+import AlbumLink from "../../components/AlbumLink.vue";
+import BackButton from "../../components/BackButton.vue";
 import FadeInImage from "../../components/FadeInImage.vue";
 import LikeButton from "../../components/LikeButton.vue";
 import TrackArtistLinks from "../../components/TrackArtistLinks.vue";
@@ -42,7 +44,13 @@ const route = useRoute();
 const { t } = useI18n();
 const { address } = useServer();
 const { token } = useSession();
-const { active, playing, playCollection, togglePlayback } = useLibraryPlayer();
+const {
+  active,
+  playing,
+  toggleCollectionPlayback,
+  togglePlayback,
+  isPlaybackTargetActive,
+} = useLibraryPlayer();
 const { status: serverStatus } = useServerConnection();
 const { savedTracks, tracksMatching } = useOfflineTracks();
 const {
@@ -101,6 +109,15 @@ const albumActive = computed(() => {
   const current = active.value;
   return Boolean(current && album.value && current.albumId === album.value.id);
 });
+const albumTarget = computed(() => ({
+  kind: "album" as const,
+  id: album.value?.id ?? "",
+}));
+const albumPlaybackActive = computed(
+  () =>
+    isPlaybackTargetActive(albumTarget.value) ||
+    (albumActive.value && playing.value),
+);
 const albumPlayable = computed(
   () =>
     Boolean(album.value?.trackCount) &&
@@ -112,8 +129,11 @@ const albumPlayable = computed(
 const coverUrl = computed(() =>
   trackCoverUrl(address.value ?? "", album.value?.coverUrl ?? null),
 );
-const { artworkUrl: coverImageUrl, failed: coverFailed } =
-  useCachedArtwork(coverUrl);
+const {
+  artworkUrl: coverImageUrl,
+  failed: coverFailed,
+  fromCache: coverFromCache,
+} = useCachedArtwork(coverUrl);
 useHead(() => ({
   title: album.value
     ? t("page.album.title", {
@@ -127,34 +147,37 @@ function loadAlbum(force = false) {
 }
 
 async function playWholeAlbum() {
-  if (!address.value || !token.value || !album.value || !albumPlayable.value)
-    return;
+  if (!album.value || !albumPlayable.value) return;
   offlinePlaybackError.value = "";
-  const playSavedTracks = async () => {
-    const saved = await tracksMatching(
-      (track) => track.albumId === album.value?.id,
-    );
-    if (!saved.length) {
-      offlinePlaybackError.value = t("error.offlineCollectionEmpty");
-      return;
-    }
-    playCollection(saved);
-  };
-  if (serverStatus.value === "lost" || !album.value.available) {
-    await playSavedTracks();
-    return;
-  }
   try {
-    playCollection(
-      await loadCollectionTracks(address.value, token.value, {
-        albumId: album.value.id,
-      }),
+    const result = await toggleCollectionPlayback(
+      albumTarget.value,
+      async () => {
+        const saved = await tracksMatching(
+          (track) => track.albumId === album.value?.id,
+        );
+        if (
+          serverStatus.value === "lost" ||
+          !album.value?.available ||
+          !address.value ||
+          !token.value
+        ) {
+          return saved;
+        }
+        try {
+          return await loadCollectionTracks(address.value, token.value, {
+            albumId: album.value.id,
+          });
+        } catch (reason) {
+          if (isPeridotNetworkError(reason)) return saved;
+          throw reason;
+        }
+      },
     );
-  } catch (reason) {
-    if (isPeridotNetworkError(reason)) {
-      await playSavedTracks();
-      return;
+    if (result === "empty") {
+      offlinePlaybackError.value = t("error.offlineCollectionEmpty");
     }
+  } catch (reason) {
     if (!isAuthenticationRedirectError(reason)) {
       offlinePlaybackError.value = t("page.album.loadError");
     }
@@ -162,7 +185,11 @@ async function playWholeAlbum() {
 }
 
 function toggleAlbumPlayback() {
-  if (albumActive.value && playing.value) {
+  if (
+    albumActive.value &&
+    playing.value &&
+    !isPlaybackTargetActive(albumTarget.value)
+  ) {
     togglePlayback();
     return;
   }
@@ -201,15 +228,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="mb-2">
-    <Button as-child variant="ghost" size="lg"
-      ><NuxtLink to="/albums"
-        ><Icon :icon="icons.arrowLeft" aria-hidden="true" />{{
-          t("page.album.back")
-        }}</NuxtLink
-      ></Button
-    >
-  </div>
+  <BackButton />
 
   <div
     v-if="albumLoading"
@@ -237,101 +256,104 @@ onMounted(() => {
     >
       {{ offlinePlaybackError }}
     </p>
-    <section
-      aria-labelledby="album-heading"
-      class="relative flex flex-col gap-6 rounded-lg border bg-card p-6 text-card-foreground sm:flex-row sm:items-end"
-    >
-      <div class="absolute right-4 top-4">
-        <AlbumOfflineButton :album="album" />
-      </div>
-      <div
-        aria-hidden="true"
-        class="relative flex size-40 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted text-muted-foreground"
+    <AlbumContextMenu :album="album">
+      <section
+        aria-labelledby="album-heading"
+        class="relative flex flex-col gap-6 rounded-lg border bg-card p-6 text-card-foreground sm:flex-row sm:items-end"
       >
-        <Icon :icon="icons.album" class="size-16" />
-        <FadeInImage
-          v-if="coverImageUrl && !coverFailed"
-          :src="coverImageUrl"
-          loading="eager"
-          class="absolute inset-0"
-          @error="coverFailed = true"
+        <LikeButton
+          class="absolute right-4 top-4"
+          :liked="likedAlbumIds.includes(album.id) || album.liked"
+          :label="album.title"
+          :pending="
+            isLikePending({
+              kind: 'album',
+              albumId: album.id,
+              title: album.title,
+              artist: album.artist,
+            })
+          "
+          :disabled="!likesLoaded"
+          @toggle="
+            toggleLike({
+              kind: 'album',
+              albumId: album.id,
+              title: album.title,
+              artist: album.artist,
+            })
+          "
         />
-      </div>
-      <div class="min-w-0 flex-1 space-y-3 pr-12">
-        <p
-          class="text-xs font-medium uppercase tracking-wide text-muted-foreground"
+        <div
+          aria-hidden="true"
+          class="relative flex size-40 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted text-muted-foreground"
         >
-          {{ t("page.album.label") }}
-        </p>
-        <h1 id="album-heading" class="text-3xl font-semibold tracking-tight">
-          <ScrollingText class="w-full">{{ album.title }}</ScrollingText>
-        </h1>
-        <ScrollingText class="w-full text-sm text-muted-foreground">
-          <TrackArtistLinks :artists="album.artists" />
-        </ScrollingText>
-        <div class="flex flex-wrap items-center gap-3">
-          <Button
-            size="icon-lg"
-            class="rounded-full"
-            :disabled="!albumPlayable"
-            :aria-label="
-              albumActive && playing
-                ? t('card.pauseAlbum', {
-                    album: album.title,
-                    artist: album.artist,
-                  })
-                : t('card.playAlbum', {
-                    album: album.title,
-                    artist: album.artist,
-                  })
-            "
-            @click="toggleAlbumPlayback"
-          >
-            <Icon
-              :icon="albumActive && playing ? icons.pause : icons.play"
-              aria-hidden="true"
-              class="size-5"
-            />
-          </Button>
-          <LikeButton
-            :liked="likedAlbumIds.includes(album.id) || album.liked"
-            :label="album.title"
-            :pending="
-              isLikePending({
-                kind: 'album',
-                albumId: album.id,
-                title: album.title,
-                artist: album.artist,
-              })
-            "
-            :disabled="!likesLoaded"
-            @toggle="
-              toggleLike({
-                kind: 'album',
-                albumId: album.id,
-                title: album.title,
-                artist: album.artist,
-              })
-            "
+          <Icon :icon="icons.album" class="size-16" />
+          <FadeInImage
+            v-if="coverImageUrl && !coverFailed"
+            :src="coverImageUrl"
+            :fade-in="!coverFromCache"
+            loading="eager"
+            class="absolute inset-0"
+            @error="coverFailed = true"
           />
-          <Badge variant="secondary">
-            {{
-              t("count.track", { count: album.trackCount }, album.trackCount)
-            }}
-          </Badge>
-          <Badge v-if="!album.available" variant="secondary">
-            {{ t("trackTable.unavailable") }}
-          </Badge>
-          <span class="text-sm text-muted-foreground">
-            <template v-if="album.releaseYear">
-              {{ album.releaseYear }}
-              <span aria-hidden="true">·</span>
-            </template>
-            {{ formatTrackDuration(album.durationMs) }}
-          </span>
         </div>
-      </div>
-    </section>
+        <div class="min-w-0 flex-1 space-y-3 pr-12">
+          <p
+            class="text-xs font-medium uppercase tracking-wide text-muted-foreground"
+          >
+            {{ t("page.album.label") }}
+          </p>
+          <h1 id="album-heading" class="text-3xl font-semibold tracking-tight">
+            <AlbumLink :album="album">
+              <ScrollingText class="w-full">{{ album.title }}</ScrollingText>
+            </AlbumLink>
+          </h1>
+          <ScrollingText class="w-full text-sm text-muted-foreground">
+            <TrackArtistLinks :artists="album.artists" />
+          </ScrollingText>
+          <div class="flex flex-wrap items-center gap-3">
+            <Button
+              size="icon-lg"
+              class="rounded-full"
+              :disabled="!albumPlayable"
+              :aria-label="
+                albumPlaybackActive
+                  ? t('card.pauseAlbum', {
+                      album: album.title,
+                      artist: album.artist,
+                    })
+                  : t('card.playAlbum', {
+                      album: album.title,
+                      artist: album.artist,
+                    })
+              "
+              @click="toggleAlbumPlayback"
+            >
+              <Icon
+                :icon="albumPlaybackActive ? icons.pause : icons.play"
+                aria-hidden="true"
+                class="size-5"
+              />
+            </Button>
+            <Badge variant="secondary">
+              {{
+                t("count.track", { count: album.trackCount }, album.trackCount)
+              }}
+            </Badge>
+            <Badge v-if="!album.available" variant="secondary">
+              {{ t("trackTable.unavailable") }}
+            </Badge>
+            <span class="text-sm text-muted-foreground">
+              <template v-if="album.releaseYear">
+                {{ album.releaseYear }}
+                <span aria-hidden="true">·</span>
+              </template>
+              {{ formatTrackDuration(album.durationMs) }}
+            </span>
+          </div>
+        </div>
+      </section>
+    </AlbumContextMenu>
 
     <section aria-labelledby="album-tracks-heading" class="space-y-4">
       <h2 id="album-tracks-heading" class="text-lg font-semibold">

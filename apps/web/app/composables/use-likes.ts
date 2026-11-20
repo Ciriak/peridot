@@ -345,6 +345,9 @@ export function useLikes() {
         void queryClient.invalidateQueries({
           queryKey: [...peridotScopeKey(scope.value), "catalog", "tracks"],
         });
+        void queryClient.invalidateQueries({
+          queryKey: [...peridotScopeKey(scope.value), "playlists"],
+        });
       }
     },
     async onError(reason, variables, context) {

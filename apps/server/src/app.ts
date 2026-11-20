@@ -27,7 +27,6 @@ import { MetadataResolverRegistry } from "./metadata-resolver.js";
 import { registerTrackMetadataRoutes } from "./metadata-routes.js";
 import { MusicBrainzClient, MusicBrainzResolver } from "./musicbrainz.js";
 import { registerQuickPickRoutes } from "./quick-picks-routes.js";
-import { registerQueueRoutes } from "./queue-routes.js";
 import {
   PlaybackTokenService,
   redactPlaybackToken,
@@ -320,7 +319,6 @@ export async function buildApp(options: BuildAppOptions = {}) {
       await registerLikeRoutes(protectedApp, database);
       await registerPlaylistRoutes(protectedApp, database, playbackTokens);
       await registerQuickPickRoutes(protectedApp, database, catalog);
-      await registerQueueRoutes(protectedApp, database);
       await registerTrackMetadataRoutes(
         protectedApp,
         metadataEnrichment,

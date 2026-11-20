@@ -313,6 +313,23 @@ export function artistRoute(artist: { name: string; localName?: string }) {
   return `/artists/${encodeURIComponent(artist.localName ?? artist.name)}`;
 }
 
+export function albumSummaryFromTrack(
+  track: TrackResponse,
+): AlbumSummaryResponse {
+  return {
+    id: track.albumId ?? "",
+    title: track.album?.trim() ?? "",
+    artist: track.artist.trim(),
+    artists: trackArtistNames(track),
+    coverUrl: track.coverUrl,
+    trackCount: track.albumId ? 1 : 0,
+    durationMs: track.durationMs,
+    releaseYear: null,
+    available: track.available,
+    liked: track.liked,
+  };
+}
+
 function routeQuery(query: Record<string, string | undefined>): string {
   const entries = Object.entries(query).filter(
     (entry): entry is [string, string] => Boolean(entry[1]),

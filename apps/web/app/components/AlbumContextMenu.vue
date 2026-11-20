@@ -32,7 +32,7 @@ const props = defineProps<{
 const { t } = useI18n();
 const { address } = useServer();
 const { token } = useSession();
-const { playCollection } = useLibraryPlayer();
+const { toggleCollectionPlayback } = useLibraryPlayer();
 const { savedTracks, tracksMatching } = useOfflineTracks();
 const {
   allSaved: albumSavedOffline,
@@ -50,6 +50,10 @@ const playable = computed(
         (saved) => saved.track.albumId === props.album.id,
       )),
 );
+const albumTarget = computed(() => ({
+  kind: "album" as const,
+  id: props.album.id,
+}));
 const {
   loaded: likesLoaded,
   toggle: toggleLike,
@@ -64,25 +68,26 @@ const target = computed<LikeTarget>(() => ({
 }));
 
 async function playAlbum() {
-  if (!address.value || !token.value || !playable.value) return;
-  const playSaved = async () => {
-    const saved = await tracksMatching(
-      (track) => track.albumId === props.album.id,
-    );
-    if (saved.length) playCollection(saved);
-  };
-  if (serverStatus.value === "lost") {
-    await playSaved();
-    return;
-  }
+  if (!playable.value) return;
   try {
-    playCollection(
-      await loadCollectionTracks(address.value, token.value, {
-        albumId: props.album.id,
-      }),
-    );
-  } catch (reason) {
-    if (isPeridotNetworkError(reason)) await playSaved();
+    await toggleCollectionPlayback(albumTarget.value, async () => {
+      const saved = await tracksMatching(
+        (track) => track.albumId === props.album.id,
+      );
+      if (serverStatus.value === "lost" || !address.value || !token.value) {
+        return saved;
+      }
+      try {
+        return await loadCollectionTracks(address.value, token.value, {
+          albumId: props.album.id,
+        });
+      } catch (reason) {
+        if (isPeridotNetworkError(reason)) return saved;
+        throw reason;
+      }
+    });
+  } catch {
+    // The shared player exposes playback failures.
   }
 }
 </script>

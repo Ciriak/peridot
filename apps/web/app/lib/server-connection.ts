@@ -2,21 +2,11 @@ import type { HealthResponse } from "@peridot/contracts";
 import { reportServerReachability } from "./server-connectivity.ts";
 
 export type ServerConnectionStatus = "unknown" | "connected" | "lost";
-export type TopbarStatus = "connection-lost" | "task-progress" | "idle";
 
 type Fetcher = (
   input: RequestInfo | URL,
   init?: RequestInit,
 ) => Promise<Response>;
-
-export function topbarStatus(
-  connectionStatus: ServerConnectionStatus,
-  hasActiveTasks: boolean,
-): TopbarStatus {
-  if (connectionStatus === "lost") return "connection-lost";
-  if (hasActiveTasks) return "task-progress";
-  return "idle";
-}
 
 export function serverConnectionRestored(
   previous: ServerConnectionStatus | undefined,

@@ -77,8 +77,11 @@ const currentTrackLikeTarget = computed(() =>
 const currentCoverUrl = computed(() =>
   trackCoverUrl(address.value ?? "", active.value?.coverUrl ?? null),
 );
-const { artworkUrl: currentCoverImageUrl, failed: coverFailed } =
-  useCachedArtwork(currentCoverUrl);
+const {
+  artworkUrl: currentCoverImageUrl,
+  failed: coverFailed,
+  fromCache: coverFromCache,
+} = useCachedArtwork(currentCoverUrl);
 const currentTrackTitleRoute = computed(() =>
   active.value ? trackAlbumTitleRoute(active.value) : null,
 );
@@ -173,6 +176,7 @@ function openQueue() {
                   v-if="currentCoverImageUrl && !coverFailed"
                   :key="currentCoverImageUrl"
                   :src="currentCoverImageUrl"
+                  :fade-in="!coverFromCache"
                   loading="eager"
                   class="absolute inset-0"
                   @error="coverFailed = true"
@@ -285,6 +289,7 @@ function openQueue() {
               v-if="currentCoverImageUrl && !coverFailed"
               :key="currentCoverImageUrl"
               :src="currentCoverImageUrl"
+              :fade-in="!coverFromCache"
               loading="eager"
               class="scale-125 blur-3xl"
             />
@@ -343,6 +348,7 @@ function openQueue() {
                 v-if="currentCoverImageUrl && !coverFailed"
                 :key="currentCoverImageUrl"
                 :src="currentCoverImageUrl"
+                :fade-in="!coverFromCache"
                 loading="eager"
                 class="absolute inset-0"
                 @error="coverFailed = true"

@@ -15,7 +15,11 @@ const props = defineProps<{
 const coverUrl = computed(() =>
   trackCoverUrl(props.serverAddress, props.track.coverUrl),
 );
-const { artworkUrl, failed: coverFailed } = useCachedArtwork(coverUrl);
+const {
+  artworkUrl,
+  failed: coverFailed,
+  fromCache,
+} = useCachedArtwork(coverUrl);
 const placeholderIcon = computed(() =>
   props.track.albumId || props.track.album?.trim() ? icons.album : icons.music,
 );
@@ -29,6 +33,7 @@ const placeholderIcon = computed(() =>
     <FadeInImage
       v-if="artworkUrl && !coverFailed"
       :src="artworkUrl"
+      :fade-in="!fromCache"
       class="absolute inset-0"
       @error="coverFailed = true"
     />

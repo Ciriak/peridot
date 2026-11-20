@@ -19,9 +19,9 @@ import type {
 } from '@prisma/orm-sqlite/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'91a3040941397282f212b07fb898bfaf79a2b6a35ef99b50cb2c34caedd47971'>;
+  StorageHashBase<'65d6faa975e23cbe3e3d0ee7d450f3142a29da04ab07ba161a51590a87d3234d'>;
 export type ExecutionHash =
-  ExecutionHashBase<'97fc046b1d4dab2bdb7c66c465182d63cb742a8cf7a04ee2e990ce77c078f512'>;
+  ExecutionHashBase<'893cb931a69dfa62f8cc5331d19e7a10d59f0777de879106a39d2d587eee7f8c'>;
 export type ProfileHash =
   ProfileHashBase<'260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53'>;
 
@@ -435,25 +435,6 @@ export namespace Models {
     user: User;
     readonly [RelationKeys]?: 'playlist' | 'user';
   };
-  export type QueueItem = {
-    createdAt: FieldOutputTypes['__unbound__']['QueueItem']['createdAt'];
-    position: FieldOutputTypes['__unbound__']['QueueItem']['position'];
-    randomPosition: FieldOutputTypes['__unbound__']['QueueItem']['randomPosition'];
-    trackId: FieldOutputTypes['__unbound__']['QueueItem']['trackId'];
-    userId: FieldOutputTypes['__unbound__']['QueueItem']['userId'];
-    track: Track;
-    user: User;
-    readonly [RelationKeys]?: 'track' | 'user';
-  };
-  export type QueueState = {
-    activeTrackId: FieldOutputTypes['__unbound__']['QueueState']['activeTrackId'];
-    shuffleEnabled: FieldOutputTypes['__unbound__']['QueueState']['shuffleEnabled'];
-    updatedAt: FieldOutputTypes['__unbound__']['QueueState']['updatedAt'];
-    userId: FieldOutputTypes['__unbound__']['QueueState']['userId'];
-    activeTrack: Track | null;
-    user: User;
-    readonly [RelationKeys]?: 'activeTrack' | 'user';
-  };
   export type ServerSetting = {
     fileLogRetentionDays: FieldOutputTypes['__unbound__']['ServerSetting']['fileLogRetentionDays'];
     fileLoggingEnabled: FieldOutputTypes['__unbound__']['ServerSetting']['fileLoggingEnabled'];
@@ -629,8 +610,6 @@ export declare const models: {
   Playlist: Models.Playlist;
   PlaylistItem: Models.PlaylistItem;
   PlaylistLike: Models.PlaylistLike;
-  QueueItem: Models.QueueItem;
-  QueueState: Models.QueueState;
   ServerSetting: Models.ServerSetting;
   Session: Models.Session;
   Source: Models.Source;
@@ -2200,163 +2179,6 @@ type ContractBase = Omit<
                 },
               ];
             };
-            readonly QueueItem: {
-              columns: {
-                readonly createdAt: {
-                  readonly dataType: 'sqlite/datetime';
-                  readonly codecId: 'sqlite/datetime@1';
-                  readonly nullable: false;
-                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
-                  readonly many: false;
-                };
-                readonly position: {
-                  readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/integer@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly randomPosition: {
-                  readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/integer@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly trackId: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly userId: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-              };
-              primaryKey: { readonly columns: readonly ['userId', 'trackId'] };
-              uniques: readonly [];
-              indexes: readonly [
-                {
-                  readonly name: 'QueueItem_trackId_idx_8b560769';
-                  readonly prefix: 'QueueItem_trackId_idx';
-                  readonly columns: readonly ['trackId'];
-                  readonly unique: false;
-                },
-                {
-                  readonly name: 'QueueItem_userId_idx_a489d58a';
-                  readonly prefix: 'QueueItem_userId_idx';
-                  readonly columns: readonly ['userId'];
-                  readonly unique: false;
-                },
-                {
-                  readonly name: 'QueueItem_userId_position_idx_665dbc99';
-                  readonly prefix: 'QueueItem_userId_position_idx';
-                  readonly columns: readonly ['userId', 'position'];
-                  readonly unique: false;
-                },
-                {
-                  readonly name: 'QueueItem_userId_randomPosition_idx_54dda204';
-                  readonly prefix: 'QueueItem_userId_randomPosition_idx';
-                  readonly columns: readonly ['userId', 'randomPosition'];
-                  readonly unique: false;
-                },
-              ];
-              foreignKeys: readonly [
-                {
-                  readonly source: {
-                    readonly namespaceId: '__unbound__' & NamespaceId;
-                    readonly tableName: 'QueueItem';
-                    readonly columns: readonly ['userId'];
-                  };
-                  readonly target: {
-                    readonly namespaceId: '__unbound__' & NamespaceId;
-                    readonly tableName: 'User';
-                    readonly columns: readonly ['id'];
-                  };
-                },
-                {
-                  readonly source: {
-                    readonly namespaceId: '__unbound__' & NamespaceId;
-                    readonly tableName: 'QueueItem';
-                    readonly columns: readonly ['trackId'];
-                  };
-                  readonly target: {
-                    readonly namespaceId: '__unbound__' & NamespaceId;
-                    readonly tableName: 'Track';
-                    readonly columns: readonly ['id'];
-                  };
-                },
-              ];
-            };
-            readonly QueueState: {
-              columns: {
-                readonly activeTrackId: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly shuffleEnabled: {
-                  readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/integer@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
-                  };
-                  readonly many: false;
-                };
-                readonly updatedAt: {
-                  readonly dataType: 'sqlite/datetime';
-                  readonly codecId: 'sqlite/datetime@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly userId: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-              };
-              primaryKey: { readonly columns: readonly ['userId'] };
-              uniques: readonly [];
-              indexes: readonly [
-                {
-                  readonly name: 'QueueState_activeTrackId_idx_2a5a6afd';
-                  readonly prefix: 'QueueState_activeTrackId_idx';
-                  readonly columns: readonly ['activeTrackId'];
-                  readonly unique: false;
-                },
-              ];
-              foreignKeys: readonly [
-                {
-                  readonly source: {
-                    readonly namespaceId: '__unbound__' & NamespaceId;
-                    readonly tableName: 'QueueState';
-                    readonly columns: readonly ['userId'];
-                  };
-                  readonly target: {
-                    readonly namespaceId: '__unbound__' & NamespaceId;
-                    readonly tableName: 'User';
-                    readonly columns: readonly ['id'];
-                  };
-                },
-                {
-                  readonly source: {
-                    readonly namespaceId: '__unbound__' & NamespaceId;
-                    readonly tableName: 'QueueState';
-                    readonly columns: readonly ['activeTrackId'];
-                  };
-                  readonly target: {
-                    readonly namespaceId: '__unbound__' & NamespaceId;
-                    readonly tableName: 'Track';
-                    readonly columns: readonly ['id'];
-                  };
-                },
-              ];
-            };
             readonly ServerSetting: {
               columns: {
                 readonly fileLogRetentionDays: {
@@ -3524,14 +3346,6 @@ type ContractBase = Omit<
       readonly namespace: '__unbound__' & NamespaceId;
       readonly model: 'PlaylistLike';
     };
-    readonly QueueItem: {
-      readonly namespace: '__unbound__' & NamespaceId;
-      readonly model: 'QueueItem';
-    };
-    readonly QueueState: {
-      readonly namespace: '__unbound__' & NamespaceId;
-      readonly model: 'QueueState';
-    };
     readonly ServerSetting: {
       readonly namespace: '__unbound__' & NamespaceId;
       readonly model: 'ServerSetting';
@@ -4688,123 +4502,6 @@ type ContractBase = Omit<
               };
             };
           };
-          readonly QueueItem: {
-            readonly fields: {
-              readonly createdAt: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
-              };
-              readonly position: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-              };
-              readonly randomPosition: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-              };
-              readonly trackId: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly userId: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-            };
-            readonly relations: {
-              readonly track: {
-                readonly to: {
-                  readonly namespace: '__unbound__' & NamespaceId;
-                  readonly model: 'Track';
-                };
-                readonly cardinality: 'N:1';
-                readonly nullable: false;
-                readonly on: {
-                  readonly localFields: readonly ['trackId'];
-                  readonly targetFields: readonly ['id'];
-                };
-              };
-              readonly user: {
-                readonly to: {
-                  readonly namespace: '__unbound__' & NamespaceId;
-                  readonly model: 'User';
-                };
-                readonly cardinality: 'N:1';
-                readonly nullable: false;
-                readonly on: {
-                  readonly localFields: readonly ['userId'];
-                  readonly targetFields: readonly ['id'];
-                };
-              };
-            };
-            readonly storage: {
-              readonly table: 'QueueItem';
-              readonly namespaceId: '__unbound__';
-              readonly fields: {
-                readonly createdAt: { readonly column: 'createdAt' };
-                readonly position: { readonly column: 'position' };
-                readonly randomPosition: { readonly column: 'randomPosition' };
-                readonly trackId: { readonly column: 'trackId' };
-                readonly userId: { readonly column: 'userId' };
-              };
-            };
-          };
-          readonly QueueState: {
-            readonly fields: {
-              readonly activeTrackId: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly shuffleEnabled: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-              };
-              readonly updatedAt: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
-              };
-              readonly userId: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-            };
-            readonly relations: {
-              readonly activeTrack: {
-                readonly to: {
-                  readonly namespace: '__unbound__' & NamespaceId;
-                  readonly model: 'Track';
-                };
-                readonly cardinality: 'N:1';
-                readonly nullable: true;
-                readonly on: {
-                  readonly localFields: readonly ['activeTrackId'];
-                  readonly targetFields: readonly ['id'];
-                };
-              };
-              readonly user: {
-                readonly to: {
-                  readonly namespace: '__unbound__' & NamespaceId;
-                  readonly model: 'User';
-                };
-                readonly cardinality: 'N:1';
-                readonly nullable: false;
-                readonly on: {
-                  readonly localFields: readonly ['userId'];
-                  readonly targetFields: readonly ['id'];
-                };
-              };
-            };
-            readonly storage: {
-              readonly table: 'QueueState';
-              readonly namespaceId: '__unbound__';
-              readonly fields: {
-                readonly activeTrackId: { readonly column: 'activeTrackId' };
-                readonly shuffleEnabled: { readonly column: 'shuffleEnabled' };
-                readonly updatedAt: { readonly column: 'updatedAt' };
-                readonly userId: { readonly column: 'userId' };
-              };
-            };
-          };
           readonly ServerSetting: {
             readonly fields: {
               readonly fileLogRetentionDays: {
@@ -5818,15 +5515,6 @@ type ContractBase = Omit<
           readonly ref: {
             readonly entry: 'PlaylistLike';
             readonly field: 'id';
-            readonly namespace: '__unbound__';
-          };
-        },
-        {
-          readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
-          readonly onUpdate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
-          readonly ref: {
-            readonly entry: 'QueueState';
-            readonly field: 'updatedAt';
             readonly namespace: '__unbound__';
           };
         },

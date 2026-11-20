@@ -33,8 +33,8 @@ test("settings is a fullscreen routed area with a separate administrator group",
   assert.match(layout, /class="space-y-1 border-t border-sidebar-border pt-4"/);
   assert.match(layout, /t\("navigation\.admin"\)/);
   assert.doesNotMatch(layout, /name: "Administration"/);
-  assert.match(layout, /import TaskProgressIndicator/);
-  assert.match(layout, /<TaskProgressIndicator \/>/);
+  assert.match(layout, /import ServerConnectionIndicator/);
+  assert.match(layout, /<ServerConnectionIndicator \/>/);
   assert.match(layout, /useAdminSourcesQuery/);
   assert.match(layout, /sourceCount/);
   assert.match(layout, /computed\(\(\) => sources\.value\.length\)/);
@@ -161,7 +161,7 @@ test("settings shows app metadata and profile owns confirmed logout", async () =
   assert.match(logoutDialog, /@click="confirmLogout"/);
 });
 
-test("the header places task progress before the account avatar", async () => {
+test("the header places connection status before the account avatar", async () => {
   const layout = await readSource("../app/layouts/default.vue");
   const sidebar = layout.slice(
     layout.indexOf('id="sidebar"'),
@@ -177,7 +177,7 @@ test("the header places task progress before the account avatar", async () => {
   assert.doesNotMatch(layout, /@peridot\/ui\/components\/ui\/progress-circle/);
   assert.match(
     layout,
-    /import TaskProgressIndicator from "\.\.\/components\/TaskProgressIndicator\.vue"/,
+    /import ServerConnectionIndicator from "\.\.\/components\/ServerConnectionIndicator\.vue"/,
   );
   assert.doesNotMatch(layout, /PeridotSpinner/);
   assert.doesNotMatch(layout, /Change server/);
@@ -188,7 +188,7 @@ test("the header places task progress before the account avatar", async () => {
   assert.doesNotMatch(header, /aria-label="Open settings"/);
   assert.match(
     header,
-    /<TaskProgressIndicator \/>[\s\S]*?to="\/settings\/account"/,
+    /<ServerConnectionIndicator \/>[\s\S]*?to="\/settings\/account"/,
   );
   assert.match(header, /to="\/settings\/account"/);
   assert.match(header, /t\('navigation\.profileSettings'\)/);

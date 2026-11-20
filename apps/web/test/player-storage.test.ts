@@ -43,7 +43,7 @@ test("player snapshots persist the current track, progress, and full queue", () 
   );
 });
 
-test("invalid or mismatched player snapshots fall back to server state", () => {
+test("invalid or mismatched player snapshots are ignored", () => {
   const scope: PlayerStateScope = {
     serverAddress: "http://localhost:17430",
     userId: "user-1",

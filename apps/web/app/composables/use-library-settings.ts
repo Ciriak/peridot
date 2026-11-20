@@ -2,7 +2,6 @@ import { useState } from "#imports";
 import { computed, watch } from "vue";
 import {
   defaultLibrarySettings,
-  hasPersistedLibrarySettings,
   readPersistedLibrarySettings,
   savePersistedLibrarySettings,
   type LibrarySettings,
@@ -99,16 +98,12 @@ export function useLibrarySettings() {
           currentToken,
         );
         if (!preferences.initialized) {
-          const localSettings = hasPersistedLibrarySettings(
-            window.localStorage,
-            currentScope,
-          )
-            ? readPersistedLibrarySettings(window.localStorage, currentScope)
-            : defaultLibrarySettings();
           preferences = await initializeUserPreferences(
             currentScope.serverAddress,
             currentToken,
-            { likedTitlesOffline: localSettings.likedTitlesOffline },
+            {
+              likedTitlesOffline: defaultLibrarySettings().likedTitlesOffline,
+            },
           );
         }
         if (

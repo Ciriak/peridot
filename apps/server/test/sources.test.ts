@@ -6,7 +6,6 @@ import type {
   AlbumListResponse,
   LikeListResponse,
   PlaylistDetailResponse,
-  QueueResponse,
   TrackListResponse,
 } from "@peridot/contracts";
 import {
@@ -287,19 +286,6 @@ test("source removal preserves personal references and revives them when re-adde
     });
     assert.equal(added.statusCode, 201);
 
-    const queued = await context.app.inject({
-      method: "PUT",
-      url: "/api/queue",
-      headers: context.authorization,
-      payload: {
-        trackIds: [track.id],
-        activeTrackId: track.id,
-        shuffleEnabled: false,
-        shuffleTrackIds: [],
-      },
-    });
-    assert.equal(queued.statusCode, 200);
-
     const source = await context.database.orm.Source.firstOrThrow({
       path: context.libraryRoot,
     });
@@ -361,15 +347,6 @@ test("source removal preserves personal references and revives them when re-adde
       playlistAfterRemoval.json<PlaylistDetailResponse>().entries[0];
     assert.equal(playlistEntry?.track?.id, track.id);
     assert.equal(playlistEntry?.available, false);
-    const queueAfterRemoval = await context.app.inject({
-      method: "GET",
-      url: "/api/queue",
-      headers: context.authorization,
-    });
-    assert.deepEqual(queueAfterRemoval.json<QueueResponse>().trackIds, [
-      track.id,
-    ]);
-
     const restored = await context.app.inject({
       method: "POST",
       url: "/api/admin/sources",

@@ -10,7 +10,9 @@ import { computed, onMounted, ref, watch } from "vue";
 import AlbumCard from "../../components/AlbumCard.vue";
 import ArtistArtwork from "../../components/ArtistArtwork.vue";
 import ArtistContextMenu from "../../components/ArtistContextMenu.vue";
+import ArtistLink from "../../components/ArtistLink.vue";
 import AutoLoadMore from "../../components/AutoLoadMore.vue";
+import BackButton from "../../components/BackButton.vue";
 import LikeButton from "../../components/LikeButton.vue";
 import TrackTable from "../../components/TrackTable.vue";
 import VirtualCardGrid from "../../components/VirtualCardGrid.vue";
@@ -44,7 +46,7 @@ const route = useRoute();
 const { t } = useI18n();
 const { address } = useServer();
 const { token } = useSession();
-const { playCollection } = useLibraryPlayer();
+const { toggleCollectionPlayback, isPlaybackTargetActive } = useLibraryPlayer();
 const { status: serverStatus } = useServerConnection();
 const { savedTracks, tracksMatching } = useOfflineTracks();
 const {
@@ -60,6 +62,13 @@ const artistName = computed(() => {
 });
 const artist = ref<ArtistSummaryResponse | null>(null);
 const offlinePlaybackError = ref("");
+const artistTarget = computed(() => ({
+  kind: "artist" as const,
+  id: artist.value?.id ?? "",
+}));
+const artistPlaybackActive = computed(() =>
+  isPlaybackTargetActive(artistTarget.value),
+);
 const artistPlayable = computed(() => {
   if (!artist.value?.trackCount) return false;
   if (serverStatus.value !== "lost") return true;
@@ -123,37 +132,35 @@ function loadArtist(force = false) {
 }
 
 async function playWholeArtist() {
-  if (!address.value || !token.value || !artist.value || !artistPlayable.value)
-    return;
+  if (!artist.value || !artistPlayable.value) return;
   offlinePlaybackError.value = "";
-  const playSavedTracks = async () => {
-    const localName = artist.value?.localName.trim().toLowerCase();
-    const saved = await tracksMatching((track) =>
-      trackArtistNames(track).some(
-        (name) => name.trim().toLowerCase() === localName,
-      ),
-    );
-    if (!saved.length) {
-      offlinePlaybackError.value = t("error.offlineCollectionEmpty");
-      return;
-    }
-    playCollection(saved);
-  };
-  if (serverStatus.value === "lost") {
-    await playSavedTracks();
-    return;
-  }
   try {
-    playCollection(
-      await loadCollectionTracks(address.value, token.value, {
-        artistId: artist.value.id,
-      }),
+    const result = await toggleCollectionPlayback(
+      artistTarget.value,
+      async () => {
+        const localName = artist.value?.localName.trim().toLowerCase();
+        const saved = await tracksMatching((track) =>
+          trackArtistNames(track).some(
+            (name) => name.trim().toLowerCase() === localName,
+          ),
+        );
+        if (serverStatus.value === "lost" || !address.value || !token.value) {
+          return saved;
+        }
+        try {
+          return await loadCollectionTracks(address.value, token.value, {
+            artistId: artist.value?.id ?? "",
+          });
+        } catch (reason) {
+          if (isPeridotNetworkError(reason)) return saved;
+          throw reason;
+        }
+      },
     );
-  } catch (reason) {
-    if (isPeridotNetworkError(reason)) {
-      await playSavedTracks();
-      return;
+    if (result === "empty") {
+      offlinePlaybackError.value = t("error.offlineCollectionEmpty");
     }
+  } catch (reason) {
     if (!isAuthenticationRedirectError(reason)) {
       offlinePlaybackError.value = t("page.artist.loadError");
     }
@@ -196,15 +203,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="mb-2">
-    <Button as-child variant="ghost" size="lg"
-      ><NuxtLink to="/artists"
-        ><Icon :icon="icons.arrowLeft" aria-hidden="true" />{{
-          t("page.artist.back")
-        }}</NuxtLink
-      ></Button
-    >
-  </div>
+  <BackButton />
 
   <div
     v-if="artistLoading"
@@ -245,20 +244,38 @@ onMounted(() => {
             {{ t("page.artist.label") }}
           </p>
           <h1 id="artist-heading" class="text-3xl font-semibold tracking-tight">
-            <ScrollingText class="w-full">{{ artist.name }}</ScrollingText>
+            <ArtistLink :artist="artist">
+              <ScrollingText class="w-full">{{ artist.name }}</ScrollingText>
+            </ArtistLink>
           </h1>
           <p
             v-if="artist.name !== artist.localName"
             class="text-sm text-muted-foreground"
           >
-            <ScrollingText class="w-full">
-              {{ t("page.artist.localName", { artist: artist.localName }) }}
-            </ScrollingText>
+            <span>{{ t("page.artist.localNameLabel") }}:</span>
+            <ArtistLink :artist="artist.localName">
+              <ScrollingText class="w-full">{{
+                artist.localName
+              }}</ScrollingText>
+            </ArtistLink>
           </p>
           <div class="flex flex-wrap items-center gap-3">
-            <Button :disabled="!artistPlayable" @click="playWholeArtist">
-              <Icon :icon="icons.play" aria-hidden="true" />{{
-                t("context.playArtist")
+            <Button
+              :disabled="!artistPlayable"
+              :aria-label="
+                artistPlaybackActive
+                  ? t('context.pauseArtist')
+                  : t('context.playArtist')
+              "
+              @click="playWholeArtist"
+            >
+              <Icon
+                :icon="artistPlaybackActive ? icons.pause : icons.play"
+                aria-hidden="true"
+              />{{
+                artistPlaybackActive
+                  ? t("context.pauseArtist")
+                  : t("context.playArtist")
               }}
             </Button>
             <LikeButton

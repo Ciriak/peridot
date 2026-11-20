@@ -140,11 +140,13 @@ test("playlists support owner CRUD and stay private", async () => {
     });
     assert.equal(listResponse.statusCode, 200);
     const list = listResponse.json<PlaylistListResponse>();
-    assert.equal(list.totalCount, 1);
+    assert.equal(list.totalCount, 2);
     assert.deepEqual(
       list.items.map((item) => item.name),
-      ["Road trip"],
+      ["Liked tracks", "Road trip"],
     );
+    assert.equal(list.items[0]?.kind, "liked-tracks");
+    assert.equal(created.kind, "manual");
 
     const renamed = await context.app.inject({
       method: "PATCH",
@@ -175,7 +177,11 @@ test("playlists support owner CRUD and stay private", async () => {
       headers: member,
     });
     assert.equal(memberList.statusCode, 200);
-    assert.equal(memberList.json<PlaylistListResponse>().totalCount, 0);
+    assert.equal(memberList.json<PlaylistListResponse>().totalCount, 1);
+    assert.equal(
+      memberList.json<PlaylistListResponse>().items[0]?.kind,
+      "liked-tracks",
+    );
 
     for (const method of ["GET", "PATCH", "DELETE"] as const) {
       const response = await context.app.inject({
@@ -247,7 +253,152 @@ test("playlist list search filters names before pagination", async () => {
       headers: context.authorization,
     });
     assert.equal(blank.statusCode, 200);
-    assert.equal(blank.json<PlaylistListResponse>().totalCount, 4);
+    assert.equal(blank.json<PlaylistListResponse>().totalCount, 5);
+  } finally {
+    await context.close();
+  }
+});
+
+test("liked tracks produce a read-only automatic playlist", async () => {
+  const context = await createTestContext();
+  try {
+    const tracks = await scanTracks(context, [
+      { filename: "newest.mp3", title: "Newest Like" },
+      { filename: "older.mp3", title: "Older Like" },
+      { filename: "audiobook.mp3", title: "Not Music" },
+    ]);
+    assert.equal(tracks.length, 3);
+    await createPlaylist(context, context.authorization, "Manual playlist");
+    const user = await context.database.orm.User.firstOrThrow();
+    const newest = tracks.find((track) => track.title === "Newest Like")!;
+    const older = tracks.find((track) => track.title === "Older Like")!;
+    const audiobook = tracks.find((track) => track.title === "Not Music")!;
+    await context.database.orm.TrackLike.create({
+      userId: user.id,
+      trackId: older.id,
+      createdAt: new Date("2026-01-01T10:00:00.000Z"),
+    });
+    await context.database.orm.TrackLike.create({
+      userId: user.id,
+      trackId: newest.id,
+      createdAt: new Date("2026-01-02T10:00:00.000Z"),
+    });
+    await context.database.orm.TrackLike.create({
+      userId: user.id,
+      trackId: audiobook.id,
+      createdAt: new Date("2026-01-03T10:00:00.000Z"),
+    });
+    await context.database.orm.Track.where({ id: audiobook.id }).update({
+      mediaType: "audiobook",
+    });
+    await context.database.orm.CatalogTrack.where({ id: audiobook.id }).update({
+      mediaType: "audiobook",
+    });
+    await context.database.orm.Track.where({ id: older.id }).update({
+      available: 0,
+    });
+    await context.database.orm.CatalogTrack.where({ id: older.id }).update({
+      available: 0,
+    });
+
+    const detail = await getPlaylist(context, "liked");
+    assert.equal(detail.kind, "liked-tracks");
+    assert.equal(detail.name, "Liked tracks");
+    assert.deepEqual(
+      detail.entries.map((entry) => entry.title),
+      ["Newest Like", "Older Like"],
+    );
+    assert.equal(
+      detail.entries.every((entry) => entry.liked),
+      true,
+    );
+    assert.equal(detail.entries[1]?.available, false);
+    assert.equal(detail.availableTrackCount, 1);
+    assert.equal(detail.trackCount, 2);
+    assert.equal(detail.coverUrls.length, 0);
+
+    const listResponse = await context.app.inject({
+      method: "GET",
+      url: "/api/playlists",
+      headers: context.authorization,
+    });
+    const list = listResponse.json<PlaylistListResponse>();
+    assert.equal(list.totalCount, 2);
+    assert.equal(list.items[0]?.kind, "liked-tracks");
+
+    const contains = await context.app.inject({
+      method: "GET",
+      url: `/api/playlists?trackId=${encodeURIComponent(newest.id)}`,
+      headers: context.authorization,
+    });
+    assert.equal(
+      contains.json<PlaylistListResponse>().items[0]?.containsTrack,
+      true,
+    );
+
+    const searched = await context.app.inject({
+      method: "GET",
+      url: "/api/playlists?query=liked&limit=1",
+      headers: context.authorization,
+    });
+    const searchPage = searched.json<PlaylistListResponse>();
+    assert.equal(searchPage.totalCount, 1);
+    assert.equal(searchPage.items[0]?.kind, "liked-tracks");
+    assert.equal(searchPage.nextOffset, null);
+
+    const secondPage = await context.app.inject({
+      method: "GET",
+      url: "/api/playlists?limit=1&offset=1",
+      headers: context.authorization,
+    });
+    assert.deepEqual(
+      secondPage.json<PlaylistListResponse>().items.map((item) => item.name),
+      ["Manual playlist"],
+    );
+
+    const member = await createMemberSession(context);
+    const memberLiked = await getPlaylist(context, "liked", member);
+    assert.equal(memberLiked.trackCount, 0);
+    assert.deepEqual(memberLiked.entries, []);
+
+    const mutationResponses = [
+      await context.app.inject({
+        method: "PATCH",
+        url: "/api/playlists/liked",
+        headers: context.authorization,
+        payload: { name: "Renamed" },
+      }),
+      await context.app.inject({
+        method: "DELETE",
+        url: "/api/playlists/liked",
+        headers: context.authorization,
+      }),
+      await context.app.inject({
+        method: "POST",
+        url: "/api/playlists/liked/items",
+        headers: context.authorization,
+        payload: { kind: "catalog", trackId: newest.id },
+      }),
+      await context.app.inject({
+        method: "DELETE",
+        url: `/api/playlists/liked/items/${encodeURIComponent(`liked:${newest.id}`)}`,
+        headers: context.authorization,
+      }),
+      await context.app.inject({
+        method: "PUT",
+        url: "/api/playlists/liked/items/order",
+        headers: context.authorization,
+        payload: { itemIds: [] },
+      }),
+    ];
+    assert.deepEqual(
+      mutationResponses.map((response) => response.statusCode),
+      [409, 409, 409, 409, 409],
+    );
+    assert.equal(
+      mutationResponses[0]?.json().error.code,
+      "automatic_playlist_read_only",
+    );
   } finally {
     await context.close();
   }
@@ -281,7 +432,9 @@ test("playlist items append, deduplicate, reorder, and compact after removal", a
     });
     assert.equal(membership.statusCode, 200);
     assert.equal(
-      membership.json<PlaylistListResponse>().items[0]!.containsTrack,
+      membership
+        .json<PlaylistListResponse>()
+        .items.find((item) => item.id === playlist.id)!.containsTrack,
       true,
     );
 

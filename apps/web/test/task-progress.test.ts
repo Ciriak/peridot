@@ -363,50 +363,54 @@ test("task history renders partial completion with a completed warning", async (
   assert.match(page, /:class="taskFailureMessageClass\(row\)"/);
 });
 
-test("the topbar shares connection loss and combines server and download work", async () => {
-  const [layout, indicator] = await Promise.all([
+test("task progress stays out of the application headers", async () => {
+  const [layout, settingsLayout, indicator] = await Promise.all([
     readFile(new URL("../app/layouts/default.vue", import.meta.url), "utf8"),
+    readFile(new URL("../app/layouts/settings.vue", import.meta.url), "utf8"),
     readFile(
-      new URL("../app/components/TaskProgressIndicator.vue", import.meta.url),
+      new URL(
+        "../app/components/ServerConnectionIndicator.vue",
+        import.meta.url,
+      ),
       "utf8",
     ),
   ]);
+  const header = layout.slice(
+    layout.indexOf("<header"),
+    layout.indexOf("</header>"),
+  );
+  const settingsHeader = settingsLayout.slice(
+    settingsLayout.indexOf("<header"),
+    settingsLayout.indexOf("</header>"),
+  );
 
-  assert.match(layout, /<TaskProgressIndicator \/>/);
+  assert.doesNotMatch(layout, /TaskProgressIndicator/);
+  assert.doesNotMatch(settingsLayout, /TaskProgressIndicator/);
+  assert.doesNotMatch(header, /ProgressCircle|settings\/tasks#active-tasks/);
+  assert.doesNotMatch(
+    settingsHeader,
+    /ProgressCircle|settings\/tasks#active-tasks/,
+  );
+  assert.match(header, /<ServerConnectionIndicator \/>/);
+  assert.match(settingsHeader, /<ServerConnectionIndicator \/>/);
   assert.doesNotMatch(layout, /Fetching metadata/);
   assert.match(indicator, /useServerConnection/);
-  assert.match(indicator, /useUser/);
-  assert.match(indicator, /useOfflineDownloadTasks/);
-  assert.match(
-    indicator,
-    /canViewServerTasks = computed\(\(\) => user\.value\?\.role === "admin"\)/,
-  );
-  assert.match(
-    indicator,
-    /topbarStatus\(connectionStatus\.value, rows\.value\.length > 0\)/,
-  );
-  assert.match(indicator, /v-if="status === 'connection-lost'"/);
-  assert.match(indicator, /v-else-if="status === 'task-progress'"/);
+  assert.match(indicator, /v-if="status === 'lost'"/);
   assert.match(indicator, /:icon="icons\.networkOff"/);
   assert.match(indicator, /text-foreground/);
   assert.doesNotMatch(indicator, /text-destructive|border-destructive/);
   assert.doesNotMatch(indicator, /animate-pulse/);
-  assert.match(indicator, /t\('components\.taskProgress\.connectionLost'\)/);
+  assert.match(indicator, /t\('components\.serverConnection\.offline'\)/);
   assert.match(indicator, /import \{ Badge \}/);
   assert.match(indicator, /<Badge[\s\S]*variant="outline"[\s\S]*role="status"/);
   assert.match(
     indicator,
     /<Icon :icon="icons\.networkOff" aria-hidden="true" \/>/,
   );
-  assert.match(indicator, /t\("components\.taskProgress\.offlineBadge"\)/);
+  assert.match(indicator, /t\("components\.serverConnection\.offlineBadge"\)/);
   assert.match(indicator, /<TooltipTrigger as-child>/);
-  assert.match(indicator, /<NuxtLink\s+to="\/settings\/tasks#active-tasks"/);
-  assert.match(indicator, /t\('components\.taskProgress\.open'\)/);
-  assert.match(indicator, /:value="overallProgress"/);
-  assert.match(indicator, /const overallProgress = computed/);
-  assert.match(indicator, /orderedActiveTasks\(serverActiveTasks\.value\)/);
-  assert.match(indicator, /downloadTasks\s*\.orderedTasks\(\)/);
-  assert.match(indicator, /taskStatusMessage\(task\)/);
-  assert.match(indicator, /taskProgressMessage\(task\)/);
-  assert.match(indicator, /max-h-64[\s\S]*?overflow-y-auto/);
+  assert.doesNotMatch(
+    indicator,
+    /ProgressCircle|useTasks|useOfflineDownloadTasks/,
+  );
 });

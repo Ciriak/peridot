@@ -118,15 +118,6 @@ test("duplicate detection keeps the best copy, hides the rest, and transfers use
         userId: user.id,
         trackId: hidden.id,
       }),
-      context.database.orm.QueueItem.create({
-        userId: user.id,
-        trackId: hidden.id,
-        position: 0,
-      }),
-      context.database.orm.QueueState.create({
-        userId: user.id,
-        activeTrackId: hidden.id,
-      }),
       context.database.orm.PlaylistItem.create({
         playlistId: playlist.id,
         position: 0,
@@ -191,16 +182,6 @@ test("duplicate detection keeps the best copy, hides the rest, and transfers use
           userId: user.id,
         })
       )?.trackId,
-      canonical.id,
-    );
-    assert.equal(
-      (await context.database.orm.QueueItem.first({ userId: user.id }))
-        ?.trackId,
-      canonical.id,
-    );
-    assert.equal(
-      (await context.database.orm.QueueState.first({ userId: user.id }))
-        ?.activeTrackId,
       canonical.id,
     );
     assert.equal(

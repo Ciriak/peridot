@@ -21,7 +21,6 @@ import {
   fetchAuthStatus,
   fetchLogs,
   fetchPlaylist,
-  fetchQueue,
   fetchQuickPicks,
   fetchServerSettings,
   fetchUpdateStatus,
@@ -49,7 +48,6 @@ import {
   reorderMetadataProviders,
   reorderPlaylistItems,
   reorderSources,
-  replaceQueue,
   rescanSource,
   resetMetadata,
   revertArtistMetadata,
@@ -379,46 +377,6 @@ test("task list polling sends status and bounded pagination", async (context) =>
     requestedUrl,
     "http://127.0.0.1:17430/api/tasks?status=active&limit=25&offset=5",
   );
-});
-
-test("queue reads and writes are authenticated ordered snapshots", async (context) => {
-  const queue = {
-    trackIds: ["track-2", "track-1"],
-    activeTrackId: "track-2",
-    shuffleEnabled: true,
-    shuffleTrackIds: ["track-1"],
-  };
-  const originalFetch = globalThis.fetch;
-  context.after(() => {
-    globalThis.fetch = originalFetch;
-  });
-  const requests: Array<{ input: string; init?: RequestInit }> = [];
-  globalThis.fetch = async (input, init) => {
-    requests.push({ input: String(input), init });
-    return Response.json(queue);
-  };
-
-  assert.deepEqual(
-    await fetchQueue("http://127.0.0.1:17430", "session-token"),
-    queue,
-  );
-  assert.deepEqual(
-    await replaceQueue("http://127.0.0.1:17430", "session-token", queue),
-    queue,
-  );
-
-  assert.equal(requests[0]?.input, "http://127.0.0.1:17430/api/queue");
-  assert.equal(requests[1]?.input, "http://127.0.0.1:17430/api/queue");
-  assert.equal(requests[1]?.init?.method, "PUT");
-  assert.equal(
-    new Headers(requests[1]?.init?.headers).get("Authorization"),
-    "Bearer session-token",
-  );
-  assert.equal(
-    new Headers(requests[1]?.init?.headers).get("Content-Type"),
-    "application/json",
-  );
-  assert.deepEqual(JSON.parse(String(requests[1]?.init?.body)), queue);
 });
 
 test("library track listing sends the session to the catalog endpoint", async (context) => {

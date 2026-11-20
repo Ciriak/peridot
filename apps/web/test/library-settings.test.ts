@@ -9,7 +9,6 @@ import type {
 } from "@peridot/contracts";
 import {
   defaultLibrarySettings,
-  hasPersistedLibrarySettings,
   librarySettingsStorageKey,
   parsePersistedLibrarySettings,
   readPersistedLibrarySettings,
@@ -106,7 +105,6 @@ test("liked titles are available offline by default for each server and user", (
     { likedTitlesOffline: true },
   );
   assert.match(librarySettingsStorageKey(scope), /library-settings:v2:/);
-  assert.equal(hasPersistedLibrarySettings(storage, scope), true);
 });
 
 test("invalid library settings fall back to the enabled default", () => {
@@ -114,7 +112,7 @@ test("invalid library settings fall back to the enabled default", () => {
   storage.setItem(
     librarySettingsStorageKey(scope),
     JSON.stringify({
-      version: 1,
+      version: 2,
       ...scope,
       likedTitlesOffline: "yes",
     }),
@@ -126,7 +124,7 @@ test("invalid library settings fall back to the enabled default", () => {
   });
 });
 
-test("legacy device preferences are available for account initialization", () => {
+test("legacy device preferences are ignored", () => {
   const storage = createStorage();
   storage.setItem(
     `peridot:library-settings:v1:${encodeURIComponent(scope.serverAddress)}:${encodeURIComponent(scope.userId)}`,
@@ -137,9 +135,8 @@ test("legacy device preferences are available for account initialization", () =>
     }),
   );
 
-  assert.equal(hasPersistedLibrarySettings(storage, scope), true);
   assert.deepEqual(readPersistedLibrarySettings(storage, scope), {
-    likedTitlesOffline: false,
+    likedTitlesOffline: true,
   });
 });
 
@@ -256,9 +253,10 @@ test("the Library setting persists and drives automatic liked-track saving", asy
   assert.match(syncSource, /likesRevision/);
   assert.match(appSource, /<LikedTitlesOfflineSync \/>/);
   assert.match(settingsSource, /fetchUserPreferences/);
+  assert.doesNotMatch(settingsSource, /hasPersistedLibrarySettings/);
   assert.match(
     settingsSource,
-    /hasPersistedLibrarySettings\(\s+window\.localStorage/,
+    /initializeUserPreferences\([\s\S]*defaultLibrarySettings\(\)\.likedTitlesOffline/,
   );
   assert.match(settingsSource, /initializeUserPreferences/);
   assert.match(settingsSource, /updateUserPreferences/);

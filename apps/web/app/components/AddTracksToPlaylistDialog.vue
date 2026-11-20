@@ -21,9 +21,10 @@ import { useQueryScope } from "../composables/use-query-scope";
 import { useSession } from "../composables/use-session";
 import { usePlaylistActions } from "../composables/use-playlists";
 import { icons } from "../lib/icons";
-import { trackArtistNames } from "../lib/library";
+import { albumSummaryFromTrack, trackArtistNames } from "../lib/library";
 import { listTracks } from "../lib/peridot-client";
 import { queryKeys } from "../lib/query-keys";
+import AlbumLink from "./AlbumLink.vue";
 import TrackArtwork from "./TrackArtwork.vue";
 import TrackArtistLinks from "./TrackArtistLinks.vue";
 
@@ -165,7 +166,10 @@ async function add(track: TrackResponse) {
                 <p class="min-w-0 text-xs text-muted-foreground">
                   <ScrollingText class="w-full">
                     <TrackArtistLinks :artists="trackArtistNames(track)" />
-                    <template v-if="track.album"> · {{ track.album }}</template>
+                    <template v-if="track.album">
+                      ·
+                      <AlbumLink :album="albumSummaryFromTrack(track)" />
+                    </template>
                   </ScrollingText>
                 </p>
               </div>

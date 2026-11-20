@@ -39,9 +39,6 @@ const {
   active,
   playing,
   currentTrackId,
-  loadQueue,
-  queueError,
-  queueLoading,
   shuffleEnabled,
   upcomingTracks,
   removeFromQueue,
@@ -215,25 +212,8 @@ onBeforeUnmount(() => document.removeEventListener("keydown", handleKeydown));
           </span>
         </div>
 
-        <p
-          v-if="queueLoading && !queueError"
-          role="status"
-          class="mt-3 text-sm text-muted-foreground"
-        >
-          {{ t("queue.loading") }}
-        </p>
         <div
-          v-else-if="queueError"
-          role="alert"
-          class="mt-3 flex items-center justify-between gap-3 text-sm text-destructive"
-        >
-          <p>{{ queueError }}</p>
-          <Button variant="outline" size="sm" @click="loadQueue(true)">
-            {{ t("common.tryAgain") }}
-          </Button>
-        </div>
-        <div
-          v-else-if="sortableTracks.length"
+          v-if="sortableTracks.length"
           class="mt-3 min-h-0 flex-1 overflow-y-auto"
         >
           <ol

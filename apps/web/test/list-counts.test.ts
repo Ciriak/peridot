@@ -9,7 +9,7 @@ test("collection counts use exact totals beside section headings", async () => {
       "../app/pages/artists/index.vue",
       "../app/pages/audiobooks/index.vue",
       "../app/pages/podcasts/index.vue",
-      "../app/pages/playlists.vue",
+      "../app/pages/playlists/index.vue",
       "../app/components/LibraryScreen.vue",
       "../app/pages/search.vue",
       "../app/pages/artists/[artist].vue",

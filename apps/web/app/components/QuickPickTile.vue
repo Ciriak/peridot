@@ -14,13 +14,26 @@ import AlbumContextMenu from "./AlbumContextMenu.vue";
 import QuickPickTileContent from "./QuickPickTileContent.vue";
 import TrackContextMenu from "./TrackContextMenu.vue";
 
-const props = defineProps<{ item: ResolvedQuickPickItem }>();
+const props = withDefaults(
+  defineProps<{
+    item: ResolvedQuickPickItem;
+    layout?: "tile" | "card";
+  }>(),
+  { layout: "tile" },
+);
 const { t } = useI18n();
 const { address } = useServer();
 const { status: serverStatus } = useServerConnection();
 const { token } = useSession();
-const { active, playing, loading, play, playCollection, togglePlayback } =
-  useLibraryPlayer();
+const {
+  active,
+  playing,
+  loading,
+  play,
+  toggleCollectionPlayback,
+  togglePlayback,
+  isPlaybackTargetActive,
+} = useLibraryPlayer();
 const { savedTracks, tracksMatching } = useOfflineTracks();
 const savedTrackIds = computed(
   () => new Set(savedTracks.value.map((saved) => saved.track.id)),
@@ -36,12 +49,20 @@ const coverUrl = computed(() =>
 const title = computed(() =>
   props.item.kind === "track" ? props.item.track.title : props.item.album.title,
 );
+const albumTarget = computed(() =>
+  props.item.kind === "album"
+    ? { kind: "album" as const, id: props.item.album.id }
+    : null,
+);
 const activeItem = computed(() => {
   const activeTrackId = active.value?.id;
-  if (!activeTrackId) return false;
-  return props.item.kind === "track"
-    ? activeTrackId === props.item.track.id
-    : active.value?.albumId === props.item.album.id;
+  if (props.item.kind === "track") {
+    return Boolean(activeTrackId && activeTrackId === props.item.track.id);
+  }
+  return Boolean(
+    (albumTarget.value && isPlaybackTargetActive(albumTarget.value)) ||
+    active.value?.albumId === props.item.album.id,
+  );
 });
 const playable = computed(() => {
   const item = props.item;
@@ -71,9 +92,9 @@ const playLabel = computed(() => {
 });
 
 async function albumTracks() {
-  if (!address.value || !token.value || props.item.kind !== "album") return [];
+  if (props.item.kind !== "album") return [];
   const album = props.item.album;
-  if (serverStatus.value === "lost") {
+  if (serverStatus.value === "lost" || !address.value || !token.value) {
     return tracksMatching((track) => track.albumId === album.id);
   }
   return loadCollectionTracks(address.value, token.value, {
@@ -83,7 +104,11 @@ async function albumTracks() {
 
 async function toggleItemPlayback() {
   if (!playable.value) return;
-  if (activeItem.value && playing.value) {
+  if (
+    activeItem.value &&
+    playing.value &&
+    !(albumTarget.value && isPlaybackTargetActive(albumTarget.value))
+  ) {
     togglePlayback();
     return;
   }
@@ -91,7 +116,12 @@ async function toggleItemPlayback() {
     play(props.item.track);
     return;
   }
-  playCollection(await albumTracks());
+  if (!albumTarget.value) return;
+  try {
+    await toggleCollectionPlayback(albumTarget.value, albumTracks);
+  } catch {
+    // The shared player exposes playback failures.
+  }
 }
 </script>
 
@@ -109,6 +139,7 @@ async function toggleItemPlayback() {
       :play-label="playLabel"
       :busy="activeItem && loading"
       :playable="playable"
+      :layout="layout"
       @play="toggleItemPlayback"
     />
   </TrackContextMenu>
@@ -121,6 +152,7 @@ async function toggleItemPlayback() {
       :play-label="playLabel"
       :busy="activeItem && loading"
       :playable="playable"
+      :layout="layout"
       @play="toggleItemPlayback"
     />
   </AlbumContextMenu>

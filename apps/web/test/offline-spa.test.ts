@@ -84,12 +84,9 @@ test("the topbar names the unavailable-server state as offline mode", async () =
     ),
   ) as Record<string, string>;
 
-  assert.equal(
-    locale["components.taskProgress.connectionLost"],
-    "Offline mode",
-  );
+  assert.equal(locale["components.serverConnection.offline"], "Offline mode");
   assert.match(
-    locale["components.taskProgress.connectionLostDescription"] ?? "",
+    locale["components.serverConnection.offlineDescription"] ?? "",
     /Saved tracks remain available/,
   );
 });
@@ -684,9 +681,10 @@ test("album offline controls use the shared album download task", async () => {
   assert.match(button, /:aria-pressed="allSaved"/);
   assert.doesNotMatch(button, /showLabel|visibleLabel|<span/);
   assert.doesNotMatch(card, /<AlbumOfflineButton/);
-  assert.match(
+  assert.doesNotMatch(
     detail,
-    /<div class="absolute right-4 top-4">\s+<AlbumOfflineButton :album="album"/,
+    /<AlbumOfflineButton/,
+    "The album detail header does not expose a separate offline action",
   );
   assert.match(menu, /@select="toggleAlbumOffline"/);
 });

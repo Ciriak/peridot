@@ -7,6 +7,7 @@ import { artistLikeKey, artistRoute } from "../lib/library";
 import { useLikes } from "../composables/use-likes";
 import ArtistArtwork from "./ArtistArtwork.vue";
 import ArtistContextMenu from "./ArtistContextMenu.vue";
+import ArtistLink from "./ArtistLink.vue";
 import LikeButton from "./LikeButton.vue";
 
 const props = defineProps<{ artist: ArtistSummaryResponse }>();
@@ -26,36 +27,39 @@ const {
     >
       <NuxtLink
         :to="artistRoute(artist)"
-        class="flex min-w-0 flex-1 items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        class="shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         :aria-label="t('card.openArtist', { artist: artist.name })"
       >
         <ArtistArtwork :image-url="artist.imageUrl" />
-        <div class="min-w-0 flex-1">
-          <h3 class="text-sm font-medium">
-            <ScrollingText class="w-full">{{ artist.name }}</ScrollingText>
-          </h3>
-          <Badge v-if="!artist.available" variant="secondary" class="mt-1">
-            {{ t("trackTable.unavailable") }}
-          </Badge>
-          <p
-            v-if="artist.name !== artist.localName"
-            class="text-xs text-muted-foreground"
-          >
-            <ScrollingText class="w-full">
-              {{ t("card.localArtistName", { artist: artist.localName }) }}
-            </ScrollingText>
-          </p>
-          <p class="text-xs text-muted-foreground">
-            {{
-              t("count.album", { count: artist.albumCount }, artist.albumCount)
-            }}
-            ·
-            {{
-              t("count.track", { count: artist.trackCount }, artist.trackCount)
-            }}
-          </p>
-        </div>
       </NuxtLink>
+      <div class="min-w-0 flex-1">
+        <h3 class="text-sm font-medium">
+          <ArtistLink :artist="artist">
+            <ScrollingText class="w-full">{{ artist.name }}</ScrollingText>
+          </ArtistLink>
+        </h3>
+        <Badge v-if="!artist.available" variant="secondary" class="mt-1">
+          {{ t("trackTable.unavailable") }}
+        </Badge>
+        <p
+          v-if="artist.name !== artist.localName"
+          class="text-xs text-muted-foreground"
+        >
+          <span>{{ t("card.localArtistNameLabel") }}:</span>
+          <ArtistLink :artist="artist.localName">
+            <ScrollingText class="w-full">{{ artist.localName }}</ScrollingText>
+          </ArtistLink>
+        </p>
+        <p class="text-xs text-muted-foreground">
+          {{
+            t("count.album", { count: artist.albumCount }, artist.albumCount)
+          }}
+          ·
+          {{
+            t("count.track", { count: artist.trackCount }, artist.trackCount)
+          }}
+        </p>
+      </div>
       <LikeButton
         :liked="
           likedArtistKeys.includes(artistLikeKey(artist.localName)) ||

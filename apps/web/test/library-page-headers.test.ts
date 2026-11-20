@@ -19,7 +19,7 @@ const pages = [
     descriptionKey: "page.artists.description",
   },
   {
-    path: "../app/pages/playlists.vue",
+    path: "../app/pages/playlists/index.vue",
     title: /t\("navigation\.playlists"\)/,
     descriptionKey: "page.playlists.description",
   },
@@ -36,13 +36,15 @@ test("library landing pages keep their titles without descriptive subtitles", as
   );
 });
 
-test("liked songs uses the shared page-title format", async () => {
-  const [page, messages] = await Promise.all([
-    readFile(new URL("../app/pages/liked.vue", import.meta.url), "utf8"),
-    readFile(new URL("../i18n/locales/en-US.json", import.meta.url), "utf8"),
-  ]);
+test("the liked tracks sidebar link opens the automatic playlist", async () => {
+  const layout = await readFile(
+    new URL("../app/layouts/default.vue", import.meta.url),
+    "utf8",
+  );
 
-  assert.match(page, /useHead\(\{ title: t\("page\.liked\.title"\) \}\)/);
-  assert.match(page, /:title="t\('navigation\.likedSongs'\)"/);
-  assert.match(messages, /"page\.liked\.title": "Liked songs — Peridot"/);
+  assert.match(
+    layout,
+    /labelKey: "navigation\.likedSongs",\s*to: "\/playlists\/liked"/,
+  );
+  assert.match(layout, /item\.to === '\/playlists\/liked'/);
 });

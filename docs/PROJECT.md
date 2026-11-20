@@ -27,6 +27,9 @@ automatic only and does not use title- or folder-name heuristics.
   built-ins behind the same internal source interface and ship with Peridot.
 - Never load untrusted integration code into the server process.
 - OpenSubsonic compatibility is a target requiring future interoperability tests.
+- Every catalog artist and album name is an interactive reference. Artist names
+  link to their artist page, album names link to their album page, and
+  right-clicking either name opens the corresponding artist or album menu.
 
 Provider availability and API policies must be revalidated before implementation.
 Playlist synchronization concerns references and matching against local audio.
@@ -78,7 +81,7 @@ motion, visible keyboard focus, and accessible contrast.
 2. Local library vertical slice: configure a folder, scan tracks into the catalog,
    list real tracks, classify music, audiobooks, and podcasts, and play one
    through an authenticated audio endpoint.
-3. Users, playlists, matching, and playback persistence.
+3. Users, playlists, matching, and device-local playback persistence.
 4. Direct built-in source integrations with Jellyfin as the first implementation.
 5. Further built-in providers; desktop packaging; OpenSubsonic verification.
 

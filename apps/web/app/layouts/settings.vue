@@ -6,7 +6,7 @@ import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { ProgressCircle } from "@peridot/ui/components/ui/progress-circle";
 import { computed, ref, watch } from "vue";
-import TaskProgressIndicator from "../components/TaskProgressIndicator.vue";
+import ServerConnectionIndicator from "../components/ServerConnectionIndicator.vue";
 import { useAdminSourcesQuery } from "../composables/use-admin-queries";
 import { useOfflineDownloadTasks } from "../composables/use-offline-download-tasks";
 import { useTasks } from "../composables/use-tasks";
@@ -279,7 +279,7 @@ watch(tasks, (current) => {
         /></Button>
         <h1 class="text-lg font-semibold">{{ t("settings.title") }}</h1>
         <div class="ml-auto flex items-center gap-2">
-          <TaskProgressIndicator />
+          <ServerConnectionIndicator />
         </div>
       </header>
       <main

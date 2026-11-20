@@ -368,38 +368,6 @@ export class DuplicateDetectionService {
     }).updateAndCount({ trackId: canonicalId });
     moved += plays;
 
-    const queueItems = await transaction.orm.QueueItem.where({
-      trackId: duplicate.id,
-    }).all();
-    const affectedUsers = new Set<string>();
-    for (const item of queueItems) {
-      affectedUsers.add(item.userId);
-      const existing = await transaction.orm.QueueItem.first({
-        userId: item.userId,
-        trackId: canonicalId,
-      });
-      if (!existing) {
-        await transaction.orm.QueueItem.create({
-          userId: item.userId,
-          trackId: canonicalId,
-          position: item.position,
-          randomPosition: item.randomPosition,
-          createdAt: item.createdAt,
-        });
-      }
-      await transaction.orm.QueueItem.where({
-        userId: item.userId,
-        trackId: duplicate.id,
-      }).delete();
-      moved += 1;
-    }
-    for (const userId of affectedUsers) {
-      await transaction.orm.QueueState.where({
-        userId,
-        activeTrackId: duplicate.id,
-      }).update({ activeTrackId: canonicalId });
-    }
-
     const playlistItems = await transaction.orm.PlaylistItem.where({
       trackId: duplicate.id,
     }).all();

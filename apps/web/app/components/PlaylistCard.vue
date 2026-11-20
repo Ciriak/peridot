@@ -34,7 +34,6 @@ import LikeButton from "./LikeButton.vue";
 import PlaylistCover from "./PlaylistCover.vue";
 import PlaylistDeleteDialog from "./PlaylistDeleteDialog.vue";
 import PlaylistNameDialog from "./PlaylistNameDialog.vue";
-import PlaylistOfflineSummaryButton from "./PlaylistOfflineSummaryButton.vue";
 
 const props = defineProps<{ playlist: PlaylistSummaryResponse }>();
 const { t } = useI18n();
@@ -42,7 +41,12 @@ const { address } = useServer();
 const { scope } = useQueryScope();
 const { token } = useSession();
 const { status } = useServerConnection();
-const { playing, playCollection, togglePlayback } = useLibraryPlayer();
+const {
+  playing,
+  toggleCollectionPlayback,
+  togglePlayback,
+  isPlaybackTargetActive,
+} = useLibraryPlayer();
 const { savedTracks } = useOfflineTracks();
 const queryClient = useQueryClient();
 const actions = usePlaylistActions();
@@ -61,7 +65,12 @@ const compactCoverUrls = computed(() =>
     return resolved ? [resolved] : [];
   }),
 );
+const automatic = computed(() => props.playlist.kind === "liked-tracks");
 const active = computed(() => activePlaylistId.value === props.playlist.id);
+const playlistTarget = computed(() => ({
+  kind: "playlist" as const,
+  id: props.playlist.id,
+}));
 const renameOpen = ref(false);
 const deleteOpen = ref(false);
 const pending = ref(false);
@@ -91,20 +100,29 @@ async function loadDetail(): Promise<PlaylistDetailResponse | null> {
 }
 
 async function togglePlaylistPlayback() {
-  if (active.value && playing.value) {
+  if (
+    active.value &&
+    playing.value &&
+    !isPlaybackTargetActive(playlistTarget.value)
+  ) {
     togglePlayback();
     return;
   }
-  const detail = await loadDetail();
-  if (!detail) return;
-  const savedIds = new Set(savedTracks.value.map((saved) => saved.track.id));
-  const tracks = playlistPlayableTracks(detail.entries, {
-    serverLost: status.value === "lost",
-    savedTrackIds: savedIds,
-  });
-  if (!tracks.length) return;
-  activePlaylistId.value = detail.id;
-  playCollection(tracks);
+  try {
+    await toggleCollectionPlayback(playlistTarget.value, async () => {
+      const detail = await loadDetail();
+      if (!detail) return [];
+      const savedIds = new Set(
+        savedTracks.value.map((saved) => saved.track.id),
+      );
+      return playlistPlayableTracks(detail.entries, {
+        serverLost: status.value === "lost",
+        savedTrackIds: savedIds,
+      });
+    });
+  } catch {
+    // The shared player exposes playback failures.
+  }
 }
 
 function openRename() {
@@ -146,66 +164,77 @@ async function removePlaylist() {
       <article
         class="group relative min-w-0 rounded-lg border bg-card p-3 text-card-foreground"
       >
-        <div class="relative">
-          <NuxtLink
-            :to="`/playlists/${playlist.id}`"
-            class="block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            :aria-label="t('playlistCard.open', { playlist: playlist.name })"
-          >
-            <PlaylistCover :cover-urls="compactCoverUrls" />
-          </NuxtLink>
-          <Button
-            variant="default"
-            size="icon"
-            class="absolute bottom-2 right-2 z-10 rounded-full shadow-md"
-            :aria-label="
-              active && playing
-                ? t('playlistCard.pause', { playlist: playlist.name })
-                : t('playlistCard.play', { playlist: playlist.name })
-            "
-            :disabled="!playlist.availableTrackCount"
-            @click.prevent.stop="togglePlaylistPlayback"
-          >
-            <Icon
-              :icon="active && playing ? icons.pause : icons.play"
-              aria-hidden="true"
-              class="size-5"
-            />
-          </Button>
-        </div>
-        <div class="mt-3 min-w-0 pr-16">
-          <NuxtLink
-            :to="`/playlists/${playlist.id}`"
-            class="block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <h3 class="font-medium">
-              <ScrollingText class="w-full">
-                {{ playlist.name }}
-              </ScrollingText>
-            </h3>
-          </NuxtLink>
-          <p class="truncate text-xs text-muted-foreground">
-            {{
-              t(
-                "count.track",
-                { count: playlist.trackCount },
-                playlist.trackCount,
-              )
-            }}
-            <template v-if="playlist.availableTrackCount < playlist.trackCount">
-              ·
+        <div class="space-y-3">
+          <div class="relative">
+            <NuxtLink
+              :to="`/playlists/${playlist.id}`"
+              class="block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              :aria-label="t('playlistCard.open', { playlist: playlist.name })"
+            >
+              <PlaylistCover
+                :cover-urls="compactCoverUrls"
+                :kind="playlist.kind"
+              />
+            </NuxtLink>
+            <Button
+              variant="default"
+              size="icon"
+              class="absolute bottom-2 right-2 z-10 rounded-full shadow-md"
+              :aria-label="
+                active && playing
+                  ? t('playlistCard.pause', { playlist: playlist.name })
+                  : t('playlistCard.play', { playlist: playlist.name })
+              "
+              :disabled="!playlist.availableTrackCount"
+              @click.prevent.stop="togglePlaylistPlayback"
+            >
+              <Icon
+                :icon="active && playing ? icons.pause : icons.play"
+                aria-hidden="true"
+                class="size-5"
+              />
+            </Button>
+          </div>
+          <div class="min-w-0 flex-1 pr-12">
+            <NuxtLink
+              :to="`/playlists/${playlist.id}`"
+              class="flex min-w-0 items-center gap-1 rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              :title="playlist.name"
+            >
+              <Icon
+                :icon="icons.playlist"
+                aria-hidden="true"
+                class="size-3 shrink-0 text-muted-foreground"
+              />
+              <h3 class="min-w-0 flex-1 text-sm font-medium">
+                <ScrollingText class="w-full">
+                  {{ playlist.name }}
+                </ScrollingText>
+              </h3>
+            </NuxtLink>
+            <p class="truncate text-xs text-muted-foreground">
               {{
-                t("playlistCard.unavailableCount", {
-                  count: playlist.trackCount - playlist.availableTrackCount,
-                })
+                t(
+                  "count.track",
+                  { count: playlist.trackCount },
+                  playlist.trackCount,
+                )
               }}
-            </template>
-          </p>
-        </div>
-        <div class="absolute bottom-2 left-3 flex items-center">
-          <PlaylistOfflineSummaryButton :playlist="playlist" />
+              <template
+                v-if="playlist.availableTrackCount < playlist.trackCount"
+              >
+                ·
+                {{
+                  t("playlistCard.unavailableCount", {
+                    count: playlist.trackCount - playlist.availableTrackCount,
+                  })
+                }}
+              </template>
+            </p>
+          </div>
         </div>
         <LikeButton
+          v-if="!automatic"
           class="absolute bottom-1 right-1"
           compact
           :liked="playlist.liked"
@@ -236,6 +265,7 @@ async function removePlaylist() {
         {{ t("context.playPlaylist") }}
       </ContextMenuItem>
       <ContextMenuItem
+        v-if="!automatic"
         :disabled="!likesLoaded || isLikePending(likeTarget)"
         @select="toggleLike(likeTarget)"
       >
@@ -249,12 +279,17 @@ async function removePlaylist() {
             : t("context.likePlaylist")
         }}
       </ContextMenuItem>
-      <ContextMenuSeparator />
-      <ContextMenuItem :disabled="status === 'lost'" @select="openRename">
+      <ContextMenuSeparator v-if="!automatic" />
+      <ContextMenuItem
+        v-if="!automatic"
+        :disabled="status === 'lost'"
+        @select="openRename"
+      >
         <Icon :icon="icons.edit" aria-hidden="true" />
         {{ t("context.renamePlaylist") }}
       </ContextMenuItem>
       <ContextMenuItem
+        v-if="!automatic"
         :disabled="status === 'lost'"
         @select="deleteOpen = true"
       >

@@ -128,49 +128,40 @@ test("interrupted tasks resume as queued and terminal history is bounded", () =>
 });
 
 test("all offline entry points feed the unified task display", async () => {
-  const [
-    tracks,
-    album,
-    collection,
-    playlist,
-    liked,
-    indicator,
-    layout,
-    tasksPage,
-  ] = await Promise.all([
-    readFile(
-      new URL("../app/composables/use-offline-tracks.ts", import.meta.url),
-      "utf8",
-    ),
-    readFile(
-      new URL("../app/composables/use-offline-album.ts", import.meta.url),
-      "utf8",
-    ),
-    readFile(
-      new URL(
-        "../app/composables/use-offline-media-collection.ts",
-        import.meta.url,
+  const [tracks, album, collection, playlist, liked, layout, tasksPage] =
+    await Promise.all([
+      readFile(
+        new URL("../app/composables/use-offline-tracks.ts", import.meta.url),
+        "utf8",
       ),
-      "utf8",
-    ),
-    readFile(
-      new URL("../app/composables/use-offline-playlist.ts", import.meta.url),
-      "utf8",
-    ),
-    readFile(
-      new URL("../app/components/LikedTitlesOfflineSync.vue", import.meta.url),
-      "utf8",
-    ),
-    readFile(
-      new URL("../app/components/TaskProgressIndicator.vue", import.meta.url),
-      "utf8",
-    ),
-    readFile(new URL("../app/layouts/default.vue", import.meta.url), "utf8"),
-    readFile(
-      new URL("../app/pages/settings/tasks.vue", import.meta.url),
-      "utf8",
-    ),
-  ]);
+      readFile(
+        new URL("../app/composables/use-offline-album.ts", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL(
+          "../app/composables/use-offline-media-collection.ts",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+      readFile(
+        new URL("../app/composables/use-offline-playlist.ts", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL(
+          "../app/components/LikedTitlesOfflineSync.vue",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+      readFile(new URL("../app/layouts/default.vue", import.meta.url), "utf8"),
+      readFile(
+        new URL("../app/pages/settings/tasks.vue", import.meta.url),
+        "utf8",
+      ),
+    ]);
 
   assert.match(tracks, /enqueueTrack\(track\)/);
   assert.match(tracks, /enqueueAlbum\(album\)/);
@@ -185,10 +176,7 @@ test("all offline entry points feed the unified task display", async () => {
   assert.match(liked, /verified/);
   assert.match(liked, /saveLikedTitles\(\)/);
   assert.match(liked, /cancelLikedTitles\(\)/);
-  assert.match(indicator, /useOfflineDownloadTasks/);
-  assert.match(indicator, /downloadTasks\s*\.orderedTasks\(\)/);
-  assert.match(indicator, /\/settings\/tasks#active-tasks/);
-  assert.match(layout, /<TaskProgressIndicator \/>/);
+  assert.doesNotMatch(layout, /TaskProgressIndicator/);
   assert.doesNotMatch(layout, /DownloadTaskIndicator/);
   assert.match(tasksPage, /useOfflineDownloadTasks/);
   assert.match(tasksPage, /activeRows/);

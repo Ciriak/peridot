@@ -8,7 +8,7 @@ const props = defineProps<{
   url: string | null;
 }>();
 
-const { artworkUrl, failed } = useCachedArtwork(() => props.url);
+const { artworkUrl, failed, fromCache } = useCachedArtwork(() => props.url);
 </script>
 
 <template>
@@ -19,6 +19,7 @@ const { artworkUrl, failed } = useCachedArtwork(() => props.url);
     <FadeInImage
       v-if="artworkUrl && !failed"
       :src="artworkUrl"
+      :fade-in="!fromCache"
       class="absolute inset-0"
       @error="failed = true"
     />

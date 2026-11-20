@@ -115,10 +115,10 @@ test("the player exposes randomize and a persistent right-side queue drawer", as
   );
   assert.match(drawer, /@click\.stop="play\(track\)"/);
 
-  assert.match(player, /fetchQueue\(/);
-  assert.match(player, /replaceQueue\(/);
-  assert.match(player, /queueWriteTail/);
-  assert.match(player, /saveQueue\(normalized\)/);
+  assert.doesNotMatch(player, /fetchQueue\(/);
+  assert.doesNotMatch(player, /\/api\/queue/);
+  assert.match(player, /savePersistedPlayerState\(window\.localStorage/);
+  assert.match(player, /persistLocalPlayerState\(\);/);
   assert.match(player, /queueAuthScope/);
   assert.match(player, /queueHistory/);
   assert.match(player, /shuffleTrackIds/);

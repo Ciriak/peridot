@@ -28,6 +28,7 @@ import {
   isAuthenticationRedirectError,
   isPeridotNetworkError,
 } from "../lib/peridot-client";
+import BackButton from "./BackButton.vue";
 import FadeInImage from "./FadeInImage.vue";
 import LikeButton from "./LikeButton.vue";
 import MediaCollectionOfflineButton from "./MediaCollectionOfflineButton.vue";
@@ -44,7 +45,13 @@ const route = useRoute();
 const { t } = useI18n();
 const { address } = useServer();
 const { token } = useSession();
-const { active, playing, playCollection, togglePlayback } = useLibraryPlayer();
+const {
+  active,
+  playing,
+  toggleCollectionPlayback: togglePlayerCollectionPlayback,
+  togglePlayback,
+  isPlaybackTargetActive,
+} = useLibraryPlayer();
 const { status: serverStatus } = useServerConnection();
 const { savedTracks, tracksMatching } = useOfflineTracks();
 const {
@@ -117,6 +124,15 @@ const creatorLabel = computed(() =>
 const collectionActive = computed(
   () => active.value?.albumId === collection.value?.id,
 );
+const collectionTarget = computed(() => ({
+  kind: "collection" as const,
+  id: collection.value?.id ?? "",
+}));
+const collectionPlaybackActive = computed(
+  () =>
+    isPlaybackTargetActive(collectionTarget.value) ||
+    (collectionActive.value && playing.value),
+);
 const collectionPlayable = computed(
   () =>
     itemCount.value > 0 &&
@@ -128,8 +144,11 @@ const collectionPlayable = computed(
 const coverUrl = computed(() =>
   trackCoverUrl(address.value ?? "", collection.value?.coverUrl ?? null),
 );
-const { artworkUrl: coverImageUrl, failed: coverFailed } =
-  useCachedArtwork(coverUrl);
+const {
+  artworkUrl: coverImageUrl,
+  failed: coverFailed,
+  fromCache: coverFromCache,
+} = useCachedArtwork(coverUrl);
 const likeTarget = computed<LikeTarget | null>(() => {
   const current = collection.value;
   if (!current) return null;
@@ -190,33 +209,38 @@ function setTrackSort(next: TrackSort | null) {
 
 async function playWholeCollection() {
   const current = collection.value;
-  if (!address.value || !token.value || !current || !collectionPlayable.value)
-    return;
+  if (!current || !collectionPlayable.value) return;
   offlinePlaybackError.value = "";
-  const playSavedTracks = async () => {
-    const saved = await tracksMatching((track) => track.albumId === current.id);
-    if (!saved.length) {
-      offlinePlaybackError.value = t("error.offlineCollectionEmpty");
-      return;
-    }
-    playCollection(saved);
-  };
-  if (serverStatus.value === "lost" || !current.available) {
-    await playSavedTracks();
-    return;
-  }
   try {
-    playCollection(
-      await loadCollectionTracks(address.value, token.value, {
-        collectionId: current.id,
-        mediaType: current.mediaType,
-      }),
+    const result = await togglePlayerCollectionPlayback(
+      collectionTarget.value,
+      async () => {
+        const saved = await tracksMatching(
+          (track) => track.albumId === current.id,
+        );
+        if (
+          serverStatus.value === "lost" ||
+          !current.available ||
+          !address.value ||
+          !token.value
+        ) {
+          return saved;
+        }
+        try {
+          return await loadCollectionTracks(address.value, token.value, {
+            collectionId: current.id,
+            mediaType: current.mediaType,
+          });
+        } catch (reason) {
+          if (isPeridotNetworkError(reason)) return saved;
+          throw reason;
+        }
+      },
     );
-  } catch (reason) {
-    if (isPeridotNetworkError(reason)) {
-      await playSavedTracks();
-      return;
+    if (result === "empty") {
+      offlinePlaybackError.value = t("error.offlineCollectionEmpty");
     }
+  } catch (reason) {
     if (!isAuthenticationRedirectError(reason)) {
       offlinePlaybackError.value = t("error.catalogLoad");
     }
@@ -224,7 +248,11 @@ async function playWholeCollection() {
 }
 
 function toggleCollectionPlayback() {
-  if (collectionActive.value && playing.value) {
+  if (
+    collectionActive.value &&
+    playing.value &&
+    !isPlaybackTargetActive(collectionTarget.value)
+  ) {
     togglePlayback();
     return;
   }
@@ -249,14 +277,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="mb-2">
-    <Button as-child variant="ghost" size="lg">
-      <NuxtLink :to="backRoute">
-        <Icon :icon="icons.arrowLeft" aria-hidden="true" />
-        {{ t(backLabelKey) }}
-      </NuxtLink>
-    </Button>
-  </div>
+  <BackButton />
 
   <div
     v-if="collectionLoading"
@@ -301,6 +322,7 @@ onMounted(() => {
         <FadeInImage
           v-if="coverImageUrl && !coverFailed"
           :src="coverImageUrl"
+          :fade-in="!coverFromCache"
           loading="eager"
           class="absolute inset-0"
           @error="coverFailed = true"
@@ -327,7 +349,7 @@ onMounted(() => {
             class="rounded-full"
             :disabled="!collectionPlayable"
             :aria-label="
-              collectionActive && playing
+              collectionPlaybackActive
                 ? t('card.pauseCollection', {
                     collection: collection.title,
                   })
@@ -339,7 +361,7 @@ onMounted(() => {
             @click="toggleCollectionPlayback"
           >
             <Icon
-              :icon="collectionActive && playing ? icons.pause : icons.play"
+              :icon="collectionPlaybackActive ? icons.pause : icons.play"
               aria-hidden="true"
               class="size-5"
             />

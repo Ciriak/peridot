@@ -52,6 +52,12 @@ test("the persistent player controls a native audio element", async () => {
   assert.match(player, /audio\.currentTime = position/);
   assert.match(player, /readPersistedPlayerState\(window\.localStorage/);
   assert.match(player, /savePersistedPlayerState\(window\.localStorage/);
+  assert.doesNotMatch(player, /fetchQueue\(|\/api\/queue/);
+  assert.match(
+    player,
+    /const stored = readPersistedPlayerState\(window\.localStorage, scope\);[\s\S]*?setQueueSnapshot\([\s\S]*?trackIds: stored\.queueTrackIds[\s\S]*?activeTrackId: stored\.currentTrackId[\s\S]*?elapsed\.value = stored\.positionSeconds/,
+    "A reload restores the selected track, active queue, and playback progress locally",
+  );
   assert.match(
     player,
     /watch\(\s*\[queueTrackIds, activeTrackId, shuffleEnabled, shuffleTrackIds, elapsed\]/,
@@ -351,4 +357,107 @@ test("the player replaces known track metadata without an unresolved frame", asy
     /Promise<TrackResponse\[\]>[\s\S]*tracks\.push\(\.\.\.page\.items\)/,
     "Collection loading retains track metadata instead of returning IDs only",
   );
+});
+
+test("available collection play controls switch to pause before buffering", async () => {
+  const [
+    player,
+    albumCard,
+    albumPage,
+    artistPage,
+    mediaCard,
+    mediaDetail,
+    playlistCard,
+    playlistPage,
+    quickPick,
+  ] = await Promise.all([
+    readFile(
+      new URL("../app/composables/use-library-player.ts", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/components/AlbumCard.vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/pages/albums/[album].vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/pages/artists/[artist].vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/components/MediaCollectionCard.vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/components/MediaCollectionDetail.vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/components/PlaylistCard.vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/pages/playlists/[playlist].vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/components/QuickPickTile.vue", import.meta.url),
+      "utf8",
+    ),
+  ]);
+
+  assert.match(
+    player,
+    /async function toggleCollectionPlayback\([\s\S]*?playbackCollectionTarget\.value = target;[\s\S]*?playbackCollectionStarting\.value = true;[\s\S]*?playing\.value = true;[\s\S]*?loading\.value = true;[\s\S]*?const tracks = await load\(\);/,
+    "Playback intent becomes active before collection data is awaited",
+  );
+  assert.match(
+    player,
+    /if \(playbackCollectionStarting\.value\) return;\s+const previousTrackId/,
+    "Pending collection intent does not resume stale audio",
+  );
+  assert.match(
+    player,
+    /if \(playbackCollectionStarting\.value\) \{\s+cancelCollectionPlaybackStart\(\);\s+return;\s+\}/,
+    "A pause action cancels a pending collection start",
+  );
+
+  for (const [name, source] of [
+    ["album card", albumCard],
+    ["album page", albumPage],
+    ["artist page", artistPage],
+    ["media collection card", mediaCard],
+    ["media collection detail", mediaDetail],
+    ["playlist card", playlistCard],
+    ["quick pick", quickPick],
+  ] as const) {
+    assert.match(
+      source,
+      /toggleCollectionPlayback/,
+      `${name} uses the shared immediate collection intent`,
+    );
+  }
+  assert.match(
+    playlistPage,
+    /playCollection\(playableTracks\.value, track\.id, playlistTarget\.value\)/,
+    "Playlist track playback binds the active playlist target",
+  );
+  assert.match(albumCard, /albumPlaybackActive \? icons\.pause : icons\.play/);
+  assert.match(albumPage, /albumPlaybackActive \? icons\.pause : icons\.play/);
+  assert.match(
+    artistPage,
+    /artistPlaybackActive \? icons\.pause : icons\.play/,
+  );
+  assert.match(
+    mediaCard,
+    /collectionPlaybackActive \? icons\.pause : icons\.play/,
+  );
+  assert.match(
+    mediaDetail,
+    /collectionPlaybackActive \? icons\.pause : icons\.play/,
+  );
+  assert.match(quickPick, /isPlaybackTargetActive\(albumTarget\.value\)/);
 });

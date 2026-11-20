@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { useI18n } from "#imports";
-import type { PlaylistEntryResponse, TrackResponse } from "@peridot/contracts";
+import type {
+  AlbumSummaryResponse,
+  PlaylistEntryResponse,
+  TrackResponse,
+} from "@peridot/contracts";
 import { Icon } from "@iconify/vue/offline";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
@@ -14,19 +18,23 @@ import { useServer } from "../composables/use-server";
 import { useServerConnection } from "../composables/use-server-connection";
 import { icons } from "../lib/icons";
 import {
+  albumSummaryFromTrack,
   formatTrackDuration,
-  trackAlbumRoute,
   trackArtistNames,
 } from "../lib/library";
 import { isTrackPlayable } from "../lib/offline-playback";
+import AlbumLink from "./AlbumLink.vue";
+import ArtistLink from "./ArtistLink.vue";
 import LikeButton from "./LikeButton.vue";
 import TrackArtistLinks from "./TrackArtistLinks.vue";
 import TrackArtwork from "./TrackArtwork.vue";
-import TrackContextMenu from "./TrackContextMenu.vue";
+import TrackRowContextMenu from "./TrackRowContextMenu.vue";
 
 const props = defineProps<{
   entries: readonly PlaylistEntryResponse[];
   editable: boolean;
+  readOnly?: boolean;
+  showTrackLikes?: boolean;
 }>();
 const emit = defineEmits<{
   reorder: [itemIds: string[]];
@@ -97,6 +105,22 @@ function toggleEntryPlayback(entry: PlaylistEntryResponse) {
   }
   emit("play", entry.track);
 }
+
+function albumForEntry(entry: PlaylistEntryResponse): AlbumSummaryResponse {
+  if (entry.track) return albumSummaryFromTrack(entry.track);
+  return {
+    id: "",
+    title: entry.album?.trim() ?? "",
+    artist: entry.artist.trim(),
+    artists: entry.artists,
+    coverUrl: entry.coverUrl,
+    trackCount: 0,
+    durationMs: entry.durationMs,
+    releaseYear: null,
+    available: entry.available,
+    liked: entry.liked,
+  };
+}
 </script>
 
 <template>
@@ -106,27 +130,30 @@ function toggleEntryPlayback(entry: PlaylistEntryResponse) {
     :aria-label="t('playlistTracks.label')"
     class="rounded-lg border text-sm"
   >
-    <div
+    <TrackRowContextMenu
       v-for="(entry, index) in rows"
       :key="entry.id"
-      role="listitem"
-      class="flex min-w-full items-center gap-3 border-b p-3 last:border-b-0"
+      :track="entry.track"
+      @play="toggleEntryPlayback(entry)"
     >
-      <Icon
-        :icon="icons.drag"
-        aria-hidden="true"
-        class="size-4 shrink-0 text-muted-foreground"
-        :class="!editable && 'opacity-30'"
-      />
-      <span class="w-6 shrink-0 text-right tabular-nums text-muted-foreground">
-        {{ index + 1 }}
-      </span>
-      <TrackContextMenu
-        v-if="entry.track"
-        :track="entry.track"
-        @play="toggleEntryPlayback(entry)"
+      <div
+        role="listitem"
+        class="flex min-w-full items-center gap-3 border-b p-3 last:border-b-0"
       >
+        <Icon
+          v-if="!readOnly"
+          :icon="icons.drag"
+          aria-hidden="true"
+          class="size-4 shrink-0 text-muted-foreground"
+          :class="!editable && 'opacity-30'"
+        />
+        <span
+          class="w-6 shrink-0 text-right tabular-nums text-muted-foreground"
+        >
+          {{ index + 1 }}
+        </span>
         <Button
+          v-if="entry.track"
           variant="ghost"
           size="icon-sm"
           class="group size-10 shrink-0 overflow-hidden rounded-md p-0"
@@ -150,90 +177,99 @@ function toggleEntryPlayback(entry: PlaylistEntryResponse) {
             </span>
           </TrackArtwork>
         </Button>
-      </TrackContextMenu>
-      <div
-        v-else
-        class="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground"
-      >
-        <Icon
-          :icon="entry.album ? icons.album : icons.music"
-          aria-hidden="true"
-          class="size-5"
-        />
-      </div>
-      <div class="min-w-0 flex-1">
-        <div class="flex min-w-0 flex-wrap items-center gap-2">
-          <ScrollingText
-            class="min-w-0"
-            :class="!playable(entry) && 'opacity-60'"
-            :title="entry.title"
-          >
-            {{ entry.title }}
-          </ScrollingText>
+        <div
+          v-else
+          class="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground"
+        >
           <Icon
-            v-if="isCurrent(entry)"
-            :icon="icons.waveform"
+            :icon="entry.album ? icons.album : icons.music"
             aria-hidden="true"
-            class="size-4 shrink-0 text-primary"
+            class="size-5"
           />
-          <Badge
-            v-if="entry.track && !entry.track.available"
-            variant="secondary"
-          >
-            {{
-              playable(entry)
-                ? t("trackTable.availableOffline")
-                : t("playlistTracks.unavailable")
-            }}
-          </Badge>
-          <Badge v-else-if="!playable(entry)" variant="secondary">
-            {{ t("playlistTracks.unavailable") }}
-          </Badge>
         </div>
-        <ScrollingText class="w-full text-xs text-muted-foreground">
-          <TrackArtistLinks
-            v-if="entry.track?.mediaType === 'music'"
-            :artists="trackArtistNames(entry.track)"
-          />
-          <span v-else>{{ entry.artist }}</span>
-        </ScrollingText>
+        <div class="min-w-0 flex-1">
+          <div class="flex min-w-0 flex-wrap items-center gap-2">
+            <ScrollingText
+              class="min-w-0"
+              :class="!playable(entry) && 'opacity-60'"
+              :title="entry.title"
+            >
+              {{ entry.title }}
+            </ScrollingText>
+            <Icon
+              v-if="isCurrent(entry)"
+              :icon="icons.waveform"
+              aria-hidden="true"
+              class="size-4 shrink-0 text-primary"
+            />
+            <Badge
+              v-if="entry.track && !entry.track.available"
+              variant="secondary"
+            >
+              {{
+                playable(entry)
+                  ? t("trackTable.availableOffline")
+                  : t("playlistTracks.unavailable")
+              }}
+            </Badge>
+            <Badge v-else-if="!playable(entry)" variant="secondary">
+              {{ t("playlistTracks.unavailable") }}
+            </Badge>
+          </div>
+          <ScrollingText class="w-full text-xs text-muted-foreground">
+            <TrackArtistLinks
+              v-if="entry.track?.mediaType === 'music'"
+              :artists="trackArtistNames(entry.track)"
+            />
+            <ArtistLink
+              v-else-if="entry.artist.trim()"
+              :artist="entry.artist"
+            />
+          </ScrollingText>
+        </div>
+        <AlbumLink
+          v-if="entry.album"
+          :album="albumForEntry(entry)"
+          class="hidden w-48 shrink-0 text-muted-foreground hover:text-foreground hover:underline md:block"
+        >
+          <ScrollingText class="w-full">{{ entry.album }}</ScrollingText>
+        </AlbumLink>
+        <span
+          v-else
+          class="hidden w-48 shrink-0 text-muted-foreground md:block"
+        >
+          <ScrollingText class="w-full">
+            {{ entry.album || "—" }}
+          </ScrollingText>
+        </span>
+        <span
+          class="w-16 shrink-0 text-right tabular-nums text-muted-foreground"
+        >
+          {{ formatTrackDuration(entry.durationMs) }}
+        </span>
+        <LikeButton
+          v-if="showTrackLikes !== false && entry.track?.mediaType === 'music'"
+          compact
+          :liked="entry.liked"
+          :label="entry.title"
+          :pending="isLikePending({ kind: 'track', trackId: entry.track.id })"
+          :disabled="!likesLoaded || status === 'lost'"
+          @toggle="toggleLike({ kind: 'track', trackId: entry.track!.id })"
+        />
+        <span v-else class="w-7 shrink-0" />
+        <Button
+          v-if="!readOnly"
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          :disabled="!editable"
+          :aria-label="t('playlistTracks.remove', { title: entry.title })"
+          :title="t('playlistTracks.remove', { title: entry.title })"
+          @click="emit('remove', entry)"
+        >
+          <Icon :icon="icons.close" aria-hidden="true" class="size-4" />
+        </Button>
       </div>
-      <NuxtLink
-        v-if="entry.album && entry.track"
-        :to="trackAlbumRoute(entry.track)"
-        class="hidden w-48 shrink-0 text-muted-foreground hover:text-foreground hover:underline md:block"
-      >
-        <ScrollingText class="w-full">{{ entry.album }}</ScrollingText>
-      </NuxtLink>
-      <span v-else class="hidden w-48 shrink-0 text-muted-foreground md:block">
-        <ScrollingText class="w-full">
-          {{ entry.album || "—" }}
-        </ScrollingText>
-      </span>
-      <span class="w-16 shrink-0 text-right tabular-nums text-muted-foreground">
-        {{ formatTrackDuration(entry.durationMs) }}
-      </span>
-      <LikeButton
-        v-if="entry.track?.mediaType === 'music'"
-        compact
-        :liked="entry.liked"
-        :label="entry.title"
-        :pending="isLikePending({ kind: 'track', trackId: entry.track.id })"
-        :disabled="!likesLoaded || status === 'lost'"
-        @toggle="toggleLike({ kind: 'track', trackId: entry.track!.id })"
-      />
-      <span v-else class="w-7 shrink-0" />
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        :disabled="!editable"
-        :aria-label="t('playlistTracks.remove', { title: entry.title })"
-        :title="t('playlistTracks.remove', { title: entry.title })"
-        @click="emit('remove', entry)"
-      >
-        <Icon :icon="icons.close" aria-hidden="true" class="size-4" />
-      </Button>
-    </div>
+    </TrackRowContextMenu>
   </div>
 </template>

@@ -5,6 +5,13 @@ import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import type { AlbumSummaryResponse } from "@peridot/contracts";
+import {
+  TooltipContent,
+  TooltipPortal,
+  TooltipProvider,
+  TooltipRoot,
+  TooltipTrigger,
+} from "reka-ui";
 import { albumRoute, trackCoverUrl } from "../lib/library";
 import { icons } from "../lib/icons";
 import { computed } from "vue";
@@ -30,14 +37,23 @@ const emit = defineEmits<{ open: [] }>();
 const { t } = useI18n();
 const { address } = useServer();
 const { token } = useSession();
-const { active, playing, playCollection, togglePlayback } = useLibraryPlayer();
+const {
+  active,
+  playing,
+  toggleCollectionPlayback,
+  togglePlayback,
+  isPlaybackTargetActive,
+} = useLibraryPlayer();
 const { savedTracks, tracksMatching } = useOfflineTracks();
 const { status: serverStatus } = useServerConnection();
 const coverUrl = computed(() =>
   trackCoverUrl(address.value ?? "", props.album.coverUrl),
 );
-const { artworkUrl: coverImageUrl, failed: coverFailed } =
-  useCachedArtwork(coverUrl);
+const {
+  artworkUrl: coverImageUrl,
+  failed: coverFailed,
+  fromCache: coverFromCache,
+} = useCachedArtwork(coverUrl);
 const {
   likedAlbumIds,
   loaded: likesLoaded,
@@ -47,38 +63,63 @@ const {
 const albumActive = computed(() => {
   return active.value?.albumId === props.album.id;
 });
+const savedTrackCount = computed(
+  () =>
+    savedTracks.value.filter((saved) => saved.track.albumId === props.album.id)
+      .length,
+);
+const albumFullySaved = computed(
+  () =>
+    Boolean(props.album.trackCount) &&
+    savedTrackCount.value >= props.album.trackCount,
+);
 const albumPlayable = computed(
   () =>
     Boolean(props.album.trackCount) &&
-    (props.album.available ||
-      savedTracks.value.some(
-        (saved) => saved.track.albumId === props.album.id,
-      )),
+    (albumFullySaved.value ||
+      (serverStatus.value !== "lost" && props.album.available)),
+);
+const albumControlEnabled = computed(
+  () => albumPlayable.value || (albumActive.value && playing.value),
+);
+const albumTarget = computed(() => ({
+  kind: "album" as const,
+  id: props.album.id,
+}));
+const albumPlaybackActive = computed(
+  () =>
+    isPlaybackTargetActive(albumTarget.value) ||
+    (albumActive.value && playing.value),
 );
 async function toggleAlbumPlayback() {
-  if (albumActive.value && playing.value) {
+  if (
+    albumActive.value &&
+    playing.value &&
+    !isPlaybackTargetActive(albumTarget.value)
+  ) {
     togglePlayback();
     return;
   }
-  if (!address.value || !token.value || !albumPlayable.value) return;
-  const playSaved = async () => {
-    const saved = await tracksMatching(
-      (track) => track.albumId === props.album.id,
-    );
-    if (saved.length) playCollection(saved);
-  };
-  if (serverStatus.value === "lost" || !props.album.available) {
-    await playSaved();
-    return;
-  }
+  if (!albumPlayable.value) return;
   try {
-    playCollection(
-      await loadCollectionTracks(address.value, token.value, {
-        albumId: props.album.id,
-      }),
-    );
-  } catch (reason) {
-    if (isPeridotNetworkError(reason)) await playSaved();
+    await toggleCollectionPlayback(albumTarget.value, async () => {
+      const saved = await tracksMatching(
+        (track) => track.albumId === props.album.id,
+      );
+      if (serverStatus.value === "lost" || !address.value || !token.value) {
+        return saved;
+      }
+      try {
+        return await loadCollectionTracks(address.value, token.value, {
+          albumId: props.album.id,
+        });
+      } catch (reason) {
+        if (isPeridotNetworkError(reason)) return saved;
+        throw reason;
+      }
+    });
+  } catch {
+    // The shared player exposes playback failures.
   }
 }
 </script>
@@ -113,36 +154,54 @@ async function toggleAlbumPlayback() {
               <FadeInImage
                 v-if="coverImageUrl && !coverFailed"
                 :src="coverImageUrl"
+                :fade-in="!coverFromCache"
                 class="absolute inset-0"
                 @error="coverFailed = true"
               />
             </div>
           </NuxtLink>
-          <Button
-            variant="default"
-            :size="compact ? 'icon-sm' : 'icon'"
-            class="pointer-events-none absolute z-10 cursor-pointer rounded-full opacity-0 shadow-md transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
-            :class="compact ? 'bottom-1 right-1' : 'bottom-2 right-2'"
-            :disabled="!albumPlayable"
-            :aria-label="
-              albumActive && playing
-                ? t('card.pauseAlbum', {
-                    album: album.title,
-                    artist: album.artist,
-                  })
-                : t('card.playAlbum', {
-                    album: album.title,
-                    artist: album.artist,
-                  })
-            "
-            @click.prevent.stop="toggleAlbumPlayback"
-          >
-            <Icon
-              :icon="albumActive && playing ? icons.pause : icons.play"
-              aria-hidden="true"
-              :class="compact ? 'size-4' : 'size-5'"
-            />
-          </Button>
+          <TooltipProvider :delay-duration="150">
+            <TooltipRoot :disabled="albumControlEnabled">
+              <TooltipTrigger as-child>
+                <Button
+                  variant="default"
+                  :size="compact ? 'icon-sm' : 'icon'"
+                  class="pointer-events-none absolute z-10 cursor-pointer rounded-full opacity-0 shadow-md transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-primary max-sm:pointer-events-auto max-sm:size-11 max-sm:opacity-100"
+                  :class="compact ? 'bottom-1 right-1' : 'bottom-2 right-2'"
+                  :aria-disabled="!albumControlEnabled"
+                  :aria-label="
+                    albumPlaybackActive
+                      ? t('card.pauseAlbum', {
+                          album: album.title,
+                          artist: album.artist,
+                        })
+                      : t('card.playAlbum', {
+                          album: album.title,
+                          artist: album.artist,
+                        })
+                  "
+                  @click.prevent.stop="toggleAlbumPlayback"
+                >
+                  <Icon
+                    :icon="albumPlaybackActive ? icons.pause : icons.play"
+                    aria-hidden="true"
+                    :class="
+                      compact ? 'size-4 max-sm:size-5' : 'size-5 max-sm:size-6'
+                    "
+                  />
+                </Button>
+              </TooltipTrigger>
+              <TooltipPortal>
+                <TooltipContent
+                  v-if="!albumControlEnabled"
+                  :side-offset="6"
+                  class="z-50 rounded-md border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-md"
+                >
+                  {{ t("trackTable.unavailable") }}
+                </TooltipContent>
+              </TooltipPortal>
+            </TooltipRoot>
+          </TooltipProvider>
         </div>
         <div class="min-w-0 flex-1" :class="compact ? 'pr-6' : 'pr-12'">
           <NuxtLink
@@ -162,7 +221,7 @@ async function toggleAlbumPlayback() {
               </ScrollingText>
             </h3>
           </NuxtLink>
-          <Badge v-if="!album.available" variant="secondary" class="mt-1">
+          <Badge v-if="!albumPlayable" variant="secondary" class="mt-1">
             {{ t("trackTable.unavailable") }}
           </Badge>
           <ScrollingText class="w-full text-xs text-muted-foreground">

@@ -8,8 +8,10 @@ import { ProgressCircle } from "@peridot/ui/components/ui/progress-circle";
 import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import { computed, nextTick, ref, watch } from "vue";
 import AutoLoadMore from "./AutoLoadMore.vue";
+import AlbumLink from "./AlbumLink.vue";
 import DownloadProgressTooltip from "./DownloadProgressTooltip.vue";
 import LikeButton from "./LikeButton.vue";
+import TrackArtistLinks from "./TrackArtistLinks.vue";
 import TrackArtwork from "./TrackArtwork.vue";
 import TrackContextMenu from "./TrackContextMenu.vue";
 import { useMainScrollVirtualizer } from "../composables/use-main-scroll-virtualizer";
@@ -25,9 +27,8 @@ import {
   formatTrackDuration,
   formatTrackNumber,
   nextTrackSort,
-  artistRoute,
+  albumSummaryFromTrack,
   trackArtistNames,
-  trackAlbumRoute,
   trackTitleAnchorId,
   type TrackSort,
   type TrackTableVariant,
@@ -328,6 +329,7 @@ watch(
           </button>
         </div>
         <div
+          v-if="variant !== 'album'"
           role="columnheader"
           class="w-14 shrink-0 p-3 text-right font-medium"
         >
@@ -433,24 +435,7 @@ watch(
                     showArtists !== false && item.track.mediaType === 'music'
                   "
                 >
-                  <template
-                    v-for="(artist, artistIndex) in trackArtistNames(
-                      item.track,
-                    )"
-                    :key="artist"
-                  >
-                    <NuxtLink
-                      :to="artistRoute({ name: artist })"
-                      class="rounded-sm hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      @dblclick.stop
-                      >{{ artist }}</NuxtLink
-                    ><template
-                      v-if="
-                        artistIndex < trackArtistNames(item.track).length - 1
-                      "
-                      >,
-                    </template>
-                  </template>
+                  <TrackArtistLinks :artists="trackArtistNames(item.track)" />
                 </template>
                 <template v-else>{{ item.track.artist }}</template>
               </ScrollingText>
@@ -465,13 +450,7 @@ watch(
               v-if="item.track.album?.trim() && item.track.artist.trim()"
               class="w-full"
             >
-              <NuxtLink
-                :to="trackAlbumRoute(item.track)"
-                class="rounded-sm hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                @dblclick.stop
-              >
-                {{ item.track.album?.trim() }}
-              </NuxtLink>
+              <AlbumLink :album="albumSummaryFromTrack(item.track)" />
             </ScrollingText>
             <ScrollingText v-else class="w-full">
               {{ item.track.album?.trim() || "—" }}
@@ -483,7 +462,11 @@ watch(
           >
             {{ formatTrackDuration(item.track.durationMs) }}
           </div>
-          <div role="cell" class="w-14 shrink-0 p-2 text-right">
+          <div
+            v-if="variant !== 'album'"
+            role="cell"
+            class="w-14 shrink-0 p-2 text-right"
+          >
             <DownloadProgressTooltip
               :active="
                 isOfflinePending(item.track.id) &&

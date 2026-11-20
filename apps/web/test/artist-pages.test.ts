@@ -69,8 +69,14 @@ test("artists have list and detail routes with artist-scoped content", async () 
     /<VirtualCardGrid[\s\S]*layout="wide"/,
     "Artist albums use the wide virtual card profile",
   );
-  assert.match(detailPage, /playCollection\(/);
+  assert.match(detailPage, /toggleCollectionPlayback\(/);
   assert.match(detailPage, /t\("context\.playArtist"\)/);
+  assert.match(detailPage, /t\("context\.pauseArtist"\)/);
+  assert.match(
+    detailPage,
+    /artistPlaybackActive \? icons\.pause : icons\.play/,
+    "Artist playback action switches to pause before loading completes",
+  );
   assert.match(detailPage, /<LikeButton/);
   assert.match(detailPage, /t\("page\.artist\.unavailable"\)/);
   assert.match(detailPage, /<ArtistArtwork :image-url="artist\.imageUrl"/);
@@ -78,8 +84,8 @@ test("artists have list and detail routes with artist-scoped content", async () 
   assert.match(detailPage, /artist\.localName/);
   assert.match(
     detailPage,
-    /<div class="mb-2">\s+<Button as-child variant="ghost" size="lg"/,
-    "The artist back control is large with tighter page spacing",
+    /<BackButton \/>/,
+    "The artist back control uses the shared history-aware button",
   );
 });
 
@@ -120,13 +126,13 @@ test("artist names link from navigation and track lists", async () => {
   assert.match(albumDetail, /<TrackArtistLinks :artists="album\.artists" \/>/);
   assert.match(
     trackTable,
-    /showArtists !== false[\s\S]*?item\.track\.mediaType === 'music'[\s\S]*?<NuxtLink\s+:to="artistRoute\(\{ name: artist \}\)"/,
-    "Artist-page track rows link every music artist directly",
+    /showArtists !== false[\s\S]*?item\.track\.mediaType === 'music'[\s\S]*?<TrackArtistLinks :artists="trackArtistNames\(item\.track\)" \/>/,
+    "Artist-page track rows use the shared menu-aware artist links",
   );
   assert.match(
     trackTable,
-    /:to="trackAlbumRoute\(item\.track\)"/,
-    "Artist-page track lists link their album names",
+    /<AlbumLink :album="albumSummaryFromTrack\(item\.track\)" \/>/,
+    "Artist-page track lists use the shared menu-aware album links",
   );
   assert.match(libraryScreen, /variant="library"/);
   assert.match(trackTable, /@dblclick\.stop/);

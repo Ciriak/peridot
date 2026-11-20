@@ -42,9 +42,7 @@ import type {
   ReorderPlaylistItemsRequest,
   ResolveTracksResponse,
   PlaybackTokenResponse,
-  QueueResponse,
   RecordTrackPlayResponse,
-  ReplaceQueueRequest,
   ResetMetadataResponse,
   RestartServerResponse,
   ServerSettingsResponse,
@@ -1142,27 +1140,6 @@ export function revertTrackMetadata(
     `/api/tracks/${encodeURIComponent(trackId)}/metadata`,
     token,
     { method: "DELETE" },
-  );
-}
-
-export function fetchQueue(serverAddress: string, token: string) {
-  return authenticatedRequestJson<QueueResponse>(
-    serverAddress,
-    "/api/queue",
-    token,
-  );
-}
-
-export function replaceQueue(
-  serverAddress: string,
-  token: string,
-  queue: ReplaceQueueRequest,
-) {
-  return authenticatedRequestJson<QueueResponse>(
-    serverAddress,
-    "/api/queue",
-    token,
-    { method: "PUT", body: JSON.stringify(queue) },
   );
 }
 

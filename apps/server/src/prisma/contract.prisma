@@ -203,32 +203,6 @@ model TrackPlayEvent {
   @@index([trackId])
 }
 
-model QueueItem {
-  userId         String
-  trackId        String
-  position       Int
-  randomPosition Int?
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  track          Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  createdAt      DateTime @default(now())
-
-  @@id([userId, trackId])
-  @@index([userId, position])
-  @@index([userId, randomPosition])
-  @@index([trackId])
-}
-
-model QueueState {
-  userId         String   @id
-  activeTrackId  String?
-  shuffleEnabled Int      @default(0)
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  activeTrack    Track?   @relation(fields: [activeTrackId], references: [id], onDelete: SetNull)
-  updatedAt      DateTime @onCreate(now()) @onUpdate(now())
-
-  @@index([activeTrackId])
-}
-
 model AlbumLike {
   id               String   @id @onCreate(cuid(2))
   userId           String

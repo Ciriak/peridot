@@ -76,11 +76,12 @@ deduplicated WebP cache.
 
 Removing any source stops its tasks, retains a hidden source tombstone, and marks
 its tracks and catalog projections unavailable in one transaction. Likes,
-playlists, queues, play events, playlist entries, catalog artwork, and offline
-copies are retained. Source configuration and encrypted credentials are cleared,
-and queued artwork jobs are removed. Normal catalog queries exclude unavailable
-entries; personal surfaces can request them explicitly. Re-adding the same source
-identity restores the tombstone and track IDs before queuing a scan.
+playlists, play events, playlist entries, catalog artwork, and offline copies are
+retained. Local player snapshots are not server state and remain on the device.
+Source configuration and encrypted credentials are cleared, and queued artwork
+jobs are removed. Normal catalog queries exclude unavailable entries; personal
+surfaces can request them explicitly. Re-adding the same source identity restores
+the tombstone and track IDs before queuing a scan.
 
 ## API summary
 
@@ -121,6 +122,11 @@ area, sidebar, main content surface, and fixed bottom player. Authenticated serv
 state is cached with TanStack Query and persisted per server and user in
 IndexedDB.
 
+The selected track, active queue, shuffle state, and playback position are
+persisted in browser-local storage per server and user. Reloads restore the
+snapshot with playback paused. There is no server queue endpoint or database
+queue state; playback state is not synchronized across devices.
+
 Offline audio and download-task state are persisted separately from query cache.
 All offline-save controls enqueue a device task; the shared worker resolves the
 current catalog target, skips existing copies, and downloads one track at a time.
@@ -129,13 +135,18 @@ Settings → Tasks.
 
 User preferences use `GET /api/users/me/preferences`,
 `PUT /api/users/me/preferences`, and
-`POST /api/users/me/preferences/initialize` for the one-time account migration.
+`POST /api/users/me/preferences/initialize` for one-time account initialization.
 The client verifies preferences after authentication before starting automatic
-liked-title downloads.
+liked-title downloads. Uninitialized accounts use the enabled default and do not
+import legacy browser-local values.
 
 The shared UI uses standard Tailwind utilities, shadcn-vue variants, theme tokens,
 and bundled Basil Iconify SVG data. Do not add component CSS, inline visual
 styles, arbitrary Tailwind values, or local theme overrides.
+
+Render catalog artists through `ArtistLink` or `TrackArtistLinks`, and catalog
+albums through `AlbumLink`, so navigation and right-click menu behavior remain
+consistent across cards, tables, dialogs, the queue, and both player layouts.
 
 ## Desktop and Android
 

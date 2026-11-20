@@ -13,7 +13,6 @@ const CODE_MESSAGE_KEYS: Record<string, string> = {
   invalid_configuration: "api.message.invalidSourceConfiguration",
   invalid_response: "api.message.invalidSourceResponse",
   invalid_display_name: "api.message.invalidDisplayName",
-  invalid_queue: "api.message.invalidQueue",
   invalid_range: "api.message.invalidRange",
   invalid_search: "api.message.invalidSearch",
   invalid_source: "api.message.sourceInvalid",

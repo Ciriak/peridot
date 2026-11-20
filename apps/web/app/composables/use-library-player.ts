@@ -1,6 +1,5 @@
 import { useI18n, useState } from "#imports";
 import type { TrackResponse } from "@peridot/contracts";
-import { useQueryClient } from "@tanstack/vue-query";
 import { computed, onMounted, onUnmounted, watch } from "vue";
 import {
   haveSameTrackReferences,
@@ -30,21 +29,16 @@ import {
 import { nextPlaybackStartRetry } from "../lib/playback-start-retry";
 import {
   createPlaybackToken,
-  fetchQueue,
   isAuthenticationRedirectError,
   isPeridotNetworkError,
   recordTrackPlay,
-  replaceQueue,
   resolveTracks,
   trackAudioUrl,
 } from "../lib/peridot-client";
 import { offlineAudioBlob, readSavedOfflineTracks } from "../lib/offline-audio";
 import { readOfflineCatalog } from "../lib/offline-catalog";
 import { isTrackPlayable } from "../lib/offline-playback";
-import {
-  notifyQueueSaveFailed,
-  notifyTrackDownloadFailed,
-} from "../lib/toasts";
+import { notifyTrackDownloadFailed } from "../lib/toasts";
 import { useCatalogRevision } from "./use-catalog-query";
 import {
   readPersistedPlayerState,
@@ -57,26 +51,12 @@ import { useUser } from "./use-user";
 import { useLocalizedMessage } from "./use-localized-message";
 import { localizedError } from "../lib/messages.ts";
 import { useServerConnection } from "./use-server-connection";
-import { queryKeys } from "../lib/query-keys";
-import { persistQueryKey } from "../lib/query-persister";
 import { isAndroidRuntime } from "../lib/android-runtime";
 import {
   androidQueue,
   PeridotMedia,
   type AndroidPlaybackSnapshot,
 } from "../lib/android-playback";
-
-let queueWriteTail = Promise.resolve();
-let pendingQueueSave: {
-  scope: string;
-  version: number;
-  body: {
-    trackIds: string[];
-    activeTrackId: string | null;
-    shuffleEnabled: boolean;
-    shuffleTrackIds: string[];
-  };
-} | null = null;
 
 interface QueueSnapshot {
   trackIds: readonly string[];
@@ -87,6 +67,17 @@ interface QueueSnapshot {
 
 type PlayerTrack = string | TrackResponse;
 
+export type PlaybackCollectionKind =
+  "album" | "artist" | "collection" | "playlist";
+
+export interface PlaybackCollectionTarget {
+  kind: PlaybackCollectionKind;
+  id: string;
+}
+
+export type CollectionPlaybackResult =
+  "started" | "paused" | "empty" | "cancelled";
+
 export function useLibraryPlayer(options: { audio?: boolean } = {}) {
   const { address } = useServer();
   const { token } = useSession();
@@ -94,7 +85,6 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
   const { t } = useI18n();
   const { errorMessage } = useLocalizedMessage();
   const { status: serverStatus } = useServerConnection();
-  const queryClient = useQueryClient();
   const { revision: catalogRevision } = useCatalogRevision();
   const androidRuntime = isAndroidRuntime();
   const playing = useState("player-playing", () => false);
@@ -117,20 +107,26 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     () => [],
   );
   const queueLoaded = useState("player-queue-loaded", () => false);
-  const queueLoading = useState("player-queue-loading", () => false);
-  const queueError = useState<string | null>("player-queue-error", () => null);
   const queueAuthScope = useState<string | null>(
     "player-queue-auth-scope",
     () => null,
-  );
-  const queueMutationVersion = useState(
-    "player-queue-mutation-version",
-    () => 0,
   );
   const queueHistory = useState<string[]>("player-queue-history", () => []);
   const activePlaylistId = useState<string | null>(
     "player-active-playlist-id",
     () => null,
+  );
+  const playbackCollectionTarget = useState<PlaybackCollectionTarget | null>(
+    "player-playback-collection-target",
+    () => null,
+  );
+  const playbackCollectionStarting = useState(
+    "player-playback-collection-starting",
+    () => false,
+  );
+  const playbackCollectionAttempt = useState(
+    "player-playback-collection-attempt",
+    () => 0,
   );
   const offlineSavedTrackIds = useState<string[]>(
     "player-offline-saved-track-ids",
@@ -144,7 +140,6 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     "player-repeat-cycle-track-ids",
     () => [],
   );
-  let localStateChecked = false;
   let localPersistenceReady = false;
   let queueHydrationVersion = 0;
   let applyingAndroidSnapshot = false;
@@ -386,6 +381,34 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     return typeof track === "string" ? track : track.id;
   }
 
+  function samePlaybackTarget(
+    left: PlaybackCollectionTarget | null,
+    right: PlaybackCollectionTarget,
+  ): boolean {
+    return left?.kind === right.kind && left.id === right.id;
+  }
+
+  function isPlaybackTargetActive(target: PlaybackCollectionTarget): boolean {
+    return (
+      playing.value &&
+      samePlaybackTarget(playbackCollectionTarget.value, target)
+    );
+  }
+
+  function clearCollectionPlaybackTarget() {
+    playbackCollectionTarget.value = null;
+    playbackCollectionStarting.value = false;
+    activePlaylistId.value = null;
+  }
+
+  function cancelCollectionPlaybackStart() {
+    playbackCollectionAttempt.value += 1;
+    clearCollectionPlaybackTarget();
+    playing.value = false;
+    loading.value = false;
+    syncAndroidPlaybackIntent();
+  }
+
   function rememberQueueTrackDetails(
     tracks: readonly PlayerTrack[],
     nextQueueTrackIds: readonly string[],
@@ -522,8 +545,6 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     shuffleTrackIds.value = [];
     queueHistory.value = [];
     queueLoaded.value = false;
-    queueLoading.value = false;
-    queueError.value = null;
     repeatCycleTrackIds.value = [];
     repeatMode.value = "off";
     playing.value = false;
@@ -536,96 +557,12 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     if (queueAuthScope.value === scope) return false;
     clearQueue();
     queueAuthScope.value = scope;
-    localStateChecked = false;
-    queueMutationVersion.value += 1;
     return true;
-  }
-
-  function saveQueue(snapshot: QueueSnapshot) {
-    const serverAddress = address.value;
-    const sessionToken = token.value;
-    const scope = currentScope();
-    const version = queueMutationVersion.value;
-    const body = {
-      trackIds: [...snapshot.trackIds],
-      activeTrackId: snapshot.activeTrackId,
-      shuffleEnabled: snapshot.shuffleEnabled,
-      shuffleTrackIds: [...snapshot.shuffleTrackIds],
-    };
-    pendingQueueSave = { scope, version, body };
-    queueWriteTail = queueWriteTail
-      .catch(() => undefined)
-      .then(async () => {
-        if (
-          queueAuthScope.value !== scope ||
-          queueMutationVersion.value !== version
-        ) {
-          return;
-        }
-        if (!serverAddress || !sessionToken) {
-          throw localizedError(
-            "error.connectServer",
-            "Connect to your server and try again.",
-          );
-        }
-        const savedQueue = await replaceQueue(
-          serverAddress,
-          sessionToken,
-          body,
-        );
-        if (user.value?.id) {
-          const queueKey = queryKeys.queue({
-            serverAddress,
-            userId: user.value.id,
-          });
-          queryClient.setQueryData(queueKey, savedQueue);
-          await persistQueryKey(queueKey);
-        }
-        if (
-          pendingQueueSave?.scope === scope &&
-          pendingQueueSave.version === version
-        ) {
-          pendingQueueSave = null;
-        }
-      })
-      .catch((reason: unknown) => {
-        if (
-          isPeridotNetworkError(reason) ||
-          serverStatus.value === "lost" ||
-          isAuthenticationRedirectError(reason)
-        ) {
-          return;
-        }
-        notifyQueueSaveFailed(errorMessage(reason, "error.queueSave"));
-      });
-  }
-
-  function flushPendingQueue() {
-    const pending = pendingQueueSave;
-    const serverAddress = address.value;
-    const sessionToken = token.value;
-    if (
-      !pending ||
-      !serverAddress ||
-      !sessionToken ||
-      pending.scope !== currentScope()
-    ) {
-      return;
-    }
-    queueWriteTail = queueWriteTail
-      .catch(() => undefined)
-      .then(async () => {
-        await replaceQueue(serverAddress, sessionToken, pending.body);
-        if (pendingQueueSave?.version === pending.version) {
-          pendingQueueSave = null;
-        }
-      })
-      .catch(() => undefined);
   }
 
   function setQueueSnapshot(
     snapshot: QueueSnapshot,
-    persist = true,
+    persistLocal = true,
     rememberRepeatCycle = true,
     syncToAndroid = true,
   ) {
@@ -658,66 +595,33 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     shuffleTrackIds.value = normalizedShuffleTrackIds;
     if (rememberRepeatCycle) repeatCycleTrackIds.value = normalizedTrackIds;
     queueLoaded.value = true;
-    queueError.value = null;
-    queueMutationVersion.value += 1;
-    if (address.value && user.value?.id) {
-      const queueKey = queryKeys.queue({
-        serverAddress: address.value,
-        userId: user.value.id,
-      });
-      queryClient.setQueryData(queueKey, normalized);
-      void persistQueryKey(queueKey);
-    }
-    if (persist) saveQueue(normalized);
+    if (persistLocal) persistLocalPlayerState();
     if (syncToAndroid) syncAndroidQueue();
     return normalized;
   }
 
-  async function loadQueue(force = false) {
+  async function loadQueue() {
     syncScope();
-    if (!force && !localStateChecked) {
-      localStateChecked = true;
-      if (restoreLocalPlayerState()) return;
-    }
-    if (force) localStateChecked = true;
-    if (queueLoading.value || (!force && queueLoaded.value)) return;
-    const serverAddress = address.value;
-    const sessionToken = token.value;
-    if (!serverAddress || !sessionToken) {
+    if (queueLoaded.value) return;
+    if (!address.value || !user.value?.id) {
       clearQueue();
       return;
     }
 
-    const scope = currentScope();
-    const version = queueMutationVersion.value;
-    queueLoading.value = true;
-    queueError.value = null;
-    try {
-      const response = await queryClient.fetchQuery({
-        queryKey: queryKeys.queue({
-          serverAddress,
-          userId: user.value?.id ?? "",
-        }),
-        queryFn: () => fetchQueue(serverAddress, sessionToken),
-        staleTime: 0,
-        meta: { persist: true },
-      });
-      if (
-        queueAuthScope.value !== scope ||
-        queueMutationVersion.value !== version
-      ) {
-        return;
-      }
-      setQueueSnapshot(response, false);
-      playing.value = false;
-      elapsed.value = 0;
-      mediaDuration.value = 0;
-    } catch (reason) {
-      if (isAuthenticationRedirectError(reason)) return;
-      queueError.value = errorMessage(reason, "error.queueLoad");
-    } finally {
-      if (queueAuthScope.value === scope) queueLoading.value = false;
-    }
+    if (restoreLocalPlayerState()) return;
+    setQueueSnapshot(
+      {
+        trackIds: [],
+        activeTrackId: null,
+        shuffleEnabled: false,
+        shuffleTrackIds: [],
+      },
+      false,
+      false,
+    );
+    playing.value = false;
+    elapsed.value = 0;
+    mediaDuration.value = 0;
   }
 
   function rememberCurrentTrack(nextTrackId: string) {
@@ -728,6 +632,8 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
   }
 
   function play(track?: PlayerTrack, restart = false) {
+    playbackCollectionAttempt.value += 1;
+    clearCollectionPlaybackTarget();
     activePlaylistId.value = null;
     const nextTrackId = track ? trackIdFor(track) : currentTrackId.value;
     if (!nextTrackId) return;
@@ -761,8 +667,12 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
   function playCollection(
     tracks: readonly PlayerTrack[],
     startTrackId: string = tracks[0] ? trackIdFor(tracks[0]) : "",
+    target: PlaybackCollectionTarget | null = null,
   ) {
-    activePlaylistId.value = null;
+    playbackCollectionAttempt.value += 1;
+    playbackCollectionStarting.value = false;
+    playbackCollectionTarget.value = target;
+    activePlaylistId.value = target?.kind === "playlist" ? target.id : null;
     const playableTracks =
       serverStatus.value === "lost"
         ? tracks.filter((track) =>
@@ -793,7 +703,60 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     syncAndroidPlaybackIntent();
   }
 
-  function next() {
+  async function toggleCollectionPlayback(
+    target: PlaybackCollectionTarget,
+    load: () => Promise<readonly PlayerTrack[]>,
+  ): Promise<CollectionPlaybackResult> {
+    if (isPlaybackTargetActive(target)) {
+      if (playbackCollectionStarting.value) {
+        cancelCollectionPlaybackStart();
+      } else {
+        togglePlayback();
+      }
+      return "paused";
+    }
+
+    const attempt = ++playbackCollectionAttempt.value;
+    playbackCollectionTarget.value = target;
+    playbackCollectionStarting.value = true;
+    activePlaylistId.value = target.kind === "playlist" ? target.id : null;
+    error.value = null;
+    playing.value = true;
+    loading.value = true;
+
+    try {
+      const tracks = await load();
+      if (
+        attempt !== playbackCollectionAttempt.value ||
+        !playing.value ||
+        !samePlaybackTarget(playbackCollectionTarget.value, target)
+      ) {
+        return "cancelled";
+      }
+      if (!tracks.length) {
+        clearCollectionPlaybackTarget();
+        playing.value = false;
+        loading.value = false;
+        syncAndroidPlaybackIntent();
+        return "empty";
+      }
+      playCollection(tracks, tracks[0] ? trackIdFor(tracks[0]) : "", target);
+      return "started";
+    } catch (reason) {
+      if (
+        attempt === playbackCollectionAttempt.value &&
+        samePlaybackTarget(playbackCollectionTarget.value, target)
+      ) {
+        clearCollectionPlaybackTarget();
+        playing.value = false;
+        loading.value = false;
+        syncAndroidPlaybackIntent();
+      }
+      throw reason;
+    }
+  }
+
+  function next(forceAdvance = false) {
     const current = currentTrackId.value;
     if (!current) return;
     if (androidRuntime) {
@@ -835,7 +798,9 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
 
     const nextQueue = consumeQueue(playableQueueIds());
     const repeatingAll =
-      repeatMode.value === "all" && repeatCycleTrackIds.value.length > 0;
+      !forceAdvance &&
+      repeatMode.value === "all" &&
+      repeatCycleTrackIds.value.length > 0;
     const sourceQueue =
       repeatingAll && !nextQueue.length
         ? repeatCycleTrackIds.value.filter(
@@ -1003,6 +968,10 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
   }
 
   function togglePlayback() {
+    if (playbackCollectionStarting.value) {
+      cancelCollectionPlaybackStart();
+      return;
+    }
     if (!isOfflineTrackPlayable(currentTrackId.value)) return;
     playing.value = !playing.value;
     syncAndroidPlaybackIntent();
@@ -1092,12 +1061,6 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
   if (options.audio) {
     watch([address, token, () => user.value?.id], () => {
       if (syncScope()) void loadQueue();
-    });
-  }
-
-  if (options.audio) {
-    watch(serverStatus, (status) => {
-      if (status === "connected") flushPendingQueue();
     });
   }
 
@@ -1196,6 +1159,16 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
       return true;
     }
 
+    function skipFailedTrack(trackId: string, failedAttempt: number): boolean {
+      if (failedAttempt !== loadAttempt || currentTrackId.value !== trackId) {
+        return false;
+      }
+      error.value = null;
+      loading.value = false;
+      next(true);
+      return currentTrackId.value !== trackId;
+    }
+
     async function playLoadedTrack(trackId: string, attempt: number) {
       if (
         !audio ||
@@ -1248,6 +1221,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
         if (!blocked && (await retryTrackStart(trackId, attempt, false))) {
           return;
         }
+        if (!blocked && skipFailedTrack(trackId, attempt)) return;
         playing.value = false;
         error.value = blocked
           ? t("error.playbackBlocked")
@@ -1289,6 +1263,8 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
         try {
           error.value = null;
           if (!(await loadOfflineTrack(trackId, attempt))) {
+            if (await retryTrackStart(trackId, attempt, true)) return;
+            if (skipFailedTrack(trackId, attempt)) return;
             playing.value = false;
             error.value = t("error.offlineTrackMissing");
           }
@@ -1304,6 +1280,8 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
         try {
           error.value = null;
           if (!(await loadOfflineTrack(trackId, attempt))) {
+            if (await retryTrackStart(trackId, attempt, true)) return;
+            if (skipFailedTrack(trackId, attempt)) return;
             playing.value = false;
             error.value = t("error.offlineTrackMissing");
           }
@@ -1344,11 +1322,13 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
             return;
           }
           if (await retryTrackStart(trackId, attempt, false)) return;
+          if (skipFailedTrack(trackId, attempt)) return;
           playing.value = false;
           error.value = t("error.offlineTrackMissing");
           return;
         }
         if (await retryTrackStart(trackId, attempt, false)) return;
+        if (skipFailedTrack(trackId, attempt)) return;
         playing.value = false;
         error.value = playbackError(reason, "error.audioPrepare");
       } finally {
@@ -1406,6 +1386,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
             ) {
               return;
             }
+            if (skipFailedTrack(failedTrackId, failedAttempt)) return;
             playing.value = false;
             error.value = t("error.audioDecode");
           });
@@ -1415,10 +1396,14 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
         if (!offlineObjectUrl) {
           error.value = null;
           void loadOfflineTrack(failedTrackId, failedAttempt).then((loaded) => {
-            if (!loaded) error.value = t("error.audioDecode");
+            if (!loaded && !skipFailedTrack(failedTrackId, failedAttempt)) {
+              error.value = t("error.audioDecode");
+            }
           });
-        } else {
+        } else if (!skipFailedTrack(failedTrackId, failedAttempt)) {
           error.value = t("error.audioDecode");
+        } else {
+          return;
         }
       };
       const handleWaiting = () => {
@@ -1471,6 +1456,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
         [currentTrackId, playing, playbackRequest],
         async ([trackId, shouldPlay, request], previous) => {
           if (!audio) return;
+          if (playbackCollectionStarting.value) return;
           const previousTrackId = previous?.[0] ?? null;
           const previousRequest = previous?.[2] ?? request;
           const trackChanged =
@@ -1558,9 +1544,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     volume,
     loading,
     error,
-    queueError,
     queueLoaded,
-    queueLoading,
     shuffleEnabled,
     active,
     queueTracks,
@@ -1571,6 +1555,8 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     loadQueue,
     play,
     playCollection,
+    toggleCollectionPlayback,
+    isPlaybackTargetActive,
     addToQueue,
     removeFromQueue,
     reorderQueue,

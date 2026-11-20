@@ -5,17 +5,17 @@ import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { onMounted, ref } from "vue";
-import AutoLoadMore from "../components/AutoLoadMore.vue";
-import ListSearchBar from "../components/ListSearchBar.vue";
-import PlaylistCard from "../components/PlaylistCard.vue";
-import PlaylistNameDialog from "../components/PlaylistNameDialog.vue";
-import VirtualCardGrid from "../components/VirtualCardGrid.vue";
-import { useListSearch } from "../composables/use-list-search";
+import AutoLoadMore from "../../components/AutoLoadMore.vue";
+import ListSearchBar from "../../components/ListSearchBar.vue";
+import PlaylistCard from "../../components/PlaylistCard.vue";
+import PlaylistNameDialog from "../../components/PlaylistNameDialog.vue";
+import VirtualCardGrid from "../../components/VirtualCardGrid.vue";
+import { useListSearch } from "../../composables/use-list-search";
 import {
   usePlaylistActions,
   usePlaylistList,
-} from "../composables/use-playlists";
-import { icons } from "../lib/icons";
+} from "../../composables/use-playlists";
+import { icons } from "../../lib/icons";
 
 const { t } = useI18n();
 useHead({ title: t("page.playlists.title") });

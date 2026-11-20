@@ -102,25 +102,88 @@ test("track rows expose a Reka context menu with playback, favorites, offline st
   }
 });
 
+test("track list rows open their track menu while catalog links keep their own menus", async () => {
+  const [trackTable, playlistTracks, rowMenu, artistLink, albumLink] =
+    await Promise.all([
+      readFile(
+        new URL("../app/components/TrackTable.vue", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL("../app/components/PlaylistTrackList.vue", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL("../app/components/TrackRowContextMenu.vue", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL("../app/components/ArtistLink.vue", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL("../app/components/AlbumLink.vue", import.meta.url),
+        "utf8",
+      ),
+    ]);
+
+  assert.match(
+    trackTable,
+    /<TrackContextMenu[\s\S]*role="row"[\s\S]*<TrackArtistLinks[\s\S]*<AlbumLink[\s\S]*<\/TrackContextMenu>/,
+    "The whole catalog track row is a context-menu trigger",
+  );
+  assert.match(
+    playlistTracks,
+    /<TrackRowContextMenu\s+v-for="\(entry, index\) in rows"[\s\S]*:track="entry\.track"[\s\S]*role="listitem"[\s\S]*<TrackArtistLinks[\s\S]*<AlbumLink[\s\S]*<\/TrackRowContextMenu>/,
+    "The whole playlist track row is a context-menu trigger",
+  );
+  assert.doesNotMatch(
+    playlistTracks,
+    /<TrackContextMenu/,
+    "The playlist artwork is not the only context-menu trigger",
+  );
+  assert.match(rowMenu, /<TrackContextMenu v-if="track" :track="track"/);
+  assert.match(
+    rowMenu,
+    /<slot v-else \/>/,
+    "Unmatched playlist entries still render as plain rows",
+  );
+  assert.match(
+    artistLink,
+    /@contextmenu\.stop/,
+    "Artist links stop bubbling so the artist menu remains authoritative",
+  );
+  assert.match(
+    albumLink,
+    /@contextmenu\.stop/,
+    "Album links stop bubbling so the album menu remains authoritative",
+  );
+});
+
 test("album and artist cards expose collection-aware context menus", async () => {
-  const [albumMenu, artistMenu, albumCard, artistCard] = await Promise.all([
-    readFile(
-      new URL("../app/components/AlbumContextMenu.vue", import.meta.url),
-      "utf8",
-    ),
-    readFile(
-      new URL("../app/components/ArtistContextMenu.vue", import.meta.url),
-      "utf8",
-    ),
-    readFile(
-      new URL("../app/components/AlbumCard.vue", import.meta.url),
-      "utf8",
-    ),
-    readFile(
-      new URL("../app/components/ArtistCard.vue", import.meta.url),
-      "utf8",
-    ),
-  ]);
+  const [albumMenu, artistMenu, albumCard, artistCard, albumPage] =
+    await Promise.all([
+      readFile(
+        new URL("../app/components/AlbumContextMenu.vue", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL("../app/components/ArtistContextMenu.vue", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL("../app/components/AlbumCard.vue", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL("../app/components/ArtistCard.vue", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL("../app/pages/albums/[album].vue", import.meta.url),
+        "utf8",
+      ),
+    ]);
 
   for (const menu of [albumMenu, artistMenu]) {
     assert.match(menu, /@peridot\/ui\/components\/ui\/context-menu/);
@@ -143,10 +206,10 @@ test("album and artist cards expose collection-aware context menus", async () =>
   assert.match(albumMenu, /@select="toggleAlbumOffline"/);
   assert.match(albumMenu, /t\("albumOffline\.remove"\)/);
 
-  assert.match(artistMenu, /artistId: props\.artist\.id/);
+  assert.match(artistMenu, /artistId: artistSummary\.value\.id/);
   assert.match(artistMenu, /context\.likeArtist/);
   assert.match(artistMenu, /context\.unlikeArtist/);
-  assert.match(artistMenu, /artistRoute\(artist\)/);
+  assert.match(artistMenu, /artistRoute\(artistSummary\)/);
   assert.match(artistMenu, /context\.openArtist/);
   assert.match(artistMenu, /listArtistMetadataCandidates\(/);
   assert.match(artistMenu, /applyArtistMetadata\(/);
@@ -168,5 +231,10 @@ test("album and artist cards expose collection-aware context menus", async () =>
     artistCard,
     /<ArtistContextMenu[\s\S]*<article[\s\S]*<NuxtLink/,
     "The entire artist card is the context-menu trigger",
+  );
+  assert.match(
+    albumPage,
+    /<AlbumContextMenu :album="album">\s+<section\s+aria-labelledby="album-heading"/,
+    "The entire album header card is the context-menu trigger",
   );
 });

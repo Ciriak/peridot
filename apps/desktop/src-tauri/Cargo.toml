@@ -1,6 +1,6 @@
 [package]
 name = "peridot-desktop"
-version = "0.0.9"
+version = "0.0.10"
 description = "Native desktop shell for the Peridot music platform"
 authors = ["Peridot contributors"]
 edition = "2021"

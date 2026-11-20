@@ -9,7 +9,7 @@ test("library list pages render an independent scoped search control", async () 
       "../app/pages/artists/index.vue",
       "../app/pages/audiobooks/index.vue",
       "../app/pages/podcasts/index.vue",
-      "../app/pages/playlists.vue",
+      "../app/pages/playlists/index.vue",
       "../app/components/LibraryScreen.vue",
     ].map((path) => readFile(new URL(path, import.meta.url), "utf8")),
   );
@@ -70,7 +70,7 @@ test("filtered empty states remain distinct from empty libraries", async () => {
         "../app/pages/artists/index.vue",
         "../app/pages/audiobooks/index.vue",
         "../app/pages/podcasts/index.vue",
-        "../app/pages/playlists.vue",
+        "../app/pages/playlists/index.vue",
         "../app/components/LibraryScreen.vue",
       ].map((path) => readFile(new URL(path, import.meta.url), "utf8")),
     )

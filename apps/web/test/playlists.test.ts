@@ -1,8 +1,14 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import type { PlaylistEntryResponse, TrackResponse } from "@peridot/contracts";
+import type {
+  PlaylistEntryResponse,
+  PlaylistSummaryResponse,
+  TrackResponse,
+} from "@peridot/contracts";
 import {
+  filterAddablePlaylists,
+  filterPlaylistEntries,
   playlistCoverSlots,
   playlistPlayableTracks,
 } from "../app/lib/playlists.ts";
@@ -55,6 +61,26 @@ function entry(
   };
 }
 
+function playlist(
+  id: string,
+  name: string,
+  kind: PlaylistSummaryResponse["kind"] = "manual",
+): PlaylistSummaryResponse {
+  return {
+    id,
+    kind,
+    name,
+    trackCount: 0,
+    availableTrackCount: 0,
+    durationMs: null,
+    coverUrls: [],
+    liked: false,
+    containsTrack: false,
+    createdAt: "2026-11-20T00:00:00.000Z",
+    updatedAt: "2026-11-20T00:00:00.000Z",
+  };
+}
+
 test("playlist playback keeps order while skipping unavailable and unresolved entries", () => {
   const entries = [
     entry("0", track("a")),
@@ -100,34 +126,107 @@ test("playlist covers fill exactly nine slots in playlist order", () => {
   );
 });
 
-test("playlist pages expose creation, unavailable tracks, editing, likes, and offline controls", async () => {
-  const [listPage, index, detailPage, card, trackList, contextMenu, actions] =
-    await Promise.all([
-      readFile(new URL("../app/pages/playlists.vue", import.meta.url), "utf8"),
-      readFile(new URL("../app/pages/index.vue", import.meta.url), "utf8"),
-      readFile(
-        new URL("../app/pages/playlists/[playlist].vue", import.meta.url),
-        "utf8",
-      ),
-      readFile(
-        new URL("../app/components/PlaylistCard.vue", import.meta.url),
-        "utf8",
-      ),
-      readFile(
-        new URL("../app/components/PlaylistTrackList.vue", import.meta.url),
-        "utf8",
-      ),
-      readFile(
-        new URL("../app/components/TrackContextMenu.vue", import.meta.url),
-        "utf8",
-      ),
-      readFile(
-        new URL("../app/composables/use-playlists.ts", import.meta.url),
-        "utf8",
-      ),
-    ]);
+test("automatic playlist search matches title, artist, and album", () => {
+  const entries = [
+    entry("0", {
+      ...track("a"),
+      title: "Night Drive",
+      artist: "First Artist",
+      artists: ["First Artist"],
+      album: "Road",
+    }),
+    entry("1", {
+      ...track("b"),
+      title: "Morning",
+      artist: "Second Artist",
+      artists: ["Second Artist"],
+      album: "Window",
+    }),
+  ];
 
-  assert.match(index, /usePlaylistList\(\{ limit: HOME_PREVIEW_LIMIT \}\)/);
+  assert.deepEqual(
+    filterPlaylistEntries(entries, "drive").map((item) => item.track?.id),
+    ["a"],
+  );
+  assert.deepEqual(
+    filterPlaylistEntries(entries, "second").map((item) => item.track?.id),
+    ["b"],
+  );
+  assert.deepEqual(
+    filterPlaylistEntries(entries, "road").map((item) => item.track?.id),
+    ["a"],
+  );
+});
+
+test("add-to-playlist filtering excludes automatic playlists and matches every term", () => {
+  const playlists = [
+    playlist("1", "Late Night Drive"),
+    playlist("2", "Morning Window"),
+    playlist("3", "Liked tracks", "liked-tracks"),
+  ];
+
+  assert.deepEqual(
+    filterAddablePlaylists(playlists, "  NIGHT drive  ").map((item) => item.id),
+    ["1"],
+  );
+  assert.deepEqual(
+    filterAddablePlaylists(playlists, "").map((item) => item.id),
+    ["1", "2"],
+  );
+  assert.deepEqual(filterAddablePlaylists(playlists, "liked"), []);
+});
+
+test("playlist pages expose creation, unavailable tracks, editing, likes, and offline controls", async () => {
+  const [
+    listPage,
+    index,
+    detailPage,
+    card,
+    trackList,
+    likeButton,
+    contextMenu,
+    submenu,
+    actions,
+  ] = await Promise.all([
+    readFile(
+      new URL("../app/pages/playlists/index.vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(new URL("../app/pages/index.vue", import.meta.url), "utf8"),
+    readFile(
+      new URL("../app/pages/playlists/[playlist].vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/components/PlaylistCard.vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/components/PlaylistTrackList.vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/components/LikeButton.vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/components/TrackContextMenu.vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../app/components/AddTrackToPlaylistSubmenu.vue",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/composables/use-playlists.ts", import.meta.url),
+      "utf8",
+    ),
+  ]);
+
+  assert.match(index, /usePlaylistList\(\{ limit: 1 \}\)/);
   assert.match(index, /<PlaylistCard/);
   assert.doesNotMatch(index, /page\.home\.comingSoon/);
   assert.match(listPage, /<PlaylistNameDialog/);
@@ -138,19 +237,41 @@ test("playlist pages expose creation, unavailable tracks, editing, likes, and of
   assert.match(detailPage, /<PlaylistNameDialog/);
   assert.match(detailPage, /<PlaylistDeleteDialog/);
   assert.match(card, /<PlaylistCover/);
-  assert.match(card, /<PlaylistOfflineSummaryButton/);
+  assert.doesNotMatch(card, /<PlaylistOfflineSummaryButton/);
   assert.match(card, /<LikeButton/);
+  assert.match(
+    card,
+    /<div class="space-y-3">[\s\S]*<div class="min-w-0 flex-1 pr-12">/,
+    "Playlist cards use the shared card content spacing and text width",
+  );
+  assert.match(
+    card,
+    /<Icon\s+:icon="icons\.playlist"\s+aria-hidden="true"\s+class="size-3 shrink-0 text-muted-foreground"\s+\/>\s*<h3 class="min-w-0 flex-1 text-sm font-medium">/,
+    "Playlist cards use the shared type icon and title sizing",
+  );
   assert.match(card, /context\.renamePlaylist/);
   assert.match(card, /<PlaylistDeleteDialog/);
   assert.match(trackList, /useSortable/);
   assert.match(trackList, /playlistTracks\.unavailable/);
   assert.match(trackList, /emit\(\s*"reorder"/);
+  assert.match(trackList, /showTrackLikes !== false/);
+  assert.match(
+    likeButton,
+    /compact \? 'size-4' : large \? 'size-7' : 'size-6'/,
+    "Compact like controls keep a legible 16px icon",
+  );
   assert.match(
     trackList,
     /<ScrollingText\s+class="min-w-0"[\s\S]*>\s*\{\{ entry\.title \}\}\s*<\/ScrollingText>\s*<Icon\s+v-if="isCurrent\(entry\)"\s+:icon="icons\.waveform"/,
     "The current-track indicator sits immediately after the playlist title",
   );
-  assert.match(contextMenu, /<AddTrackToPlaylistDialog/);
+  assert.match(contextMenu, /<AddTrackToPlaylistSubmenu/);
+  assert.doesNotMatch(contextMenu, /<AddTrackToPlaylistDialog/);
+  assert.match(submenu, /<ContextMenuSubContent/);
+  assert.match(submenu, /type="search"/);
+  assert.match(submenu, /while \(hasMore\.value\)/);
+  assert.match(submenu, /filterAddablePlaylists/);
+  assert.match(submenu, /page\.playlists\.create/);
   assert.match(actions, /createPlaylist\(/);
   assert.match(actions, /updatePlaylist\(/);
   assert.match(actions, /deletePlaylist\(/);
@@ -168,4 +289,41 @@ test("playlist offline saving reuses the per-track manifest", async () => {
   assert.match(source, /downloadTasks\.enqueuePlaylist\(/);
   assert.match(source, /async function removePlaylist/);
   assert.match(source, /removeTrackForOffline/);
+});
+
+test("liked tracks use generated artwork and a read-only automatic playlist surface", async () => {
+  const [cover, card, detail, submenu, layout] = await Promise.all([
+    readFile(
+      new URL("../app/components/PlaylistCover.vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/components/PlaylistCard.vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/pages/playlists/[playlist].vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../app/components/AddTrackToPlaylistSubmenu.vue",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+    readFile(new URL("../app/layouts/default.vue", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(cover, /bg-primary\/60 text-white/);
+  assert.match(cover, /icons\.heartFilled/);
+  assert.match(cover, /class="size-16"/);
+  assert.match(card, /playlist\.kind === "liked-tracks"/);
+  assert.match(card, /:kind="playlist\.kind"/);
+  assert.match(detail, /playlist\.value\?\.kind === "liked-tracks"/);
+  assert.match(detail, /:read-only="automatic"/);
+  assert.match(detail, /:show-track-likes="!automatic"/);
+  assert.doesNotMatch(detail, /automatic[\s\S]{0,100}page\.playlist\.rename/);
+  assert.match(submenu, /filterAddablePlaylists/);
+  assert.match(layout, /to: "\/playlists\/liked"/);
 });

@@ -168,17 +168,24 @@ test("the sidebar renders linked, context-aware quick picks", async () => {
   assert.match(tile, /props\.item\.kind === "track"[\s\S]*?track\.coverUrl/);
   assert.match(content, /props\.coverUrl/);
   assert.match(content, /group\/quick-pick/);
+  assert.match(content, /props\.layout === "card"/);
+  assert.match(content, /aspect-square h-auto w-full/);
+  assert.match(tile, /layout\?: "tile" \| "card"/);
   assert.match(content, /cursor-pointer/);
   assert.match(content, /group-hover\/quick-pick:opacity-100/);
   assert.match(content, /group-focus-within\/quick-pick:opacity-100/);
   assert.match(content, /activeItem && playing \? icons\.pause : icons\.play/);
   assert.match(tile, /play\(props\.item\.track\)/);
-  assert.match(tile, /playCollection\(await albumTracks\(\)\)/);
+  assert.match(
+    tile,
+    /toggleCollectionPlayback\(albumTarget\.value, albumTracks\)/,
+    "Album quick picks use the optimistic collection playback target",
+  );
   assert.match(tile, /togglePlayback\(\)/);
   assert.match(
     tile,
-    /async function toggleItemPlayback\(\) \{\s+if \(!playable\.value\) return;\s+if \(activeItem\.value && playing\.value\) \{\s+togglePlayback\(\);\s+return;\s+\}/,
-    "An album quick pick pauses while playing but restarts the album otherwise",
+    /async function toggleItemPlayback\(\) \{[\s\S]*?if \(props\.item\.kind === "track"\)[\s\S]*?play\(props\.item\.track\);[\s\S]*?await toggleCollectionPlayback\(albumTarget\.value, albumTracks\);/,
+    "An album quick pick starts immediately and handles direct tracks synchronously",
   );
   assert.match(
     tile,
