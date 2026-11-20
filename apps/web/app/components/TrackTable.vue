@@ -6,7 +6,7 @@ import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { ProgressCircle } from "@peridot/ui/components/ui/progress-circle";
 import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import AutoLoadMore from "./AutoLoadMore.vue";
 import AlbumLink from "./AlbumLink.vue";
 import DownloadProgressTooltip from "./DownloadProgressTooltip.vue";
@@ -185,6 +185,30 @@ function offlineActionLabel(track: TrackResponse): string {
 }
 
 const completedScrollTarget = ref<string | null>(null);
+const trackLinkHighlightId = ref<string | null>(null);
+const TRACK_LINK_HIGHLIGHT_DURATION_MS = 2000;
+let trackLinkHighlightTimer: ReturnType<typeof setTimeout> | undefined;
+
+function clearTrackLinkHighlight() {
+  if (trackLinkHighlightTimer !== undefined) {
+    clearTimeout(trackLinkHighlightTimer);
+    trackLinkHighlightTimer = undefined;
+  }
+  trackLinkHighlightId.value = null;
+}
+
+function startTrackLinkHighlight(trackId: string) {
+  clearTrackLinkHighlight();
+  trackLinkHighlightId.value = trackId;
+  trackLinkHighlightTimer = setTimeout(() => {
+    trackLinkHighlightId.value = null;
+    trackLinkHighlightTimer = undefined;
+  }, TRACK_LINK_HIGHLIGHT_DURATION_MS);
+}
+
+function isTrackLinkHighlighted(track: TrackResponse): boolean {
+  return trackLinkHighlightId.value === track.id;
+}
 
 async function scrollToTarget(trackId: string) {
   await nextTick();
@@ -193,6 +217,7 @@ async function scrollToTarget(trackId: string) {
   if (index < 0) return false;
   virtualizer.scrollToIndex(index, { align: "start" });
   completedScrollTarget.value = trackId;
+  startTrackLinkHighlight(trackId);
   return true;
 }
 
@@ -200,6 +225,7 @@ watch(
   () => props.scrollToTrackId,
   async (trackId) => {
     completedScrollTarget.value = null;
+    clearTrackLinkHighlight();
     if (import.meta.client && trackId) await scrollToTarget(trackId);
   },
   { flush: "post", immediate: true },
@@ -218,6 +244,10 @@ watch(
   },
   { flush: "post" },
 );
+
+onBeforeUnmount(() => {
+  clearTrackLinkHighlight();
+});
 </script>
 
 <template>
@@ -363,8 +393,10 @@ watch(
         <div
           role="row"
           :aria-rowindex="item.index + 2"
-          class="group/track-artwork flex h-14 min-w-full select-none items-center whitespace-nowrap border-b hover:bg-muted/50"
+          class="group/track-artwork flex h-14 min-w-full select-none items-center whitespace-nowrap border-b motion-safe:transition-colors motion-safe:duration-300 motion-safe:ease-out motion-reduce:transition-none"
           :class="{
+            'bg-primary/10': isTrackLinkHighlighted(item.track),
+            'hover:bg-muted/50': !isTrackLinkHighlighted(item.track),
             'border-0': item.index === tracks.length - 1,
           }"
           :style="virtualizer.virtualRowStyle(item)"

@@ -23,6 +23,7 @@ import PlaylistDeleteDialog from "../../components/PlaylistDeleteDialog.vue";
 import PlaylistNameDialog from "../../components/PlaylistNameDialog.vue";
 import PlaylistOfflineButton from "../../components/PlaylistOfflineButton.vue";
 import PlaylistTrackList from "../../components/PlaylistTrackList.vue";
+import ScrolledHeader from "../../components/ScrolledHeader.vue";
 import { useLikes } from "../../composables/use-likes";
 import { useLibraryPlayer } from "../../composables/use-library-player";
 import { useListSearch } from "../../composables/use-list-search";
@@ -106,6 +107,16 @@ const playlistTarget = computed(() => ({
   kind: "playlist" as const,
   id: playlist.value?.id ?? "",
 }));
+const playlistPlayLabel = computed(() =>
+  playlist.value
+    ? t("playlistCard.play", { playlist: playlist.value.name })
+    : "",
+);
+const playlistPauseLabel = computed(() =>
+  playlist.value
+    ? t("playlistCard.pause", { playlist: playlist.value.name })
+    : "",
+);
 useHead(() => ({
   title: playlist.value
     ? t("page.playlist.title", { playlist: playlist.value.name })
@@ -212,103 +223,115 @@ onMounted(() => void load());
     <p v-if="actionError" role="alert" class="mb-4 text-sm text-destructive">
       {{ actionError }}
     </p>
-    <section
-      aria-labelledby="playlist-heading"
-      class="relative flex flex-col gap-6 rounded-lg border bg-card p-6 text-card-foreground sm:flex-row sm:items-end"
+    <ScrolledHeader
+      :title="playlist.name"
+      :playable="playableTracks.length > 0"
+      :playback-active="playlistActive && playing"
+      :play-label="playlistPlayLabel"
+      :pause-label="playlistPauseLabel"
+      @play="togglePlaylistPlayback"
     >
-      <PlaylistOfflineButton
-        :playlist="playlist"
-        class="absolute right-4 top-4"
-      />
-      <div class="w-40 shrink-0">
-        <PlaylistCover :cover-urls="coverUrls" :kind="playlist.kind" />
-      </div>
-      <div class="min-w-0 flex-1 space-y-3 pr-12">
-        <p
-          class="text-xs font-medium uppercase tracking-wide text-muted-foreground"
-        >
-          {{
-            automatic
-              ? t("page.playlist.automaticLabel")
-              : t("page.playlist.label")
-          }}
-        </p>
-        <h1 id="playlist-heading" class="text-3xl font-semibold tracking-tight">
-          <ScrollingText class="w-full">{{ playlist.name }}</ScrollingText>
-        </h1>
-        <div class="flex flex-wrap items-center gap-3">
-          <Button
-            size="icon-lg"
-            class="rounded-full"
-            :disabled="!playableTracks.length"
-            :aria-label="
-              playlistActive && playing
-                ? t('playlistCard.pause', { playlist: playlist.name })
-                : t('playlistCard.play', { playlist: playlist.name })
-            "
-            @click="togglePlaylistPlayback"
-          >
-            <Icon
-              :icon="playlistActive && playing ? icons.pause : icons.play"
-              aria-hidden="true"
-              class="size-5"
-            />
-          </Button>
-          <LikeButton
-            v-if="!automatic"
-            :liked="playlist.liked"
-            :label="playlist.name"
-            :pending="isLikePending(likeTarget)"
-            :disabled="!likesLoaded || status === 'lost'"
-            @toggle="toggleLike(likeTarget)"
-          />
-          <Button
-            v-if="!automatic"
-            variant="ghost"
-            size="icon-lg"
-            :disabled="status === 'lost'"
-            :aria-label="t('page.playlist.rename')"
-            :title="t('page.playlist.rename')"
-            @click="renameOpen = true"
-          >
-            <Icon :icon="icons.edit" aria-hidden="true" class="size-5" />
-          </Button>
-          <Button
-            v-if="!automatic"
-            variant="ghost"
-            size="icon-lg"
-            :disabled="status === 'lost'"
-            :aria-label="t('page.playlist.delete')"
-            :title="t('page.playlist.delete')"
-            @click="deleteOpen = true"
-          >
-            <Icon :icon="icons.trash" aria-hidden="true" class="size-5" />
-          </Button>
-          <Badge variant="secondary">
-            {{
-              t(
-                "count.track",
-                { count: currentEntries.length },
-                currentEntries.length,
-              )
-            }}
-          </Badge>
-          <Badge
-            v-if="playlist.availableTrackCount < playlist.trackCount"
-            variant="secondary"
-          >
-            {{
-              t("page.playlist.unavailableCount", {
-                count: playlist.trackCount - playlist.availableTrackCount,
-              })
-            }}
-          </Badge>
-          <span class="text-sm text-muted-foreground">
-            {{ formatTrackDuration(playlist.durationMs) }}
-          </span>
+      <section
+        aria-labelledby="playlist-heading"
+        class="relative flex flex-col gap-6 rounded-lg border bg-card p-6 text-card-foreground sm:flex-row sm:items-end"
+      >
+        <PlaylistOfflineButton
+          :playlist="playlist"
+          class="absolute right-4 top-4"
+        />
+        <div class="w-40 shrink-0">
+          <PlaylistCover :cover-urls="coverUrls" :kind="playlist.kind" />
         </div>
-      </div>
-    </section>
+        <div class="min-w-0 flex-1 space-y-3 pr-12">
+          <p
+            class="text-xs font-medium uppercase tracking-wide text-muted-foreground"
+          >
+            {{
+              automatic
+                ? t("page.playlist.automaticLabel")
+                : t("page.playlist.label")
+            }}
+          </p>
+          <h1
+            id="playlist-heading"
+            class="text-3xl font-semibold tracking-tight"
+          >
+            <ScrollingText class="w-full">{{ playlist.name }}</ScrollingText>
+          </h1>
+          <div class="flex flex-wrap items-center gap-3">
+            <Button
+              size="icon-lg"
+              class="rounded-full"
+              :disabled="!playableTracks.length"
+              :aria-label="
+                playlistActive && playing
+                  ? playlistPauseLabel
+                  : playlistPlayLabel
+              "
+              @click="togglePlaylistPlayback"
+            >
+              <Icon
+                :icon="playlistActive && playing ? icons.pause : icons.play"
+                aria-hidden="true"
+                class="size-5"
+              />
+            </Button>
+            <LikeButton
+              v-if="!automatic"
+              :liked="playlist.liked"
+              :label="playlist.name"
+              :pending="isLikePending(likeTarget)"
+              :disabled="!likesLoaded || status === 'lost'"
+              @toggle="toggleLike(likeTarget)"
+            />
+            <Button
+              v-if="!automatic"
+              variant="ghost"
+              size="icon-lg"
+              :disabled="status === 'lost'"
+              :aria-label="t('page.playlist.rename')"
+              :title="t('page.playlist.rename')"
+              @click="renameOpen = true"
+            >
+              <Icon :icon="icons.edit" aria-hidden="true" class="size-5" />
+            </Button>
+            <Button
+              v-if="!automatic"
+              variant="ghost"
+              size="icon-lg"
+              :disabled="status === 'lost'"
+              :aria-label="t('page.playlist.delete')"
+              :title="t('page.playlist.delete')"
+              @click="deleteOpen = true"
+            >
+              <Icon :icon="icons.trash" aria-hidden="true" class="size-5" />
+            </Button>
+            <Badge variant="secondary">
+              {{
+                t(
+                  "count.track",
+                  { count: currentEntries.length },
+                  currentEntries.length,
+                )
+              }}
+            </Badge>
+            <Badge
+              v-if="playlist.availableTrackCount < playlist.trackCount"
+              variant="secondary"
+            >
+              {{
+                t("page.playlist.unavailableCount", {
+                  count: playlist.trackCount - playlist.availableTrackCount,
+                })
+              }}
+            </Badge>
+            <span class="text-sm text-muted-foreground">
+              {{ formatTrackDuration(playlist.durationMs) }}
+            </span>
+          </div>
+        </div>
+      </section>
+    </ScrolledHeader>
 
     <section aria-labelledby="playlist-tracks-heading" class="space-y-4">
       <div class="flex flex-wrap items-center justify-between gap-3">

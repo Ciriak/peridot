@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 test("albums have list and detail routes with derived groups", async () => {
-  const [listPage, detailPage, libraryScreen, trackTable, albumCard] =
+  const [listPage, detailPage, libraryScreen, trackTable, catalogCard] =
     await Promise.all([
       readFile(
         new URL("../app/pages/albums/index.vue", import.meta.url),
@@ -22,7 +22,7 @@ test("albums have list and detail routes with derived groups", async () => {
         "utf8",
       ),
       readFile(
-        new URL("../app/components/AlbumCard.vue", import.meta.url),
+        new URL("../app/components/CatalogCard.vue", import.meta.url),
         "utf8",
       ),
     ]);
@@ -31,97 +31,100 @@ test("albums have list and detail routes with derived groups", async () => {
   assert.match(listPage, /items: albums/);
   assert.doesNotMatch(listPage, /library-search/);
   assert.match(listPage, /<VirtualCardGrid/);
-  assert.match(listPage, /<AlbumCard/);
-  assert.match(listPage, /:album="item"/);
-  assert.match(albumCard, /:to="albumRoute\(album\)"/);
+  assert.match(listPage, /<CatalogCard/);
+  assert.match(listPage, /albumCatalogCard\(item\)/);
+  assert.match(catalogCard, /:to="titleRoute"/);
   assert.match(
-    albumCard,
-    /<\/NuxtLink>[\s\S]*<Badge v-if="!albumPlayable"[\s\S]*<ScrollingText class="w-full text-xs text-muted-foreground">\s+<TrackArtistLinks :artists="album\.artists" \/>/,
+    catalogCard,
+    /<Badge v-if="!playable"[\s\S]*<TrackArtistLinks :artists="album\.artists" \/>/,
     "Album card artist credits link to their artist pages",
   );
-  assert.match(albumCard, /useLikes\(\)/);
-  assert.match(albumCard, /<LikeButton/);
-  assert.match(albumCard, /trackCoverUrl\(/);
-  assert.match(albumCard, /<FadeInImage[\s\S]*:src="coverImageUrl"/);
-  assert.match(albumCard, /class="absolute inset-0"/);
-  assert.match(albumCard, /@error="coverFailed = true"/);
-  assert.match(albumCard, /<Icon\s+:icon="icons\.album"/);
-  assert.match(albumCard, /useLibraryPlayer\(\)/);
-  assert.match(albumCard, /loadCollectionTracks\(/);
-  assert.match(albumCard, /togglePlayback\(\)/);
+  assert.match(catalogCard, /useLikes\(\)/);
+  assert.match(catalogCard, /<LikeButton/);
+  assert.match(catalogCard, /trackCoverUrl\(/);
+  assert.match(catalogCard, /<FadeInImage[\s\S]*:src="coverImageUrl"/);
+  assert.match(catalogCard, /class="absolute inset-0"/);
+  assert.match(catalogCard, /@error="coverFailed = true"/);
+  assert.match(catalogCard, /const fallbackIcon = computed/);
+  assert.match(catalogCard, /useLibraryPlayer\(\)/);
+  assert.match(catalogCard, /loadCollectionTracks\(/);
+  assert.match(catalogCard, /togglePlayback\(\)/);
   assert.match(
-    albumCard,
+    catalogCard,
     /async function toggleAlbumPlayback\(\) \{[\s\S]*?await toggleCollectionPlayback\(albumTarget\.value, async \(\) => \{/,
     "The album card starts the whole collection through the optimistic player target",
   );
   assert.match(
-    albumCard,
+    catalogCard,
     /if \(serverStatus\.value === "lost" \|\| !address\.value \|\| !token\.value\) \{\s+return saved;\s+\}/,
     "Offline albums do not require live-server credentials to play saved tracks",
   );
   assert.match(
-    albumCard,
-    /t\('card\.playAlbum', \{\s+album: album\.title,\s+artist: album\.artist,\s+\}\)/,
+    catalogCard,
+    /t\("card\.playAlbum", \{\s+album: album\.value\.title,\s+artist: album\.value\.artist,\s+\}\)/,
     "The album card play label explains that playback starts from the first track",
   );
-  assert.match(albumCard, /albumPlaybackActive \? icons\.pause : icons\.play/);
+  assert.match(catalogCard, /playbackActive \? icons\.pause : icons\.play/);
   assert.doesNotMatch(
-    albumCard,
+    catalogCard,
     /albumLoading|Loading \$\{album\.title\}/,
     "Album cards switch directly from play to pause",
   );
-  assert.match(albumCard, /@click\.prevent\.stop="toggleAlbumPlayback"/);
-  assert.match(albumCard, /group-hover:opacity-100/);
-  assert.doesNotMatch(albumCard, /group-focus-within:opacity-100/);
-  assert.match(albumCard, /focus-visible:opacity-100/);
-  assert.match(albumCard, /max-sm:pointer-events-auto/);
-  assert.match(albumCard, /max-sm:size-11/);
-  assert.match(albumCard, /max-sm:opacity-100/);
+  assert.match(catalogCard, /@click\.prevent\.stop="toggleCardPlayback"/);
+  assert.match(catalogCard, /group-hover:opacity-100/);
+  assert.doesNotMatch(catalogCard, /group-focus-within:opacity-100/);
+  assert.match(catalogCard, /focus-visible:opacity-100/);
+  assert.match(catalogCard, /max-sm:pointer-events-auto/);
+  assert.match(catalogCard, /max-sm:size-11/);
+  assert.match(catalogCard, /max-sm:opacity-100/);
   assert.match(
-    albumCard,
+    catalogCard,
     /compact \? 'size-4 max-sm:size-5' : 'size-5 max-sm:size-6'/,
     "The play icon grows on mobile-sized album cards",
   );
-  assert.match(albumCard, /cursor-pointer/);
-  assert.match(albumCard, /compact \? 'icon-sm' : 'icon'/);
-  assert.match(albumCard, /compact \? 'bottom-1 right-1' : 'bottom-2 right-2'/);
+  assert.match(catalogCard, /cursor-pointer/);
+  assert.match(catalogCard, /compact \? 'icon-sm' : 'icon'/);
   assert.match(
-    albumCard,
-    /:aria-disabled="!albumControlEnabled"[\s\S]*?@click\.prevent\.stop="toggleAlbumPlayback"/,
+    catalogCard,
+    /compact \? 'bottom-1 right-1' : 'bottom-2 right-2'/,
+  );
+  assert.match(
+    catalogCard,
+    /:aria-disabled="!controlEnabled"[\s\S]*?@click\.prevent\.stop="toggleCardPlayback"/,
     "Unavailable album cards expose a disabled, guarded play control",
   );
   assert.match(
-    albumCard,
-    /const albumControlEnabled = computed\(\s+\(\) => albumPlayable\.value \|\| \(albumActive\.value && playing\.value\),\s+\);/,
+    catalogCard,
+    /if \(album\.value\) return albumPlayable\.value \|\| activePlaying\.value;/,
     "An album that is currently playing can still be paused",
   );
   assert.match(
-    albumCard,
-    /const albumFullySaved = computed\(\s+\(\) =>\s+Boolean\(props\.album\.trackCount\) &&\s+savedTrackCount\.value >= props\.album\.trackCount,\s+\);/,
+    catalogCard,
+    /const albumFullySaved = computed/,
     "Offline playback requires the whole album to be saved",
   );
   assert.match(
-    albumCard,
-    /const albumPlayable = computed\(\s+\(\) =>\s+Boolean\(props\.album\.trackCount\) &&\s+\(albumFullySaved\.value \|\|\s+\(serverStatus\.value !== "lost" && props\.album\.available\)\),\s+\);/,
+    catalogCard,
+    /const albumPlayable = computed\(\s+\(\) =>[\s\S]*albumFullySaved\.value[\s\S]*serverStatus\.value !== "lost"/,
     "A partially saved album is unavailable offline",
   );
   assert.match(
-    albumCard,
-    /<TooltipProvider :delay-duration="150">\s+<TooltipRoot :disabled="albumControlEnabled">\s+<TooltipTrigger as-child>/,
+    catalogCard,
+    /<TooltipProvider :delay-duration="150">\s+<TooltipRoot :disabled="controlEnabled">\s+<TooltipTrigger as-child>/,
   );
   assert.match(
-    albumCard,
-    /<TooltipContent\s+v-if="!albumControlEnabled"[\s\S]*?\{\{ t\("trackTable\.unavailable"\) \}\}/,
+    catalogCard,
+    /<TooltipContent\s+v-if="!controlEnabled"[\s\S]*?\{\{ t\("trackTable\.unavailable"\) \}\}/,
     "Unavailable album cards explain the disabled play control in a tooltip",
   );
   assert.match(
-    albumCard,
-    /<Badge v-if="!albumPlayable" variant="secondary" class="mt-1">/,
+    catalogCard,
+    /<Badge v-if="!playable" variant="secondary" class="mt-1">/,
     "Partially available albums display their unavailable state",
   );
   assert.doesNotMatch(
     detailPage,
-    /<AlbumCard/,
+    /<CatalogCard/,
     "The album detail cover does not use the shared card play control",
   );
   assert.match(listPage, /t\("page\.albums\.empty"\)/);
@@ -153,8 +156,13 @@ test("albums have list and detail routes with derived groups", async () => {
   );
   assert.match(
     detailPage,
-    /t\('card\.playAlbum', \{\s+album: album\.title,\s+artist: album\.artist,\s+\}\)/,
+    /const albumPlayLabel = computed\([\s\S]*?t\("card\.playAlbum", \{[\s\S]*?album: album\.value\.title,[\s\S]*?artist: album\.value\.artist,/,
     "The album header play label explains that playback starts from the first track",
+  );
+  assert.match(
+    detailPage,
+    /:play-label="albumPlayLabel"[\s\S]*?:pause-label="albumPauseLabel"/,
+    "The compact album header shares the full header play labels",
   );
   assert.match(detailPage, /albumPlaybackActive \? icons\.pause : icons\.play/);
   assert.doesNotMatch(
@@ -203,13 +211,23 @@ test("albums have list and detail routes with derived groups", async () => {
   );
   assert.match(
     trackTable,
-    /class="group\/track-artwork flex h-14 min-w-full select-none items-center whitespace-nowrap border-b hover:bg-muted\/50"[\s\S]*@dblclick\.prevent="playFromList\(item\.track\)"/,
-    "The current track row does not add an active background effect",
+    /class="group\/track-artwork flex h-14 min-w-full select-none items-center whitespace-nowrap border-b motion-safe:transition-colors motion-safe:duration-300 motion-safe:ease-out motion-reduce:transition-none"[\s\S]*@dblclick\.prevent="playFromList\(item\.track\)"/,
+    "Track rows use a fading background transition without selecting on double click",
   );
   assert.match(
     trackTable,
-    /class="group\/track-artwork flex h-14 min-w-full select-none items-center whitespace-nowrap border-b hover:bg-muted\/50"/,
+    /class="group\/track-artwork flex h-14 min-w-full select-none items-center whitespace-nowrap border-b motion-safe:transition-colors motion-safe:duration-300 motion-safe:ease-out motion-reduce:transition-none"/,
     "Track rows prevent their text from being selected",
+  );
+  assert.match(
+    trackTable,
+    /'bg-primary\/10': isTrackLinkHighlighted\(item\.track\)[\s\S]*?'hover:bg-muted\/50': !isTrackLinkHighlighted\(item\.track\)/,
+    "Only the linked track receives the primary background highlight",
+  );
+  assert.match(
+    trackTable,
+    /const TRACK_LINK_HIGHLIGHT_DURATION_MS = 2000;[\s\S]*?trackLinkHighlightId\.value = trackId;[\s\S]*?trackLinkHighlightId\.value = null;/,
+    "A linked track keeps its highlight for two seconds before returning to its normal background",
   );
   assert.match(
     trackTable,

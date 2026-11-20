@@ -3,12 +3,12 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 test("search uses one full-content route with recent and local results", async () => {
-  const [searchPage, layout, albumCard, artistCard, mediaCollectionCard] =
+  const [searchPage, layout, catalogCard, artistCard, mediaCollectionCard] =
     await Promise.all([
       readFile(new URL("../app/pages/search.vue", import.meta.url), "utf8"),
       readFile(new URL("../app/layouts/default.vue", import.meta.url), "utf8"),
       readFile(
-        new URL("../app/components/AlbumCard.vue", import.meta.url),
+        new URL("../app/components/CatalogCard.vue", import.meta.url),
         "utf8",
       ),
       readFile(
@@ -43,13 +43,15 @@ test("search uses one full-content route with recent and local results", async (
   assert.match(searchPage, /page\.search\.recent/);
   assert.match(searchPage, /useSearchRecents\(\)/);
   assert.match(searchPage, /@open="openAlbum\(album\)"/);
-  assert.match(searchPage, /<AlbumCard :album="item" compact/);
+  assert.match(searchPage, /<CatalogCard/);
+  assert.match(searchPage, /albumCatalogCard\(item\)/);
+  assert.match(searchPage, /compact/);
   assert.match(searchPage, /<ArtistCard/);
   assert.match(searchPage, /<MediaCollectionCard/);
   assert.match(searchPage, /<TrackTable/);
   assert.match(searchPage, /page\.search\.externalSources/);
   assert.match(searchPage, /page\.search\.externalTitle/);
-  assert.match(albumCard, /defineEmits<\{ open: \[\] \}>/);
+  assert.match(catalogCard, /defineEmits<\{ open: \[\] \}>/);
   assert.match(artistCard, /artistRoute\(artist\)/);
   assert.match(mediaCollectionCard, /collection\.mediaType/);
 });

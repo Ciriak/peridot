@@ -181,7 +181,8 @@ test("playlist pages expose creation, unavailable tracks, editing, likes, and of
     listPage,
     index,
     detailPage,
-    card,
+    catalogCard,
+    playlistMenu,
     trackList,
     likeButton,
     contextMenu,
@@ -198,7 +199,11 @@ test("playlist pages expose creation, unavailable tracks, editing, likes, and of
       "utf8",
     ),
     readFile(
-      new URL("../app/components/PlaylistCard.vue", import.meta.url),
+      new URL("../app/components/CatalogCard.vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/components/PlaylistContextMenu.vue", import.meta.url),
       "utf8",
     ),
     readFile(
@@ -227,7 +232,8 @@ test("playlist pages expose creation, unavailable tracks, editing, likes, and of
   ]);
 
   assert.match(index, /usePlaylistList\(\{ limit: 1 \}\)/);
-  assert.match(index, /<PlaylistCard/);
+  assert.match(index, /<CatalogCard/);
+  assert.match(index, /playlistCatalogCard/);
   assert.doesNotMatch(index, /page\.home\.comingSoon/);
   assert.match(listPage, /<PlaylistNameDialog/);
   assert.match(listPage, /mode="create"/);
@@ -236,21 +242,21 @@ test("playlist pages expose creation, unavailable tracks, editing, likes, and of
   assert.match(detailPage, /<PlaylistTrackList/);
   assert.match(detailPage, /<PlaylistNameDialog/);
   assert.match(detailPage, /<PlaylistDeleteDialog/);
-  assert.match(card, /<PlaylistCover/);
-  assert.doesNotMatch(card, /<PlaylistOfflineSummaryButton/);
-  assert.match(card, /<LikeButton/);
+  assert.match(catalogCard, /<PlaylistCover/);
+  assert.doesNotMatch(catalogCard, /<PlaylistOfflineSummaryButton/);
   assert.match(
-    card,
-    /<div class="space-y-3">[\s\S]*<div class="min-w-0 flex-1 pr-12">/,
+    catalogCard,
+    /'space-y-3'/,
     "Playlist cards use the shared card content spacing and text width",
   );
+  assert.match(catalogCard, /pr-12/);
   assert.match(
-    card,
-    /<Icon\s+:icon="icons\.playlist"\s+aria-hidden="true"\s+class="size-3 shrink-0 text-muted-foreground"\s+\/>\s*<h3 class="min-w-0 flex-1 text-sm font-medium">/,
-    "Playlist cards use the shared type icon and title sizing",
+    catalogCard,
+    /<h3 :class="compact \? 'text-xs' : 'text-sm'" class="font-medium">/,
+    "Playlist cards use the shared title sizing",
   );
-  assert.match(card, /context\.renamePlaylist/);
-  assert.match(card, /<PlaylistDeleteDialog/);
+  assert.match(playlistMenu, /context\.renamePlaylist/);
+  assert.match(playlistMenu, /<PlaylistDeleteDialog/);
   assert.match(trackList, /useSortable/);
   assert.match(trackList, /playlistTracks\.unavailable/);
   assert.match(trackList, /emit\(\s*"reorder"/);
@@ -292,34 +298,40 @@ test("playlist offline saving reuses the per-track manifest", async () => {
 });
 
 test("liked tracks use generated artwork and a read-only automatic playlist surface", async () => {
-  const [cover, card, detail, submenu, layout] = await Promise.all([
-    readFile(
-      new URL("../app/components/PlaylistCover.vue", import.meta.url),
-      "utf8",
-    ),
-    readFile(
-      new URL("../app/components/PlaylistCard.vue", import.meta.url),
-      "utf8",
-    ),
-    readFile(
-      new URL("../app/pages/playlists/[playlist].vue", import.meta.url),
-      "utf8",
-    ),
-    readFile(
-      new URL(
-        "../app/components/AddTrackToPlaylistSubmenu.vue",
-        import.meta.url,
+  const [cover, catalogCard, playlistMenu, detail, submenu, layout] =
+    await Promise.all([
+      readFile(
+        new URL("../app/components/PlaylistCover.vue", import.meta.url),
+        "utf8",
       ),
-      "utf8",
-    ),
-    readFile(new URL("../app/layouts/default.vue", import.meta.url), "utf8"),
-  ]);
+      readFile(
+        new URL("../app/components/CatalogCard.vue", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL("../app/components/PlaylistContextMenu.vue", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL("../app/pages/playlists/[playlist].vue", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL(
+          "../app/components/AddTrackToPlaylistSubmenu.vue",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+      readFile(new URL("../app/layouts/default.vue", import.meta.url), "utf8"),
+    ]);
 
-  assert.match(cover, /bg-primary\/60 text-white/);
+  assert.match(cover, /bg-primary\/40 text-white/);
   assert.match(cover, /icons\.heartFilled/);
   assert.match(cover, /class="size-16"/);
-  assert.match(card, /playlist\.kind === "liked-tracks"/);
-  assert.match(card, /:kind="playlist\.kind"/);
+  assert.match(catalogCard, /:kind="playlist\.kind"/);
+  assert.match(playlistMenu, /playlist\.kind === "liked-tracks"/);
+  assert.match(playlistMenu, /v-if="!automatic"/);
   assert.match(detail, /playlist\.value\?\.kind === "liked-tracks"/);
   assert.match(detail, /:read-only="automatic"/);
   assert.match(detail, /:show-track-likes="!automatic"/);

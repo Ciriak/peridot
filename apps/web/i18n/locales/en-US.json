@@ -313,6 +313,7 @@
   "trackTable.pause": "Pause {title}",
   "trackTable.openAlbum": "Open {album}",
   "card.openAlbum": "Open {album} by {artist}",
+  "card.openTrack": "Open {track} by {artist}",
   "card.playAlbum": "Play {album} by {artist} from the first track",
   "card.pauseAlbum": "Pause {album} by {artist}",
   "card.openArtist": "Open {artist}",

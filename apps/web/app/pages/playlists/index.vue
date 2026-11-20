@@ -6,8 +6,8 @@ import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { onMounted, ref } from "vue";
 import AutoLoadMore from "../../components/AutoLoadMore.vue";
+import CatalogCard from "../../components/CatalogCard.vue";
 import ListSearchBar from "../../components/ListSearchBar.vue";
-import PlaylistCard from "../../components/PlaylistCard.vue";
 import PlaylistNameDialog from "../../components/PlaylistNameDialog.vue";
 import VirtualCardGrid from "../../components/VirtualCardGrid.vue";
 import { useListSearch } from "../../composables/use-list-search";
@@ -15,6 +15,7 @@ import {
   usePlaylistActions,
   usePlaylistList,
 } from "../../composables/use-playlists";
+import { playlistCatalogCard } from "../../lib/catalog-cards";
 import { icons } from "../../lib/icons";
 
 const { t } = useI18n();
@@ -113,7 +114,7 @@ onMounted(() => void load());
       :estimate-row-height="220"
     >
       <template #default="{ item }">
-        <PlaylistCard :playlist="item" />
+        <CatalogCard :item="playlistCatalogCard(item)" />
       </template>
       <template #footer>
         <AutoLoadMore

@@ -4,13 +4,14 @@ import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { onMounted } from "vue";
-import AlbumCard from "../../components/AlbumCard.vue";
 import AutoLoadMore from "../../components/AutoLoadMore.vue";
+import CatalogCard from "../../components/CatalogCard.vue";
 import ListSearchBar from "../../components/ListSearchBar.vue";
 import VirtualCardGrid from "../../components/VirtualCardGrid.vue";
 import { useCatalogAlbumQuery } from "../../composables/use-catalog-query";
 import { useListSearch } from "../../composables/use-list-search";
 import { useLikes } from "../../composables/use-likes";
+import { albumCatalogCard } from "../../lib/catalog-cards";
 
 const { t } = useI18n();
 useHead({ title: t("page.albums.title") });
@@ -90,7 +91,7 @@ onMounted(() => {
       :aria-busy="loading"
     >
       <template #default="{ item }">
-        <AlbumCard :album="item" />
+        <CatalogCard :item="albumCatalogCard(item)" />
       </template>
       <template #footer>
         <AutoLoadMore

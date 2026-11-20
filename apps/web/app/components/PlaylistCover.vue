@@ -21,7 +21,7 @@ const slots = computed(() => playlistCoverSlots(props.coverUrls));
   <div
     v-if="kind === 'liked-tracks'"
     aria-hidden="true"
-    class="flex aspect-square items-center justify-center rounded-md bg-primary/60 text-white"
+    class="flex aspect-square items-center justify-center rounded-md bg-primary/40 text-white"
   >
     <Icon :icon="icons.heartFilled" class="size-16" />
   </div>

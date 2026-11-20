@@ -14,13 +14,7 @@ import AlbumContextMenu from "./AlbumContextMenu.vue";
 import QuickPickTileContent from "./QuickPickTileContent.vue";
 import TrackContextMenu from "./TrackContextMenu.vue";
 
-const props = withDefaults(
-  defineProps<{
-    item: ResolvedQuickPickItem;
-    layout?: "tile" | "card";
-  }>(),
-  { layout: "tile" },
-);
+const props = defineProps<{ item: ResolvedQuickPickItem }>();
 const { t } = useI18n();
 const { address } = useServer();
 const { status: serverStatus } = useServerConnection();
@@ -139,7 +133,6 @@ async function toggleItemPlayback() {
       :play-label="playLabel"
       :busy="activeItem && loading"
       :playable="playable"
-      :layout="layout"
       @play="toggleItemPlayback"
     />
   </TrackContextMenu>
@@ -152,7 +145,6 @@ async function toggleItemPlayback() {
       :play-label="playLabel"
       :busy="activeItem && loading"
       :playable="playable"
-      :layout="layout"
       @play="toggleItemPlayback"
     />
   </AlbumContextMenu>

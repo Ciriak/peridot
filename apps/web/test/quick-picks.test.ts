@@ -168,9 +168,8 @@ test("the sidebar renders linked, context-aware quick picks", async () => {
   assert.match(tile, /props\.item\.kind === "track"[\s\S]*?track\.coverUrl/);
   assert.match(content, /props\.coverUrl/);
   assert.match(content, /group\/quick-pick/);
-  assert.match(content, /props\.layout === "card"/);
-  assert.match(content, /aspect-square h-auto w-full/);
-  assert.match(tile, /layout\?: "tile" \| "card"/);
+  assert.doesNotMatch(content, /props\.layout|aspect-square h-auto w-full/);
+  assert.doesNotMatch(tile, /layout\?: "tile" \| "card"/);
   assert.match(content, /cursor-pointer/);
   assert.match(content, /group-hover\/quick-pick:opacity-100/);
   assert.match(content, /group-focus-within\/quick-pick:opacity-100/);

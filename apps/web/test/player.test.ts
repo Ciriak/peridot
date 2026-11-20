@@ -362,12 +362,11 @@ test("the player replaces known track metadata without an unresolved frame", asy
 test("available collection play controls switch to pause before buffering", async () => {
   const [
     player,
-    albumCard,
+    catalogCard,
     albumPage,
     artistPage,
     mediaCard,
     mediaDetail,
-    playlistCard,
     playlistPage,
     quickPick,
   ] = await Promise.all([
@@ -376,7 +375,7 @@ test("available collection play controls switch to pause before buffering", asyn
       "utf8",
     ),
     readFile(
-      new URL("../app/components/AlbumCard.vue", import.meta.url),
+      new URL("../app/components/CatalogCard.vue", import.meta.url),
       "utf8",
     ),
     readFile(
@@ -393,10 +392,6 @@ test("available collection play controls switch to pause before buffering", asyn
     ),
     readFile(
       new URL("../app/components/MediaCollectionDetail.vue", import.meta.url),
-      "utf8",
-    ),
-    readFile(
-      new URL("../app/components/PlaylistCard.vue", import.meta.url),
       "utf8",
     ),
     readFile(
@@ -426,12 +421,11 @@ test("available collection play controls switch to pause before buffering", asyn
   );
 
   for (const [name, source] of [
-    ["album card", albumCard],
+    ["catalog card", catalogCard],
     ["album page", albumPage],
     ["artist page", artistPage],
     ["media collection card", mediaCard],
     ["media collection detail", mediaDetail],
-    ["playlist card", playlistCard],
     ["quick pick", quickPick],
   ] as const) {
     assert.match(
@@ -445,7 +439,7 @@ test("available collection play controls switch to pause before buffering", asyn
     /playCollection\(playableTracks\.value, track\.id, playlistTarget\.value\)/,
     "Playlist track playback binds the active playlist target",
   );
-  assert.match(albumCard, /albumPlaybackActive \? icons\.pause : icons\.play/);
+  assert.match(catalogCard, /playbackActive \? icons\.pause : icons\.play/);
   assert.match(albumPage, /albumPlaybackActive \? icons\.pause : icons\.play/);
   assert.match(
     artistPage,

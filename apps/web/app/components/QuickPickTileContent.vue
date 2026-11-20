@@ -13,21 +13,16 @@ import { icons } from "../lib/icons";
 import FadeInImage from "./FadeInImage.vue";
 import TrackArtistLinks from "./TrackArtistLinks.vue";
 
-const props = withDefaults(
-  defineProps<{
-    item: ResolvedQuickPickItem;
-    coverUrl: string | null;
-    activeItem: boolean;
-    playing: boolean;
-    playLabel: string;
-    busy: boolean;
-    playable: boolean;
-    layout?: "tile" | "card";
-  }>(),
-  { layout: "tile" },
-);
+const props = defineProps<{
+  item: ResolvedQuickPickItem;
+  coverUrl: string | null;
+  activeItem: boolean;
+  playing: boolean;
+  playLabel: string;
+  busy: boolean;
+  playable: boolean;
+}>();
 const emit = defineEmits<{ play: [] }>();
-const card = computed(() => props.layout === "card");
 
 const {
   artworkUrl: cachedCoverUrl,
@@ -51,21 +46,12 @@ const titleRoute = computed(() =>
 
 <template>
   <article
-    class="group/quick-pick flex min-w-0"
-    :class="
-      card
-        ? 'flex-col gap-3 rounded-lg border bg-card p-3 text-card-foreground'
-        : 'items-center gap-2 rounded-md p-1 transition-colors hover:bg-accent'
-    "
+    class="group/quick-pick flex min-w-0 items-center gap-2 rounded-md p-1 transition-colors hover:bg-accent"
   >
     <Button
       variant="ghost"
       size="icon-sm"
-      :class="
-        card
-          ? 'relative aspect-square h-auto w-full shrink-0 cursor-pointer overflow-hidden rounded-md p-0'
-          : 'relative size-10 shrink-0 cursor-pointer overflow-hidden rounded-md p-0'
-      "
+      class="relative size-10 shrink-0 cursor-pointer overflow-hidden rounded-md p-0"
       :aria-label="playLabel"
       :aria-busy="busy"
       :disabled="!playable"
@@ -74,11 +60,7 @@ const titleRoute = computed(() =>
       <Icon
         :icon="props.item.kind === 'album' ? icons.album : icons.music"
         aria-hidden="true"
-        :class="
-          card
-            ? 'size-10 text-muted-foreground'
-            : 'size-5 text-muted-foreground'
-        "
+        class="size-5 text-muted-foreground"
       />
       <FadeInImage
         v-if="cachedCoverUrl && !coverFailed"
@@ -89,11 +71,11 @@ const titleRoute = computed(() =>
       />
       <span
         aria-hidden="true"
-        class="absolute inset-0 flex items-center justify-center bg-background/70 opacity-0 transition-opacity group-hover/quick-pick:opacity-100 group-focus-within/quick-pick:opacity-100 max-sm:opacity-100"
+        class="absolute inset-0 flex items-center justify-center bg-background/70 opacity-0 transition-opacity group-hover/quick-pick:opacity-100 group-focus-within/quick-pick:opacity-100"
       >
         <Icon
           :icon="activeItem && playing ? icons.pause : icons.play"
-          :class="card ? 'size-6 text-foreground' : 'size-4 text-foreground'"
+          class="size-4 text-foreground"
         />
       </span>
     </Button>
@@ -109,8 +91,8 @@ const titleRoute = computed(() =>
           class="size-3 shrink-0 text-muted-foreground"
         />
         <ScrollingText
-          class="min-w-0 flex-1 font-medium"
-          :class="[card ? 'text-sm' : 'text-xs', !playable && 'opacity-60']"
+          class="min-w-0 flex-1 text-xs font-medium"
+          :class="!playable && 'opacity-60'"
         >
           {{ title }}
         </ScrollingText>

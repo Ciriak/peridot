@@ -82,7 +82,7 @@ test("track, album, and artist likes share accessible persistent state wiring", 
   );
   assert.match(
     button,
-    /:class="\[\s*compact \? 'size-3' : large \? 'size-7' : 'size-6',\s*liked && 'text-primary',\s*\]"/,
+    /:class="\[\s*compact \? 'size-4' : large \? 'size-7' : 'size-6',\s*liked && 'text-primary',\s*\]"/,
     "Liked state colors the icon",
   );
   assert.doesNotMatch(
@@ -111,18 +111,33 @@ test("track, album, and artist likes share accessible persistent state wiring", 
   assert.match(layout, /<LikeButton/);
 });
 
-test("album and artist cards keep navigation and like actions separate", async () => {
-  const [albumCard, artistCard] = await Promise.all([
+test("catalog cards show album and track likes but not playlist buttons", async () => {
+  const [catalogCard, artistCard, playlistMenu] = await Promise.all([
     readFile(
-      new URL("../app/components/AlbumCard.vue", import.meta.url),
+      new URL("../app/components/CatalogCard.vue", import.meta.url),
       "utf8",
     ),
     readFile(
       new URL("../app/components/ArtistCard.vue", import.meta.url),
       "utf8",
     ),
+    readFile(
+      new URL("../app/components/PlaylistContextMenu.vue", import.meta.url),
+      "utf8",
+    ),
   ]);
   const separateActions = /<NuxtLink[\s\S]*<\/NuxtLink>[\s\S]*<LikeButton/;
-  assert.match(albumCard, separateActions);
+  assert.match(catalogCard, separateActions);
   assert.match(artistCard, separateActions);
+  assert.match(catalogCard, /if \(track\.value\?\.mediaType === "music"\)/);
+  assert.doesNotMatch(
+    catalogCard,
+    /kind: "playlist"[\s\S]{0,120}LikeButton/,
+    "Playlist cards do not render a like button",
+  );
+  assert.match(
+    playlistMenu,
+    /t\("context\.unlikePlaylist"\)[\s\S]*t\("context\.likePlaylist"\)/,
+    "Playlist liking remains available from its context menu",
+  );
 });

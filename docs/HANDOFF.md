@@ -1,5 +1,227 @@
 # Peridot handoff
 
+## Scrolled detail header dock
+
+Album, artist, playlist, audiobook, and podcast detail pages now show a compact
+fixed header after their full header card has scrolled completely out of view.
+The dock sits below the existing application top bar and provides an icon-only
+history-aware Back control, the collection title, and its play/pause control.
+
+The compact and full playback controls share one handler, playable state,
+playback-active state, and localized label for each detail surface. The dock
+therefore preserves the existing immediate pause feedback, pending collection
+cancellation, offline fallback, and unavailable disabled state.
+
+Verification:
+
+- Focused scrolled-header, album, artist, playlist, styling, and back-navigation
+  tests (14 passing)
+- `pnpm --filter @peridot/web test` (275 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- `pnpm lint`
+- Focused Prettier check for all changed web and test files
+- `git diff --check`
+
+Known limits:
+
+- Live browser visual QA at desktop and mobile widths was not run.
+- `pnpm format:check` remains blocked by the pre-existing formatting issue in
+  `apps/desktop/src-tauri/tauri.conf.json`.
+
+Feature files:
+
+- `apps/web/app/components/ScrolledHeader.vue`
+- `apps/web/app/components/BackButton.vue`
+- `apps/web/app/lib/scrolled-header.ts`
+- `apps/web/app/components/MediaCollectionDetail.vue`
+- `apps/web/app/pages/albums/[album].vue`
+- `apps/web/app/pages/artists/[artist].vue`
+- `apps/web/app/pages/playlists/[playlist].vue`
+
+Uncommitted changes:
+
+- The shared scrolled header, icon-only back mode, detail-page integrations,
+  regression coverage, decision record, and this handoff section.
+- Concurrent catalog-card, mobile-grid, track-highlight, and related web changes
+  were preserved.
+
+Next:
+
+- Exercise each detail surface at phone and desktop widths while scrolling in
+  both directions and while the collection is playing, paused, unavailable,
+  and still resolving playback.
+
+## Two-column mobile card grids
+
+All page-level card lists now use two columns at mobile widths. The shared
+`VirtualCardGrid` starts standard and wide layouts at two columns and changes
+the compact layout from three columns to two. Home’s mixed catalog cards and
+Search’s recent album cards apply the same mobile rule directly.
+
+This covers Albums, Artists, Playlists, Audiobooks, Podcasts, artist album
+collections, Search result sections, and Home.
+
+Verification:
+
+- Focused virtual-grid, Home, and Search tests (8 passing)
+- `pnpm --filter @peridot/web test` (272 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Focused ESLint and Prettier checks
+- `git diff --check`
+
+Known limits:
+
+- Live browser visual QA at mobile widths was not run.
+
+Feature files:
+
+- `apps/web/app/components/VirtualCardGrid.vue`
+- `apps/web/app/pages/index.vue`
+- `apps/web/app/pages/search.vue`
+- `apps/web/test/virtual-scroll.test.ts`
+- `apps/web/test/home-page.test.ts`
+
+Uncommitted changes:
+
+- The shared two-column mobile grid rule, Home and Search adjustments,
+  regression coverage, decision record, and this handoff section.
+- Concurrent catalog-card, track-highlight, and related web changes were
+  preserved.
+
+Next:
+
+- Check Home, Albums, Artists, Playlists, Audiobooks, Podcasts, artist detail,
+  and Search at phone width and confirm each card row has two evenly sized
+  cards without horizontal overflow.
+
+## Linked track row highlight
+
+Album track links now keep their target row highlighted before returning to the
+normal background. The existing `#track-title-*` hash continues to identify and
+scroll the row, so link generation did not need a new route format. The shared
+track table applies `bg-primary/10` for two seconds, then fades the highlight
+out.
+
+Verification:
+
+- `pnpm --filter @peridot/web exec node --test test/album-pages.test.ts`
+  (2 passing)
+- `pnpm --filter @peridot/web test` (272 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Focused ESLint and Prettier checks
+
+Known limits:
+
+- Live browser visual QA was not run for the highlight timing.
+
+Feature files:
+
+- `apps/web/app/components/TrackTable.vue`
+- `apps/web/test/album-pages.test.ts`
+
+Uncommitted changes:
+
+- The linked-row highlight, regression coverage, decision record, and this
+  handoff section.
+- Concurrent catalog-card and related web changes were preserved.
+
+Next:
+
+- Open the supplied album track link at desktop and phone widths and confirm the
+  selected row scrolls into view, holds the highlight for two seconds, then fades
+  back to normal.
+
+## Shared catalog cards
+
+Album, playlist, and track card surfaces now use one polymorphic
+`CatalogCard`. Home renders its liked playlist and mixed quick picks through one
+keyed collection, while album lists, artist album grids, playlist lists, and
+compact search results use the same component. `AlbumCard` and `PlaylistCard`
+were removed, and `QuickPickTile` is now limited to the sidebar tile layout.
+
+The shared card preserves album playback and complete-offline-copy rules, track
+direct playback and artist links, playlist playback and unavailable counts, and
+the existing mobile and unavailable-control behavior. Albums and music tracks
+show the card like button; playlist cards do not. Playlist likes, rename, and
+delete remain in `PlaylistContextMenu`, with automatic playlists restricted to
+play and open.
+
+Context menus are selected by item type and receive only the listeners that
+their component supports: album collection actions, track playback and catalog
+actions, or playlist management. This prevents actions from leaking between
+item kinds.
+
+Verification:
+
+- `pnpm --filter @peridot/web test` (272 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- `pnpm lint`
+- Focused Prettier formatting on changed web files
+
+Known limits:
+
+- Live browser visual QA at desktop and phone widths was not run.
+
+Feature files:
+
+- `apps/web/app/components/CatalogCard.vue`
+- `apps/web/app/components/PlaylistContextMenu.vue`
+- `apps/web/app/lib/catalog-cards.ts`
+- `apps/web/test/catalog-card.test.ts`
+
+Uncommitted changes:
+
+- The shared card refactor, item-specific menus, regression coverage, decision
+  record, and this handoff section.
+- Concurrent liked-tracks cover darkening remains present and unchanged.
+
+Next:
+
+- Open Home, Albums, Playlists, and compact Search results at desktop and phone
+  widths. Right-click each item type and confirm the matching menu appears, and
+  confirm tracks show a like button while playlists do not.
+
+## Liked tracks cover darkening
+
+The generated liked-tracks artwork now uses `bg-primary/40`, replacing the
+previous 60% primary tint. The white Basil heart and shared playlist card/detail
+presentation are unchanged.
+
+Verification:
+
+- Focused liked-tracks artwork test (1 passing)
+- Focused ESLint check
+- Focused Prettier check
+- Web typecheck passes; the temporary untracked playlist playback helper was
+  folded into `CatalogCard` during the shared-card refactor
+- `git diff --check`
+
+Known limits:
+
+- Live browser visual QA was not run.
+
+Feature files:
+
+- `apps/web/app/components/PlaylistCover.vue`
+- `apps/web/test/playlists.test.ts`
+
+Uncommitted changes:
+
+- The darker liked-tracks cover, its regression assertion, decision record, and
+  this handoff section.
+- The shared catalog card refactor preserves this darker cover while absorbing
+  playlist playback into the card.
+
+Next:
+
+- Open the Liked tracks card and detail at desktop and phone widths and confirm
+  the darker primary-derived cover has sufficient separation from the white
+  heart.
+
 ## History-aware catalog back buttons
 
 Album, artist, playlist, audiobook, and podcast detail pages now use one generic

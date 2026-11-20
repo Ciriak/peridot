@@ -12,6 +12,7 @@ import AlbumLink from "../../components/AlbumLink.vue";
 import BackButton from "../../components/BackButton.vue";
 import FadeInImage from "../../components/FadeInImage.vue";
 import LikeButton from "../../components/LikeButton.vue";
+import ScrolledHeader from "../../components/ScrolledHeader.vue";
 import TrackArtistLinks from "../../components/TrackArtistLinks.vue";
 import TrackTable from "../../components/TrackTable.vue";
 import {
@@ -125,6 +126,22 @@ const albumPlayable = computed(
       savedTracks.value.some(
         (saved) => saved.track.albumId === album.value?.id,
       )),
+);
+const albumPlayLabel = computed(() =>
+  album.value
+    ? t("card.playAlbum", {
+        album: album.value.title,
+        artist: album.value.artist,
+      })
+    : "",
+);
+const albumPauseLabel = computed(() =>
+  album.value
+    ? t("card.pauseAlbum", {
+        album: album.value.title,
+        artist: album.value.artist,
+      })
+    : "",
 );
 const coverUrl = computed(() =>
   trackCoverUrl(address.value ?? "", album.value?.coverUrl ?? null),
@@ -256,104 +273,112 @@ onMounted(() => {
     >
       {{ offlinePlaybackError }}
     </p>
-    <AlbumContextMenu :album="album">
-      <section
-        aria-labelledby="album-heading"
-        class="relative flex flex-col gap-6 rounded-lg border bg-card p-6 text-card-foreground sm:flex-row sm:items-end"
-      >
-        <LikeButton
-          class="absolute right-4 top-4"
-          :liked="likedAlbumIds.includes(album.id) || album.liked"
-          :label="album.title"
-          :pending="
-            isLikePending({
-              kind: 'album',
-              albumId: album.id,
-              title: album.title,
-              artist: album.artist,
-            })
-          "
-          :disabled="!likesLoaded"
-          @toggle="
-            toggleLike({
-              kind: 'album',
-              albumId: album.id,
-              title: album.title,
-              artist: album.artist,
-            })
-          "
-        />
-        <div
-          aria-hidden="true"
-          class="relative flex size-40 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted text-muted-foreground"
+    <ScrolledHeader
+      :title="album.title"
+      :playable="albumPlayable"
+      :playback-active="albumPlaybackActive"
+      :play-label="albumPlayLabel"
+      :pause-label="albumPauseLabel"
+      @play="toggleAlbumPlayback"
+    >
+      <AlbumContextMenu :album="album">
+        <section
+          aria-labelledby="album-heading"
+          class="relative flex flex-col gap-6 rounded-lg border bg-card p-6 text-card-foreground sm:flex-row sm:items-end"
         >
-          <Icon :icon="icons.album" class="size-16" />
-          <FadeInImage
-            v-if="coverImageUrl && !coverFailed"
-            :src="coverImageUrl"
-            :fade-in="!coverFromCache"
-            loading="eager"
-            class="absolute inset-0"
-            @error="coverFailed = true"
+          <LikeButton
+            class="absolute right-4 top-4"
+            :liked="likedAlbumIds.includes(album.id) || album.liked"
+            :label="album.title"
+            :pending="
+              isLikePending({
+                kind: 'album',
+                albumId: album.id,
+                title: album.title,
+                artist: album.artist,
+              })
+            "
+            :disabled="!likesLoaded"
+            @toggle="
+              toggleLike({
+                kind: 'album',
+                albumId: album.id,
+                title: album.title,
+                artist: album.artist,
+              })
+            "
           />
-        </div>
-        <div class="min-w-0 flex-1 space-y-3 pr-12">
-          <p
-            class="text-xs font-medium uppercase tracking-wide text-muted-foreground"
+          <div
+            aria-hidden="true"
+            class="relative flex size-40 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted text-muted-foreground"
           >
-            {{ t("page.album.label") }}
-          </p>
-          <h1 id="album-heading" class="text-3xl font-semibold tracking-tight">
-            <AlbumLink :album="album">
-              <ScrollingText class="w-full">{{ album.title }}</ScrollingText>
-            </AlbumLink>
-          </h1>
-          <ScrollingText class="w-full text-sm text-muted-foreground">
-            <TrackArtistLinks :artists="album.artists" />
-          </ScrollingText>
-          <div class="flex flex-wrap items-center gap-3">
-            <Button
-              size="icon-lg"
-              class="rounded-full"
-              :disabled="!albumPlayable"
-              :aria-label="
-                albumPlaybackActive
-                  ? t('card.pauseAlbum', {
-                      album: album.title,
-                      artist: album.artist,
-                    })
-                  : t('card.playAlbum', {
-                      album: album.title,
-                      artist: album.artist,
-                    })
-              "
-              @click="toggleAlbumPlayback"
-            >
-              <Icon
-                :icon="albumPlaybackActive ? icons.pause : icons.play"
-                aria-hidden="true"
-                class="size-5"
-              />
-            </Button>
-            <Badge variant="secondary">
-              {{
-                t("count.track", { count: album.trackCount }, album.trackCount)
-              }}
-            </Badge>
-            <Badge v-if="!album.available" variant="secondary">
-              {{ t("trackTable.unavailable") }}
-            </Badge>
-            <span class="text-sm text-muted-foreground">
-              <template v-if="album.releaseYear">
-                {{ album.releaseYear }}
-                <span aria-hidden="true">·</span>
-              </template>
-              {{ formatTrackDuration(album.durationMs) }}
-            </span>
+            <Icon :icon="icons.album" class="size-16" />
+            <FadeInImage
+              v-if="coverImageUrl && !coverFailed"
+              :src="coverImageUrl"
+              :fade-in="!coverFromCache"
+              loading="eager"
+              class="absolute inset-0"
+              @error="coverFailed = true"
+            />
           </div>
-        </div>
-      </section>
-    </AlbumContextMenu>
+          <div class="min-w-0 flex-1 space-y-3 pr-12">
+            <p
+              class="text-xs font-medium uppercase tracking-wide text-muted-foreground"
+            >
+              {{ t("page.album.label") }}
+            </p>
+            <h1
+              id="album-heading"
+              class="text-3xl font-semibold tracking-tight"
+            >
+              <AlbumLink :album="album">
+                <ScrollingText class="w-full">{{ album.title }}</ScrollingText>
+              </AlbumLink>
+            </h1>
+            <ScrollingText class="w-full text-sm text-muted-foreground">
+              <TrackArtistLinks :artists="album.artists" />
+            </ScrollingText>
+            <div class="flex flex-wrap items-center gap-3">
+              <Button
+                size="icon-lg"
+                class="rounded-full"
+                :disabled="!albumPlayable"
+                :aria-label="
+                  albumPlaybackActive ? albumPauseLabel : albumPlayLabel
+                "
+                @click="toggleAlbumPlayback"
+              >
+                <Icon
+                  :icon="albumPlaybackActive ? icons.pause : icons.play"
+                  aria-hidden="true"
+                  class="size-5"
+                />
+              </Button>
+              <Badge variant="secondary">
+                {{
+                  t(
+                    "count.track",
+                    { count: album.trackCount },
+                    album.trackCount,
+                  )
+                }}
+              </Badge>
+              <Badge v-if="!album.available" variant="secondary">
+                {{ t("trackTable.unavailable") }}
+              </Badge>
+              <span class="text-sm text-muted-foreground">
+                <template v-if="album.releaseYear">
+                  {{ album.releaseYear }}
+                  <span aria-hidden="true">·</span>
+                </template>
+                {{ formatTrackDuration(album.durationMs) }}
+              </span>
+            </div>
+          </div>
+        </section>
+      </AlbumContextMenu>
+    </ScrolledHeader>
 
     <section aria-labelledby="album-tracks-heading" class="space-y-4">
       <h2 id="album-tracks-heading" class="text-lg font-semibold">

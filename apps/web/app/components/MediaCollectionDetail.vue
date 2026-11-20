@@ -32,6 +32,7 @@ import BackButton from "./BackButton.vue";
 import FadeInImage from "./FadeInImage.vue";
 import LikeButton from "./LikeButton.vue";
 import MediaCollectionOfflineButton from "./MediaCollectionOfflineButton.vue";
+import ScrolledHeader from "./ScrolledHeader.vue";
 import TrackTable from "./TrackTable.vue";
 
 const props = defineProps<{
@@ -140,6 +141,21 @@ const collectionPlayable = computed(
       savedTracks.value.some(
         (saved) => saved.track.albumId === collection.value?.id,
       )),
+);
+const collectionPlayLabel = computed(() =>
+  collection.value
+    ? t("card.playCollection", {
+        collection: collection.value.title,
+        creator: creatorLabel.value,
+      })
+    : "",
+);
+const collectionPauseLabel = computed(() =>
+  collection.value
+    ? t("card.pauseCollection", {
+        collection: collection.value.title,
+      })
+    : "",
 );
 const coverUrl = computed(() =>
   trackCoverUrl(address.value ?? "", collection.value?.coverUrl ?? null),
@@ -305,95 +321,99 @@ onMounted(() => {
     >
       {{ offlinePlaybackError }}
     </p>
-    <section
-      aria-labelledby="collection-heading"
-      class="relative flex flex-col gap-6 rounded-lg border bg-card p-6 text-card-foreground sm:flex-row sm:items-end"
+    <ScrolledHeader
+      :title="collection.title"
+      :playable="collectionPlayable"
+      :playback-active="collectionPlaybackActive"
+      :play-label="collectionPlayLabel"
+      :pause-label="collectionPauseLabel"
+      @play="toggleCollectionPlayback"
     >
-      <MediaCollectionOfflineButton
-        :collection="{ ...collection, trackCount: itemCount }"
-        :media-type="mediaType"
-        class="absolute right-4 top-4"
-      />
-      <div
-        aria-hidden="true"
-        class="relative flex size-40 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted text-muted-foreground"
+      <section
+        aria-labelledby="collection-heading"
+        class="relative flex flex-col gap-6 rounded-lg border bg-card p-6 text-card-foreground sm:flex-row sm:items-end"
       >
-        <Icon :icon="icon" class="size-16" />
-        <FadeInImage
-          v-if="coverImageUrl && !coverFailed"
-          :src="coverImageUrl"
-          :fade-in="!coverFromCache"
-          loading="eager"
-          class="absolute inset-0"
-          @error="coverFailed = true"
+        <MediaCollectionOfflineButton
+          :collection="{ ...collection, trackCount: itemCount }"
+          :media-type="mediaType"
+          class="absolute right-4 top-4"
         />
-      </div>
-      <div class="min-w-0 flex-1 space-y-3 pr-12">
-        <p
-          class="text-xs font-medium uppercase tracking-wide text-muted-foreground"
+        <div
+          aria-hidden="true"
+          class="relative flex size-40 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted text-muted-foreground"
         >
-          {{ t(kindLabelKey) }}
-        </p>
-        <h1
-          id="collection-heading"
-          class="text-3xl font-semibold tracking-tight"
-        >
-          <ScrollingText class="w-full">{{ collection.title }}</ScrollingText>
-        </h1>
-        <ScrollingText class="w-full text-sm text-muted-foreground">
-          {{ creatorLabel }}
-        </ScrollingText>
-        <div class="flex flex-wrap items-center gap-3">
-          <Button
-            size="icon-lg"
-            class="rounded-full"
-            :disabled="!collectionPlayable"
-            :aria-label="
-              collectionPlaybackActive
-                ? t('card.pauseCollection', {
-                    collection: collection.title,
-                  })
-                : t('card.playCollection', {
-                    collection: collection.title,
-                    creator: creatorLabel,
-                  })
-            "
-            @click="toggleCollectionPlayback"
-          >
-            <Icon
-              :icon="collectionPlaybackActive ? icons.pause : icons.play"
-              aria-hidden="true"
-              class="size-5"
-            />
-          </Button>
-          <LikeButton
-            v-if="likeTarget"
-            :liked="liked"
-            :label="collection.title"
-            :pending="isLikePending(likeTarget)"
-            :disabled="!likesLoaded"
-            @toggle="toggleLike(likeTarget)"
+          <Icon :icon="icon" class="size-16" />
+          <FadeInImage
+            v-if="coverImageUrl && !coverFailed"
+            :src="coverImageUrl"
+            :fade-in="!coverFromCache"
+            loading="eager"
+            class="absolute inset-0"
+            @error="coverFailed = true"
           />
-          <Badge variant="secondary">
-            {{ t(countKey, { count: itemCount }, itemCount) }}
-          </Badge>
-          <Badge v-if="!collection.available" variant="secondary">
-            {{ t("trackTable.unavailable") }}
-          </Badge>
-          <span class="text-sm text-muted-foreground">
-            <template
-              v-if="
-                collection.mediaType === 'audiobook' && collection.releaseYear
-              "
-            >
-              {{ collection.releaseYear }}
-              <span aria-hidden="true">·</span>
-            </template>
-            {{ formatTrackDuration(collection.durationMs) }}
-          </span>
         </div>
-      </div>
-    </section>
+        <div class="min-w-0 flex-1 space-y-3 pr-12">
+          <p
+            class="text-xs font-medium uppercase tracking-wide text-muted-foreground"
+          >
+            {{ t(kindLabelKey) }}
+          </p>
+          <h1
+            id="collection-heading"
+            class="text-3xl font-semibold tracking-tight"
+          >
+            <ScrollingText class="w-full">{{ collection.title }}</ScrollingText>
+          </h1>
+          <ScrollingText class="w-full text-sm text-muted-foreground">
+            {{ creatorLabel }}
+          </ScrollingText>
+          <div class="flex flex-wrap items-center gap-3">
+            <Button
+              size="icon-lg"
+              class="rounded-full"
+              :disabled="!collectionPlayable"
+              :aria-label="
+                collectionPlaybackActive
+                  ? collectionPauseLabel
+                  : collectionPlayLabel
+              "
+              @click="toggleCollectionPlayback"
+            >
+              <Icon
+                :icon="collectionPlaybackActive ? icons.pause : icons.play"
+                aria-hidden="true"
+                class="size-5"
+              />
+            </Button>
+            <LikeButton
+              v-if="likeTarget"
+              :liked="liked"
+              :label="collection.title"
+              :pending="isLikePending(likeTarget)"
+              :disabled="!likesLoaded"
+              @toggle="toggleLike(likeTarget)"
+            />
+            <Badge variant="secondary">
+              {{ t(countKey, { count: itemCount }, itemCount) }}
+            </Badge>
+            <Badge v-if="!collection.available" variant="secondary">
+              {{ t("trackTable.unavailable") }}
+            </Badge>
+            <span class="text-sm text-muted-foreground">
+              <template
+                v-if="
+                  collection.mediaType === 'audiobook' && collection.releaseYear
+                "
+              >
+                {{ collection.releaseYear }}
+                <span aria-hidden="true">·</span>
+              </template>
+              {{ formatTrackDuration(collection.durationMs) }}
+            </span>
+          </div>
+        </div>
+      </section>
+    </ScrolledHeader>
 
     <section aria-labelledby="collection-tracks-heading" class="space-y-4">
       <h2 id="collection-tracks-heading" class="text-lg font-semibold">

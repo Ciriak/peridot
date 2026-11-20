@@ -31,27 +31,18 @@ const columns = computed(() => {
     if (breakpoints.lg.value) return 8;
     if (breakpoints.md.value) return 6;
     if (breakpoints.sm.value) return 4;
-    return 3;
-  }
-  if (props.layout === "wide") {
-    if (breakpoints.xl.value) return 5;
-    if (breakpoints.lg.value) return 3;
     return 2;
   }
   if (breakpoints.xl.value) return 5;
   if (breakpoints.lg.value) return 3;
-  if (breakpoints.sm.value) return 2;
-  return 1;
+  return 2;
 });
 const rowCount = computed(() => Math.ceil(props.items.length / columns.value));
 const gridClass = computed(() => {
   if (props.layout === "compact") {
-    return "grid grid-cols-3 gap-x-1.5 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10";
+    return "grid grid-cols-2 gap-x-1.5 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10";
   }
-  if (props.layout === "wide") {
-    return "grid grid-cols-2 gap-x-4 lg:grid-cols-3 xl:grid-cols-5";
-  }
-  return "grid grid-cols-1 gap-x-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5";
+  return "grid grid-cols-2 gap-x-4 lg:grid-cols-3 xl:grid-cols-5";
 });
 const rowGapClass = computed(() =>
   props.layout === "compact" ? "pb-1.5" : "pb-4",

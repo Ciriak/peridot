@@ -1,0 +1,161 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+import type {
+  AlbumSummaryResponse,
+  PlaylistSummaryResponse,
+  TrackResponse,
+} from "@peridot/contracts";
+import {
+  albumCatalogCard,
+  catalogCardKey,
+  playlistCatalogCard,
+  trackCatalogCard,
+} from "../app/lib/catalog-cards.ts";
+
+const album: AlbumSummaryResponse = {
+  id: "album-1",
+  title: "Night Sessions",
+  artist: "Elliot Lake",
+  artists: ["Elliot Lake"],
+  coverUrl: null,
+  trackCount: 2,
+  durationMs: null,
+  releaseYear: null,
+  available: true,
+  liked: false,
+};
+const track: TrackResponse = {
+  id: "track-1",
+  mediaType: "music",
+  mediaTypeOrigin: "embedded",
+  title: "Opening",
+  artist: "Elliot Lake",
+  artists: ["Elliot Lake"],
+  album: "Night Sessions",
+  albumId: "album-1",
+  genres: [],
+  discNumber: 1,
+  trackNumber: 1,
+  durationMs: 180_000,
+  publishedAt: null,
+  mimeType: "audio/mpeg",
+  available: true,
+  coverUrl: null,
+  metadata: null,
+  liked: false,
+};
+const playlist: PlaylistSummaryResponse = {
+  id: "playlist-1",
+  kind: "manual",
+  name: "Night Drive",
+  trackCount: 2,
+  availableTrackCount: 2,
+  durationMs: null,
+  coverUrls: [],
+  liked: false,
+  containsTrack: false,
+  createdAt: "2026-11-20T00:00:00.000Z",
+  updatedAt: "2026-11-20T00:00:00.000Z",
+};
+
+test("catalog card items preserve their discriminated payload and key", () => {
+  const albumItem = albumCatalogCard(album);
+  const trackItem = trackCatalogCard(track);
+  const playlistItem = playlistCatalogCard(playlist);
+
+  assert.equal(catalogCardKey(albumItem), "album:album-1");
+  assert.equal(catalogCardKey(trackItem), "track:track-1");
+  assert.equal(catalogCardKey(playlistItem), "playlist:playlist-1");
+  assert.equal(albumItem.kind, "album");
+  assert.equal(trackItem.kind, "track");
+  assert.equal(playlistItem.kind, "playlist");
+});
+
+test("existing card lists render the one shared catalog card", async () => {
+  const [
+    home,
+    albums,
+    artist,
+    playlists,
+    search,
+    catalogCard,
+    quickPick,
+    quickPickContent,
+  ] = await Promise.all([
+    readFile(new URL("../app/pages/index.vue", import.meta.url), "utf8"),
+    readFile(new URL("../app/pages/albums/index.vue", import.meta.url), "utf8"),
+    readFile(
+      new URL("../app/pages/artists/[artist].vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/pages/playlists/index.vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(new URL("../app/pages/search.vue", import.meta.url), "utf8"),
+    readFile(
+      new URL("../app/components/CatalogCard.vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/components/QuickPickTile.vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/components/QuickPickTileContent.vue", import.meta.url),
+      "utf8",
+    ),
+  ]);
+
+  for (const source of [home, albums, artist, playlists, search]) {
+    assert.match(source, /CatalogCard/);
+    assert.doesNotMatch(source, /components\/(?:AlbumCard|PlaylistCard)\.vue/);
+  }
+  assert.match(home, /playlistCatalogCard/);
+  assert.match(home, /items\.push\(\.\.\.visibleQuickPickItems\.value\)/);
+  assert.equal(home.match(/<CatalogCard(?:\s|>)/g)?.length, 1);
+  assert.match(albums, /albumCatalogCard\(item\)/);
+  assert.match(artist, /albumCatalogCard\(item\)/);
+  assert.match(playlists, /playlistCatalogCard\(item\)/);
+  assert.match(search, /albumCatalogCard\(item\)/);
+  assert.match(catalogCard, /<article/);
+  assert.doesNotMatch(quickPick, /layout\?: "tile" \| "card"/);
+  assert.doesNotMatch(quickPickContent, /layout|rounded-lg border bg-card/);
+});
+
+test("the shared card adapts menus, playback, and likes by item type", async () => {
+  const [card, playlistMenu] = await Promise.all([
+    readFile(
+      new URL("../app/components/CatalogCard.vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/components/PlaylistContextMenu.vue", import.meta.url),
+      "utf8",
+    ),
+  ]);
+
+  assert.match(
+    card,
+    /if \(album\.value\) return AlbumContextMenu;[\s\S]*if \(track\.value\) return TrackContextMenu;[\s\S]*return PlaylistContextMenu;/,
+  );
+  assert.match(
+    card,
+    /<component\s+:is="menuComponent"\s+v-bind="menuBindings"/,
+  );
+  assert.match(card, /toggleCollectionPlayback\(albumTarget\.value/);
+  assert.match(card, /if \(trackPlayable\.value\) play\(track\.value\);/);
+  assert.match(card, /toggleCollectionPlayback\(playlistTarget\.value/);
+  assert.match(
+    card,
+    /if \(album\.value\) \{[\s\S]*kind: "album"[\s\S]*if \(track\.value\?\.mediaType === "music"\) \{[\s\S]*kind: "track"[\s\S]*return null;/,
+  );
+  assert.equal(card.match(/<LikeButton/g)?.length, 1);
+  assert.match(card, /v-if="likeTarget"/);
+  assert.match(playlistMenu, /v-if="!automatic"/);
+  assert.match(playlistMenu, /context\.playPlaylist/);
+  assert.match(playlistMenu, /context\.renamePlaylist/);
+  assert.match(playlistMenu, /context\.deletePlaylist/);
+  assert.match(playlistMenu, /context\.openPlaylist/);
+});

@@ -85,4 +85,9 @@ test("catalog detail surfaces use the shared history-aware back button", async (
     /class="min-w-40 justify-start"/,
     "The shared back button has a wider hitbox",
   );
+  assert.match(
+    button,
+    /v-if="iconOnly"[\s\S]*?size="icon"[\s\S]*?<Icon :icon="icons\.caretLeft" aria-hidden="true" class="size-6"/,
+    "The shared back button supports a larger chevron-only compact mode",
+  );
 });

@@ -22,8 +22,17 @@ test("catalog card grids virtualize responsive rows against the main scroll", as
   assert.match(grid, /:style="\{ overflowAnchor: 'none' \}"/);
   assert.match(grid, /overflowAnchor: 'none'/);
   assert.match(grid, /grid-cols-2.*lg:grid-cols-3.*xl:grid-cols-5/);
-  assert.match(grid, /grid-cols-1.*sm:grid-cols-2.*lg:grid-cols-3/);
-  assert.match(grid, /grid-cols-3.*sm:grid-cols-4.*md:grid-cols-6/);
+  assert.match(grid, /grid-cols-2.*sm:grid-cols-4.*md:grid-cols-6/);
+  assert.match(
+    grid,
+    /if \(breakpoints\.sm\.value\) return 4;[\s\S]*return 2;/,
+    "Compact card rows render two columns at mobile widths",
+  );
+  assert.match(
+    grid,
+    /if \(breakpoints\.lg\.value\) return 3;[\s\S]*return 2;/,
+    "Standard and wide card rows render two columns at mobile widths",
+  );
 
   for (const page of [
     albums,
@@ -52,4 +61,9 @@ test("catalog search uses virtualized card rows and the shared track table", asy
   assert.match(search, /layout="standard"/);
   assert.match(search, /<TrackTable/);
   assert.match(search, /<VirtualCardGrid/);
+  assert.match(
+    search,
+    /grid grid-cols-2 gap-1\.5 sm:grid-cols-4/,
+    "Recent search cards render two columns at mobile widths",
+  );
 });

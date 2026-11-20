@@ -1,5 +1,71 @@
 # Peridot decisions
 
+## 2026-11-20: Detail headers dock after scrolling out of view
+
+Album, artist, playlist, audiobook, and podcast detail cards use one shared
+`ScrolledHeader`. Once the entire full card has crossed above the main content
+viewport, a fixed compact header appears below the application top bar with an
+icon-only history-aware Back control, the collection title, and the collection
+play control.
+
+The compact play control reuses the page's existing handler, playable state,
+active playback state, and localized play/pause label. It therefore has the
+same pending-start, pause, offline, and unavailable behavior as the full header
+control. The dock is hidden whenever any portion of the original card is still
+visible.
+
+## 2026-11-20: Card lists use two columns on mobile
+
+Every page-level card list starts with two columns at mobile widths, matching
+the album list. The shared virtual card grid applies this to standard, wide, and
+compact layouts while preserving their existing larger breakpoint column
+counts. Home and the non-virtualized recent-search cards use the same
+two-column mobile rule directly.
+
+This keeps card width and scan order consistent across Albums, Artists,
+Playlists, Audiobooks, Podcasts, detail-page album collections, Search, and
+Home.
+
+## 2026-11-20: Linked track rows hold a short selection highlight
+
+Track links already target album title anchors through the shared
+`#track-title-*` hash flow. The album track table reuses that decoded target to
+scroll to the row and briefly apply `bg-primary/10`, rather than adding a second
+navigation representation.
+
+The linked row holds the primary tint for two seconds, then fades back to its
+normal background with the standard Tailwind color-transition utilities. The
+highlight timer is cleaned up when the target changes or the table unmounts.
+Reduced-motion users receive the same two-second state without the color
+transition.
+
+## 2026-11-20: Catalog cards use one item-aware component
+
+Album, playlist, and track items displayed as cards use one polymorphic
+`CatalogCard`. Album, playlist, and Home card surfaces pass a discriminated item
+model, while the sidebar keeps its denser `QuickPickTile` layout and track
+collections keep the shared table.
+
+The card frame follows the existing album card, including its compact mode,
+cover, play control, unavailable tooltip, mobile treatment, and metadata
+spacing. Albums and music tracks show the card like button; playlist cards do
+not. Playlist liking remains available through the playlist context menu.
+
+The context menu is selected from the item kind. Albums use
+`AlbumContextMenu`, tracks use `TrackContextMenu`, and playlists use
+`PlaylistContextMenu`. Manual playlists retain playback, like, rename, delete,
+and open actions, while the automatic liked-tracks playlist exposes only play
+and open.
+
+This supersedes the earlier Home-only adoption of `AlbumCard`.
+
+## 2026-11-20: Liked tracks cover uses a darker primary tint
+
+The generated liked-tracks cover uses `bg-primary/40` instead of
+`bg-primary/60`. This produces a darker, more muted background on the
+dark-first surfaces while keeping the cover color linked to the active primary
+theme token. The white Basil heart treatment is unchanged.
+
 ## 2026-11-20: Catalog detail back buttons follow browser history
 
 Album, artist, playlist, audiobook, and podcast detail surfaces use one shared

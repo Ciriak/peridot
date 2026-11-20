@@ -23,24 +23,20 @@ test("home shows liked tracks and the quick-pick content without categories", as
   assert.match(homePage, /usePlaylistList\(\{ limit: 1 \}\)/);
   assert.match(
     homePage,
-    /<PlaylistCard v-if="likedPlaylist" :playlist="likedPlaylist"/,
+    /import CatalogCard from "\.\.\/components\/CatalogCard\.vue"/,
   );
   assert.match(
     homePage,
-    /import AlbumCard from "\.\.\/components\/AlbumCard\.vue"/,
+    /playlistCatalogCard\(likedPlaylist\.value\)/,
+    "Home wraps the liked playlist in the shared card model",
   );
   assert.match(
     homePage,
-    /<AlbumCard\s+v-if="item\.kind === 'album'"\s+:album="item\.album"\s+\/>/,
-    "Home renders album items with the same AlbumCard used by the album list",
+    /items\.push\(\.\.\.visibleQuickPickItems\.value\)/,
+    "Home combines tracks and albums in the shared card list",
   );
-  assert.match(
-    homePage,
-    /<QuickPickTile v-else :item="item" layout="card" \/>/,
-  );
-  assert.match(homePage, /<QuickPickTile/);
-  assert.match(homePage, /:item="item"/);
-  assert.match(homePage, /layout="card"/);
+  assert.match(homePage, /<CatalogCard/);
+  assert.match(homePage, /catalogCardKey\(item\)/);
   assert.match(
     homePage,
     /useInteractionFrozenList\(quickPickItems\)/,
@@ -73,14 +69,14 @@ test("home shows liked tracks and the quick-pick content without categories", as
 
   assert.match(
     homePage,
-    /grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5/,
-    "Liked tracks and quick picks share one equal-card grid",
+    /grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-5/,
+    "Liked tracks and quick picks share one two-column mobile card grid",
   );
   assert.match(albumPage, /<VirtualCardGrid[\s\S]*layout="wide"/);
   assert.match(
     albumPage,
-    /<AlbumCard :album="item" \/>/,
-    "The album list keeps its shared AlbumCard usage",
+    /<CatalogCard :item="albumCatalogCard\(item\)" \/>/,
+    "The album list keeps its shared CatalogCard usage",
   );
 });
 

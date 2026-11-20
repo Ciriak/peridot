@@ -8,9 +8,9 @@ import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { useQuery } from "@tanstack/vue-query";
 import { watchDebounced } from "@vueuse/core";
 import { computed, onMounted, ref, watch } from "vue";
-import AlbumCard from "../components/AlbumCard.vue";
 import ArtistCard from "../components/ArtistCard.vue";
 import AutoLoadMore from "../components/AutoLoadMore.vue";
+import CatalogCard from "../components/CatalogCard.vue";
 import MediaCollectionCard from "../components/MediaCollectionCard.vue";
 import TrackTable from "../components/TrackTable.vue";
 import VirtualCardGrid from "../components/VirtualCardGrid.vue";
@@ -26,6 +26,7 @@ import { useSearchRecents } from "../composables/use-search-recents";
 import { useQueryScope } from "../composables/use-query-scope";
 import { useServer } from "../composables/use-server";
 import { useSession } from "../composables/use-session";
+import { albumCatalogCard } from "../lib/catalog-cards";
 import { icons } from "../lib/icons";
 import { listAlbums } from "../lib/peridot-client";
 import { queryKeys } from "../lib/query-keys";
@@ -302,12 +303,12 @@ onMounted(() => {
       </div>
       <div
         v-if="recentAlbums.length"
-        class="grid grid-cols-3 gap-1.5 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10"
+        class="grid grid-cols-2 gap-1.5 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10"
       >
-        <AlbumCard
+        <CatalogCard
           v-for="album in recentAlbums"
           :key="album.id"
-          :album="album"
+          :item="albumCatalogCard(album)"
           compact
           @open="openAlbum(album)"
         />
@@ -387,7 +388,11 @@ onMounted(() => {
           :estimate-row-height="150"
         >
           <template #default="{ item }">
-            <AlbumCard :album="item" compact @open="openAlbum(item)" />
+            <CatalogCard
+              :item="albumCatalogCard(item)"
+              compact
+              @open="openAlbum(item)"
+            />
           </template>
           <template #footer>
             <AutoLoadMore

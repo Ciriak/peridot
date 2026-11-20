@@ -7,13 +7,14 @@ import { Button } from "@peridot/ui/components/ui/button";
 import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { computed, onMounted, ref, watch } from "vue";
-import AlbumCard from "../../components/AlbumCard.vue";
 import ArtistArtwork from "../../components/ArtistArtwork.vue";
 import ArtistContextMenu from "../../components/ArtistContextMenu.vue";
 import ArtistLink from "../../components/ArtistLink.vue";
 import AutoLoadMore from "../../components/AutoLoadMore.vue";
 import BackButton from "../../components/BackButton.vue";
+import CatalogCard from "../../components/CatalogCard.vue";
 import LikeButton from "../../components/LikeButton.vue";
+import ScrolledHeader from "../../components/ScrolledHeader.vue";
 import TrackTable from "../../components/TrackTable.vue";
 import VirtualCardGrid from "../../components/VirtualCardGrid.vue";
 import {
@@ -28,6 +29,7 @@ import { useServerConnection } from "../../composables/use-server-connection";
 import { useServer } from "../../composables/use-server";
 import { useSession } from "../../composables/use-session";
 import { loadCollectionTracks } from "../../lib/catalog-collections";
+import { albumCatalogCard } from "../../lib/catalog-cards";
 import { icons } from "../../lib/icons";
 import {
   artistLikeKey,
@@ -79,6 +81,8 @@ const artistPlayable = computed(() => {
     ),
   );
 });
+const artistPlayLabel = computed(() => t("context.playArtist"));
+const artistPauseLabel = computed(() => t("context.pauseArtist"));
 const {
   items: artistMatches,
   loading: artistMatchesLoading,
@@ -231,90 +235,98 @@ onMounted(() => {
     >
       {{ offlinePlaybackError }}
     </p>
-    <ArtistContextMenu :artist="artist">
-      <section
-        aria-labelledby="artist-heading"
-        class="flex flex-col gap-6 rounded-lg border bg-card p-6 text-card-foreground sm:flex-row sm:items-end"
-      >
-        <ArtistArtwork :image-url="artist.imageUrl" size="lg" />
-        <div class="min-w-0 flex-1 space-y-3">
-          <p
-            class="text-xs font-medium uppercase tracking-wide text-muted-foreground"
-          >
-            {{ t("page.artist.label") }}
-          </p>
-          <h1 id="artist-heading" class="text-3xl font-semibold tracking-tight">
-            <ArtistLink :artist="artist">
-              <ScrollingText class="w-full">{{ artist.name }}</ScrollingText>
-            </ArtistLink>
-          </h1>
-          <p
-            v-if="artist.name !== artist.localName"
-            class="text-sm text-muted-foreground"
-          >
-            <span>{{ t("page.artist.localNameLabel") }}:</span>
-            <ArtistLink :artist="artist.localName">
-              <ScrollingText class="w-full">{{
-                artist.localName
-              }}</ScrollingText>
-            </ArtistLink>
-          </p>
-          <div class="flex flex-wrap items-center gap-3">
-            <Button
-              :disabled="!artistPlayable"
-              :aria-label="
-                artistPlaybackActive
-                  ? t('context.pauseArtist')
-                  : t('context.playArtist')
-              "
-              @click="playWholeArtist"
+    <ScrolledHeader
+      :title="artist.name"
+      :playable="artistPlayable"
+      :playback-active="artistPlaybackActive"
+      :play-label="artistPlayLabel"
+      :pause-label="artistPauseLabel"
+      @play="playWholeArtist"
+    >
+      <ArtistContextMenu :artist="artist">
+        <section
+          aria-labelledby="artist-heading"
+          class="flex flex-col gap-6 rounded-lg border bg-card p-6 text-card-foreground sm:flex-row sm:items-end"
+        >
+          <ArtistArtwork :image-url="artist.imageUrl" size="lg" />
+          <div class="min-w-0 flex-1 space-y-3">
+            <p
+              class="text-xs font-medium uppercase tracking-wide text-muted-foreground"
             >
-              <Icon
-                :icon="artistPlaybackActive ? icons.pause : icons.play"
-                aria-hidden="true"
-              />{{
-                artistPlaybackActive
-                  ? t("context.pauseArtist")
-                  : t("context.playArtist")
-              }}
-            </Button>
-            <LikeButton
-              :liked="
-                likedArtistKeys.includes(artistLikeKey(artist.localName)) ||
-                artist.liked
-              "
-              :label="artist.name"
-              :pending="
-                isLikePending({ kind: 'artist', name: artist.localName })
-              "
-              :disabled="!likesLoaded"
-              @toggle="toggleLike({ kind: 'artist', name: artist.localName })"
-            />
-            <Badge variant="secondary">
-              {{
-                t(
-                  "count.album",
-                  { count: artist.albumCount },
-                  artist.albumCount,
-                )
-              }}
-            </Badge>
-            <Badge variant="secondary">
-              {{
-                t(
-                  "count.track",
-                  { count: artist.trackCount },
-                  artist.trackCount,
-                )
-              }}
-            </Badge>
-            <span class="text-sm text-muted-foreground">
-              {{ formatTrackDuration(artist.durationMs) }}
-            </span>
+              {{ t("page.artist.label") }}
+            </p>
+            <h1
+              id="artist-heading"
+              class="text-3xl font-semibold tracking-tight"
+            >
+              <ArtistLink :artist="artist">
+                <ScrollingText class="w-full">{{ artist.name }}</ScrollingText>
+              </ArtistLink>
+            </h1>
+            <p
+              v-if="artist.name !== artist.localName"
+              class="text-sm text-muted-foreground"
+            >
+              <span>{{ t("page.artist.localNameLabel") }}:</span>
+              <ArtistLink :artist="artist.localName">
+                <ScrollingText class="w-full">{{
+                  artist.localName
+                }}</ScrollingText>
+              </ArtistLink>
+            </p>
+            <div class="flex flex-wrap items-center gap-3">
+              <Button
+                :disabled="!artistPlayable"
+                :aria-label="
+                  artistPlaybackActive ? artistPauseLabel : artistPlayLabel
+                "
+                @click="playWholeArtist"
+              >
+                <Icon
+                  :icon="artistPlaybackActive ? icons.pause : icons.play"
+                  aria-hidden="true"
+                />{{
+                  artistPlaybackActive ? artistPauseLabel : artistPlayLabel
+                }}
+              </Button>
+              <LikeButton
+                :liked="
+                  likedArtistKeys.includes(artistLikeKey(artist.localName)) ||
+                  artist.liked
+                "
+                :label="artist.name"
+                :pending="
+                  isLikePending({ kind: 'artist', name: artist.localName })
+                "
+                :disabled="!likesLoaded"
+                @toggle="toggleLike({ kind: 'artist', name: artist.localName })"
+              />
+              <Badge variant="secondary">
+                {{
+                  t(
+                    "count.album",
+                    { count: artist.albumCount },
+                    artist.albumCount,
+                  )
+                }}
+              </Badge>
+              <Badge variant="secondary">
+                {{
+                  t(
+                    "count.track",
+                    { count: artist.trackCount },
+                    artist.trackCount,
+                  )
+                }}
+              </Badge>
+              <span class="text-sm text-muted-foreground">
+                {{ formatTrackDuration(artist.durationMs) }}
+              </span>
+            </div>
           </div>
-        </div>
-      </section>
-    </ArtistContextMenu>
+        </section>
+      </ArtistContextMenu>
+    </ScrolledHeader>
 
     <div
       v-if="albumsError"
@@ -346,7 +358,7 @@ onMounted(() => {
         :estimate-row-height="300"
       >
         <template #default="{ item }">
-          <AlbumCard :album="item" />
+          <CatalogCard :item="albumCatalogCard(item)" />
         </template>
         <template #footer>
           <AutoLoadMore

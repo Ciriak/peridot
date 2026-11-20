@@ -161,7 +161,7 @@ test("track list rows open their track menu while catalog links keep their own m
 });
 
 test("album and artist cards expose collection-aware context menus", async () => {
-  const [albumMenu, artistMenu, albumCard, artistCard, albumPage] =
+  const [albumMenu, artistMenu, catalogCard, artistCard, albumPage] =
     await Promise.all([
       readFile(
         new URL("../app/components/AlbumContextMenu.vue", import.meta.url),
@@ -172,7 +172,7 @@ test("album and artist cards expose collection-aware context menus", async () =>
         "utf8",
       ),
       readFile(
-        new URL("../app/components/AlbumCard.vue", import.meta.url),
+        new URL("../app/components/CatalogCard.vue", import.meta.url),
         "utf8",
       ),
       readFile(
@@ -218,12 +218,12 @@ test("album and artist cards expose collection-aware context menus", async () =>
   assert.match(artistMenu, /context\.artistPortraitAvailable/);
 
   assert.match(
-    albumCard,
-    /<AlbumContextMenu[\s\S]*<article[\s\S]*<NuxtLink/,
-    "The entire album card is the context-menu trigger",
+    catalogCard,
+    /if \(album\.value\) return AlbumContextMenu;[\s\S]*if \(track\.value\) return TrackContextMenu;[\s\S]*return PlaylistContextMenu;/,
+    "The shared card selects its context menu by item type",
   );
   assert.doesNotMatch(
-    albumCard,
+    catalogCard,
     /<AlbumOfflineButton[\s\S]*:album="album"[\s\S]*compact[\s\S]*overlay/,
     "Album cards do not duplicate the album-header offline action",
   );

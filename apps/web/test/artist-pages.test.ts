@@ -62,8 +62,8 @@ test("artists have list and detail routes with artist-scoped content", async () 
   assert.match(detailPage, /route\.params\.artist/);
   assert.match(detailPage, /useCatalogAlbumQuery/);
   assert.match(detailPage, /artistId: artist\.value\?\.id/);
-  assert.match(detailPage, /<AlbumCard/);
-  assert.match(detailPage, /:album="item"/);
+  assert.match(detailPage, /<CatalogCard/);
+  assert.match(detailPage, /albumCatalogCard\(item\)/);
   assert.match(
     detailPage,
     /<VirtualCardGrid[\s\S]*layout="wide"/,

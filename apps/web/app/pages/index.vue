@@ -4,13 +4,16 @@ import { LIKED_TRACKS_PLAYLIST_ID } from "@peridot/contracts";
 import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import AlbumCard from "../components/AlbumCard.vue";
-import PlaylistCard from "../components/PlaylistCard.vue";
-import QuickPickTile from "../components/QuickPickTile.vue";
+import CatalogCard from "../components/CatalogCard.vue";
 import { useInteractionFrozenList } from "../composables/use-interaction-frozen-list";
 import { usePlaylistList } from "../composables/use-playlists";
 import { useQuickPicks } from "../composables/use-quick-picks";
 import { useUser } from "../composables/use-user";
+import {
+  catalogCardKey,
+  playlistCatalogCard,
+  type CatalogCardItem,
+} from "../lib/catalog-cards";
 import { HOME_GREETING_KEYS, homeGreetingPeriod } from "../lib/home-greeting";
 
 const { t } = useI18n();
@@ -51,10 +54,14 @@ const likedPlaylist = computed(
       (playlist) => playlist.id === LIKED_TRACKS_PLAYLIST_ID,
     ) ?? null,
 );
-const contentCount = computed(
-  () =>
-    Number(Boolean(likedPlaylist.value)) + visibleQuickPickItems.value.length,
-);
+const contentItems = computed<CatalogCardItem[]>(() => {
+  const items: CatalogCardItem[] = likedPlaylist.value
+    ? [playlistCatalogCard(likedPlaylist.value)]
+    : [];
+  items.push(...visibleQuickPickItems.value);
+  return items;
+});
+const contentCount = computed(() => contentItems.value.length);
 const contentLoading = computed(
   () => playlistsLoading.value || quickPicksLoading.value,
 );
@@ -134,17 +141,17 @@ onBeforeUnmount(() => {
       </div>
       <div
         v-else-if="contentCount"
-        class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+        class="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-5"
         @pointerenter="beginPointerInteraction"
         @pointerleave="endPointerInteraction"
         @focusin="beginFocusInteraction"
         @focusout="handleQuickPickFocusOut"
       >
-        <PlaylistCard v-if="likedPlaylist" :playlist="likedPlaylist" />
-        <template v-for="item in visibleQuickPickItems" :key="item.key">
-          <AlbumCard v-if="item.kind === 'album'" :album="item.album" />
-          <QuickPickTile v-else :item="item" layout="card" />
-        </template>
+        <CatalogCard
+          v-for="item in contentItems"
+          :key="catalogCardKey(item)"
+          :item="item"
+        />
       </div>
       <p
         v-else

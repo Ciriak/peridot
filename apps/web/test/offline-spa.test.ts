@@ -653,7 +653,7 @@ test("album offline controls use the shared album download task", async () => {
       "utf8",
     ),
     readFile(
-      new URL("../app/components/AlbumCard.vue", import.meta.url),
+      new URL("../app/components/CatalogCard.vue", import.meta.url),
       "utf8",
     ),
     readFile(
