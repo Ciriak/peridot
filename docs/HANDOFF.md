@@ -1,5 +1,35 @@
 # Peridot handoff
 
+## CI test suite restored
+
+The full test suite now matches the current public track contract, the public PWA
+manifest, and the configured log-retention policy. The web branding check reads
+the authoritative public manifest instead of the removed inline Nuxt PWA
+manifest. The library scan assertion includes `sourceKind`, and the restored-log
+endpoint fixture uses a current timestamp so startup retention does not prune it.
+
+Verification:
+
+- `pnpm test` (193 server, 294 web, 18 UI, and 5 desktop tests passing)
+- `pnpm format:check`
+- `pnpm lint`
+- `pnpm typecheck`
+- `pnpm version:check`
+
+Known limits:
+
+- The Android test job was unchanged; the next GitHub Actions run remains the
+  final check for that job and the downstream builds.
+
+Uncommitted changes:
+
+- Web branding, server library, and server log test corrections.
+- This handoff section.
+
+Next:
+
+- Confirm the pushed `dev` commit passes the complete GitHub Actions workflow.
+
 ## Desktop player likes move to the right controls
 
 The desktop player's like action now sits in the right-side utility group before

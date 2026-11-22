@@ -83,6 +83,7 @@ test("scans catalog supported regular files, reconcile availability, and persist
       id: list.items[0]?.id,
       mediaType: "music",
       mediaTypeOrigin: "fallback",
+      sourceKind: "path",
       title: "Song",
       artist: "Unknown Artist",
       artists: ["Unknown Artist"],

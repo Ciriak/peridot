@@ -189,7 +189,7 @@ test("server logs reload persisted history after a restart", async () => {
 });
 
 test("the admin log endpoint exposes history restored from the log file", async () => {
-  const time = Date.UTC(2026, 10, 17, 11, 30);
+  const time = Date.now() - 60_000;
   const context = await createTestContext({
     persistedLogLines: [
       JSON.stringify({

@@ -27,7 +27,7 @@ test("the web app uses the shared favicon and onboarding logo", async () => {
 });
 
 test("startup shows the shared brand spinner on a full black splash screen", async () => {
-  const [app, splash, preHydrationSplash, spinner, logo, config] =
+  const [app, splash, preHydrationSplash, spinner, logo, config, manifest] =
     await Promise.all([
       readFile(new URL("../app/app.vue", import.meta.url), "utf8"),
       readFile(
@@ -53,7 +53,12 @@ test("startup shows the shared brand spinner on a full black splash screen", asy
         "utf8",
       ),
       readFile(new URL("../nuxt.config.ts", import.meta.url), "utf8"),
+      readFile(
+        new URL("../public/manifest.webmanifest", import.meta.url),
+        "utf8",
+      ),
     ]);
+  const manifestData = JSON.parse(manifest) as { background_color?: string };
 
   assert.match(
     app,
@@ -111,9 +116,9 @@ test("startup shows the shared brand spinner on a full black splash screen", asy
     logo.match(/<path\s+fill="currentColor"\s+d="([^"]+)"/)?.[1],
     "The reduced-motion pre-hydration mark matches the shared static logo",
   );
-  assert.match(
-    config,
-    /background_color: "#000000"/,
+  assert.equal(
+    manifestData.background_color,
+    "#000000",
     "The installed app uses the same black background before the client paints",
   );
   assert.match(
