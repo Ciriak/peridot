@@ -430,7 +430,17 @@ jobs:
       - name: Upload desktop release assets
         shell: bash
         run: |
-          mapfile -d '' assets < <(find release-assets -type f -print0)
+          declare -A uploaded
+          mapfile -d '' candidates < <(find release-assets -type f -print0)
+          assets=()
+          for asset in "${candidates[@]}"; do
+            name="${asset##*/}"
+            if [[ -n "${uploaded[$name]:-}" ]]; then
+              continue
+            fi
+            uploaded[$name]=1
+            assets+=("$asset")
+          done
           gh release upload "${{ needs.prepare-client-release.outputs.tag }}" \
             "${assets[@]}" --clobber
         env:
