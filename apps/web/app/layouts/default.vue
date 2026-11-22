@@ -600,22 +600,6 @@ onBeforeUnmount(stopLoadingRay);
                     />
                     <template v-else>{{ active.artist }}</template>
                   </ScrollingText>
-                  <LikeButton
-                    class="shrink-0"
-                    :liked="
-                      currentTrackLikeTarget
-                        ? likedTrackIds.includes(currentTrackLikeTarget.trackId)
-                        : false
-                    "
-                    :label="active.title"
-                    :pending="
-                      currentTrackLikeTarget
-                        ? isLikePending(currentTrackLikeTarget)
-                        : false
-                    "
-                    :disabled="!currentTrackId || !likesLoaded"
-                    @toggle="toggleCurrentTrackLike"
-                  />
                 </div>
               </div>
             </TrackContextMenu>
@@ -629,13 +613,6 @@ onBeforeUnmount(stopLoadingRay);
                 >
                   {{ t("player.scanLibrary") }}
                 </p>
-                <LikeButton
-                  class="shrink-0"
-                  :liked="false"
-                  :label="t('player.currentTrack')"
-                  disabled
-                  @toggle="toggleCurrentTrackLike"
-                />
               </div>
             </template>
           </div>
@@ -751,6 +728,22 @@ onBeforeUnmount(stopLoadingRay);
           </div>
         </div>
         <div class="flex min-w-0 flex-1 items-center justify-end gap-3">
+          <LikeButton
+            class="shrink-0"
+            :liked="
+              currentTrackLikeTarget
+                ? likedTrackIds.includes(currentTrackLikeTarget.trackId)
+                : false
+            "
+            :label="active?.title ?? t('player.currentTrack')"
+            :pending="
+              currentTrackLikeTarget
+                ? isLikePending(currentTrackLikeTarget)
+                : false
+            "
+            :disabled="!currentTrackId || !likesLoaded"
+            @toggle="toggleCurrentTrackLike"
+          />
           <Button
             variant="ghost"
             size="icon-lg"

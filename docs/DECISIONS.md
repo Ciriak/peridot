@@ -1,5 +1,13 @@
 # Peridot decisions
 
+## 2026-11-22: The desktop player keeps likes in its right-side controls
+
+The desktop player's track like action belongs in the right-side utility group
+with the queue and volume controls. The left metadata block remains focused on
+the title and credited artists, which preserves more width for scrolling
+metadata. The same control continues to expose pending and disabled states and
+remains present but disabled when no track is active.
+
 ## 2026-11-22: The PWA manifest is a public source asset
 
 The web application keeps `manifest.webmanifest` in `apps/web/public` and

@@ -595,8 +595,8 @@ onBeforeUnmount(() => {
             :title="sourceKindLabel(source)"
             class="flex size-6 shrink-0 items-center justify-center text-muted-foreground"
           >
-                  <Icon
-                    :icon="sourceKindIcon(source.kind) ?? icons.server"
+            <Icon
+              :icon="sourceKindIcon(source.kind) ?? icons.server"
               aria-hidden="true"
               class="size-5"
             />

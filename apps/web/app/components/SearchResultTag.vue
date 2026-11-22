@@ -19,9 +19,7 @@ const { t } = useI18n();
 const icon = computed(() => sourceKindIcon(props.sourceKind));
 const labelKey = computed(() => sourceKindLabelKey(props.sourceKind));
 const label = computed(() => (labelKey.value ? t(labelKey.value) : undefined));
-const typeLabel = computed(() =>
-  t(searchResultTypeLabelKey(props.type)),
-);
+const typeLabel = computed(() => t(searchResultTypeLabelKey(props.type)));
 </script>
 
 <template>

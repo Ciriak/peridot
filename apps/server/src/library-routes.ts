@@ -97,9 +97,11 @@ export async function registerLibraryRoutes(
           trackId: track.id,
         }),
       );
-      const projected = await database.orm.CatalogTrack.select("albumId").first({
-        id: track.id,
-      });
+      const projected = await database.orm.CatalogTrack.select("albumId").first(
+        {
+          id: track.id,
+        },
+      );
       return toTrackResponse(
         track,
         playbackTokens,

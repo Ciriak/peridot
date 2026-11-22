@@ -24,10 +24,7 @@ const slots = computed(() => playlistCoverSlots(props.coverUrls));
     aria-hidden="true"
     class="flex aspect-square items-center justify-center rounded-md bg-primary/40 text-white"
   >
-    <Icon
-      :icon="icons.heartFilled"
-      :class="compact ? 'size-5' : 'size-16'"
-    />
+    <Icon :icon="icons.heartFilled" :class="compact ? 'size-5' : 'size-16'" />
   </div>
   <div
     v-else

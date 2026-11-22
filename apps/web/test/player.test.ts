@@ -268,12 +268,26 @@ test("the persistent player controls a native audio element", async () => {
   );
   const artistLinksIndex = playerFooter.indexOf("<TrackArtistLinks");
   const likeControlIndex = playerFooter.indexOf("<LikeButton");
+  const rightControlsIndex = playerFooter.indexOf(
+    '<div class="flex min-w-0 flex-1 items-center justify-end gap-3">',
+  );
+  const queueControlIndex = playerFooter.indexOf("data-queue-toggle");
+  assert.ok(
+    rightControlsIndex >= 0 &&
+      likeControlIndex > rightControlsIndex &&
+      likeControlIndex < queueControlIndex,
+    "The track like control sits in the desktop player's right-side controls",
+  );
+  assert.equal(
+    playerFooter.match(/<LikeButton\b/g)?.length,
+    1,
+    "The desktop player renders one like control",
+  );
   assert.ok(
     metadataControlIndex >= 0 &&
       artistLinksIndex > metadataControlIndex &&
-      likeControlIndex > artistLinksIndex &&
-      likeControlIndex < transportControlIndex,
-    "The track like control sits after the artist name in the player metadata",
+      artistLinksIndex < transportControlIndex,
+    "The desktop player metadata stays in the left-side block",
   );
   assert.match(
     playerFooter,

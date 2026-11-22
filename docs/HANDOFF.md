@@ -1,5 +1,42 @@
 # Peridot handoff
 
+## Desktop player likes move to the right controls
+
+The desktop player's like action now sits in the right-side utility group before
+the queue control instead of beside the artist name. Its like state, pending
+state, accessible label, and disabled behavior are unchanged, including when no
+track is active. The left metadata block now gives the title and artist more
+space.
+
+Verification:
+
+- `pnpm --filter @peridot/web exec node --test test/player.test.ts test/likes-ui.test.ts test/styling.test.ts`
+  (8 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Focused ESLint and Prettier checks
+- `git diff --check` for the changed files
+- `pnpm --filter @peridot/web test` (293 of 294 passing; the unrelated existing
+  branding assertion expects `background_color: "#000000"` in
+  `nuxt.config.ts`)
+
+Known limits:
+
+- The control bar was not visually inspected with an authenticated track at
+  desktop widths during this run.
+
+Uncommitted changes:
+
+- The desktop player like-control placement, its regression assertion, and the
+  decision and handoff updates.
+- Existing catalog, player, sidebar, manifest, source, Android, contract,
+  documentation, and lockfile changes remain present and were not modified.
+
+Next:
+
+- Open the player with a track active at desktop widths and confirm the heart
+  aligns with the right-side queue and volume group.
+
 ## Search filters anchor to the main viewport
 
 The search quick-filter bar now offsets its sticky top position by the same
