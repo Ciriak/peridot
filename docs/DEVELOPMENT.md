@@ -11,8 +11,9 @@ pnpm dev
 ```
 
 Husky installs the repository Git hooks during `pnpm install`. The `pre-commit`
-hook runs `npm run format`, and the `commit-msg` hook validates the message with
-Commitlint.
+hook runs `npm run version:sync`, formats the repository, and stages the
+version-synchronized manifests. The `commit-msg` hook validates the message
+with Commitlint.
 
 Development web runs at http://localhost:17430. Nuxt proxies API traffic to a
 private Fastify listener on port 17431. A built deployment serves the web

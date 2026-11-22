@@ -1,5 +1,26 @@
 # Peridot handoff
 
+## Version manifests sync before commits
+
+The `pre-commit` hook now runs `npm run version:sync` and stages every manifest
+updated by the script. The existing formatter still runs afterward, and the
+`commit-msg` hook continues to validate conventional commit messages.
+
+Verification:
+
+- `npm run version:sync`
+- `npm run version:check`
+- Hook invocation and staged-manifest behavior
+
+Uncommitted changes:
+
+- Version synchronization in the pre-commit hook, plus development, decision,
+  and handoff updates.
+
+Next:
+
+- None.
+
 ## Offline copies survive duplicate promotion
 
 Offline playback now follows canonical duplicate IDs. The local catalog exposed

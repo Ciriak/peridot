@@ -1,1 +1,3 @@
+npm run version:sync
 npm run format
+git add -- package.json apps/*/package.json packages/*/package.json apps/desktop/src-tauri/tauri.conf.json apps/desktop/src-tauri/Cargo.toml apps/android/android/app/build.gradle

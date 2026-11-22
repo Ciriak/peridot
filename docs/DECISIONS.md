@@ -16,10 +16,11 @@ authoritative after all start attempts are exhausted.
 ## 2026-11-22: Git hooks format commits and validate messages
 
 The repository keeps its Git hooks in `.husky` and configures Git to use them
-during `pnpm install`. The `pre-commit` hook runs the repository formatter, and
-the `commit-msg` hook runs Commitlint. Keeping both checks in shared hooks makes
-formatting and conventional commit messages consistent across contributors
-without relying on editor-specific setup.
+during `pnpm install`. The `pre-commit` hook synchronizes release versions from
+the root package, runs the repository formatter, and stages the synchronized
+manifests. The `commit-msg` hook runs Commitlint. Keeping these checks in shared
+hooks keeps versions, formatting, and conventional commit messages consistent
+across contributors without relying on editor-specific setup.
 
 ## 2026-11-22: Search includes playlists as catalog items
 
