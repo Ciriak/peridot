@@ -48,7 +48,10 @@ import {
 } from "./tasks.js";
 import { ensureServerSettings } from "./server-settings.js";
 import { SourceRefreshScheduler } from "./source-refresh-scheduler.js";
-import { ensureDefaultSource } from "./sources.js";
+import {
+  ensureDefaultSource,
+  normalizeLegacyJellyfinSources,
+} from "./sources.js";
 import { ServerLogBuffer, serverLogFilePath } from "./server-log.js";
 import {
   RealtimeHub,
@@ -100,6 +103,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
   const database = options.database ?? createDatabase(config.databaseUrl);
   const ownsDatabase = options.database === undefined;
   await configureDatabase(database);
+  await normalizeLegacyJellyfinSources(database);
   const artworkCache = new ArtworkCache(config.databaseUrl);
   let credentials: CredentialStore;
   try {

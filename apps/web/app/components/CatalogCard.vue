@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { useI18n, useState } from "#imports";
-import type { LikeTarget, PlaylistDetailResponse } from "@peridot/contracts";
+import type {
+  LikeTarget,
+  PlaylistDetailResponse,
+  SourceKind,
+} from "@peridot/contracts";
 import { Icon } from "@iconify/vue/offline";
 import { Button } from "@peridot/ui/components/ui/button";
 import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
@@ -45,6 +49,7 @@ import LikeButton from "./LikeButton.vue";
 import PlaylistContextMenu from "./PlaylistContextMenu.vue";
 import PlaylistCover from "./PlaylistCover.vue";
 import SearchResultTag from "./SearchResultTag.vue";
+import SearchSourceIcons from "./SearchSourceIcons.vue";
 import TrackArtistLinks from "./TrackArtistLinks.vue";
 import TrackContextMenu from "./TrackContextMenu.vue";
 
@@ -99,6 +104,10 @@ const resultType = computed<SearchResultType>(() => {
   if (album.value) return "album";
   if (playlist.value) return "playlist";
   return trackSearchResultType(track.value!.mediaType);
+});
+const searchSourceKinds = computed<SourceKind[]>(() => {
+  if (album.value) return album.value.sourceKinds ?? [];
+  return track.value?.sourceKind ? [track.value.sourceKind] : [];
 });
 const playlistTarget = computed(() =>
   playlist.value ? { kind: "playlist" as const, id: playlist.value.id } : null,
@@ -434,7 +443,7 @@ function toggleCardLike() {
       "
     >
       <template v-if="layout === 'row'">
-        <div class="relative size-10 shrink-0">
+        <div class="group/catalog-cover relative size-10 shrink-0">
           <NuxtLink
             :to="titleRoute"
             class="block size-10 overflow-hidden rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -462,25 +471,51 @@ function toggleCardLike() {
               />
             </div>
           </NuxtLink>
+          <Button
+            v-if="album || track"
+            variant="ghost"
+            size="icon-sm"
+            class="absolute inset-0 size-full cursor-pointer rounded-md bg-background/70 opacity-0 transition-opacity hover:bg-background/70 hover:text-foreground focus-visible:opacity-100 group-hover/catalog-cover:opacity-100 group-focus-within/catalog-cover:opacity-100 dark:hover:bg-background/70"
+            :aria-busy="(albumActive || trackActive) && loading"
+            :aria-label="
+              controlEnabled ? playLabel : t('trackTable.retryUnavailable')
+            "
+            @click.prevent.stop="toggleCardPlayback"
+          >
+            <Icon
+              :icon="
+                !controlEnabled
+                  ? icons.cloudOff
+                  : playbackActive
+                    ? icons.pause
+                    : icons.play
+              "
+              aria-hidden="true"
+              class="text-foreground"
+            />
+          </Button>
         </div>
         <div class="min-w-0 flex-1">
-          <NuxtLink
-            :to="titleRoute"
-            class="block rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            :aria-label="openLabel"
-            @click="emit('open')"
-          >
-            <h3 class="text-sm font-medium">
-              <ScrollingText
-                class="w-full"
-                :class="!playable && 'opacity-60'"
-                :title="
-                  !playable ? t('trackTable.unavailableTitle') : undefined
-                "
-                >{{ title }}</ScrollingText
-              >
-            </h3>
-          </NuxtLink>
+          <div class="flex min-w-0 items-center gap-2">
+            <NuxtLink
+              :to="titleRoute"
+              class="min-w-0 flex-1 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              :aria-label="openLabel"
+              @click="emit('open')"
+            >
+              <h3 class="text-sm font-medium">
+                <ScrollingText
+                  class="w-full"
+                  :class="!playable && 'opacity-60'"
+                  :title="
+                    !playable ? t('trackTable.unavailableTitle') : undefined
+                  "
+                  >{{ title }}</ScrollingText
+                >
+              </h3>
+            </NuxtLink>
+            <SearchResultTag class="shrink-0" :type="resultType" />
+          </div>
           <ScrollingText class="w-full text-xs text-muted-foreground">
             <template v-if="album">
               <TrackArtistLinks :artists="album.artists" /> ·
@@ -500,62 +535,62 @@ function toggleCardLike() {
             </template>
           </ScrollingText>
         </div>
-        <SearchResultTag
-          class="ml-auto"
-          :type="resultType"
-          :source-kind="track?.sourceKind ?? null"
-        />
-        <TooltipProvider :delay-duration="150">
-          <TooltipRoot :disabled="controlEnabled">
-            <TooltipTrigger as-child>
-              <Button
-                variant="default"
-                size="icon-sm"
-                class="shrink-0 rounded-full shadow-sm"
-                :class="
-                  !controlEnabled &&
-                  'bg-muted text-muted-foreground hover:bg-muted'
-                "
-                :aria-busy="trackActive && loading"
-                :aria-label="
-                  controlEnabled ? playLabel : t('trackTable.retryUnavailable')
-                "
-                @click.prevent.stop="toggleCardPlayback"
-              >
-                <Icon
-                  :icon="
-                    !controlEnabled
-                      ? icons.cloudOff
-                      : playbackActive
-                        ? icons.pause
-                        : icons.play
+        <div class="ml-auto flex shrink-0 items-center gap-2">
+          <SearchSourceIcons :source-kinds="searchSourceKinds" />
+          <TooltipProvider v-if="playlist" :delay-duration="150">
+            <TooltipRoot :disabled="controlEnabled">
+              <TooltipTrigger as-child>
+                <Button
+                  variant="default"
+                  size="icon-sm"
+                  class="shrink-0 rounded-full shadow-sm"
+                  :class="
+                    !controlEnabled &&
+                    'bg-muted text-muted-foreground hover:bg-muted'
                   "
-                  aria-hidden="true"
-                  class="size-4"
-                />
-              </Button>
-            </TooltipTrigger>
-            <TooltipPortal>
-              <TooltipContent
-                v-if="!controlEnabled"
-                :side-offset="6"
-                class="z-50 rounded-md border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-md"
-              >
-                {{ t("trackTable.unavailable") }}
-              </TooltipContent>
-            </TooltipPortal>
-          </TooltipRoot>
-        </TooltipProvider>
-        <LikeButton
-          v-if="likeTarget"
-          class="shrink-0"
-          compact
-          :liked="liked"
-          :label="title"
-          :pending="isLikePending(likeTarget)"
-          :disabled="!likesLoaded"
-          @toggle="toggleCardLike"
-        />
+                  :aria-busy="trackActive && loading"
+                  :aria-label="
+                    controlEnabled
+                      ? playLabel
+                      : t('trackTable.retryUnavailable')
+                  "
+                  @click.prevent.stop="toggleCardPlayback"
+                >
+                  <Icon
+                    :icon="
+                      !controlEnabled
+                        ? icons.cloudOff
+                        : playbackActive
+                          ? icons.pause
+                          : icons.play
+                    "
+                    aria-hidden="true"
+                    class="size-4"
+                  />
+                </Button>
+              </TooltipTrigger>
+              <TooltipPortal>
+                <TooltipContent
+                  v-if="!controlEnabled"
+                  :side-offset="6"
+                  class="z-50 rounded-md border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-md"
+                >
+                  {{ t("trackTable.unavailable") }}
+                </TooltipContent>
+              </TooltipPortal>
+            </TooltipRoot>
+          </TooltipProvider>
+          <LikeButton
+            v-if="likeTarget"
+            class="shrink-0"
+            compact
+            :liked="liked"
+            :label="title"
+            :pending="isLikePending(likeTarget)"
+            :disabled="!likesLoaded"
+            @toggle="toggleCardLike"
+          />
+        </div>
       </template>
 
       <template v-else>

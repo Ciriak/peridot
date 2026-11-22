@@ -267,6 +267,7 @@ const schemas: Record<string, SchemaObject> = {
     title: stringSchema,
     artist: stringSchema,
     artists: arrayOf(stringSchema),
+    sourceKinds: arrayOf(enumeration("path", "url", "jellyfin")),
     coverUrl: nullable(stringSchema),
     trackCount: integerSchema,
     durationMs: nullable(integerSchema),

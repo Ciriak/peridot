@@ -302,6 +302,11 @@ test("albums have list and detail routes with derived groups", async () => {
     /v-if="variant !== 'album' && !isSearch"\s+:role="isSearch \? undefined : 'cell'"[\s\S]*?<DownloadProgressTooltip[\s\S]*?!isSearch &&\s*allowTrackLike !== false &&\s*item\.track\.mediaType === 'music'[\s\S]*?<LikeButton/,
     "The album track-list row replaces the offline action with the like button",
   );
+  assert.match(
+    trackTable,
+    /const props = withDefaults\(\s*defineProps<\{[\s\S]*?\}>\(\),\s*\{\s*showArtists: true,\s*allowTrackLike: true,\s*\},?\s*\);/,
+    "Omitted track-list flags enable artist links and like controls",
+  );
   assert.doesNotMatch(
     trackTable,
     /variant === 'library' &&\s*track\.album/,

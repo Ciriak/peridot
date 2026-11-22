@@ -4,6 +4,7 @@ import { writeFile } from "node:fs/promises";
 import { test } from "node:test";
 import type {
   AlbumListResponse,
+  AlbumSummaryResponse,
   ArtistListResponse,
   AudiobookListResponse,
   PodcastListResponse,
@@ -81,6 +82,43 @@ test("catalog endpoints page tracks, albums, artists, search, and likes", async 
     assert.equal(albums.items.length, 5);
     assert.equal(albums.totalCount, 9);
     assert.ok(albums.items.every((album) => album.trackCount > 0));
+    assert.ok(
+      albums.items.every(
+        (album) =>
+          album.sourceKinds.length === 1 && album.sourceKinds[0] === "path",
+      ),
+    );
+
+    const sharedAlbum = (
+      await context.app.inject({
+        method: "GET",
+        url: "/api/albums?query=shared&sort=title",
+        headers: context.authorization,
+      })
+    ).json<AlbumListResponse>().items[0];
+    assert.equal(sharedAlbum?.title, "Shared Album");
+    const jellyfinSource = await context.database.orm.Source.create({
+      kind: "jellyfin",
+      name: "Music server",
+      position: 1,
+    });
+    const sharedProjection =
+      await context.database.orm.CatalogTrack.firstOrThrow({
+        albumId: sharedAlbum!.id,
+      });
+    await context.database.orm.CatalogTrack.where({
+      id: sharedProjection.id,
+    }).update({ sourceId: jellyfinSource.id });
+    const sharedDetail = await context.app.inject({
+      method: "GET",
+      url: `/api/albums/${sharedAlbum!.id}`,
+      headers: context.authorization,
+    });
+    assert.equal(sharedDetail.statusCode, 200);
+    assert.deepEqual(sharedDetail.json<AlbumSummaryResponse>().sourceKinds, [
+      "path",
+      "jellyfin",
+    ]);
 
     const artists = (
       await context.app.inject({

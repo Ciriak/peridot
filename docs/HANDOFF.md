@@ -1,5 +1,187 @@
 # Peridot handoff
 
+## Search results align categories, album playback, and provenance
+
+Search result categories now sit beside track and album titles instead of the
+right-side action group. Album playback is embedded in the row cover like the
+shared track control, so albums no longer render a separate trailing play
+button. Playlist playback remains a standalone collection control.
+
+Album summaries now expose the ordered source kinds represented by their
+available tracks. Search results render one source icon for a single source and
+all source icons for a multi-source album. Hover copy reads “Provided from
+{source}” for one source and “Served from multiple sources” for multiple
+sources.
+
+Verification:
+
+- `pnpm --filter @peridot/web test` (297 passing)
+- `pnpm --filter @peridot/server test` (194 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/server typecheck`
+- Production builds for `@peridot/web` and `@peridot/server`
+- Focused ESLint and Prettier checks
+
+Known limits:
+
+- The search rows were verified through behavioral assertions and production
+  builds but were not visually exercised in an authenticated browser session.
+- Source kinds are deduplicated by provider family; multiple configured sources
+  of the same kind share one icon.
+
+Uncommitted changes:
+
+- Album source-kind summaries, the separate category and source-icon search
+  components, embedded album playback, contract and OpenAPI updates, behavioral
+  tests, the decision record, and this handoff section.
+- Existing authentication, search-history, source-normalization,
+  library-preference, and documentation changes remain present and were
+  preserved.
+
+Next:
+
+- Search for an album with one source and one represented across multiple source
+  kinds, then confirm category placement, cover playback, icon grouping, and
+  hover copy at desktop and phone widths.
+
+## Search queries enter browser history
+
+Completed global searches now create URL-backed browser history entries at
+`/search?q=...`. The query is committed after the search debounce, Back and
+Forward restore the input and results for the selected entry, and reloading or
+sharing a search URL retains the query. Clearing the input removes `q`, and
+repeating the current query does not add a duplicate entry.
+
+Verification:
+
+- Focused search history, search view, shortcut, and sidebar tests (12 passing)
+- `pnpm --filter @peridot/web test` (297 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Focused ESLint and Prettier checks
+
+Known limits:
+
+- Browser Back and Forward were covered by route-helper and wiring tests but
+  were not exercised in a live authenticated browser session.
+
+Uncommitted changes:
+
+- Search history route helper, layout and search-page wiring, behavioral tests,
+  the decision record, and this handoff section.
+- Existing authentication, catalog, source, track-table, library-preference,
+  contract, and documentation changes remain present and were preserved.
+
+Next:
+
+- Run two searches with a pause between them, then use Back, Forward, and reload
+  to confirm the URL, input, and results stay synchronized.
+
+## Jellyfin source icon restored
+
+Jellyfin sources imported before the plugin-system removal were still persisted
+with legacy `kind = "plugin"`. Startup normalization now upgrades exact
+Jellyfin-shaped legacy rows to `jellyfin` and restores their source identity, so
+Sources renders the bundled Jellyfin icon and uses the normal Jellyfin
+integration path. Unrelated legacy plugin records are left unchanged.
+
+Verification:
+
+- Focused server source normalization test
+- `pnpm --filter @peridot/server test` (194 passing)
+- `pnpm --filter @peridot/server typecheck`
+- `pnpm --filter @peridot/server build`
+- Focused web source-label and settings tests (19 passing)
+- `pnpm db:validate` (17-migration graph current)
+- Focused ESLint and Prettier checks
+- `git diff --check`
+- Local development `Audio` source now has `kind = "jellyfin"` and a restored
+  source identity
+
+Known limits:
+
+- Unrelated legacy plugin records are not converted and still fall back to the
+  generic server icon.
+- The live Sources screen was not visually inspected in this run.
+
+Uncommitted changes:
+
+- Startup source compatibility normalization, its behavioral test, the decision
+  record, and this handoff section.
+- Existing authentication, track-table, library-preference, and documentation
+  changes remain present and were preserved.
+
+Next:
+
+- Reload Settings → Sources and confirm the `Audio` source shows the bundled
+  Jellyfin icon.
+
+## Track lists restore default like and artist controls
+
+The shared track table now defaults `allowTrackLike` and `showArtists` to true.
+Vue casts omitted Boolean props to false, so album and other callers that did not
+pass these flags were suppressing the row like buttons and menu-aware artist
+links. Album tracks now show the far-right heart without duplicating explicit
+flags at each call site.
+
+Verification:
+
+- `pnpm --filter @peridot/web test` (294 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Focused ESLint and Prettier checks
+- `git diff --check`
+
+Known limits:
+
+- The running development client was not visually inspected after hot reload.
+
+Uncommitted changes:
+
+- Shared track-table defaults, an album regression assertion, and this handoff
+  section.
+- Existing authentication, library-preference, and documentation changes remain
+  present and were preserved.
+
+Next:
+
+- Reload an album and confirm the far-right row hearts and linked artist names
+  render without callers passing either flag.
+
+## Liked-title offline downloads default off
+
+“Make my liked titles available offline” now defaults to disabled. Uninitialized
+accounts receive `false` from the server and the web client initializes the
+account preference with the same value. Missing or invalid device state also
+falls back to disabled. Existing accounts and devices with an explicit `true`
+preference remain enabled.
+
+Verification:
+
+- `pnpm test` (193 server, 294 web, 18 UI, and 5 desktop tests passing)
+- `pnpm typecheck`
+- `pnpm lint`
+- `pnpm format:check`
+- `pnpm version:check`
+- `pnpm db:validate` (17-migration graph current)
+- Production builds for `@peridot/web` and `@peridot/server`
+
+Known limits:
+
+- Existing enabled account preferences are preserved; this change only alters
+  the default used when no explicit value exists.
+- The Library switch was not visually exercised in a live browser session.
+
+Uncommitted changes:
+
+- Web and server preference defaults, behavioral tests, decision and development
+  notes, and this handoff section.
+
+Next:
+
+- In a fresh-account browser session, confirm the Library switch renders off and
+  no liked-title download task is queued before the user enables it.
+
 ## CI release workflow repaired
 
 GitHub retired all macOS 14 hosted images on November 2, 2026. The signed

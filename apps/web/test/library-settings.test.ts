@@ -84,30 +84,30 @@ function albumPage(
   return { items, nextCursor, totalCount: items.length, catalogRevision: 1 };
 }
 
-test("liked titles are available offline by default for each server and user", () => {
+test("liked titles are not available offline by default for each server and user", () => {
   const storage = createStorage();
 
-  assert.deepEqual(defaultLibrarySettings(), { likedTitlesOffline: true });
+  assert.deepEqual(defaultLibrarySettings(), { likedTitlesOffline: false });
   assert.deepEqual(readPersistedLibrarySettings(storage, scope), {
-    likedTitlesOffline: true,
+    likedTitlesOffline: false,
   });
   assert.equal(
     savePersistedLibrarySettings(storage, scope, {
-      likedTitlesOffline: false,
+      likedTitlesOffline: true,
     }),
     true,
   );
   assert.deepEqual(readPersistedLibrarySettings(storage, scope), {
-    likedTitlesOffline: false,
+    likedTitlesOffline: true,
   });
   assert.deepEqual(
     readPersistedLibrarySettings(storage, { ...scope, userId: "user-2" }),
-    { likedTitlesOffline: true },
+    { likedTitlesOffline: false },
   );
   assert.match(librarySettingsStorageKey(scope), /library-settings:v2:/);
 });
 
-test("invalid library settings fall back to the enabled default", () => {
+test("invalid library settings fall back to the disabled default", () => {
   const storage = createStorage();
   storage.setItem(
     librarySettingsStorageKey(scope),
@@ -120,7 +120,7 @@ test("invalid library settings fall back to the enabled default", () => {
 
   assert.equal(parsePersistedLibrarySettings("not-json", scope), null);
   assert.deepEqual(readPersistedLibrarySettings(storage, scope), {
-    likedTitlesOffline: true,
+    likedTitlesOffline: false,
   });
 });
 
@@ -131,12 +131,12 @@ test("legacy device preferences are ignored", () => {
     JSON.stringify({
       version: 1,
       ...scope,
-      likedTitlesOffline: false,
+      likedTitlesOffline: true,
     }),
   );
 
   assert.deepEqual(readPersistedLibrarySettings(storage, scope), {
-    likedTitlesOffline: true,
+    likedTitlesOffline: false,
   });
 });
 

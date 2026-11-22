@@ -146,7 +146,7 @@ User preferences use `GET /api/users/me/preferences`,
 `PUT /api/users/me/preferences`, and
 `POST /api/users/me/preferences/initialize` for one-time account initialization.
 The client verifies preferences after authentication before starting automatic
-liked-title downloads. Uninitialized accounts use the enabled default and do not
+liked-title downloads. Uninitialized accounts use the disabled default and do not
 import legacy browser-local values.
 
 The shared UI uses standard Tailwind utilities, shadcn-vue variants, theme tokens,

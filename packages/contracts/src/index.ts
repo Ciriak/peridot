@@ -137,6 +137,7 @@ export interface AlbumSummaryResponse {
   title: string;
   artist: string;
   artists: string[];
+  sourceKinds: SourceKind[];
   coverUrl: string | null;
   trackCount: number;
   durationMs: number | null;

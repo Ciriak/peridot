@@ -1,5 +1,55 @@
 # Peridot decisions
 
+## 2026-11-22: Search cards separate category and source provenance
+
+Search result categories render beside the item title. Album and track playback
+is embedded in the cover on compact result rows, matching the track-table
+control, so album rows do not add a trailing play button. The trailing action
+area remains for source provenance and likes.
+
+Album summaries include the ordered, unique source kinds represented by their
+currently available catalog tracks. A single source icon reports
+“Provided from {source}”; multiple source kinds render every icon and report
+“Served from multiple sources”. Source kinds come from active track projections,
+so unavailable or removed sources do not appear in the search result.
+
+## 2026-11-22: Completed searches are URL-backed browser history entries
+
+Completed searches put the trimmed query in `/search?q=...` and create a browser
+history entry. Search-page rendering and the global search input both share the
+query route state, so Back and Forward restore the prior search term and its
+results. Empty queries remove the parameter, and repeating the current query
+does not add another entry.
+
+The query is committed after the existing 250 ms search debounce. Other route
+query state is preserved when the search parameter changes.
+
+## 2026-11-22: Legacy Jellyfin plugin sources are normalized at startup
+
+The plugin-system removal migrated the schema but left existing Jellyfin sources
+stored with `kind = "plugin"`. Those rows lost the bundled Jellyfin icon and
+Jellyfin-specific integration lookup, so they appeared as generic server
+sources and could no longer rescan normally.
+
+Application startup now upgrades only legacy rows whose top-level URL and
+configuration URL match and whose configuration contains a non-empty library
+ID. It restores the source identity and changes the kind to `jellyfin`.
+Unrelated legacy plugin records remain untouched. A same-contract Prisma
+data-only migration cannot be applied because the graph treats its from/to edge
+as already satisfied, so this compatibility repair runs after database
+migrations during server startup.
+
+## 2026-11-22: Liked-title offline saving is opt-in
+
+“Make my liked titles available offline” defaults to disabled for accounts and
+devices without an explicit value. Automatic liked-title downloads can consume
+substantial device storage and bandwidth, so the user opts in instead of
+receiving that work by default.
+
+Existing account preferences remain unchanged. The new default applies when an
+account is initialized, when an uninitialized preference is returned by the
+server, and when invalid or missing device state falls back to its default.
+
 ## 2026-11-22: The desktop player keeps likes in its right-side controls
 
 The desktop player's track like action belongs in the right-side utility group

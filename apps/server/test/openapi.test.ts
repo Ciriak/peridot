@@ -133,6 +133,10 @@ test("OpenAPI endpoints publish every documented API route", async () => {
       properties?: Record<string, unknown>;
     };
     assert.ok(trackSchema.properties?.sourceKind);
+    const albumSchema = document.components.schemas.AlbumSummaryResponse as {
+      properties?: Record<string, unknown>;
+    };
+    assert.ok(albumSchema.properties?.sourceKinds);
     assert.ok(document.components.schemas.ApiErrorResponse);
 
     const references = collectSchemaReferences(document);

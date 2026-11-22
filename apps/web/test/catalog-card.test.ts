@@ -18,6 +18,7 @@ const album: AlbumSummaryResponse = {
   title: "Night Sessions",
   artist: "Elliot Lake",
   artists: ["Elliot Lake"],
+  sourceKinds: ["path"],
   coverUrl: null,
   trackCount: 2,
   durationMs: null,
@@ -155,6 +156,22 @@ test("the shared card adapts menus, playback, and likes by item type", async () 
   assert.match(card, /layout\?: "card" \| "row"/);
   assert.match(card, /layout === 'row'/);
   assert.match(card, /<SearchResultTag/);
+  assert.match(card, /:source-kinds="searchSourceKinds"/);
+  assert.ok(
+    card.indexOf('<SearchResultTag class="shrink-0" :type="resultType" />') <
+      card.indexOf('<div class="ml-auto flex shrink-0 items-center gap-2">'),
+    "The category tag sits beside the row title rather than in the trailing actions",
+  );
+  assert.match(
+    card,
+    /v-if="album \|\| track"[\s\S]*?@click\.prevent\.stop="toggleCardPlayback"/,
+    "Album playback is overlaid on the row cover instead of using a trailing control",
+  );
+  assert.match(
+    card,
+    /<TooltipProvider v-if="playlist" :delay-duration="150">/,
+    "Only playlists retain the standalone row playback control",
+  );
   assert.match(card, /v-if="likeTarget"/);
   assert.doesNotMatch(
     card,

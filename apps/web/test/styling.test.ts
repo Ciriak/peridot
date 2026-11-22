@@ -33,6 +33,7 @@ test("app layout respects the owner's Tailwind and shadcn styling authority", as
     "../app/components/SearchResultTag.vue",
     "../app/components/ScrolledHeader.vue",
     "../app/components/ServerConnectionIndicator.vue",
+    "../app/components/SearchSourceIcons.vue",
     "../app/components/SidebarQuickPicks.vue",
     "../app/components/TrackArtistLinks.vue",
     "../app/components/TrackContextMenu.vue",

@@ -22,7 +22,7 @@ interface StoredLibrarySettings extends LibrarySettings {
 }
 
 export const DEFAULT_LIBRARY_SETTINGS: Readonly<LibrarySettings> = {
-  likedTitlesOffline: true,
+  likedTitlesOffline: false,
 };
 
 export function defaultLibrarySettings(): LibrarySettings {

@@ -121,6 +121,47 @@ export async function ensureDefaultSource(
   }
 }
 
+export async function normalizeLegacyJellyfinSources(
+  database: Database,
+): Promise<number> {
+  return database.transaction(async (transaction) => {
+    const legacySources = await transaction.orm.Source.where({
+      kind: "plugin",
+    }).all();
+    let normalized = 0;
+
+    for (const source of legacySources) {
+      const configuration = parseSourceConfiguration(source.configuration);
+      const configuredUrl = configuration?.url?.trim();
+      const libraryId = configuration?.libraryId?.trim();
+      if (
+        !source.url ||
+        !configuredUrl ||
+        configuredUrl !== source.url ||
+        !libraryId
+      ) {
+        continue;
+      }
+
+      const sourceIdentity = JSON.stringify([source.url, libraryId]);
+      const existing = await transaction.orm.Source.where({
+        kind: "jellyfin",
+        sourceIdentity,
+      }).first();
+      if (existing) continue;
+
+      normalized += await transaction.orm.Source.where({
+        id: source.id,
+      }).updateAndCount({
+        kind: "jellyfin",
+        sourceIdentity,
+      });
+    }
+
+    return normalized;
+  });
+}
+
 export async function listSources(
   database: Database,
   removals?: SourceRemovalRegistry,

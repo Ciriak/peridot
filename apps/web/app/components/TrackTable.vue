@@ -12,6 +12,7 @@ import AlbumLink from "./AlbumLink.vue";
 import DownloadProgressTooltip from "./DownloadProgressTooltip.vue";
 import LikeButton from "./LikeButton.vue";
 import SearchResultTag from "./SearchResultTag.vue";
+import SearchSourceIcons from "./SearchSourceIcons.vue";
 import TrackArtistLinks from "./TrackArtistLinks.vue";
 import TrackArtwork from "./TrackArtwork.vue";
 import TrackContextMenu from "./TrackContextMenu.vue";
@@ -41,16 +42,22 @@ import {
 import { isTrackPlayable } from "../lib/offline-playback";
 import { trackSearchResultType } from "../lib/search-results";
 
-const props = defineProps<{
-  tracks: readonly TrackResponse[];
-  variant: TrackTableVariant;
-  scrollToTrackId?: string | null;
-  sort?: TrackSort;
-  hasMore?: boolean;
-  loadingMore?: boolean;
-  showArtists?: boolean;
-  allowTrackLike?: boolean;
-}>();
+const props = withDefaults(
+  defineProps<{
+    tracks: readonly TrackResponse[];
+    variant: TrackTableVariant;
+    scrollToTrackId?: string | null;
+    sort?: TrackSort;
+    hasMore?: boolean;
+    loadingMore?: boolean;
+    showArtists?: boolean;
+    allowTrackLike?: boolean;
+  }>(),
+  {
+    showArtists: true,
+    allowTrackLike: true,
+  },
+);
 const { t } = useI18n();
 const emit = defineEmits<{
   "sort-change": [sort: TrackSort | null];
@@ -479,6 +486,11 @@ onBeforeUnmount(() => {
                   "
                   >{{ item.track.title }}</ScrollingText
                 >
+                <SearchResultTag
+                  v-if="isSearch"
+                  class="shrink-0"
+                  :type="trackSearchResultType(item.track.mediaType)"
+                />
                 <Icon
                   v-if="isUnavailable(item.track)"
                   :icon="icons.cloudOff"
@@ -539,9 +551,10 @@ onBeforeUnmount(() => {
             v-if="isSearch"
             class="ml-auto flex shrink-0 items-center justify-end gap-2 p-2"
           >
-            <SearchResultTag
-              :type="trackSearchResultType(item.track.mediaType)"
-              :source-kind="item.track.sourceKind ?? null"
+            <SearchSourceIcons
+              :source-kinds="
+                item.track.sourceKind ? [item.track.sourceKind] : []
+              "
             />
             <LikeButton
               v-if="

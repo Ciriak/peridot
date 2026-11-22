@@ -206,6 +206,8 @@
   "page.search.resultType.song": "Song",
   "page.search.resultType.chapter": "Chapter",
   "page.search.resultType.episode": "Episode",
+  "page.search.sourceProvided": "Provided from {source}",
+  "page.search.sourcesMultiple": "Served from multiple sources",
   "page.search.externalSources": "External sources",
   "page.search.externalTitle": "External sources are not connected yet.",
   "page.search.externalDescription": "When a provider is available, its albums will appear here and can be downloaded and played.",

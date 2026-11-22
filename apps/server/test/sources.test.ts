@@ -16,6 +16,7 @@ import {
   startScan,
   waitForScan,
 } from "./helpers.js";
+import { normalizeLegacyJellyfinSources } from "../src/sources.js";
 
 test("administrators can read server counts and the default source", async () => {
   const context = await createTestContext();
@@ -57,6 +58,57 @@ test("administrators can read server counts and the default source", async () =>
     assert.equal(items[0]?.path, context.libraryRoot);
     assert.equal(items[0]?.fileCount, 0);
     assert.equal(items[0]?.lastSyncedAt, null);
+  } finally {
+    await context.close();
+  }
+});
+
+test("legacy Jellyfin plugin sources are normalized from stored data", async () => {
+  const context = await createTestContext();
+  const serverUrl = "https://jellyfin.example.test/";
+  const libraryId = "music-library";
+  try {
+    await context.database.orm.Source.create({
+      kind: "plugin",
+      name: "Audio",
+      url: serverUrl,
+      configuration: JSON.stringify({ libraryId, url: serverUrl }),
+      position: 1,
+    });
+    await context.database.orm.Source.create({
+      kind: "plugin",
+      name: "Legacy plugin",
+      url: "https://plugin.example.test/",
+      configuration: JSON.stringify({ custom: "value" }),
+      position: 2,
+    });
+
+    assert.equal(await normalizeLegacyJellyfinSources(context.database), 1);
+
+    const normalized = await context.database.orm.Source.firstOrThrow({
+      name: "Audio",
+    });
+    assert.equal(normalized.kind, "jellyfin");
+    assert.deepEqual(JSON.parse(normalized.sourceIdentity!), [
+      serverUrl,
+      libraryId,
+    ]);
+
+    const untouched = await context.database.orm.Source.firstOrThrow({
+      name: "Legacy plugin",
+    });
+    assert.equal(untouched.kind, "plugin");
+    assert.equal(untouched.sourceIdentity, null);
+
+    const sources = await context.app.inject({
+      method: "GET",
+      url: "/api/admin/sources",
+      headers: context.authorization,
+    });
+    const listed = sources
+      .json<{ items: Array<{ id: string; kind: string }> }>()
+      .items.find((source) => source.id === normalized.id);
+    assert.equal(listed?.kind, "jellyfin");
   } finally {
     await context.close();
   }

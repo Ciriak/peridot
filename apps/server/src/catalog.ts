@@ -16,7 +16,7 @@ import type {
   ResolveTracksResponse,
   TrackListResponse,
 } from "@peridot/contracts";
-import type { MediaType } from "@peridot/contracts";
+import type { MediaType, SourceKind } from "@peridot/contracts";
 import type { Database } from "./database.js";
 import {
   parseStoredArtistCredits,
@@ -118,6 +118,13 @@ interface CatalogChange {
   reason:
     "scan" | "metadata" | "reset" | "source" | "source-removal" | "duplicate";
   changedCount: number;
+}
+
+function parsedSourceKind(value: string): SourceKind | null {
+  if (value === "path" || value === "url" || value === "jellyfin") {
+    return value;
+  }
+  return null;
 }
 
 interface TrackPageOptions {
@@ -1475,10 +1482,17 @@ export class CatalogService {
     const rows = await paged.limit(limit + 1).all();
     const hasMore = rows.length > limit;
     const pageRows = rows.slice(0, limit);
-    const likedIds = await this.likedAlbumIds(options.userId);
+    const [likedIds, sourceKindsByAlbum] = await Promise.all([
+      this.likedAlbumIds(options.userId),
+      this.albumSourceKinds(pageRows.map((album) => album.id)),
+    ]);
     return {
       items: pageRows.map((album) =>
-        this.toAlbumSummary(album, likedIds.has(album.id)),
+        this.toAlbumSummary(
+          album,
+          likedIds.has(album.id),
+          sourceKindsByAlbum.get(album.id) ?? [],
+        ),
       ),
       nextCursor: hasMore
         ? encodeCursor(
@@ -1794,9 +1808,12 @@ export class CatalogService {
       mediaType: "music",
     }).first();
     if (!album || album.trackCount < 1) return null;
+    const sourceKinds =
+      (await this.albumSourceKinds([album.id])).get(album.id) ?? [];
     return this.toAlbumSummary(
       album,
       (await this.likedAlbumIds(userId)).has(album.id),
+      sourceKinds,
     );
   }
 
@@ -2013,6 +2030,67 @@ export class CatalogService {
     return new Set(rows.map((row) => catalogArtistId(row.name)));
   }
 
+  private async albumSourceKinds(
+    albumIds: readonly string[],
+  ): Promise<Map<string, SourceKind[]>> {
+    if (!albumIds.length) return new Map();
+    const tracks = await this.database.orm.CatalogTrack.where((track) =>
+      track.albumId.in([...albumIds]),
+    )
+      .where({ available: 1 })
+      .select("albumId", "sourceId")
+      .all();
+    const sourceIds = [
+      ...new Set(
+        tracks.flatMap((track) => (track.sourceId ? [track.sourceId] : [])),
+      ),
+    ];
+    if (!sourceIds.length) {
+      return new Map(albumIds.map((albumId) => [albumId, []]));
+    }
+    const sources = await this.database.orm.Source.where((source) =>
+      source.id.in(sourceIds),
+    )
+      .orderBy([
+        (source) => source.position.asc(),
+        (source) => source.createdAt.asc(),
+      ])
+      .select("id", "kind")
+      .all();
+    const orderedKinds = [
+      ...new Set(
+        sources.flatMap((source) => {
+          const kind = parsedSourceKind(source.kind);
+          return kind ? [kind] : [];
+        }),
+      ),
+    ];
+    const kindBySourceId = new Map(
+      sources.flatMap((source) => {
+        const kind = parsedSourceKind(source.kind);
+        return kind ? [[source.id, kind] as const] : [];
+      }),
+    );
+    const kindsByAlbum = new Map<string, Set<SourceKind>>();
+    for (const track of tracks) {
+      if (!track.albumId || !track.sourceId) continue;
+      const kind = kindBySourceId.get(track.sourceId);
+      if (!kind) continue;
+      const kinds = kindsByAlbum.get(track.albumId) ?? new Set<SourceKind>();
+      kinds.add(kind);
+      kindsByAlbum.set(track.albumId, kinds);
+    }
+    return new Map(
+      albumIds.map((albumId) => {
+        const kinds = kindsByAlbum.get(albumId);
+        return [
+          albumId,
+          kinds ? orderedKinds.filter((kind) => kinds.has(kind)) : [],
+        ];
+      }),
+    );
+  }
+
   private toAlbumSummary(
     album: {
       id: string;
@@ -2027,6 +2105,7 @@ export class CatalogService {
       releaseYear: number | null;
     },
     liked: boolean,
+    sourceKinds: SourceKind[],
   ): AlbumSummaryResponse {
     let artists = [album.artist];
     try {
@@ -2048,6 +2127,7 @@ export class CatalogService {
       title: album.title,
       artist: album.artist,
       artists,
+      sourceKinds,
       coverUrl: toCoverUrl(album.coverId, this.playbackTokens),
       trackCount: album.trackCount,
       durationMs: album.durationMs,

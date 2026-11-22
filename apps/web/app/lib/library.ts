@@ -321,6 +321,7 @@ export function albumSummaryFromTrack(
     title: track.album?.trim() ?? "",
     artist: track.artist.trim(),
     artists: trackArtistNames(track),
+    sourceKinds: track.sourceKind ? [track.sourceKind] : [],
     coverUrl: track.coverUrl,
     trackCount: track.albumId ? 1 : 0,
     durationMs: track.durationMs,

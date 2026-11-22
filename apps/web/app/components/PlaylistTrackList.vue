@@ -124,6 +124,7 @@ function albumForEntry(entry: PlaylistEntryResponse): AlbumSummaryResponse {
     title: entry.album?.trim() ?? "",
     artist: entry.artist.trim(),
     artists: entry.artists,
+    sourceKinds: [],
     coverUrl: entry.coverUrl,
     trackCount: 0,
     durationMs: entry.durationMs,

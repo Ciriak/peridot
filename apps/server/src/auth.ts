@@ -58,7 +58,7 @@ function publicPreferences(user: {
 }): UserPreferencesResponse {
   return {
     likedTitlesOffline:
-      user.likedTitlesOffline === null ? true : user.likedTitlesOffline !== 0,
+      user.likedTitlesOffline === null ? false : user.likedTitlesOffline !== 0,
     initialized: user.likedTitlesOffline !== null,
   };
 }

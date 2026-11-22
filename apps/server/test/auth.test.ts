@@ -266,7 +266,7 @@ test("user preferences initialize once, remain account-scoped, and update", asyn
     });
     assert.equal(initial.statusCode, 200);
     assert.deepEqual(initial.json(), {
-      likedTitlesOffline: true,
+      likedTitlesOffline: false,
       initialized: false,
     });
 
@@ -274,11 +274,11 @@ test("user preferences initialize once, remain account-scoped, and update", asyn
       method: "POST",
       url: "/api/users/me/preferences/initialize",
       headers: context.authorization,
-      payload: { likedTitlesOffline: false },
+      payload: { likedTitlesOffline: true },
     });
     assert.equal(initialized.statusCode, 200);
     assert.deepEqual(initialized.json(), {
-      likedTitlesOffline: false,
+      likedTitlesOffline: true,
       initialized: true,
     });
 
@@ -286,11 +286,11 @@ test("user preferences initialize once, remain account-scoped, and update", asyn
       method: "POST",
       url: "/api/users/me/preferences/initialize",
       headers: context.authorization,
-      payload: { likedTitlesOffline: true },
+      payload: { likedTitlesOffline: false },
     });
     assert.equal(losingInitializer.statusCode, 200);
     assert.deepEqual(losingInitializer.json(), {
-      likedTitlesOffline: false,
+      likedTitlesOffline: true,
       initialized: true,
     });
 
@@ -298,11 +298,11 @@ test("user preferences initialize once, remain account-scoped, and update", asyn
       method: "PUT",
       url: "/api/users/me/preferences",
       headers: context.authorization,
-      payload: { likedTitlesOffline: true },
+      payload: { likedTitlesOffline: false },
     });
     assert.equal(updated.statusCode, 200);
     assert.deepEqual(updated.json(), {
-      likedTitlesOffline: true,
+      likedTitlesOffline: false,
       initialized: true,
     });
 

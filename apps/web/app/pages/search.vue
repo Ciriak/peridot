@@ -29,6 +29,7 @@ import { useSession } from "../composables/use-session";
 import { albumCatalogCard, playlistCatalogCard } from "../lib/catalog-cards";
 import { listAlbums } from "../lib/peridot-client";
 import { queryKeys } from "../lib/query-keys";
+import { SEARCH_HISTORY_DEBOUNCE_MS } from "../lib/search-history";
 
 const { t } = useI18n();
 useHead({ title: t("page.search.title") });
@@ -85,7 +86,7 @@ watchDebounced(
   (value) => {
     debouncedQuery.value = value.trim();
   },
-  { debounce: 250 },
+  { debounce: SEARCH_HISTORY_DEBOUNCE_MS },
 );
 
 const searching = computed(() => debouncedQuery.value.length > 0);

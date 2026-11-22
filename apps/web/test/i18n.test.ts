@@ -80,6 +80,14 @@ test("en-US messages interpolate and pluralize", () => {
   assert.equal(i18n.global.t("page.search.resultType.album"), "Album");
   assert.equal(i18n.global.t("page.search.resultType.chapter"), "Chapter");
   assert.equal(i18n.global.t("page.search.resultType.episode"), "Episode");
+  assert.equal(
+    i18n.global.t("page.search.sourceProvided", { source: "Jellyfin" }),
+    "Provided from Jellyfin",
+  );
+  assert.equal(
+    i18n.global.t("page.search.sourcesMultiple"),
+    "Served from multiple sources",
+  );
   assert.equal(i18n.global.t("count.file", { count: 1 }, 1), "1 file");
   assert.equal(i18n.global.t("count.file", { count: 2 }, 2), "2 files");
   assert.equal(

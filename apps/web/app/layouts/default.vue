@@ -8,6 +8,7 @@ import { Input } from "@peridot/ui/components/ui/input";
 import { Kbd, KbdGroup } from "@peridot/ui/components/ui/kbd";
 import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import { Slider } from "@peridot/ui/components/ui/slider";
+import { watchDebounced } from "@vueuse/core";
 import {
   computed,
   nextTick,
@@ -45,11 +46,20 @@ import {
   searchShortcutModifier,
   type SearchShortcutModifier,
 } from "../lib/search-shortcut";
+import {
+  buildSearchHistoryLocation,
+  normalizeSearchQuery,
+  SEARCH_HISTORY_DEBOUNCE_MS,
+  SEARCH_QUERY_PARAM,
+} from "../lib/search-history";
 
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
 const searchQuery = useState("search-query", () => "");
+const routeSearchQuery = computed(() =>
+  normalizeSearchQuery(route.query[SEARCH_QUERY_PARAM]),
+);
 const searchInput = ref<{ $el?: HTMLInputElement } | null>(null);
 const shortcutModifier = ref<SearchShortcutModifier>("ctrl");
 const mobileNavigation = ref(false);
@@ -126,6 +136,7 @@ const navigation = [
   },
 ];
 const currentPath = computed(() => route.path);
+const pendingSearchHistoryQueries = new Set<string>();
 const {
   isMobile: mobileNavigationViewport,
   dragging: mobileNavigationDragging,
@@ -192,6 +203,42 @@ async function openSearch() {
   await nextTick();
   searchInput.value?.$el?.focus();
 }
+
+watchDebounced(
+  searchQuery,
+  (value) => {
+    if (currentPath.value !== "/search") return;
+    const normalized = normalizeSearchQuery(value);
+    if (
+      normalized === routeSearchQuery.value ||
+      pendingSearchHistoryQueries.has(normalized)
+    ) {
+      return;
+    }
+
+    pendingSearchHistoryQueries.add(normalized);
+    void router
+      .push(buildSearchHistoryLocation(route.query, normalized))
+      .finally(() => pendingSearchHistoryQueries.delete(normalized));
+  },
+  { debounce: SEARCH_HISTORY_DEBOUNCE_MS },
+);
+
+watch(
+  routeSearchQuery,
+  (value) => {
+    if (
+      currentPath.value !== "/search" ||
+      pendingSearchHistoryQueries.has(value)
+    ) {
+      return;
+    }
+    if (normalizeSearchQuery(searchQuery.value) !== value) {
+      searchQuery.value = value;
+    }
+  },
+  { immediate: true },
+);
 
 watch(currentPath, (path) => {
   mobileNavigation.value = false;
