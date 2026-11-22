@@ -10,6 +10,10 @@ pnpm install --frozen-lockfile
 pnpm dev
 ```
 
+Husky installs the repository Git hooks during `pnpm install`. The `pre-commit`
+hook runs `npm run format`, and the `commit-msg` hook validates the message with
+Commitlint.
+
 Development web runs at http://localhost:17430. Nuxt proxies API traffic to a
 private Fastify listener on port 17431. A built deployment serves the web
 application, API, audio, and realtime traffic from one listener on port 17430.

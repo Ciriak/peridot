@@ -1,5 +1,25 @@
 # Peridot handoff
 
+## Git formatter and message hooks
+
+Husky now runs `npm run format` before each commit. The existing `commit-msg`
+hook continues to validate the commit message with Commitlint. Installation of
+both hooks remains part of the existing `prepare` script executed by
+`pnpm install`.
+
+Verification:
+
+- `npm run format`
+- Husky `pre-commit` and `commit-msg` wrappers resolve to the tracked hook files
+
+Uncommitted changes:
+
+- The `pre-commit` formatter hook and development, decision, and handoff updates.
+
+Next:
+
+- None.
+
 ## Playlists in global search
 
 Global search now includes paginated playlist results and a Playlists quick
