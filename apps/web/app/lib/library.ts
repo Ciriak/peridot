@@ -416,7 +416,10 @@ export function findAlbum(
 }
 
 export function albumRoute(
-  album: Pick<AlbumGroup, "title" | "artist"> & { id?: string },
+  album: Pick<AlbumGroup, "title"> & {
+    artist?: string;
+    id?: string;
+  },
 ) {
   return `/albums/${encodeURIComponent(album.title)}${routeQuery({
     artist: album.artist,
@@ -443,7 +446,7 @@ export function trackAlbumRoute(track: TrackResponse) {
   }
   return albumRoute({
     title: track.album?.trim() ?? "",
-    artist: track.artist.trim(),
+    artist: track.albumId ? undefined : track.artist.trim(),
     ...(track.albumId ? { id: track.albumId } : {}),
   });
 }
@@ -465,7 +468,9 @@ export function trackIdFromTitleHash(hash: string): string | null {
 }
 
 export function trackAlbumTitleRoute(track: TrackResponse) {
-  if (!track.album?.trim() || !track.artist.trim()) return null;
+  if (!track.album?.trim() || (!track.albumId && !track.artist.trim())) {
+    return null;
+  }
   return `${trackAlbumRoute(track)}#${encodeURIComponent(trackTitleAnchorId(track.id))}`;
 }
 

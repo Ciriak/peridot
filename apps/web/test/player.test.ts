@@ -282,7 +282,7 @@ test("the persistent player controls a native audio element", async () => {
   );
   assert.match(
     playerFooter,
-    /<ScrollingText\s+:key="`\$\{active\.id\}:\$\{active\.title\}`"\s+mode="always"\s+class="w-full"\s*>[\s\S]*?<NuxtLink\s+v-if="currentTrackTitleRoute"/,
+    /<ScrollingText\s+:key="`\$\{active\.id\}:\$\{active\.title\}`"\s+mode="always"\s+class="w-full"[\s\S]*?>[\s\S]*?<NuxtLink\s+v-if="currentTrackTitleRoute"/,
     "Only the active player title uses the always-on scrolling text component",
   );
   assert.equal(
@@ -439,7 +439,10 @@ test("available collection play controls switch to pause before buffering", asyn
     /playCollection\(playableTracks\.value, track\.id, playlistTarget\.value\)/,
     "Playlist track playback binds the active playlist target",
   );
-  assert.match(catalogCard, /playbackActive \? icons\.pause : icons\.play/);
+  assert.match(
+    catalogCard,
+    /playbackActive\s+\?\s+icons\.pause\s+:\s+icons\.play/,
+  );
   assert.match(albumPage, /albumPlaybackActive \? icons\.pause : icons\.play/);
   assert.match(
     artistPage,

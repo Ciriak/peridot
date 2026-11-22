@@ -144,15 +144,30 @@ test("the shared card adapts menus, playback, and likes by item type", async () 
     card,
     /<component\s+:is="menuComponent"\s+v-bind="menuBindings"/,
   );
-  assert.match(card, /toggleCollectionPlayback\(albumTarget\.value/);
-  assert.match(card, /if \(trackPlayable\.value\) play\(track\.value\);/);
-  assert.match(card, /toggleCollectionPlayback\(playlistTarget\.value/);
+  assert.match(card, /toggleCollectionPlayback\(\s*albumTarget\.value/);
+  assert.match(card, /if \(trackPlayable\.value\) \{\s+play\(track\.value\);/);
+  assert.match(card, /toggleCollectionPlayback\(\s*playlistTarget\.value/);
   assert.match(
     card,
     /if \(album\.value\) \{[\s\S]*kind: "album"[\s\S]*if \(track\.value\?\.mediaType === "music"\) \{[\s\S]*kind: "track"[\s\S]*return null;/,
   );
   assert.equal(card.match(/<LikeButton/g)?.length, 1);
   assert.match(card, /v-if="likeTarget"/);
+  assert.doesNotMatch(
+    card,
+    /<Badge\b/,
+    "Track and album cards rely on their shared disabled control instead of a status tag",
+  );
+  assert.match(card, /:class="!playable && 'opacity-60'"/);
+  assert.match(
+    card,
+    /!controlEnabled\s+\? icons\.cloudOff\s+:\s+playbackActive\s+\? icons\.pause\s+:\s+icons\.play/,
+  );
+  assert.match(
+    card,
+    /if \(trackPlayable\.value\) \{\s+play\(track\.value\);\s+return;\s+\}\s+retryUnavailableTrack\(track\.value\);/,
+    "Unavailable card taps retry through the shared player",
+  );
   assert.match(playlistMenu, /v-if="!automatic"/);
   assert.match(playlistMenu, /context\.playPlaylist/);
   assert.match(playlistMenu, /context\.renamePlaylist/);

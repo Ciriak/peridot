@@ -40,6 +40,7 @@ const optimizedDependencies = [
   "@iconify-icons/basil/heart-outline",
   "@iconify-icons/basil/heart-solid",
   "@iconify-icons/basil/home-outline",
+  "@iconify-icons/basil/info-circle-outline",
   "@iconify-icons/basil/info-triangle-outline",
   "@iconify-icons/basil/logout-outline",
   "@iconify-icons/basil/menu-outline",
@@ -75,6 +76,7 @@ const optimizedDependencies = [
   "@peridot/ui/components/ui/progress-circle",
   "@peridot/ui/components/ui/scrolling-text",
   "@peridot/ui/components/ui/slider",
+  "@peridot/ui/components/ui/sonner",
   "@peridot/ui/components/ui/spinner",
   "@peridot/ui/components/ui/switch",
   "@tanstack/vue-virtual",
@@ -83,6 +85,7 @@ const optimizedDependencies = [
   "cn",
   "reka-ui",
   "ts-md5",
+  "vue-sonner",
   "@tanstack/vue-query",
   "@tanstack/query-persist-client-core",
   "idb-keyval",
@@ -145,6 +148,7 @@ export default defineNuxtConfig({
   },
   app: {
     head: {
+      title: "Peridot",
       htmlAttrs: { class: "dark", lang: "en-US" },
       link: [{ rel: "manifest", href: "/manifest.webmanifest" }],
     },

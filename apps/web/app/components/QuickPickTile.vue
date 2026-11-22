@@ -23,6 +23,7 @@ const {
   active,
   playing,
   loading,
+  unavailableTrackIdSet,
   play,
   toggleCollectionPlayback,
   togglePlayback,
@@ -64,6 +65,7 @@ const playable = computed(() => {
     return isTrackPlayable(item.track, {
       serverLost: serverStatus.value === "lost",
       savedTrackIds: savedTrackIds.value,
+      unavailableTrackIds: unavailableTrackIdSet.value,
     });
   }
   if (serverStatus.value !== "lost") return Boolean(item.album.trackCount);

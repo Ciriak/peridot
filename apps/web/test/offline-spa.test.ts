@@ -523,6 +523,14 @@ test("offline playback uses only saved copies while disconnected", () => {
     ),
     false,
   );
+  assert.equal(
+    isTrackPlayable(track, {
+      serverLost: false,
+      savedTrackIds: new Set(["track-1"]),
+      unavailableTrackIds: new Set(["track-1"]),
+    }),
+    false,
+  );
 });
 
 test("the fixed player shares saved-track availability across controls", async () => {
@@ -577,13 +585,18 @@ test("offline saves use shared task progress without removal toasts", async () =
   );
   assert.match(
     table,
-    /if \(!\(await removeOffline\(track\.id\)\)\) \{[\s\S]*?notifyOfflineTrackFailed/,
+    /if \(!\(await removeOffline\(track\.id\)\)\) \{[\s\S]*?notifyOfflineTrackRemoveFailed/,
   );
   assert.match(table, /if \(!\(await saveOffline\(track\)\)\)/);
+  assert.match(
+    table,
+    /if \(!\(await saveOffline\(track\)\)\) \{[\s\S]*?notifyOfflineTrackFailed/,
+  );
   assert.doesNotMatch(table, /notifyOfflineTrackSaved\(track\.title\)/);
   assert.match(albumAction, /saveAlbum\(currentAlbum\)/);
   assert.doesNotMatch(albumAction, /notifyOfflineAlbumSaved/);
   assert.match(toasts, /notifyDownloadTaskEnded/);
+  assert.match(toasts, /notifyOfflineTrackRemoveFailed/);
   assert.doesNotMatch(toasts, /toast\.offlineRemoved/);
   assert.equal(
     messages["toast.downloadTaskCompletedTitle"],
@@ -595,6 +608,14 @@ test("offline saves use shared task progress without removal toasts", async () =
   );
   assert.equal(messages["toast.offlineRemovedTitle"], undefined);
   assert.equal(messages["toast.offlineRemoved"], undefined);
+  assert.equal(
+    messages["toast.offlineRemoveFailedTitle"],
+    "Offline removal failed",
+  );
+  assert.equal(
+    messages["toast.offlineRemoveFailed"],
+    "{track} could not be made unavailable offline. {message}",
+  );
 });
 
 test("offline progress spinners show song and album download details", async () => {

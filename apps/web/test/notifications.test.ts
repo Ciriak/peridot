@@ -11,9 +11,16 @@ import {
   SERVER_OFFLINE_COOLDOWN_MS,
   serverReachability,
 } from "../app/lib/server-connectivity.ts";
-import { offlineSaveSuccessToast } from "../app/lib/offline-toast.ts";
+import {
+  offlineSaveSuccessToast,
+  offlineTrackRemovalFailureToast,
+} from "../app/lib/offline-toast.ts";
 import { sourceMutationToast } from "../app/lib/source-toast.ts";
-import { TOAST_VIEWPORT_CLASS } from "../app/lib/toast-position.ts";
+import {
+  TOAST_MOBILE_OFFSET,
+  TOAST_OFFSET,
+  TOAST_POSITION,
+} from "../app/lib/toast-options.ts";
 
 test("source mutations map to concise success toasts", () => {
   assert.deepEqual(sourceMutationToast("added", " D:\\Music "), {
@@ -61,10 +68,30 @@ test("offline saves map tracks and albums to success toasts", () => {
   });
 });
 
+test("offline removal failures map to a dedicated error toast", () => {
+  assert.deepEqual(
+    offlineTrackRemovalFailureToast(" Night Drive ", "Storage failed."),
+    {
+      titleMessage: { key: "toast.offlineRemoveFailedTitle" },
+      descriptionMessage: {
+        key: "toast.offlineRemoveFailed",
+        params: { track: "Night Drive", message: "Storage failed." },
+      },
+      status: "error",
+      kind: "error",
+      duration: 8000,
+    },
+  );
+});
+
 test("toasts sit below the topbar at the top-right", () => {
-  assert.match(TOAST_VIEWPORT_CLASS, /\btop-20\b/);
-  assert.match(TOAST_VIEWPORT_CLASS, /\bmd:right-6\b/);
-  assert.doesNotMatch(TOAST_VIEWPORT_CLASS, /\bbottom-/);
+  assert.equal(TOAST_POSITION, "top-right");
+  assert.deepEqual(TOAST_OFFSET, { top: 80, right: 24 });
+  assert.deepEqual(TOAST_MOBILE_OFFSET, {
+    top: 80,
+    right: 16,
+    left: 16,
+  });
 });
 
 test("server health checks require the exact Peridot health signature", async () => {
@@ -142,8 +169,11 @@ test("task and log updates use the shared realtime subscription", async () => {
     new URL("../app/components/AppToaster.vue", import.meta.url),
     "utf8",
   );
-  const list = await readFile(
-    new URL("../app/components/AppToastList.vue", import.meta.url),
+  const sonner = await readFile(
+    new URL(
+      "../../../packages/ui/src/components/ui/sonner/Sonner.vue",
+      import.meta.url,
+    ),
     "utf8",
   );
   const toasts = await readFile(
@@ -173,11 +203,21 @@ test("task and log updates use the shared realtime subscription", async () => {
 
   assert.match(app, /<AppToaster \/>/);
   assert.match(app, /<AppNotifications \/>/);
-  assert.match(toaster, /<ToastProvider/);
-  assert.match(toaster, /toast-manager/);
-  assert.match(list, /<ToastViewport/);
-  assert.match(list, /TOAST_VIEWPORT_CLASS/);
-  assert.match(list, /<ToastRoot/);
+  assert.match(app, /import "vue-sonner\/style\.css"/);
+  assert.match(toaster, /@peridot\/ui\/components\/ui\/sonner/);
+  assert.match(toaster, /<Toaster/);
+  assert.match(toaster, /TOAST_POSITION/);
+  assert.match(toaster, /TOAST_OFFSET/);
+  assert.match(toaster, /TOAST_MOBILE_OFFSET/);
+  assert.match(toaster, /ToasterProps/);
+  assert.match(toaster, /@iconify\/vue\/offline/);
+  assert.match(toaster, /<template #success-icon>/);
+  assert.match(toaster, /<template #error-icon>/);
+  assert.match(toaster, /<template #close-icon>/);
+  assert.doesNotMatch(toaster, /ToastProvider|appToastManager|@lucide\/vue/);
+  assert.match(sonner, /from "vue-sonner"/);
+  assert.match(sonner, /cn\('toaster group'/);
+  assert.doesNotMatch(sonner, /\s:?style\s*=|@lucide\/vue/);
   assert.match(notifications, /useRealtime/);
   assert.match(notifications, /useServerConnection/);
   assert.match(notifications, /serverConnectionRestored\(previous, next\)/);
@@ -202,10 +242,10 @@ test("task and log updates use the shared realtime subscription", async () => {
   assert.match(toasts, /export function notifyServerOnline/);
   assert.match(toasts, /message\("toast\.serverOnlineTitle"\)/);
   assert.match(toasts, /message\("toast\.serverOnline"\)/);
-  assert.doesNotMatch(
-    list,
-    /Work in progress|PeridotSpinner|kind === 'progress'/,
-  );
+  assert.match(toasts, /toast\.success/);
+  assert.match(toasts, /toast\.error/);
+  assert.match(toasts, /LocalizedToastMessage/);
+  assert.doesNotMatch(toasts, /createToastManager|appToastManager/);
   assert.doesNotMatch(notifications, /setTimeout|setInterval/);
   assert.match(serverSettings, /subscribe\(\["logs"\]/);
   assert.doesNotMatch(serverSettings, /setInterval/);

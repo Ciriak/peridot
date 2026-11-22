@@ -1,5 +1,467 @@
 # Peridot handoff
 
+## Desktop album cover in the scrolled header
+
+The album detail dock now shows the album cover beside its Back control. It
+reuses the cache-aware artwork already resolved for the full album header,
+disables the fade for cached images, and falls back to the bundled album icon
+when artwork is unavailable. The cover is hidden below the desktop breakpoint.
+
+Verification:
+
+- Focused scrolled-header and album-page tests (5 passing)
+- `pnpm --filter @peridot/web test` (279 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Focused ESLint and Prettier checks
+- `git diff --check` for the changed files
+
+Known checks:
+
+- Verification used Node 24.15.0 and the repository-pinned pnpm 12.21.0 rather
+  than the contributor-requested pnpm 11.25.0.
+
+Known limits:
+
+- Computer Use stopped before visual navigation because it could not verify the
+  active Brave URL. Desktop and mobile visual QA remains pending.
+
+Uncommitted changes:
+
+- The optional scrolled-header cover, album-page wiring, regression assertions,
+  decision record, and this handoff section.
+- Existing Android, playback, toast, catalog, desktop, and related worktree
+  changes remain present and were not modified.
+
+Next:
+
+- Open an album, scroll the full header out of view, and confirm the cover
+  appears beside the dock title at desktop widths and stays hidden at phone
+  widths.
+
+## Track-derived album links use the canonical album ID
+
+Track item-card titles now link to the canonical album without adding the
+track's guest-inclusive artist credit as an album search filter. The same
+shared route helper is used by track titles, tables, context menus, quick picks,
+queues, and player surfaces. Tracks without an album ID retain the
+artist-and-title fallback lookup.
+
+Verification:
+
+- Focused route and media-category tests (32 passing)
+- `pnpm --filter @peridot/web test` (279 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Focused ESLint and Prettier checks
+- `git diff --check` for the changed files
+
+Known checks:
+
+- Verification used Node 24.15.0 and the repository-pinned pnpm 12.21.0 rather
+  than the contributor-requested pnpm 11.25.0.
+
+Known limits:
+
+- Live browser visual QA was not run after the route change.
+
+Uncommitted changes:
+
+- The shared album route selection, regression coverage, decision record, and
+  this handoff section.
+- Existing catalog-card, playback, notification, Android, and related worktree
+  changes remain present and were not modified.
+
+Next:
+
+- Reload a collaborative track card and confirm its title opens the album and
+  highlights the linked row.
+
+## Compact Home heading spacing
+
+Home now uses `space-y-6` between the greeting and the “Suggested for you”
+section instead of `space-y-10`. The heading-to-content spacing inside the
+suggestions section is unchanged.
+
+Verification:
+
+- Focused Home test (3 passing)
+- `pnpm --filter @peridot/web test` (278 passing)
+- `pnpm --filter @peridot/web typecheck`
+- Focused ESLint and Prettier checks
+- `git diff --check` for the changed files
+
+Known limits:
+
+- Browser visual QA was not completed because Computer Use could not verify the
+  active Brave URL.
+
+Uncommitted changes:
+
+- The Home spacing adjustment, its layout regression assertion, and this handoff
+  section.
+- The existing concurrent Android, web, UI, lockfile, decision, and handoff
+  changes remain present and were preserved.
+
+Next:
+
+- Reload Home and confirm the tighter greeting-to-suggestions gap at desktop and
+  phone widths.
+
+## Offline context-menu icons use the primary color
+
+Track and album context menus now color the saved `cloudCheck` icon with the
+shared primary token. The same action falls back to the muted foreground color
+when the item is not saved offline. This aligns "Remove offline copy" and
+"Remove offline" with the existing row, card, and header controls.
+
+Verification:
+
+- `pnpm --filter @peridot/web exec node --test test/context-menu.test.ts`
+  (3 passing)
+- `pnpm --filter @peridot/web test` (278 passing)
+- Focused ESLint and Prettier checks
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+
+Known limits:
+
+- Live browser visual QA was not run for the context-menu hover state.
+
+Uncommitted changes:
+
+- The primary-color context-menu icon states, regression assertions, and this
+  handoff section.
+- Concurrent catalog, playback, toast, and Android changes remain present and
+  were preserved.
+
+Next:
+
+- Open a saved track and album context menu in the browser and confirm both
+  saved cloud icons use the primary color in dark and light themes.
+
+## Catalog cards share unavailable behavior
+
+Home, album lists, artist album grids, playlist lists, and search results already
+render track, album, and playlist items through the shared `CatalogCard`. The
+component previously retained an unavailable badge for collection items while
+track cards used only their dimmed title and disabled control.
+
+That kind-specific badge branch is removed. Every unavailable card now has the
+same presentation: no status badge, a dimmed title with the localized native
+unavailable label, and a muted cloud-off control in place of the play glyph.
+The control remains actionable: tapping it clears the track's runtime
+unavailable state and retries through the normal player path. Failed playback
+re-establishes the unavailable state through the existing retry and skip flow.
+The shared track table and playlist track list show the same cloud-off hint
+beside resolved unavailable titles, and their controls use the same retry path.
+Item-specific activation and menu behavior are otherwise unchanged.
+
+Verification:
+
+- Focused catalog-card, album-page, and playback-retry tests (9 passing)
+- `pnpm --filter @peridot/web test` (278 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Focused ESLint and Prettier checks
+
+Known limits:
+
+- Live visual QA was not rerun after this change.
+
+Uncommitted changes:
+
+- The shared card availability treatment, regression assertions, decision
+  record, and this handoff section.
+- Concurrent Sonner, playback, queue, and card-layout changes remain present and
+  were preserved.
+
+Next:
+
+- Reload Home and confirm unavailable album and track cards render without a
+  badge at desktop and phone widths.
+
+## shadcn-vue Sonner toasts
+
+The custom Reka toast manager and renderer are replaced by the shadcn-vue
+Sonner `Toaster` wrapper and `vue-sonner`. Existing notification helpers,
+localized message descriptors, success and error durations, top-right placement,
+three-toast limit, close control, and right-swipe dismissal are retained.
+
+The shared UI wrapper passes its icon slots through to the web application,
+which supplies bundled Basil success, information, warning, error, and close
+icons plus the Peridot spinner. Toast surfaces use standard Tailwind utilities
+with Peridot popover, border, foreground, muted, and radius tokens instead of
+the generated inline variable map or Lucide icons.
+
+Verification:
+
+- `pnpm --filter @peridot/ui test` (18 passing)
+- Focused web notification and styling tests (10 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm typecheck`
+- `pnpm --filter @peridot/web build`
+- `pnpm lint`
+- `pnpm format:check`
+- `pnpm version:check`
+- `git diff --check`
+- Confirmed the production CSS includes Sonner and the token-based toast class
+  overrides
+
+Known checks:
+
+- `pnpm --filter @peridot/web test` reaches two unrelated failures in
+  `album-pages.test.ts` and `player.test.ts` from concurrent catalog-card and
+  player changes that were already present in the worktree. All focused toast,
+  UI, notification, and styling tests pass.
+- Verification used Node 24.15.0 and the repository-pinned pnpm 12.21.0 instead
+  of the contributor-requested pnpm 11.25.0.
+
+Known limits:
+
+- Live browser visual QA could not run because Computer Use could not verify the
+  current Brave URL. Success, error, stacking, dismissal, mobile placement, and
+  reduced-motion behavior still need a manual browser pass.
+
+Uncommitted changes:
+
+- The shared Sonner wrapper, web toaster integration, localized toast content,
+  exact dependency and lockfile update, icon registration, tests, decision
+  record, and this handoff section.
+- Concurrent playback, unavailable-track, catalog-card, queue, and player
+  changes remain present and were preserved.
+
+Next:
+
+- Open the app in a browser at desktop and phone widths, trigger success and
+  error notifications, and verify placement, stacking, close behavior, swipe
+  dismissal, focus, and reduced motion.
+- Resolve the two unrelated full-suite failures in the concurrent worktree
+  changes before running the web suite again.
+
+## Static Peridot document title
+
+The generated web shell now includes `Peridot` as its default document title,
+so tabs and windows identify the application before Vue and client code load.
+Runtime route titles continue to replace the default after initialization.
+
+Verification:
+
+- Focused web branding regression test
+- `pnpm --filter @peridot/web test`
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Focused ESLint and Prettier checks
+- Generated `apps/web/.output/public/index.html` contains `<title>Peridot</title>`
+
+Uncommitted changes:
+
+- The static Nuxt head title and its branding regression assertion.
+- This handoff and decision record.
+
+Next:
+
+- None.
+
+## Offline removal failure toast
+
+Track offline-removal failures now use a dedicated error toast, matching the
+browser download failure treatment. The track row button and track context menu
+explain that the file could not be made unavailable offline, while offline-save
+failures keep the existing save-failure message.
+
+Verification:
+
+- Focused context-menu, offline SPA, notifications, and i18n tests (36 passing)
+- `pnpm --filter @peridot/web test` (276 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Focused ESLint and Prettier checks for all changed files
+
+Known limits:
+
+- Automated coverage verifies the removal-failure wiring and message resources;
+  a browser or Android cache failure was not forced during live UI testing.
+
+Feature files:
+
+- `apps/web/app/lib/toasts.ts`
+- `apps/web/app/components/TrackContextMenu.vue`
+- `apps/web/app/components/TrackTable.vue`
+- `apps/web/i18n/locales/en-US.json`
+- `apps/web/app/lib/offline-toast.ts`
+- `apps/web/test/context-menu.test.ts`
+- `apps/web/test/offline-spa.test.ts`
+- `apps/web/test/notifications.test.ts`
+
+Uncommitted changes:
+
+- The offline-removal error toast, copy, regression assertions, and this handoff
+  section.
+- Concurrent playback, unavailable-track, and catalog-surface changes were
+  present before this work and remain untouched.
+
+Next:
+
+- Force an IndexedDB or Cache API removal rejection in a browser and on Android
+  to confirm the visible error toast.
+
+## Playback-failed tracks use unavailable UI state
+
+Tracks that exhaust their three playback-start attempts now remain marked
+unavailable for the current playback session after the player advances. The
+existing unavailable treatment applies: dimmed artwork and title with disabled
+play controls. Every visible track title also exposes the localized native
+label “This title is unavailable.” Runtime-failed tracks are excluded from later
+queue and collection playback, including saved offline copies whose audio
+failed.
+
+The shared web player owns the unavailable track IDs. Android includes the same
+IDs in playback snapshots so the embedded UI receives the state after native
+Media3 skips a failed item.
+
+Verification:
+
+- Focused playback, title-label, i18n, library, playlist, and mobile-player tests
+  (46 passing)
+- `pnpm --filter @peridot/web test` (278 passing)
+- `pnpm --filter @peridot/web build`
+- `pnpm --filter @peridot/android test`
+- `pnpm --filter @peridot/android lint`
+- Focused ESLint and Prettier checks on changed web, test, and documentation
+  files
+- `git diff --check`
+
+Known checks:
+
+- Concurrent toast/icon work in the worktree currently makes `pnpm lint` fail
+  on an unused `props` binding in `LocalizedToastMessage.vue` and `pnpm
+typecheck` fail on its `vue-sonner` and Basil info-icon imports. The changed
+  playback files pass focused ESLint and the web production build.
+- Repository-wide `pnpm format:check` also reports only those concurrent toast
+  files; every file changed for this playback feature passes Prettier.
+
+Known limits:
+
+- The failure state is session-local and is not persisted across a full app
+  relaunch.
+- Native title-label presentation depends on the browser or embedded WebView;
+  the localized `title` attribute is present in every track-title surface.
+- Live browser and physical Android playback with deliberately corrupt audio
+  were not exercised.
+
+Feature files:
+
+- `apps/web/app/composables/use-library-player.ts`
+- `apps/web/app/lib/offline-playback.ts`
+- `apps/web/app/lib/playlists.ts`
+- `apps/web/app/components/TrackTable.vue`
+- `apps/web/app/components/PlaylistTrackList.vue`
+- `apps/web/app/components/CatalogCard.vue`
+- `apps/web/app/components/QueueDrawer.vue`
+- `apps/web/app/components/QuickPickTile.vue`
+- `apps/web/app/components/QuickPickTileContent.vue`
+- `apps/web/app/components/TrackContextMenu.vue`
+- `apps/web/app/components/MobilePlayer.vue`
+- `apps/web/app/layouts/default.vue`
+- `apps/web/i18n/locales/en-US.json`
+- `apps/android/android/app/src/main/java/app/peridot/android/playback/PeridotPlaybackService.kt`
+
+Uncommitted changes:
+
+- Runtime unavailable-track state, UI availability wiring, Android snapshot
+  propagation, regression tests, the decision record, and this handoff section.
+- Earlier bounded automatic-skip and unavailable-badge changes in the working
+  tree were preserved.
+
+Next:
+
+- Play a queue with a deliberately corrupt track on web and Android, then
+  confirm the failed row dims and all of its play controls remain disabled after
+  playback advances.
+
+## Bounded unavailable-track queue advancement
+
+Automatic skip after exhausted playback attempts now traverses the active queue
+once even when repeat-all is enabled. The web shuffle path no longer renews its
+shuffle pool during a forced skip, and Android resolves the next Media3 item
+with repeat temporarily disabled before restoring the selected mode. Once no
+later item remains, playback stops on the final error instead of looping.
+Manual next and normal repeat-all completion still wrap.
+
+Verification:
+
+- Focused web queue and playback-start tests (10 passing)
+- `pnpm --filter @peridot/web test` (275 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- `pnpm --filter @peridot/android test`
+- `pnpm --filter @peridot/android typecheck`
+- `pnpm --filter @peridot/android lint`
+- Focused web ESLint and Prettier checks
+
+Known limits:
+
+- Automated verification covers the native skip policy and web transition
+  wiring; a live device queue where every track fails was not exercised.
+
+Feature files:
+
+- `apps/web/app/composables/use-library-player.ts`
+- `apps/web/test/playback-start-retry.test.ts`
+- `apps/android/android/app/src/main/java/app/peridot/android/playback/PlaybackSkipPolicy.kt`
+- `apps/android/android/app/src/main/java/app/peridot/android/playback/PeridotPlaybackService.kt`
+- `apps/android/android/app/src/test/java/app/peridot/android/playback/PlaybackSkipPolicyTest.kt`
+- `docs/DECISIONS.md`
+
+Uncommitted changes:
+
+- The bounded automatic-skip fix, regression coverage, decision record, and this
+  handoff section.
+- Concurrent unavailable-badge and catalog-surface changes were present before
+  this work and remain untouched.
+
+Next:
+
+- Create a queue whose tracks all fail to load with repeat-all enabled, then
+  verify it stops after one pass in both a browser and the Android app.
+
+## Unavailable track badges removed
+
+Resolved tracks no longer show a redundant “Unavailable” badge in shared track
+tables, playlist track lists, or catalog cards. Titles remain dimmed and play
+controls remain disabled; unavailable catalog-card playback keeps its localized
+tooltip. “Available offline” remains visible for saved tracks. Album, artist,
+playlist, and unresolved playlist-entry status labels are unchanged.
+
+Verification:
+
+- Focused library, playlist, and catalog-card tests (38 passing)
+- `pnpm --filter @peridot/web test` (275 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- `pnpm lint`
+- Focused Prettier check and `git diff --check`
+
+Known checks:
+
+- Verification used Node 24.15.0 and the repository-pinned pnpm 12.21.0 rather
+  than the contributor-requested pnpm 11.25.0.
+
+Known limits:
+
+- Live browser visual QA was not run.
+
+Uncommitted changes:
+
+- Unavailable track badge removal in shared track surfaces, regression
+  assertions, the decision record, and this handoff section.
+
+Next:
+
+- Confirm unavailable and available-offline tracks at desktop and phone widths
+  in an album, playlist, and card grid.
+
 ## Queue endpoint TypeScript regression
 
 The queue absence test now probes GET and PUT with separate literal request

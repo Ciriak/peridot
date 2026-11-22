@@ -197,6 +197,11 @@ function openQueue() {
                   :key="`${active.id}:${active.title}`"
                   mode="always"
                   class="w-full max-w-full text-sm font-medium"
+                  :title="
+                    currentTrackPlayable
+                      ? undefined
+                      : t('trackTable.unavailableTitle')
+                  "
                 >
                   {{ active.title }}
                 </ScrollingText>
@@ -366,6 +371,11 @@ function openQueue() {
                     :key="`${active.id}:${active.title}`"
                     mode="always"
                     class="w-full text-lg font-semibold"
+                    :title="
+                      currentTrackPlayable
+                        ? undefined
+                        : t('trackTable.unavailableTitle')
+                    "
                   >
                     <NuxtLink
                       v-if="currentTrackTitleRoute"

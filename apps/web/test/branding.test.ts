@@ -116,4 +116,9 @@ test("startup shows the shared brand spinner on a full black splash screen", asy
     /background_color: "#000000"/,
     "The installed app uses the same black background before the client paints",
   );
+  assert.match(
+    config,
+    /head:\s*\{\s*title: "Peridot",/,
+    "The static HTML shell exposes the default app title before Vue loads",
+  );
 });

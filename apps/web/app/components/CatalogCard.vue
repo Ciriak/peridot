@@ -2,7 +2,6 @@
 import { useI18n, useState } from "#imports";
 import type { LikeTarget, PlaylistDetailResponse } from "@peridot/contracts";
 import { Icon } from "@iconify/vue/offline";
-import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import {
@@ -58,7 +57,9 @@ const {
   active,
   playing,
   loading,
+  unavailableTrackIdSet,
   play,
+  retryUnavailableTrack,
   toggleCollectionPlayback,
   togglePlayback,
   isPlaybackTargetActive,
@@ -191,6 +192,7 @@ const trackPlayable = computed(
     isTrackPlayable(track.value!, {
       serverLost: serverStatus.value === "lost",
       savedTrackIds: savedTrackIds.value,
+      unavailableTrackIds: unavailableTrackIdSet.value,
     }),
 );
 const playable = computed(() => {
@@ -291,7 +293,7 @@ const menuBindings = computed(() => {
   };
 });
 
-async function toggleAlbumPlayback() {
+async function toggleAlbumPlayback(retryUnavailable = false) {
   if (!album.value || !albumTarget.value) return;
   if (
     albumActive.value &&
@@ -301,24 +303,27 @@ async function toggleAlbumPlayback() {
     togglePlayback();
     return;
   }
-  if (!albumPlayable.value) return;
   try {
-    await toggleCollectionPlayback(albumTarget.value, async () => {
-      const saved = await tracksMatching(
-        (candidate) => candidate.albumId === album.value!.id,
-      );
-      if (serverStatus.value === "lost" || !address.value || !token.value) {
-        return saved;
-      }
-      try {
-        return await loadCollectionTracks(address.value, token.value, {
-          albumId: album.value!.id,
-        });
-      } catch (reason) {
-        if (isPeridotNetworkError(reason)) return saved;
-        throw reason;
-      }
-    });
+    await toggleCollectionPlayback(
+      albumTarget.value,
+      async () => {
+        const saved = await tracksMatching(
+          (candidate) => candidate.albumId === album.value!.id,
+        );
+        if (serverStatus.value === "lost" || !address.value || !token.value) {
+          return saved;
+        }
+        try {
+          return await loadCollectionTracks(address.value, token.value, {
+            albumId: album.value!.id,
+          });
+        } catch (reason) {
+          if (isPeridotNetworkError(reason)) return saved;
+          throw reason;
+        }
+      },
+      retryUnavailable,
+    );
   } catch {
     // The shared player exposes playback failures.
   }
@@ -339,8 +344,8 @@ async function loadPlaylistDetail(): Promise<PlaylistDetailResponse | null> {
   });
 }
 
-async function togglePlaylistPlayback() {
-  if (!playlistTarget.value || !playlistControlEnabled.value) return;
+async function togglePlaylistPlayback(retryUnavailable = false) {
+  if (!playlistTarget.value) return;
   if (
     playlistActive.value &&
     playing.value &&
@@ -350,17 +355,24 @@ async function togglePlaylistPlayback() {
     return;
   }
   try {
-    await toggleCollectionPlayback(playlistTarget.value, async () => {
-      const detail = await loadPlaylistDetail();
-      if (!detail) return [];
-      const savedIds = new Set(
-        savedTracks.value.map((saved) => saved.track.id),
-      );
-      return playlistPlayableTracks(detail.entries, {
-        serverLost: serverStatus.value === "lost",
-        savedTrackIds: savedIds,
-      });
-    });
+    await toggleCollectionPlayback(
+      playlistTarget.value,
+      async () => {
+        const detail = await loadPlaylistDetail();
+        if (!detail) return [];
+        const savedIds = new Set(
+          savedTracks.value.map((saved) => saved.track.id),
+        );
+        return playlistPlayableTracks(detail.entries, {
+          serverLost: serverStatus.value === "lost",
+          savedTrackIds: savedIds,
+          unavailableTrackIds: retryUnavailable
+            ? undefined
+            : unavailableTrackIdSet.value,
+        });
+      },
+      retryUnavailable,
+    );
   } catch {
     // The shared player exposes playback failures.
   }
@@ -372,20 +384,23 @@ function toggleTrackPlayback() {
     togglePlayback();
     return;
   }
-  if (trackPlayable.value) play(track.value);
+  if (trackPlayable.value) {
+    play(track.value);
+    return;
+  }
+  retryUnavailableTrack(track.value);
 }
 
 async function toggleCardPlayback() {
-  if (!controlEnabled.value) return;
   if (album.value) {
-    await toggleAlbumPlayback();
+    await toggleAlbumPlayback(!albumPlayable.value);
     return;
   }
   if (track.value) {
     toggleTrackPlayback();
     return;
   }
-  await togglePlaylistPlayback();
+  await togglePlaylistPlayback(!playlistControlEnabled.value);
 }
 
 function toggleCardLike() {
@@ -436,15 +451,28 @@ function toggleCardLike() {
                 <Button
                   variant="default"
                   :size="compact ? 'icon-sm' : 'icon'"
-                  class="pointer-events-none absolute z-10 cursor-pointer rounded-full opacity-0 shadow-md transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-primary max-sm:pointer-events-auto max-sm:size-11 max-sm:opacity-100"
-                  :class="compact ? 'bottom-1 right-1' : 'bottom-2 right-2'"
-                  :aria-disabled="!controlEnabled"
+                  class="pointer-events-none absolute z-10 cursor-pointer rounded-full opacity-0 shadow-md transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 max-sm:pointer-events-auto max-sm:size-11 max-sm:opacity-100"
+                  :class="[
+                    compact ? 'bottom-1 right-1' : 'bottom-2 right-2',
+                    !controlEnabled &&
+                      'bg-muted text-muted-foreground hover:bg-muted',
+                  ]"
                   :aria-busy="trackActive && loading"
-                  :aria-label="playLabel"
+                  :aria-label="
+                    controlEnabled
+                      ? playLabel
+                      : t('trackTable.retryUnavailable')
+                  "
                   @click.prevent.stop="toggleCardPlayback"
                 >
                   <Icon
-                    :icon="playbackActive ? icons.pause : icons.play"
+                    :icon="
+                      !controlEnabled
+                        ? icons.cloudOff
+                        : playbackActive
+                          ? icons.pause
+                          : icons.play
+                    "
                     aria-hidden="true"
                     :class="
                       compact ? 'size-4 max-sm:size-5' : 'size-5 max-sm:size-6'
@@ -472,12 +500,16 @@ function toggleCardLike() {
             @click="emit('open')"
           >
             <h3 :class="compact ? 'text-xs' : 'text-sm'" class="font-medium">
-              <ScrollingText class="w-full">{{ title }}</ScrollingText>
+              <ScrollingText
+                class="w-full"
+                :class="!playable && 'opacity-60'"
+                :title="
+                  !playable ? t('trackTable.unavailableTitle') : undefined
+                "
+                >{{ title }}</ScrollingText
+              >
             </h3>
           </NuxtLink>
-          <Badge v-if="!playable" variant="secondary" class="mt-1">
-            {{ t("trackTable.unavailable") }}
-          </Badge>
           <ScrollingText class="w-full text-xs text-muted-foreground">
             <template v-if="album">
               <TrackArtistLinks :artists="album.artists" /> ·

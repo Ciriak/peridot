@@ -94,6 +94,10 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
   const mediaDuration = useState("player-media-duration", () => 0);
   const loading = useState("player-loading", () => false);
   const error = useState<string | null>("player-error", () => null);
+  const unavailableTrackIds = useState<string[]>(
+    "player-unavailable-track-ids",
+    () => [],
+  );
   const playbackRequest = useState("player-playback-request", () => 0);
   const playHistoryVersion = useState("player-play-history-version", () => 0);
   const queueTrackIds = useState<string[]>("player-queue-track-ids", () => []);
@@ -158,11 +162,15 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
   const offlineSavedTrackIdSet = computed(
     () => new Set(offlineSavedTrackIds.value),
   );
+  const unavailableTrackIdSet = computed(
+    () => new Set(unavailableTrackIds.value),
+  );
   const currentTrackPlayable = computed(() =>
     active.value
       ? isTrackPlayable(active.value, {
           serverLost: serverStatus.value === "lost",
           savedTrackIds: offlineSavedTrackIdSet.value,
+          unavailableTrackIds: unavailableTrackIdSet.value,
         })
       : false,
   );
@@ -314,6 +322,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
   function isOfflineTrackPlayable(trackId: string | null): boolean {
     return Boolean(
       trackId &&
+      !unavailableTrackIdSet.value.has(trackId) &&
       (serverStatus.value !== "lost" ||
         offlineSavedTrackIdSet.value.has(trackId)),
     );
@@ -325,6 +334,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
       resolvedQueueTracks.value.map((track) => [track.id, track]),
     );
     return trackIds.filter((trackId) => {
+      if (unavailableTrackIdSet.value.has(trackId)) return false;
       if (offlineSavedTrackIdSet.value.has(trackId)) return true;
       const track = tracksById.get(trackId);
       return serverStatus.value !== "lost" && Boolean(track?.available);
@@ -512,6 +522,9 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
       repeatMode.value = snapshot.repeatMode;
       shuffleEnabled.value = snapshot.shuffleEnabled;
       shuffleTrackIds.value = [...snapshot.shuffleTrackIds];
+      unavailableTrackIds.value = [
+        ...new Set(snapshot.unavailableTrackIds ?? []),
+      ];
       error.value = snapshot.error;
       if (snapshot.trackIds.length && !sameQueue) {
         setQueueSnapshot(
@@ -547,6 +560,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     queueLoaded.value = false;
     repeatCycleTrackIds.value = [];
     repeatMode.value = "off";
+    unavailableTrackIds.value = [];
     playing.value = false;
     elapsed.value = 0;
     mediaDuration.value = 0;
@@ -664,6 +678,16 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     syncAndroidPlaybackIntent();
   }
 
+  function retryUnavailableTrack(track: PlayerTrack) {
+    const trackId = trackIdFor(track);
+    if (unavailableTrackIdSet.value.has(trackId)) {
+      unavailableTrackIds.value = unavailableTrackIds.value.filter(
+        (id) => id !== trackId,
+      );
+    }
+    play(track, true);
+  }
+
   function playCollection(
     tracks: readonly PlayerTrack[],
     startTrackId: string = tracks[0] ? trackIdFor(tracks[0]) : "",
@@ -673,12 +697,14 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     playbackCollectionStarting.value = false;
     playbackCollectionTarget.value = target;
     activePlaylistId.value = target?.kind === "playlist" ? target.id : null;
-    const playableTracks =
-      serverStatus.value === "lost"
-        ? tracks.filter((track) =>
-            offlineSavedTrackIdSet.value.has(trackIdFor(track)),
-          )
-        : tracks;
+    const playableTracks = tracks.filter((track) => {
+      const trackId = trackIdFor(track);
+      return (
+        !unavailableTrackIdSet.value.has(trackId) &&
+        (serverStatus.value !== "lost" ||
+          offlineSavedTrackIdSet.value.has(trackId))
+      );
+    });
     const trackIds = playableTracks.map(trackIdFor);
     const nextQueue = rotateQueueToTrack(
       normalizeQueueTrackIds(trackIds, new Set(trackIds)),
@@ -706,6 +732,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
   async function toggleCollectionPlayback(
     target: PlaybackCollectionTarget,
     load: () => Promise<readonly PlayerTrack[]>,
+    retryUnavailable = false,
   ): Promise<CollectionPlaybackResult> {
     if (isPlaybackTargetActive(target)) {
       if (playbackCollectionStarting.value) {
@@ -740,7 +767,27 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
         syncAndroidPlaybackIntent();
         return "empty";
       }
-      playCollection(tracks, tracks[0] ? trackIdFor(tracks[0]) : "", target);
+      if (retryUnavailable) {
+        const retryTrackIds = new Set(tracks.map(trackIdFor));
+        unavailableTrackIds.value = unavailableTrackIds.value.filter(
+          (trackId) => !retryTrackIds.has(trackId),
+        );
+      }
+      const playableTracks = tracks.filter(
+        (track) => !unavailableTrackIdSet.value.has(trackIdFor(track)),
+      );
+      if (!playableTracks.length) {
+        clearCollectionPlaybackTarget();
+        playing.value = false;
+        loading.value = false;
+        syncAndroidPlaybackIntent();
+        return "empty";
+      }
+      playCollection(
+        playableTracks,
+        playableTracks[0] ? trackIdFor(playableTracks[0]) : "",
+        target,
+      );
       return "started";
     } catch (reason) {
       if (
@@ -769,11 +816,12 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
       const shufflePool = shuffleTrackIds.value.filter((trackId) =>
         trackIds.includes(trackId),
       );
+      const repeatAll = repeatMode.value === "all" && !forceAdvance;
       const advanced = advanceShuffle(
         trackIds,
         current,
         shufflePool,
-        repeatMode.value === "all",
+        repeatAll,
       );
       if (advanced.activeTrackId === current) {
         playing.value = false;
@@ -1166,6 +1214,9 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
       error.value = null;
       loading.value = false;
       next(true);
+      if (!unavailableTrackIds.value.includes(trackId)) {
+        unavailableTrackIds.value = [...unavailableTrackIds.value, trackId];
+      }
       return currentTrackId.value !== trackId;
     }
 
@@ -1549,11 +1600,14 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     active,
     queueTracks,
     upcomingTracks,
+    unavailableTrackIds,
+    unavailableTrackIdSet,
     currentTrackPlayable,
     canGoNext,
     durationSeconds,
     loadQueue,
     play,
+    retryUnavailableTrack,
     playCollection,
     toggleCollectionPlayback,
     isPlaybackTargetActive,

@@ -46,7 +46,13 @@ const list = ref<HTMLElement | null>(null);
 const rows = ref<PlaylistEntryResponse[]>([]);
 const { address } = useServer();
 const { status } = useServerConnection();
-const { currentTrackId, playing, play } = useLibraryPlayer();
+const {
+  currentTrackId,
+  playing,
+  unavailableTrackIdSet,
+  play,
+  retryUnavailableTrack,
+} = useLibraryPlayer();
 const { savedTracks } = useOfflineTracks();
 const {
   loaded: likesLoaded,
@@ -89,6 +95,7 @@ function playable(entry: PlaylistEntryResponse): boolean {
     isTrackPlayable(entry.track, {
       serverLost: status.value === "lost",
       savedTrackIds: savedIds.value,
+      unavailableTrackIds: unavailableTrackIdSet.value,
     }),
   );
 }
@@ -98,7 +105,11 @@ function isCurrent(entry: PlaylistEntryResponse): boolean {
 }
 
 function toggleEntryPlayback(entry: PlaylistEntryResponse) {
-  if (!entry.track || !playable(entry)) return;
+  if (!entry.track) return;
+  if (!playable(entry)) {
+    retryUnavailableTrack(entry.track);
+    return;
+  }
   if (isCurrent(entry)) {
     play(entry.track);
     return;
@@ -158,11 +169,12 @@ function albumForEntry(entry: PlaylistEntryResponse): AlbumSummaryResponse {
           size="icon-sm"
           class="group size-10 shrink-0 overflow-hidden rounded-md p-0"
           :aria-label="
-            isCurrent(entry) && playing
-              ? t('playlistTracks.pause', { title: entry.title })
-              : t('playlistTracks.play', { title: entry.title })
+            !playable(entry)
+              ? t('trackTable.retryUnavailable')
+              : isCurrent(entry) && playing
+                ? t('playlistTracks.pause', { title: entry.title })
+                : t('playlistTracks.play', { title: entry.title })
           "
-          :disabled="!playable(entry)"
           @click="toggleEntryPlayback(entry)"
         >
           <TrackArtwork :track="entry.track" :server-address="address ?? ''">
@@ -171,7 +183,13 @@ function albumForEntry(entry: PlaylistEntryResponse): AlbumSummaryResponse {
               class="absolute inset-0 flex items-center justify-center bg-background/70 opacity-0 transition-opacity group-hover:opacity-100"
             >
               <Icon
-                :icon="isCurrent(entry) && playing ? icons.pause : icons.play"
+                :icon="
+                  !playable(entry)
+                    ? icons.cloudOff
+                    : isCurrent(entry) && playing
+                      ? icons.pause
+                      : icons.play
+                "
                 class="size-4"
               />
             </span>
@@ -192,10 +210,18 @@ function albumForEntry(entry: PlaylistEntryResponse): AlbumSummaryResponse {
             <ScrollingText
               class="min-w-0"
               :class="!playable(entry) && 'opacity-60'"
-              :title="entry.title"
+              :title="
+                playable(entry) ? entry.title : t('trackTable.unavailableTitle')
+              "
             >
               {{ entry.title }}
             </ScrollingText>
+            <Icon
+              v-if="entry.track && !playable(entry)"
+              :icon="icons.cloudOff"
+              aria-hidden="true"
+              class="size-4 shrink-0 text-muted-foreground"
+            />
             <Icon
               v-if="isCurrent(entry)"
               :icon="icons.waveform"
@@ -203,16 +229,12 @@ function albumForEntry(entry: PlaylistEntryResponse): AlbumSummaryResponse {
               class="size-4 shrink-0 text-primary"
             />
             <Badge
-              v-if="entry.track && !entry.track.available"
+              v-if="entry.track && !entry.track.available && playable(entry)"
               variant="secondary"
             >
-              {{
-                playable(entry)
-                  ? t("trackTable.availableOffline")
-                  : t("playlistTracks.unavailable")
-              }}
+              {{ t("trackTable.availableOffline") }}
             </Badge>
-            <Badge v-else-if="!playable(entry)" variant="secondary">
+            <Badge v-else-if="!entry.track" variant="secondary">
               {{ t("playlistTracks.unavailable") }}
             </Badge>
           </div>

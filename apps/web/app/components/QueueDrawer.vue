@@ -39,6 +39,7 @@ const {
   active,
   playing,
   currentTrackId,
+  unavailableTrackIdSet,
   shuffleEnabled,
   upcomingTracks,
   removeFromQueue,
@@ -51,6 +52,7 @@ function isUnavailable(track: TrackResponse): boolean {
   return !isTrackPlayable(track, {
     serverLost: serverStatus.value === "lost",
     savedTrackIds: savedTrackIds.value,
+    unavailableTrackIds: unavailableTrackIdSet.value,
   });
 }
 
@@ -178,7 +180,14 @@ onBeforeUnmount(() => document.removeEventListener("keydown", handleKeydown));
               </Button>
             </TrackArtwork>
             <div class="min-w-0 flex-1">
-              <ScrollingText class="w-full text-sm font-medium">
+              <ScrollingText
+                class="w-full text-sm font-medium"
+                :title="
+                  isUnavailable(active)
+                    ? t('trackTable.unavailableTitle')
+                    : undefined
+                "
+              >
                 {{ active.title }}
               </ScrollingText>
               <ScrollingText class="w-full text-xs text-muted-foreground">
@@ -254,7 +263,14 @@ onBeforeUnmount(() => document.removeEventListener("keydown", handleKeydown));
                 </Button>
               </TrackArtwork>
               <div class="min-w-0 flex-1">
-                <ScrollingText class="w-full text-sm font-medium">
+                <ScrollingText
+                  class="w-full text-sm font-medium"
+                  :title="
+                    isUnavailable(track)
+                      ? t('trackTable.unavailableTitle')
+                      : undefined
+                  "
+                >
                   {{ track.title }}
                 </ScrollingText>
                 <ScrollingText class="w-full text-xs text-muted-foreground">

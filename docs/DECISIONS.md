@@ -1,5 +1,113 @@
 # Peridot decisions
 
+## 2026-11-22: Scrolled album headers show cover art on desktop
+
+The shared scrolled detail header accepts optional artwork for collection
+surfaces. Album detail passes its resolved, cache-aware cover into the dock. The
+cover appears only at desktop widths and falls back to the bundled album icon
+when artwork is absent or fails to load.
+
+This keeps navigation, the collection title, and playback in one compact row
+without changing the mobile dock or duplicating the album title. The optional
+prop leaves artist, playlist, audiobook, and podcast headers unchanged until
+they intentionally adopt artwork.
+
+## 2026-11-22: Canonical album IDs own track-derived album links
+
+Track-derived album links use the canonical album ID without also filtering the
+album detail lookup by the track artist. Track credits can include guests that
+are not album artists, so passing them as an artist query can exclude the album
+even when its ID is present. Tracks without an album ID continue to use their
+track artist and title as the fallback lookup.
+
+Shared track title, table, context-menu, quick-pick, queue, and player links
+therefore resolve the same album regardless of per-track featured credits.
+
+## 2026-11-22: Catalog cards never show unavailable badges
+
+Album, track, and playlist items use the same `CatalogCard` component and the
+same availability presentation. Unavailable cards never render a status badge.
+Their title is dimmed and exposes the localized unavailable label, while their
+control replaces the play glyph with the bundled Basil cloud-off icon. The
+control uses a muted surface and remains actionable. Selecting it clears the
+track's runtime-unavailable state and starts the normal playback attempt; a
+failed attempt restores the unavailable state through the player's existing
+retry and skip flow. The shared track table and playlist track list show the
+same cloud-off hint beside resolved unavailable titles and make their controls
+retry through the same player path.
+
+Item kind changes only playback, context-menu, link, metadata, and like
+capabilities. It must not change how availability is presented. This supersedes
+the earlier exceptions that retained unavailable badges on collection cards.
+
+## 2026-11-22: Notification toasts use shadcn-vue Sonner
+
+Peridot uses the shadcn-vue Sonner `Toaster` component and `vue-sonner` for
+imperative toast notifications. Application code continues to call the existing
+semantic `notify*` helpers; those helpers map localized title and description
+descriptors into Sonner success and error toasts.
+
+The shared UI wrapper keeps Sonner's compact card presentation while applying
+Peridot popover, border, foreground, muted, and radius tokens through standard
+Tailwind utility options. This avoids the generated wrapper's inline style
+mapping and Lucide icons, which conflict with the project's styling authority.
+All toast and dismiss icons use bundled Basil SVGs, and loading toasts use the
+Peridot spinner.
+
+Toasts remain top-right below the application top bar, show at most three at
+once, dismiss to the right, and keep the existing five-second success and
+eight-second error durations. Sonner's rich-color backgrounds remain disabled.
+
+## 2026-11-22: The static web shell uses the Peridot title
+
+Nuxt writes `Peridot` into the application's static document head. This gives
+the browser a stable window and tab title while the client bundle, i18n, and Vue
+application are still loading. Route and runtime metadata continue to replace
+the title after initialization.
+
+## 2026-11-22: Exhausted playback tracks become unavailable
+
+When a track exhausts its playback-start attempts and is skipped, the shared
+player records that track ID as unavailable for the current playback session.
+The UI then uses the existing unavailable treatment: dimmed artwork and title,
+with disabled play and queue-selection controls. No additional status badge is
+added. Track titles in lists, cards, menus, the queue, and both player layouts
+also expose the localized native `title` label “This title is unavailable.”
+
+Runtime-unavailable tracks are excluded from future queue selection and
+collection playback, including saved offline copies whose audio also failed.
+Such a failed copy does not retain its “Available offline” label because that
+copy is not currently playable.
+Android reports the same IDs in its playback snapshot so its embedded web UI
+matches browser playback. This state is session-local and is discarded when the
+player queue scope is cleared; it is not catalog availability and does not alter
+the server record.
+
+## 2026-11-21: Automatic track skips do not wrap
+
+Automatic advancement after exhausted playback-start attempts traverses the
+active queue once. Repeat-all may resume a queue after normal completion or a
+manual next action, but it cannot renew the queue during automatic failure
+handling.
+
+The web shuffle path treats a forced advancement as exhausting its current
+shuffle pass. Android temporarily requests the next Media3 item with repeat
+disabled, then restores the user's repeat mode. If no later playable item
+exists, playback stops and exposes the final error instead of repeatedly
+retrying the queue.
+
+## 2026-11-21: Unavailable tracks rely on playback controls
+
+Resolved tracks do not render a redundant “Unavailable” badge in track tables,
+playlist track lists, or shared catalog cards. Their title remains dimmed and
+their play control remains disabled, while catalog-card controls retain the
+localized unavailable tooltip.
+
+Tracks with a saved offline copy still show “Available offline.” Album, artist,
+and playlist collection status labels remain unchanged. Playlist entries without
+a resolved local track also retain their status label because they have no track
+play control.
+
 ## 2026-11-20: Detail headers dock after scrolling out of view
 
 Album, artist, playlist, audiobook, and podcast detail cards use one shared

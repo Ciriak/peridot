@@ -1,19 +1,16 @@
 import type { LikeTarget, MessageDescriptor } from "@peridot/contracts";
-import { createToastManager } from "reka-ui";
+import { h } from "vue";
+import { toast } from "vue-sonner";
+import LocalizedToastMessage from "../components/LocalizedToastMessage.vue";
 import { likeSuccessToast } from "./like-toast";
 import { message } from "./messages.ts";
-import { offlineSaveSuccessToast } from "./offline-toast";
+import {
+  offlineSaveSuccessToast,
+  offlineTrackRemovalFailureToast,
+} from "./offline-toast";
 import { sourceMutationToast, type SourceMutation } from "./source-toast";
 
 export type AppToastKind = "success" | "error";
-
-export interface AppToastData {
-  kind: AppToastKind;
-  titleMessage: MessageDescriptor;
-  descriptionMessage: MessageDescriptor;
-}
-
-export const appToastManager = createToastManager<AppToastData>();
 
 function addToast(content: {
   titleMessage: MessageDescriptor;
@@ -22,16 +19,21 @@ function addToast(content: {
   duration: number;
   kind: AppToastKind;
 }) {
-  appToastManager.add({
-    status: content.status,
-    duration: content.duration,
-    type: "foreground",
-    data: {
-      kind: content.kind,
-      titleMessage: content.titleMessage,
-      descriptionMessage: content.descriptionMessage,
-    },
+  const title = h(LocalizedToastMessage, {
+    message: content.titleMessage,
   });
+  const options = {
+    description: h(LocalizedToastMessage, {
+      message: content.descriptionMessage,
+    }),
+    duration: content.duration,
+  };
+
+  if (content.status === "error") {
+    toast.error(title, options);
+  } else {
+    toast.success(title, options);
+  }
 }
 
 export function notifySourceMutation(
@@ -226,6 +228,13 @@ export function notifyOfflineTrackFailed(
     duration: 8000,
     kind: "error",
   });
+}
+
+export function notifyOfflineTrackRemoveFailed(
+  trackTitle: string,
+  detailMessage: string,
+) {
+  addToast(offlineTrackRemovalFailureToast(trackTitle, detailMessage));
 }
 
 export function notifyOfflineAlbumFailed(

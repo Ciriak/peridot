@@ -36,7 +36,7 @@ test("albums have list and detail routes with derived groups", async () => {
   assert.match(catalogCard, /:to="titleRoute"/);
   assert.match(
     catalogCard,
-    /<Badge v-if="!playable"[\s\S]*<TrackArtistLinks :artists="album\.artists" \/>/,
+    /<\/h3>\s*<\/NuxtLink>\s*<ScrollingText[\s\S]*?<TrackArtistLinks :artists="album\.artists" \/>/,
     "Album card artist credits link to their artist pages",
   );
   assert.match(catalogCard, /useLikes\(\)/);
@@ -51,7 +51,7 @@ test("albums have list and detail routes with derived groups", async () => {
   assert.match(catalogCard, /togglePlayback\(\)/);
   assert.match(
     catalogCard,
-    /async function toggleAlbumPlayback\(\) \{[\s\S]*?await toggleCollectionPlayback\(albumTarget\.value, async \(\) => \{/,
+    /async function toggleAlbumPlayback\(retryUnavailable = false\) \{[\s\S]*?await toggleCollectionPlayback\(\s*albumTarget\.value,\s*async \(\) => \{/,
     "The album card starts the whole collection through the optimistic player target",
   );
   assert.match(
@@ -64,7 +64,10 @@ test("albums have list and detail routes with derived groups", async () => {
     /t\("card\.playAlbum", \{\s+album: album\.value\.title,\s+artist: album\.value\.artist,\s+\}\)/,
     "The album card play label explains that playback starts from the first track",
   );
-  assert.match(catalogCard, /playbackActive \? icons\.pause : icons\.play/);
+  assert.match(
+    catalogCard,
+    /playbackActive\s+\?\s+icons\.pause\s+:\s+icons\.play/,
+  );
   assert.doesNotMatch(
     catalogCard,
     /albumLoading|Loading \$\{album\.title\}/,
@@ -90,8 +93,18 @@ test("albums have list and detail routes with derived groups", async () => {
   );
   assert.match(
     catalogCard,
-    /:aria-disabled="!controlEnabled"[\s\S]*?@click\.prevent\.stop="toggleCardPlayback"/,
-    "Unavailable album cards expose a disabled, guarded play control",
+    /@click\.prevent\.stop="toggleCardPlayback"/,
+    "Unavailable album cards expose an actionable unavailable control",
+  );
+  assert.doesNotMatch(
+    catalogCard,
+    /:aria-disabled="!controlEnabled"/,
+    "Unavailable album controls remain actionable",
+  );
+  assert.match(
+    catalogCard,
+    /!controlEnabled\s+\? icons\.cloudOff\s+:\s+playbackActive\s+\? icons\.pause\s+:\s+icons\.play/,
+    "Unavailable album cards replace the play glyph with the unavailable icon",
   );
   assert.match(
     catalogCard,
@@ -117,10 +130,10 @@ test("albums have list and detail routes with derived groups", async () => {
     /<TooltipContent\s+v-if="!controlEnabled"[\s\S]*?\{\{ t\("trackTable\.unavailable"\) \}\}/,
     "Unavailable album cards explain the disabled play control in a tooltip",
   );
-  assert.match(
+  assert.doesNotMatch(
     catalogCard,
-    /<Badge v-if="!playable" variant="secondary" class="mt-1">/,
-    "Partially available albums display their unavailable state",
+    /<Badge\b/,
+    "Catalog cards use their unavailable control instead of a status badge",
   );
   assert.doesNotMatch(
     detailPage,
@@ -271,7 +284,7 @@ test("albums have list and detail routes with derived groups", async () => {
   );
   assert.match(
     trackTable,
-    /<TrackArtwork[\s\S]*icons\.play[\s\S]*<\/TrackArtwork>\s*<div class="min-w-0 flex-1">\s*<div class="flex min-w-0 items-center gap-2">\s*<ScrollingText\s+:id="trackTitleAnchorId\(item\.track\.id\)"\s+class="min-w-0 scroll-mt-4"\s+:class="\{ 'opacity-60': isUnavailable\(item\.track\) \}"\s+>\{\{ item\.track\.title \}\}<\/ScrollingText/,
+    /<TrackArtwork[\s\S]*icons\.play[\s\S]*<\/TrackArtwork>\s*<div class="min-w-0 flex-1">\s*<div class="flex min-w-0 items-center gap-2">\s*<ScrollingText\s+:id="trackTitleAnchorId\(item\.track\.id\)"\s+class="min-w-0 scroll-mt-4"\s+:class="\{ 'opacity-60': isUnavailable\(item\.track\) \}"[\s\S]*?>\{\{ item\.track\.title \}\}<\/ScrollingText/,
     "The current-track indicator sits immediately after the track title",
   );
   assert.match(

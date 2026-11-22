@@ -57,6 +57,11 @@ test("home shows liked tracks and the quick-pick content without categories", as
   assert.match(homePage, /useUser\(\)/);
   assert.match(homePage, /HOME_GREETING_KEYS/);
   assert.match(homePage, /username: user\.value\?\.displayName \?\? ""/);
+  assert.match(
+    homePage,
+    /<div class="space-y-6">[\s\S]*<h1[\s\S]*<h2 id="home-suggestions-heading"/,
+    "Home keeps the greeting and suggestions heading compact",
+  );
   assert.doesNotMatch(homePage, /page\.home\.heading/);
   assert.doesNotMatch(homePage, /page\.home\.description/);
   assert.doesNotMatch(homePage, /<ArtistCard/);

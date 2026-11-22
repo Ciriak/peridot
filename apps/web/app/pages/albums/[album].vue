@@ -279,6 +279,8 @@ onMounted(() => {
       :playback-active="albumPlaybackActive"
       :play-label="albumPlayLabel"
       :pause-label="albumPauseLabel"
+      :cover-url="coverImageUrl"
+      :cover-fade-in="!coverFromCache"
       @play="toggleAlbumPlayback"
     >
       <AlbumContextMenu :album="album">

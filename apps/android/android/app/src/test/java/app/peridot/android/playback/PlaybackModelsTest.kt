@@ -70,4 +70,28 @@ class PlaybackModelsTest {
         assertNull(track.album)
         assertEquals("music", track.mediaType)
     }
+
+    @Test
+    fun playbackSnapshotJsonIncludesUnavailableTracks() {
+        val snapshot = PlaybackSnapshot(
+            trackIds = listOf("track-1", "track-2"),
+            tracks = emptyList(),
+            unavailableTrackIds = listOf("track-1"),
+            activeTrackId = "track-2",
+            playing = true,
+            loading = false,
+            positionMs = 0,
+            durationMs = 42_000,
+            volume = 1f,
+            repeatMode = "off",
+            shuffleEnabled = false,
+            shuffleTrackIds = emptyList(),
+        )
+
+        val unavailable =
+            snapshot.toJson().getJSONArray("unavailableTrackIds")
+
+        assertEquals(1, unavailable.length())
+        assertEquals("track-1", unavailable.getString(0))
+    }
 }

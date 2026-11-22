@@ -60,7 +60,122 @@ test("the player retries start failures before exposing their error state", asyn
   );
   assert.match(
     player,
-    /function skipFailedTrack\([\s\S]*?next\(true\);[\s\S]*?return currentTrackId\.value !== trackId;/,
-    "An exhausted track start advances past the failed queue item",
+    /function skipFailedTrack\([\s\S]*?next\(true\);[\s\S]*?unavailableTrackIds\.value = \[\.\.\.unavailableTrackIds\.value, trackId\];[\s\S]*?return currentTrackId\.value !== trackId;/,
+    "An exhausted track start is marked unavailable, then advances",
+  );
+
+  assert.match(
+    player,
+    /const repeatAll = repeatMode\.value === "all" && !forceAdvance;[\s\S]*?advanceShuffle\([\s\S]*?repeatAll,/,
+    "Automatic skip does not renew a shuffled repeat-all cycle",
+  );
+});
+
+test("playback-failed tracks use unavailable controls everywhere", async () => {
+  const [player, table, playlist, card, quickPick, queue, menu] =
+    await Promise.all([
+      readFile(
+        new URL("../app/composables/use-library-player.ts", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL("../app/components/TrackTable.vue", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL("../app/components/PlaylistTrackList.vue", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL("../app/components/CatalogCard.vue", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL("../app/components/QuickPickTile.vue", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL("../app/components/QueueDrawer.vue", import.meta.url),
+        "utf8",
+      ),
+      readFile(
+        new URL("../app/components/TrackContextMenu.vue", import.meta.url),
+        "utf8",
+      ),
+    ]);
+
+  assert.match(
+    player,
+    /const unavailableTrackIds = useState<string\[\]>\(\s*"player-unavailable-track-ids"/,
+    "Playback-failed tracks use shared player state",
+  );
+  assert.match(
+    player,
+    /const unavailableTrackIdSet = computed\(\s*\(\) => new Set\(unavailableTrackIds\.value\)/,
+    "The player exposes one reactive unavailable-track set",
+  );
+  assert.match(
+    player,
+    /if \(unavailableTrackIdSet\.value\.has\(trackId\)\) return false;/,
+    "Failed tracks are excluded from playback queue selection",
+  );
+  assert.match(
+    player,
+    /function retryUnavailableTrack\(track: PlayerTrack\) \{[\s\S]*?unavailableTrackIds\.value = unavailableTrackIds\.value\.filter\([\s\S]*?play\(track, true\);/,
+    "An explicit unavailable-track retry clears its failed state before playback",
+  );
+
+  for (const [name, source] of [
+    ["track table", table],
+    ["playlist list", playlist],
+    ["catalog card", card],
+    ["quick pick", quickPick],
+    ["queue", queue],
+    ["track menu", menu],
+  ] as const) {
+    assert.match(
+      source,
+      /unavailableTrackIdSet/,
+      `${name} consumes the shared unavailable-track state`,
+    );
+  }
+});
+
+test("unavailable tracks expose a native title label", async () => {
+  const files = await Promise.all([
+    ["track table", "../app/components/TrackTable.vue"],
+    ["playlist list", "../app/components/PlaylistTrackList.vue"],
+    ["catalog card", "../app/components/CatalogCard.vue"],
+    ["quick pick", "../app/components/QuickPickTileContent.vue"],
+    ["queue", "../app/components/QueueDrawer.vue"],
+    ["track menu", "../app/components/TrackContextMenu.vue"],
+    ["mobile player", "../app/components/MobilePlayer.vue"],
+    ["desktop player", "../app/layouts/default.vue"],
+  ] as const).then((sources) =>
+    Promise.all(
+      sources.map(async ([name, path]) => [
+        name,
+        await readFile(new URL(path, import.meta.url), "utf8"),
+      ]),
+    ),
+  );
+
+  for (const [name, source] of files) {
+    assert.match(
+      source,
+      /trackTable\.unavailableTitle/,
+      `${name} exposes the unavailable title label`,
+    );
+  }
+
+  const locale = JSON.parse(
+    await readFile(
+      new URL("../i18n/locales/en-US.json", import.meta.url),
+      "utf8",
+    ),
+  ) as Record<string, string>;
+  assert.equal(
+    locale["trackTable.unavailableTitle"],
+    "This title is unavailable.",
   );
 });

@@ -269,7 +269,7 @@ test("player queue details are merged without refetching known tracks", () => {
   );
 });
 
-test("unavailable track titles and artwork are dimmed with inert controls", async () => {
+test("unavailable tracks keep inert controls without an unavailable badge", async () => {
   const table = await readFile(
     new URL("../app/components/TrackTable.vue", import.meta.url),
     "utf8",
@@ -277,13 +277,33 @@ test("unavailable track titles and artwork are dimmed with inert controls", asyn
 
   assert.match(
     table,
-    /<ScrollingText\s+:id="trackTitleAnchorId\(item\.track\.id\)"\s+class="min-w-0 scroll-mt-4"\s+:class="\{ 'opacity-60': isUnavailable\(item\.track\) \}"\s+>\{\{ item\.track\.title \}\}<\/ScrollingText/,
+    /<ScrollingText\s+:id="trackTitleAnchorId\(item\.track\.id\)"\s+class="min-w-0 scroll-mt-4"\s+:class="\{ 'opacity-60': isUnavailable\(item\.track\) \}"[\s\S]*?t\('trackTable\.unavailableTitle'\)[\s\S]*?\{\{ item\.track\.title \}\}<\/ScrollingText/,
+    "Unavailable titles stay dimmed and expose their native status label",
   );
   assert.match(table, /:class="isUnavailable\(item\.track\) && 'opacity-60'"/);
-  assert.match(table, /:disabled="isUnavailable\(item\.track\)"/);
+  assert.match(
+    table,
+    /if \(isUnavailable\(track\)\) \{\s+retryUnavailableTrack\(track\);\s+return;\s+\}/,
+    "Unavailable track-row taps retry through the shared player",
+  );
+  assert.match(
+    table,
+    /v-if="isUnavailable\(item\.track\)"\s+:icon="icons\.cloudOff"/,
+    "Unavailable track rows show the shared cloud-off hint beside the title",
+  );
   assert.match(
     table,
     /function isUnavailable\(track: TrackResponse\): boolean/,
+  );
+  assert.doesNotMatch(table, /t\("trackTable\.unavailable"\)/);
+  assert.match(
+    table,
+    /<Badge\s+v-if="isOfflineOnly\(item\.track\)"[\s\S]*?trackTable\.availableOffline/,
+  );
+  assert.match(
+    table,
+    /function isOfflineOnly\(track: TrackResponse\): boolean \{\s+return \(\s+!track\.available &&\s+!unavailableTrackIdSet\.value\.has\(track\.id\) &&\s+isSavedOffline\(track\.id\)/,
+    "A saved copy that also failed playback is shown as unavailable",
   );
 });
 
@@ -701,7 +721,7 @@ test("album tracks sort by disc, track number, then title", () => {
   assert.equal(formatTrackNumber(albumTracks[0]!), "—");
 });
 
-test("album links encode title and artist without losing identity", () => {
+test("album links encode title and fallback artist identity", () => {
   const [album] = groupAlbums([
     {
       ...tracks[0]!,
@@ -721,7 +741,7 @@ test("album links encode title and artist without losing identity", () => {
       album: "  Night/Sessions & More  ",
       artist: "  Elliot Lake  ",
     }),
-    "/albums/Night%2FSessions%20%26%20More?artist=Elliot%20Lake&id=album-night-sessions",
+    "/albums/Night%2FSessions%20%26%20More?id=album-night-sessions",
   );
 });
 
@@ -740,9 +760,30 @@ test("player track titles link to their anchored album title", () => {
       album: "  Night/Sessions & More  ",
       artist: "  Elliot Lake  ",
     }),
-    "/albums/Night%2FSessions%20%26%20More?artist=Elliot%20Lake&id=album-night-sessions#track-title-track%20%2F%20one",
+    "/albums/Night%2FSessions%20%26%20More?id=album-night-sessions#track-title-track%20%2F%20one",
   );
   assert.equal(trackAlbumTitleRoute(tracks[1]!), null);
+});
+
+test("track album links do not turn guest credits into album filters", () => {
+  const collaborative = {
+    ...tracks[0]!,
+    id: "track-get-lucky",
+    title: "Get Lucky",
+    artist: "Daft Punk, Nile Rodgers",
+    artists: ["Daft Punk", "Nile Rodgers"],
+    album: "Random Access Memories",
+    albumId: "album_e87897b96dfdf8b4c276002b4434",
+  };
+
+  assert.equal(
+    trackAlbumTitleRoute(collaborative),
+    "/albums/Random%20Access%20Memories?id=album_e87897b96dfdf8b4c276002b4434#track-title-track-get-lucky",
+  );
+  assert.equal(
+    trackAlbumRoute({ ...collaborative, albumId: null }),
+    "/albums/Random%20Access%20Memories?artist=Daft%20Punk%2C%20Nile%20Rodgers",
+  );
 });
 
 test("player queues preserve album order and reset to the catalog", () => {

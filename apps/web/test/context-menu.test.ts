@@ -41,9 +41,15 @@ test("track rows expose a Reka context menu with playback, favorites, offline st
   assert.match(menu, /useOfflineTracks\(\)/);
   assert.match(menu, /saveOffline\(props\.track\)/);
   assert.match(menu, /removeOffline\(props\.track\.id\)/);
+  assert.match(menu, /notifyOfflineTrackRemoveFailed\(/);
   assert.doesNotMatch(menu, /notifyOfflineTrackSaved/);
   assert.match(menu, /context\.makeAvailableOffline/);
   assert.match(menu, /context\.removeOfflineCopy/);
+  assert.match(
+    menu,
+    /isSavedOffline\(track\.id\)\s+\?\s+['"]text-primary['"]\s+:\s+['"]text-muted-foreground['"]/,
+    "The saved offline icon uses the primary color",
+  );
   assert.match(menu, /downloadTrack\(props\.track\.id\)/);
   assert.doesNotMatch(menu, /usePluginProviders|fetchSimilarPluginTracks/);
   assert.doesNotMatch(menu, /context\.listenSimilar|similarProviders/);
@@ -205,6 +211,11 @@ test("album and artist cards expose collection-aware context menus", async () =>
   assert.match(albumMenu, /useOfflineAlbum\(\(\) => props\.album\)/);
   assert.match(albumMenu, /@select="toggleAlbumOffline"/);
   assert.match(albumMenu, /t\("albumOffline\.remove"\)/);
+  assert.match(
+    albumMenu,
+    /albumSavedOffline\s+\?\s+['"]text-primary['"]\s+:\s+['"]text-muted-foreground['"]/,
+    "The saved offline album icon uses the primary color",
+  );
 
   assert.match(artistMenu, /artistId: artistSummary\.value\.id/);
   assert.match(artistMenu, /context\.likeArtist/);

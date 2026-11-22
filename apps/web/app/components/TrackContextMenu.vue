@@ -57,6 +57,7 @@ import {
   notifyMetadataReverted,
   notifyMetadataUpdateFailed,
   notifyOfflineTrackFailed,
+  notifyOfflineTrackRemoveFailed,
 } from "../lib/toasts";
 import AddTrackToPlaylistSubmenu from "./AddTrackToPlaylistSubmenu.vue";
 import DownloadProgressTooltip from "./DownloadProgressTooltip.vue";
@@ -65,7 +66,8 @@ const props = defineProps<{ track: TrackResponse }>();
 const emit = defineEmits<{ play: [] }>();
 const { t } = useI18n();
 const { translate, errorMessage } = useLocalizedMessage();
-const { addToQueue, downloadTrack, queueLoaded } = useLibraryPlayer();
+const { addToQueue, downloadTrack, queueLoaded, unavailableTrackIdSet } =
+  useLibraryPlayer();
 const { invalidate: invalidateCatalog } = useCatalogRevision();
 const { address } = useServer();
 const { scope } = useQueryScope();
@@ -86,6 +88,7 @@ const playable = computed(() =>
   isTrackPlayable(props.track, {
     serverLost: serverLost.value,
     savedTrackIds: new Set(savedTracks.value.map((saved) => saved.track.id)),
+    unavailableTrackIds: unavailableTrackIdSet.value,
   }),
 );
 const { token } = useSession();
@@ -126,7 +129,7 @@ async function toggleOffline() {
   if (isSavedOffline(props.track.id)) {
     const removed = await removeOffline(props.track.id);
     if (!removed) {
-      notifyOfflineTrackFailed(
+      notifyOfflineTrackRemoveFailed(
         props.track.title,
         offlineError.value ?? t("error.apiUnavailable"),
       );
@@ -271,7 +274,11 @@ async function revertMetadata() {
     </ContextMenuTrigger>
     <ContextMenuContent class="w-56">
       <ContextMenuLabel>
-        <ScrollingText class="w-full">{{ track.title }}</ScrollingText>
+        <ScrollingText
+          class="w-full"
+          :title="playable ? undefined : t('trackTable.unavailableTitle')"
+          >{{ track.title }}</ScrollingText
+        >
       </ContextMenuLabel>
       <ContextMenuSeparator />
       <ContextMenuItem :disabled="!playable" @select="emit('play')">
@@ -332,6 +339,11 @@ async function revertMetadata() {
               isSavedOffline(track.id) ? icons.cloudCheck : icons.cloudDownload
             "
             aria-hidden="true"
+            :class="
+              isSavedOffline(track.id)
+                ? 'text-primary'
+                : 'text-muted-foreground'
+            "
           />
           {{ offlineActionLabel() }}
         </ContextMenuItem>

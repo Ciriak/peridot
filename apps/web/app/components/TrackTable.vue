@@ -21,7 +21,10 @@ import { useOfflineTracks } from "../composables/use-offline-tracks";
 import { useServer } from "../composables/use-server";
 import { useServerConnection } from "../composables/use-server-connection";
 import { icons } from "../lib/icons";
-import { notifyOfflineTrackFailed } from "../lib/toasts";
+import {
+  notifyOfflineTrackFailed,
+  notifyOfflineTrackRemoveFailed,
+} from "../lib/toasts";
 import {
   defaultTrackSort,
   formatTrackDuration,
@@ -54,7 +57,14 @@ const emit = defineEmits<{
 
 const { address } = useServer();
 const { status: serverStatus } = useServerConnection();
-const { playing, currentTrackId, play, playCollection } = useLibraryPlayer();
+const {
+  playing,
+  currentTrackId,
+  unavailableTrackIdSet,
+  play,
+  retryUnavailableTrack,
+  playCollection,
+} = useLibraryPlayer();
 const {
   likedTrackIds,
   loaded: likesLoaded,
@@ -133,11 +143,16 @@ function isUnavailable(track: TrackResponse): boolean {
   return !isTrackPlayable(track, {
     serverLost: serverStatus.value === "lost",
     savedTrackIds: savedTrackIds.value,
+    unavailableTrackIds: unavailableTrackIdSet.value,
   });
 }
 
 function isOfflineOnly(track: TrackResponse): boolean {
-  return !track.available && isSavedOffline(track.id);
+  return (
+    !track.available &&
+    !unavailableTrackIdSet.value.has(track.id) &&
+    isSavedOffline(track.id)
+  );
 }
 
 function loadMoreRows() {
@@ -145,7 +160,10 @@ function loadMoreRows() {
 }
 
 function playFromList(track: TrackResponse, restart = false) {
-  if (isUnavailable(track)) return;
+  if (isUnavailable(track)) {
+    retryUnavailableTrack(track);
+    return;
+  }
   if (!restart && currentTrackId.value === track.id) {
     play(track);
     return;
@@ -160,7 +178,7 @@ async function toggleOffline(track: TrackResponse) {
   if (isOfflinePending(track.id)) return;
   if (isSavedOffline(track.id)) {
     if (!(await removeOffline(track.id))) {
-      notifyOfflineTrackFailed(
+      notifyOfflineTrackRemoveFailed(
         track.title,
         offlineError.value ?? t("error.apiUnavailable"),
       );
@@ -419,17 +437,24 @@ onBeforeUnmount(() => {
                 variant="ghost"
                 size="icon-sm"
                 class="absolute inset-0 size-full cursor-pointer rounded-md bg-background/70 opacity-0 transition-opacity hover:bg-background/70 hover:text-foreground disabled:cursor-not-allowed dark:hover:bg-background/70 group-hover/track-artwork:opacity-100 group-focus-within/track-artwork:opacity-100"
-                :disabled="isUnavailable(item.track)"
                 :aria-label="
-                  isPlaying(item.track)
-                    ? t('trackTable.pause', { title: item.track.title })
-                    : t('trackTable.play', { title: item.track.title })
+                  isUnavailable(item.track)
+                    ? t('trackTable.retryUnavailable')
+                    : isPlaying(item.track)
+                      ? t('trackTable.pause', { title: item.track.title })
+                      : t('trackTable.play', { title: item.track.title })
                 "
                 @click="playFromList(item.track)"
                 @dblclick.stop
               >
                 <Icon
-                  :icon="isPlaying(item.track) ? icons.pause : icons.play"
+                  :icon="
+                    isUnavailable(item.track)
+                      ? icons.cloudOff
+                      : isPlaying(item.track)
+                        ? icons.pause
+                        : icons.play
+                  "
                   aria-hidden="true"
                   class="text-foreground"
                 />
@@ -441,8 +466,19 @@ onBeforeUnmount(() => {
                   :id="trackTitleAnchorId(item.track.id)"
                   class="min-w-0 scroll-mt-4"
                   :class="{ 'opacity-60': isUnavailable(item.track) }"
+                  :title="
+                    isUnavailable(item.track)
+                      ? t('trackTable.unavailableTitle')
+                      : undefined
+                  "
                   >{{ item.track.title }}</ScrollingText
                 >
+                <Icon
+                  v-if="isUnavailable(item.track)"
+                  :icon="icons.cloudOff"
+                  aria-hidden="true"
+                  class="size-4 shrink-0 text-muted-foreground"
+                />
                 <Icon
                   v-if="isActive(item.track)"
                   :icon="icons.waveform"
@@ -450,15 +486,11 @@ onBeforeUnmount(() => {
                   class="size-4 shrink-0 text-primary"
                 />
                 <Badge
-                  v-if="!item.track.available"
+                  v-if="isOfflineOnly(item.track)"
                   variant="secondary"
                   class="shrink-0"
                 >
-                  {{
-                    isOfflineOnly(item.track)
-                      ? t("trackTable.availableOffline")
-                      : t("trackTable.unavailable")
-                  }}
+                  {{ t("trackTable.availableOffline") }}
                 </Badge>
               </div>
               <ScrollingText class="w-full text-xs text-muted-foreground">

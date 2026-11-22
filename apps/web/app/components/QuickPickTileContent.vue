@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import { Button } from "@peridot/ui/components/ui/button";
 import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
@@ -23,6 +24,7 @@ const props = defineProps<{
   playable: boolean;
 }>();
 const emit = defineEmits<{ play: [] }>();
+const { t } = useI18n();
 
 const {
   artworkUrl: cachedCoverUrl,
@@ -41,6 +43,11 @@ const titleRoute = computed(() =>
     ? (trackAlbumTitleRoute(props.item.track) ??
       artistRoute({ name: props.item.track.artist }))
     : albumRoute(props.item.album),
+);
+const unavailableTitle = computed(() =>
+  props.item.kind === "track" && !props.playable
+    ? t("trackTable.unavailableTitle")
+    : undefined,
 );
 </script>
 
@@ -93,6 +100,7 @@ const titleRoute = computed(() =>
         <ScrollingText
           class="min-w-0 flex-1 text-xs font-medium"
           :class="!playable && 'opacity-60'"
+          :title="unavailableTitle"
         >
           {{ title }}
         </ScrollingText>

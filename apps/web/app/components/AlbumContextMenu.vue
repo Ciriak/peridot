@@ -127,6 +127,9 @@ async function playAlbum() {
             v-else
             :icon="albumSavedOffline ? icons.cloudCheck : icons.cloudDownload"
             aria-hidden="true"
+            :class="
+              albumSavedOffline ? 'text-primary' : 'text-muted-foreground'
+            "
           />
           {{
             albumOfflinePending

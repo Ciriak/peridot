@@ -108,6 +108,7 @@ data class PlaybackQueue(
 data class PlaybackSnapshot(
     val trackIds: List<String>,
     val tracks: List<TrackSnapshot>,
+    val unavailableTrackIds: List<String> = emptyList(),
     val activeTrackId: String?,
     val playing: Boolean,
     val loading: Boolean,
@@ -126,9 +127,12 @@ data class PlaybackSnapshot(
         trackIds.forEach(idsJson::put)
         val shuffleJson = JSONArray()
         shuffleTrackIds.forEach(shuffleJson::put)
+        val unavailableJson = JSONArray()
+        unavailableTrackIds.forEach(unavailableJson::put)
         return JSONObject()
             .put("trackIds", idsJson)
             .put("tracks", tracksJson)
+            .put("unavailableTrackIds", unavailableJson)
             .put("activeTrackId", activeTrackId ?: JSONObject.NULL)
             .put("playing", playing)
             .put("loading", loading)

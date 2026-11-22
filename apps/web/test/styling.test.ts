@@ -7,8 +7,8 @@ test("app layout respects the owner's Tailwind and shadcn styling authority", as
     "../app/app.vue",
     "../app/layouts/default.vue",
     "../app/layouts/settings.vue",
-    "../app/components/AppToastList.vue",
     "../app/components/AppToaster.vue",
+    "../app/components/LocalizedToastMessage.vue",
     "../app/components/AppNotifications.vue",
     "../app/components/AppSplashScreen.vue",
     "../app/components/AddTracksToPlaylistDialog.vue",
@@ -55,6 +55,7 @@ test("app layout respects the owner's Tailwind and shadcn styling authority", as
     "../app/pages/settings/server.vue",
     "../../../packages/ui/src/components/ui/progress-circle/ProgressCircle.vue",
     "../../../packages/ui/src/components/ui/scrolling-text/ScrollingText.vue",
+    "../../../packages/ui/src/components/ui/sonner/Sonner.vue",
     "../../../packages/ui/src/components/ui/spinner/PeridotSpinner.vue",
   ];
   const sources = await Promise.all(

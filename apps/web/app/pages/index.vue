@@ -106,7 +106,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="space-y-10">
+  <div class="space-y-6">
     <header>
       <h1 class="text-2xl font-semibold tracking-tight">
         {{ greeting }}

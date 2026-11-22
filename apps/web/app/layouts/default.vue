@@ -522,6 +522,11 @@ onBeforeUnmount(stopLoadingRay);
                   :key="`${active.id}:${active.title}`"
                   mode="always"
                   class="w-full"
+                  :title="
+                    currentTrackPlayable
+                      ? undefined
+                      : t('trackTable.unavailableTitle')
+                  "
                 >
                   <NuxtLink
                     v-if="currentTrackTitleRoute"

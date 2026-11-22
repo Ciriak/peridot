@@ -108,10 +108,7 @@ test("track collection routes follow the normalized media type", () => {
     liked: false,
   };
 
-  assert.equal(
-    trackAlbumRoute(base),
-    "/albums/Collection?artist=Creator&id=collection-id",
-  );
+  assert.equal(trackAlbumRoute(base), "/albums/Collection?id=collection-id");
   assert.equal(
     trackAlbumRoute({
       ...base,

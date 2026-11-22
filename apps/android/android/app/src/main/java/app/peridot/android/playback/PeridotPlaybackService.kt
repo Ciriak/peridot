@@ -60,6 +60,7 @@ class PeridotPlaybackService : MediaLibraryService() {
     private var lastError: String? = null
     private var playbackStartRetries = 0
     private var playbackStartedTrackId: String? = null
+    private val unavailableTrackIds = linkedSetOf<String>()
 
     private val publishProgress = object : Runnable {
         override fun run() {
@@ -284,13 +285,13 @@ class PeridotPlaybackService : MediaLibraryService() {
     private fun skipFailedTrack(failedTrackId: String): Boolean {
         val currentIndex = player.currentMediaItemIndex
         if (currentIndex == C.INDEX_UNSET) return false
-        val repeatMode = player.repeatMode
-        if (repeatMode == Player.REPEAT_MODE_ONE) {
-            player.repeatMode = Player.REPEAT_MODE_OFF
-        }
-        val nextIndex = player.nextMediaItemIndex
-        player.repeatMode = repeatMode
-        if (nextIndex == C.INDEX_UNSET || nextIndex == currentIndex) return false
+        unavailableTrackIds += failedTrackId
+        val nextIndex = PlaybackSkipPolicy.nextIndexWithoutWrapping(
+            currentIndex = currentIndex,
+            repeatMode = player.repeatMode,
+            setRepeatMode = { player.repeatMode = it },
+            getNextIndex = { player.nextMediaItemIndex },
+        ) ?: return false
         val nextTrackId = player.getMediaItemAt(nextIndex).mediaId.substringAfter(':')
         if (nextTrackId == failedTrackId) return false
 
@@ -372,6 +373,7 @@ class PeridotPlaybackService : MediaLibraryService() {
                 activeQueue = null
                 activeTracks = emptyMap()
                 lastError = null
+                unavailableTrackIds.clear()
                 playbackStore.clear()
                 publishSnapshot()
                 stopSelf()
@@ -579,6 +581,7 @@ class PeridotPlaybackService : MediaLibraryService() {
                 }
             },
             tracks = tracks.values.toList(),
+            unavailableTrackIds = unavailableTrackIds.toList(),
             activeTrackId = trackId,
             playing = playbackControlActive(
                 playWhenReady = player.playWhenReady,

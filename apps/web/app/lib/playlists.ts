@@ -3,11 +3,12 @@ import type {
   PlaylistSummaryResponse,
   TrackResponse,
 } from "@peridot/contracts";
+import {
+  isTrackPlayable,
+  type PlaybackAvailability,
+} from "./offline-playback.ts";
 
-export interface PlaylistPlaybackAvailability {
-  serverLost: boolean;
-  savedTrackIds: ReadonlySet<string>;
-}
+export type PlaylistPlaybackAvailability = PlaybackAvailability;
 
 export function playlistPlayableTracks(
   entries: readonly PlaylistEntryResponse[],
@@ -15,10 +16,7 @@ export function playlistPlayableTracks(
 ): TrackResponse[] {
   return entries.flatMap((entry) => {
     if (!entry.track) return [];
-    return availability.savedTrackIds.has(entry.track.id) ||
-      (!availability.serverLost && entry.track.available)
-      ? [entry.track]
-      : [];
+    return isTrackPlayable(entry.track, availability) ? [entry.track] : [];
   });
 }
 

@@ -102,6 +102,14 @@ test("playlist playback keeps order while skipping unavailable and unresolved en
     }).map((item) => item.id),
     ["a"],
   );
+  assert.deepEqual(
+    playlistPlayableTracks(entries, {
+      serverLost: false,
+      savedTrackIds: new Set(),
+      unavailableTrackIds: new Set(["a"]),
+    }).map((item) => item.id),
+    ["b"],
+  );
 });
 
 function entryTrackUnavailable() {
@@ -258,7 +266,24 @@ test("playlist pages expose creation, unavailable tracks, editing, likes, and of
   assert.match(playlistMenu, /context\.renamePlaylist/);
   assert.match(playlistMenu, /<PlaylistDeleteDialog/);
   assert.match(trackList, /useSortable/);
-  assert.match(trackList, /playlistTracks\.unavailable/);
+  assert.match(
+    trackList,
+    /<Badge\s+v-if="\s*entry\.track && !entry\.track\.available && playable\(entry\)\s*"[\s\S]*?trackTable\.availableOffline/,
+  );
+  assert.match(
+    trackList,
+    /<Badge v-else-if="!entry\.track" variant="secondary">\s*\{\{ t\("playlistTracks\.unavailable"\) \}\}\s*<\/Badge>/,
+  );
+  assert.match(
+    trackList,
+    /v-if="entry\.track && !playable\(entry\)"\s+:icon="icons\.cloudOff"/,
+    "Resolved but unplayable playlist tracks show the shared cloud-off hint",
+  );
+  assert.match(
+    trackList,
+    /if \(!playable\(entry\)\) \{\s+retryUnavailableTrack\(entry\.track\);\s+return;\s+\}/,
+    "Resolved but unplayable playlist tracks retry through the shared player",
+  );
   assert.match(trackList, /emit\(\s*"reorder"/);
   assert.match(trackList, /showTrackLikes !== false/);
   assert.match(
@@ -268,8 +293,8 @@ test("playlist pages expose creation, unavailable tracks, editing, likes, and of
   );
   assert.match(
     trackList,
-    /<ScrollingText\s+class="min-w-0"[\s\S]*>\s*\{\{ entry\.title \}\}\s*<\/ScrollingText>\s*<Icon\s+v-if="isCurrent\(entry\)"\s+:icon="icons\.waveform"/,
-    "The current-track indicator sits immediately after the playlist title",
+    /<ScrollingText\s+class="min-w-0"[\s\S]*>\s*\{\{ entry\.title \}\}\s*<\/ScrollingText>\s*<Icon\s+v-if="entry\.track && !playable\(entry\)"[\s\S]*?<Icon\s+v-if="isCurrent\(entry\)"\s+:icon="icons\.waveform"/,
+    "Unavailable and current-track indicators follow the playlist title consistently",
   );
   assert.match(contextMenu, /<AddTrackToPlaylistSubmenu/);
   assert.doesNotMatch(contextMenu, /<AddTrackToPlaylistDialog/);

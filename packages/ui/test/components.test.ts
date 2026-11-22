@@ -58,6 +58,24 @@ test("Kbd renders keyboard keys with shadcn key styling", async () => {
   assert.match(html, /^<kbd class="[^"]*bg-muted[^"]*shortcut-key"/);
   assert.match(html, /Ctrl<!--\]--><\/kbd>/);
 });
+test("Sonner exposes an accessible, themed toaster without local inline styles", async () => {
+  const html = await render(
+    "Sonner",
+    {
+      class: "app-toaster",
+      containerAriaLabel: "Notifications",
+      position: "top-right",
+      theme: "dark",
+      visibleToasts: 3,
+    },
+    undefined,
+    "sonner",
+  );
+  assert.match(html, /data-sonner-toaster/);
+  assert.match(html, /data-x-position="right"/);
+  assert.match(html, /aria-label="Notifications/);
+  assert.match(html, /class="[^"]*toaster group[^"]*app-toaster/);
+});
 test("switch renders its checked state and accessible name", async () => {
   const html = await render("Switch", {
     modelValue: true,

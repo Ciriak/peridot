@@ -60,6 +60,11 @@ test("the scrolled header provides compact history and playback controls", async
     /class="fixed inset-x-0 top-16 -mt-px z-20 border-b bg-card\/95 text-card-foreground md:left-56"/,
   );
   assert.match(component, /<BackButton icon-only \/>/);
+  assert.match(
+    component,
+    /v-if="coverUrl"[\s\S]*?class="relative hidden size-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted text-muted-foreground md:flex"[\s\S]*?<FadeInImage[\s\S]*?:src="coverUrl"[\s\S]*?:fade-in="coverFadeIn"/,
+    "The compact header renders its cover on desktop",
+  );
   assert.match(component, /<ScrollingText[\s\S]*?\{\{ title \}\}/);
   assert.match(component, /:disabled="!playable"/);
   assert.match(
@@ -145,6 +150,13 @@ test("all catalog detail headers reuse their existing playback handlers", async 
       new RegExp(`:pause-label="${surface.labels[1]}"`),
       `${surface.path} shares the full header pause label`,
     );
+    if (surface.path.includes("/albums/")) {
+      assert.match(
+        surface.source,
+        /<ScrolledHeader[\s\S]*?:cover-url="coverImageUrl"[\s\S]*?:cover-fade-in="!coverFromCache"/,
+        "The album compact header reuses the album artwork",
+      );
+    }
     assert.match(
       surface.source,
       new RegExp(

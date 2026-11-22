@@ -49,6 +49,7 @@ class PlaybackStore(context: Context) {
         return PlaybackSnapshot(
             trackIds = stringList("trackIds"),
             tracks = tracks,
+            unavailableTrackIds = stringList("unavailableTrackIds"),
             activeTrackId = value.optNullableString("activeTrackId"),
             playing = value.optBoolean("playing", false),
             loading = value.optBoolean("loading", false),

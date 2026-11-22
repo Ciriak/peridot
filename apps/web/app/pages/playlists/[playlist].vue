@@ -47,7 +47,8 @@ const route = useRoute();
 const { t } = useI18n();
 const { address } = useServer();
 const { status } = useServerConnection();
-const { playing, playCollection, togglePlayback } = useLibraryPlayer();
+const { playing, unavailableTrackIdSet, playCollection, togglePlayback } =
+  useLibraryPlayer();
 const { savedTracks } = useOfflineTracks();
 const actions = usePlaylistActions();
 const activePlaylistId = useState<string | null>(
@@ -98,6 +99,7 @@ const playableTracks = computed(() =>
   playlistPlayableTracks(currentEntries.value, {
     serverLost: status.value === "lost",
     savedTrackIds: savedIds.value,
+    unavailableTrackIds: unavailableTrackIdSet.value,
   }),
 );
 const playlistActive = computed(() =>

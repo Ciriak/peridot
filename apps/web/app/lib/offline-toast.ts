@@ -11,6 +11,14 @@ export interface OfflineSaveSuccessToast {
   duration: number;
 }
 
+export interface OfflineTrackRemovalFailureToast {
+  titleMessage: MessageDescriptor;
+  descriptionMessage: MessageDescriptor;
+  status: "error";
+  kind: "error";
+  duration: number;
+}
+
 export function offlineSaveSuccessToast(
   target: OfflineSaveTarget,
   title: string,
@@ -29,5 +37,21 @@ export function offlineSaveSuccessToast(
     status: "success",
     kind: "success",
     duration: 5000,
+  };
+}
+
+export function offlineTrackRemovalFailureToast(
+  trackTitle: string,
+  detailMessage: string,
+): OfflineTrackRemovalFailureToast {
+  return {
+    titleMessage: message("toast.offlineRemoveFailedTitle"),
+    descriptionMessage: message("toast.offlineRemoveFailed", {
+      track: trackTitle.trim(),
+      message: detailMessage,
+    }),
+    status: "error",
+    kind: "error",
+    duration: 8000,
   };
 }

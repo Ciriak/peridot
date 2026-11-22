@@ -32,6 +32,7 @@ export interface AndroidPlaybackSnapshot extends Omit<
 > {
   trackIds: string[];
   tracks: AndroidTrackSnapshot[];
+  unavailableTrackIds?: string[];
   loading: boolean;
   durationMs: number;
   error: string | null;

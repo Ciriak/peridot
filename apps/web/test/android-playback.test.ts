@@ -90,5 +90,10 @@ test("the shared player selects native transport and suppresses browser audio on
   assert.match(source, /PeridotMedia\.replaceQueue/);
   assert.match(source, /function syncAndroidPlaybackIntent\(\)/);
   assert.match(source, /PeridotMedia\.addListener\(\s*"playbackStateChanged"/);
+  assert.match(
+    source,
+    /unavailableTrackIds\.value = \[\s*\.\.\.new Set\(snapshot\.unavailableTrackIds \?\? \[\]\)/,
+    "Native playback failures update the shared unavailable-track UI state",
+  );
   assert.match(source, /if \(options\.audio && !androidRuntime\)/);
 });

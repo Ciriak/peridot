@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useHead, useI18n, useRoute, useRouter } from "#imports";
 import favicon from "@peridot/ui/assets/brand/favicon.png";
+import "vue-sonner/style.css";
 import { useLibraryPlayer } from "./composables/use-library-player";
 import { useDesktopMediaKeys } from "./composables/use-desktop-media-keys";
 import { useWebMediaSession } from "./composables/use-web-media-session";
