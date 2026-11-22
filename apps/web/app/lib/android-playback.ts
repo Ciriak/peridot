@@ -143,6 +143,7 @@ export function trackResponseFromAndroid(
     id: track.id,
     mediaType: track.mediaType,
     mediaTypeOrigin: "fallback",
+    sourceKind: null,
     title: track.title,
     artist: track.artist,
     artists: track.artist ? [track.artist] : [],

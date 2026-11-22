@@ -407,7 +407,11 @@ test("task progress stays out of the application headers", async () => {
     indicator,
     /<Icon :icon="icons\.networkOff" aria-hidden="true" \/>/,
   );
-  assert.match(indicator, /t\("components\.serverConnection\.offlineBadge"\)/);
+  assert.match(
+    indicator,
+    /<span class="hidden md:inline">[\s\S]*?t\("components\.serverConnection\.offlineBadge"\)[\s\S]*?<\/span>/,
+    "The offline badge collapses to its icon on mobile",
+  );
   assert.match(indicator, /<TooltipTrigger as-child>/);
   assert.doesNotMatch(
     indicator,

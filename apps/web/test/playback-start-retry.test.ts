@@ -63,6 +63,11 @@ test("the player retries start failures before exposing their error state", asyn
     /function skipFailedTrack\([\s\S]*?next\(true\);[\s\S]*?unavailableTrackIds\.value = \[\.\.\.unavailableTrackIds\.value, trackId\];[\s\S]*?return currentTrackId\.value !== trackId;/,
     "An exhausted track start is marked unavailable, then advances",
   );
+  assert.match(
+    player,
+    /const notifiedPlaybackFailureIds = new Set\(unavailableTrackIds\.value\);[\s\S]*?watch\(\s*unavailableTrackIds,[\s\S]*?notifyPlaybackFailed\(trackForId\(trackId\)\?\.title\);[\s\S]*?flush: "post"/,
+    "A newly unavailable track exposes one playback failure toast",
+  );
 
   assert.match(
     player,
@@ -116,7 +121,7 @@ test("playback-failed tracks use unavailable controls everywhere", async () => {
   );
   assert.match(
     player,
-    /if \(unavailableTrackIdSet\.value\.has\(trackId\)\) return false;/,
+    /function isTrackPlayableForPlayer\(track: TrackResponse\): boolean \{[\s\S]*unavailableTrackIds: unavailableTrackIdSet\.value/,
     "Failed tracks are excluded from playback queue selection",
   );
   assert.match(

@@ -15,6 +15,7 @@ import {
   offlineSaveSuccessToast,
   offlineTrackRemovalFailureToast,
 } from "../app/lib/offline-toast.ts";
+import { playbackFailureToast } from "../app/lib/playback-toast.ts";
 import { sourceMutationToast } from "../app/lib/source-toast.ts";
 import {
   TOAST_MOBILE_OFFSET,
@@ -82,6 +83,26 @@ test("offline removal failures map to a dedicated error toast", () => {
       duration: 8000,
     },
   );
+});
+
+test("playback failures map to a track-specific error toast", () => {
+  assert.deepEqual(playbackFailureToast(" Night Drive "), {
+    titleMessage: { key: "toast.playbackFailedTitle" },
+    descriptionMessage: {
+      key: "toast.playbackFailed",
+      params: { track: "Night Drive" },
+    },
+    status: "error",
+    kind: "error",
+    duration: 8000,
+  });
+  assert.deepEqual(playbackFailureToast(), {
+    titleMessage: { key: "toast.playbackFailedTitle" },
+    descriptionMessage: { key: "toast.playbackFailedGeneric" },
+    status: "error",
+    kind: "error",
+    duration: 8000,
+  });
 });
 
 test("toasts sit below the topbar at the top-right", () => {

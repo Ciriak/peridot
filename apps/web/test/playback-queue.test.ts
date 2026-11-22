@@ -7,7 +7,9 @@ import {
   appendToShufflePool,
   compactQueueAfterShuffle,
   consumeQueue,
+  lastAvailableHistoryTrackId,
   moveTrackToFront,
+  nextPreviewTrackId,
   nextRepeatMode,
   normalizeQueueTrackIds,
   removeFromShufflePool,
@@ -47,6 +49,61 @@ test("queue helpers move, add, consume, and remove unique tracks", () => {
   assert.deepEqual(consumeQueue(["a", "b", "c"]), ["b", "c"]);
   assert.deepEqual(consumeQueue(["a"]), []);
   assert.deepEqual(removeQueueTrack(["a", "b", "c"], "b"), ["a", "c"]);
+});
+
+test("adjacent previews follow queue order, shuffle, repeat, and history", () => {
+  assert.equal(
+    nextPreviewTrackId({
+      currentTrackId: "a",
+      playableTrackIds: ["a", "b", "c"],
+      shuffleEnabled: false,
+      shuffleTrackIds: [],
+      repeatMode: "off",
+      repeatCycleTrackIds: ["a", "b", "c"],
+    }),
+    "b",
+  );
+  assert.equal(
+    nextPreviewTrackId({
+      currentTrackId: "c",
+      playableTrackIds: ["c"],
+      shuffleEnabled: false,
+      shuffleTrackIds: [],
+      repeatMode: "all",
+      repeatCycleTrackIds: ["a", "c"],
+    }),
+    "a",
+  );
+  assert.equal(
+    nextPreviewTrackId({
+      currentTrackId: "b",
+      playableTrackIds: ["a", "b", "c"],
+      shuffleEnabled: true,
+      shuffleTrackIds: ["c", "a"],
+      repeatMode: "all",
+      repeatCycleTrackIds: ["a", "b", "c"],
+    }),
+    "c",
+  );
+  assert.equal(
+    nextPreviewTrackId({
+      currentTrackId: "c",
+      playableTrackIds: ["c"],
+      shuffleEnabled: false,
+      shuffleTrackIds: [],
+      repeatMode: "off",
+      repeatCycleTrackIds: ["a", "b", "c"],
+    }),
+    null,
+  );
+  assert.equal(
+    lastAvailableHistoryTrackId(
+      ["a", "unavailable", "c", "b"],
+      new Set(["a", "b"]),
+    ),
+    "b",
+  );
+  assert.equal(lastAvailableHistoryTrackId([], new Set()), null);
 });
 
 test("queue normalization preserves order while dropping unavailable entries", () => {

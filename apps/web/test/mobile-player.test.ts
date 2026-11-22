@@ -15,7 +15,10 @@ test("the compact mobile player anchors metadata and actions separately", async 
     layout,
     /<MobilePlayer\s+@open-queue="openQueueFromMobilePlayer"\s*\/>/,
   );
-  assert.match(layout, /class="flex min-h-0 flex-1 pb-20 md:pb-28"/);
+  assert.match(
+    layout,
+    /class="flex min-h-0 flex-1 touch-(?:pan-y|manipulation) overscroll-x-none pb-20 md:pb-28"/,
+  );
   assert.match(
     layout,
     /class="fixed inset-x-0 bottom-0 z-30 isolate h-20 overflow-hidden border-t bg-card text-card-foreground md:h-28"/,
@@ -81,10 +84,16 @@ test("the compact mobile player anchors metadata and actions separately", async 
 });
 
 test("the fullscreen mobile player exposes accessible complete controls", async () => {
-  const player = await readFile(
-    new URL("../app/components/MobilePlayer.vue", import.meta.url),
-    "utf8",
-  );
+  const [player, panel] = await Promise.all([
+    readFile(
+      new URL("../app/components/MobilePlayer.vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/components/MobilePlayerTrackPanel.vue", import.meta.url),
+      "utf8",
+    ),
+  ]);
 
   assert.match(
     player,
@@ -99,24 +108,67 @@ test("the fullscreen mobile player exposes accessible complete controls", async 
     /if \(historyState\?\.back\) \{\s+router\.back\(\);\s+return;/,
   );
   assert.match(player, /<DialogRoot v-model:open="open">/);
-  assert.match(player, /<DialogOverlay class="fixed inset-0 z-40/);
   assert.match(
     player,
-    /<DialogContent\s+data-mobile-player-dialog\s+class="fixed inset-0 z-40 isolate flex h-dvh flex-col/,
+    /<DialogOverlay[\s\S]*class="fixed inset-0 z-40[\s\S]*:style="playerOverlayStyle"/,
   );
+  assert.match(
+    player,
+    /<DialogContent\s+data-mobile-player-dialog\s+class="fixed inset-0 z-40 isolate flex h-dvh flex-col[\s\S]*:style="playerSurfaceStyle"/,
+  );
+  assert.match(player, /ref="playerGestureSurface"/);
+  assert.match(player, /ref="playerScrollArea"/);
+  assert.match(player, /useSwipePlayer\(\{/);
+  assert.match(
+    player,
+    /target: playerGestureSurface,[\s\S]*scrollArea: playerScrollArea,[\s\S]*open,/,
+  );
+  assert.match(player, /nextTrack: nextTrackPreview/);
+  assert.match(player, /previousTrack: previousTrackPreview/);
+  assert.match(player, /prepareNextTrack: prepareNextTrackPreview/);
   assert.match(player, /<DialogTitle class="text-base font-semibold">/);
   assert.match(player, /<DialogDescription class="sr-only">/);
   assert.match(player, /t\('player\.closeFullscreen'\)/);
   assert.match(player, /icons\.caretDown/);
   assert.match(player, /@click="openQueue"/);
   assert.match(player, /closeFullscreen\(\);\s+emit\("openQueue"\)/);
-  assert.match(player, /<TrackContextMenu[\s\S]*:track="active"/);
-  assert.match(player, /<TrackArtistLinks/);
   assert.match(
     player,
-    /v-else-if="loading"[\s\S]*<PeridotSpinner\s+:label="t\('player\.buffering'\)"[\s\S]*t\("player\.buffering"\)/,
-    "the fullscreen player visibly identifies buffering",
+    /data-mobile-player-carousel[\s\S]*class="flex w-full"[\s\S]*:style="playerCarouselStyle"/,
   );
+  assert.equal(
+    player.match(/<MobilePlayerTrackPanel/g)?.length,
+    3,
+    "previous, active, and next tracks occupy the carousel positions",
+  );
+  assert.match(
+    player,
+    /class="w-full shrink-0 overflow-hidden transition-opacity[\s\S]*'opacity-0'[\s\S]*inert\s+aria-hidden="true"[\s\S]*:track="previousTrackPreview"/,
+  );
+  assert.match(
+    player,
+    /:track="active"[\s\S]*interactive[\s\S]*@play="playActiveTrack"/,
+  );
+  assert.match(
+    player,
+    /class="w-full shrink-0 overflow-hidden transition-opacity[\s\S]*'opacity-0'[\s\S]*inert\s+aria-hidden="true"[\s\S]*:track="nextTrackPreview"/,
+  );
+  assert.match(
+    player,
+    /class="w-full shrink-0 overflow-hidden"[\s\S]*:track="active"/,
+  );
+  assert.match(panel, /class="min-w-0 overflow-hidden text-center"/);
+  assert.match(panel, /TrackContextMenu/);
+  assert.match(panel, /<TrackArtistLinks/);
+  assert.match(panel, /v-if="interactive && track"/);
+  assert.match(
+    player,
+    /v-if="loading"[\s\S]*class="pointer-events-none absolute inset-x-0 top-0 z-30 h-1 overflow-hidden"[\s\S]*bg-primary\/40 motion-reduce:block[\s\S]*from-transparent via-primary to-transparent transition-transform duration-1000 ease-in-out motion-reduce:hidden[\s\S]*loadingRayAtRight \? 'translate-x-full' : '-translate-x-full'/,
+    "the fullscreen player uses the desktop loading ray at the top edge",
+  );
+  assert.doesNotMatch(player, /player\.buffering|PeridotSpinner/);
+  assert.match(player, /const loadingRayAtRight = ref\(false\)/);
+  assert.match(player, /loadingRayTimeout = setTimeout\(\(\) =>/);
   assert.match(player, /:thumb-label="t\('player\.position'\)"/);
   assert.match(player, /@click="toggleRandomization"/);
   assert.match(player, /@click="previous"/);
@@ -131,7 +183,11 @@ test("the fullscreen mobile player exposes accessible complete controls", async 
     player,
     /class="ml-auto size-12"\s+:aria-label="t\('player\.openQueue'\)"/,
   );
-  assert.match(player, /class="mt-3"\s+large/);
+  assert.match(
+    panel,
+    /class="mt-3 flex w-full justify-end"[\s\S]*<LikeButton\s+large/,
+    "the fullscreen like control sits on the right",
+  );
   assert.match(
     player,
     /class="flex items-center justify-center gap-2 sm:gap-4"/,
@@ -145,7 +201,7 @@ test("the fullscreen mobile player exposes accessible complete controls", async 
   assert.match(player, /class="size-8"/);
   assert.doesNotMatch(player, /class="[^"]*\bvolume\b|id="volume"/);
   assert.match(
-    player,
+    panel,
     /t\("player\.noTrack"\)[\s\S]*t\("player\.scanLibrary"\)/,
   );
 });

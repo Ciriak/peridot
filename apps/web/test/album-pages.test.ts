@@ -82,7 +82,7 @@ test("albums have list and detail routes with derived groups", async () => {
   assert.match(catalogCard, /max-sm:opacity-100/);
   assert.match(
     catalogCard,
-    /compact \? 'size-4 max-sm:size-5' : 'size-5 max-sm:size-6'/,
+    /compact\s*\?\s*'size-4 max-sm:size-5'\s*:\s*'size-5 max-sm:size-6'/,
     "The play icon grows on mobile-sized album cards",
   );
   assert.match(catalogCard, /cursor-pointer/);
@@ -284,7 +284,7 @@ test("albums have list and detail routes with derived groups", async () => {
   );
   assert.match(
     trackTable,
-    /<TrackArtwork[\s\S]*icons\.play[\s\S]*<\/TrackArtwork>\s*<div class="min-w-0 flex-1">\s*<div class="flex min-w-0 items-center gap-2">\s*<ScrollingText\s+:id="trackTitleAnchorId\(item\.track\.id\)"\s+class="min-w-0 scroll-mt-4"\s+:class="\{ 'opacity-60': isUnavailable\(item\.track\) \}"[\s\S]*?>\{\{ item\.track\.title \}\}<\/ScrollingText/,
+    /<TrackArtwork[\s\S]*icons\.play[\s\S]*<\/TrackArtwork>\s*<div class="min-w-0 flex-1">\s*<div class="flex min-w-0 items-center gap-2">\s*<ScrollingText\s+:id="trackTitleAnchorId\(item\.track\.id\)"\s+class="min-w-0 scroll-mt-20"\s+:class="\{ 'opacity-60': isUnavailable\(item\.track\) \}"[\s\S]*?>\{\{ item\.track\.title \}\}<\/ScrollingText/,
     "The current-track indicator sits immediately after the track title",
   );
   assert.match(
@@ -299,7 +299,7 @@ test("albums have list and detail routes with derived groups", async () => {
   );
   assert.match(
     trackTable,
-    /v-if="variant !== 'album'"\s+role="cell"[\s\S]*?<DownloadProgressTooltip[\s\S]*?v-if="allowTrackLike !== false && item\.track\.mediaType === 'music'"[\s\S]*?<LikeButton/,
+    /v-if="variant !== 'album' && !isSearch"\s+:role="isSearch \? undefined : 'cell'"[\s\S]*?<DownloadProgressTooltip[\s\S]*?!isSearch &&\s*allowTrackLike !== false &&\s*item\.track\.mediaType === 'music'[\s\S]*?<LikeButton/,
     "The album track-list row replaces the offline action with the like button",
   );
   assert.doesNotMatch(

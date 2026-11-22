@@ -1,5 +1,261 @@
 # Peridot handoff
 
+## Search filters anchor to the main viewport
+
+The search quick-filter bar now offsets its sticky top position by the same
+mobile and desktop padding used by the main scroll panel. `top-0` previously
+settled at the scrollport's padded edge once the page scrolled, exposing a strip
+of content above the filter background.
+
+Verification:
+
+- Headless Chromium measured a padded scrollport fixture with `top-0` at the
+  20px padding edge and with the matching negative top at the true viewport edge.
+- `pnpm --filter @peridot/web exec node --test test/search-view.test.ts`
+  (4 passing)
+- `pnpm --filter @peridot/web exec node --test test/styling.test.ts`
+  (2 passing)
+- `pnpm --filter @peridot/web test` (293 of 294 passing; the unrelated existing
+  branding assertion expects `background_color: "#000000"` in
+  `nuxt.config.ts`)
+- `pnpm --filter @peridot/web typecheck`
+- Focused ESLint and Prettier checks
+- `pnpm --filter @peridot/web build`
+- `git diff --check` for the changed files
+
+Known limits:
+
+- The isolated browser used for layout measurement had no authenticated Peridot
+  session, so the live search page was not visually rechecked.
+
+Uncommitted changes:
+
+- Search filter sticky offset, its regression assertion, and this handoff
+  section.
+- Existing catalog, player, sidebar, manifest, source, Android, contract,
+  documentation, and lockfile changes remain present and were not modified.
+
+Next:
+
+- Reload `/search`, enter a query, and scroll the results at phone and desktop
+  widths to confirm the filter bar stays flush below the top bar.
+
+## Playback failures surface a toast
+
+The shared player now shows a localized error toast when a track becomes
+runtime-unavailable after its playback attempts are exhausted. The toast names
+the failed track and appears whether playback skips to another item or stops.
+The same newly-unavailable tracking covers browser audio failures and Android
+playback snapshots without reporting retry attempts or repeated snapshots.
+
+Verification:
+
+- Focused notification and playback-retry tests (13 passing)
+- `pnpm --filter @peridot/web typecheck`
+- Focused ESLint and Prettier checks
+- `pnpm --filter @peridot/web build`
+- `git diff --check`
+- `pnpm --filter @peridot/web test` (293 of 294 passing; the unrelated existing
+  branding assertion expects `background_color: "#000000"` in
+  `nuxt.config.ts`)
+
+Verification ran with Node 24.15.0 and the repository-configured pnpm 12.21.0;
+the contributor policy requests pnpm 11.25.0, and Corepack refused to run the
+older version against the project pin.
+
+Known limits:
+
+- Toast presentation will be checked through automated tests rather than by
+  forcing a live media failure in the browser during this run.
+
+Uncommitted changes:
+
+- Playback failure toast mapping, shared-player integration, translations,
+  regression tests, the decision record, and this handoff section.
+- Existing catalog, player, sidebar, manifest, source, Android, and related
+  worktree changes remain present and were not modified by this work.
+
+Next:
+
+- Play a source-unavailable track and confirm one toast names it before playback
+  advances.
+
+## PWA manifest is valid in development
+
+The development server now serves `/manifest.webmanifest` as a public JSON asset
+with `application/manifest+json` instead of returning the SPA HTML fallback. The
+manifest is the single source for development and production, and the
+development service worker remains disabled.
+
+Verification:
+
+- Live development request returned `200`, `application/manifest+json`, valid
+  JSON, the Peridot name, standalone display mode, and three icons.
+- `pnpm --filter @peridot/web exec node --test test/offline-spa.test.ts`
+  (21 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Focused ESLint and Prettier checks
+- `git diff --check` for the changed files
+- Production output retained the same manifest hash as the public source.
+- The production Fastify static path returned `200`,
+  `application/manifest+json`, and valid JSON.
+
+Verification ran with Node 24.15.0 and the repository's current pnpm 12.21.0;
+the contributor policy requests pnpm 11.25.0.
+
+Known limits:
+
+- The HTTP response was verified directly, but the existing browser tab was not
+  inspected after the change.
+
+Uncommitted changes:
+
+- The public PWA manifest, PWA configuration, offline-shell regression
+  assertion, decision record, and this handoff section.
+- Existing mobile, catalog, playback, source, desktop, and documentation changes
+  remain present and were preserved.
+
+Next:
+
+- Reload the open client once and confirm the manifest syntax error is gone.
+
+## Fullscreen mobile player carousel gestures
+
+The fullscreen mobile player now follows the finger. Left swipes advance to the
+next track, right swipes return to the previous track, and the previous/current/
+next artwork and metadata render as an adjacent carousel preview. Upward swipes
+never close the player. Downward swipes close only from outside the scroll body
+or while its scroll position is zero.
+
+Gestures lock to an axis, ignore controls and sliders, use distance or velocity
+thresholds, and reuse the existing next/previous playback methods. Adjacent
+panels are inert and hidden from assistive technology. Their carousel cells clip
+all artwork and scrolling-text overflow, and adjacent titles remain transparent
+at rest so the previous title cannot overlap the centered title. Player history
+details are retained so the previous preview and the committed previous track
+resolve to the same item.
+
+Tapping the compact bottom player now opens the fullscreen surface from below
+with a 200 ms upward transition and overlay fade. Closing resets all gesture and
+carousel state after the route leaves fullscreen, allowing the player to reopen
+cleanly after a downward swipe.
+
+Fullscreen buffering uses the desktop player's animated top-edge loading ray
+without a buffering text label. The active track's like control is right-aligned
+within the centered carousel panel.
+
+Verification:
+
+- Focused player, queue, route, styling, scrolling-text, image, and gesture tests
+  (37 passing)
+- `pnpm --filter @peridot/web test` (292 of 293 passing; the unrelated concurrent
+  branding/manifest assertion expects `background_color: "#000000"` in
+  `nuxt.config.ts`)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Focused ESLint and Prettier checks
+- `git diff --check`
+
+Known limits:
+
+- Gesture behavior has not yet been exercised on a physical phone.
+- Native system gestures reserved by a browser cannot be overridden by a page.
+
+Uncommitted changes:
+
+- Fullscreen carousel, swipe player composable, adjacent preview selectors,
+  history detail retention, open/close transitions, responsive reset behavior,
+  regression tests, the decision record, and this handoff section.
+
+Next:
+
+- Open, swipe between tracks, swipe down, reopen, and repeat in dark and light
+  themes on a physical phone; also verify scroll-at-top arbitration and controls
+  excluded from gestures.
+
+## Mobile icon-only connection badge
+
+The shared topbar connection badge now hides its “Offline” label below the
+`md` breakpoint, leaving the network-off icon. The badge retains its localized
+accessible label and tooltip. Desktop widths continue to show the full badge.
+
+Verification:
+
+- `pnpm --filter @peridot/web exec node --test test/task-progress.test.ts test/styling.test.ts`
+  (15 passing)
+- Focused ESLint and Prettier checks
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+
+Known limits:
+
+- The responsive badge was covered by source and styling assertions but was
+  not visually inspected in a phone-sized browser during this run.
+
+Uncommitted changes:
+
+- The shared connection indicator, its regression assertion, and this handoff
+  section.
+
+Next:
+
+- Open the app with the server disconnected at a phone width and confirm the
+  topbar badge shows only the icon and retains its accessible label.
+
+## Mobile sidebar swipes and backdrop
+
+The main and settings navigation sidebars now share mobile swipe handling.
+The drawer follows horizontal touch movement continuously: swiping right drags a
+closed sidebar open, swiping left drags an open sidebar closed, and release
+settles the drawer against the nearest side of the midpoint. The backdrop opacity
+tracks the same drag progress. Gestures that begin in text fields or sliders are
+ignored for opening. The backdrop sits above page controls and below the drawer,
+while leaving the fixed player available.
+
+Horizontal panning and overscroll are disabled on the navigation surface, and
+the VueUse swipe listener is non-passive. This prevents the app's right swipe
+from triggering browser Back navigation where browsers permit touch events to
+override that gesture.
+
+Verification:
+
+- `pnpm --filter @peridot/web exec node --test test/sidebar-swipe.test.ts`
+  (3 passing)
+- Focused sidebar, styling, and mobile-player tests (7 passing)
+- `pnpm --filter @peridot/web build`
+- Focused ESLint and Prettier checks
+- `git diff --check`
+- Production CSS contains the transition, `z-40`, `z-50`, `touch-pan-y`, and
+  `overscroll-x-none` utilities.
+
+Known checks:
+
+- `pnpm --filter @peridot/web typecheck` passes.
+- The full web suite currently has concurrent catalog/search failures outside
+  the sidebar files, including catalog-card, track-table, playlist, search, and
+  virtual-scroll expectations. All focused sidebar, styling, and mobile-player
+  tests pass.
+
+Known limits:
+
+- Swipe handling uses touch events through VueUse and was not exercised on a
+  physical phone during this run.
+- Browsers may reserve edge or system-level navigation gestures that a website
+  cannot cancel. In-app touch handling covers the browser gestures that remain
+  cancelable from the page.
+
+Uncommitted changes:
+
+- Shared continuous sidebar drag logic, finger-following drawer and backdrop
+  positioning, browser gesture suppression, the narrow runtime-style exception,
+  regression tests, the decision record, and this handoff section.
+
+Next:
+
+- Test open and close swipes plus backdrop dismissal on a physical phone in dark
+  and light themes, including gestures that start on the search field.
+
 ## Version manifests sync before commits
 
 The `pre-commit` hook now runs `npm run version:sync` and stages every manifest

@@ -44,22 +44,37 @@ async function waitFor(predicate: () => boolean, timeoutMs = 1_000) {
 }
 
 test("Nuxt builds a client-rendered installable offline shell", async () => {
-  const [config, devReset, indexIcon, maskableIcon] = await Promise.all([
-    readFile(new URL("../nuxt.config.ts", import.meta.url), "utf8"),
-    readFile(
-      new URL(
-        "../app/plugins/service-worker-dev-reset.client.ts",
-        import.meta.url,
+  const [config, devReset, manifestFile, indexIcon, maskableIcon] =
+    await Promise.all([
+      readFile(new URL("../nuxt.config.ts", import.meta.url), "utf8"),
+      readFile(
+        new URL(
+          "../app/plugins/service-worker-dev-reset.client.ts",
+          import.meta.url,
+        ),
+        "utf8",
       ),
-      "utf8",
-    ),
-    access(new URL("../public/pwa-192x192.png", import.meta.url)),
-    access(new URL("../public/pwa-maskable-512x512.png", import.meta.url)),
-  ]);
+      readFile(
+        new URL("../public/manifest.webmanifest", import.meta.url),
+        "utf8",
+      ),
+      access(new URL("../public/pwa-192x192.png", import.meta.url)),
+      access(new URL("../public/pwa-maskable-512x512.png", import.meta.url)),
+    ]);
+  const manifest = JSON.parse(manifestFile) as {
+    name: string;
+    orientation: string;
+    icons: Array<{ src: string; purpose?: string }>;
+  };
 
   assert.match(config, /ssr: false/);
   assert.match(config, /modules: \["@nuxtjs\/i18n", "@vite-pwa\/nuxt"\]/);
   assert.match(config, /registerType: "autoUpdate"/);
+  assert.match(
+    config,
+    /manifest: false/,
+    "The public manifest is served directly instead of being generated only during a build",
+  );
   assert.match(
     config,
     /devOptions: \{\s*enabled: false,?\s*\}/,
@@ -71,7 +86,16 @@ test("Nuxt builds a client-rendered installable offline shell", async () => {
   assert.match(config, /navigateFallback: "\/"/);
   assert.match(config, /additionalManifestEntries/);
   assert.match(config, /rel: "manifest", href: "\/manifest.webmanifest"/);
-  assert.match(config, /orientation: "portrait"/);
+  assert.equal(manifest.name, "Peridot");
+  assert.equal(manifest.orientation, "portrait");
+  assert.deepEqual(
+    manifest.icons.map((icon) => [icon.src, icon.purpose]),
+    [
+      ["/pwa-192x192.png", undefined],
+      ["/pwa-512x512.png", undefined],
+      ["/pwa-maskable-512x512.png", "maskable"],
+    ],
+  );
   assert.doesNotMatch(config, /runtimeCaching:/);
   assert.equal(indexIcon, undefined);
   assert.equal(maskableIcon, undefined);

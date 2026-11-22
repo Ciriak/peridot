@@ -29,6 +29,7 @@ import { useLikes } from "../composables/use-likes";
 import { useLibraryPlayer } from "../composables/use-library-player";
 import { useServer } from "../composables/use-server";
 import { useSession } from "../composables/use-session";
+import { useSwipeSidebar } from "../composables/use-swipe-sidebar";
 import { useUser } from "../composables/use-user";
 import { isTauriRuntime } from "../lib/desktop-runtime";
 import { gravatarUrl } from "../lib/gravatar";
@@ -52,6 +53,8 @@ const searchQuery = useState("search-query", () => "");
 const searchInput = ref<{ $el?: HTMLInputElement } | null>(null);
 const shortcutModifier = ref<SearchShortcutModifier>("ctrl");
 const mobileNavigation = ref(false);
+const navigationSwipeArea = ref<HTMLElement | null>(null);
+const navigationDrawer = ref<HTMLElement | null>(null);
 const queueOpen = ref(false);
 const mainScrollElement = ref<HTMLElement | null>(null);
 const desktopRuntime = ref(false);
@@ -123,6 +126,16 @@ const navigation = [
   },
 ];
 const currentPath = computed(() => route.path);
+const {
+  isMobile: mobileNavigationViewport,
+  dragging: mobileNavigationDragging,
+  interactive: mobileNavigationInteractive,
+  drawerStyle: mobileNavigationTransform,
+  backdropStyle: mobileNavigationBackdropStyle,
+} = useSwipeSidebar(navigationSwipeArea, navigationDrawer, mobileNavigation);
+const navigationInert = computed(
+  () => mobileNavigationViewport.value && !mobileNavigationInteractive.value,
+);
 provide(MAIN_SCROLL_ELEMENT_KEY, mainScrollElement);
 const isNavigationActive = (target: string) =>
   target === "/"
@@ -253,15 +266,43 @@ onBeforeUnmount(stopLoadingRay);
     <a href="#main-content" class="sr-only focus:not-sr-only focus:p-4">{{
       t("navigation.skipToContent")
     }}</a>
-    <div class="flex min-h-0 flex-1 pb-20 md:pb-28">
+    <div
+      ref="navigationSwipeArea"
+      class="flex min-h-0 flex-1 touch-manipulation overscroll-x-none pb-20 md:pb-28"
+    >
+      <button
+        type="button"
+        data-sidebar-backdrop
+        class="fixed inset-x-0 top-0 bottom-20 z-40 cursor-default bg-background/80 backdrop-blur-sm md:hidden"
+        :class="[
+          mobileNavigationDragging
+            ? 'transition-none'
+            : 'transition-opacity duration-300 ease-out motion-reduce:transition-none',
+          mobileNavigationInteractive
+            ? 'pointer-events-auto'
+            : 'pointer-events-none',
+        ]"
+        :style="mobileNavigationBackdropStyle"
+        :aria-label="t('navigation.close')"
+        :aria-hidden="mobileNavigationInteractive ? undefined : 'true'"
+        :tabindex="mobileNavigationInteractive ? undefined : -1"
+        @click="mobileNavigation = false"
+      />
       <aside
+        ref="navigationDrawer"
         id="sidebar"
         :aria-label="t('navigation.sidebar')"
+        :inert="navigationInert"
+        :aria-hidden="navigationInert ? 'true' : undefined"
+        :style="mobileNavigationTransform"
         :class="[
-          'w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground',
-          mobileNavigation
-            ? 'absolute inset-y-0 left-0 z-20 flex pb-20 md:static md:pb-0'
-            : 'hidden md:flex',
+          'absolute top-0 bottom-20 left-0 z-50 flex w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transform-gpu md:static md:bottom-auto md:translate-x-0',
+          mobileNavigationDragging
+            ? 'transition-none'
+            : 'transition-transform duration-300 ease-out motion-reduce:transition-none',
+          mobileNavigationInteractive
+            ? 'pointer-events-auto'
+            : 'pointer-events-none md:pointer-events-auto',
         ]"
       >
         <div

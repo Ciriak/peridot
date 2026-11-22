@@ -118,7 +118,7 @@ test("existing card lists render the one shared catalog card", async () => {
   assert.match(albums, /albumCatalogCard\(item\)/);
   assert.match(artist, /albumCatalogCard\(item\)/);
   assert.match(playlists, /playlistCatalogCard\(item\)/);
-  assert.match(search, /albumCatalogCard\(item\)/);
+  assert.match(search, /albumCatalogCard\(album\)/);
   assert.match(catalogCard, /<article/);
   assert.doesNotMatch(quickPick, /layout\?: "tile" \| "card"/);
   assert.doesNotMatch(quickPickContent, /layout|rounded-lg border bg-card/);
@@ -151,7 +151,10 @@ test("the shared card adapts menus, playback, and likes by item type", async () 
     card,
     /if \(album\.value\) \{[\s\S]*kind: "album"[\s\S]*if \(track\.value\?\.mediaType === "music"\) \{[\s\S]*kind: "track"[\s\S]*return null;/,
   );
-  assert.equal(card.match(/<LikeButton/g)?.length, 1);
+  assert.equal(card.match(/<LikeButton/g)?.length, 2);
+  assert.match(card, /layout\?: "card" \| "row"/);
+  assert.match(card, /layout === 'row'/);
+  assert.match(card, /<SearchResultTag/);
   assert.match(card, /v-if="likeTarget"/);
   assert.doesNotMatch(
     card,

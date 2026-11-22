@@ -230,6 +230,7 @@ const schemas: Record<string, SchemaObject> = {
     id: stringSchema,
     mediaType: mediaTypeSchema,
     mediaTypeOrigin: trackMediaTypeOriginSchema,
+    sourceKind: nullable(enumeration("path", "url", "jellyfin")),
     title: stringSchema,
     artist: stringSchema,
     artists: arrayOf(stringSchema),

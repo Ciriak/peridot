@@ -91,6 +91,7 @@ export interface TrackResponse {
   id: string;
   mediaType: MediaType;
   mediaTypeOrigin: TrackMediaTypeOrigin;
+  sourceKind: SourceKind | null;
   title: string;
   artist: string;
   artists: string[];

@@ -46,7 +46,7 @@ test("catalog card grids virtualize responsive rows against the main scroll", as
   }
 });
 
-test("catalog search uses virtualized card rows and the shared track table", async () => {
+test("catalog search uses the shared row surfaces for tracks and collections", async () => {
   const search = await readFile(
     new URL("../app/pages/search.vue", import.meta.url),
     "utf8",
@@ -57,7 +57,7 @@ test("catalog search uses virtualized card rows and the shared track table", asy
   assert.match(search, /useCatalogTrackQuery/);
   assert.match(search, /useCatalogAudiobookQuery/);
   assert.match(search, /useCatalogPodcastQuery/);
-  assert.match(search, /layout="compact"/);
+  assert.match(search, /layout="row"/);
   assert.match(search, /layout="standard"/);
   assert.match(search, /<TrackTable/);
   assert.match(search, /<VirtualCardGrid/);

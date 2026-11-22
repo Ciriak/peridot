@@ -1849,7 +1849,9 @@ export class CatalogService {
   private async hydrateTracks(ids: readonly string[], userId: string) {
     if (!ids.length) return [];
     const [tracks, projected, likedRows] = await Promise.all([
-      this.database.orm.Track.where((track) => track.id.in([...ids])).all(),
+      this.database.orm.Track.where((track) => track.id.in([...ids]))
+        .include("source", (source) => source.select("kind"))
+        .all(),
       this.database.orm.CatalogTrack.where((track) =>
         track.id.in([...ids]),
       ).all(),

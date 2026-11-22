@@ -387,7 +387,12 @@ test("Jellyfin publishes 100-item catalog batches before the scan completes", as
     });
     assert.equal(partial.statusCode, 200, partial.body);
     const partialTracks = partial.json<{
-      items: Array<{ title: string; artist: string; album: string | null }>;
+      items: Array<{
+        title: string;
+        artist: string;
+        album: string | null;
+        sourceKind: string | null;
+      }>;
       totalCount: number;
     }>();
     assert.equal(partialTracks.totalCount, 100);
@@ -397,7 +402,8 @@ test("Jellyfin publishes 100-item catalog batches before the scan completes", as
         (track) =>
           track.title.startsWith("Batched track ") &&
           track.artist.startsWith("Batched artist ") &&
-          track.album?.startsWith("Batched album "),
+          track.album?.startsWith("Batched album ") &&
+          track.sourceKind === "jellyfin",
       ),
     );
     const running = await context.app.inject({

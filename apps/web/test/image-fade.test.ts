@@ -74,6 +74,7 @@ test("cover art and artist portraits disable fades for cached images", async () 
     "../app/components/MediaCollectionCard.vue",
     "../app/components/MediaCollectionDetail.vue",
     "../app/components/MobilePlayer.vue",
+    "../app/components/MobilePlayerTrackPanel.vue",
     "../app/components/QuickPickTileContent.vue",
     "../app/layouts/default.vue",
     "../app/pages/albums/[album].vue",

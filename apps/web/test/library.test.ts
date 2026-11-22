@@ -215,9 +215,15 @@ test("shared track tables virtualize against the main content scroll owner", asy
   assert.match(table, /@load="loadMoreRows"/);
   assert.doesNotMatch(table, /@click="loadMoreRows"/);
   assert.doesNotMatch(table, /t\("trackTable\.loadMore"\)/);
-  assert.match(table, /role="table"/);
-  assert.match(table, /:aria-rowcount="tracks\.length \+ 1"/);
-  assert.match(table, /:aria-rowindex="item\.index \+ 2"/);
+  assert.match(table, /:role="isSearch \? 'list' : 'table'"/);
+  assert.match(
+    table,
+    /:aria-rowcount="isSearch \? undefined : tracks\.length \+ 1"/,
+  );
+  assert.match(
+    table,
+    /:aria-rowindex="isSearch \? undefined : item\.index \+ 2"/,
+  );
   assert.match(table, /:style="virtualizer\.virtualRowStyle\(item\)"/);
   assert.match(table, /:style="\{ overflowAnchor: 'none' \}"/);
   assert.doesNotMatch(table, /useVirtualList|containerProps|wrapperProps/);
@@ -229,6 +235,11 @@ test("shared track tables virtualize against the main content scroll owner", asy
   assert.doesNotMatch(virtualizer, /useElementBounding|wrapperBounds/);
   assert.match(table, /completedScrollTarget/);
   assert.doesNotMatch(table, /scrollIntoView\(\{ block: "start" \}\)/);
+  assert.match(
+    table,
+    /virtualizer\.scrollToIndex\(index, \{ align: "center" \}\);/,
+    "Linked tracks scroll into a clear safe zone below the compact header",
+  );
   assert.match(
     layout,
     /id="main-content"[\s\S]*?class="[^"]*overflow-y-auto/,
@@ -277,7 +288,7 @@ test("unavailable tracks keep inert controls without an unavailable badge", asyn
 
   assert.match(
     table,
-    /<ScrollingText\s+:id="trackTitleAnchorId\(item\.track\.id\)"\s+class="min-w-0 scroll-mt-4"\s+:class="\{ 'opacity-60': isUnavailable\(item\.track\) \}"[\s\S]*?t\('trackTable\.unavailableTitle'\)[\s\S]*?\{\{ item\.track\.title \}\}<\/ScrollingText/,
+    /<ScrollingText\s+:id="trackTitleAnchorId\(item\.track\.id\)"\s+class="min-w-0 scroll-mt-20"\s+:class="\{ 'opacity-60': isUnavailable\(item\.track\) \}"[\s\S]*?t\('trackTable\.unavailableTitle'\)[\s\S]*?\{\{ item\.track\.title \}\}<\/ScrollingText/,
     "Unavailable titles stay dimmed and expose their native status label",
   );
   assert.match(table, /:class="isUnavailable\(item\.track\) && 'opacity-60'"/);

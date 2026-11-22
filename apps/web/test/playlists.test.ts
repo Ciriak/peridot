@@ -353,7 +353,7 @@ test("liked tracks use generated artwork and a read-only automatic playlist surf
 
   assert.match(cover, /bg-primary\/40 text-white/);
   assert.match(cover, /icons\.heartFilled/);
-  assert.match(cover, /class="size-16"/);
+  assert.match(cover, /compact \? 'size-5' : 'size-16'/);
   assert.match(catalogCard, /:kind="playlist\.kind"/);
   assert.match(playlistMenu, /playlist\.kind === "liked-tracks"/);
   assert.match(playlistMenu, /v-if="!automatic"/);

@@ -196,6 +196,10 @@ test("scans track, disc, and album tags and backfills legacy metadata once", asy
     });
     assert.equal(response.statusCode, 200);
     assert.equal(
+      response.json<{ sourceKind: string | null }>().sourceKind,
+      "path",
+    );
+    assert.equal(
       response.json<{ trackNumber: number | null }>().trackNumber,
       5,
     );
@@ -203,6 +207,20 @@ test("scans track, disc, and album tags and backfills legacy metadata once", asy
       "Elliot Lake",
       "Óra",
     ]);
+
+    await context.database.orm.Track.where({ id: firstTrack.id }).update({
+      sourceId: null,
+    });
+    const legacyResponse = await context.app.inject({
+      method: "GET",
+      url: `/api/tracks/${firstTrack.id}`,
+      headers: context.authorization,
+    });
+    assert.equal(legacyResponse.statusCode, 200);
+    assert.equal(
+      legacyResponse.json<{ sourceKind: string | null }>().sourceKind,
+      null,
+    );
   } finally {
     await context.close();
   }

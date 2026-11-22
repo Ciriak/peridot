@@ -77,7 +77,12 @@ export async function registerLibraryRoutes(
   app.get<{ Params: { id: string } }>(
     "/api/tracks/:id",
     async (request, reply) => {
-      const track = await canonicalTrack(database, request.params.id);
+      const canonical = await canonicalTrack(database, request.params.id);
+      const track = canonical
+        ? await database.orm.Track.where({ id: canonical.id })
+            .include("source", (source) => source.select("kind"))
+            .first()
+        : null;
       if (!track)
         return sendError(
           reply,
@@ -92,9 +97,9 @@ export async function registerLibraryRoutes(
           trackId: track.id,
         }),
       );
-      const projected = await database.orm.CatalogTrack.select("albumId").first(
-        { id: track.id },
-      );
+      const projected = await database.orm.CatalogTrack.select("albumId").first({
+        id: track.id,
+      });
       return toTrackResponse(
         track,
         playbackTokens,

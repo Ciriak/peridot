@@ -11,6 +11,7 @@ import AutoLoadMore from "./AutoLoadMore.vue";
 import AlbumLink from "./AlbumLink.vue";
 import DownloadProgressTooltip from "./DownloadProgressTooltip.vue";
 import LikeButton from "./LikeButton.vue";
+import SearchResultTag from "./SearchResultTag.vue";
 import TrackArtistLinks from "./TrackArtistLinks.vue";
 import TrackArtwork from "./TrackArtwork.vue";
 import TrackContextMenu from "./TrackContextMenu.vue";
@@ -38,6 +39,7 @@ import {
   type TrackSortField,
 } from "../lib/library";
 import { isTrackPlayable } from "../lib/offline-playback";
+import { trackSearchResultType } from "../lib/search-results";
 
 const props = defineProps<{
   tracks: readonly TrackResponse[];
@@ -88,6 +90,7 @@ const savedTrackIds = computed(
 const activeSort = computed(
   () => props.sort ?? defaultTrackSort(props.variant),
 );
+const isSearch = computed(() => props.variant === "search");
 const rowGroup = ref<HTMLElement | null>(null);
 const virtualizer = useMainScrollVirtualizer({
   count: computed(() => props.tracks.length),
@@ -233,7 +236,7 @@ async function scrollToTarget(trackId: string) {
   await virtualizer.refresh();
   const index = props.tracks.findIndex((track) => track.id === trackId);
   if (index < 0) return false;
-  virtualizer.scrollToIndex(index, { align: "start" });
+  virtualizer.scrollToIndex(index, { align: "center" });
   completedScrollTarget.value = trackId;
   startTrackLinkHighlight(trackId);
   return true;
@@ -270,13 +273,13 @@ onBeforeUnmount(() => {
 
 <template>
   <div
-    role="table"
-    :aria-rowcount="tracks.length + 1"
-    :aria-label="t('trackTable.label')"
-    class="rounded-lg border text-sm"
+    :role="isSearch ? 'list' : 'table'"
+    :aria-rowcount="isSearch ? undefined : tracks.length + 1"
+    :aria-label="isSearch ? t('page.search.results') : t('trackTable.label')"
+    :class="isSearch ? 'text-sm' : 'rounded-lg border text-sm'"
     :style="{ overflowAnchor: 'none' }"
   >
-    <div role="rowgroup">
+    <div v-if="!isSearch" role="rowgroup">
       <div
         role="row"
         aria-rowindex="1"
@@ -395,7 +398,7 @@ onBeforeUnmount(() => {
 
     <div
       ref="rowGroup"
-      role="rowgroup"
+      :role="isSearch ? 'presentation' : 'rowgroup'"
       class="relative"
       :style="{
         height: `${virtualizer.totalSize.value}px`,
@@ -409,8 +412,8 @@ onBeforeUnmount(() => {
         @play="playFromList(item.track, true)"
       >
         <div
-          role="row"
-          :aria-rowindex="item.index + 2"
+          :role="isSearch ? 'listitem' : 'row'"
+          :aria-rowindex="isSearch ? undefined : item.index + 2"
           class="group/track-artwork flex h-14 min-w-full select-none items-center whitespace-nowrap border-b motion-safe:transition-colors motion-safe:duration-300 motion-safe:ease-out motion-reduce:transition-none"
           :class="{
             'bg-primary/10': isTrackLinkHighlighted(item.track),
@@ -421,13 +424,16 @@ onBeforeUnmount(() => {
           @dblclick.prevent="playFromList(item.track)"
         >
           <div
-            v-if="variant !== 'library'"
-            role="cell"
+            v-if="!isSearch && variant !== 'library'"
+            :role="isSearch ? undefined : 'cell'"
             class="flex w-16 shrink-0 justify-end p-3 tabular-nums text-muted-foreground"
           >
             {{ formatTrackNumber(item.track) }}
           </div>
-          <div role="cell" class="flex min-w-0 flex-1 items-center gap-2 p-2">
+          <div
+            :role="isSearch ? undefined : 'cell'"
+            class="flex min-w-0 flex-1 items-center gap-2 p-2"
+          >
             <TrackArtwork
               :track="item.track"
               :server-address="address ?? ''"
@@ -464,7 +470,7 @@ onBeforeUnmount(() => {
               <div class="flex min-w-0 items-center gap-2">
                 <ScrollingText
                   :id="trackTitleAnchorId(item.track.id)"
-                  class="min-w-0 scroll-mt-4"
+                  class="min-w-0 scroll-mt-20"
                   :class="{ 'opacity-60': isUnavailable(item.track) }"
                   :title="
                     isUnavailable(item.track)
@@ -506,8 +512,10 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <div
-            v-if="!['album', 'audiobook', 'podcast'].includes(variant)"
-            role="cell"
+            v-if="
+              !isSearch && !['album', 'audiobook', 'podcast'].includes(variant)
+            "
+            :role="isSearch ? undefined : 'cell'"
             class="hidden w-56 shrink-0 p-3 text-muted-foreground md:block"
           >
             <ScrollingText
@@ -521,14 +529,42 @@ onBeforeUnmount(() => {
             </ScrollingText>
           </div>
           <div
-            role="cell"
+            v-if="!isSearch"
+            :role="isSearch ? undefined : 'cell'"
             class="w-20 shrink-0 p-3 text-right tabular-nums text-muted-foreground"
           >
             {{ formatTrackDuration(item.track.durationMs) }}
           </div>
           <div
-            v-if="variant !== 'album'"
-            role="cell"
+            v-if="isSearch"
+            class="ml-auto flex shrink-0 items-center justify-end gap-2 p-2"
+          >
+            <SearchResultTag
+              :type="trackSearchResultType(item.track.mediaType)"
+              :source-kind="item.track.sourceKind ?? null"
+            />
+            <LikeButton
+              v-if="
+                allowTrackLike !== false && item.track.mediaType === 'music'
+              "
+              compact
+              :liked="
+                likesLoaded
+                  ? likedTrackIds.includes(item.track.id)
+                  : item.track.liked
+              "
+              :label="item.track.title"
+              :pending="
+                isLikePending({ kind: 'track', trackId: item.track.id })
+              "
+              :disabled="!likesLoaded"
+              @toggle="toggleLike({ kind: 'track', trackId: item.track.id })"
+              @dblclick.stop
+            />
+          </div>
+          <div
+            v-if="variant !== 'album' && !isSearch"
+            :role="isSearch ? undefined : 'cell'"
             class="w-14 shrink-0 p-2 text-right"
           >
             <DownloadProgressTooltip
@@ -584,8 +620,12 @@ onBeforeUnmount(() => {
             </DownloadProgressTooltip>
           </div>
           <div
-            v-if="allowTrackLike !== false && item.track.mediaType === 'music'"
-            role="cell"
+            v-if="
+              !isSearch &&
+              allowTrackLike !== false &&
+              item.track.mediaType === 'music'
+            "
+            :role="isSearch ? undefined : 'cell'"
             class="w-14 shrink-0 p-2 text-right"
           >
             <LikeButton
@@ -606,10 +646,13 @@ onBeforeUnmount(() => {
         </div>
       </TrackContextMenu>
     </div>
-    <div v-if="hasMore" role="rowgroup">
-      <div role="row" :aria-rowindex="tracks.length + 2">
+    <div v-if="hasMore" :role="isSearch ? undefined : 'rowgroup'">
+      <div
+        :role="isSearch ? undefined : 'row'"
+        :aria-rowindex="isSearch ? undefined : tracks.length + 2"
+      >
         <AutoLoadMore
-          role="cell"
+          :role="isSearch ? undefined : 'cell'"
           class="min-w-full"
           :enabled="Boolean(hasMore)"
           :loading="Boolean(loadingMore)"

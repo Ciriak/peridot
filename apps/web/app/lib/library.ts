@@ -23,7 +23,7 @@ export interface ArtistGroup {
 }
 
 export type TrackTableVariant =
-  "library" | "album" | "artist" | "audiobook" | "podcast";
+  "library" | "search" | "album" | "artist" | "audiobook" | "podcast";
 
 export type TrackSortField =
   "number" | "title" | "artist" | "album" | "duration";
@@ -34,7 +34,7 @@ export interface TrackSort {
 }
 
 export function defaultTrackSort(variant: TrackTableVariant): TrackSort {
-  return variant === "library"
+  return variant === "library" || variant === "search"
     ? { field: "title", direction: "asc" }
     : { field: "number", direction: "asc" };
 }

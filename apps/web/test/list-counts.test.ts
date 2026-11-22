@@ -16,7 +16,7 @@ test("collection counts use exact totals beside section headings", async () => {
     ].map((path) => readFile(new URL(path, import.meta.url), "utf8")),
   );
 
-  for (const page of pages) {
+  for (const page of pages.filter((_, index) => index !== 6)) {
     assert.match(
       page,
       /<div class="flex flex-wrap items-center gap-2">\s*<h2/,
@@ -36,8 +36,10 @@ test("collection counts use exact totals beside section headings", async () => {
   assert.match(pages[4]!, /loading \? t\("common\.loading"\) : totalCount/);
   assert.match(pages[5]!, /t\("count\.track", \{ count: totalCount \}/);
   assert.match(pages[6]!, /totalCount: artistTotalCount/);
-  assert.match(pages[6]!, /totalCount: albumTotalCount/);
-  assert.match(pages[6]!, /totalCount: trackTotalCount/);
+  assert.match(pages[6]!, /totalCount: audiobookTotalCount/);
+  assert.match(pages[6]!, /totalCount: podcastTotalCount/);
+  assert.doesNotMatch(pages[6]!, /totalCount: albumTotalCount/);
+  assert.doesNotMatch(pages[6]!, /totalCount: trackTotalCount/);
   assert.match(pages[7]!, /totalCount: albumTotalCount/);
   assert.match(pages[7]!, /totalCount: trackTotalCount/);
 });

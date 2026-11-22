@@ -166,9 +166,11 @@ test("administrators can add and remove path and url sources", async () => {
       headers: context.authorization,
     });
     const removedTrack = tracksBeforeRemoval
-      .json<{ items: Array<{ id: string }> }>()
+      .json<{ items: Array<{ id: string; sourceKind: string | null }> }>()
       .items.at(0);
     assert.ok(removedTrack);
+    assert.equal(removedTrack.sourceKind, "path");
+    assert.equal(tracksBeforeRemoval.body.includes(secondRoot), false);
 
     const removed = await context.app.inject({
       method: "DELETE",

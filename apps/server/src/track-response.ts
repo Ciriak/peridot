@@ -1,4 +1,4 @@
-import type { TrackResponse } from "@peridot/contracts";
+import type { SourceKind, TrackResponse } from "@peridot/contracts";
 import {
   effectiveAlbumArtistCredits,
   effectiveArtistCredits,
@@ -12,6 +12,17 @@ import { effectiveTrackGenres, parseStoredGenres } from "./genres.js";
 import type { PlaybackTokenService } from "./playback-tokens.js";
 import type { TrackRow } from "./prisma/models.js";
 import { storedMediaType } from "./media.js";
+
+type TrackResponseRow = TrackRow & {
+  source?: { kind: string } | null;
+};
+
+function sourceKind(value: string | null | undefined): SourceKind | null {
+  if (value === "path" || value === "url" || value === "jellyfin") {
+    return value;
+  }
+  return null;
+}
 
 export function effectiveTrackFields(track: TrackRow) {
   const music = storedMediaType(track.mediaType) === "music";
@@ -64,7 +75,7 @@ export function toCoverUrl(
 }
 
 export function toTrackResponse(
-  track: TrackRow,
+  track: TrackResponseRow,
   playbackTokens: PlaybackTokenService,
   liked = false,
   albumId: string | null = null,
@@ -104,6 +115,7 @@ export function toTrackResponse(
       track.mediaTypeOrigin === "source" || track.mediaTypeOrigin === "embedded"
         ? track.mediaTypeOrigin
         : "fallback",
+    sourceKind: sourceKind(track.source?.kind),
     title: effective.title,
     artist: effective.artist,
     artists: effective.artists,

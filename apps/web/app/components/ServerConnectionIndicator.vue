@@ -28,7 +28,9 @@ const { status } = useServerConnection();
           class="cursor-default text-foreground"
         >
           <Icon :icon="icons.networkOff" aria-hidden="true" />
-          {{ t("components.serverConnection.offlineBadge") }}
+          <span class="hidden md:inline">{{
+            t("components.serverConnection.offlineBadge")
+          }}</span>
         </Badge>
       </TooltipTrigger>
       <TooltipPortal>

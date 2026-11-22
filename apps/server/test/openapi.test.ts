@@ -129,6 +129,10 @@ test("OpenAPI endpoints publish every documented API route", async () => {
 
     assert.ok(document.components.securitySchemes.bearerAuth);
     assert.ok(document.components.schemas.TrackResponse);
+    const trackSchema = document.components.schemas.TrackResponse as {
+      properties?: Record<string, unknown>;
+    };
+    assert.ok(trackSchema.properties?.sourceKind);
     assert.ok(document.components.schemas.ApiErrorResponse);
 
     const references = collectSchemaReferences(document);

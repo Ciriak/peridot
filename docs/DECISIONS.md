@@ -1,5 +1,87 @@
 # Peridot decisions
 
+## 2026-11-22: The PWA manifest is a public source asset
+
+The web application keeps `manifest.webmanifest` in `apps/web/public` and
+disables manifest generation in the PWA module. With the development service
+worker disabled, the module does not generate a development manifest; the SPA
+fallback previously returned `index.html` at `/manifest.webmanifest`, causing
+the browser manifest parser to report a line-one syntax error.
+
+Serving the manifest as a public JSON asset gives development and production one
+authoritative manifest with the correct `application/manifest+json` content
+type. Production service-worker generation and caching remain enabled while the
+development service worker remains disabled.
+
+## 2026-11-22: Fullscreen mobile player uses carousel gestures
+
+The expanded `player=fullscreen` mobile surface uses one shared swipe system
+built on VueUse `useSwipe` distances. Gestures lock to the first dominant axis
+after 8 px. Left swipes advance and right swipes return to the previous track;
+upward gestures never close the player. The persistent compact bottom bar does
+not receive these gestures.
+
+Artwork and metadata render as a three-position carousel containing the actual
+previous, current, and next queue entries. Adjacent panels are visual-only,
+`inert`, and hidden from assistive technology. Each carousel cell clips its own
+content, and adjacent titles stay transparent until a horizontal drag or track
+transition begins so preview text cannot overlap the centered title. Preview
+selection follows normal queue order, shuffle history, unavailable-track
+filtering, and repeat-all behavior. An exhausted shuffled repeat pass is
+materialized when the left gesture begins so its preview is the track that
+`next()` will actually play.
+
+Gestures may begin anywhere except buttons, links, sliders, form fields, and
+explicitly ignored elements. A downward close gesture is available outside the
+scroll area or while the scroll area is at its top; otherwise downward movement
+continues to scroll. Horizontal changes settle after 20% of the width or a fast
+flick. Downward dismissal requires 20% of the player height or a fast downward
+flick. Both animations use the standard 200 ms transition token.
+
+Opening the fullscreen player from the compact bar starts the surface below the
+viewport and animates it upward while the overlay fades in. Closing resets all
+gesture offsets and animation state only after the route leaves fullscreen, so
+the compact bar can always reopen a clean player surface.
+
+The fullscreen player does not render a buffering label. It uses the same
+top-edge animated loading ray as the desktop player. The active track's like
+control is aligned to the right edge of its centered track panel, while nearby
+preview panels remain visual-only.
+
+## 2026-11-22: Mobile sidebars share swipe and backdrop behavior
+
+The main and settings navigation sidebars use one shared VueUse `useSwipe`
+composable. On mobile, the drawer follows horizontal touch movement directly:
+rightward drags reveal the closed sidebar and leftward drags dismiss the open
+sidebar. The drawer settles at the midpoint when the finger is released rather
+than waiting for a swipe to end before playing a two-state transition. Desktop
+no longer receives synthetic open/closed state from touch gestures.
+Swipe-to-open is suppressed when the gesture starts in a text field or slider so
+those controls retain their native horizontal behavior.
+
+Both sidebars render a theme-token backdrop with background dimming and blur
+while open. The backdrop is a labelled button, so tapping it closes the
+sidebar while preserving a clear compact-screen escape action. Its opacity
+tracks the drawer's drag progress. Button and backdrop actions still settle with
+a 300 ms transition when no continuous drag is active.
+
+Continuous positioning uses runtime transforms for the drawer, player surface,
+and player carousel plus opacity for each backdrop. This is a narrow technical
+exception to the no-inline-style rule because the values change on every touch
+frame and cannot be represented by a finite set of Tailwind utilities. All
+static visual styling continues to use shared Tailwind utilities and semantic
+tokens.
+
+The mobile navigation surface disables horizontal overscroll and panning and
+uses a non-passive VueUse swipe listener. This claims horizontal touch gestures
+inside the application so the browser does not interpret the sidebar-opening
+right swipe as Back navigation. Browser-reserved system gestures remain outside
+site control.
+
+The backdrop sits above page content and catalog play controls, while the drawer
+sits above the backdrop. The drawer ends above the fixed player so playback
+remains available.
+
 ## 2026-11-22: Offline copies follow canonical duplicate IDs
 
 Saved offline audio and metadata are reconciled against the current canonical
@@ -114,6 +196,12 @@ matches browser playback. This state is session-local and is discarded when the
 player queue scope is cleared; it is not catalog availability and does not alter
 the server record.
 
+Each track that newly becomes runtime-unavailable also produces one localized
+error toast with the track title. The toast follows the unavailable state shared
+by browser and Android playback, so it appears whether the failed track was
+skipped or playback stopped. Retry attempts and repeated Android snapshots do
+not produce additional toasts.
+
 ## 2026-11-21: Automatic track skips do not wrap
 
 Automatic advancement after exhausted playback-start attempts traverses the
@@ -177,6 +265,10 @@ normal background with the standard Tailwind color-transition utilities. The
 highlight timer is cleaned up when the target changes or the table unmounts.
 Reduced-motion users receive the same two-second state without the color
 transition.
+
+Track jumps center the linked row in the main scroll viewport, and title anchors
+use a `scroll-mt-20` safe zone. This keeps the highlighted row clear of the
+fixed compact detail header at the top of the main content area.
 
 ## 2026-11-20: Catalog cards use one item-aware component
 

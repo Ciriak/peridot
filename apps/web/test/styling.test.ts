@@ -24,11 +24,13 @@ test("app layout respects the owner's Tailwind and shadcn styling authority", as
     "../app/components/LibraryScreen.vue",
     "../app/components/ListSearchBar.vue",
     "../app/components/MobilePlayer.vue",
+    "../app/components/MobilePlayerTrackPanel.vue",
     "../app/components/PlaylistContextMenu.vue",
     "../app/components/PlaylistTrackList.vue",
     "../app/components/QuickPickTileContent.vue",
     "../app/components/QuickPickTile.vue",
     "../app/components/QueueDrawer.vue",
+    "../app/components/SearchResultTag.vue",
     "../app/components/ScrolledHeader.vue",
     "../app/components/ServerConnectionIndicator.vue",
     "../app/components/SidebarQuickPicks.vue",
@@ -69,11 +71,43 @@ test("app layout respects the owner's Tailwind and shadcn styling authority", as
     "../app/components/TrackTable.vue",
     "../app/components/VirtualCardGrid.vue",
   ]);
+  const runtimePlayerStyleBindings = [
+    ':style="playerOverlayStyle"',
+    ':style="playerSurfaceStyle"',
+    ':style="playerCarouselStyle"',
+  ];
+  const sidebarStyleBindings = [
+    ':style="mobileNavigationTransform"',
+    ':style="mobileNavigationBackdropStyle"',
+  ];
   assert.doesNotMatch(source, /<style\b/i, "No custom CSS blocks");
   for (const entry of sources) {
     if (virtualStyleFiles.has(entry.file)) continue;
+    let sourceWithoutRuntimeSidebarStyles = entry.source;
+    if (
+      entry.file === "../app/layouts/default.vue" ||
+      entry.file === "../app/layouts/settings.vue"
+    ) {
+      for (const binding of sidebarStyleBindings) {
+        assert.ok(
+          sourceWithoutRuntimeSidebarStyles.includes(binding),
+          `${entry.file} binds ${binding}`,
+        );
+        sourceWithoutRuntimeSidebarStyles =
+          sourceWithoutRuntimeSidebarStyles.replaceAll(binding, "");
+      }
+    } else if (entry.file === "../app/components/MobilePlayer.vue") {
+      for (const binding of runtimePlayerStyleBindings) {
+        assert.ok(
+          sourceWithoutRuntimeSidebarStyles.includes(binding),
+          `${entry.file} binds ${binding}`,
+        );
+        sourceWithoutRuntimeSidebarStyles =
+          sourceWithoutRuntimeSidebarStyles.replaceAll(binding, "");
+      }
+    }
     assert.doesNotMatch(
-      entry.source,
+      sourceWithoutRuntimeSidebarStyles,
       /\s:?style\s*=/i,
       `No inline styles in ${entry.file}`,
     );

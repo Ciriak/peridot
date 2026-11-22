@@ -168,7 +168,9 @@ async function materializeLikedTracksPlaylist(
   const likedTrackIds = [...new Set(likes.map((like) => like.trackId))];
   const [trackRows, projections] = await Promise.all([
     likedTrackIds.length
-      ? database.orm.Track.where((track) => track.id.in(likedTrackIds)).all()
+      ? database.orm.Track.where((track) => track.id.in(likedTrackIds))
+          .include("source", (source) => source.select("kind"))
+          .all()
       : Promise.resolve([]),
     likedTrackIds.length
       ? database.orm.CatalogTrack.where((track) =>
@@ -300,7 +302,9 @@ async function materializePlaylist(
   ];
   const [trackRows, projections, likedRows, likedPlaylist] = await Promise.all([
     trackIds.length
-      ? database.orm.Track.where((track) => track.id.in(trackIds)).all()
+      ? database.orm.Track.where((track) => track.id.in(trackIds))
+          .include("source", (source) => source.select("kind"))
+          .all()
       : Promise.resolve([]),
     trackIds.length
       ? database.orm.CatalogTrack.where((track) => track.id.in(trackIds)).all()

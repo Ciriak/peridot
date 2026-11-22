@@ -45,17 +45,53 @@ test("search uses one full-content route with recent and local results", async (
   assert.match(searchPage, /useSearchRecents\(\)/);
   assert.match(searchPage, /@open="openAlbum\(album\)"/);
   assert.match(searchPage, /<CatalogCard/);
-  assert.match(searchPage, /albumCatalogCard\(item\)/);
-  assert.match(searchPage, /playlistCatalogCard\(item\)/);
+  assert.match(searchPage, /albumCatalogCard\(album\)/);
+  assert.match(searchPage, /playlistCatalogCard\(playlist\)/);
   assert.match(searchPage, /compact/);
   assert.match(searchPage, /<ArtistCard/);
   assert.match(searchPage, /<MediaCollectionCard/);
   assert.match(searchPage, /<TrackTable/);
-  assert.match(searchPage, /page\.search\.externalSources/);
-  assert.match(searchPage, /page\.search\.externalTitle/);
+  assert.match(searchPage, /variant="search"/);
+  assert.match(searchPage, /layout="row"/);
+  assert.match(searchPage, /page\.search\.noResults/);
+  assert.doesNotMatch(searchPage, /page\.search\.externalSources/);
+  assert.doesNotMatch(searchPage, /page\.search\.externalTitle/);
   assert.match(catalogCard, /defineEmits<\{ open: \[\] \}>/);
   assert.match(artistCard, /artistRoute\(artist\)/);
   assert.match(mediaCollectionCard, /collection\.mediaType/);
+});
+
+test("search lists tracks before albums and playlists without type headings", async () => {
+  const searchPage = await readFile(
+    new URL("../app/pages/search.vue", import.meta.url),
+    "utf8",
+  );
+  const trackIndex = searchPage.indexOf('variant="search"');
+  const albumIndex = searchPage.indexOf(
+    'v-if="showAlbums && albumResults.length"',
+  );
+  const playlistIndex = searchPage.indexOf(
+    'v-if="showPlaylists && playlistResults.length"',
+  );
+
+  assert.ok(trackIndex >= 0);
+  assert.ok(albumIndex > trackIndex);
+  assert.ok(playlistIndex > albumIndex);
+  assert.doesNotMatch(searchPage, /page\.search\.localTracks/);
+  assert.doesNotMatch(searchPage, /page\.search\.localAlbums/);
+  assert.doesNotMatch(searchPage, /page\.search\.localPlaylists/);
+  assert.match(
+    searchPage,
+    /const showArtists = computed\(\s*\(\) => resultFilter\.value === "artists"/,
+  );
+  assert.match(
+    searchPage,
+    /const showAudiobooks = computed\(\s*\(\) => resultFilter\.value === "audiobooks"/,
+  );
+  assert.match(
+    searchPage,
+    /const showPodcasts = computed\(\s*\(\) => resultFilter\.value === "podcasts"/,
+  );
 });
 
 test("result-type tags are accessible quick filters", async () => {
@@ -66,7 +102,17 @@ test("result-type tags are accessible quick filters", async () => {
 
   assert.match(searchPage, /page\.search\.filters/);
   assert.match(searchPage, /role="group"/);
+  assert.match(
+    searchPage,
+    /data-sidebar-swipe-ignore\s+role="group"[\s\S]*?class="scrollbar-hide flex flex-nowrap touch-pan-x items-center gap-2 overflow-x-auto overscroll-x-contain"/,
+    "Quick filters stay on one horizontally scrollable line without a scrollbar",
+  );
   assert.match(searchPage, /:aria-label="t\('page\.search\.filters'\)"/);
+  assert.match(
+    searchPage,
+    /class="sticky -top-4 z-20 -mx-4 -mt-4 border-b bg-background px-4 py-3 md:-top-6 md:-mx-6 md:-mt-6 md:px-6"/,
+    "The quick filters stay flush with the main scroll viewport while results scroll",
+  );
   assert.match(searchPage, /aria-pressed="resultFilter === filter\.value"/);
   assert.match(searchPage, /\{ value: "all", labelKey: "page\.search\.all" \}/);
   assert.match(

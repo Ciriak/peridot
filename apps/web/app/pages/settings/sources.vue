@@ -66,7 +66,11 @@ import {
   isAuthenticationRedirectError,
   reorderSources,
 } from "../../lib/peridot-client";
-import { sourceFolderName } from "../../lib/source-label";
+import {
+  sourceFolderName,
+  sourceKindIcon,
+  sourceKindLabelKey,
+} from "../../lib/source-label";
 import {
   activeTaskForSource,
   sourceTaskProgress,
@@ -152,16 +156,9 @@ function sourceLabel(source: SourceResponse | null): string {
   return source.name || source.url || "";
 }
 
-function sourceKindIcon(source: SourceResponse) {
-  if (source.kind === "path") return icons.folder;
-  if (source.kind === "url") return icons.globe;
-  return icons.jellyfin;
-}
-
 function sourceKindLabel(source: SourceResponse): string {
-  if (source.kind === "path") return t("settings.sources.path");
-  if (source.kind === "url") return t("settings.sources.url");
-  return t("settings.sources.jellyfin.title");
+  const key = sourceKindLabelKey(source.kind);
+  return key ? t(key) : source.kind;
 }
 
 function sourceDetail(source: SourceResponse): string | null {
@@ -598,8 +595,8 @@ onBeforeUnmount(() => {
             :title="sourceKindLabel(source)"
             class="flex size-6 shrink-0 items-center justify-center text-muted-foreground"
           >
-            <Icon
-              :icon="sourceKindIcon(source)"
+                  <Icon
+                    :icon="sourceKindIcon(source.kind) ?? icons.server"
               aria-hidden="true"
               class="size-5"
             />

@@ -135,7 +135,7 @@ test("track list rows open their track menu while catalog links keep their own m
 
   assert.match(
     trackTable,
-    /<TrackContextMenu[\s\S]*role="row"[\s\S]*<TrackArtistLinks[\s\S]*<AlbumLink[\s\S]*<\/TrackContextMenu>/,
+    /<TrackContextMenu[\s\S]*:role="isSearch \? 'listitem' : 'row'"[\s\S]*<TrackArtistLinks[\s\S]*<AlbumLink[\s\S]*<\/TrackContextMenu>/,
     "The whole catalog track row is a context-menu trigger",
   );
   assert.match(

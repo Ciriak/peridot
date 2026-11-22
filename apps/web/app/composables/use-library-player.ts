@@ -14,7 +14,9 @@ import {
   appendToShufflePool,
   compactQueueAfterShuffle,
   consumeQueue,
+  lastAvailableHistoryTrackId,
   moveTrackToFront,
+  nextPreviewTrackId,
   nextRepeatMode,
   normalizeQueueTrackIds,
   removeFromShufflePool,
@@ -38,7 +40,7 @@ import {
 import { offlineAudioBlob, readSavedOfflineTracks } from "../lib/offline-audio";
 import { readOfflineCatalog } from "../lib/offline-catalog";
 import { isTrackPlayable } from "../lib/offline-playback";
-import { notifyTrackDownloadFailed } from "../lib/toasts";
+import { notifyPlaybackFailed, notifyTrackDownloadFailed } from "../lib/toasts";
 import { useCatalogRevision } from "./use-catalog-query";
 import {
   readPersistedPlayerState,
@@ -116,6 +118,10 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     () => null,
   );
   const queueHistory = useState<string[]>("player-queue-history", () => []);
+  const queueHistoryTrackDetails = useState<TrackResponse[]>(
+    "player-queue-history-track-details",
+    () => [],
+  );
   const activePlaylistId = useState<string | null>(
     "player-active-playlist-id",
     () => null,
@@ -189,6 +195,28 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
             repeatCycleTrackIds.value.some((trackId) =>
               nextPlayableQueueIds.includes(trackId),
             ));
+  });
+  const nextTrackPreview = computed<TrackResponse | null>(() => {
+    const nextId = nextPreviewTrackId({
+      currentTrackId: currentTrackId.value,
+      playableTrackIds: playableQueueIds(),
+      shuffleEnabled: shuffleEnabled.value,
+      shuffleTrackIds: shuffleTrackIds.value,
+      repeatMode: repeatMode.value,
+      repeatCycleTrackIds: repeatCycleTrackIds.value.filter(
+        (trackId) =>
+          serverStatus.value !== "lost" ||
+          offlineSavedTrackIdSet.value.has(trackId),
+      ),
+    });
+    return nextId ? trackForId(nextId) : null;
+  });
+  const previousTrackPreview = computed<TrackResponse | null>(() => {
+    const previousId = lastAvailableHistoryTrackId(
+      queueHistory.value,
+      availableTrackIds(),
+    );
+    return previousId ? trackForId(previousId) : null;
   });
   const durationSeconds = computed(() => {
     const catalogDuration = Math.floor((active.value?.durationMs ?? 0) / 1000);
@@ -328,16 +356,22 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     );
   }
 
+  function isTrackPlayableForPlayer(track: TrackResponse): boolean {
+    return isTrackPlayable(track, {
+      serverLost: serverStatus.value === "lost",
+      savedTrackIds: offlineSavedTrackIdSet.value,
+      unavailableTrackIds: unavailableTrackIdSet.value,
+    });
+  }
+
   function playableQueueIds(): string[] {
     const trackIds = normalizedQueue();
     const tracksById = new Map(
       resolvedQueueTracks.value.map((track) => [track.id, track]),
     );
     return trackIds.filter((trackId) => {
-      if (unavailableTrackIdSet.value.has(trackId)) return false;
-      if (offlineSavedTrackIdSet.value.has(trackId)) return true;
       const track = tracksById.get(trackId);
-      return serverStatus.value !== "lost" && Boolean(track?.available);
+      return track ? isTrackPlayableForPlayer(track) : false;
     });
   }
 
@@ -378,7 +412,11 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
   }
 
   function availableTrackIds(): Set<string> {
-    return new Set(playableQueueIds());
+    return new Set(
+      [...queueTracks.value, ...queueHistoryTrackDetails.value]
+        .filter(isTrackPlayableForPlayer)
+        .map((track) => track.id),
+    );
   }
 
   function normalizedQueue(
@@ -389,6 +427,15 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
 
   function trackIdFor(track: PlayerTrack): string {
     return typeof track === "string" ? track : track.id;
+  }
+
+  function trackForId(trackId: string): TrackResponse | null {
+    const known =
+      active.value?.id === trackId
+        ? active.value
+        : (queueTracks.value.find((track) => track.id === trackId) ??
+          queueHistoryTrackDetails.value.find((track) => track.id === trackId));
+    return known ?? null;
   }
 
   function samePlaybackTarget(
@@ -557,6 +604,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     shuffleEnabled.value = false;
     shuffleTrackIds.value = [];
     queueHistory.value = [];
+    queueHistoryTrackDetails.value = [];
     queueLoaded.value = false;
     repeatCycleTrackIds.value = [];
     repeatMode.value = "off";
@@ -638,9 +686,22 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     mediaDuration.value = 0;
   }
 
+  function rememberHistoryTrack(track: TrackResponse | null) {
+    if (
+      !track ||
+      queueHistoryTrackDetails.value.some(
+        (candidate) => candidate.id === track.id,
+      )
+    ) {
+      return;
+    }
+    queueHistoryTrackDetails.value = [...queueHistoryTrackDetails.value, track];
+  }
+
   function rememberCurrentTrack(nextTrackId: string) {
     const current = currentTrackId.value;
     if (current && current !== nextTrackId) {
+      rememberHistoryTrack(active.value);
       queueHistory.value = [...queueHistory.value, current];
     }
   }
@@ -810,6 +871,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
       void PeridotMedia.next().catch(() => undefined);
       return;
     }
+    rememberHistoryTrack(active.value);
     queueHistory.value = [...queueHistory.value, current];
     if (shuffleEnabled.value) {
       const trackIds = playableQueueIds();
@@ -877,6 +939,23 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     }
   }
 
+  function prepareNextTrackPreview(): TrackResponse | null {
+    const current = currentTrackId.value;
+    if (!current) return null;
+    const existing = nextTrackPreview.value;
+    if (existing) return existing;
+    if (!shuffleEnabled.value || repeatMode.value !== "all") return null;
+    const trackIds = playableQueueIds();
+    if (trackIds.length < 2) return null;
+    const advanced = advanceShuffle(trackIds, current, [], true);
+    if (advanced.activeTrackId === current) return null;
+    shuffleTrackIds.value = [
+      advanced.activeTrackId,
+      ...advanced.shuffleTrackIds,
+    ];
+    return trackForId(advanced.activeTrackId);
+  }
+
   function previous() {
     if (androidRuntime) {
       void PeridotMedia.previous().catch(() => undefined);
@@ -894,6 +973,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     }
     const previousTrackId = queueHistory.value.at(-1);
     if (previousTrackId) {
+      const previousTrack = trackForId(previousTrackId);
       queueHistory.value = queueHistory.value.slice(0, -1);
       if (shuffleEnabled.value) {
         const trackIds = normalizedQueue();
@@ -901,10 +981,15 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
           shuffleTrackIds.value,
           previousTrackId,
         );
+        const nextQueue = trackIds.includes(previousTrackId)
+          ? trackIds
+          : [previousTrackId, ...trackIds];
+        rememberQueueTrackDetails(
+          previousTrack ? [previousTrack] : [],
+          nextQueue,
+        );
         setQueueSnapshot({
-          trackIds: trackIds.includes(previousTrackId)
-            ? trackIds
-            : [previousTrackId, ...trackIds],
+          trackIds: nextQueue,
           activeTrackId: previousTrackId,
           shuffleEnabled: true,
           shuffleTrackIds: restorePreviousShuffleTrack(
@@ -916,6 +1001,10 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
         const trackIds = restorePreviousTrack(
           normalizedQueue(),
           previousTrackId,
+        );
+        rememberQueueTrackDetails(
+          previousTrack ? [previousTrack] : [],
+          trackIds,
         );
         setQueueSnapshot({
           trackIds,
@@ -1120,6 +1209,23 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
       { deep: true },
     );
     onUnmounted(stopLocalStateWatch);
+
+    const notifiedPlaybackFailureIds = new Set(unavailableTrackIds.value);
+    const stopPlaybackFailureWatch = watch(
+      unavailableTrackIds,
+      (trackIds) => {
+        for (const trackId of trackIds) {
+          if (notifiedPlaybackFailureIds.has(trackId)) continue;
+          notifyPlaybackFailed(trackForId(trackId)?.title);
+        }
+        notifiedPlaybackFailureIds.clear();
+        for (const trackId of trackIds) {
+          notifiedPlaybackFailureIds.add(trackId);
+        }
+      },
+      { flush: "post" },
+    );
+    onUnmounted(stopPlaybackFailureWatch);
   }
 
   if (options.audio && androidRuntime) {
@@ -1598,6 +1704,8 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     queueLoaded,
     shuffleEnabled,
     active,
+    nextTrackPreview,
+    previousTrackPreview,
     queueTracks,
     upcomingTracks,
     unavailableTrackIds,
@@ -1617,6 +1725,7 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
     toggleRandomization,
     cycleRepeatMode,
     next,
+    prepareNextTrackPreview,
     previous,
     togglePlayback,
     seek,

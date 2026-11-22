@@ -264,7 +264,7 @@ test("sources are managed on their own page with row action menus", async () => 
     /v-else class="text-sm text-muted-foreground">[\s\S]*?<\/div>\s*<section aria-labelledby="source-refresh-heading"/,
   );
   assert.match(page, /:datetime="source\.lastSyncedAt"/);
-  assert.match(page, /sourceKindIcon\(source\)/);
+  assert.match(page, /sourceKindIcon\(source\.kind\)/);
   assert.match(page, /sourceKindLabel\(source\)/);
   assert.match(page, /:title="sourceKindLabel\(source\)"/);
   assert.match(page, /block font-medium/);

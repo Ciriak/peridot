@@ -70,6 +70,51 @@ export function consumeQueue(trackIds: readonly string[]): string[] {
   return trackIds.slice(1);
 }
 
+export function nextPreviewTrackId({
+  currentTrackId,
+  playableTrackIds,
+  shuffleEnabled,
+  shuffleTrackIds,
+  repeatMode,
+  repeatCycleTrackIds,
+}: {
+  currentTrackId: string | null;
+  playableTrackIds: readonly string[];
+  shuffleEnabled: boolean;
+  shuffleTrackIds: readonly string[];
+  repeatMode: RepeatMode;
+  repeatCycleTrackIds: readonly string[];
+}): string | null {
+  if (!currentTrackId) return null;
+  const playable = new Set(playableTrackIds);
+  if (shuffleEnabled) {
+    return (
+      shuffleTrackIds.find(
+        (trackId) => trackId !== currentTrackId && playable.has(trackId),
+      ) ?? null
+    );
+  }
+  const nextId = consumeQueue(playableTrackIds).find(
+    (trackId) => trackId !== currentTrackId,
+  );
+  if (nextId) return nextId;
+  if (repeatMode !== "all") return null;
+  return (
+    repeatCycleTrackIds.find((trackId) => trackId !== currentTrackId) ?? null
+  );
+}
+
+export function lastAvailableHistoryTrackId(
+  historyTrackIds: readonly string[],
+  availableTrackIds: ReadonlySet<string>,
+): string | null {
+  return (
+    [...historyTrackIds]
+      .reverse()
+      .find((trackId) => availableTrackIds.has(trackId)) ?? null
+  );
+}
+
 export function removeQueueTrack(
   trackIds: readonly string[],
   trackId: string,

@@ -9,6 +9,7 @@ import { computed, ref, watch } from "vue";
 import ServerConnectionIndicator from "../components/ServerConnectionIndicator.vue";
 import { useAdminSourcesQuery } from "../composables/use-admin-queries";
 import { useOfflineDownloadTasks } from "../composables/use-offline-download-tasks";
+import { useSwipeSidebar } from "../composables/use-swipe-sidebar";
 import { useTasks } from "../composables/use-tasks";
 import { useUser } from "../composables/use-user";
 import { downloadTaskProgressPercent } from "../lib/download-tasks";
@@ -33,6 +34,8 @@ const runtimeConfig = useRuntimeConfig();
 const appVersion = runtimeConfig.public.appVersion;
 const environment = runtimeConfig.public.environment;
 const mobileNavigation = ref(false);
+const navigationSwipeArea = ref<HTMLElement | null>(null);
+const navigationDrawer = ref<HTMLElement | null>(null);
 const previousLibraryTaskStatuses = new Map<string, TaskStatus>();
 const sourceCount = computed(() => sources.value.length);
 const activeTasks = computed(() =>
@@ -93,6 +96,16 @@ const adminCategories = [
   },
   { labelKey: "settings.server", to: "/settings/server", icon: icons.server },
 ];
+const {
+  isMobile: mobileNavigationViewport,
+  dragging: mobileNavigationDragging,
+  interactive: mobileNavigationInteractive,
+  drawerStyle: mobileNavigationTransform,
+  backdropStyle: mobileNavigationBackdropStyle,
+} = useSwipeSidebar(navigationSwipeArea, navigationDrawer, mobileNavigation);
+const navigationInert = computed(
+  () => mobileNavigationViewport.value && !mobileNavigationInteractive.value,
+);
 
 watch(
   () => route.path,
@@ -116,18 +129,46 @@ watch(tasks, (current) => {
 </script>
 
 <template>
-  <div class="flex h-dvh overflow-hidden bg-background text-foreground">
+  <div
+    ref="navigationSwipeArea"
+    class="flex h-dvh touch-pan-y overflow-hidden overscroll-x-none bg-background text-foreground"
+  >
     <a href="#settings-content" class="sr-only focus:not-sr-only focus:p-4">{{
       t("navigation.skipToContent")
     }}</a>
+    <button
+      type="button"
+      data-sidebar-backdrop
+      class="fixed inset-0 z-40 cursor-default bg-background/80 backdrop-blur-sm md:hidden"
+      :class="[
+        mobileNavigationDragging
+          ? 'transition-none'
+          : 'transition-opacity duration-300 ease-out motion-reduce:transition-none',
+        mobileNavigationInteractive
+          ? 'pointer-events-auto'
+          : 'pointer-events-none',
+      ]"
+      :style="mobileNavigationBackdropStyle"
+      :aria-label="t('navigation.closeSettings')"
+      :aria-hidden="mobileNavigationInteractive ? undefined : 'true'"
+      :tabindex="mobileNavigationInteractive ? undefined : -1"
+      @click="mobileNavigation = false"
+    />
     <aside
+      ref="navigationDrawer"
       id="settings-sidebar"
       :aria-label="t('navigation.settingsNavigation')"
+      :inert="navigationInert"
+      :aria-hidden="navigationInert ? 'true' : undefined"
+      :style="mobileNavigationTransform"
       :class="[
-        'w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground',
-        mobileNavigation
-          ? 'absolute inset-y-0 left-0 z-20 flex'
-          : 'hidden md:flex',
+        'absolute inset-y-0 left-0 z-50 flex w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transform-gpu md:static md:translate-x-0',
+        mobileNavigationDragging
+          ? 'transition-none'
+          : 'transition-transform duration-300 ease-out motion-reduce:transition-none',
+        mobileNavigationInteractive
+          ? 'pointer-events-auto'
+          : 'pointer-events-none md:pointer-events-auto',
       ]"
     >
       <div
