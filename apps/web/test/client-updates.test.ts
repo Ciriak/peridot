@@ -109,6 +109,8 @@ test("CI publishes signed Android and desktop update artifacts", async () => {
   assert.match(workflow, /package-android-web:/);
   assert.match(workflow, /android-web-update/);
   assert.match(workflow, /publish-desktop:/);
+  assert.match(workflow, /target: darwin-universal\s+runner: macos-15/);
+  assert.doesNotMatch(workflow, /runner: macos-14\b/);
   assert.match(workflow, /desktop-updater-manifest\.mjs/);
   assert.match(workflow, /client-\$\{channel\}/);
   assert.match(workflow, /channel=beta/);

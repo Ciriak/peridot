@@ -1,5 +1,30 @@
 # Peridot handoff
 
+## Retired macOS release runner replaced
+
+GitHub retired all macOS 14 hosted images on November 2, 2026. The signed
+universal desktop release job now runs on `macos-15`, and the CI workflow
+regression test rejects the retired `macos-14` runner label.
+
+Verification:
+
+- Focused CI workflow regression test
+- Full repository test and static-check gates rerun before push
+
+Known limits:
+
+- The universal macOS artifact itself must build successfully in the next
+  GitHub Actions run.
+
+Uncommitted changes:
+
+- Desktop release runner update, its workflow assertion, and this handoff
+  section.
+
+Next:
+
+- Confirm the complete pushed GitHub Actions workflow succeeds.
+
 ## CI test suite restored
 
 The full test suite now matches the current public track contract, the public PWA

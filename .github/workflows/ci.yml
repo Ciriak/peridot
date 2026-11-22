@@ -337,7 +337,7 @@ jobs:
             runner: windows-latest
             tauriTarget: ""
           - target: darwin-universal
-            runner: macos-14
+            runner: macos-15
             tauriTarget: universal-apple-darwin
     steps:
       - uses: actions/checkout@v7
