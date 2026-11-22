@@ -1,5 +1,57 @@
 # Peridot handoff
 
+## Offline copies survive duplicate promotion
+
+Offline playback now follows canonical duplicate IDs. The local catalog exposed
+`Give Life Back to Music` under a canonical ID while its saved offline manifest
+still referenced a hidden duplicate ID, so the title appeared unavailable even
+though its audio remained cached. Connected clients now resolve saved IDs in
+bounded batches and move browser cache entries and Android cached files to the
+canonical track while preserving their original save time.
+
+The Android Media3 queue no longer removes a source-unavailable track before
+checking for its device-local audio file. Runtime playback failures still mark a
+track unavailable after the normal retry limit.
+
+Verification:
+
+- `pnpm --filter @peridot/web test` (280 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- `pnpm typecheck`
+- Focused ESLint and repository Prettier checks
+- `pnpm --filter @peridot/android test`
+- `pnpm --filter @peridot/android lint`
+- `pnpm --filter @peridot/android instrument` (7 passing on API 37)
+- `pnpm --filter @peridot/android build`
+- `git diff --check`
+- `pnpm test` completed desktop, player, contracts, UI, and web tests, but the
+  server suite failed the unrelated `server-log.test.ts` restart-history
+  assertion (192 of 193 passing). The same failure reproduced when that test was
+  run alone.
+
+Known limits:
+
+- A saved copy that references a duplicate ID requires one connected refresh
+  before an offline-only session can resolve it to the canonical ID.
+- Live browser playback was not rechecked after the fix because the current
+  Computer Use session could not verify the active Brave URL.
+- The full test gate remains red because the existing server log restoration
+  test does not recover its pre-restart entry in this environment.
+
+Uncommitted changes:
+
+- Web offline manifest reconciliation and regression coverage.
+- Android cached-track identity migration and source-unavailable queue handling.
+- Decision, development, and handoff updates.
+
+Next:
+
+- Reconnect the affected client, confirm the offline badge and playback target
+  move to the visible track, then disconnect and play it once.
+- Repair or quarantine the unrelated server log restoration test before using
+  the aggregate `pnpm test` result as a release gate.
+
 ## Git formatter and message hooks
 
 Husky now runs `npm run format` before each commit. The existing `commit-msg`

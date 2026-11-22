@@ -87,6 +87,10 @@ jobs are removed. Normal catalog queries exclude unavailable entries; personal
 surfaces can request them explicitly. Re-adding the same source identity restores
 the tombstone and track IDs before queuing a scan.
 
+When connected, the client resolves saved offline track IDs and moves stored
+audio and manifests to current canonical duplicate IDs. Android may queue a
+source-unavailable track when its device-local audio file exists.
+
 ## API summary
 
 Administrators create sources with `POST /api/admin/sources`. Jellyfin uses:

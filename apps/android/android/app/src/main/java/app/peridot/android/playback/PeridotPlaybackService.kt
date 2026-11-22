@@ -531,7 +531,15 @@ class PeridotPlaybackService : MediaLibraryService() {
     }
 
     private fun playableItems(tracks: List<TrackSnapshot>): List<MediaItem> =
-        tracks.filter(TrackSnapshot::available).map(::playableItem)
+        tracks
+            .filter(::hasPlayableSource)
+            .map(::playableItem)
+
+    private fun hasPlayableSource(track: TrackSnapshot): Boolean {
+        if (track.available) return true
+        val session = sessions.read() ?: return false
+        return offlineStore.audioFile(session, track.id).isFile
+    }
 
     private fun playableItem(track: TrackSnapshot): MediaItem {
         val artwork = track.coverUrl?.let(Uri::parse)

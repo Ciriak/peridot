@@ -1,5 +1,18 @@
 # Peridot decisions
 
+## 2026-11-22: Offline copies follow canonical duplicate IDs
+
+Saved offline audio and metadata are reconciled against the current canonical
+track IDs whenever the client is connected. Duplicate detection can promote a
+different copy after a track was downloaded, so a saved manifest may reference
+an ID that is no longer visible in the catalog. The client resolves saved IDs in
+bounded batches and moves the cached audio, manifest metadata, and original save
+time to the canonical ID on both web storage and Android.
+
+The Android Media3 queue also treats a local cached file as playable when the
+catalog marks its source unavailable. Runtime playback failure remains
+authoritative after all start attempts are exhausted.
+
 ## 2026-11-22: Git hooks format commits and validate messages
 
 The repository keeps its Git hooks in `.husky` and configures Git to use them

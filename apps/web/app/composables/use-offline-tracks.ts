@@ -7,7 +7,7 @@ import { useState } from "#imports";
 import { computed, ref, watch } from "vue";
 import {
   readSavedOfflineTrack,
-  readSavedOfflineTracks,
+  refreshSavedOfflineTracks,
   removeTrackForOffline,
   saveTrackForOffline,
   type SavedOfflineTrack,
@@ -51,7 +51,10 @@ export function useOfflineTracks() {
       return;
     }
     try {
-      savedTracks.value = await readSavedOfflineTracks(scope.value);
+      savedTracks.value = await refreshSavedOfflineTracks(
+        scope.value,
+        token.value,
+      );
       playerSavedTrackIds.value = savedTracks.value.map(
         (saved) => saved.track.id,
       );
@@ -318,11 +321,7 @@ export function useOfflineTracks() {
     await downloadTasks.clear(scope.value);
   }
 
-  watch(
-    () => scope.value,
-    () => void refresh(),
-    { immediate: true },
-  );
+  watch([scope, token, status], () => void refresh(), { immediate: true });
 
   return {
     savedTracks,

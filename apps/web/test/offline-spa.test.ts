@@ -7,6 +7,7 @@ import {
   OFFLINE_AUDIO_CACHE,
   OFFLINE_TRACK_DATABASE,
   offlineAudioCacheRequest,
+  offlineTrackAliasMoves,
   offlineTrackStorageKey,
   prepareOfflineResponse,
   snapshotTrackForOffline,
@@ -533,6 +534,48 @@ test("offline playback uses only saved copies while disconnected", () => {
   );
 });
 
+test("saved offline copies follow canonical duplicate aliases", () => {
+  const duplicate: TrackResponse = {
+    id: "track-duplicate",
+    mediaType: "music",
+    mediaTypeOrigin: "source",
+    title: "Give Life Back to Music",
+    artist: "Daft Punk",
+    artists: ["Daft Punk"],
+    album: "Random Access Memories",
+    genres: ["disco"],
+    albumId: "album-1",
+    discNumber: 1,
+    trackNumber: 1,
+    durationMs: 261_000,
+    publishedAt: "2013-01-01T00:00:00.000Z",
+    mimeType: "audio/flac",
+    available: false,
+    coverUrl: null,
+    metadata: null,
+    liked: false,
+  };
+  const canonical: TrackResponse = {
+    ...duplicate,
+    id: "track-canonical",
+    available: true,
+  };
+  const savedAt = "2026-11-18T10:15:06.475Z";
+  const moves = offlineTrackAliasMoves(
+    [{ scope, track: duplicate, savedAt, size: 31_295_714 }],
+    {
+      items: [canonical],
+      aliases: { "track-duplicate": "track-canonical" },
+    },
+  );
+
+  assert.equal(moves.length, 1);
+  assert.equal(moves[0]?.source.track.id, "track-duplicate");
+  assert.equal(moves[0]?.target.track.id, "track-canonical");
+  assert.equal(moves[0]?.target.savedAt, savedAt);
+  assert.equal(moves[0]?.target.size, 31_295_714);
+});
+
 test("the fixed player shares saved-track availability across controls", async () => {
   const [player, offlineTracks, layout] = await Promise.all([
     readFile(
@@ -546,6 +589,11 @@ test("the fixed player shares saved-track availability across controls", async (
     readFile(new URL("../app/layouts/default.vue", import.meta.url), "utf8"),
   ]);
 
+  assert.match(
+    offlineTracks,
+    /refreshSavedOfflineTracks\(\s*scope\.value,\s*token\.value/,
+    "Saved audio follows canonical duplicate aliases before controls use it",
+  );
   assert.match(
     offlineTracks,
     /const savedTracks = useState<SavedOfflineTrack\[\]>\(\s*"player-offline-saved-tracks"/,

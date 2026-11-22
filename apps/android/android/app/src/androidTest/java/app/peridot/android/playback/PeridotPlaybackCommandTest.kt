@@ -100,6 +100,7 @@ class PeridotPlaybackCommandTest {
                     title = "Notification test",
                     artist = "Peridot",
                     mimeType = "audio/wav",
+                    available = false,
                 ),
             ),
             activeTrackId = TRACK_ID,

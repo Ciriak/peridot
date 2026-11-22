@@ -252,6 +252,31 @@ class PeridotMediaPlugin : Plugin() {
     }
 
     @PluginMethod
+    fun moveCachedTrack(call: PluginCall) {
+        val fromTrackId = call.getString("fromTrackId")
+        val savedAt = call.getString("savedAt")
+        val trackJson = call.getObject("track")
+        val session = sessions.read()
+        if (
+            fromTrackId.isNullOrBlank() ||
+            savedAt.isNullOrBlank() ||
+            trackJson == null ||
+            session == null
+        ) {
+            call.reject("A connected session, track ID, metadata, and save time are required.")
+            return
+        }
+        val track = runCatching {
+            TrackSnapshot.fromJson(org.json.JSONObject(trackJson.toString()))
+        }.getOrElse {
+            call.reject("Track metadata is invalid: ${it.message ?: "unknown error"}")
+            return
+        }
+        offlineStore.move(session, fromTrackId, track, savedAt)
+        call.resolve()
+    }
+
+    @PluginMethod
     fun removeCachedTrack(call: PluginCall) {
         val trackId = call.getString("trackId")
         val session = sessions.read()

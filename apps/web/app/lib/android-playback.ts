@@ -65,6 +65,11 @@ interface PeridotMediaPlugin {
     track: AndroidTrackSnapshot;
   }): Promise<AndroidCachedTrack>;
   listCachedTracks(): Promise<{ items: AndroidCachedTrack[] }>;
+  moveCachedTrack(options: {
+    fromTrackId: string;
+    track: AndroidTrackSnapshot;
+    savedAt: string;
+  }): Promise<void>;
   removeCachedTrack(options: { trackId: string }): Promise<void>;
   clearOfflineTracks(): Promise<void>;
   addListener(

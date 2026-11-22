@@ -10,18 +10,24 @@ import {
 import {
   createPlaybackToken,
   PeridotNetworkError,
+  resolveTracks,
   trackAudioUrl,
 } from "./peridot-client.ts";
 import { trackCoverUrl } from "./library.ts";
 import { clearOfflineArtwork, loadArtworkBlob } from "./offline-artwork.ts";
 import type { PeridotQueryScope } from "./query-keys";
 import { isAndroidRuntime } from "./android-runtime.ts";
-import { PeridotMedia, trackResponseFromAndroid } from "./android-playback.ts";
+import {
+  androidTrackSnapshot,
+  PeridotMedia,
+  trackResponseFromAndroid,
+} from "./android-playback.ts";
 import { reportServerReachability } from "./server-connectivity.ts";
 
 export const OFFLINE_AUDIO_CACHE = "peridot-offline-audio-v1";
 export const OFFLINE_TRACK_DATABASE = "peridot-web-offline-tracks-v1";
 const OFFLINE_TRACK_STORE = "offline-tracks";
+const offlineTrackRefreshes = new Map<string, Promise<SavedOfflineTrack[]>>();
 
 export interface SavedOfflineTrack {
   scope: PeridotQueryScope;
@@ -33,6 +39,11 @@ export interface SavedOfflineTrack {
 export interface PreparedOfflineResponse {
   response: Response;
   size: number;
+}
+
+export interface OfflineTrackAliasMove {
+  source: SavedOfflineTrack;
+  target: SavedOfflineTrack;
 }
 
 export function snapshotTrackForOffline(track: TrackResponse): TrackResponse {
@@ -143,6 +154,32 @@ export function offlineAudioCacheRequest(
   );
 }
 
+export function offlineTrackAliasMoves(
+  savedTracks: readonly SavedOfflineTrack[],
+  resolution: {
+    items: readonly TrackResponse[];
+    aliases: Readonly<Record<string, string>>;
+  },
+): OfflineTrackAliasMove[] {
+  const tracksById = new Map(
+    resolution.items.map((track) => [track.id, track]),
+  );
+  return savedTracks.flatMap((source) => {
+    const canonicalId = resolution.aliases[source.track.id];
+    const canonical = canonicalId ? tracksById.get(canonicalId) : undefined;
+    if (!canonicalId || !canonical) return [];
+    return [
+      {
+        source,
+        target: {
+          ...source,
+          track: canonical,
+        },
+      },
+    ];
+  });
+}
+
 export async function readSavedOfflineTracks(
   scope: PeridotQueryScope,
 ): Promise<SavedOfflineTrack[]> {
@@ -182,6 +219,102 @@ export async function readSavedOfflineTrack(
     offlineTrackStore(),
   );
   return saved ? normalizeSavedOfflineTrack(saved) : undefined;
+}
+
+async function moveOfflineAudioCache(
+  scope: PeridotQueryScope,
+  sourceTrackId: string,
+  targetTrackId: string,
+): Promise<boolean> {
+  if (sourceTrackId === targetTrackId) return true;
+  if (typeof caches === "undefined") return false;
+  const cache = await caches.open(OFFLINE_AUDIO_CACHE);
+  const targetRequest = offlineAudioCacheRequest(scope, targetTrackId);
+  if (await cache.match(targetRequest)) return true;
+  const sourceRequest = offlineAudioCacheRequest(scope, sourceTrackId);
+  const response = await cache.match(sourceRequest);
+  if (!response) return false;
+  await cache.put(targetRequest, response);
+  return true;
+}
+
+async function reconcileSavedOfflineTracks(
+  scope: PeridotQueryScope,
+  token: string | null,
+): Promise<SavedOfflineTrack[]> {
+  const savedTracks = await readSavedOfflineTracks(scope);
+  if (!token || !savedTracks.length) return savedTracks;
+
+  let moves: OfflineTrackAliasMove[];
+  try {
+    const items: TrackResponse[] = [];
+    const aliases: Record<string, string> = {};
+    const trackIds = savedTracks.map((saved) => saved.track.id);
+    for (let index = 0; index < trackIds.length; index += 200) {
+      const resolution = await resolveTracks(
+        scope.serverAddress,
+        token,
+        trackIds.slice(index, index + 200),
+      );
+      items.push(...resolution.items);
+      Object.assign(aliases, resolution.aliases);
+    }
+    moves = offlineTrackAliasMoves(savedTracks, { items, aliases });
+  } catch {
+    return savedTracks;
+  }
+  if (!moves.length) return savedTracks;
+
+  if (isAndroidRuntime()) {
+    for (const move of moves) {
+      await PeridotMedia.moveCachedTrack({
+        fromTrackId: move.source.track.id,
+        track: androidTrackSnapshot(move.target.track, scope.serverAddress),
+        savedAt: move.target.savedAt,
+      }).catch(() => undefined);
+    }
+    return readSavedOfflineTracks(scope);
+  }
+  if (typeof caches === "undefined") return savedTracks;
+
+  const cache = await caches.open(OFFLINE_AUDIO_CACHE);
+  for (const move of moves) {
+    const sourceId = move.source.track.id;
+    const targetId = move.target.track.id;
+    if (!(await moveOfflineAudioCache(scope, sourceId, targetId))) continue;
+
+    const targetKey = offlineTrackStorageKey(scope, targetId);
+    const existingTarget = await get<SavedOfflineTrack>(
+      targetKey,
+      offlineTrackStore(),
+    );
+    if (
+      !existingTarget ||
+      new Date(move.target.savedAt).getTime() >=
+        new Date(existingTarget.savedAt).getTime()
+    ) {
+      await set(targetKey, move.target, offlineTrackStore());
+    }
+    await del(offlineTrackStorageKey(scope, sourceId), offlineTrackStore());
+    await cache.delete(offlineAudioCacheRequest(scope, sourceId));
+  }
+  return readSavedOfflineTracks(scope);
+}
+
+export function refreshSavedOfflineTracks(
+  scope: PeridotQueryScope,
+  token: string | null,
+): Promise<SavedOfflineTrack[]> {
+  const key = `${scope.serverAddress}\u0000${scope.userId}\u0000${token ?? ""}`;
+  const pending = offlineTrackRefreshes.get(key);
+  if (pending) return pending;
+  const refresh = reconcileSavedOfflineTracks(scope, token).finally(() => {
+    if (offlineTrackRefreshes.get(key) === refresh) {
+      offlineTrackRefreshes.delete(key);
+    }
+  });
+  offlineTrackRefreshes.set(key, refresh);
+  return refresh;
 }
 
 export async function saveTrackForOffline(

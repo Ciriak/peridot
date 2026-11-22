@@ -95,8 +95,40 @@ class OfflineStore(context: Context) {
         }.sortedByDescending(CachedTrack::savedAt)
     }
 
+    fun move(
+        session: PeridotSession,
+        fromTrackId: String,
+        track: TrackSnapshot,
+        savedAt: String,
+    ): CachedTrack? {
+        val source = audioFile(session, fromTrackId)
+        if (!source.isFile) return null
+        val target = audioFile(session, track.id)
+        if (source != target) {
+            val existingTarget = list(session).firstOrNull { it.track.id == track.id }
+            if (existingTarget != null && existingTarget.savedAt >= savedAt) {
+                source.delete()
+                preferences.edit { remove(manifestKey(session, fromTrackId)) }
+                return existingTarget
+            }
+            target.parentFile?.mkdirs()
+            if (!source.renameTo(target)) {
+                source.copyTo(target, overwrite = true)
+                source.delete()
+            }
+        }
+        preferences.edit { remove(manifestKey(session, fromTrackId)) }
+        val cached = CachedTrack(
+            track = track,
+            savedAt = savedAt,
+            size = target.length(),
+        )
+        saveManifest(session, cached)
+        return cached
+    }
+
     fun remove(session: PeridotSession, trackId: String) {
-        preferences.edit { remove("${scopeKey(session)}:$trackId") }
+        preferences.edit { remove(manifestKey(session, trackId)) }
         audioFile(session, trackId).delete()
     }
 
@@ -120,9 +152,12 @@ class OfflineStore(context: Context) {
             .put("savedAt", cached.savedAt)
             .put("size", cached.size)
         preferences.edit {
-            putString("${scopeKey(session)}:${cached.track.id}", payload.toString())
+            putString(manifestKey(session, cached.track.id), payload.toString())
         }
     }
+
+    private fun manifestKey(session: PeridotSession, trackId: String): String =
+        "${scopeKey(session)}:$trackId"
 
     private fun directory(session: PeridotSession): File =
         File(File(appContext.filesDir, "offline"), scopeKey(session))
