@@ -22,11 +22,12 @@ import {
   useCatalogTrackQuery,
 } from "../composables/use-catalog-query";
 import { useLikes } from "../composables/use-likes";
+import { usePlaylistList } from "../composables/use-playlists";
 import { useSearchRecents } from "../composables/use-search-recents";
 import { useQueryScope } from "../composables/use-query-scope";
 import { useServer } from "../composables/use-server";
 import { useSession } from "../composables/use-session";
-import { albumCatalogCard } from "../lib/catalog-cards";
+import { albumCatalogCard, playlistCatalogCard } from "../lib/catalog-cards";
 import { icons } from "../lib/icons";
 import { listAlbums } from "../lib/peridot-client";
 import { queryKeys } from "../lib/query-keys";
@@ -36,7 +37,13 @@ const { t } = useI18n();
 useHead({ title: t("page.search.title") });
 
 type ResultFilter =
-  "all" | "artists" | "albums" | "tracks" | "audiobooks" | "podcasts";
+  | "all"
+  | "artists"
+  | "albums"
+  | "playlists"
+  | "tracks"
+  | "audiobooks"
+  | "podcasts";
 
 const query = useState("search-query", () => "");
 const debouncedQuery = ref("");
@@ -116,6 +123,18 @@ const {
   sort: "title",
 }));
 const {
+  items: playlistResults,
+  loading: playlistsLoading,
+  loadingMore: playlistsLoadingMore,
+  error: playlistsError,
+  hasMore: hasMorePlaylists,
+  totalCount: playlistTotalCount,
+  load: loadPlaylists,
+  loadMore: loadMorePlaylists,
+} = usePlaylistList({
+  query: searchTerm,
+});
+const {
   items: audiobookResults,
   loading: audiobooksLoading,
   loadingMore: audiobooksLoadingMore,
@@ -161,6 +180,7 @@ const resultsLoading = computed(
   () =>
     artistsLoading.value ||
     albumsLoading.value ||
+    playlistsLoading.value ||
     tracksLoading.value ||
     audiobooksLoading.value ||
     podcastsLoading.value,
@@ -169,6 +189,7 @@ const resultsError = computed(
   () =>
     artistsError.value ||
     albumsError.value ||
+    playlistsError.value ||
     tracksError.value ||
     audiobooksError.value ||
     podcastsError.value,
@@ -177,6 +198,7 @@ const hasResults = computed(() =>
   Boolean(
     artistResults.value.length ||
     albumResults.value.length ||
+    playlistResults.value.length ||
     trackResults.value.length ||
     audiobookResults.value.length ||
     podcastResults.value.length,
@@ -187,6 +209,9 @@ const showArtists = computed(
 );
 const showAlbums = computed(
   () => resultFilter.value === "all" || resultFilter.value === "albums",
+);
+const showPlaylists = computed(
+  () => resultFilter.value === "all" || resultFilter.value === "playlists",
 );
 const showTracks = computed(
   () => resultFilter.value === "all" || resultFilter.value === "tracks",
@@ -201,6 +226,7 @@ const resultFilters: { value: ResultFilter; labelKey: string }[] = [
   { value: "all", labelKey: "page.search.all" },
   { value: "artists", labelKey: "page.search.artists" },
   { value: "albums", labelKey: "page.search.albums" },
+  { value: "playlists", labelKey: "page.search.playlists" },
   { value: "tracks", labelKey: "page.search.tracks" },
   { value: "audiobooks", labelKey: "page.search.audiobooks" },
   { value: "podcasts", labelKey: "page.search.podcasts" },
@@ -218,6 +244,7 @@ function retrySearch() {
   void Promise.all([
     loadArtists(true),
     loadAlbums(true),
+    loadPlaylists(true),
     loadTracks(true),
     loadAudiobooks(true),
     loadPodcasts(true),
@@ -231,6 +258,7 @@ onMounted(() => {
   debouncedQuery.value = query.value.trim();
   void loadArtists();
   void loadAlbums();
+  void loadPlaylists();
   void loadTracks();
   void loadAudiobooks();
   void loadPodcasts();
@@ -410,6 +438,54 @@ onMounted(() => {
           class="rounded-lg border p-6 text-sm text-muted-foreground"
         >
           {{ t("page.search.noAlbums") }}
+        </p>
+      </section>
+
+      <section
+        v-if="showPlaylists"
+        aria-labelledby="local-playlists-heading"
+        class="space-y-4"
+      >
+        <div class="flex flex-wrap items-center gap-2">
+          <h2 id="local-playlists-heading" class="text-lg font-semibold">
+            {{ t("page.search.localPlaylists") }}
+          </h2>
+          <Badge variant="secondary">
+            {{
+              t(
+                "count.playlist",
+                { count: playlistTotalCount },
+                playlistTotalCount,
+              )
+            }}
+          </Badge>
+        </div>
+        <VirtualCardGrid
+          v-if="playlistResults.length"
+          :items="playlistResults"
+          layout="standard"
+          :item-key="(playlist) => playlist.id"
+          :estimate-row-height="220"
+        >
+          <template #default="{ item }">
+            <CatalogCard :item="playlistCatalogCard(item)" />
+          </template>
+          <template #footer>
+            <AutoLoadMore
+              :enabled="hasMorePlaylists"
+              :loading="playlistsLoadingMore"
+              :item-count="playlistResults.length"
+              :label="t('page.search.loadingMorePlaylists')"
+              @load="loadMorePlaylists"
+            />
+          </template>
+        </VirtualCardGrid>
+        <p
+          v-else
+          role="status"
+          class="rounded-lg border p-6 text-sm text-muted-foreground"
+        >
+          {{ t("page.search.noPlaylists") }}
         </p>
       </section>
 

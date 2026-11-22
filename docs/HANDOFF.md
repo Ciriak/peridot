@@ -1,5 +1,40 @@
 # Peridot handoff
 
+## Playlists in global search
+
+Global search now includes paginated playlist results and a Playlists quick
+filter. Playlist cards use the same shared `CatalogCard` as the Playlists page,
+including playback, unavailable handling, and the playlist context menu. The
+search empty state does not issue an unfiltered playlist search, and retry
+refreshes playlists with the other result types.
+
+Verification:
+
+- `pnpm --filter @peridot/web test` (279 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Focused search, catalog-card, virtual-scroll, playlist, i18n, and list-search
+  tests (18 passing)
+- Focused ESLint and Prettier checks
+- `git diff --check`
+
+Known limits:
+
+- Live browser visual QA was not completed because Computer Use could not
+  verify the active Brave URL.
+
+Uncommitted changes:
+
+- Search playlist query, results, filter, translations, regression assertions,
+  decision record, and this handoff section.
+- Existing Android, playback, toast, catalog, desktop, and related worktree
+  changes remain present and were not modified.
+
+Next:
+
+- Search for a saved and an automatic playlist, then confirm both cards open,
+  play, and expose the same context-menu actions as the Playlists page.
+
 ## Desktop album cover in the scrolled header
 
 The album detail dock now shows the album cover beside its Back control. It

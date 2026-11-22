@@ -36,6 +36,7 @@ test("search uses one full-content route with recent and local results", async (
   assert.match(searchPage, /useState\("search-query"/);
   assert.match(searchPage, /useCatalogArtistQuery/);
   assert.match(searchPage, /useCatalogAlbumQuery/);
+  assert.match(searchPage, /usePlaylistList/);
   assert.match(searchPage, /useCatalogTrackQuery/);
   assert.match(searchPage, /useCatalogAudiobookQuery/);
   assert.match(searchPage, /useCatalogPodcastQuery/);
@@ -45,6 +46,7 @@ test("search uses one full-content route with recent and local results", async (
   assert.match(searchPage, /@open="openAlbum\(album\)"/);
   assert.match(searchPage, /<CatalogCard/);
   assert.match(searchPage, /albumCatalogCard\(item\)/);
+  assert.match(searchPage, /playlistCatalogCard\(item\)/);
   assert.match(searchPage, /compact/);
   assert.match(searchPage, /<ArtistCard/);
   assert.match(searchPage, /<MediaCollectionCard/);
@@ -77,6 +79,10 @@ test("result-type tags are accessible quick filters", async () => {
   );
   assert.match(
     searchPage,
+    /\{ value: "playlists", labelKey: "page\.search\.playlists" \}/,
+  );
+  assert.match(
+    searchPage,
     /\{ value: "tracks", labelKey: "page\.search\.tracks" \}/,
   );
   assert.match(
@@ -89,6 +95,7 @@ test("result-type tags are accessible quick filters", async () => {
   );
   assert.match(searchPage, /resultFilter\.value === "artists"/);
   assert.match(searchPage, /resultFilter\.value === "albums"/);
+  assert.match(searchPage, /resultFilter\.value === "playlists"/);
   assert.match(searchPage, /resultFilter\.value === "tracks"/);
   assert.match(searchPage, /resultFilter\.value === "audiobooks"/);
   assert.match(searchPage, /resultFilter\.value === "podcasts"/);

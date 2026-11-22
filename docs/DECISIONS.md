@@ -1,5 +1,14 @@
 # Peridot decisions
 
+## 2026-11-22: Search includes playlists as catalog items
+
+Global search treats playlists as a first-class catalog result alongside artists,
+albums, tracks, audiobooks, and podcasts. The search route uses the paginated
+playlist query and renders results with `CatalogCard`, so playlists keep the
+same open, play, context-menu, and unavailable-state behavior as the Playlists
+page. The result filters include a Playlists option, and empty searches do not
+fall back to listing every playlist.
+
 ## 2026-11-22: Scrolled album headers show cover art on desktop
 
 The shared scrolled detail header accepts optional artwork for collection
