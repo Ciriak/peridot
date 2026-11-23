@@ -188,6 +188,7 @@ const {
   loadingMore: tracksLoadingMore,
   error: tracksError,
   hasMore: hasMoreTracks,
+  totalCount: trackTotalCount,
   load: loadTracks,
   loadMore: loadMoreTracks,
 } = useCatalogTrackQuery(() => ({
@@ -451,6 +452,7 @@ onMounted(() => {
               variant="search"
               :has-more="hasMoreTracks"
               :loading-more="tracksLoadingMore"
+              :total-count="trackTotalCount"
               @load-more="loadMoreTracks"
             />
 
@@ -528,18 +530,13 @@ onMounted(() => {
               layout="standard"
               :item-key="(artist) => artist.id"
               :estimate-row-height="92"
+              :total-count="artistTotalCount"
+              :has-more="hasMoreArtists"
+              :loading-more="artistsLoadingMore"
+              @load-more="loadMoreArtists"
             >
               <template #default="{ item }">
                 <ArtistCard :artist="item" />
-              </template>
-              <template #footer>
-                <AutoLoadMore
-                  :enabled="hasMoreArtists"
-                  :loading="artistsLoadingMore"
-                  :item-count="artistResults.length"
-                  :label="t('page.search.loadingMoreArtists')"
-                  @load="loadMoreArtists"
-                />
               </template>
             </VirtualCardGrid>
           </section>
@@ -568,18 +565,13 @@ onMounted(() => {
               layout="standard"
               :item-key="(audiobook) => audiobook.id"
               :estimate-row-height="340"
+              :total-count="audiobookTotalCount"
+              :has-more="hasMoreAudiobooks"
+              :loading-more="audiobooksLoadingMore"
+              @load-more="loadMoreAudiobooks"
             >
               <template #default="{ item }">
                 <MediaCollectionCard :collection="item" />
-              </template>
-              <template #footer>
-                <AutoLoadMore
-                  :enabled="hasMoreAudiobooks"
-                  :loading="audiobooksLoadingMore"
-                  :item-count="audiobookResults.length"
-                  :label="t('page.search.loadingMoreAudiobooks')"
-                  @load="loadMoreAudiobooks"
-                />
               </template>
             </VirtualCardGrid>
           </section>
@@ -608,18 +600,13 @@ onMounted(() => {
               layout="standard"
               :item-key="(podcast) => podcast.id"
               :estimate-row-height="340"
+              :total-count="podcastTotalCount"
+              :has-more="hasMorePodcasts"
+              :loading-more="podcastsLoadingMore"
+              @load-more="loadMorePodcasts"
             >
               <template #default="{ item }">
                 <MediaCollectionCard :collection="item" />
-              </template>
-              <template #footer>
-                <AutoLoadMore
-                  :enabled="hasMorePodcasts"
-                  :loading="podcastsLoadingMore"
-                  :item-count="podcastResults.length"
-                  :label="t('page.search.loadingMorePodcasts')"
-                  @load="loadMorePodcasts"
-                />
               </template>
             </VirtualCardGrid>
           </section>

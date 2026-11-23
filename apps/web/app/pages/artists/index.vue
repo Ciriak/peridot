@@ -5,7 +5,6 @@ import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { onMounted } from "vue";
 import ArtistCard from "../../components/ArtistCard.vue";
-import AutoLoadMore from "../../components/AutoLoadMore.vue";
 import ListSearchBar from "../../components/ListSearchBar.vue";
 import VirtualCardGrid from "../../components/VirtualCardGrid.vue";
 import { useCatalogArtistQuery } from "../../composables/use-catalog-query";
@@ -88,19 +87,14 @@ onMounted(() => {
       layout="standard"
       :item-key="(artist) => artist.id"
       :estimate-row-height="92"
+      :total-count="totalCount"
+      :has-more="hasMore"
+      :loading-more="loadingMore"
       :aria-busy="loading"
+      @load-more="loadMore"
     >
       <template #default="{ item }">
         <ArtistCard :artist="item" />
-      </template>
-      <template #footer>
-        <AutoLoadMore
-          :enabled="hasMore"
-          :loading="loadingMore"
-          :item-count="artists.length"
-          :label="t('page.artists.loadingMore')"
-          @load="loadMore"
-        />
       </template>
     </VirtualCardGrid>
     <p

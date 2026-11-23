@@ -1,5 +1,57 @@
 # Peridot handoff
 
+## Full-count virtual catalog paging
+
+Catalog card grids and track tables now reserve the complete `totalCount`
+returned by the first cursor page. The native scrollbar therefore represents
+the full collection while pages continue to load dynamically near the visible
+virtual range. Non-virtual paginated surfaces keep the existing
+`AutoLoadMore` sentinel.
+
+The Albums grid now renders card-shaped skeletons for unloaded rows. Placeholder
+rows are not measured into the virtualizer, preserving the estimated total
+height until real album cards arrive. One live desktop check scrolled from the
+first page to an unloaded range, confirmed visible album skeletons, and verified
+the loaded item count advanced through subsequent cursor pages.
+
+Verification:
+
+- `pnpm --filter @peridot/web test` (306 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Focused ESLint and Prettier checks on all changed files
+- `git diff --check`
+
+Known limits:
+
+- Cursor pagination is sequential. A direct scrollbar jump deep into a large
+  collection must fetch every intervening page before the visible rows resolve.
+- Only Albums has visible loading placeholders in this iteration. Other virtual
+  surfaces reserve the correct space but render blank rows until data arrives.
+- Live validation used a desktop viewport; phone-width skeleton wrapping was not
+  visually inspected.
+
+Feature files:
+
+- `apps/web/app/composables/use-virtual-load-more.ts`
+- `apps/web/app/components/TrackTable.vue`
+- `apps/web/app/components/VirtualCardGrid.vue`
+- `apps/web/app/components/AlbumCardPlaceholder.vue`
+- `apps/web/app/pages/albums/index.vue`
+
+Uncommitted changes:
+
+- Full-count virtual paging, Albums placeholders, call-site wiring, regression
+  tests, decision record, and this handoff section.
+
+Next:
+
+- Inspect Albums placeholders at phone width.
+- Add equivalent placeholders to artists, playlists, audiobooks, podcasts, and
+  direct search grids when requested.
+- Consider offset-addressable catalog pages if deep scrollbar jumps must resolve
+  immediately in large libraries.
+
 ## Shared qBittorrent download clients
 
 Settings → Download clients manages named server-side connections. The add dialog starts with a client-type picker. Each qBittorrent instance can use its Web UI username and password or a bearer API key (5.2+). Existing clients retain their authentication method and indexer links. Torznab indexers independently choose a client, category, tags, folder and path mode. The additive database migration creates DownloadClient. Startup transfers existing embedded credentials and links in one transaction. Verify category path mappings on the deployed services.

@@ -17,8 +17,13 @@ test("catalog card grids virtualize responsive rows against the main scroll", as
     );
 
   assert.match(grid, /useMainScrollVirtualizer/);
+  assert.match(grid, /useVirtualLoadMore/);
   assert.match(grid, /virtualizer\.virtualItems\.value/);
-  assert.match(grid, /:ref="virtualizer\.measureRow"/);
+  assert.match(grid, /virtualizer\.measureRow/);
+  assert.match(grid, /emit\("load-more"\)/);
+  assert.match(grid, /name="placeholder"/);
+  assert.match(grid, /placeholder\?\(props: \{ itemIndex: number \}\)/);
+  assert.match(grid, /Math\.ceil\(totalItemCount\.value \/ columns\.value\)/);
   assert.match(grid, /:style="\{ overflowAnchor: 'none' \}"/);
   assert.match(grid, /overflowAnchor: 'none'/);
   assert.match(grid, /grid-cols-2.*lg:grid-cols-3.*xl:grid-cols-5/);
@@ -43,7 +48,30 @@ test("catalog card grids virtualize responsive rows against the main scroll", as
     playlists,
   ]) {
     assert.match(page, /<VirtualCardGrid/);
+    assert.match(page, /:total-count=/);
+    assert.match(page, /:has-more=/);
+    assert.match(page, /:loading-more=/);
+    assert.match(page, /@load-more=/);
   }
+  assert.match(albums, /<AlbumCardPlaceholder/);
+  assert.match(albums, /<template #placeholder>/);
+});
+
+test("track tables reserve the total item count for scrolling and paging", async () => {
+  const trackTable = await readFile(
+    new URL("../app/components/TrackTable.vue", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(trackTable, /useVirtualLoadMore/);
+  assert.match(trackTable, /count: totalItemCount/);
+  assert.match(trackTable, /totalCount\?: number/);
+  assert.doesNotMatch(trackTable, /<AutoLoadMore/);
+  assert.match(
+    trackTable,
+    /ref="rowGroup"[\s\S]*?height: `\$\{virtualizer\.totalSize\.value\}px`/,
+    "The track row container exposes the complete virtual size to the scrollbar",
+  );
 });
 
 test("catalog search uses the shared row surfaces for tracks and collections", async () => {
@@ -61,6 +89,11 @@ test("catalog search uses the shared row surfaces for tracks and collections", a
   assert.match(search, /layout="standard"/);
   assert.match(search, /<TrackTable/);
   assert.match(search, /<VirtualCardGrid/);
+  assert.match(search, /:total-count="trackTotalCount"/);
+  assert.match(search, /@load-more="loadMoreTracks"/);
+  assert.match(search, /:total-count="artistTotalCount"/);
+  assert.match(search, /:total-count="audiobookTotalCount"/);
+  assert.match(search, /:total-count="podcastTotalCount"/);
   assert.match(
     search,
     /grid grid-cols-2 gap-1\.5 sm:grid-cols-4/,

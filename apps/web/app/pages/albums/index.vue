@@ -4,7 +4,7 @@ import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { onMounted } from "vue";
-import AutoLoadMore from "../../components/AutoLoadMore.vue";
+import AlbumCardPlaceholder from "../../components/AlbumCardPlaceholder.vue";
 import CatalogCard from "../../components/CatalogCard.vue";
 import ListSearchBar from "../../components/ListSearchBar.vue";
 import VirtualCardGrid from "../../components/VirtualCardGrid.vue";
@@ -88,19 +88,17 @@ onMounted(() => {
       layout="wide"
       :item-key="(album) => album.id"
       :estimate-row-height="300"
-      :aria-busy="loading"
+      :total-count="totalCount"
+      :has-more="hasMore"
+      :loading-more="loadingMore"
+      :aria-busy="loading || loadingMore"
+      @load-more="loadMore"
     >
       <template #default="{ item }">
         <CatalogCard :item="albumCatalogCard(item)" />
       </template>
-      <template #footer>
-        <AutoLoadMore
-          :enabled="hasMore"
-          :loading="loadingMore"
-          :item-count="albums.length"
-          :label="t('page.albums.loadingMore')"
-          @load="loadMore"
-        />
+      <template #placeholder>
+        <AlbumCardPlaceholder />
       </template>
     </VirtualCardGrid>
     <p

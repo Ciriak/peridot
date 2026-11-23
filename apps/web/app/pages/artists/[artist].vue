@@ -10,7 +10,6 @@ import { computed, onMounted, ref, watch } from "vue";
 import ArtistArtwork from "../../components/ArtistArtwork.vue";
 import ArtistContextMenu from "../../components/ArtistContextMenu.vue";
 import ArtistLink from "../../components/ArtistLink.vue";
-import AutoLoadMore from "../../components/AutoLoadMore.vue";
 import BackButton from "../../components/BackButton.vue";
 import CatalogCard from "../../components/CatalogCard.vue";
 import LikeButton from "../../components/LikeButton.vue";
@@ -356,18 +355,13 @@ onMounted(() => {
         layout="wide"
         :item-key="(album) => album.id"
         :estimate-row-height="300"
+        :total-count="albumTotalCount"
+        :has-more="hasMoreAlbums"
+        :loading-more="albumsLoadingMore"
+        @load-more="loadMoreAlbums"
       >
         <template #default="{ item }">
           <CatalogCard :item="albumCatalogCard(item)" />
-        </template>
-        <template #footer>
-          <AutoLoadMore
-            :enabled="hasMoreAlbums"
-            :loading="albumsLoadingMore"
-            :item-count="albums.length"
-            :label="t('page.albums.loadingMore')"
-            @load="loadMoreAlbums"
-          />
         </template>
       </VirtualCardGrid>
     </section>
@@ -409,6 +403,7 @@ onMounted(() => {
         :sort="trackSort"
         :has-more="hasMoreTracks"
         :loading-more="tracksLoadingMore"
+        :total-count="trackTotalCount"
         @sort-change="setTrackSort"
         @load-more="loadMoreTracks"
       />

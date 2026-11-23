@@ -1,5 +1,23 @@
 # Peridot decisions
 
+## 2026-11-23: Virtual catalog surfaces reserve the full result count
+
+Cursor paged catalog responses already include the complete result count. Catalog
+card grids and track tables use that total for their virtualizer count instead
+of the currently loaded page length, so the native scrollbar thumb represents
+the complete collection from the first page and does not grow while paging.
+
+Virtual-range watchers request subsequent cursor pages before the loaded range
+ends. The intersection-observer sentinel remains for non-virtual paginated
+surfaces such as search rows and task history. Direct jumps into an unloaded
+range fetch the intervening cursor pages sequentially; offset-addressable
+catalog pages would be required to make very large jumps resolve immediately.
+
+The Albums grid renders card-shaped loading placeholders for unloaded rows.
+Rows containing placeholders are not measured into the virtualizer, so their
+reserved estimate remains stable until real cards replace them. Reduced-motion
+users receive static placeholders.
+
 ## Torznab release acquisition
 
 Torznab supplies release search through a trusted built-in server integration. All signed-in users can search and import releases into the shared library. qBittorrent owns transfer progress and seeding. Peridot indexes the existing completed folder as a normal library source, which allows its read-only music mount and existing playback endpoint to serve downloaded files.

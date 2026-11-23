@@ -4,7 +4,6 @@ import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { onMounted } from "vue";
-import AutoLoadMore from "../../components/AutoLoadMore.vue";
 import ListSearchBar from "../../components/ListSearchBar.vue";
 import MediaCollectionCard from "../../components/MediaCollectionCard.vue";
 import VirtualCardGrid from "../../components/VirtualCardGrid.vue";
@@ -87,19 +86,14 @@ onMounted(() => {
       layout="standard"
       :item-key="(book) => book.id"
       :estimate-row-height="340"
+      :total-count="totalCount"
+      :has-more="hasMore"
+      :loading-more="loadingMore"
       :aria-busy="loading"
+      @load-more="loadMore"
     >
       <template #default="{ item }">
         <MediaCollectionCard :collection="item" />
-      </template>
-      <template #footer>
-        <AutoLoadMore
-          :enabled="hasMore"
-          :loading="loadingMore"
-          :item-count="audiobooks.length"
-          :label="t('page.audiobooks.loadingMore')"
-          @load="loadMore"
-        />
       </template>
     </VirtualCardGrid>
     <p

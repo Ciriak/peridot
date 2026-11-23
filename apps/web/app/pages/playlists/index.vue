@@ -5,7 +5,6 @@ import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { onMounted, ref } from "vue";
-import AutoLoadMore from "../../components/AutoLoadMore.vue";
 import CatalogCard from "../../components/CatalogCard.vue";
 import ListSearchBar from "../../components/ListSearchBar.vue";
 import PlaylistNameDialog from "../../components/PlaylistNameDialog.vue";
@@ -112,18 +111,13 @@ onMounted(() => void load());
       layout="standard"
       :item-key="(playlist) => playlist.id"
       :estimate-row-height="220"
+      :total-count="totalCount"
+      :has-more="hasMore"
+      :loading-more="loadingMore"
+      @load-more="loadMore"
     >
       <template #default="{ item }">
         <CatalogCard :item="playlistCatalogCard(item)" />
-      </template>
-      <template #footer>
-        <AutoLoadMore
-          :enabled="hasMore"
-          :loading="loadingMore"
-          :item-count="items.length"
-          :label="t('page.playlists.loadingMore')"
-          @load="loadMore"
-        />
       </template>
     </VirtualCardGrid>
     <p

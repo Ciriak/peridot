@@ -2,6 +2,7 @@
 import { breakpointsTailwind, useBreakpoints } from "@vueuse/core";
 import { computed, ref } from "vue";
 import { useMainScrollVirtualizer } from "../composables/use-main-scroll-virtualizer";
+import { useVirtualLoadMore } from "../composables/use-virtual-load-more";
 
 export type VirtualCardLayout = "wide" | "standard" | "compact";
 
@@ -12,14 +13,23 @@ const props = withDefaults(
     itemKey: (item: T) => string | number;
     estimateRowHeight?: number;
     overscan?: number;
+    totalCount?: number;
+    hasMore?: boolean;
+    loadingMore?: boolean;
   }>(),
   {
     estimateRowHeight: 240,
     overscan: 4,
+    hasMore: false,
+    loadingMore: false,
   },
 );
+const emit = defineEmits<{
+  "load-more": [];
+}>();
 defineSlots<{
   default(props: { item: T; itemIndex: number }): unknown;
+  placeholder?(props: { itemIndex: number }): unknown;
   footer?: () => unknown;
 }>();
 
@@ -37,7 +47,12 @@ const columns = computed(() => {
   if (breakpoints.lg.value) return 3;
   return 2;
 });
-const rowCount = computed(() => Math.ceil(props.items.length / columns.value));
+const totalItemCount = computed(() =>
+  Math.max(props.items.length, props.totalCount ?? props.items.length),
+);
+const rowCount = computed(() =>
+  Math.ceil(totalItemCount.value / columns.value),
+);
 const gridClass = computed(() => {
   if (props.layout === "compact") {
     return "grid grid-cols-2 gap-x-1.5 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10";
@@ -56,6 +71,16 @@ const virtualizer = useMainScrollVirtualizer({
     const first = props.items[index * columns.value];
     return first ? props.itemKey(first) : index;
   },
+});
+useVirtualLoadMore({
+  virtualItems: computed(() => virtualizer.virtualItems.value),
+  loadedItemCount: computed(() => props.items.length),
+  totalItemCount,
+  itemsPerRow: columns,
+  prefetchRows: computed(() => props.overscan),
+  enabled: computed(() => props.hasMore),
+  loading: computed(() => props.loadingMore),
+  onLoad: () => emit("load-more"),
 });
 
 function rowItems(index: number) {
@@ -79,24 +104,49 @@ function rowKey(index: number) {
         overflowAnchor: 'none',
       }"
     >
-      <div
+      <template
         v-for="row in virtualizer.virtualItems.value"
         :key="String(row.key)"
-        :ref="virtualizer.measureRow"
-        :data-index="row.index"
-        :style="virtualizer.virtualRowStyle(row)"
       >
         <div
-          :class="[gridClass, row.index < rowCount - 1 && rowGapClass]"
-          :data-virtual-row="rowKey(row.index)"
+          v-if="rowItems(row.index).length || $slots.placeholder"
+          :ref="
+            rowItems(row.index).length === columns
+              ? virtualizer.measureRow
+              : undefined
+          "
+          :data-index="row.index"
+          :style="virtualizer.virtualRowStyle(row)"
         >
-          <slot
-            v-for="(item, itemIndex) in rowItems(row.index)"
-            :item="item"
-            :item-index="row.index * columns + itemIndex"
-          />
+          <div
+            :class="[gridClass, row.index < rowCount - 1 && rowGapClass]"
+            :data-virtual-row="rowKey(row.index)"
+          >
+            <slot
+              v-for="(item, itemIndex) in rowItems(row.index)"
+              :item="item"
+              :item-index="row.index * columns + itemIndex"
+            />
+            <template
+              v-for="placeholderIndex in Math.max(
+                0,
+                columns - rowItems(row.index).length,
+              )"
+              :key="`placeholder-${row.index}-${placeholderIndex}`"
+            >
+              <slot
+                name="placeholder"
+                :item-index="
+                  row.index * columns +
+                  rowItems(row.index).length +
+                  placeholderIndex -
+                  1
+                "
+              />
+            </template>
+          </div>
         </div>
-      </div>
+      </template>
     </div>
     <div v-if="$slots.footer" :class="layout === 'compact' ? 'mt-1.5' : 'mt-4'">
       <slot name="footer" />

@@ -71,9 +71,10 @@ test("automatic pagination re-arms only after the sentinel leaves view", () => {
   );
 });
 
-test("paginated app surfaces do not render manual load-more buttons", async () => {
+test("paginated app surfaces use automatic load triggers without manual buttons", async () => {
   const paths = [
     "../app/components/TrackTable.vue",
+    "../app/components/VirtualCardGrid.vue",
     "../app/pages/albums/index.vue",
     "../app/pages/artists/index.vue",
     "../app/pages/artists/[artist].vue",
@@ -88,10 +89,16 @@ test("paginated app surfaces do not render manual load-more buttons", async () =
   );
 
   for (const source of sources) {
-    assert.match(source, /AutoLoadMore/);
     assert.doesNotMatch(source, /@click="loadMore/);
     assert.doesNotMatch(source, /t\(["'][^"']*\.loadMore["']\)/);
   }
+
+  const search = sources.at(-2)!;
+  const tasks = sources.at(-1)!;
+  assert.match(search, /AutoLoadMore/);
+  assert.match(tasks, /AutoLoadMore/);
+  assert.match(sources[0]!, /useVirtualLoadMore/);
+  assert.match(sources[1]!, /useVirtualLoadMore/);
 
   const trigger = await readFile(
     new URL("../app/components/AutoLoadMore.vue", import.meta.url),
