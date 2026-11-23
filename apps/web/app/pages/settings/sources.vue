@@ -106,7 +106,20 @@ const sourceList = ref<HTMLElement | null>(null);
 const loading = sourcesQuery.loading;
 const pageError = ref("");
 const addOpen = ref(false);
-type SourceChoice = "path" | "jellyfin";
+type SourceChoice = "path" | "jellyfin" | "torznab";
+function blankIndexer() {
+  return {
+    name: "",
+    url: "",
+    apiKey: "",
+    clientUrl: "",
+    username: "",
+    password: "",
+    savePath: "",
+    folderId: "",
+  };
+}
+const indexer = ref(blankIndexer());
 const newKind = ref<SourceChoice | null>(null);
 const newPath = ref("");
 const newJellyfinUrl = ref("");
@@ -267,6 +280,7 @@ function chooseKind(kind: SourceChoice) {
 }
 
 function resetJellyfinForm() {
+  indexer.value = blankIndexer();
   newJellyfinUrl.value = "";
   newJellyfinApiKey.value = "";
   newJellyfinLibraryId.value = "";
@@ -293,6 +307,11 @@ function handleDialogBack() {
 }
 
 function canAdd(): boolean {
+  if (newKind.value === "torznab")
+    return Boolean(
+      indexer.value.url.trim() &&
+      (!indexer.value.clientUrl || indexer.value.folderId),
+    );
   if (newKind.value === "path") return Boolean(newPath.value.trim());
   return (
     Boolean(newJellyfinUrl.value.trim()) &&
@@ -310,6 +329,12 @@ async function addSource() {
     body = {
       kind: "path",
       path: newPath.value,
+    };
+  } else if (newKind.value === "torznab") {
+    const { name, url, apiKey } = indexer.value;
+    body = {
+      kind: "torznab",
+      ...(indexer.value.clientUrl ? indexer.value : { name, url, apiKey }),
     };
   } else {
     if (!newJellyfinLibraryId.value) return;
@@ -622,6 +647,16 @@ onBeforeUnmount(() => {
               {{ sourceLabel(source) }}
             </span>
             <span
+              v-if="source.kind === 'torznab'"
+              class="block text-xs text-muted-foreground"
+              >{{
+                t("indexer.audioCategories", {
+                  categories: source.configuration?.categories,
+                })
+              }}</span
+            >
+            <span
+              v-else
               class="mt-1 flex flex-wrap items-center gap-x-1 text-xs text-muted-foreground"
             >
               <span class="font-semibold text-foreground">{{
@@ -876,6 +911,15 @@ onBeforeUnmount(() => {
             <Icon :icon="icons.jellyfin" aria-hidden="true" class="size-5" />
             {{ t("settings.sources.jellyfin.title") }}
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            class="justify-start"
+            @click="chooseKind('torznab')"
+            ><Icon :icon="icons.globe" aria-hidden="true" class="size-5" />{{
+              t("indexer.title")
+            }}</Button
+          >
         </div>
 
         <div v-else class="mt-4 space-y-4">
@@ -889,6 +933,70 @@ onBeforeUnmount(() => {
             </p>
           </div>
 
+          <div v-else-if="newKind === 'torznab'" class="space-y-3">
+            <label class="block space-y-1"
+              ><span>{{ t("indexer.name") }}</span
+              ><Input v-model="indexer.name" type="text" autocomplete="off"
+            /></label>
+            <label class="block space-y-1"
+              ><span>{{ t("indexer.url") }}</span
+              ><Input v-model="indexer.url" type="url" autocomplete="off"
+            /></label>
+            <label class="block space-y-1"
+              ><span>{{ t("indexer.apiKey") }}</span
+              ><Input
+                v-model="indexer.apiKey"
+                type="password"
+                autocomplete="off"
+            /></label>
+            <label class="block space-y-1"
+              ><span>{{ t("indexer.clientUrl") }}</span
+              ><Input v-model="indexer.clientUrl" type="url" autocomplete="off"
+            /></label>
+            <template v-if="indexer.clientUrl"
+              ><label class="block space-y-1"
+                ><span>{{ t("indexer.username") }}</span
+                ><Input
+                  v-model="indexer.username"
+                  type="text"
+                  autocomplete="off"
+              /></label>
+              <label class="block space-y-1"
+                ><span>{{ t("indexer.password") }}</span
+                ><Input
+                  v-model="indexer.password"
+                  type="password"
+                  autocomplete="off"
+              /></label>
+              <label class="block space-y-1"
+                ><span>{{ t("indexer.savePath") }}</span
+                ><Input
+                  v-model="indexer.savePath"
+                  type="text"
+                  autocomplete="off"
+              /></label>
+              <label class="block space-y-1"
+                ><span>{{ t("indexer.folder") }}</span
+                ><select
+                  v-model="indexer.folderId"
+                  class="w-full rounded-md border bg-background p-2"
+                >
+                  <option disabled value="">
+                    {{ t("indexer.chooseFolder") }}
+                  </option>
+                  <option
+                    v-for="folder in sources.filter(
+                      (s) => s.kind === 'path' && !s.removal,
+                    )"
+                    :key="folder.id"
+                    :value="folder.id"
+                  >
+                    {{ sourceLabel(folder) }}
+                  </option>
+                </select></label
+              ></template
+            >
+          </div>
           <div v-else class="space-y-4">
             <div class="space-y-2">
               <label for="jellyfin-url" class="text-sm font-medium">

@@ -198,6 +198,6 @@ self-emit it before applying the migration.
 
 ### Jackett / Torznab imports
 
-Configure the server environment with PERIDOT_TORZNAB_URL (Jackett Copy Torznab Feed URL), PERIDOT_TORZNAB_KEY, PERIDOT_QBIT_URL (qBittorrent Web UI base URL), PERIDOT_QBIT_USER and PERIDOT_QBIT_PASSWORD. PERIDOT_IMPORT_FOLDER must be the exact absolute path of an active Peridot folder source. Set PERIDOT_QBIT_SAVE_PATH to the same folder as mounted inside qBittorrent if its path differs. Enable qBittorrent's separate incomplete download directory outside this source. qBittorrent writes the completed music and retains it for seeding. Peridot only needs read access. Removing downloaded files from qBittorrent also removes the library audio if you delete the files.
+In Settings → Sources, select + → Torznab indexer. Enter the feed URL, optional display name, and API key. Peridot reads the feed’s audio capabilities before saving it. Repeat for additional indexers. Existing environment-based installations must add their feeds through this dialog.
 
-All signed-in users can search an audio feed from Search, add a release, and play the indexed files. The server queues a folder scan for completed downloads tagged peridot-import. Keep the qBittorrent Web UI and the Jackett feed reachable from the server, and configure Jackett's advertised download URLs to be reachable from qBittorrent.
+To enable imports, enter the qBittorrent Web UI URL and credentials and select an existing folder source. If the same directory has a different path inside qBittorrent, enter that path too. Keep incomplete downloads outside the folder source. All signed-in users can search configured indexers and import from those with downloads configured.

@@ -2,7 +2,7 @@
 
 ## Jackett search and completed-release playback
 
-Authenticated search supports one configured Torznab endpoint and qBittorrent instance. Setup is documented in DEVELOPMENT.md. The search page can queue an import or start the player after the scanner indexes downloaded files. Automatic playback requires keeping the search view open. qBittorrent tags identify transfers across server restarts.
+Authenticated search queries the Torznab indexers configured in Settings → Sources. Each feed advertises audio capabilities and may have a qBittorrent import destination. Setup is documented in DEVELOPMENT.md. The search page can queue an import or start the player after the scanner indexes downloaded files. Automatic playback requires keeping the search view open. qBittorrent tags identify transfers across server restarts.
 
 The integration test uses simulated upstream responses, a temporary database, a real WAV file, the scanner, and the authenticated audio endpoint. Deployment verification still requires running a transfer on a configured Jackett and qBittorrent installation.
 

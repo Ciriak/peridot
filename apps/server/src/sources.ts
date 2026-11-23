@@ -1,3 +1,5 @@
+import { validateIndexer } from "./torznab.js";
+import type { CreateTorznabSourceRequest } from "@peridot/contracts";
 import { readdir, realpath, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
@@ -217,7 +219,12 @@ export async function createSource(
     collectionType?: unknown;
   };
   const kind = value.kind;
-  if (kind !== "path" && kind !== "url" && kind !== "jellyfin") {
+  if (
+    kind !== "path" &&
+    kind !== "url" &&
+    kind !== "jellyfin" &&
+    kind !== "torznab"
+  ) {
     throw new SourceError(
       "Choose a valid source type.",
       message("api.message.sourceInvalid"),
@@ -332,10 +339,13 @@ export async function createSource(
   };
   let validated;
   try {
-    validated = await integrations.validateSource(kind, {
-      configuration,
-      credentials: suppliedCredentials,
-    });
+    validated =
+      kind === "torznab"
+        ? await validateIndexer(body as CreateTorznabSourceRequest, database)
+        : await integrations.validateSource(kind, {
+            configuration,
+            credentials: suppliedCredentials,
+          });
   } catch (error) {
     if (error instanceof SourceIntegrationError) {
       throw new SourceError(error.message, error.messageDescriptor);

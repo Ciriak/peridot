@@ -508,7 +508,7 @@ export interface ApiErrorResponse {
 
 export type SourceIntegrationKind = "jellyfin";
 
-export type SourceKind = "path" | "url" | SourceIntegrationKind;
+export type SourceKind = "torznab" | "path" | "url" | SourceIntegrationKind;
 
 export type SourceRemovalPhase = "stopping" | "tracks" | "catalog";
 
@@ -569,7 +569,19 @@ export interface CreateJellyfinSourceRequest {
   collectionType: string | null;
 }
 
+export interface CreateTorznabSourceRequest {
+  kind: "torznab";
+  name?: string;
+  url: string;
+  apiKey?: string;
+  clientUrl?: string;
+  username?: string;
+  password?: string;
+  folderId?: string;
+  savePath?: string;
+}
 export type CreateSourceRequest =
+  | CreateTorznabSourceRequest
   | CreatePathSourceRequest
   | CreateUrlSourceRequest
   | CreateJellyfinSourceRequest;
@@ -882,6 +894,8 @@ export type RealtimeServerMessage =
   | RealtimeLogAppendedEvent;
 
 export interface TorznabRelease {
+  sourceName: string;
+  canImport: boolean;
   id: string;
   title: string;
   seeders: number | null;

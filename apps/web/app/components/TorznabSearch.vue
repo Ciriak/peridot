@@ -23,6 +23,7 @@ const active = ref(""),
 const config = useQuery({
   queryKey: computed(() => ["torznab", scope.value]),
   queryFn: () => client.value.config(),
+  refetchOnMount: "always",
   enabled: computed(() => Boolean(address.value && token.value)),
   retry: false,
 });
@@ -97,6 +98,7 @@ async function add(id: string, play = false) {
     >
       <div>
         <p>{{ release.title }}</p>
+        <p class="text-xs text-muted-foreground">{{ release.sourceName }}</p>
         <p class="text-sm text-muted-foreground">
           <span v-if="release.seeders !== null"
             >{{ t("torznab.seeders", { count: release.seeders }) }} </span
@@ -107,12 +109,14 @@ async function add(id: string, play = false) {
       </div>
       <Button
         variant="outline"
+        v-if="release.canImport"
         :disabled="busy || active === release.id"
         @click="add(release.id)"
         >{{ t("torznab.add") }}</Button
       >
       <Button
         variant="outline"
+        v-if="release.canImport"
         :disabled="busy || active === release.id"
         @click="add(release.id, true)"
         >{{ t("torznab.autoplay") }}</Button

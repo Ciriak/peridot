@@ -319,7 +319,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
         artworkCache,
         sourceIntegrations,
       );
-      registerTorznab(protectedApp, database, tasks);
+      registerTorznab(protectedApp, database, tasks, credentials);
       await registerCatalogRoutes(protectedApp, catalog, artworkCache);
       await registerTaskRoutes(protectedApp, tasks);
       await registerLikeRoutes(protectedApp, database);

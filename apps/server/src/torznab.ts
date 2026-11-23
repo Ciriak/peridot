@@ -4,7 +4,127 @@ import type { FastifyInstance } from "fastify";
 import type { Database } from "./database.js";
 import { queueLibraryScan, type TaskService } from "./tasks.js";
 
-const pending = "peridot-import";
+import type { CredentialStore } from "./credential-store.js";
+import type { CreateTorznabSourceRequest } from "@peridot/contracts";
+import { SourceIntegrationError } from "./source-integrations.js";
+
+function invalid(reason: string): never {
+  throw new SourceIntegrationError(reason, "invalid_configuration", 400, {
+    key: "indexer.validation",
+    params: { reason },
+  });
+}
+function httpUrl(value: unknown) {
+  if (typeof value !== "string" || !URL.canParse(value))
+    return invalid("Enter an HTTP or HTTPS URL.");
+  const url = new URL(value);
+  if (
+    !["https:", "http:"].includes(url.protocol) ||
+    url.username ||
+    url.password
+  )
+    return invalid("Enter an HTTP or HTTPS URL without embedded credentials.");
+  url.hash = "";
+  return url;
+}
+function audioCode(id: string) {
+  return /^3[0-9]{3}$/.test(id);
+}
+export async function validateIndexer(
+  input: CreateTorznabSourceRequest,
+  db: Database,
+) {
+  const endpoint = httpUrl(input.url);
+  const apiKey =
+    (typeof input.apiKey === "string" && input.apiKey) ||
+    endpoint.searchParams.get("apikey") ||
+    "";
+  endpoint.searchParams.delete("apikey");
+  const feed = endpoint.href;
+  const identity = createHash("sha256").update(feed).digest("hex");
+  if (apiKey) endpoint.searchParams.set("apikey", apiKey);
+  endpoint.searchParams.set("t", "caps");
+  let text: string;
+  try {
+    const response = await fetch(endpoint, {
+      redirect: "error",
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!response.ok) throw new Error();
+    text = await response.text();
+  } catch {
+    return invalid(
+      "Could not read audio capabilities. Check the indexer URL and API key.",
+    );
+  }
+  if (/<!DOCTYPE/i.test(text)) return invalid("Invalid indexer capabilities.");
+  let doc;
+  try {
+    doc = new DOMParser().parseFromString(text, "application/xml");
+  } catch {
+    return invalid("Invalid indexer capabilities.");
+  }
+  const supportsQuery = (tag: string) => {
+    const node = doc.getElementsByTagName(tag)[0];
+    return (
+      node?.getAttribute("available") === "yes" &&
+      (node.getAttribute("supportedParams") || "q")
+        .split(",")
+        .some((p) => p.trim() === "q")
+    );
+  };
+  const categories = [
+    ...new Set(
+      ["category", "subcat"]
+        .flatMap((tag) =>
+          Array.from(doc.getElementsByTagName(tag)).map(
+            (e) => e.getAttribute("id") || "",
+          ),
+        )
+        .filter(audioCode),
+    ),
+  ];
+  const mode = supportsQuery("music-search") ? "music" : "search";
+  if (
+    doc.documentElement?.localName !== "caps" ||
+    (!categories.length && doc.getElementsByTagName("category").length > 0) ||
+    (mode === "search" && (!categories.length || !supportsQuery("search")))
+  )
+    return invalid("This indexer does not advertise searchable audio.");
+  const client = input.clientUrl ? httpUrl(input.clientUrl) : null;
+  if (client?.search)
+    return invalid("Enter a qBittorrent base URL without query parameters.");
+  const folderId = typeof input.folderId === "string" ? input.folderId : "";
+  if (client || folderId) {
+    const folder = await db.orm.Source.first({ id: folderId, kind: "path" });
+    if (!client || !folder || folder.removedAt)
+      return invalid(
+        "Choose a folder source and qBittorrent connection for imports.",
+      );
+  }
+  endpoint.search = "";
+  return {
+    identity,
+    name:
+      (typeof input.name === "string" && input.name.trim()) ||
+      endpoint.hostname,
+    configuration: {
+      url: endpoint.href,
+      mode,
+      categories: categories.join(",") || "3000",
+      clientUrl: client?.href || "",
+      folderId,
+      savePath: typeof input.savePath === "string" ? input.savePath : "",
+    },
+    credentials: {
+      feed,
+      apiKey,
+      username: typeof input.username === "string" ? input.username : "",
+      password: typeof input.password === "string" ? input.password : "",
+    },
+  };
+}
+
 const base = "/api/torznab";
 
 export function parseReleases(xml: string, feed: URL) {
@@ -17,6 +137,17 @@ export function parseReleases(xml: string, feed: URL) {
     .flatMap((item) => {
       const field = (key: string) =>
         item.getElementsByTagName(key)[0]?.textContent?.trim();
+      const attributes = Array.from(item.getElementsByTagNameNS("*", "attr"));
+      const standardCategories = [
+        ...Array.from(item.getElementsByTagName("category")).map(
+          (c) => c.textContent?.trim() || "",
+        ),
+        ...attributes
+          .filter((a) => a.getAttribute("name") === "category")
+          .map((a) => a.getAttribute("value") || ""),
+      ].filter((c) => /^[1-9][0-9]{3}$/.test(c));
+      if (standardCategories.length && !standardCategories.some(audioCode))
+        return [];
       const title = field("title");
       const href =
         item.getElementsByTagName("enclosure")[0]?.getAttribute("url") ||
@@ -32,7 +163,7 @@ export function parseReleases(xml: string, feed: URL) {
       const id = createHash("sha256")
         .update(feed.pathname + "\n" + (field("guid") || href))
         .digest("hex");
-      const seeders = Array.from(item.getElementsByTagNameNS("*", "attr"))
+      const seeders = attributes
         .find((a) => a.getAttribute("name") === "seeders")
         ?.getAttribute("value");
       const number = (v: string | null | undefined) =>
@@ -56,81 +187,66 @@ export function registerTorznab(
   app: FastifyInstance,
   db: Database,
   tasks: TaskService,
+  credentials: CredentialStore,
 ) {
-  const feed = process.env.PERIDOT_TORZNAB_URL;
-  const key = process.env.PERIDOT_TORZNAB_KEY;
-  const client = process.env.PERIDOT_QBIT_URL;
-  const folder = process.env.PERIDOT_IMPORT_FOLDER;
-  const destination = process.env.PERIDOT_QBIT_SAVE_PATH || folder;
-  const enabled = Boolean(feed && key && client && folder);
-  app.get(base, async () => ({ enabled }));
-  if (!feed || !key || !client || !folder || !destination) {
-    const unavailable = async (
-      _: unknown,
-      reply: import("fastify").FastifyReply,
-    ) =>
-      reply.code(503).send({
-        error: {
-          code: "not_configured",
-          message: "Torznab is not configured.",
-        },
-      });
-    app.get(base + "/search", unavailable);
-    app.get(base + "/imports/:id", unavailable);
-    app.post(base + "/imports/:id", unavailable);
-    return;
-  }
-  const source = async () => {
-    const row = await db.orm.Source.first({ kind: "path", path: folder });
-    if (!row || row.removedAt)
-      throw new Error(
-        "Add the configured import folder in Settings → Sources.",
-      );
-    return { id: row.id, name: row.name || folder };
-  };
-  const endpoint = new URL(feed);
-  endpoint.searchParams.set("apikey", key);
-  let searchMode: "search" | "music" | undefined;
-  async function discoverSearchMode() {
-    const url = new URL(endpoint);
-    url.searchParams.set("t", "caps");
-    const response = await fetch(url, {
-      redirect: "error",
-      signal: AbortSignal.timeout(12000),
-    });
-    if (!response.ok) throw new Error("Could not read indexer capabilities");
-    const xml = await response.text();
-    if (/<!DOCTYPE/i.test(xml))
-      throw new Error("Unexpected indexer capabilities");
-    const caps = new DOMParser().parseFromString(xml, "application/xml");
-    if (caps.documentElement?.localName !== "caps")
-      throw new Error("Invalid indexer capabilities");
-    const music = caps.getElementsByTagName("music-search")[0];
-    return music?.getAttribute("available") === "yes" &&
-      music
-        .getAttribute("supportedParams")
-        ?.split(",")
-        .map((p) => p.trim())
-        .includes("q")
-      ? "music"
-      : "search";
-  }
   const cache = new Map<string, string>();
-  let cookie = "";
+  const cookies = new Map<string, string>();
+  async function indexers() {
+    const rows = await db.orm.Source.where({ kind: "torznab" })
+      .where((s) => s.removedAt.isNull())
+      .all();
+    return rows.map((row) => {
+      const config = JSON.parse(row.configuration!);
+      const secrets = JSON.parse(
+        credentials.decrypt(row.credentialCiphertext!, "source"),
+      );
+      return {
+        id: row.id,
+        name: row.name || "Torznab",
+        feed: String(secrets.feed),
+        apiKey: String(secrets.apiKey),
+        username: String(secrets.username),
+        password: String(secrets.password),
+        client: String(config.clientUrl),
+        folderId: String(config.folderId),
+        savePath: String(config.savePath),
+        categories: String(config.categories),
+        mode: String(config.mode),
+      };
+    });
+  }
+  type Indexer = Awaited<ReturnType<typeof indexers>>[number];
+  async function source(indexer: Indexer) {
+    const row = await db.orm.Source.first({
+      id: indexer.folderId,
+      kind: "path",
+    });
+    if (!row?.path || row.removedAt)
+      throw new Error("Import folder unavailable.");
+    return {
+      id: row.id,
+      name: row.name || row.path,
+      destination: indexer.savePath || row.path,
+    };
+  }
+  app.get(base, async () => ({ enabled: (await indexers()).length > 0 }));
   async function qb(
+    indexer: Indexer,
     method: string,
     params: Record<string, string> = {},
     post = false,
     retry = true,
   ): Promise<Response> {
-    const url = new URL(client!.replace(/\/$/, "") + "/api/v2/" + method);
+    const url = new URL(
+      indexer.client.replace(/\/$/, "") + "/api/v2/" + method,
+    );
     const body = new URLSearchParams(params);
     if (!post) url.search = body.toString();
     const response = await fetch(url, {
       method: post ? "POST" : "GET",
       body: post ? body : null,
       headers: {
-        Cookie: cookie,
+        Cookie: cookies.get(indexer.id) || "",
         Origin: url.origin,
         Referer: url.origin + "/",
       },
@@ -139,20 +255,22 @@ export function registerTorznab(
     });
     if (response.status === 403 && retry) {
       const login = await qb(
+        indexer,
         "auth/login",
         {
-          username: process.env.PERIDOT_QBIT_USER || "",
-          password: process.env.PERIDOT_QBIT_PASSWORD || "",
+          username: indexer.username,
+          password: indexer.password,
         },
         true,
         false,
       );
-      cookie = login.headers
+      const cookie = login.headers
         .getSetCookie()
         .map((c) => c.split(";")[0])
         .join("; ");
       if (!cookie) throw new Error("qBittorrent authentication failed");
-      return qb(method, params, post, false);
+      cookies.set(indexer.id, cookie);
+      return qb(indexer, method, params, post, false);
     }
     if (!response.ok) throw new Error("qBittorrent request failed");
     return response;
@@ -165,25 +283,41 @@ export function registerTorznab(
       if (typeof q !== "string" || !q.trim() || q.length > 256)
         return reply.code(400).send();
       try {
-        searchMode ??= await discoverSearchMode();
-        const url = new URL(endpoint);
-        url.searchParams.set("t", searchMode);
-        url.searchParams.set("cat", "3000");
-        url.searchParams.set("q", q);
-        const response = await fetch(url, {
-          redirect: "error",
-          signal: AbortSignal.timeout(20000),
-        });
-        if (!response.ok) throw new Error();
-        const releases = parseReleases(await response.text(), url);
-        for (const r of releases) cache.set(r.id, r.href);
+        const sources = await indexers();
+        const responses = await Promise.allSettled(
+          sources.map(async (indexer) => {
+            const url = new URL(indexer.feed);
+            if (indexer.apiKey) url.searchParams.set("apikey", indexer.apiKey);
+            url.searchParams.set("t", indexer.mode);
+            url.searchParams.set("cat", indexer.categories);
+            url.searchParams.set("q", q);
+            const response = await fetch(url, {
+              redirect: "error",
+              signal: AbortSignal.timeout(20000),
+            });
+            if (!response.ok) throw new Error();
+            return parseReleases(await response.text(), url).map(
+              ({ id: hash, title, href, seeders, bytes }) => {
+                const id = indexer.id + "." + hash;
+                cache.set(id, href);
+                return {
+                  id,
+                  title,
+                  seeders,
+                  bytes,
+                  sourceName: indexer.name,
+                  canImport: Boolean(indexer.client),
+                };
+              },
+            );
+          }),
+        );
+        if (responses.length && responses.every((r) => r.status === "rejected"))
+          throw new Error();
         while (cache.size > 2000) cache.delete(cache.keys().next().value!);
-        return releases.map(({ id, title, seeders, bytes }) => ({
-          id,
-          title,
-          seeders,
-          bytes,
-        }));
+        return responses.flatMap((r) =>
+          r.status === "fulfilled" ? r.value : [],
+        );
       } catch {
         return reply.code(502).send({
           error: {
@@ -207,10 +341,14 @@ export function registerTorznab(
             message: "Search again to refresh this release.",
           },
         });
-      await source();
-      if ((await list("peridot-" + id)).length)
+      const indexer = (await indexers()).find((s) => s.id === id.split(".")[0]);
+      if (!indexer?.client) return reply.code(409).send();
+      const { destination } = await source(indexer);
+      const pending = "peridot-import-" + indexer.id;
+      if ((await list(indexer, "peridot-" + id)).length)
         return reply.code(202).send({ id });
       const response = await qb(
+        indexer,
         "torrents/add",
         {
           urls: href,
@@ -233,9 +371,9 @@ export function registerTorznab(
     save_path: string;
     state: string;
   }
-  async function list(tag: string): Promise<Torrent[]> {
+  async function list(indexer: Indexer, tag: string): Promise<Torrent[]> {
     const torrents: Torrent[] = await (
-      await qb("torrents/info", { tag })
+      await qb(indexer, "torrents/info", { tag })
     ).json();
     return torrents.filter((torrent) =>
       torrent.tags.split(",").some((value) => value.trim() === tag),
@@ -244,8 +382,13 @@ export function registerTorznab(
   app.get<{ Params: { id: string } }>(
     base + "/imports/:id",
     async (req, reply) => {
-      if (!/^[a-f0-9]{64}$/.test(req.params.id)) return reply.code(400).send();
-      const [torrent] = await list("peridot-" + req.params.id);
+      const indexer = (await indexers()).find(
+        (s) => s.id === req.params.id.split(".")[0],
+      );
+      if (!indexer?.client) return reply.code(404).send();
+      const src = await source(indexer);
+      const { destination } = src;
+      const [torrent] = await list(indexer, "peridot-" + req.params.id);
       const progress = torrent?.progress ?? 0;
       const trackIds: string[] = [];
       if (
@@ -254,10 +397,10 @@ export function registerTorznab(
         torrent.save_path.replace(/\/$/, "") === destination.replace(/\/$/, "")
       ) {
         const files: { name: string; progress: number }[] = await (
-          await qb("torrents/files", { hash: torrent.hash })
+          await qb(indexer, "torrents/files", { hash: torrent.hash })
         ).json();
         const names = files.filter((f) => f.progress === 1).map((f) => f.name);
-        const src = await source();
+
         for (let i = 0; i < names.length; i += 200) {
           const rows = await db.orm.Track.where({
             sourceId: src.id,
@@ -281,20 +424,33 @@ export function registerTorznab(
   );
 
   let running: Promise<void> | undefined;
-  async function scanCompleted() {
-    const completed = (await list(pending)).filter(
+  async function scanCompleted(indexer: Indexer) {
+    const pending = "peridot-import-" + indexer.id;
+    const completed = (await list(indexer, pending)).filter(
       (t) => t.progress === 1 && t.state !== "moving",
     );
     if (!completed.length) return;
-    await queueLibraryScan(tasks, await source());
+    await queueLibraryScan(tasks, await source(indexer));
     await qb(
+      indexer,
       "torrents/removeTags",
       { hashes: completed.map((t) => t.hash).join("|"), tags: pending },
       true,
     );
   }
   const timer = setInterval(() => {
-    running ??= scanCompleted()
+    running ??= indexers()
+      .then(async (rows) => {
+        await Promise.all(
+          rows
+            .filter((s) => s.client)
+            .map((s) =>
+              scanCompleted(s).catch(() =>
+                app.log.warn("Could not process indexer imports"),
+              ),
+            ),
+        );
+      })
       .catch(() => app.log.warn("Could not process completed Torznab imports"))
       .finally(() => {
         running = undefined;

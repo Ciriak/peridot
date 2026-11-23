@@ -29,6 +29,17 @@ test("an external release becomes a playable folder track after completion", asy
     assert.equal((req.query as { cat: string }).cat, "3000");
     return '<rss xmlns:t="http://torznab.com/schemas/2015/feed"><channel><item><title>Release</title><guid>abc</guid><enclosure length="100" url="/download?secret=hidden"/><t:attr name="seeders" value="4"/></item></channel></rss>';
   });
+  upstream.get(
+    "/movies",
+    async () =>
+      '<caps><searching><search available="yes" supportedParams="q"/></searching><categories><category id="2000"/></categories></caps>',
+  );
+  upstream.get("/mixed", async (req) => {
+    if ((req.query as { t: string }).t === "caps")
+      return '<caps><searching><search available="yes" supportedParams="q"/></searching><categories><category id="2000"/><category id="3000"><subcat id="3040"/></category></categories></caps>';
+    assert.equal((req.query as { cat: string }).cat, "3000,3040");
+    return "<rss><channel><item><title>Film</title><category>2000</category><link>/movie</link></item></channel></rss>";
+  });
   upstream.addContentTypeParser(
     "application/x-www-form-urlencoded",
     { parseAs: "string" },
@@ -75,31 +86,47 @@ test("an external release becomes a playable folder track after completion", asy
     });
     return new Response(response.body, { status: response.statusCode });
   });
-  const config = {
-    PERIDOT_TORZNAB_URL: url + "/feed",
-    PERIDOT_TORZNAB_KEY: "test-key",
-    PERIDOT_QBIT_URL: url,
-    PERIDOT_IMPORT_FOLDER: folder,
-    PERIDOT_QBIT_SAVE_PATH: folder,
-  };
-  const old = new Map(Object.keys(config).map((k) => [k, process.env[k]]));
-  Object.assign(process.env, config);
   t.after(async () => {
-    for (const [k, v] of old) {
-      if (v === undefined) delete process.env[k];
-      else process.env[k] = v;
-    }
     await upstream.close();
     await rm(folder, { recursive: true, force: true });
   });
   const ctx = await createTestContext();
   t.after(() => ctx.close());
   const headers = await createMemberSession(ctx);
-  await ctx.database.orm.Source.create({
+  const folderSource = await ctx.database.orm.Source.create({
     kind: "path",
     path: folder,
     position: 1,
   });
+  const input = {
+    kind: "torznab",
+    name: "Audio indexer",
+    url: url + "/feed",
+    apiKey: "test-key",
+    clientUrl: url,
+    folderId: folderSource.id,
+  };
+  for (const host of ["one", "two"]) {
+    const added = await ctx.app.inject({
+      method: "POST",
+      url: "/api/admin/sources",
+      headers: ctx.authorization,
+      payload: { ...input, name: host, url: "http://" + host + ".test/feed" },
+    });
+    assert.equal(added.statusCode, 201, added.body);
+    assert.doesNotMatch(added.body, /test-key/);
+  }
+  const addFeed = (suffix: string) =>
+    ctx.app.inject({
+      method: "POST",
+      url: "/api/admin/sources",
+      headers: ctx.authorization,
+      payload: { kind: "torznab", url: url + suffix },
+    });
+  assert.equal((await addFeed("/movies")).statusCode, 400);
+  const mixed = await addFeed("/mixed");
+  assert.equal(mixed.statusCode, 201, mixed.body);
+  assert.equal(mixed.json().configuration.categories, "3000,3040");
   const base = "/api/torznab";
   const denied = await ctx.app.inject({
     url: base + "/search?q=test",
@@ -120,7 +147,10 @@ test("an external release becomes a playable folder track after completion", asy
   });
   assert.equal(result.statusCode, 200);
   assert.doesNotMatch(result.body, /hidden|test-key/);
-  const [release] = result.json();
+  assert.equal(result.json().length, 2);
+  const [release, second] = result.json();
+  assert.notEqual(release.id, second.id);
+  assert.notEqual(release.sourceName, second.sourceName);
   assert.equal(release.seeders, 4);
   const route = base + "/imports/" + release.id;
   for (let i = 0; i < 2; i++)
