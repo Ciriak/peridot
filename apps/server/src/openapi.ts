@@ -140,12 +140,14 @@ const downloadLinkFields = {
   categoryPath: booleanSchema,
 };
 const downloadClientFields = {
+  authType: enumeration("apiKey", "password"),
+  username: stringSchema,
   kind: enumeration("qbittorrent"),
   name: stringSchema,
   url: stringSchema,
 };
 const downloadClientInput = objectSchema(
-  { ...downloadClientFields, apiKey: stringSchema },
+  { ...downloadClientFields, password: stringSchema, apiKey: stringSchema },
   ["kind", "name", "url"],
 );
 const downloadOptions = objectSchema({
@@ -1442,7 +1444,7 @@ const routes: Record<string, OpenApiOperation> = {
     "Server administration",
     "Create a download client",
     objectSchema({ id: stringSchema }),
-    { status: 201, body: objectSchema({ ...downloadClientFields, apiKey: stringSchema }) },
+    { status: 201, body: downloadClientInput },
   ),
   "PUT /api/admin/download-clients/:id": jsonOperation(
     "Server administration",
@@ -1462,7 +1464,7 @@ const routes: Record<string, OpenApiOperation> = {
     downloadOptions,
     {
       body: objectSchema(
-        { ...downloadClientFields, apiKey: stringSchema, id: stringSchema },
+        { ...downloadClientFields, password: stringSchema, apiKey: stringSchema, id: stringSchema },
         ["url", "kind"],
       ),
     },

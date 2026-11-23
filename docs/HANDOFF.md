@@ -2,7 +2,7 @@
 
 ## Shared qBittorrent download clients
 
-Settings → Download clients manages named server-side connections. The add dialog starts with a client-type picker. qBittorrent 5.2+ uses a bearer API key. Existing password-based clients retain their links and require a key before imports can resume. Torznab indexers independently choose a client, category, tags, folder and path mode. The additive database migration creates DownloadClient. Startup transfers existing embedded credentials and links in one transaction. Verify category path mappings on the deployed services.
+Settings → Download clients manages named server-side connections. The add dialog starts with a client-type picker. Each qBittorrent instance can use its Web UI username and password or a bearer API key (5.2+). Existing clients retain their authentication method and indexer links. Torznab indexers independently choose a client, category, tags, folder and path mode. The additive database migration creates DownloadClient. Startup transfers existing embedded credentials and links in one transaction. Verify category path mappings on the deployed services.
 
 ## Jackett search and completed-release playback
 

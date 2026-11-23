@@ -569,7 +569,11 @@ export interface CreateJellyfinSourceRequest {
   collectionType: string | null;
 }
 
+export type DownloadClientAuthType = "apiKey" | "password";
 export interface DownloadClientInput {
+  authType?: DownloadClientAuthType;
+  username?: string;
+  password?: string;
   kind: "qbittorrent";
   name: string;
   url: string;
@@ -581,6 +585,8 @@ export interface DownloadClientResponse {
   name: string;
   url: string;
   hasApiKey: boolean;
+  authType: DownloadClientAuthType;
+  username: string;
 }
 export interface DownloadClientOptions {
   categories: string[];

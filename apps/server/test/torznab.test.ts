@@ -314,14 +314,59 @@ test("legacy indexers share one migrated client and retain feed credentials afte
     store.decrypt(clients[0]!.credentialCiphertext, "source"),
     "old-password",
   );
-  assert.equal((await readClientConnections(ctx.database, store)).size, 0);
+  assert.equal(
+    (await readClientConnections(ctx.database, store)).get(clients[0]!.id)
+      ?.username,
+    "fixture",
+  );
   const clientPath = "/api/admin/download-clients/" + clients[0]!.id;
   const payload = {
     name: "Reconfigured",
     kind: "qbittorrent",
     url: clients[0]!.url,
   };
+  let logins = 0;
+  let requests = 0;
+  t.mock.method(globalThis, "fetch", async (url: URL, init: RequestInit) => {
+    const headers = new Headers(init.headers);
+    assert.equal(headers.has("authorization"), false);
+    if (url.pathname.endsWith("/auth/login")) {
+      assert.equal((init.body as URLSearchParams).get("username"), "fixture");
+      assert.equal(
+        (init.body as URLSearchParams).get("password"),
+        "old-password",
+      );
+      logins++;
+      const legacy = logins === 1;
+      return new Response(legacy ? "Ok." : null, {
+        status: legacy ? 200 : 204,
+        headers: {
+          "set-cookie":
+            (legacy ? "SID" : "QBT_SID_8080") + "=session; HttpOnly",
+        },
+      });
+    }
+    requests++;
+    if (requests === 2) return new Response("", { status: 403 });
+    assert.equal(
+      headers.get("cookie"),
+      logins === 1 ? "SID=session" : "QBT_SID_8080=session",
+    );
+    return Response.json(url.pathname.endsWith("/tags") ? [] : {});
+  });
+  assert.equal(
+    (
+      await ctx.app.inject({
+        url: clientPath + "/options",
+        headers: ctx.authorization,
+      })
+    ).statusCode,
+    200,
+  );
+  assert.equal(logins, 2);
   for (const [body, expected] of [
+    [{ ...payload, authType: "password", username: "fixture" }, 200],
+    [{ ...payload, authType: "password", username: "changed" }, 400],
     [payload, 400],
     [{ ...payload, apiKey: "new-key" }, 200],
   ] as const) {

@@ -15,6 +15,7 @@ import { useQuery, useQueryClient } from "@tanstack/vue-query";
 import { Button } from "@peridot/ui/components/ui/button";
 import { Input } from "@peridot/ui/components/ui/input";
 import type {
+  DownloadClientAuthType,
   DownloadClientInput,
   DownloadClientResponse,
 } from "@peridot/contracts";
@@ -48,10 +49,21 @@ const kind = ref<DownloadClientInput["kind"]>();
 const saved = computed(() =>
   clients.data.value?.find((c) => c.id === id.value),
 );
-const keepKey = computed(
-  () => saved.value?.hasApiKey && saved.value.url === form.value.url,
+const keepSecret = computed(
+  () =>
+    saved.value?.authType === form.value.authType &&
+    saved.value.url === form.value.url &&
+    (form.value.authType === "apiKey" ||
+      saved.value.username === form.value.username),
 );
-const blank = () => ({ name: "", url: "", apiKey: "" });
+const blank = () => ({
+  name: "",
+  url: "",
+  authType: "apiKey" as DownloadClientAuthType,
+  username: "",
+  password: "",
+  apiKey: "",
+});
 const form = ref(blank());
 function edit(c?: DownloadClientResponse) {
   kind.value = c?.kind;
@@ -59,6 +71,9 @@ function edit(c?: DownloadClientResponse) {
   form.value = {
     name: c?.name || "",
     url: c?.url || "",
+    authType: c?.authType || "apiKey",
+    username: c?.username || "",
+    password: "",
     apiKey: "",
   };
   open.value = true;
@@ -71,11 +86,15 @@ async function act(action: "test" | "save" | "remove", removeId?: string) {
   notice.value = "";
   error.value = "";
   try {
-    const { apiKey, ...fields } = form.value;
+    const { apiKey, username, password, ...fields } = form.value;
     const input: DownloadClientInput = {
       ...fields,
       kind: kind.value || "qbittorrent",
-      ...(apiKey ? { apiKey } : {}),
+      ...(fields.authType === "password"
+        ? { username, ...(password ? { password } : {}) }
+        : apiKey
+          ? { apiKey }
+          : {}),
     };
     if (action === "test") {
       const opts = await api.value.test(input, id.value || undefined);
@@ -126,7 +145,6 @@ async function act(action: "test" | "save" | "remove", removeId?: string) {
     >
       <div class="flex-1">
         <p>{{ c.name }}</p>
-        <p v-if="!c.hasApiKey">{{ t("clients.keyRequired") }}</p>
         <p class="text-sm text-muted-foreground">{{ c.url }}</p>
       </div>
       <Button variant="outline" :disabled="busy" @click="edit(c)">{{
@@ -151,7 +169,13 @@ async function act(action: "test" | "save" | "remove", removeId?: string) {
               : t("clients.add")
           }}</DialogTitle>
           <DialogDescription class="text-sm text-muted-foreground">{{
-            t(kind ? "clients.keyHelp" : "clients.chooseType")
+            t(
+              !kind
+                ? "clients.chooseType"
+                : form.authType === "apiKey"
+                  ? "clients.keyHelp"
+                  : "clients.passwordHelp",
+            )
           }}</DialogDescription>
           <div v-if="!kind" class="mt-4 grid gap-2">
             <Button
@@ -175,13 +199,44 @@ async function act(action: "test" | "save" | "remove", removeId?: string) {
               }}<Input v-model="form.url" type="url" required
             /></label>
             <label class="block"
+              >{{ t("clients.authType") }}
+              <select
+                v-model="form.authType"
+                class="w-full rounded-md border bg-background p-2"
+                @change="
+                  notice = '';
+                  error = '';
+                  form.apiKey = '';
+                  form.password = '';
+                "
+              >
+                <option value="apiKey">{{ t("indexer.apiKey") }}</option>
+                <option value="password">{{ t("clients.userPass") }}</option>
+              </select>
+            </label>
+            <template v-if="form.authType === 'password'">
+              <label class="block"
+                >{{ t("clients.username")
+                }}<Input v-model="form.username" required autocomplete="off"
+              /></label>
+              <label class="block"
+                >{{ t("onboarding.password")
+                }}<Input
+                  v-model="form.password"
+                  type="password"
+                  autocomplete="new-password"
+                  :required="!keepSecret"
+                  :placeholder="keepSecret ? t('clients.keepPassword') : ''"
+              /></label>
+            </template>
+            <label v-else class="block"
               >{{ t("indexer.apiKey")
               }}<Input
                 v-model="form.apiKey"
                 type="password"
                 autocomplete="new-password"
-                :required="!keepKey"
-                :placeholder="keepKey ? t('clients.keepKey') : ''"
+                :required="!keepSecret"
+                :placeholder="keepSecret ? t('clients.keepKey') : ''"
             /></label>
             <p v-if="error" role="alert">{{ error }}</p>
             <p v-if="notice" role="status">{{ notice }}</p>

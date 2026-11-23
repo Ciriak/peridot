@@ -6,7 +6,7 @@ import type {
 import type { Database } from "./database.js";
 import type { CredentialStore } from "./credential-store.js";
 import { SourceIntegrationError } from "./source-integrations.js";
-import { qbitOptions } from "./qbittorrent.js";
+import { type QbitConnection, qbitOptions } from "./qbittorrent.js";
 
 function invalid(message: string): never {
   throw new SourceIntegrationError(message, "invalid_configuration", 400, {
@@ -59,19 +59,23 @@ export async function readClientConnections(
   store: CredentialStore,
 ) {
   const clients = await db.orm.DownloadClient.all();
-  return new Map(
-    clients
-      .filter((c) => c.credentialCiphertext.startsWith(apiKeyPrefix))
-      .map((c) => [
+  return new Map<string, QbitConnection>(
+    clients.map((c) => {
+      const key = c.credentialCiphertext.startsWith(apiKeyPrefix);
+      const secret = store.decrypt(
+        downloadCredentialEnvelope(c.credentialCiphertext),
+        "source",
+      );
+      return [
         c.id,
         {
           client: c.url,
-          clientApiKey: store.decrypt(
-            downloadCredentialEnvelope(c.credentialCiphertext),
-            "source",
-          ),
+          ...(key
+            ? { clientApiKey: secret }
+            : { username: c.username, password: secret }),
         },
-      ]),
+      ];
+    }),
   );
 }
 
@@ -132,11 +136,15 @@ export function registerDownloadClients(
   const clients = db.orm.DownloadClient;
   app.get(base, async () =>
     (await clients.all()).map(
-      ({ id, kind, name, url, credentialCiphertext }) => ({
+      ({ id, kind, name, url, username, credentialCiphertext }) => ({
         id,
         kind,
         name,
         url,
+        username,
+        authType: credentialCiphertext.startsWith(apiKeyPrefix)
+          ? "apiKey"
+          : "password",
         hasApiKey: credentialCiphertext.startsWith(apiKeyPrefix),
       }),
     ),
@@ -160,21 +168,47 @@ export function registerDownloadClients(
       invalid("Enter the qBittorrent Web UI base URL.");
     const saved = id ? await clients.first({ id }) : null;
     if (id && !saved) invalid("Download client no longer exists.");
-    let key = input.apiKey;
+    const mode =
+      input.authType === undefined
+        ? input.username !== undefined || input.password !== undefined
+          ? "password"
+          : "apiKey"
+        : input.authType;
+    if (mode !== "password" && mode !== "apiKey")
+      invalid("Select an authentication method.");
+    const isKey = mode === "apiKey";
+    const username = isKey ? "" : input.username;
+    if (!isKey && (typeof username !== "string" || !username.trim()))
+      invalid("Enter a qBittorrent username.");
+    let secret = isKey ? input.apiKey : input.password;
     if (
-      key === undefined &&
-      saved?.credentialCiphertext.startsWith(apiKeyPrefix)
+      secret === undefined &&
+      saved &&
+      new URL(saved.url).href === url.href &&
+      saved.credentialCiphertext.startsWith(apiKeyPrefix) === isKey &&
+      (isKey || saved.username === username)
     ) {
-      if (new URL(saved.url).href !== url.href)
-        invalid("Re-enter the API key when changing the server URL.");
-      key = store.decrypt(
+      secret = store.decrypt(
         downloadCredentialEnvelope(saved.credentialCiphertext),
         "source",
       );
     }
-    if (typeof key !== "string" || !key.trim() || /\s/.test(key.trim()))
-      invalid("Enter a qBittorrent API key.");
-    return { client: url.href, clientApiKey: key.trim() };
+    if (
+      typeof secret !== "string" ||
+      !secret ||
+      (isKey && !/^\S+$/.test(secret.trim()))
+    )
+      invalid(
+        isKey
+          ? "Enter a qBittorrent API key."
+          : "Enter a qBittorrent password.",
+      );
+    return {
+      client: url.href,
+      username: username || "",
+      password: isKey ? "" : secret,
+      clientApiKey: isKey ? secret.trim() : "",
+    };
   }
   async function save(input: DownloadClientInput, id?: string) {
     const c = await connection(input, id);
@@ -184,9 +218,10 @@ export function registerDownloadClients(
       name: input.name.trim(),
       kind: "qbittorrent",
       url: c.client,
-      username: "",
-      credentialCiphertext:
-        apiKeyPrefix + store.encrypt(c.clientApiKey, "source"),
+      username: c.username,
+      credentialCiphertext: c.clientApiKey
+        ? apiKeyPrefix + store.encrypt(c.clientApiKey, "source")
+        : store.encrypt(c.password, "source"),
     };
     if (id) {
       await clients.where({ id }).updateAndCount(data);
