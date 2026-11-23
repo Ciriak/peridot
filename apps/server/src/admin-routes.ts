@@ -1,4 +1,3 @@
-import { registerTorznab } from "./torznab.js";
 import path from "node:path";
 import type {
   CreateUserRequest,
@@ -109,8 +108,6 @@ export async function registerAdminRoutes(
         );
       }
     });
-
-    registerTorznab(admin, database, tasks);
 
     admin.get(
       "/api/admin/server",

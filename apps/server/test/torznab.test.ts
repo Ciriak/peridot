@@ -94,18 +94,26 @@ test("an external release becomes a playable folder track after completion", asy
   });
   const ctx = await createTestContext();
   t.after(() => ctx.close());
-  const headers = ctx.authorization;
+  const headers = await createMemberSession(ctx);
   await ctx.database.orm.Source.create({
     kind: "path",
     path: folder,
     position: 1,
   });
-  const base = "/api/admin/torznab";
+  const base = "/api/torznab";
   const denied = await ctx.app.inject({
     url: base + "/search?q=test",
-    headers: await createMemberSession(ctx),
   });
-  assert.equal(denied.statusCode, 403);
+  assert.equal(denied.statusCode, 401);
+  for (const sessionHeaders of [ctx.authorization, headers]) {
+    const config = await ctx.app.inject({ url: base, headers: sessionHeaders });
+    assert.deepEqual(config.json(), { enabled: true });
+  }
+  assert.equal(
+    (await ctx.app.inject({ method: "POST", url: base + "/imports/abc" }))
+      .statusCode,
+    401,
+  );
   const result = await ctx.app.inject({
     url: base + "/search?q=test",
     headers,

@@ -1197,7 +1197,7 @@ export function trackAudioUrl(
 }
 
 export function torznabClient(address: string, token: string) {
-  const base = "/api/admin/torznab";
+  const base = "/api/torznab";
   const get = <T>(path: string, init?: RequestInit) =>
     authenticatedRequestJson<T>(address, base + path, token, init);
   return {

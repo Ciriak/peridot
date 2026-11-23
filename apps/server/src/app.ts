@@ -31,6 +31,7 @@ import {
   PlaybackTokenService,
   redactPlaybackToken,
 } from "./playback-tokens.js";
+import { registerTorznab } from "./torznab.js";
 import { registerAdminRoutes } from "./admin-routes.js";
 import { ArtworkService, hasPendingArtworkJobs } from "./artwork-fetch.js";
 import { createJellyfinIntegration } from "./jellyfin/index.js";
@@ -318,6 +319,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
         artworkCache,
         sourceIntegrations,
       );
+      registerTorznab(protectedApp, database, tasks);
       await registerCatalogRoutes(protectedApp, catalog, artworkCache);
       await registerTaskRoutes(protectedApp, tasks);
       await registerLikeRoutes(protectedApp, database);

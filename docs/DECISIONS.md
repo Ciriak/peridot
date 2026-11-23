@@ -2,7 +2,7 @@
 
 ## Torznab release acquisition
 
-Torznab supplies release search through a trusted built-in server integration. Administrators initiate imports because downloads consume shared storage. qBittorrent owns transfer progress and seeding. Peridot indexes the existing completed folder as a normal library source, which allows its read-only music mount and existing playback endpoint to serve downloaded files.
+Torznab supplies release search through a trusted built-in server integration. All signed-in users can search and import releases into the shared library. qBittorrent owns transfer progress and seeding. Peridot indexes the existing completed folder as a normal library source, which allows its read-only music mount and existing playback endpoint to serve downloaded files.
 
 ## 2026-11-23: Desktop top bar shows task progress
 

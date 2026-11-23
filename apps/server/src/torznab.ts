@@ -5,7 +5,7 @@ import type { Database } from "./database.js";
 import { queueLibraryScan, type TaskService } from "./tasks.js";
 
 const pending = "peridot-import";
-const base = "/api/admin/torznab";
+const base = "/api/torznab";
 
 export function parseReleases(xml: string, feed: URL) {
   if (/<!DOCTYPE/i.test(xml)) throw new Error("Unexpected indexer response");

@@ -5,7 +5,6 @@ import { useQuery } from "@tanstack/vue-query";
 import { Button } from "@peridot/ui/components/ui/button";
 import { useSession } from "../composables/use-session";
 import { useServer } from "../composables/use-server";
-import { useUser } from "../composables/use-user";
 import { useLibraryPlayer } from "../composables/use-library-player";
 import { useQueryScope } from "../composables/use-query-scope";
 import { torznabClient } from "../lib/peridot-client";
@@ -14,7 +13,6 @@ const autoplay = ref(false);
 const props = defineProps<{ query: string }>();
 const { address } = useServer(),
   { token } = useSession(),
-  { user } = useUser(),
   { scope } = useQueryScope();
 const client = computed(() => torznabClient(address.value!, token.value!));
 const { playCollection } = useLibraryPlayer();
@@ -25,9 +23,7 @@ const active = ref(""),
 const config = useQuery({
   queryKey: computed(() => ["torznab", scope.value]),
   queryFn: () => client.value.config(),
-  enabled: computed(() =>
-    Boolean(address.value && token.value && user.value?.role === "admin"),
-  ),
+  enabled: computed(() => Boolean(address.value && token.value)),
   retry: false,
 });
 const results = useQuery({
