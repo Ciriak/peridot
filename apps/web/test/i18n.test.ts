@@ -78,6 +78,9 @@ test("en-US messages interpolate and pluralize", () => {
   );
   assert.equal(i18n.global.t("page.search.resultType.song"), "Song");
   assert.equal(i18n.global.t("page.search.resultType.album"), "Album");
+  assert.equal(i18n.global.t("page.search.resultType.music"), "Music");
+  assert.equal(i18n.global.t("page.search.resultType.audiobook"), "Audiobook");
+  assert.equal(i18n.global.t("page.search.resultType.podcast"), "Podcast");
   assert.equal(i18n.global.t("page.search.resultType.release"), "Release");
   assert.equal(i18n.global.t("page.search.libraryTab"), "Library");
   assert.equal(

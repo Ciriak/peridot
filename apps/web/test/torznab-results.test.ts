@@ -48,10 +48,24 @@ test("external rows mirror library rows with placeholder art and a download acti
   );
   assert.match(
     row,
-    /<Icon :icon="icons\.album" class="size-5" \/>/,
-    "External results use the library album placeholder without remote artwork",
+    /<Icon :icon="placeholderIcon" class="size-5" \/>/,
+    "External results use a type-aware placeholder without remote artwork",
   );
-  assert.match(row, /<SearchResultTag class="shrink-0" type="release" \/>/);
+  assert.match(row, /<SearchResultTag class="shrink-0" :type="resultType" \/>/);
+  assert.match(
+    row,
+    /props\.release\.mediaType === "audiobook"\) return "audiobook"/,
+  );
+  assert.match(
+    row,
+    /props\.release\.mediaType === "podcast"\) return "podcast"/,
+  );
+  assert.match(row, /props\.release\.mediaType === "music"\) return "music"/);
+  assert.match(row, /return "release"/);
+  assert.match(row, /resultType\.value === "audiobook"\) return icons\.book/);
+  assert.match(row, /resultType\.value === "podcast"\) return icons\.podcast/);
+  assert.match(row, /resultType\.value === "music"\) return icons\.music/);
+  assert.match(row, /return icons\.album/);
   assert.match(row, /<SearchSourceIcons :source-kinds="\['torznab'\]" \/>/);
   assert.match(row, /:aria-label="t\('torznab\.add'\)"/);
   assert.match(row, /:title="t\('torznab\.add'\)"/);

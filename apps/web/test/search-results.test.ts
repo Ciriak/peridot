@@ -23,6 +23,18 @@ test("track media types map to readable search-result tags", () => {
     searchResultTypeLabelKey("release"),
     "page.search.resultType.release",
   );
+  assert.equal(
+    searchResultTypeLabelKey("music"),
+    "page.search.resultType.music",
+  );
+  assert.equal(
+    searchResultTypeLabelKey("audiobook"),
+    "page.search.resultType.audiobook",
+  );
+  assert.equal(
+    searchResultTypeLabelKey("podcast"),
+    "page.search.resultType.podcast",
+  );
 });
 
 test("search cards place category tags by titles and sources in actions", async () => {

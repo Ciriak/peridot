@@ -5,7 +5,7 @@ import {
 import { CredentialStore } from "../src/credential-store.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import Fastify from "fastify";
@@ -21,8 +21,39 @@ test("rejects DTDs and indexer errors", () => {
     assert.throws(() => parseReleases(xml, new URL("http://feed.test")));
 });
 
+test("release media types follow standard and explicit categories", () => {
+  const xml = `
+    <rss xmlns:t="http://torznab.com/schemas/2015/feed">
+      <channel>
+        <item><title>Audiobook</title><link>/audiobook</link><t:attr name="category" value="3030"/></item>
+        <item><title>Music</title><link>/music</link><t:attr name="category" value="3040"/></item>
+        <item><title>Podcast</title><link>/podcast</link><category>Audio &gt; Podcasts</category></item>
+        <item><title>Named audiobook</title><link>/named-audiobook</link><category>Books &gt; Audiobooks</category><t:attr name="category" value="7000"/></item>
+        <item><title>Unknown</title><link>/unknown</link></item>
+        <item><title>Movie</title><link>/movie</link><t:attr name="category" value="2000"/></item>
+      </channel>
+    </rss>
+  `;
+
+  assert.deepEqual(
+    parseReleases(xml, new URL("http://feed.test")).map((release) => ({
+      title: release.title,
+      mediaType: release.mediaType,
+    })),
+    [
+      { title: "Audiobook", mediaType: "audiobook" },
+      { title: "Music", mediaType: "music" },
+      { title: "Podcast", mediaType: "podcast" },
+      { title: "Named audiobook", mediaType: "audiobook" },
+      { title: "Unknown", mediaType: null },
+    ],
+  );
+});
+
 test("an external release becomes a playable folder track after completion", async (t) => {
-  const folder = await mkdtemp(path.join(os.tmpdir(), "torznab-test-"));
+  const folder = await realpath(
+    await mkdtemp(path.join(os.tmpdir(), "torznab-test-")),
+  );
   const upstream = Fastify();
   let tags: string[] = [];
   let adds = 0;
@@ -32,7 +63,7 @@ test("an external release becomes a playable folder track after completion", asy
       return '<caps><searching><music-search available="yes" supportedParams="q,artist"/></searching></caps>';
     assert.equal((req.query as { t: string }).t, "music");
     assert.equal((req.query as { cat: string }).cat, "3000");
-    return '<rss xmlns:t="http://torznab.com/schemas/2015/feed"><channel><item><title>Release</title><guid>abc</guid><enclosure length="100" url="/download?secret=hidden"/><t:attr name="seeders" value="4"/></item></channel></rss>';
+    return '<rss xmlns:t="http://torznab.com/schemas/2015/feed"><channel><item><title>Release</title><guid>abc</guid><enclosure length="100" url="/download?secret=hidden"/><t:attr name="seeders" value="4"/><t:attr name="category" value="3040"/></item></channel></rss>';
   });
   upstream.get(
     "/movies",
@@ -259,6 +290,7 @@ test("an external release becomes a playable folder track after completion", asy
   assert.notEqual(release.id, second.id);
   assert.notEqual(release.sourceName, second.sourceName);
   assert.equal(release.seeders, 4);
+  assert.equal(release.mediaType, "music");
   const route = base + "/imports/" + release.id;
   for (let i = 0; i < 2; i++)
     assert.equal(
@@ -275,11 +307,21 @@ test("an external release becomes a playable folder track after completion", asy
     id = (await ctx.app.inject({ url: route, headers })).json().trackIds[0];
   }
   assert.ok(id, "completed audio should be indexed");
-  const audio = await ctx.app.inject({
-    url: "/api/tracks/" + id + "/audio",
+  const tokenResponse = await ctx.app.inject({
+    method: "POST",
+    url: `/api/tracks/${id}/playback-token`,
     headers,
   });
-  assert.equal(audio.statusCode, 200);
+  assert.equal(tokenResponse.statusCode, 200);
+  const playbackToken = tokenResponse.json<{ token: string }>().token;
+  const audio = await ctx.app.inject({
+    url:
+      "/api/tracks/" +
+      id +
+      "/audio?playbackToken=" +
+      encodeURIComponent(playbackToken),
+  });
+  assert.equal(audio.statusCode, 200, `${id} ${audio.body}`);
 });
 
 test("legacy indexers share one migrated client and retain feed credentials after retry", async (t) => {

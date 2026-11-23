@@ -924,6 +924,7 @@ export interface TorznabRelease {
   canImport: boolean;
   id: string;
   title: string;
+  mediaType: MediaType | null;
   seeders: number | null;
   bytes: number | null;
 }

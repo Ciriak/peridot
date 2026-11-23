@@ -17,12 +17,14 @@ non-empty debounced search term. External results have a dedicated tab with a
 live release-count preview, while Library remains the default and the selected
 tab stays local to the page. Clearing the query resets the view to Library.
 
-External rows use the shared bordered search-list surface, 40px muted album
-placeholder, title-adjacent Release badge, source/seeders/size metadata, and
-Torznab provenance. The library play overlay is replaced by one Add to library
-download action. Play when ready was removed; Play imported tracks remains
-available after indexing completes. Queueing, status, and qBittorrent transfer
-failures use a release-specific error toast; the action alert is removed.
+External rows use the shared bordered search-list surface, 40px muted cover
+placeholder, title-adjacent type badge, source/seeders/size metadata, and
+Torznab provenance. Category mapping resolves Music, Audiobook, Podcast, or a
+generic Release; the placeholder icon follows the same result. The library play
+overlay is replaced by one Add to library download action. Play when ready was
+removed; Play imported tracks remains available after indexing completes.
+Queueing, status, and qBittorrent transfer failures use a release-specific
+error toast; the action alert is removed.
 
 Verification:
 

@@ -1,11 +1,19 @@
 import type { MediaType } from "@peridot/contracts";
 
+export type TrackSearchResultType = "song" | "chapter" | "episode";
+
 export type SearchResultType =
-  "album" | "playlist" | "release" | "song" | "chapter" | "episode";
+  | "album"
+  | "playlist"
+  | "music"
+  | "audiobook"
+  | "podcast"
+  | "release"
+  | TrackSearchResultType;
 
 export function trackSearchResultType(
   mediaType: MediaType,
-): Exclude<SearchResultType, "album" | "playlist"> {
+): TrackSearchResultType {
   if (mediaType === "audiobook") return "chapter";
   if (mediaType === "podcast") return "episode";
   return "song";

@@ -16,9 +16,11 @@ unavailable.
 
 External releases use the same rounded, divided list surface and compact row
 geometry as library search results. Because Torznab provides no artwork, each
-row uses the shared muted album placeholder. The category badge reads Release,
-and source name, seeders, size, and Torznab provenance follow the library
-result conventions.
+row uses the shared muted placeholder. The placeholder icon follows the
+resolved type: book for audiobooks, microphone for podcasts, music note for
+music, and the album icon for unresolved releases. The category badge uses the
+same resolved type, and source name, seeders, size, and Torznab provenance
+follow the library result conventions.
 
 The library row play control is replaced by one Add to library action using the
 download icon. External rows do not offer Play when ready. After a completed

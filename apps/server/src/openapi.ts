@@ -1438,7 +1438,13 @@ const routes: Record<string, OpenApiOperation> = {
   "GET /api/admin/download-clients": jsonOperation(
     "Server administration",
     "List saved download clients",
-    arrayOf(objectSchema({ ...downloadClientFields, hasApiKey: booleanSchema, id: stringSchema })),
+    arrayOf(
+      objectSchema({
+        ...downloadClientFields,
+        hasApiKey: booleanSchema,
+        id: stringSchema,
+      }),
+    ),
   ),
   "POST /api/admin/download-clients": jsonOperation(
     "Server administration",
@@ -1464,7 +1470,12 @@ const routes: Record<string, OpenApiOperation> = {
     downloadOptions,
     {
       body: objectSchema(
-        { ...downloadClientFields, password: stringSchema, apiKey: stringSchema, id: stringSchema },
+        {
+          ...downloadClientFields,
+          password: stringSchema,
+          apiKey: stringSchema,
+          id: stringSchema,
+        },
         ["url", "kind"],
       ),
     },

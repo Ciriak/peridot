@@ -6,6 +6,7 @@ import { Button } from "@peridot/ui/components/ui/button";
 import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import { computed } from "vue";
 import { icons } from "../lib/icons";
+import type { SearchResultType } from "../lib/search-results";
 import SearchResultTag from "./SearchResultTag.vue";
 import SearchSourceIcons from "./SearchSourceIcons.vue";
 
@@ -17,6 +18,18 @@ const props = defineProps<{
 const emit = defineEmits<{ add: [release: TorznabRelease] }>();
 const { t } = useI18n();
 
+const resultType = computed<SearchResultType>(() => {
+  if (props.release.mediaType === "audiobook") return "audiobook";
+  if (props.release.mediaType === "podcast") return "podcast";
+  if (props.release.mediaType === "music") return "music";
+  return "release";
+});
+const placeholderIcon = computed(() => {
+  if (resultType.value === "audiobook") return icons.book;
+  if (resultType.value === "podcast") return icons.podcast;
+  if (resultType.value === "music") return icons.music;
+  return icons.album;
+});
 const metadata = computed(() => {
   const parts = [props.release.sourceName];
   if (props.release.seeders !== null) {
@@ -39,7 +52,7 @@ const metadata = computed(() => {
         aria-hidden="true"
         class="relative flex size-10 items-center justify-center overflow-hidden rounded-md bg-muted text-muted-foreground group-hover/release-cover:text-foreground"
       >
-        <Icon :icon="icons.album" class="size-5" />
+        <Icon :icon="placeholderIcon" class="size-5" />
       </div>
       <Button
         type="button"
@@ -65,7 +78,7 @@ const metadata = computed(() => {
         <h3 class="min-w-0 text-sm font-medium">
           <ScrollingText class="w-full">{{ release.title }}</ScrollingText>
         </h3>
-        <SearchResultTag class="shrink-0" type="release" />
+        <SearchResultTag class="shrink-0" :type="resultType" />
       </div>
       <ScrollingText class="w-full text-xs text-muted-foreground">
         {{ metadata }}

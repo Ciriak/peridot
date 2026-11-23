@@ -7,7 +7,7 @@ import type { Database } from "./database.js";
 import { queueLibraryScan, type TaskService } from "./tasks.js";
 
 import type { CredentialStore } from "./credential-store.js";
-import type { CreateTorznabSourceRequest } from "@peridot/contracts";
+import type { CreateTorznabSourceRequest, MediaType } from "@peridot/contracts";
 import { SourceIntegrationError } from "./source-integrations.js";
 
 function invalid(reason: string): never {
@@ -115,6 +115,29 @@ export async function validateIndexer(
 
 const base = "/api/torznab";
 
+export function torznabReleaseMediaType(
+  categories: readonly string[],
+): MediaType | null {
+  const normalized = categories
+    .map((category) => category.trim().toLowerCase())
+    .filter(Boolean);
+  if (normalized.some((category) => /\bpodcasts?\b/.test(category))) {
+    return "podcast";
+  }
+  if (normalized.some((category) => /\baudiobooks?\b/.test(category))) {
+    return "audiobook";
+  }
+  const codes = normalized.filter((category) =>
+    /^[1-9][0-9]{3}$/.test(category),
+  );
+  if (codes.includes("3030")) return "audiobook";
+  if (codes.some(audioCode)) return "music";
+  if (normalized.some((category) => /\b(?:audio|music)\b/.test(category))) {
+    return "music";
+  }
+  return null;
+}
+
 export function parseReleases(xml: string, feed: URL) {
   if (/<!DOCTYPE/i.test(xml)) throw new Error("Unexpected indexer response");
   const document = new DOMParser().parseFromString(xml, "application/xml");
@@ -126,15 +149,23 @@ export function parseReleases(xml: string, feed: URL) {
       const field = (key: string) =>
         item.getElementsByTagName(key)[0]?.textContent?.trim();
       const attributes = Array.from(item.getElementsByTagNameNS("*", "attr"));
-      const standardCategories = [
+      const categories = [
         ...Array.from(item.getElementsByTagName("category")).map(
           (c) => c.textContent?.trim() || "",
         ),
         ...attributes
           .filter((a) => a.getAttribute("name") === "category")
           .map((a) => a.getAttribute("value") || ""),
-      ].filter((c) => /^[1-9][0-9]{3}$/.test(c));
-      if (standardCategories.length && !standardCategories.some(audioCode))
+      ];
+      const standardCategories = categories.filter((c) =>
+        /^[1-9][0-9]{3}$/.test(c),
+      );
+      const mediaType = torznabReleaseMediaType(categories);
+      if (
+        standardCategories.length &&
+        !standardCategories.some(audioCode) &&
+        !mediaType
+      )
         return [];
       const title = field("title");
       const href =
@@ -162,6 +193,7 @@ export function parseReleases(xml: string, feed: URL) {
           title,
           href: url.href,
           seeders: number(seeders),
+          mediaType,
           bytes: number(
             field("size") ||
               item.getElementsByTagName("enclosure")[0]?.getAttribute("length"),
@@ -243,7 +275,7 @@ export function registerTorznab(
             });
             if (!response.ok) throw new Error();
             return parseReleases(await response.text(), url).map(
-              ({ id: hash, title, href, seeders, bytes }) => {
+              ({ id: hash, title, href, seeders, bytes, mediaType }) => {
                 const id = indexer.id + "." + hash;
                 cache.set(id, href);
                 return {
@@ -251,6 +283,7 @@ export function registerTorznab(
                   title,
                   seeders,
                   bytes,
+                  mediaType,
                   sourceName: indexer.name,
                   canImport: Boolean(indexer.client),
                 };
