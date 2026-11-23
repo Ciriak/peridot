@@ -1,5 +1,19 @@
 # Peridot decisions
 
+## 2026-11-23: Desktop top bar shows task progress
+
+The default application top bar restores the compact circular task indicator
+at desktop widths and hides it below the `md` breakpoint. It combines active
+administrator server work with offline download work, links to Settings → Tasks,
+and lists the active work on hover.
+
+Queued-only work renders an empty 0% ring instead of an indeterminate spinner.
+A determinate combined percentage appears only while at least one task runs;
+indeterminate running work still uses the spinning state. The server-offline
+badge remains a separate indicator and stays visible at every breakpoint. This
+supersedes the 2026-11-20 decision that kept task progress out of application
+headers.
+
 ## 2026-11-23: Faster Jellyfin imports
 
 Jellyfin scans fetch 500 audio items per API page instead of 100, so a 69 878

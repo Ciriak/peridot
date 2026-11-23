@@ -158,6 +158,17 @@ export function overallTaskProgress(
   return total / active.length;
 }
 
+export function groupedTaskProgress(
+  rows: readonly { progress: number | null; running: boolean }[],
+): number | null {
+  if (!rows.length) return null;
+  if (!rows.some((row) => row.running)) return 0;
+  if (rows.some((row) => row.progress === null)) return null;
+  return (
+    rows.reduce((total, row) => total + (row.progress ?? 0), 0) / rows.length
+  );
+}
+
 export function taskStatusMessage(task: TaskResponse): MessageDescriptor {
   if (task.status === "completed" && task.failureMessage) {
     return message("settings.tasks.status.completedWithErrors");

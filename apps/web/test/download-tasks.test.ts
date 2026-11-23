@@ -176,7 +176,7 @@ test("all offline entry points feed the unified task display", async () => {
   assert.match(liked, /verified/);
   assert.match(liked, /saveLikedTitles\(\)/);
   assert.match(liked, /cancelLikedTitles\(\)/);
-  assert.doesNotMatch(layout, /TaskProgressIndicator/);
+  assert.match(layout, /<TaskProgressIndicator \/>/);
   assert.doesNotMatch(layout, /DownloadTaskIndicator/);
   assert.match(tasksPage, /useOfflineDownloadTasks/);
   assert.match(tasksPage, /activeRows/);

@@ -1,5 +1,41 @@
 # Peridot handoff
 
+## Desktop top-bar task spinner
+
+The default application top bar now shows combined server and offline-download
+task progress at desktop widths. The indicator is hidden below the `md`
+breakpoint, links to the active task list, and keeps the existing server-offline
+badge separate. Queued-only work is represented by an empty 0% ring rather than
+an indeterminate spinner.
+
+Verification:
+
+- `pnpm --filter @peridot/web test` (298 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Focused ESLint and Prettier checks on the changed files
+- `git diff --check`
+- Validation used Node 24.22.3 and pnpm 11.25.0
+
+Known limits:
+
+- Browser visual QA with active server and download tasks at desktop and mobile
+  widths was not run.
+
+Feature files:
+
+- `apps/web/app/components/TaskProgressIndicator.vue`
+- `apps/web/app/layouts/default.vue`
+- `apps/web/app/lib/task-progress.ts`
+- `apps/web/i18n/locales/en-US.json`
+- `apps/web/test/task-progress.test.ts`
+- `apps/web/test/download-tasks.test.ts`
+
+Uncommitted changes:
+
+- Desktop task-spinner restoration, queued-only empty progress behavior,
+  translations, tests, decision record, and this handoff section.
+
 ## Faster Jellyfin scans
 
 Jellyfin scans now list 500 audio items per page instead of 100. Import
