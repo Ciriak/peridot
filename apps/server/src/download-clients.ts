@@ -47,21 +47,31 @@ export async function importSettings(db: Database, input: DownloadLinkInput) {
   };
 }
 
+const apiKeyPrefix = "qbit-api-key:";
+export function downloadCredentialEnvelope(value: string) {
+  return value.startsWith(apiKeyPrefix)
+    ? value.slice(apiKeyPrefix.length)
+    : value;
+}
+
 export async function readClientConnections(
   db: Database,
   store: CredentialStore,
 ) {
   const clients = await db.orm.DownloadClient.all();
   return new Map(
-    clients.map((c) => [
-      c.id,
-      {
-        client: c.url,
-        username: c.username,
-        password: store.decrypt(c.credentialCiphertext, "source"),
-        sessionKey: c.id + c.credentialCiphertext,
-      },
-    ]),
+    clients
+      .filter((c) => c.credentialCiphertext.startsWith(apiKeyPrefix))
+      .map((c) => [
+        c.id,
+        {
+          client: c.url,
+          clientApiKey: store.decrypt(
+            downloadCredentialEnvelope(c.credentialCiphertext),
+            "source",
+          ),
+        },
+      ]),
   );
 }
 
@@ -85,6 +95,7 @@ export async function migrateIndexerClients(
         password = String(secrets.password || "");
       let client = clients.find(
         (c) =>
+          !c.credentialCiphertext.startsWith(apiKeyPrefix) &&
           c.url === url &&
           c.username === username &&
           store.decrypt(c.credentialCiphertext, "source") === password,
@@ -120,13 +131,15 @@ export function registerDownloadClients(
 ) {
   const clients = db.orm.DownloadClient;
   app.get(base, async () =>
-    (await clients.all()).map(({ id, kind, name, url, username }) => ({
-      id,
-      kind,
-      name,
-      url,
-      username,
-    })),
+    (await clients.all()).map(
+      ({ id, kind, name, url, credentialCiphertext }) => ({
+        id,
+        kind,
+        name,
+        url,
+        hasApiKey: credentialCiphertext.startsWith(apiKeyPrefix),
+      }),
+    ),
   );
   async function connection(input: DownloadClientInput, id?: string) {
     if (
@@ -145,25 +158,23 @@ export function registerDownloadClients(
       url.hash
     )
       invalid("Enter the qBittorrent Web UI base URL.");
-    const username = typeof input.username === "string" ? input.username : "";
     const saved = id ? await clients.first({ id }) : null;
     if (id && !saved) invalid("Download client no longer exists.");
-    let password = input.password;
-    if (password === undefined && saved) {
-      if (saved.url !== url.href || saved.username !== username)
-        invalid(
-          "Re-enter the password when changing the connection address or username.",
-        );
-      password = store.decrypt(saved.credentialCiphertext, "source");
+    let key = input.apiKey;
+    if (
+      key === undefined &&
+      saved?.credentialCiphertext.startsWith(apiKeyPrefix)
+    ) {
+      if (new URL(saved.url).href !== url.href)
+        invalid("Re-enter the API key when changing the server URL.");
+      key = store.decrypt(
+        downloadCredentialEnvelope(saved.credentialCiphertext),
+        "source",
+      );
     }
-    if (password !== undefined && typeof password !== "string")
-      invalid("Invalid password.");
-    return {
-      client: url.href,
-      username,
-      password: password || "",
-      sessionKey: "test",
-    };
+    if (typeof key !== "string" || !key.trim() || /\s/.test(key.trim()))
+      invalid("Enter a qBittorrent API key.");
+    return { client: url.href, clientApiKey: key.trim() };
   }
   async function save(input: DownloadClientInput, id?: string) {
     const c = await connection(input, id);
@@ -173,8 +184,9 @@ export function registerDownloadClients(
       name: input.name.trim(),
       kind: "qbittorrent",
       url: c.client,
-      username: c.username,
-      credentialCiphertext: store.encrypt(c.password, "source"),
+      username: "",
+      credentialCiphertext:
+        apiKeyPrefix + store.encrypt(c.clientApiKey, "source"),
     };
     if (id) {
       await clients.where({ id }).updateAndCount(data);
@@ -196,14 +208,12 @@ export function registerDownloadClients(
       try {
         return await qbitOptions(c);
       } catch {
-        return reply
-          .code(502)
-          .send({
-            error: {
-              code: "connection_failed",
-              message: "qBittorrent connection failed.",
-            },
-          });
+        return reply.code(502).send({
+          error: {
+            code: "connection_failed",
+            message: "qBittorrent connection failed.",
+          },
+        });
       }
     },
   );
@@ -215,14 +225,12 @@ export function registerDownloadClients(
       try {
         return await qbitOptions(c);
       } catch {
-        return reply
-          .code(502)
-          .send({
-            error: {
-              code: "connection_failed",
-              message: "qBittorrent connection failed.",
-            },
-          });
+        return reply.code(502).send({
+          error: {
+            code: "connection_failed",
+            message: "qBittorrent connection failed.",
+          },
+        });
       }
     },
   );
@@ -236,14 +244,12 @@ export function registerDownloadClients(
         JSON.parse(s.configuration || "{}").downloadClientId === req.params.id,
     );
     if (linked)
-      return reply
-        .code(409)
-        .send({
-          error: {
-            code: "client_in_use",
-            message: "Unlink this client from its indexers first.",
-          },
-        });
+      return reply.code(409).send({
+        error: {
+          code: "client_in_use",
+          message: "Unlink this client from its indexers first.",
+        },
+      });
     await clients.where({ id: req.params.id }).delete();
     return reply.code(204).send();
   });

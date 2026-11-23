@@ -573,15 +573,14 @@ export interface DownloadClientInput {
   kind: "qbittorrent";
   name: string;
   url: string;
-  username: string;
-  password?: string;
+  apiKey?: string;
 }
 export interface DownloadClientResponse {
   id: string;
   kind: "qbittorrent";
   name: string;
   url: string;
-  username: string;
+  hasApiKey: boolean;
 }
 export interface DownloadClientOptions {
   categories: string[];

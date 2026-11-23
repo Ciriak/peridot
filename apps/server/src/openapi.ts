@@ -143,11 +143,10 @@ const downloadClientFields = {
   kind: enumeration("qbittorrent"),
   name: stringSchema,
   url: stringSchema,
-  username: stringSchema,
 };
 const downloadClientInput = objectSchema(
-  { ...downloadClientFields, password: stringSchema },
-  ["kind", "name", "url", "username"],
+  { ...downloadClientFields, apiKey: stringSchema },
+  ["kind", "name", "url"],
 );
 const downloadOptions = objectSchema({
   categories: arrayOf(stringSchema),
@@ -1437,13 +1436,13 @@ const routes: Record<string, OpenApiOperation> = {
   "GET /api/admin/download-clients": jsonOperation(
     "Server administration",
     "List saved download clients",
-    arrayOf(objectSchema({ ...downloadClientFields, id: stringSchema })),
+    arrayOf(objectSchema({ ...downloadClientFields, hasApiKey: booleanSchema, id: stringSchema })),
   ),
   "POST /api/admin/download-clients": jsonOperation(
     "Server administration",
     "Create a download client",
     objectSchema({ id: stringSchema }),
-    { status: 201, body: downloadClientInput },
+    { status: 201, body: objectSchema({ ...downloadClientFields, apiKey: stringSchema }) },
   ),
   "PUT /api/admin/download-clients/:id": jsonOperation(
     "Server administration",
@@ -1463,7 +1462,7 @@ const routes: Record<string, OpenApiOperation> = {
     downloadOptions,
     {
       body: objectSchema(
-        { ...downloadClientFields, password: stringSchema, id: stringSchema },
+        { ...downloadClientFields, apiKey: stringSchema, id: stringSchema },
         ["url", "kind"],
       ),
     },

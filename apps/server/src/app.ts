@@ -1,4 +1,4 @@
-import { migrateIndexerClients } from "./download-clients.js";
+import { downloadCredentialEnvelope, migrateIndexerClients } from "./download-clients.js";
 import Fastify, { LogController } from "fastify";
 import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
@@ -127,7 +127,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
       "credentialCiphertext",
     ).all();
     sourceCredentials.push(
-      ...downloadCredentials.map((c) => c.credentialCiphertext),
+      ...downloadCredentials.map((c) => downloadCredentialEnvelope(c.credentialCiphertext)),
     );
     credentials = await CredentialStore.fromConfig(
       config.credentialEncryptionKey,

@@ -1,4 +1,4 @@
-import { createQbitRequester } from "./qbittorrent.js";
+import { qbitRequest as qb } from "./qbittorrent.js";
 import { importSettings, readClientConnections } from "./download-clients.js";
 import { createHash } from "node:crypto";
 import { DOMParser } from "@xmldom/xmldom";
@@ -178,7 +178,6 @@ export function registerTorznab(
   credentials: CredentialStore,
 ) {
   const cache = new Map<string, string>();
-  const qb = createQbitRequester();
   async function indexers() {
     const rows = await db.orm.Source.where({ kind: "torznab" })
       .where((s) => s.removedAt.isNull())
@@ -196,9 +195,7 @@ export function registerTorznab(
         apiKey: String(secrets.apiKey),
         ...(clients.get(config.downloadClientId) || {
           client: "",
-          username: "",
-          password: "",
-          sessionKey: "",
+          clientApiKey: "",
         }),
         category: String(config.category || ""),
         tags: String(config.tags || ""),

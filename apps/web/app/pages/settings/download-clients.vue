@@ -1,4 +1,14 @@
 <script setup lang="ts">
+import {
+  DialogRoot,
+  DialogPortal,
+  DialogOverlay,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from "reka-ui";
+import { Icon } from "@iconify/vue/offline";
+import { icons } from "../../lib/icons";
 import { computed, ref } from "vue";
 import { definePageMeta, useI18n } from "#imports";
 import { useQuery, useQueryClient } from "@tanstack/vue-query";
@@ -33,30 +43,39 @@ const open = ref(false),
   busy = ref(false),
   notice = ref(""),
   error = ref("");
-const blank = () => ({ name: "", url: "", username: "", password: "" });
+const clientTypes = [{ kind: "qbittorrent", label: "qBittorrent" }] as const;
+const kind = ref<DownloadClientInput["kind"]>();
+const saved = computed(() =>
+  clients.data.value?.find((c) => c.id === id.value),
+);
+const keepKey = computed(
+  () => saved.value?.hasApiKey && saved.value.url === form.value.url,
+);
+const blank = () => ({ name: "", url: "", apiKey: "" });
 const form = ref(blank());
 function edit(c?: DownloadClientResponse) {
+  kind.value = c?.kind;
   id.value = c?.id || "";
   form.value = {
     name: c?.name || "",
     url: c?.url || "",
-    username: c?.username || "",
-    password: "",
+    apiKey: "",
   };
   open.value = true;
   notice.value = "";
   error.value = "";
 }
 async function act(action: "test" | "save" | "remove", removeId?: string) {
+  if (action !== "remove" && !kind.value) return;
   busy.value = true;
   notice.value = "";
   error.value = "";
   try {
-    const { password, ...fields } = form.value;
+    const { apiKey, ...fields } = form.value;
     const input: DownloadClientInput = {
       ...fields,
-      kind: "qbittorrent",
-      ...(password || !id.value ? { password } : {}),
+      kind: kind.value || "qbittorrent",
+      ...(apiKey ? { apiKey } : {}),
     };
     if (action === "test") {
       const opts = await api.value.test(input, id.value || undefined);
@@ -91,9 +110,13 @@ async function act(action: "test" | "save" | "remove", removeId?: string) {
   <section v-if="user?.role === 'admin'" class="space-y-4">
     <div class="flex items-center justify-between">
       <h1 class="text-xl font-semibold">{{ t("clients.title") }}</h1>
-      <Button :disabled="busy" @click="edit()">{{ t("clients.add") }}</Button>
+      <Button :disabled="busy" @click="edit()"
+        ><Icon :icon="icons.plus" aria-hidden="true" />{{
+          t("clients.add")
+        }}</Button
+      >
     </div>
-    <p v-if="clients.error.value || error" role="alert">
+    <p v-if="clients.error.value || (!open && error)" role="alert">
       {{ error || clients.error.value?.message }}
     </p>
     <div
@@ -103,6 +126,7 @@ async function act(action: "test" | "save" | "remove", removeId?: string) {
     >
       <div class="flex-1">
         <p>{{ c.name }}</p>
+        <p v-if="!c.hasApiKey">{{ t("clients.keyRequired") }}</p>
         <p class="text-sm text-muted-foreground">{{ c.url }}</p>
       </div>
       <Button variant="outline" :disabled="busy" @click="edit(c)">{{
@@ -115,42 +139,73 @@ async function act(action: "test" | "save" | "remove", removeId?: string) {
         >{{ t("common.remove") }}</Button
       >
     </div>
-    <form v-if="open" class="max-w-md space-y-3" @submit.prevent="act('save')">
-      <label class="block"
-        >{{ t("indexer.name") }}<Input v-model="form.name" required
-      /></label>
-      <label class="block"
-        >{{ t("clients.url") }}<Input v-model="form.url" type="url" required
-      /></label>
-      <label class="block"
-        >{{ t("indexer.username")
-        }}<Input v-model="form.username" autocomplete="off"
-      /></label>
-      <label class="block"
-        >{{ t("indexer.password")
-        }}<Input
-          v-model="form.password"
-          type="password"
-          autocomplete="new-password"
-          :placeholder="id ? t('clients.keepPassword') : ''"
-      /></label>
-      <p v-if="notice" role="status">{{ notice }}</p>
-      <div class="flex gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          :disabled="busy"
-          @click="act('test')"
-          >{{ t("clients.test") }}</Button
-        ><Button :disabled="busy" type="submit">{{ t("common.save") }}</Button
-        ><Button
-          type="button"
-          variant="ghost"
-          :disabled="busy"
-          @click="open = false"
-          >{{ t("common.cancel") }}</Button
+    <DialogRoot v-model:open="open"
+      ><DialogPortal>
+        <DialogOverlay class="fixed inset-0 z-50 bg-background/80" />
+        <DialogContent
+          class="fixed left-1/2 top-1/2 z-50 max-h-svh w-full max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border bg-card p-6 text-card-foreground shadow-lg"
         >
-      </div>
-    </form>
+          <DialogTitle class="text-lg font-semibold">{{
+            kind
+              ? clientTypes.find((c) => c.kind === kind)?.label
+              : t("clients.add")
+          }}</DialogTitle>
+          <DialogDescription class="text-sm text-muted-foreground">{{
+            t(kind ? "clients.keyHelp" : "clients.chooseType")
+          }}</DialogDescription>
+          <div v-if="!kind" class="mt-4 grid gap-2">
+            <Button
+              v-for="clientType in clientTypes"
+              :key="clientType.kind"
+              variant="outline"
+              class="justify-start"
+              @click="kind = clientType.kind"
+              >{{ clientType.label }}</Button
+            >
+            <Button variant="ghost" @click="open = false">{{
+              t("common.cancel")
+            }}</Button>
+          </div>
+          <form v-else class="mt-4 space-y-3" @submit.prevent="act('save')">
+            <label class="block"
+              >{{ t("indexer.name") }}<Input v-model="form.name" required
+            /></label>
+            <label class="block"
+              >{{ t("clients.url")
+              }}<Input v-model="form.url" type="url" required
+            /></label>
+            <label class="block"
+              >{{ t("indexer.apiKey")
+              }}<Input
+                v-model="form.apiKey"
+                type="password"
+                autocomplete="new-password"
+                :required="!keepKey"
+                :placeholder="keepKey ? t('clients.keepKey') : ''"
+            /></label>
+            <p v-if="error" role="alert">{{ error }}</p>
+            <p v-if="notice" role="status">{{ notice }}</p>
+            <div class="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                :disabled="busy"
+                @click="act('test')"
+                >{{ t("clients.test") }}</Button
+              ><Button :disabled="busy" type="submit">{{
+                t("common.save")
+              }}</Button
+              ><Button
+                type="button"
+                variant="ghost"
+                :disabled="busy"
+                @click="id ? (open = false) : edit()"
+                >{{ t(id ? "common.cancel" : "common.back") }}</Button
+              >
+            </div>
+          </form>
+        </DialogContent></DialogPortal
+      ></DialogRoot
+    >
   </section>
 </template>

@@ -1,4 +1,7 @@
-import { migrateIndexerClients } from "../src/download-clients.js";
+import {
+  migrateIndexerClients,
+  readClientConnections,
+} from "../src/download-clients.js";
 import { CredentialStore } from "../src/credential-store.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
@@ -83,6 +86,19 @@ test("an external release becomes a playable folder track after completion", asy
   });
   const url = "http://fixture.test";
   t.mock.method(globalThis, "fetch", async (input: URL, init: RequestInit) => {
+    const headers = new Headers(init.headers);
+    if (input.pathname.startsWith("/api/v2/")) {
+      assert.equal(
+        headers.get("authorization"),
+        input.host === "second.test"
+          ? "Bearer second-secret"
+          : "Bearer client-secret",
+      );
+      assert.equal(headers.has("cookie"), false);
+      assert.notEqual(input.pathname, "/api/v2/auth/login");
+    } else {
+      assert.equal(headers.has("authorization"), false);
+    }
     const response = await upstream.inject({
       url: input.pathname + input.search,
       method: init.method === "POST" ? "POST" : "GET",
@@ -112,8 +128,7 @@ test("an external release becomes a playable folder track after completion", asy
     kind: "qbittorrent",
     name: "Test downloader",
     url,
-    username: "user",
-    password: "client-secret",
+    apiKey: "client-secret",
   };
   const saved = await ctx.app.inject({
     method: "POST",
@@ -132,6 +147,20 @@ test("an external release becomes a playable folder track after completion", asy
     headers: ctx.authorization,
   });
   assert.doesNotMatch(listing.body, /client-secret|credentialCiphertext/);
+  assert.equal(listing.json()[0].hasApiKey, true);
+  for (const [method, path, address, expected] of [
+    ["POST", clients, url, 400],
+    ["PUT", clients + "/" + downloadClientId, url, 200],
+    ["PUT", clients + "/" + downloadClientId, "http://other.test", 400],
+  ] as const) {
+    const response = await ctx.app.inject({
+      method,
+      url: path,
+      headers: ctx.authorization,
+      payload: { kind: "qbittorrent", name: "Renamed", url: address },
+    });
+    assert.equal(response.statusCode, expected, response.body);
+  }
   const options = await ctx.app.inject({
     url: clients + "/" + downloadClientId + "/options",
     headers: ctx.authorization,
@@ -140,6 +169,23 @@ test("an external release becomes a playable folder track after completion", asy
     categories: ["music"],
     tags: ["lossless"],
   });
+  const secondClient = await ctx.app.inject({
+    method: "POST",
+    url: clients,
+    headers: ctx.authorization,
+    payload: {
+      ...clientInput,
+      name: "Second downloader",
+      url: "http://second.test",
+      apiKey: "second-secret",
+    },
+  });
+  assert.equal(secondClient.statusCode, 201);
+  const secondOptions = await ctx.app.inject({
+    url: clients + "/" + secondClient.json().id + "/options",
+    headers: ctx.authorization,
+  });
+  assert.equal(secondOptions.statusCode, 200);
   const input = {
     kind: "torznab",
     name: "Audio indexer",
@@ -156,7 +202,13 @@ test("an external release becomes a playable folder track after completion", asy
       method: "POST",
       url: "/api/admin/sources",
       headers: ctx.authorization,
-      payload: { ...input, name: host, url: "http://" + host + ".test/feed" },
+      payload: {
+        ...input,
+        downloadClientId:
+          host === "one" ? downloadClientId : secondClient.json().id,
+        name: host,
+        url: "http://" + host + ".test/feed",
+      },
     });
     assert.equal(added.statusCode, 201, added.body);
     assert.doesNotMatch(added.body, /test-key/);
@@ -261,6 +313,30 @@ test("legacy indexers share one migrated client and retain feed credentials afte
   assert.equal(
     store.decrypt(clients[0]!.credentialCiphertext, "source"),
     "old-password",
+  );
+  assert.equal((await readClientConnections(ctx.database, store)).size, 0);
+  const clientPath = "/api/admin/download-clients/" + clients[0]!.id;
+  const payload = {
+    name: "Reconfigured",
+    kind: "qbittorrent",
+    url: clients[0]!.url,
+  };
+  for (const [body, expected] of [
+    [payload, 400],
+    [{ ...payload, apiKey: "new-key" }, 200],
+  ] as const) {
+    const res = await ctx.app.inject({
+      method: "PUT",
+      url: clientPath,
+      headers: ctx.authorization,
+      payload: body,
+    });
+    assert.equal(res.statusCode, expected, res.body);
+  }
+  assert.equal(
+    (await readClientConnections(ctx.database, store)).get(clients[0]!.id)
+      ?.clientApiKey,
+    "new-key",
   );
   for (const row of await ctx.database.orm.Source.where({
     kind: "torznab",
