@@ -1195,3 +1195,20 @@ export function trackAudioUrl(
 ) {
   return `${serverAddress}/api/tracks/${encodeURIComponent(trackId)}/audio?playbackToken=${encodeURIComponent(playbackToken)}`;
 }
+
+export function torznabClient(address: string, token: string) {
+  const base = "/api/admin/torznab";
+  const get = <T>(path: string, init?: RequestInit) =>
+    authenticatedRequestJson<T>(address, base + path, token, init);
+  return {
+    config: () => get<{ enabled: boolean }>(""),
+    search: (q: string) =>
+      get<import("@peridot/contracts").TorznabRelease[]>(
+        "/search?" + new URLSearchParams({ q }),
+      ),
+    add: (id: string) =>
+      get<{ id: string }>("/imports/" + id, { method: "POST" }),
+    status: (id: string) =>
+      get<import("@peridot/contracts").TorznabImportStatus>("/imports/" + id),
+  };
+}

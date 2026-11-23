@@ -880,3 +880,16 @@ export type RealtimeServerMessage =
   | RealtimeCatalogChangedEvent
   | RealtimeSourceRemovalProgressEvent
   | RealtimeLogAppendedEvent;
+
+export interface TorznabRelease {
+  id: string;
+  title: string;
+  seeders: number | null;
+  bytes: number | null;
+}
+
+export interface TorznabImportStatus {
+  progress: number;
+  state: string;
+  trackIds: string[];
+}

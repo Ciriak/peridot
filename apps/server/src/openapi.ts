@@ -1402,6 +1402,39 @@ const routes: Record<string, OpenApiOperation> = {
       security: realtimeTicketSecurity,
     },
   ),
+  "GET /api/admin/torznab": jsonOperation(
+    "Server administration",
+    "Check external search availability",
+    objectSchema({ enabled: booleanSchema }),
+  ),
+  "GET /api/admin/torznab/search": jsonOperation(
+    "Server administration",
+    "Search audio releases",
+    arrayOf(
+      objectSchema({
+        id: stringSchema,
+        title: stringSchema,
+        seeders: nullable(integerSchema),
+        bytes: nullable(integerSchema),
+      }),
+    ),
+    { query: objectSchema({ q: stringSchema }) },
+  ),
+  "POST /api/admin/torznab/imports/:id": jsonOperation(
+    "Server administration",
+    "Import a release",
+    objectSchema({ id: stringSchema }),
+    { status: 202 },
+  ),
+  "GET /api/admin/torznab/imports/:id": jsonOperation(
+    "Server administration",
+    "Get release import progress",
+    objectSchema({
+      progress: numberSchema,
+      state: stringSchema,
+      trackIds: arrayOf(stringSchema),
+    }),
+  ),
   "GET /api/admin/server": jsonOperation(
     "Server administration",
     "Get server settings",

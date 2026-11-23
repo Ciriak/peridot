@@ -1,4 +1,13 @@
 {
+  "torznab.search": "Search external sources",
+  "torznab.loading": "Searching Torznab…",
+  "torznab.empty": "No external releases found.",
+  "torznab.play": "Play imported tracks",
+  "torznab.indexing": "Indexing completed download…",
+  "torznab.add": "Add to library",
+  "torznab.autoplay": "Play when ready",
+  "torznab.failed": "Import failed",
+  "torznab.seeders": "{count} seeders",
   "app.name": "Peridot",
   "app.tagline": "Your music. Your space.",
   "app.description": "Your self-hosted music library.",

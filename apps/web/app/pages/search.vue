@@ -7,6 +7,7 @@ import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { useQuery } from "@tanstack/vue-query";
 import { watchDebounced } from "@vueuse/core";
 import { computed, onMounted, ref, watch } from "vue";
+import TorznabSearch from "../components/TorznabSearch.vue";
 import ArtistCard from "../components/ArtistCard.vue";
 import AutoLoadMore from "../components/AutoLoadMore.vue";
 import CatalogCard from "../components/CatalogCard.vue";
@@ -294,6 +295,7 @@ onMounted(() => {
         </Button>
       </div>
     </section>
+    <TorznabSearch v-if="searching" :query="debouncedQuery" />
 
     <div
       v-if="resultsLoading && searching && !hasResults"
