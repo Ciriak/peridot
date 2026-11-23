@@ -1,5 +1,9 @@
 # Peridot handoff
 
+## Shared qBittorrent download clients
+
+Settings → Download clients manages named server-side connections. Torznab indexers independently choose a client, category, tags, folder and path mode. The additive database migration creates DownloadClient. Startup transfers existing embedded credentials and links in one transaction. Verify category path mappings on the deployed services.
+
 ## Jackett search and completed-release playback
 
 Authenticated search queries the Torznab indexers configured in Settings → Sources. Each feed advertises audio capabilities and may have a qBittorrent import destination. Setup is documented in DEVELOPMENT.md. The search page can queue an import or start the player after the scanner indexes downloaded files. Automatic playback requires keeping the search view open. qBittorrent tags identify transfers across server restarts.

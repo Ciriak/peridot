@@ -19,6 +19,7 @@ import { Button } from "@peridot/ui/components/ui/button";
 import { Input } from "@peridot/ui/components/ui/input";
 import { ProgressCircle } from "@peridot/ui/components/ui/progress-circle";
 import { Switch } from "@peridot/ui/components/ui/switch";
+import DownloadClientLink from "../../components/DownloadClientLink.vue";
 import { useSortable } from "@vueuse/integrations/useSortable";
 import {
   AlertDialogAction,
@@ -60,6 +61,7 @@ import { useUser } from "../../composables/use-user";
 import { useLocalizedMessage } from "../../composables/use-localized-message";
 import { icons } from "../../lib/icons";
 import {
+  downloadClientsApi,
   createSource,
   deleteSource,
   discoverIntegrationSources,
@@ -112,13 +114,15 @@ function blankIndexer() {
     name: "",
     url: "",
     apiKey: "",
-    clientUrl: "",
-    username: "",
-    password: "",
+    downloadClientId: "",
+    category: "",
+    tags: "",
+    categoryPath: false,
     savePath: "",
     folderId: "",
   };
 }
+const editingLink = ref("");
 const indexer = ref(blankIndexer());
 const newKind = ref<SourceChoice | null>(null);
 const newPath = ref("");
@@ -265,7 +269,25 @@ watch(sourcesQuery.error, (value) => {
   if (value) pageError.value = value;
 });
 
+function editDownloadLink(source: SourceResponse) {
+  openAddDialog();
+  editingLink.value = source.id;
+  newKind.value = "torznab";
+  const c = source.configuration || {};
+  indexer.value = {
+    ...blankIndexer(),
+    name: source.name || "",
+    url: source.url || "",
+    downloadClientId: c.downloadClientId || "",
+    category: c.category || "",
+    tags: c.tags || "",
+    categoryPath: c.categoryPath === "true",
+    folderId: c.folderId || "",
+    savePath: c.savePath || "",
+  };
+}
 function openAddDialog() {
+  editingLink.value = "";
   addError.value = "";
   newKind.value = null;
   newPath.value = "";
@@ -310,7 +332,7 @@ function canAdd(): boolean {
   if (newKind.value === "torznab")
     return Boolean(
       indexer.value.url.trim() &&
-      (!indexer.value.clientUrl || indexer.value.folderId),
+      (!indexer.value.downloadClientId || indexer.value.folderId),
     );
   if (newKind.value === "path") return Boolean(newPath.value.trim());
   return (
@@ -334,7 +356,9 @@ async function addSource() {
     const { name, url, apiKey } = indexer.value;
     body = {
       kind: "torznab",
-      ...(indexer.value.clientUrl ? indexer.value : { name, url, apiKey }),
+      ...(indexer.value.downloadClientId
+        ? indexer.value
+        : { name, url, apiKey }),
     };
   } else {
     if (!newJellyfinLibraryId.value) return;
@@ -347,6 +371,15 @@ async function addSource() {
     };
   }
   try {
+    if (editingLink.value) {
+      await downloadClientsApi(address.value!, token.value!).link(
+        editingLink.value,
+        indexer.value.downloadClientId ? indexer.value : {},
+      );
+      closeAddDialog();
+      await loadSources();
+      return;
+    }
     const source = await createSource(
       address.value ?? "",
       token.value ?? "",
@@ -755,6 +788,12 @@ onBeforeUnmount(() => {
                 class="z-50 w-44 rounded-lg border bg-popover p-1 text-popover-foreground shadow-lg"
               >
                 <DropdownMenuItem
+                  v-if="source.kind === 'torznab'"
+                  class="cursor-pointer rounded-sm px-2 py-2 text-sm"
+                  @select="editDownloadLink(source)"
+                  >{{ t("clients.link") }}</DropdownMenuItem
+                >
+                <DropdownMenuItem
                   :disabled="
                     (source.kind !== 'path' && source.kind !== 'jellyfin') ||
                     serverLost ||
@@ -886,7 +925,7 @@ onBeforeUnmount(() => {
         class="fixed left-1/2 top-1/2 z-50 max-h-svh w-full max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border bg-card p-6 text-card-foreground shadow-lg"
       >
         <DialogTitle class="text-lg font-semibold">
-          {{ t("settings.sources.addTitle") }}
+          {{ editingLink ? t("clients.link") : t("settings.sources.addTitle") }}
         </DialogTitle>
         <DialogDescription class="text-sm text-muted-foreground">
           {{ t("settings.sources.addDescription") }}
@@ -934,68 +973,24 @@ onBeforeUnmount(() => {
           </div>
 
           <div v-else-if="newKind === 'torznab'" class="space-y-3">
-            <label class="block space-y-1"
-              ><span>{{ t("indexer.name") }}</span
-              ><Input v-model="indexer.name" type="text" autocomplete="off"
-            /></label>
-            <label class="block space-y-1"
-              ><span>{{ t("indexer.url") }}</span
-              ><Input v-model="indexer.url" type="url" autocomplete="off"
-            /></label>
-            <label class="block space-y-1"
-              ><span>{{ t("indexer.apiKey") }}</span
-              ><Input
-                v-model="indexer.apiKey"
-                type="password"
-                autocomplete="off"
-            /></label>
-            <label class="block space-y-1"
-              ><span>{{ t("indexer.clientUrl") }}</span
-              ><Input v-model="indexer.clientUrl" type="url" autocomplete="off"
-            /></label>
-            <template v-if="indexer.clientUrl"
-              ><label class="block space-y-1"
-                ><span>{{ t("indexer.username") }}</span
-                ><Input
-                  v-model="indexer.username"
-                  type="text"
-                  autocomplete="off"
+            <template v-if="!editingLink">
+              <label class="block space-y-1"
+                ><span>{{ t("indexer.name") }}</span
+                ><Input v-model="indexer.name" type="text" autocomplete="off"
               /></label>
               <label class="block space-y-1"
-                ><span>{{ t("indexer.password") }}</span
+                ><span>{{ t("indexer.url") }}</span
+                ><Input v-model="indexer.url" type="url" autocomplete="off"
+              /></label>
+              <label class="block space-y-1"
+                ><span>{{ t("indexer.apiKey") }}</span
                 ><Input
-                  v-model="indexer.password"
+                  v-model="indexer.apiKey"
                   type="password"
                   autocomplete="off"
               /></label>
-              <label class="block space-y-1"
-                ><span>{{ t("indexer.savePath") }}</span
-                ><Input
-                  v-model="indexer.savePath"
-                  type="text"
-                  autocomplete="off"
-              /></label>
-              <label class="block space-y-1"
-                ><span>{{ t("indexer.folder") }}</span
-                ><select
-                  v-model="indexer.folderId"
-                  class="w-full rounded-md border bg-background p-2"
-                >
-                  <option disabled value="">
-                    {{ t("indexer.chooseFolder") }}
-                  </option>
-                  <option
-                    v-for="folder in sources.filter(
-                      (s) => s.kind === 'path' && !s.removal,
-                    )"
-                    :key="folder.id"
-                    :value="folder.id"
-                  >
-                    {{ sourceLabel(folder) }}
-                  </option>
-                </select></label
-              ></template
-            >
+            </template>
+            <DownloadClientLink v-model="indexer" :sources="sources" />
           </div>
           <div v-else class="space-y-4">
             <div class="space-y-2">
@@ -1080,8 +1075,14 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="mt-6 flex justify-end gap-3">
-          <Button type="button" variant="outline" @click="handleDialogBack">
-            {{ newKind ? t("common.back") : t("common.cancel") }}
+          <Button
+            type="button"
+            variant="outline"
+            @click="editingLink ? closeAddDialog() : handleDialogBack()"
+          >
+            {{
+              newKind && !editingLink ? t("common.back") : t("common.cancel")
+            }}
           </Button>
           <Button
             v-if="newKind"
@@ -1089,7 +1090,13 @@ onBeforeUnmount(() => {
             :disabled="adding || !canAdd() || serverLost"
             @click="addSource"
           >
-            {{ adding ? t("common.adding") : t("settings.sources.add") }}
+            {{
+              adding
+                ? t("common.adding")
+                : editingLink
+                  ? t("common.save")
+                  : t("settings.sources.add")
+            }}
           </Button>
         </div>
       </DialogContent>

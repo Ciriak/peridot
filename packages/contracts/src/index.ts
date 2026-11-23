@@ -569,16 +569,37 @@ export interface CreateJellyfinSourceRequest {
   collectionType: string | null;
 }
 
-export interface CreateTorznabSourceRequest {
+export interface DownloadClientInput {
+  kind: "qbittorrent";
+  name: string;
+  url: string;
+  username: string;
+  password?: string;
+}
+export interface DownloadClientResponse {
+  id: string;
+  kind: "qbittorrent";
+  name: string;
+  url: string;
+  username: string;
+}
+export interface DownloadClientOptions {
+  categories: string[];
+  tags: string[];
+}
+export interface DownloadLinkInput {
+  downloadClientId?: string;
+  folderId?: string;
+  savePath?: string;
+  category?: string;
+  tags?: string;
+  categoryPath?: boolean;
+}
+export interface CreateTorznabSourceRequest extends DownloadLinkInput {
   kind: "torznab";
   name?: string;
   url: string;
   apiKey?: string;
-  clientUrl?: string;
-  username?: string;
-  password?: string;
-  folderId?: string;
-  savePath?: string;
 }
 export type CreateSourceRequest =
   | CreateTorznabSourceRequest

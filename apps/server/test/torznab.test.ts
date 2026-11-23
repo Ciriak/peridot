@@ -1,3 +1,5 @@
+import { migrateIndexerClients } from "../src/download-clients.js";
+import { CredentialStore } from "../src/credential-store.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -40,6 +42,10 @@ test("an external release becomes a playable folder track after completion", asy
     assert.equal((req.query as { cat: string }).cat, "3000,3040");
     return "<rss><channel><item><title>Film</title><category>2000</category><link>/movie</link></item></channel></rss>";
   });
+  upstream.get("/api/v2/torrents/categories", async () => ({
+    music: { name: "music", savePath: folder },
+  }));
+  upstream.get("/api/v2/torrents/tags", async () => ["lossless"]);
   upstream.addContentTypeParser(
     "application/x-www-form-urlencoded",
     { parseAs: "string" },
@@ -47,7 +53,10 @@ test("an external release becomes a playable folder track after completion", asy
   );
   upstream.post("/api/v2/torrents/add", async (req) => {
     const form = req.body as URLSearchParams;
-    assert.equal(form.get("savepath"), folder);
+    assert.equal(form.get("savepath"), null);
+    assert.equal(form.get("autoTMM"), "true");
+    assert.equal(form.get("category"), "music");
+    assert.ok(form.get("tags")?.split(",").includes("lossless"));
     tags = form.get("tags")!.split(",");
     adds++;
     return "Ok.";
@@ -98,12 +107,48 @@ test("an external release becomes a playable folder track after completion", asy
     path: folder,
     position: 1,
   });
+  const clients = "/api/admin/download-clients";
+  const clientInput = {
+    kind: "qbittorrent",
+    name: "Test downloader",
+    url,
+    username: "user",
+    password: "client-secret",
+  };
+  const saved = await ctx.app.inject({
+    method: "POST",
+    url: clients,
+    headers: ctx.authorization,
+    payload: clientInput,
+  });
+  assert.equal(saved.statusCode, 201, saved.body);
+  const downloadClientId = saved.json().id;
+  assert.equal(
+    (await ctx.app.inject({ url: clients, headers })).statusCode,
+    403,
+  );
+  const listing = await ctx.app.inject({
+    url: clients,
+    headers: ctx.authorization,
+  });
+  assert.doesNotMatch(listing.body, /client-secret|credentialCiphertext/);
+  const options = await ctx.app.inject({
+    url: clients + "/" + downloadClientId + "/options",
+    headers: ctx.authorization,
+  });
+  assert.deepEqual(options.json(), {
+    categories: ["music"],
+    tags: ["lossless"],
+  });
   const input = {
     kind: "torznab",
     name: "Audio indexer",
     url: url + "/feed",
     apiKey: "test-key",
-    clientUrl: url,
+    downloadClientId,
+    category: "music",
+    tags: "lossless",
+    categoryPath: true,
     folderId: folderSource.id,
   };
   for (const host of ["one", "two"]) {
@@ -116,6 +161,16 @@ test("an external release becomes a playable folder track after completion", asy
     assert.equal(added.statusCode, 201, added.body);
     assert.doesNotMatch(added.body, /test-key/);
   }
+  assert.equal(
+    (
+      await ctx.app.inject({
+        method: "DELETE",
+        url: clients + "/" + downloadClientId,
+        headers: ctx.authorization,
+      })
+    ).statusCode,
+    409,
+  );
   const addFeed = (suffix: string) =>
     ctx.app.inject({
       method: "POST",
@@ -173,4 +228,51 @@ test("an external release becomes a playable folder track after completion", asy
     headers,
   });
   assert.equal(audio.statusCode, 200);
+});
+
+test("legacy indexers share one migrated client and retain feed credentials after retry", async (t) => {
+  const key = Buffer.alloc(32, 17).toString("base64");
+  const ctx = await createTestContext({ credentialEncryptionKey: key });
+  t.after(() => ctx.close());
+  const store = new CredentialStore(key);
+  for (const feed of ["one", "two"]) {
+    await ctx.database.orm.Source.create({
+      kind: "torznab",
+      position: 1,
+      configuration: JSON.stringify({
+        clientUrl: "http://qbit.test/",
+        folderId: "music",
+      }),
+      credentialCiphertext: store.encrypt(
+        JSON.stringify({
+          feed,
+          apiKey: "fixture-key",
+          username: "fixture",
+          password: "old-password",
+        }),
+        "source",
+      ),
+    });
+  }
+  await migrateIndexerClients(ctx.database, store);
+  await migrateIndexerClients(ctx.database, store);
+  const clients = await ctx.database.orm.DownloadClient.all();
+  assert.equal(clients.length, 1);
+  assert.equal(
+    store.decrypt(clients[0]!.credentialCiphertext, "source"),
+    "old-password",
+  );
+  for (const row of await ctx.database.orm.Source.where({
+    kind: "torznab",
+  }).all()) {
+    assert.deepEqual(JSON.parse(row.configuration!), {
+      downloadClientId: clients[0]!.id,
+      folderId: "music",
+    });
+    const secrets = JSON.parse(
+      store.decrypt(row.credentialCiphertext!, "source"),
+    );
+    assert.equal(secrets.apiKey, "fixture-key");
+    assert.equal(secrets.password, undefined);
+  }
 });

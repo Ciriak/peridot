@@ -1,3 +1,4 @@
+import { registerDownloadClients } from "./download-clients.js";
 import path from "node:path";
 import type {
   CreateUserRequest,
@@ -109,6 +110,7 @@ export async function registerAdminRoutes(
       }
     });
 
+    registerDownloadClients(admin, database, metadataCredentials);
     admin.get(
       "/api/admin/server",
       async (): Promise<ServerSettingsResponse> => {

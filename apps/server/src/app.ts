@@ -1,3 +1,4 @@
+import { migrateIndexerClients } from "./download-clients.js";
 import Fastify, { LogController } from "fastify";
 import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
@@ -122,6 +123,12 @@ export async function buildApp(options: BuildAppOptions = {}) {
     ).flatMap((source) =>
       source.credentialCiphertext ? [source.credentialCiphertext] : [],
     );
+    const downloadCredentials = await database.orm.DownloadClient.select(
+      "credentialCiphertext",
+    ).all();
+    sourceCredentials.push(
+      ...downloadCredentials.map((c) => c.credentialCiphertext),
+    );
     credentials = await CredentialStore.fromConfig(
       config.credentialEncryptionKey,
       config.databaseUrl,
@@ -134,6 +141,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
     if (ownsDatabase) await database.close();
     throw error;
   }
+  await migrateIndexerClients(database, credentials);
   const registry = new MetadataResolverRegistry()
     .register(
       new MusicBrainzResolver(

@@ -200,4 +200,6 @@ self-emit it before applying the migration.
 
 In Settings → Sources, select + → Torznab indexer. Enter the feed URL, optional display name, and API key. Peridot reads the feed’s audio capabilities before saving it. Repeat for additional indexers. Existing environment-based installations must add their feeds through this dialog.
 
-To enable imports, enter the qBittorrent Web UI URL and credentials and select an existing folder source. If the same directory has a different path inside qBittorrent, enter that path too. Keep incomplete downloads outside the folder source. All signed-in users can search configured indexers and import from those with downloads configured.
+Under Settings → Download clients, add qBittorrent, test the connection, and save. Select that client in each indexer’s download settings along with an existing Peridot folder source. Choose the qBittorrent category and any additional tags. Category save paths use automatic torrent management. Select a folder source that maps to the category’s completed directory. For manual paths, enter the qBittorrent-side path if the two services mount the directory differently. Keep incomplete downloads outside that directory.
+
+Existing per-indexer qBittorrent credentials are migrated at startup. Indexers with the same URL, username, and password share a saved client. Administrators can relink existing indexers from their source action menu.

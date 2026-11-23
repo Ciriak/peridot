@@ -19,9 +19,9 @@ import type {
 } from '@prisma/orm-sqlite/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'047c2baee1f440ee5bc68058a2a1b6bdc93c730013bfa5568760f935e06794b0'>;
+  StorageHashBase<'62852c84f360700fb54d673a54a0791178d3f524fd14d42249cc7465c6681bd9'>;
 export type ExecutionHash =
-  ExecutionHashBase<'893cb931a69dfa62f8cc5331d19e7a10d59f0777de879106a39d2d587eee7f8c'>;
+  ExecutionHashBase<'4dc5ec34a7ada0a7604910a7f1410b9814a4e624330a6fecab7762fe2abe3491'>;
 export type ProfileHash =
   ProfileHashBase<'260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53'>;
 
@@ -366,6 +366,15 @@ export namespace Models {
     trackId: FieldOutputTypes['__unbound__']['CatalogTrackArtist']['trackId'];
     readonly [RelationKeys]?: never;
   };
+  export type DownloadClient = {
+    credentialCiphertext: FieldOutputTypes['__unbound__']['DownloadClient']['credentialCiphertext'];
+    id: FieldOutputTypes['__unbound__']['DownloadClient']['id'];
+    kind: FieldOutputTypes['__unbound__']['DownloadClient']['kind'];
+    name: FieldOutputTypes['__unbound__']['DownloadClient']['name'];
+    url: FieldOutputTypes['__unbound__']['DownloadClient']['url'];
+    username: FieldOutputTypes['__unbound__']['DownloadClient']['username'];
+    readonly [RelationKeys]?: never;
+  };
   export type DuplicateDetectionState = {
     algorithmVersion: FieldOutputTypes['__unbound__']['DuplicateDetectionState']['algorithmVersion'];
     groupCount: FieldOutputTypes['__unbound__']['DuplicateDetectionState']['groupCount'];
@@ -604,6 +613,7 @@ export declare const models: {
   CatalogState: Models.CatalogState;
   CatalogTrack: Models.CatalogTrack;
   CatalogTrackArtist: Models.CatalogTrackArtist;
+  DownloadClient: Models.DownloadClient;
   DuplicateDetectionState: Models.DuplicateDetectionState;
   MetadataProvider: Models.MetadataProvider;
   PasswordResetToken: Models.PasswordResetToken;
@@ -1695,6 +1705,50 @@ type ContractBase = Omit<
                   readonly unique: false;
                 },
               ];
+              foreignKeys: readonly [];
+            };
+            readonly DownloadClient: {
+              columns: {
+                readonly credentialCiphertext: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly id: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly kind: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly name: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly url: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly username: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [];
               foreignKeys: readonly [];
             };
             readonly DuplicateDetectionState: {
@@ -3322,6 +3376,10 @@ type ContractBase = Omit<
       readonly namespace: '__unbound__' & NamespaceId;
       readonly model: 'CatalogTrackArtist';
     };
+    readonly DownloadClient: {
+      readonly namespace: '__unbound__' & NamespaceId;
+      readonly model: 'DownloadClient';
+    };
     readonly DuplicateDetectionState: {
       readonly namespace: '__unbound__' & NamespaceId;
       readonly model: 'DuplicateDetectionState';
@@ -4120,6 +4178,47 @@ type ContractBase = Omit<
                 readonly artistId: { readonly column: 'artistId' };
                 readonly id: { readonly column: 'id' };
                 readonly trackId: { readonly column: 'trackId' };
+              };
+            };
+          };
+          readonly DownloadClient: {
+            readonly fields: {
+              readonly credentialCiphertext: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly kind: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly name: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly url: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly username: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly table: 'DownloadClient';
+              readonly namespaceId: '__unbound__';
+              readonly fields: {
+                readonly credentialCiphertext: { readonly column: 'credentialCiphertext' };
+                readonly id: { readonly column: 'id' };
+                readonly kind: { readonly column: 'kind' };
+                readonly name: { readonly column: 'name' };
+                readonly url: { readonly column: 'url' };
+                readonly username: { readonly column: 'username' };
               };
             };
           };
@@ -5438,6 +5537,14 @@ type ContractBase = Omit<
           readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
           readonly ref: {
             readonly entry: 'CatalogTrackArtist';
+            readonly field: 'id';
+            readonly namespace: '__unbound__';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'DownloadClient';
             readonly field: 'id';
             readonly namespace: '__unbound__';
           };

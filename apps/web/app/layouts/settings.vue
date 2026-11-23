@@ -87,6 +87,11 @@ const commonCategories = [
   },
 ];
 const adminCategories = [
+  {
+    labelKey: "clients.title",
+    to: "/settings/download-clients",
+    icon: icons.server,
+  },
   { labelKey: "settings.users", to: "/settings/users", icon: icons.user },
   { labelKey: "settings.sources", to: "/settings/sources", icon: icons.folder },
   {

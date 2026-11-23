@@ -1,3 +1,5 @@
+import { createQbitRequester } from "./qbittorrent.js";
+import { importSettings, readClientConnections } from "./download-clients.js";
 import { createHash } from "node:crypto";
 import { DOMParser } from "@xmldom/xmldom";
 import type { FastifyInstance } from "fastify";
@@ -91,17 +93,7 @@ export async function validateIndexer(
     (mode === "search" && (!categories.length || !supportsQuery("search")))
   )
     return invalid("This indexer does not advertise searchable audio.");
-  const client = input.clientUrl ? httpUrl(input.clientUrl) : null;
-  if (client?.search)
-    return invalid("Enter a qBittorrent base URL without query parameters.");
-  const folderId = typeof input.folderId === "string" ? input.folderId : "";
-  if (client || folderId) {
-    const folder = await db.orm.Source.first({ id: folderId, kind: "path" });
-    if (!client || !folder || folder.removedAt)
-      return invalid(
-        "Choose a folder source and qBittorrent connection for imports.",
-      );
-  }
+  const settings = await importSettings(db, input);
   endpoint.search = "";
   return {
     identity,
@@ -112,15 +104,11 @@ export async function validateIndexer(
       url: endpoint.href,
       mode,
       categories: categories.join(",") || "3000",
-      clientUrl: client?.href || "",
-      folderId,
-      savePath: typeof input.savePath === "string" ? input.savePath : "",
+      ...settings,
     },
     credentials: {
       feed,
       apiKey,
-      username: typeof input.username === "string" ? input.username : "",
-      password: typeof input.password === "string" ? input.password : "",
     },
   };
 }
@@ -190,11 +178,12 @@ export function registerTorznab(
   credentials: CredentialStore,
 ) {
   const cache = new Map<string, string>();
-  const cookies = new Map<string, string>();
+  const qb = createQbitRequester();
   async function indexers() {
     const rows = await db.orm.Source.where({ kind: "torznab" })
       .where((s) => s.removedAt.isNull())
       .all();
+    const clients = await readClientConnections(db, credentials);
     return rows.map((row) => {
       const config = JSON.parse(row.configuration!);
       const secrets = JSON.parse(
@@ -205,9 +194,15 @@ export function registerTorznab(
         name: row.name || "Torznab",
         feed: String(secrets.feed),
         apiKey: String(secrets.apiKey),
-        username: String(secrets.username),
-        password: String(secrets.password),
-        client: String(config.clientUrl),
+        ...(clients.get(config.downloadClientId) || {
+          client: "",
+          username: "",
+          password: "",
+          sessionKey: "",
+        }),
+        category: String(config.category || ""),
+        tags: String(config.tags || ""),
+        categoryPath: config.categoryPath === "true",
         folderId: String(config.folderId),
         savePath: String(config.savePath),
         categories: String(config.categories),
@@ -230,52 +225,6 @@ export function registerTorznab(
     };
   }
   app.get(base, async () => ({ enabled: (await indexers()).length > 0 }));
-  async function qb(
-    indexer: Indexer,
-    method: string,
-    params: Record<string, string> = {},
-    post = false,
-    retry = true,
-  ): Promise<Response> {
-    const url = new URL(
-      indexer.client.replace(/\/$/, "") + "/api/v2/" + method,
-    );
-    const body = new URLSearchParams(params);
-    if (!post) url.search = body.toString();
-    const response = await fetch(url, {
-      method: post ? "POST" : "GET",
-      body: post ? body : null,
-      headers: {
-        Cookie: cookies.get(indexer.id) || "",
-        Origin: url.origin,
-        Referer: url.origin + "/",
-      },
-      redirect: "error",
-      signal: AbortSignal.timeout(12000),
-    });
-    if (response.status === 403 && retry) {
-      const login = await qb(
-        indexer,
-        "auth/login",
-        {
-          username: indexer.username,
-          password: indexer.password,
-        },
-        true,
-        false,
-      );
-      const cookie = login.headers
-        .getSetCookie()
-        .map((c) => c.split(";")[0])
-        .join("; ");
-      if (!cookie) throw new Error("qBittorrent authentication failed");
-      cookies.set(indexer.id, cookie);
-      return qb(indexer, method, params, post, false);
-    }
-    if (!response.ok) throw new Error("qBittorrent request failed");
-    return response;
-  }
-
   app.get<{ Querystring: { q: string } }>(
     base + "/search",
     async (request, reply) => {
@@ -352,9 +301,13 @@ export function registerTorznab(
         "torrents/add",
         {
           urls: href,
-          savepath: destination,
-          autoTMM: "false",
-          tags: pending + ",peridot-" + id,
+          ...(indexer.category ? { category: indexer.category } : {}),
+          ...(indexer.categoryPath
+            ? { autoTMM: "true" }
+            : { savepath: destination, autoTMM: "false" }),
+          tags: [pending, "peridot-" + id, indexer.tags]
+            .filter(Boolean)
+            .join(","),
         },
         true,
       );
@@ -394,7 +347,9 @@ export function registerTorznab(
       if (
         torrent &&
         progress === 1 &&
-        torrent.save_path.replace(/\/$/, "") === destination.replace(/\/$/, "")
+        (indexer.categoryPath ||
+          torrent.save_path.replace(/\/$/, "") ===
+            destination.replace(/\/$/, ""))
       ) {
         const files: { name: string; progress: number }[] = await (
           await qb(indexer, "torrents/files", { hash: torrent.hash })

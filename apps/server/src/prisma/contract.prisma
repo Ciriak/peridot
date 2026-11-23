@@ -266,6 +266,15 @@ model ServerSetting {
   updatedAt            DateTime @onCreate(now()) @onUpdate(now())
 }
 
+model DownloadClient {
+  id String @id @onCreate(cuid(2))
+  kind String
+  name String
+  url String
+  username String
+  credentialCiphertext String
+}
+
 model Source {
   id                   String   @id @onCreate(cuid(2))
   kind                 String

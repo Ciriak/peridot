@@ -131,6 +131,28 @@ const taskKindSchema = enumeration(
   "artwork_fetch",
 );
 
+const downloadLinkFields = {
+  downloadClientId: stringSchema,
+  folderId: stringSchema,
+  savePath: stringSchema,
+  category: stringSchema,
+  tags: stringSchema,
+  categoryPath: booleanSchema,
+};
+const downloadClientFields = {
+  kind: enumeration("qbittorrent"),
+  name: stringSchema,
+  url: stringSchema,
+  username: stringSchema,
+};
+const downloadClientInput = objectSchema(
+  { ...downloadClientFields, password: stringSchema },
+  ["kind", "name", "url", "username"],
+);
+const downloadOptions = objectSchema({
+  categories: arrayOf(stringSchema),
+  tags: arrayOf(stringSchema),
+});
 const schemas: Record<string, SchemaObject> = {
   MessageParams: {
     type: "object",
@@ -717,11 +739,7 @@ const schemas: Record<string, SchemaObject> = {
           name: stringSchema,
           url: stringSchema,
           apiKey: stringSchema,
-          clientUrl: stringSchema,
-          username: stringSchema,
-          password: stringSchema,
-          folderId: stringSchema,
-          savePath: stringSchema,
+          ...downloadLinkFields,
         },
         ["kind", "url"],
       ),
@@ -1415,6 +1433,51 @@ const routes: Record<string, OpenApiOperation> = {
       ),
       security: realtimeTicketSecurity,
     },
+  ),
+  "GET /api/admin/download-clients": jsonOperation(
+    "Server administration",
+    "List saved download clients",
+    arrayOf(objectSchema({ ...downloadClientFields, id: stringSchema })),
+  ),
+  "POST /api/admin/download-clients": jsonOperation(
+    "Server administration",
+    "Create a download client",
+    objectSchema({ id: stringSchema }),
+    { status: 201, body: downloadClientInput },
+  ),
+  "PUT /api/admin/download-clients/:id": jsonOperation(
+    "Server administration",
+    "Update a download client",
+    objectSchema({ id: stringSchema }),
+    { body: downloadClientInput },
+  ),
+  "DELETE /api/admin/download-clients/:id": jsonOperation(
+    "Server administration",
+    "Remove a download client",
+    null,
+    { status: 204 },
+  ),
+  "POST /api/admin/download-clients/test": jsonOperation(
+    "Server administration",
+    "Test qBittorrent credentials",
+    downloadOptions,
+    {
+      body: objectSchema(
+        { ...downloadClientFields, password: stringSchema, id: stringSchema },
+        ["url", "kind"],
+      ),
+    },
+  ),
+  "GET /api/admin/download-clients/:id/options": jsonOperation(
+    "Server administration",
+    "List qBittorrent categories and tags",
+    downloadOptions,
+  ),
+  "PUT /api/admin/sources/:id/download-client": jsonOperation(
+    "Server administration",
+    "Set the indexer download destination",
+    null,
+    { status: 204, body: objectSchema(downloadLinkFields, []) },
   ),
   "GET /api/torznab": jsonOperation(
     "Library",

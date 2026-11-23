@@ -52,6 +52,10 @@
       "model": "CatalogTrackArtist",
       "namespace": "__unbound__"
     },
+    "DownloadClient": {
+      "model": "DownloadClient",
+      "namespace": "__unbound__"
+    },
     "DuplicateDetectionState": {
       "model": "DuplicateDetectionState",
       "namespace": "__unbound__"
@@ -1427,6 +1431,77 @@
               },
               "namespaceId": "__unbound__",
               "table": "CatalogTrackArtist"
+            }
+          },
+          "DownloadClient": {
+            "fields": {
+              "credentialCiphertext": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "kind": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "name": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "url": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "username": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "credentialCiphertext": {
+                  "column": "credentialCiphertext"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "kind": {
+                  "column": "kind"
+                },
+                "name": {
+                  "column": "name"
+                },
+                "url": {
+                  "column": "url"
+                },
+                "username": {
+                  "column": "username"
+                }
+              },
+              "namespaceId": "__unbound__",
+              "table": "DownloadClient"
             }
           },
           "DuplicateDetectionState": {
@@ -4665,6 +4740,48 @@
                 }
               ]
             },
+            "DownloadClient": {
+              "columns": {
+                "credentialCiphertext": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "kind": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "name": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "url": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                },
+                "username": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": [
+                  "id"
+                ]
+              },
+              "uniques": []
+            },
             "DuplicateDetectionState": {
               "columns": {
                 "algorithmVersion": {
@@ -6412,10 +6529,10 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "047c2baee1f440ee5bc68058a2a1b6bdc93c730013bfa5568760f935e06794b0"
+    "storageHash": "62852c84f360700fb54d673a54a0791178d3f524fd14d42249cc7465c6681bd9"
   },
   "execution": {
-    "executionHash": "893cb931a69dfa62f8cc5331d19e7a10d59f0777de879106a39d2d587eee7f8c",
+    "executionHash": "4dc5ec34a7ada0a7604910a7f1410b9814a4e624330a6fecab7762fe2abe3491",
     "mutations": {
       "defaults": [
         {
@@ -6596,6 +6713,17 @@
           },
           "ref": {
             "entry": "CatalogTrackArtist",
+            "field": "id",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "cuid2",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "DownloadClient",
             "field": "id",
             "namespace": "__unbound__"
           }

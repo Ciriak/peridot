@@ -1,4 +1,10 @@
 import type {
+  DownloadClientInput,
+  DownloadClientResponse,
+  DownloadClientOptions,
+  DownloadLinkInput,
+} from "@peridot/contracts";
+import type {
   AddPlaylistItemRequest,
   AddPlaylistItemResponse,
   ApiErrorResponse,
@@ -1210,5 +1216,34 @@ export function torznabClient(address: string, token: string) {
       get<{ id: string }>("/imports/" + id, { method: "POST" }),
     status: (id: string) =>
       get<import("@peridot/contracts").TorznabImportStatus>("/imports/" + id),
+  };
+}
+
+export function downloadClientsApi(address: string, token: string) {
+  const base = "/api/admin/download-clients";
+  const request = <T>(path: string, method = "GET", body?: unknown) =>
+    authenticatedRequestJson<T>(address, path, token, {
+      method,
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+  return {
+    list: () => request<DownloadClientResponse[]>(base),
+    save: (input: DownloadClientInput, id?: string) =>
+      request<{ id: string }>(
+        id ? base + "/" + id : base,
+        id ? "PUT" : "POST",
+        input,
+      ),
+    test: (input: DownloadClientInput, id?: string) =>
+      request<DownloadClientOptions>(base + "/test", "POST", { ...input, id }),
+    options: (id: string) =>
+      request<DownloadClientOptions>(base + "/" + id + "/options"),
+    remove: (id: string) => request<void>(base + "/" + id, "DELETE"),
+    link: (id: string, input: DownloadLinkInput) =>
+      request<void>(
+        "/api/admin/sources/" + id + "/download-client",
+        "PUT",
+        input,
+      ),
   };
 }
