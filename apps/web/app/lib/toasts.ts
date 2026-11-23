@@ -9,6 +9,7 @@ import {
   offlineTrackRemovalFailureToast,
 } from "./offline-toast";
 import { playbackFailureToast } from "./playback-toast";
+import { releaseDownloadFailureToast } from "./release-download-toast";
 import { sourceMutationToast, type SourceMutation } from "./source-toast";
 
 export type AppToastKind = "success" | "error";
@@ -183,6 +184,13 @@ export function notifyTrackDownloadFailed(
     duration: 8000,
     kind: "error",
   });
+}
+
+export function notifyReleaseDownloadFailed(
+  releaseTitle: string,
+  detailMessage: string,
+) {
+  addToast(releaseDownloadFailureToast(releaseTitle, detailMessage));
 }
 
 export function notifyPlaybackFailed(trackTitle?: string) {

@@ -1,7 +1,7 @@
 import type { MediaType } from "@peridot/contracts";
 
 export type SearchResultType =
-  "album" | "playlist" | "song" | "chapter" | "episode";
+  "album" | "playlist" | "release" | "song" | "chapter" | "episode";
 
 export function trackSearchResultType(
   mediaType: MediaType,

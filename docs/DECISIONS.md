@@ -4,6 +4,29 @@
 
 Torznab supplies release search through a trusted built-in server integration. All signed-in users can search and import releases into the shared library. qBittorrent owns transfer progress and seeding. Peridot indexes the existing completed folder as a normal library source, which allows its read-only music mount and existing playback endpoint to serve downloaded files.
 
+## 2026-11-23: External search uses a counted result tab
+
+Global search automatically queries configured Torznab indexers for every
+non-empty committed query, even while the Library tab is active. Completed
+external searches expose their release count in the External sources tab, so
+users can preview external availability without switching tabs. The selected
+tab is page-local state rather than URL history state, defaults to Library, and
+returns to Library when the query is cleared or external search becomes
+unavailable.
+
+External releases use the same rounded, divided list surface and compact row
+geometry as library search results. Because Torznab provides no artwork, each
+row uses the shared muted album placeholder. The category badge reads Release,
+and source name, seeders, size, and Torznab provenance follow the library
+result conventions.
+
+The library row play control is replaced by one Add to library action using the
+download icon. External rows do not offer Play when ready. After a completed
+import is indexed, Play imported tracks remains available outside the result
+rows. Search request failures stay inline in the External tab. Queueing and
+transfer failures use an error toast instead of an inline alert so the action
+failure is noticeable without replacing result content.
+
 ## 2026-11-23: Desktop top bar shows task progress
 
 The default application top bar restores the compact circular task indicator

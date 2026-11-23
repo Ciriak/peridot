@@ -10,6 +10,64 @@ Authenticated search queries the Torznab indexers configured in Settings → Sou
 
 The integration test uses simulated upstream responses, a temporary database, a real WAV file, the scanner, and the authenticated audio endpoint. Deployment verification still requires running a transfer on a configured Jackett and qBittorrent installation.
 
+## Automatic external search tab
+
+Global search now runs a configured Torznab query automatically for each
+non-empty debounced search term. External results have a dedicated tab with a
+live release-count preview, while Library remains the default and the selected
+tab stays local to the page. Clearing the query resets the view to Library.
+
+External rows use the shared bordered search-list surface, 40px muted album
+placeholder, title-adjacent Release badge, source/seeders/size metadata, and
+Torznab provenance. The library play overlay is replaced by one Add to library
+download action. Play when ready was removed; Play imported tracks remains
+available after indexing completes. Queueing, status, and qBittorrent transfer
+failures use a release-specific error toast; the action alert is removed.
+
+Verification:
+
+- `pnpm --filter @peridot/web test` (303 passing)
+- `pnpm --filter @peridot/ui test` (19 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm lint`
+- `pnpm --filter @peridot/web build`
+- Focused Prettier check on every changed file
+- `git diff --check`
+- Live Brave check at desktop width: Library selected, External sources preview
+  showed 25 results, switching tabs hid Library filters, and external rows
+  rendered placeholder art, metadata, Release badges, and Add to library
+  controls.
+
+Known limits:
+
+- Mobile-width visual inspection was not run.
+- The live check did not trigger an actual external import.
+- Validation used the shell's Node 26.13.0 and pnpm 12.21.0 because the
+  documented Node 24/pnpm 11.25.0 toolchain is not installed on this host.
+- Root `pnpm format:check` still reports unrelated formatting in
+  `apps/server/src/app.ts` and `apps/server/src/openapi.ts`.
+
+Feature files:
+
+- `apps/web/app/composables/use-torznab-search.ts`
+- `apps/web/app/components/TorznabReleaseRow.vue`
+- `apps/web/app/components/TorznabResults.vue`
+- `apps/web/app/pages/search.vue`
+- `packages/ui/src/components/ui/tabs`
+- Web and UI tests, translations, decision record, and this handoff section
+
+Uncommitted changes:
+
+- Automatic Torznab query lifecycle, tabbed search results, external release
+  rows, shared tab primitives, tests, translations, decision record, and this
+  handoff section.
+
+Next:
+
+- Check the tabs and rows at phone width.
+- Run one real import and verify progress plus Play imported tracks after the
+  completed folder is indexed.
+
 ## Desktop top-bar task spinner
 
 The default application top bar now shows combined server and offline-download

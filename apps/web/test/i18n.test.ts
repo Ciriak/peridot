@@ -78,6 +78,19 @@ test("en-US messages interpolate and pluralize", () => {
   );
   assert.equal(i18n.global.t("page.search.resultType.song"), "Song");
   assert.equal(i18n.global.t("page.search.resultType.album"), "Album");
+  assert.equal(i18n.global.t("page.search.resultType.release"), "Release");
+  assert.equal(i18n.global.t("page.search.libraryTab"), "Library");
+  assert.equal(
+    i18n.global.t("page.search.externalTabCount", { count: 2 }, 2),
+    "External sources, 2 results",
+  );
+  assert.equal(
+    i18n.global.t("toast.releaseDownloadFailed", {
+      release: "Daft Punk - Homework",
+      message: "Indexer failed.",
+    }),
+    "Daft Punk - Homework could not be added to the download client. Indexer failed.",
+  );
   assert.equal(i18n.global.t("page.search.resultType.chapter"), "Chapter");
   assert.equal(i18n.global.t("page.search.resultType.episode"), "Episode");
   assert.equal(

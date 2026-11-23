@@ -4,14 +4,20 @@ import type { AlbumSummaryResponse } from "@peridot/contracts";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@peridot/ui/components/ui/tabs";
 import { useQuery } from "@tanstack/vue-query";
 import { watchDebounced } from "@vueuse/core";
 import { computed, onMounted, ref, watch } from "vue";
-import TorznabSearch from "../components/TorznabSearch.vue";
 import ArtistCard from "../components/ArtistCard.vue";
 import AutoLoadMore from "../components/AutoLoadMore.vue";
 import CatalogCard from "../components/CatalogCard.vue";
 import MediaCollectionCard from "../components/MediaCollectionCard.vue";
+import TorznabResults from "../components/TorznabResults.vue";
 import TrackTable from "../components/TrackTable.vue";
 import VirtualCardGrid from "../components/VirtualCardGrid.vue";
 import {
@@ -22,11 +28,13 @@ import {
   useCatalogTrackQuery,
 } from "../composables/use-catalog-query";
 import { useLikes } from "../composables/use-likes";
+import { useLibraryPlayer } from "../composables/use-library-player";
 import { usePlaylistList } from "../composables/use-playlists";
 import { useSearchRecents } from "../composables/use-search-recents";
 import { useQueryScope } from "../composables/use-query-scope";
 import { useServer } from "../composables/use-server";
 import { useSession } from "../composables/use-session";
+import { useTorznabSearch } from "../composables/use-torznab-search";
 import { albumCatalogCard, playlistCatalogCard } from "../lib/catalog-cards";
 import { listAlbums } from "../lib/peridot-client";
 import { queryKeys } from "../lib/query-keys";
@@ -43,15 +51,30 @@ type ResultFilter =
   | "tracks"
   | "audiobooks"
   | "podcasts";
+type SearchTab = "library" | "external";
 
 const query = useState("search-query", () => "");
 const debouncedQuery = ref("");
 const resultFilter = ref<ResultFilter>("all");
+const activeSearchTab = ref<SearchTab>("library");
 const { address } = useServer();
 const { token } = useSession();
 const { scope } = useQueryScope();
 const { load: loadLikes } = useLikes();
+const { playCollection } = useLibraryPlayer();
 const { recents, remember } = useSearchRecents();
+const {
+  activeImportId: activeExternalImportId,
+  addToLibrary: addExternalRelease,
+  enabled: externalSearchEnabled,
+  importFailed: externalImportFailed,
+  importBusy: externalImportBusy,
+  importStatus: externalImportStatus,
+  loading: externalSearchLoading,
+  releases: externalReleases,
+  resultCount: externalResultCount,
+  searchError: externalSearchError,
+} = useTorznabSearch(debouncedQuery);
 const recentAlbumsQuery = useQuery({
   queryKey: computed(() =>
     scope.value
@@ -91,6 +114,9 @@ watchDebounced(
 );
 
 const searching = computed(() => debouncedQuery.value.length > 0);
+const showSearchTabs = computed(
+  () => searching.value && externalSearchEnabled.value,
+);
 const searchTerm = computed(() =>
   searching.value ? debouncedQuery.value : "__peridot_no_search__",
 );
@@ -254,8 +280,20 @@ function retrySearch() {
   ]);
 }
 
+function playExternalImport() {
+  if (externalImportStatus.value?.trackIds.length) {
+    playCollection(externalImportStatus.value.trackIds);
+  }
+}
+
 watch(searching, (active) => {
-  if (!active) resultFilter.value = "all";
+  if (!active) {
+    resultFilter.value = "all";
+    activeSearchTab.value = "library";
+  }
+});
+watch(externalSearchEnabled, (enabled) => {
+  if (!enabled) activeSearchTab.value = "library";
 });
 onMounted(() => {
   debouncedQuery.value = query.value.trim();
@@ -270,280 +308,337 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="min-h-full space-y-8">
-    <section
-      :aria-label="t('page.search.results')"
-      class="sticky -top-4 z-20 -mx-4 -mt-4 border-b bg-background px-4 py-3 md:-top-6 md:-mx-6 md:-mt-6 md:px-6"
-    >
-      <div
-        data-sidebar-swipe-ignore
-        role="group"
-        :aria-label="t('page.search.filters')"
-        class="scrollbar-hide flex flex-nowrap touch-pan-x items-center gap-2 overflow-x-auto overscroll-x-contain"
-      >
-        <Button
-          v-for="filter in resultFilters"
-          :key="filter.value"
-          :variant="resultFilter === filter.value ? 'default' : 'outline'"
-          size="sm"
-          class="rounded-full"
-          :aria-pressed="resultFilter === filter.value"
-          :disabled="!searching"
-          @click="resultFilter = filter.value"
-        >
-          {{ t(filter.labelKey) }}
-        </Button>
-      </div>
-    </section>
-    <TorznabSearch v-if="searching" :query="debouncedQuery" />
-
-    <div
-      v-if="resultsLoading && searching && !hasResults"
-      role="status"
-      class="flex items-center gap-3 rounded-lg border p-6 text-sm text-muted-foreground"
-    >
-      <PeridotSpinner :label="t('page.search.loading')" />
-      {{ t("page.search.searching") }}
-    </div>
-    <div
-      v-else-if="resultsError"
-      role="alert"
-      class="space-y-3 rounded-lg border p-6 text-sm"
-    >
-      <p>{{ resultsError }}</p>
-      <Button variant="outline" @click="retrySearch">
-        {{ t("common.tryAgain") }}
-      </Button>
-    </div>
-
-    <section
-      v-else-if="!searching"
-      aria-labelledby="recent-searches-heading"
-      class="space-y-4"
-    >
-      <div class="flex flex-wrap items-center gap-2">
-        <h2 id="recent-searches-heading" class="text-lg font-semibold">
-          {{ t("page.search.recent") }}
-        </h2>
-        <Badge variant="secondary">
-          {{
-            t(
-              "count.album",
-              { count: recentAlbums.length },
-              recentAlbums.length,
-            )
-          }}
-        </Badge>
-      </div>
-      <div
-        v-if="recentAlbums.length"
-        class="grid grid-cols-2 gap-1.5 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10"
-      >
-        <CatalogCard
-          v-for="album in recentAlbums"
-          :key="album.id"
-          :item="albumCatalogCard(album)"
-          compact
-          @open="openAlbum(album)"
-        />
-      </div>
-      <p
-        v-else
-        role="status"
-        class="rounded-lg border p-6 text-sm text-muted-foreground"
-      >
-        {{ t("page.search.noRecents") }}
-      </p>
-    </section>
-
-    <template v-else>
-      <p
-        v-if="!hasVisibleResults"
-        role="status"
-        class="rounded-lg border p-6 text-sm text-muted-foreground"
-      >
-        {{ t("page.search.noResults") }}
-      </p>
-
+  <div class="min-h-full">
+    <Tabs v-model="activeSearchTab" class="space-y-8">
       <section
-        v-else-if="showCatalogList"
         :aria-label="t('page.search.results')"
-        class="overflow-hidden rounded-lg border"
+        class="sticky -top-4 z-20 -mx-4 -mt-4 border-b bg-background px-4 py-3 md:-top-6 md:-mx-6 md:-mt-6 md:px-6"
       >
-        <TrackTable
-          v-if="showTracks && trackResults.length"
-          :tracks="trackResults"
-          variant="search"
-          :has-more="hasMoreTracks"
-          :loading-more="tracksLoadingMore"
-          @load-more="loadMoreTracks"
+        <div class="space-y-3">
+          <TabsList
+            v-if="showSearchTabs"
+            :aria-label="t('page.search.resultTabs')"
+            class="w-full sm:w-auto"
+          >
+            <TabsTrigger value="library">
+              {{ t("page.search.libraryTab") }}
+            </TabsTrigger>
+            <TabsTrigger
+              value="external"
+              :aria-label="
+                externalResultCount === undefined
+                  ? t('page.search.externalSources')
+                  : t(
+                      'page.search.externalTabCount',
+                      {
+                        count: externalResultCount,
+                      },
+                      externalResultCount,
+                    )
+              "
+            >
+              {{ t("page.search.externalSources") }}
+              <Badge
+                v-if="externalResultCount !== undefined"
+                variant="secondary"
+                aria-hidden="true"
+              >
+                {{ externalResultCount }}
+              </Badge>
+            </TabsTrigger>
+          </TabsList>
+
+          <div
+            v-if="!showSearchTabs || activeSearchTab === 'library'"
+            data-sidebar-swipe-ignore
+            role="group"
+            :aria-label="t('page.search.filters')"
+            class="scrollbar-hide flex flex-nowrap touch-pan-x items-center gap-2 overflow-x-auto overscroll-x-contain"
+          >
+            <Button
+              v-for="filter in resultFilters"
+              :key="filter.value"
+              :variant="resultFilter === filter.value ? 'default' : 'outline'"
+              size="sm"
+              class="rounded-full"
+              :aria-pressed="resultFilter === filter.value"
+              :disabled="!searching"
+              @click="resultFilter = filter.value"
+            >
+              {{ t(filter.labelKey) }}
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      <TabsContent value="library" class="mt-0 space-y-8">
+        <div
+          v-if="resultsLoading && searching && !hasResults"
+          role="status"
+          class="flex items-center gap-3 rounded-lg border p-6 text-sm text-muted-foreground"
+        >
+          <PeridotSpinner :label="t('page.search.loading')" />
+          {{ t("page.search.searching") }}
+        </div>
+        <div
+          v-else-if="resultsError"
+          role="alert"
+          class="space-y-3 rounded-lg border p-6 text-sm"
+        >
+          <p>{{ resultsError }}</p>
+          <Button variant="outline" @click="retrySearch">
+            {{ t("common.tryAgain") }}
+          </Button>
+        </div>
+
+        <section
+          v-else-if="!searching"
+          aria-labelledby="recent-searches-heading"
+          class="space-y-4"
+        >
+          <div class="flex flex-wrap items-center gap-2">
+            <h2 id="recent-searches-heading" class="text-lg font-semibold">
+              {{ t("page.search.recent") }}
+            </h2>
+            <Badge variant="secondary">
+              {{
+                t(
+                  "count.album",
+                  { count: recentAlbums.length },
+                  recentAlbums.length,
+                )
+              }}
+            </Badge>
+          </div>
+          <div
+            v-if="recentAlbums.length"
+            class="grid grid-cols-2 gap-1.5 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10"
+          >
+            <CatalogCard
+              v-for="album in recentAlbums"
+              :key="album.id"
+              :item="albumCatalogCard(album)"
+              compact
+              @open="openAlbum(album)"
+            />
+          </div>
+          <p
+            v-else
+            role="status"
+            class="rounded-lg border p-6 text-sm text-muted-foreground"
+          >
+            {{ t("page.search.noRecents") }}
+          </p>
+        </section>
+
+        <template v-else>
+          <p
+            v-if="!hasVisibleResults"
+            role="status"
+            class="rounded-lg border p-6 text-sm text-muted-foreground"
+          >
+            {{ t("page.search.noResults") }}
+          </p>
+
+          <section
+            v-else-if="showCatalogList"
+            :aria-label="t('page.search.results')"
+            class="overflow-hidden rounded-lg border"
+          >
+            <TrackTable
+              v-if="showTracks && trackResults.length"
+              :tracks="trackResults"
+              variant="search"
+              :has-more="hasMoreTracks"
+              :loading-more="tracksLoadingMore"
+              @load-more="loadMoreTracks"
+            />
+
+            <div
+              v-if="showAlbums && albumResults.length"
+              role="list"
+              class="divide-y"
+              :class="{
+                'border-t': showTracks && trackResults.length,
+              }"
+            >
+              <CatalogCard
+                v-for="album in albumResults"
+                :key="album.id"
+                :item="albumCatalogCard(album)"
+                layout="row"
+                @open="openAlbum(album)"
+              />
+              <AutoLoadMore
+                :enabled="hasMoreAlbums"
+                :loading="albumsLoadingMore"
+                :item-count="albumResults.length"
+                :label="t('page.search.loadingMoreAlbums')"
+                @load="loadMoreAlbums"
+              />
+            </div>
+
+            <div
+              v-if="showPlaylists && playlistResults.length"
+              role="list"
+              class="divide-y"
+              :class="{
+                'border-t':
+                  (showTracks && trackResults.length) ||
+                  (showAlbums && albumResults.length),
+              }"
+            >
+              <CatalogCard
+                v-for="playlist in playlistResults"
+                :key="playlist.id"
+                :item="playlistCatalogCard(playlist)"
+                layout="row"
+              />
+              <AutoLoadMore
+                :enabled="hasMorePlaylists"
+                :loading="playlistsLoadingMore"
+                :item-count="playlistResults.length"
+                :label="t('page.search.loadingMorePlaylists')"
+                @load="loadMorePlaylists"
+              />
+            </div>
+          </section>
+
+          <section
+            v-if="showArtists && artistResults.length"
+            aria-labelledby="local-artists-heading"
+            class="space-y-4"
+          >
+            <div class="flex flex-wrap items-center gap-2">
+              <h2 id="local-artists-heading" class="text-lg font-semibold">
+                {{ t("page.search.localArtists") }}
+              </h2>
+              <Badge variant="secondary">
+                {{
+                  t(
+                    "count.artist",
+                    { count: artistTotalCount },
+                    artistTotalCount,
+                  )
+                }}
+              </Badge>
+            </div>
+            <VirtualCardGrid
+              :items="artistResults"
+              layout="standard"
+              :item-key="(artist) => artist.id"
+              :estimate-row-height="92"
+            >
+              <template #default="{ item }">
+                <ArtistCard :artist="item" />
+              </template>
+              <template #footer>
+                <AutoLoadMore
+                  :enabled="hasMoreArtists"
+                  :loading="artistsLoadingMore"
+                  :item-count="artistResults.length"
+                  :label="t('page.search.loadingMoreArtists')"
+                  @load="loadMoreArtists"
+                />
+              </template>
+            </VirtualCardGrid>
+          </section>
+
+          <section
+            v-if="showAudiobooks && audiobookResults.length"
+            aria-labelledby="local-audiobooks-heading"
+            class="space-y-4"
+          >
+            <div class="flex flex-wrap items-center gap-2">
+              <h2 id="local-audiobooks-heading" class="text-lg font-semibold">
+                {{ t("page.search.localAudiobooks") }}
+              </h2>
+              <Badge variant="secondary">
+                {{
+                  t(
+                    "count.audiobook",
+                    { count: audiobookTotalCount },
+                    audiobookTotalCount,
+                  )
+                }}
+              </Badge>
+            </div>
+            <VirtualCardGrid
+              :items="audiobookResults"
+              layout="standard"
+              :item-key="(audiobook) => audiobook.id"
+              :estimate-row-height="340"
+            >
+              <template #default="{ item }">
+                <MediaCollectionCard :collection="item" />
+              </template>
+              <template #footer>
+                <AutoLoadMore
+                  :enabled="hasMoreAudiobooks"
+                  :loading="audiobooksLoadingMore"
+                  :item-count="audiobookResults.length"
+                  :label="t('page.search.loadingMoreAudiobooks')"
+                  @load="loadMoreAudiobooks"
+                />
+              </template>
+            </VirtualCardGrid>
+          </section>
+
+          <section
+            v-if="showPodcasts && podcastResults.length"
+            aria-labelledby="local-podcasts-heading"
+            class="space-y-4"
+          >
+            <div class="flex flex-wrap items-center gap-2">
+              <h2 id="local-podcasts-heading" class="text-lg font-semibold">
+                {{ t("page.search.localPodcasts") }}
+              </h2>
+              <Badge variant="secondary">
+                {{
+                  t(
+                    "count.podcast",
+                    { count: podcastTotalCount },
+                    podcastTotalCount,
+                  )
+                }}
+              </Badge>
+            </div>
+            <VirtualCardGrid
+              :items="podcastResults"
+              layout="standard"
+              :item-key="(podcast) => podcast.id"
+              :estimate-row-height="340"
+            >
+              <template #default="{ item }">
+                <MediaCollectionCard :collection="item" />
+              </template>
+              <template #footer>
+                <AutoLoadMore
+                  :enabled="hasMorePodcasts"
+                  :loading="podcastsLoadingMore"
+                  :item-count="podcastResults.length"
+                  :label="t('page.search.loadingMorePodcasts')"
+                  @load="loadMorePodcasts"
+                />
+              </template>
+            </VirtualCardGrid>
+          </section>
+        </template>
+      </TabsContent>
+
+      <TabsContent v-if="showSearchTabs" value="external" class="mt-0">
+        <TorznabResults
+          :active-import-id="activeExternalImportId"
+          :import-failed="externalImportFailed"
+          :import-busy="externalImportBusy"
+          :import-status="externalImportStatus"
+          :loading="externalSearchLoading"
+          :releases="externalReleases"
+          :search-error="externalSearchError"
+          @add="addExternalRelease"
+          @play="playExternalImport"
         />
-
-        <div
-          v-if="showAlbums && albumResults.length"
-          role="list"
-          class="divide-y"
-          :class="{
-            'border-t': showTracks && trackResults.length,
-          }"
-        >
-          <CatalogCard
-            v-for="album in albumResults"
-            :key="album.id"
-            :item="albumCatalogCard(album)"
-            layout="row"
-            @open="openAlbum(album)"
-          />
-          <AutoLoadMore
-            :enabled="hasMoreAlbums"
-            :loading="albumsLoadingMore"
-            :item-count="albumResults.length"
-            :label="t('page.search.loadingMoreAlbums')"
-            @load="loadMoreAlbums"
-          />
-        </div>
-
-        <div
-          v-if="showPlaylists && playlistResults.length"
-          role="list"
-          class="divide-y"
-          :class="{
-            'border-t':
-              (showTracks && trackResults.length) ||
-              (showAlbums && albumResults.length),
-          }"
-        >
-          <CatalogCard
-            v-for="playlist in playlistResults"
-            :key="playlist.id"
-            :item="playlistCatalogCard(playlist)"
-            layout="row"
-          />
-          <AutoLoadMore
-            :enabled="hasMorePlaylists"
-            :loading="playlistsLoadingMore"
-            :item-count="playlistResults.length"
-            :label="t('page.search.loadingMorePlaylists')"
-            @load="loadMorePlaylists"
-          />
-        </div>
-      </section>
-
-      <section
-        v-if="showArtists && artistResults.length"
-        aria-labelledby="local-artists-heading"
-        class="space-y-4"
-      >
-        <div class="flex flex-wrap items-center gap-2">
-          <h2 id="local-artists-heading" class="text-lg font-semibold">
-            {{ t("page.search.localArtists") }}
-          </h2>
-          <Badge variant="secondary">
-            {{
-              t("count.artist", { count: artistTotalCount }, artistTotalCount)
-            }}
-          </Badge>
-        </div>
-        <VirtualCardGrid
-          :items="artistResults"
-          layout="standard"
-          :item-key="(artist) => artist.id"
-          :estimate-row-height="92"
-        >
-          <template #default="{ item }">
-            <ArtistCard :artist="item" />
-          </template>
-          <template #footer>
-            <AutoLoadMore
-              :enabled="hasMoreArtists"
-              :loading="artistsLoadingMore"
-              :item-count="artistResults.length"
-              :label="t('page.search.loadingMoreArtists')"
-              @load="loadMoreArtists"
-            />
-          </template>
-        </VirtualCardGrid>
-      </section>
-
-      <section
-        v-if="showAudiobooks && audiobookResults.length"
-        aria-labelledby="local-audiobooks-heading"
-        class="space-y-4"
-      >
-        <div class="flex flex-wrap items-center gap-2">
-          <h2 id="local-audiobooks-heading" class="text-lg font-semibold">
-            {{ t("page.search.localAudiobooks") }}
-          </h2>
-          <Badge variant="secondary">
-            {{
-              t(
-                "count.audiobook",
-                { count: audiobookTotalCount },
-                audiobookTotalCount,
-              )
-            }}
-          </Badge>
-        </div>
-        <VirtualCardGrid
-          :items="audiobookResults"
-          layout="standard"
-          :item-key="(audiobook) => audiobook.id"
-          :estimate-row-height="340"
-        >
-          <template #default="{ item }">
-            <MediaCollectionCard :collection="item" />
-          </template>
-          <template #footer>
-            <AutoLoadMore
-              :enabled="hasMoreAudiobooks"
-              :loading="audiobooksLoadingMore"
-              :item-count="audiobookResults.length"
-              :label="t('page.search.loadingMoreAudiobooks')"
-              @load="loadMoreAudiobooks"
-            />
-          </template>
-        </VirtualCardGrid>
-      </section>
-
-      <section
-        v-if="showPodcasts && podcastResults.length"
-        aria-labelledby="local-podcasts-heading"
-        class="space-y-4"
-      >
-        <div class="flex flex-wrap items-center gap-2">
-          <h2 id="local-podcasts-heading" class="text-lg font-semibold">
-            {{ t("page.search.localPodcasts") }}
-          </h2>
-          <Badge variant="secondary">
-            {{
-              t(
-                "count.podcast",
-                { count: podcastTotalCount },
-                podcastTotalCount,
-              )
-            }}
-          </Badge>
-        </div>
-        <VirtualCardGrid
-          :items="podcastResults"
-          layout="standard"
-          :item-key="(podcast) => podcast.id"
-          :estimate-row-height="340"
-        >
-          <template #default="{ item }">
-            <MediaCollectionCard :collection="item" />
-          </template>
-          <template #footer>
-            <AutoLoadMore
-              :enabled="hasMorePodcasts"
-              :loading="podcastsLoadingMore"
-              :item-count="podcastResults.length"
-              :label="t('page.search.loadingMorePodcasts')"
-              @load="loadMorePodcasts"
-            />
-          </template>
-        </VirtualCardGrid>
-      </section>
-    </template>
+      </TabsContent>
+    </Tabs>
   </div>
 </template>

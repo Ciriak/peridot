@@ -16,6 +16,7 @@ import {
   offlineTrackRemovalFailureToast,
 } from "../app/lib/offline-toast.ts";
 import { playbackFailureToast } from "../app/lib/playback-toast.ts";
+import { releaseDownloadFailureToast } from "../app/lib/release-download-toast.ts";
 import { sourceMutationToast } from "../app/lib/source-toast.ts";
 import {
   TOAST_MOBILE_OFFSET,
@@ -103,6 +104,25 @@ test("playback failures map to a track-specific error toast", () => {
     kind: "error",
     duration: 8000,
   });
+});
+
+test("external release failures map to an error toast", () => {
+  assert.deepEqual(
+    releaseDownloadFailureToast(" Daft Punk - Homework ", "Indexer failed."),
+    {
+      titleMessage: { key: "toast.downloadFailedTitle" },
+      descriptionMessage: {
+        key: "toast.releaseDownloadFailed",
+        params: {
+          release: "Daft Punk - Homework",
+          message: "Indexer failed.",
+        },
+      },
+      status: "error",
+      kind: "error",
+      duration: 8000,
+    },
+  );
 });
 
 test("toasts sit below the topbar at the top-right", () => {

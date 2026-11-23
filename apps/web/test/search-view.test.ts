@@ -40,6 +40,7 @@ test("search uses one full-content route with recent and local results", async (
   assert.match(searchPage, /useCatalogTrackQuery/);
   assert.match(searchPage, /useCatalogAudiobookQuery/);
   assert.match(searchPage, /useCatalogPodcastQuery/);
+  assert.match(searchPage, /useTorznabSearch\(debouncedQuery\)/);
   assert.match(searchPage, /query: searchTerm\.value/);
   assert.match(searchPage, /page\.search\.recent/);
   assert.match(searchPage, /useSearchRecents\(\)/);
@@ -54,11 +55,49 @@ test("search uses one full-content route with recent and local results", async (
   assert.match(searchPage, /variant="search"/);
   assert.match(searchPage, /layout="row"/);
   assert.match(searchPage, /page\.search\.noResults/);
-  assert.doesNotMatch(searchPage, /page\.search\.externalSources/);
   assert.doesNotMatch(searchPage, /page\.search\.externalTitle/);
+  assert.doesNotMatch(searchPage, /<TorznabSearch/);
+  assert.doesNotMatch(searchPage, /torznab\.search/);
   assert.match(catalogCard, /defineEmits<\{ open: \[\] \}>/);
   assert.match(artistCard, /artistRoute\(artist\)/);
   assert.match(mediaCollectionCard, /collection\.mediaType/);
+});
+
+test("external results use a counted tab and render only through the external panel", async () => {
+  const searchPage = await readFile(
+    new URL("../app/pages/search.vue", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(searchPage, /<Tabs v-model="activeSearchTab"/);
+  assert.match(searchPage, /<TabsList/);
+  assert.match(searchPage, /v-if="showSearchTabs"/);
+  assert.match(searchPage, /<TabsTrigger value="library">/);
+  assert.match(searchPage, /<TabsTrigger[\s\S]*value="external"/);
+  assert.match(
+    searchPage,
+    /v-if="externalResultCount !== undefined"[\s\S]*\{\{ externalResultCount \}\}/,
+  );
+  assert.match(
+    searchPage,
+    /<TabsTrigger[\s\S]*value="external"[\s\S]*externalResultCount/,
+    "The external result count remains visible while Library is active",
+  );
+  assert.match(
+    searchPage,
+    /v-if="!showSearchTabs \|\| activeSearchTab === 'library'"/,
+    "Library category filters do not appear in the External tab",
+  );
+  assert.match(searchPage, /<TabsContent value="library"/);
+  assert.match(
+    searchPage,
+    /<TabsContent v-if="showSearchTabs" value="external"/,
+  );
+  assert.match(searchPage, /<TorznabResults/);
+  assert.match(
+    searchPage,
+    /watch\(searching,[\s\S]*?activeSearchTab\.value = "library"/,
+  );
 });
 
 test("search lists tracks before albums and playlists without type headings", async () => {
