@@ -7,11 +7,16 @@ card grids and track tables use that total for their virtualizer count instead
 of the currently loaded page length, so the native scrollbar thumb represents
 the complete collection from the first page and does not grow while paging.
 
-Virtual-range watchers request subsequent cursor pages before the loaded range
-ends. The intersection-observer sentinel remains for non-virtual paginated
-surfaces such as search rows and task history. Direct jumps into an unloaded
-range fetch the intervening cursor pages sequentially; offset-addressable
-catalog pages would be required to make very large jumps resolve immediately.
+The Albums grid uses offset-addressable pages around the visible virtual range.
+It waits for a 250 ms scroll quiet period before requesting the new window, so
+dragging does not queue every intermediate page. The first page remains active
+for the total count while off-window album pages are removed from Vue Query
+immediately. Large scrollbar jumps therefore load only the target neighborhood
+instead of walking the cursor chain.
+
+Other virtual surfaces still advance through cursor pages incrementally. The
+intersection-observer sentinel remains for non-virtual surfaces such as search
+rows and task history.
 
 The Albums grid renders card-shaped loading placeholders for unloaded rows.
 Rows containing placeholders are not measured into the virtualizer, so their

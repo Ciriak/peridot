@@ -1,8 +1,13 @@
 <script setup lang="ts" generic="T">
-import { breakpointsTailwind, useBreakpoints } from "@vueuse/core";
+import {
+  breakpointsTailwind,
+  useBreakpoints,
+  watchDebounced,
+} from "@vueuse/core";
 import { computed, ref } from "vue";
 import { useMainScrollVirtualizer } from "../composables/use-main-scroll-virtualizer";
 import { useVirtualLoadMore } from "../composables/use-virtual-load-more";
+import { VIRTUAL_WINDOW_LOAD_DELAY_MS } from "../lib/virtual-albums";
 
 export type VirtualCardLayout = "wide" | "standard" | "compact";
 
@@ -14,18 +19,22 @@ const props = withDefaults(
     estimateRowHeight?: number;
     overscan?: number;
     totalCount?: number;
+    loadedCount?: number;
     hasMore?: boolean;
     loadingMore?: boolean;
+    pagingMode?: "incremental" | "window";
   }>(),
   {
     estimateRowHeight: 240,
     overscan: 4,
     hasMore: false,
     loadingMore: false,
+    pagingMode: "incremental",
   },
 );
 const emit = defineEmits<{
   "load-more": [];
+  "visible-range": [startIndex: number, endIndex: number];
 }>();
 defineSlots<{
   default(props: { item: T; itemIndex: number }): unknown;
@@ -49,6 +58,13 @@ const columns = computed(() => {
 });
 const totalItemCount = computed(() =>
   Math.max(props.items.length, props.totalCount ?? props.items.length),
+);
+const loadedItemCount = computed(
+  () =>
+    props.loadedCount ??
+    (props.totalCount === undefined
+      ? props.items.length
+      : props.items.filter((item) => item !== undefined).length),
 );
 const rowCount = computed(() =>
   Math.ceil(totalItemCount.value / columns.value),
@@ -74,18 +90,41 @@ const virtualizer = useMainScrollVirtualizer({
 });
 useVirtualLoadMore({
   virtualItems: computed(() => virtualizer.virtualItems.value),
-  loadedItemCount: computed(() => props.items.length),
+  loadedItemCount,
   totalItemCount,
   itemsPerRow: columns,
   prefetchRows: computed(() => props.overscan),
-  enabled: computed(() => props.hasMore),
+  enabled: computed(() => props.pagingMode === "incremental" && props.hasMore),
   loading: computed(() => props.loadingMore),
   onLoad: () => emit("load-more"),
 });
+const visibleRange = computed(() => {
+  if (props.pagingMode !== "window") return null;
+  const rows = virtualizer.virtualItems.value;
+  const firstRow = rows[0];
+  const lastRow = rows.at(-1);
+  if (!firstRow || !lastRow || totalItemCount.value === 0) return null;
+  return {
+    startIndex: firstRow.index * columns.value,
+    endIndex: Math.min(
+      totalItemCount.value - 1,
+      (lastRow.index + 1) * columns.value - 1,
+    ),
+  };
+});
+watchDebounced(
+  visibleRange,
+  (range) => {
+    if (range) emit("visible-range", range.startIndex, range.endIndex);
+  },
+  { debounce: VIRTUAL_WINDOW_LOAD_DELAY_MS },
+);
 
 function rowItems(index: number) {
   const start = index * columns.value;
-  return props.items.slice(start, start + columns.value);
+  return props.items
+    .slice(start, start + columns.value)
+    .filter((item): item is T => item !== undefined);
 }
 
 function rowKey(index: number) {

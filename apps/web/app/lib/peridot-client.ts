@@ -712,6 +712,7 @@ export function cancelTask(
 
 export interface TrackListOptions {
   cursor?: string | null;
+  offset?: number;
   limit?: number;
   sort?: "title" | "artist" | "album" | "duration" | "track" | "published";
   direction?: "asc" | "desc";
@@ -853,6 +854,7 @@ export function resolveTracks(
 
 export interface CardListOptions {
   cursor?: string | null;
+  offset?: number;
   limit?: number;
   sort?: string;
   direction?: "asc" | "desc";

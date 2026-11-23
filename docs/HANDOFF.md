@@ -2,30 +2,34 @@
 
 ## Full-count virtual catalog paging
 
-Catalog card grids and track tables now reserve the complete `totalCount`
-returned by the first cursor page. The native scrollbar therefore represents
-the full collection while pages continue to load dynamically near the visible
-virtual range. Non-virtual paginated surfaces keep the existing
+Catalog card grids and track tables reserve the complete `totalCount` returned
+by the first cursor page. The Albums grid now uses offset-addressable sparse
+page windows with a 250 ms scroll quiet period. Dragging waits until scrolling
+stops, requests only the target page neighborhood, and immediately removes
+off-window page queries. Non-virtual paginated surfaces keep the existing
 `AutoLoadMore` sentinel.
 
 The Albums grid now renders card-shaped skeletons for unloaded rows. Placeholder
 rows are not measured into the virtualizer, preserving the estimated total
-height until real album cards arrive. One live desktop check scrolled from the
-first page to an unloaded range, confirmed visible album skeletons, and verified
-the loaded item count advanced through subsequent cursor pages.
+height until real album cards arrive. One live desktop check dragged from the
+first page to a deep album range, confirmed visible skeletons, waited for the
+scroll quiet period, and observed the target album page resolve directly.
 
 Verification:
 
-- `pnpm --filter @peridot/web test` (306 passing)
+- `pnpm --filter @peridot/web test` (309 passing)
+- `pnpm --filter @peridot/server test` (199 passing)
 - `pnpm --filter @peridot/web typecheck`
-- `pnpm --filter @peridot/web build`
-- Focused ESLint and Prettier checks on all changed files
+- `pnpm --filter @peridot/server typecheck`
+- Production web and server builds
+- `pnpm lint`
+- `pnpm format:check`
 - `git diff --check`
 
 Known limits:
 
-- Cursor pagination is sequential. A direct scrollbar jump deep into a large
-  collection must fetch every intervening page before the visible rows resolve.
+- Albums uses sparse offset windows. The other virtual catalog surfaces still
+  advance through sequential cursor pages when scrolled incrementally.
 - Only Albums has visible loading placeholders in this iteration. Other virtual
   surfaces reserve the correct space but render blank rows until data arrives.
 - Live validation used a desktop viewport; phone-width skeleton wrapping was not
@@ -34,6 +38,10 @@ Known limits:
 Feature files:
 
 - `apps/web/app/composables/use-virtual-load-more.ts`
+- `apps/web/app/composables/use-virtual-albums.ts`
+- `apps/web/app/lib/virtual-albums.ts`
+- `apps/server/src/catalog-routes.ts`
+- `apps/server/src/catalog.ts`
 - `apps/web/app/components/TrackTable.vue`
 - `apps/web/app/components/VirtualCardGrid.vue`
 - `apps/web/app/components/AlbumCardPlaceholder.vue`
@@ -47,10 +55,8 @@ Uncommitted changes:
 Next:
 
 - Inspect Albums placeholders at phone width.
-- Add equivalent placeholders to artists, playlists, audiobooks, podcasts, and
-  direct search grids when requested.
-- Consider offset-addressable catalog pages if deep scrollbar jumps must resolve
-  immediately in large libraries.
+- Add equivalent sparse page windows and placeholders to artists, playlists,
+  audiobooks, podcasts, and direct search grids when requested.
 
 ## Shared qBittorrent download clients
 

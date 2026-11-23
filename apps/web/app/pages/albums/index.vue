@@ -8,9 +8,9 @@ import AlbumCardPlaceholder from "../../components/AlbumCardPlaceholder.vue";
 import CatalogCard from "../../components/CatalogCard.vue";
 import ListSearchBar from "../../components/ListSearchBar.vue";
 import VirtualCardGrid from "../../components/VirtualCardGrid.vue";
-import { useCatalogAlbumQuery } from "../../composables/use-catalog-query";
 import { useListSearch } from "../../composables/use-list-search";
 import { useLikes } from "../../composables/use-likes";
+import { useVirtualAlbums } from "../../composables/use-virtual-albums";
 import { albumCatalogCard } from "../../lib/catalog-cards";
 
 const { t } = useI18n();
@@ -25,9 +25,10 @@ const {
   loaded,
   hasMore,
   totalCount,
+  loadedCount,
   load,
-  loadMore,
-} = useCatalogAlbumQuery(() => ({
+  setVisibleRange,
+} = useVirtualAlbums(() => ({
   query: searchQuery.value || undefined,
 }));
 const { load: loadLikes } = useLikes();
@@ -89,10 +90,12 @@ onMounted(() => {
       :item-key="(album) => album.id"
       :estimate-row-height="300"
       :total-count="totalCount"
+      :loaded-count="loadedCount"
       :has-more="hasMore"
       :loading-more="loadingMore"
+      paging-mode="window"
       :aria-busy="loading || loadingMore"
-      @load-more="loadMore"
+      @visible-range="setVisibleRange"
     >
       <template #default="{ item }">
         <CatalogCard :item="albumCatalogCard(item)" />
