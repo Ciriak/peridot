@@ -731,8 +731,8 @@ export interface DirectorySearchResponse {
   truncated: boolean;
 }
 
-export const DEFAULT_SCAN_WORKER_COUNT = 3;
-export const SCAN_WORKER_WARNING_THRESHOLD = 4;
+export const DEFAULT_SCAN_WORKER_COUNT = 6;
+export const SCAN_WORKER_WARNING_THRESHOLD = 8;
 export const MAX_SCAN_WORKER_COUNT = 32;
 export const DEFAULT_FILE_LOG_RETENTION_DAYS = 5;
 export const MAX_FILE_LOG_RETENTION_DAYS = 3650;

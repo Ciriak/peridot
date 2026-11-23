@@ -1,5 +1,16 @@
 # Peridot decisions
 
+## 2026-11-23: Scan workers default to six
+
+New installations use six scan worker threads. File discovery and local tag
+parsing are the throughput-critical phases of a first scan, and three workers
+left capable music servers underused. The administrator warning now starts above
+eight workers so the default remains below the slow-storage warning while still
+benefiting newer CPUs.
+
+Existing saved worker counts are not rewritten by the migration. A server that
+already has an explicit value keeps it, including the previous default of three.
+
 ## 2026-11-22: Search cards separate category and source provenance
 
 Search result categories render beside the item title. Album and track playback

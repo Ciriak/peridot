@@ -5277,7 +5277,7 @@
                   "dataType": "sqlite/integer",
                   "default": {
                     "kind": "literal",
-                    "value": "3"
+                    "value": "6"
                   },
                   "nullable": false
                 },
@@ -6412,7 +6412,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "65d6faa975e23cbe3e3d0ee7d450f3142a29da04ab07ba161a51590a87d3234d"
+    "storageHash": "047c2baee1f440ee5bc68058a2a1b6bdc93c730013bfa5568760f935e06794b0"
   },
   "execution": {
     "executionHash": "893cb931a69dfa62f8cc5331d19e7a10d59f0777de879106a39d2d587eee7f8c",

@@ -23,7 +23,7 @@ test("administrators can update and validate the source refresh schedule", async
       trackCount: 0,
       availableTrackCount: 0,
       scanning: {
-        workerCount: 3,
+        workerCount: 6,
       },
       sourceRefresh: {
         enabled: false,

@@ -1,5 +1,42 @@
 # Peridot handoff
 
+## Scan worker default raised to six
+
+New server settings now default to six scan worker threads. The administrator
+warning appears only above eight workers, and the web copy names both values.
+The SQLite default is migrated through a table rebuild that copies every existing
+`ServerSetting` row unchanged.
+
+Existing saved worker counts are intentionally preserved, including servers that
+still hold the previous default of three. The new default applies when a server
+setting row is created.
+
+Verification:
+
+- `pnpm --filter @peridot/server test` (194 passing)
+- Focused web settings, i18n, and client tests (39 passing)
+- `pnpm typecheck` (6 tasks passing)
+- `pnpm lint`
+- `pnpm db:validate` (18-migration graph current)
+- Production builds for `@peridot/contracts`, `@peridot/server`, and
+  `@peridot/web`
+- `pnpm format:check`
+- `git diff --check`
+- `pnpm db:migrate:dev` applied the migration and advanced the `db` ref with a
+  verified pre-migration backup
+- The running development server still returns a healthy Peridot API response
+
+Uncommitted changes:
+
+- Shared scan-worker constants, Prisma contract and emitted artifacts, migration
+  and snapshot, default-setting tests, web copy, decision record, and this
+  handoff section.
+
+Next:
+
+- Open Settings → Server on a fresh server setting and confirm the worker field
+  shows six, then enter nine and verify the warning appears.
+
 ## Search results align categories, album playback, and provenance
 
 Search result categories now sit beside track and album titles instead of the

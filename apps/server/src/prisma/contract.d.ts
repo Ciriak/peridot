@@ -19,7 +19,7 @@ import type {
 } from '@prisma/orm-sqlite/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'65d6faa975e23cbe3e3d0ee7d450f3142a29da04ab07ba161a51590a87d3234d'>;
+  StorageHashBase<'047c2baee1f440ee5bc68058a2a1b6bdc93c730013bfa5568760f935e06794b0'>;
 export type ExecutionHash =
   ExecutionHashBase<'893cb931a69dfa62f8cc5331d19e7a10d59f0777de879106a39d2d587eee7f8c'>;
 export type ProfileHash =
@@ -2219,7 +2219,7 @@ type ContractBase = Omit<
                   readonly nullable: false;
                   readonly default: {
                     readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '3'>;
+                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '6'>;
                   };
                   readonly many: false;
                 };
