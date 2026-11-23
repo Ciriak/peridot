@@ -1,5 +1,38 @@
 # Peridot handoff
 
+## Faster Jellyfin scans
+
+Jellyfin scans now list 500 audio items per page instead of 100. Import
+batching stays at 100 rows, and the catalog still publishes after each batch,
+so the page-size change only reduces listing requests.
+
+Unchanged tracks now synchronize their artwork jobs in one batch per import
+transaction instead of one query and write per track. Tracks that already have
+a valid cover and no pending job are skipped entirely. Scan task details now
+include cumulative discovery, artwork, database, and catalog times in
+milliseconds so slow scans can be diagnosed from Settings → Tasks.
+
+Verification:
+
+- `pnpm --filter @peridot/server test` (195 passing)
+- `pnpm --filter @peridot/server typecheck`
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm lint`
+- `pnpm exec prettier --write` on the changed files
+
+Uncommitted changes:
+
+- Jellyfin page size, batched artwork-job sync, scan phase timings, translated
+  task-detail labels, Jellyfin and artwork-fetch tests, decision record, and
+  this handoff section.
+- Earlier scan-worker default and migration work remains uncommitted and was
+  preserved.
+
+Next:
+
+- Run the real Jellyfin source through one full scan and compare the discovery,
+  artwork, database, and catalog timings against the previous 100-item pages.
+
 ## Scan worker default raised to six
 
 New server settings now default to six scan worker threads. The administrator

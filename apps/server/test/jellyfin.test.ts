@@ -290,13 +290,13 @@ test("Jellyfin auto-detects audiobooks, podcasts, and music within one library",
   }
 });
 
-test("Jellyfin publishes 100-item catalog batches before the scan completes", async () => {
+test("Jellyfin publishes imported tracks before the scan completes", async () => {
   let releaseSecondPage!: () => void;
   let secondPageStarted = false;
   const secondPageReady = new Promise<void>((resolve) => {
     releaseSecondPage = resolve;
   });
-  const items = Array.from({ length: 150 }, (_, index) => ({
+  const items = Array.from({ length: 550 }, (_, index) => ({
     Id: `batched-track-${index}`,
     Name: `Batched track ${index}`,
     Etag: `batched-track-${index}-v1`,
@@ -323,7 +323,7 @@ test("Jellyfin publishes 100-item catalog batches before the scan completes", as
         const limit = Number(url.searchParams.get("limit"));
         requestedLimits.push(limit);
         requestedStarts.push(startIndex);
-        if (startIndex === 100) {
+        if (startIndex === 500) {
           secondPageStarted = true;
           await secondPageReady;
         }
@@ -395,7 +395,7 @@ test("Jellyfin publishes 100-item catalog batches before the scan completes", as
       }>;
       totalCount: number;
     }>();
-    assert.equal(partialTracks.totalCount, 100);
+    assert.equal(partialTracks.totalCount, 500);
     assert.equal(partialTracks.items.length, 100);
     assert.ok(
       partialTracks.items.every(
@@ -419,8 +419,18 @@ test("Jellyfin publishes 100-item catalog batches before the scan completes", as
     assert.equal(result.createdCount, items.length);
     assert.equal(result.catalogStatus, "completed");
     assert.ok(requestedLimits.length >= 2);
-    assert.ok(requestedLimits.every((limit) => limit === 100));
-    assert.deepEqual(requestedStarts, [0, 100]);
+    assert.ok(requestedLimits.every((limit) => limit === 500));
+    assert.deepEqual(requestedStarts, [0, 500]);
+    const timingValue = (key: string) =>
+      Number(
+        (result.scan as TaskResponse).details.find(
+          (detail) => detail.key === key,
+        )?.value ?? "0",
+      );
+    assert.ok(timingValue("scan.discoveryMs") > 0);
+    assert.ok(timingValue("scan.databaseMs") > 0);
+    assert.ok(timingValue("scan.catalogMs") > 0);
+    assert.ok(timingValue("scan.artworkMs") >= 0);
     assert.equal(
       (
         await context.database.orm.Track.where({

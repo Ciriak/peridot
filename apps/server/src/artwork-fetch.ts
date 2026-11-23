@@ -68,47 +68,84 @@ export async function hasPendingArtworkJobs(
   return result.count > 0;
 }
 
-export async function syncArtworkJob(
-  database: Pick<Database, "orm">,
-  input: {
+export interface ArtworkJobSyncInput {
+  trackId: string;
+  sourceId: string;
+  externalCoverItemId: string | null;
+  externalCoverTag: string | null;
+}
+
+export async function syncArtworkJobsInBatch(
+  database: Pick<Database, "orm" | "sql" | "execute">,
+  inputs: readonly ArtworkJobSyncInput[],
+): Promise<void> {
+  if (!inputs.length) return;
+  const trackIds = [...new Set(inputs.map((input) => input.trackId))];
+  const existingRows = await database.orm.ArtworkJob.where((job) =>
+    job.trackId.in(trackIds),
+  ).all();
+  const existingByTrackId = new Map(
+    existingRows.map((job) => [job.trackId, job]),
+  );
+  const removeIds: string[] = [];
+  const updates: Array<{
+    id: string;
+    sourceId: string;
+    externalCoverItemId: string;
+    externalCoverTag: string | null;
+  }> = [];
+  const creates: Array<{
     trackId: string;
     sourceId: string;
-    externalCoverItemId: string | null;
+    externalCoverItemId: string;
     externalCoverTag: string | null;
-  },
-): Promise<void> {
-  if (!input.externalCoverItemId) {
-    await database.orm.ArtworkJob.where({
-      trackId: input.trackId,
-    }).deleteAndCount();
-    return;
-  }
-  const existing = await database.orm.ArtworkJob.first({
-    trackId: input.trackId,
-  });
-  if (existing) {
-    if (
-      existing.sourceId === input.sourceId &&
-      existing.externalCoverItemId === input.externalCoverItemId &&
-      existing.externalCoverTag === input.externalCoverTag
-    ) {
-      return;
+  }> = [];
+  for (const input of inputs) {
+    const existing = existingByTrackId.get(input.trackId);
+    if (!input.externalCoverItemId) {
+      if (existing) removeIds.push(existing.id);
+      continue;
     }
-    await database.orm.ArtworkJob.where({ id: existing.id }).update({
+    if (existing) {
+      if (
+        existing.sourceId === input.sourceId &&
+        existing.externalCoverItemId === input.externalCoverItemId &&
+        existing.externalCoverTag === input.externalCoverTag
+      ) {
+        continue;
+      }
+      updates.push({
+        id: existing.id,
+        sourceId: input.sourceId,
+        externalCoverItemId: input.externalCoverItemId,
+        externalCoverTag: input.externalCoverTag,
+      });
+      continue;
+    }
+    creates.push({
+      trackId: input.trackId,
       sourceId: input.sourceId,
       externalCoverItemId: input.externalCoverItemId,
       externalCoverTag: input.externalCoverTag,
+    });
+  }
+  if (removeIds.length) {
+    await database.orm.ArtworkJob.where((job) =>
+      job.id.in(removeIds),
+    ).deleteAndCount();
+  }
+  for (const update of updates) {
+    await database.orm.ArtworkJob.where({ id: update.id }).update({
+      sourceId: update.sourceId,
+      externalCoverItemId: update.externalCoverItemId,
+      externalCoverTag: update.externalCoverTag,
       attemptCount: 0,
       lastAttemptAt: null,
     });
-    return;
   }
-  await database.orm.ArtworkJob.create({
-    trackId: input.trackId,
-    sourceId: input.sourceId,
-    externalCoverItemId: input.externalCoverItemId,
-    externalCoverTag: input.externalCoverTag,
-  });
+  if (creates.length) {
+    await database.execute(database.sql.ArtworkJob.insert(creates).build());
+  }
 }
 
 function taskSourceName(task: TaskRow): string {

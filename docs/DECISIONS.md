@@ -1,5 +1,17 @@
 # Peridot decisions
 
+## 2026-11-23: Faster Jellyfin imports
+
+Jellyfin scans fetch 500 audio items per API page instead of 100, so a 69 878
+item library needs roughly 140 listing requests rather than 699. Catalog import
+batches remain 100 rows and still publish before the next page is requested.
+
+The rescan fast path now syncs artwork jobs in batch. Tracks with an already
+valid cover and no pending job avoid per-track queries and writes, which were
+the dominant SQLite cost on unchanged Jellyfin items. The scan task also records
+cumulative discovery, artwork, database, and catalog timings so the slowest
+phase can be identified without adding external profiling.
+
 ## 2026-11-23: Scan workers default to six
 
 New installations use six scan worker threads. File discovery and local tag
