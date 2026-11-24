@@ -31,6 +31,7 @@ test("catalog card grids virtualize responsive rows against the main scroll", as
   assert.doesNotMatch(grid, /maxWait/);
   assert.match(grid, /name="placeholder"/);
   assert.match(grid, /placeholder\?\(props: \{ itemIndex: number \}\)/);
+  assert.match(grid, /virtualCardRowPlaceholderCount/);
   assert.match(grid, /Math\.ceil\(totalItemCount\.value \/ columns\.value\)/);
   assert.match(grid, /:style="\{ overflowAnchor: 'none' \}"/);
   assert.match(grid, /overflowAnchor: 'none'/);

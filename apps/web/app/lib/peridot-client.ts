@@ -7,9 +7,14 @@ import type {
 import type {
   AddPlaylistItemRequest,
   AddPlaylistItemResponse,
+  AdminMediaCopyField,
+  AdminMediaField,
+  AdminMediaListQuery,
+  AdminMediaListResponse,
+  AdminMediaResponse,
   ApiErrorResponse,
   ApplyArtistMetadataRequest,
-  ApplyTrackMetadataRequest,
+  ApplyMediaMetadataRequest,
   AlbumListResponse,
   ArtistListResponse,
   AudiobookListResponse,
@@ -19,13 +24,15 @@ import type {
   AuthStatusResponse,
   CompletePasswordResetRequest,
   CreateMetadataProviderRequest,
+  CreateAdminMediaCopyRequest,
+  CreateAdminMediaRequest,
   CreatePlaylistRequest,
-  CreateSourceRequest,
-  CreateSourceResponse,
+  CreateLibrarySourceRequest,
+  CreateLibrarySourceResponse,
   CreateUserRequest,
   DirectoryListResponse,
   DirectorySearchResponse,
-  DiscoverSourceIntegrationRequest,
+  DiscoverLibrarySourceRequest,
   LikeListResponse,
   LikeResponse,
   LikeTarget,
@@ -39,33 +46,39 @@ import type {
   PasswordResetRequestResponse,
   PlaylistDetailResponse,
   PlaylistListResponse,
-  SourceIntegrationOptionListResponse,
-  SourceRemovalResponse,
+  LibrarySourceConnectorOptionListResponse,
+  LibrarySourceRemovalResponse,
   PodcastListResponse,
   PodcastSummaryResponse,
   QuickPickListResponse,
   RealtimeTicketResponse,
   ReorderPlaylistItemsRequest,
-  ResolveTracksResponse,
+  ResolveMediaResponse,
   PlaybackTokenResponse,
-  RecordTrackPlayResponse,
+  RecordMediaPlayResponse,
   ResetMetadataResponse,
   RestartServerResponse,
   ServerSettingsResponse,
-  SourceListResponse,
+  LibrarySourceListResponse,
   TaskListResponse,
   TaskResponse,
-  TrackListResponse,
+  MediaListResponse,
   UpdateUserPreferencesRequest,
   UpdatePlaylistRequest,
   UpdateUserProfileRequest,
   UpdateMetadataProviderRequest,
+  UpdateAdminMediaCopyRequest,
+  UpdateAdminMediaRequest,
   UpdateServerSettingsRequest,
   UpdateStatusResponse,
   UpdateUserRequest,
   UserListResponse,
   UserPreferencesResponse,
   UserResponse,
+  ConnectorListResponse,
+  ReleaseIndexerInput,
+  ReleaseIndexerListResponse,
+  ReleaseIndexerResponse,
 } from "@peridot/contracts";
 import { localizedError, message } from "./messages.ts";
 import { reportServerReachability } from "./server-connectivity.ts";
@@ -467,6 +480,150 @@ export function updateServerSettings(
   );
 }
 
+export function listAdminMedias(
+  serverAddress: string,
+  token: string,
+  options: AdminMediaListQuery = {},
+) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(options)) {
+    if (value === undefined || value === null || value === "") continue;
+    params.set(key, String(value));
+  }
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return authenticatedRequestJson<AdminMediaListResponse>(
+    serverAddress,
+    `/api/admin/medias${suffix}`,
+    token,
+  );
+}
+
+export function createAdminMedia(
+  serverAddress: string,
+  token: string,
+  input: CreateAdminMediaRequest,
+) {
+  return authenticatedRequestJson<AdminMediaResponse>(
+    serverAddress,
+    "/api/admin/medias",
+    token,
+    { method: "POST", body: JSON.stringify(input) },
+  );
+}
+
+export function updateAdminMediaField(
+  serverAddress: string,
+  token: string,
+  mediaId: string,
+  field: AdminMediaField,
+  value: UpdateAdminMediaRequest["value"],
+  expectedUpdatedAt: string,
+) {
+  return authenticatedRequestJson<AdminMediaResponse>(
+    serverAddress,
+    `/api/admin/medias/${encodeURIComponent(mediaId)}`,
+    token,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ field, value, expectedUpdatedAt }),
+    },
+  );
+}
+
+export function resetAdminMediaField(
+  serverAddress: string,
+  token: string,
+  mediaId: string,
+  field: AdminMediaField,
+  expectedUpdatedAt: string,
+) {
+  const params = new URLSearchParams({ expectedUpdatedAt });
+  return authenticatedRequestJson<AdminMediaResponse>(
+    serverAddress,
+    `/api/admin/medias/${encodeURIComponent(mediaId)}/overrides/${encodeURIComponent(field)}?${params.toString()}`,
+    token,
+    { method: "DELETE" },
+  );
+}
+
+export function deleteAdminMedia(
+  serverAddress: string,
+  token: string,
+  mediaId: string,
+) {
+  return authenticatedRequestJson<void>(
+    serverAddress,
+    `/api/admin/medias/${encodeURIComponent(mediaId)}`,
+    token,
+    { method: "DELETE" },
+  );
+}
+
+export function createAdminMediaCopy(
+  serverAddress: string,
+  token: string,
+  mediaId: string,
+  input: CreateAdminMediaCopyRequest,
+) {
+  return authenticatedRequestJson<AdminMediaResponse>(
+    serverAddress,
+    `/api/admin/medias/${encodeURIComponent(mediaId)}/copies`,
+    token,
+    { method: "POST", body: JSON.stringify(input) },
+  );
+}
+
+export function updateAdminMediaCopyField(
+  serverAddress: string,
+  token: string,
+  mediaId: string,
+  copyId: string,
+  field: AdminMediaCopyField,
+  value: UpdateAdminMediaCopyRequest["value"],
+  expectedUpdatedAt: string,
+) {
+  return authenticatedRequestJson<AdminMediaResponse>(
+    serverAddress,
+    `/api/admin/medias/${encodeURIComponent(mediaId)}/copies/${encodeURIComponent(copyId)}`,
+    token,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ field, value, expectedUpdatedAt }),
+    },
+  );
+}
+
+export function resetAdminMediaCopyField(
+  serverAddress: string,
+  token: string,
+  mediaId: string,
+  copyId: string,
+  field: AdminMediaCopyField,
+  expectedUpdatedAt: string,
+) {
+  const params = new URLSearchParams({ expectedUpdatedAt });
+  return authenticatedRequestJson<AdminMediaResponse>(
+    serverAddress,
+    `/api/admin/medias/${encodeURIComponent(mediaId)}/copies/${encodeURIComponent(copyId)}/overrides/${encodeURIComponent(field)}?${params.toString()}`,
+    token,
+    { method: "DELETE" },
+  );
+}
+
+export function deleteAdminMediaCopy(
+  serverAddress: string,
+  token: string,
+  mediaId: string,
+  copyId: string,
+) {
+  return authenticatedRequestJson<AdminMediaResponse>(
+    serverAddress,
+    `/api/admin/medias/${encodeURIComponent(mediaId)}/copies/${encodeURIComponent(copyId)}`,
+    token,
+    { method: "DELETE" },
+  );
+}
+
 export function listMetadataProviders(serverAddress: string, token: string) {
   return authenticatedRequestJson<MetadataProviderListResponse>(
     serverAddress,
@@ -553,9 +710,9 @@ export function fetchLogs(serverAddress: string, token: string, after = 0) {
 }
 
 export function listSources(serverAddress: string, token: string) {
-  return authenticatedRequestJson<SourceListResponse>(
+  return authenticatedRequestJson<LibrarySourceListResponse>(
     serverAddress,
-    "/api/admin/sources",
+    "/api/admin/library-sources",
     token,
   );
 }
@@ -563,11 +720,11 @@ export function listSources(serverAddress: string, token: string) {
 export function createSource(
   serverAddress: string,
   token: string,
-  source: CreateSourceRequest,
+  source: CreateLibrarySourceRequest,
 ) {
-  return authenticatedRequestJson<CreateSourceResponse>(
+  return authenticatedRequestJson<CreateLibrarySourceResponse>(
     serverAddress,
-    "/api/admin/sources",
+    "/api/admin/library-sources",
     token,
     { method: "POST", body: JSON.stringify(source) },
   );
@@ -578,9 +735,9 @@ export function deleteSource(
   token: string,
   sourceId: string,
 ) {
-  return authenticatedRequestJson<SourceRemovalResponse>(
+  return authenticatedRequestJson<LibrarySourceRemovalResponse>(
     serverAddress,
-    `/api/admin/sources/${sourceId}`,
+    `/api/admin/library-sources/${sourceId}`,
     token,
     { method: "DELETE" },
   );
@@ -590,9 +747,9 @@ export function discoverIntegrationSources(
   serverAddress: string,
   token: string,
   kind: string,
-  request: DiscoverSourceIntegrationRequest,
+  request: DiscoverLibrarySourceRequest,
 ) {
-  return authenticatedRequestJson<SourceIntegrationOptionListResponse>(
+  return authenticatedRequestJson<LibrarySourceConnectorOptionListResponse>(
     serverAddress,
     `/api/admin/source-integrations/${encodeURIComponent(kind)}/discover`,
     token,
@@ -605,9 +762,9 @@ export function reorderSources(
   token: string,
   ids: string[],
 ) {
-  return authenticatedRequestJson<SourceListResponse>(
+  return authenticatedRequestJson<LibrarySourceListResponse>(
     serverAddress,
-    "/api/admin/sources/order",
+    "/api/admin/library-sources/order",
     token,
     { method: "PUT", body: JSON.stringify({ ids }) },
   );
@@ -620,10 +777,37 @@ export function rescanSource(
 ) {
   return authenticatedRequestJson<TaskResponse>(
     serverAddress,
-    `/api/admin/sources/${sourceId}/scans`,
+    `/api/admin/library-sources/${sourceId}/scans`,
     token,
     { method: "POST" },
   );
+}
+
+export function connectorsApi(serverAddress: string, token: string) {
+  return authenticatedRequestJson<ConnectorListResponse>(
+    serverAddress,
+    "/api/admin/connectors",
+    token,
+  );
+}
+
+export function releaseIndexersApi(serverAddress: string, token: string) {
+  const base = "/api/admin/release-indexers";
+  const request = <T>(path: string, method = "GET", body?: unknown) =>
+    authenticatedRequestJson<T>(serverAddress, path, token, {
+      method,
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+  return {
+    list: () => request<ReleaseIndexerListResponse>(base),
+    create: (input: ReleaseIndexerInput) =>
+      request<ReleaseIndexerResponse>(base, "POST", input),
+    remove: (id: string) => request<void>(base + "/" + id, "DELETE"),
+    link: (id: string, input: DownloadLinkInput) =>
+      request<void>(base + "/" + id + "/download-client", "PUT", input),
+    reorder: (ids: string[]) =>
+      request<ReleaseIndexerListResponse>(base + "/order", "PUT", { ids }),
+  };
 }
 
 export function listDirectories(
@@ -777,7 +961,7 @@ export function listAudiobookChapters(
 ) {
   const params = trackListParams(options);
   const suffix = params.size ? `?${params.toString()}` : "";
-  return authenticatedRequestJson<TrackListResponse>(
+  return authenticatedRequestJson<MediaListResponse>(
     serverAddress,
     `/api/audiobooks/${encodeURIComponent(audiobookId)}/chapters${suffix}`,
     token,
@@ -818,7 +1002,7 @@ export function listPodcastEpisodes(
 ) {
   const params = trackListParams(options);
   const suffix = params.size ? `?${params.toString()}` : "";
-  return authenticatedRequestJson<TrackListResponse>(
+  return authenticatedRequestJson<MediaListResponse>(
     serverAddress,
     `/api/podcasts/${encodeURIComponent(podcastId)}/episodes${suffix}`,
     token,
@@ -832,9 +1016,9 @@ export function listTracks(
 ) {
   const params = trackListParams(options);
   const suffix = params.size ? `?${params.toString()}` : "";
-  return authenticatedRequestJson<TrackListResponse>(
+  return authenticatedRequestJson<MediaListResponse>(
     serverAddress,
-    `/api/tracks${suffix}`,
+    `/api/media${suffix}`,
     token,
   );
 }
@@ -844,9 +1028,9 @@ export function resolveTracks(
   token: string,
   ids: string[],
 ) {
-  return authenticatedRequestJson<ResolveTracksResponse>(
+  return authenticatedRequestJson<ResolveMediaResponse>(
     serverAddress,
-    "/api/tracks/resolve",
+    "/api/media/resolve",
     token,
     { method: "POST", body: JSON.stringify({ ids }) },
   );
@@ -914,7 +1098,7 @@ export function listArtists(
 export interface PlaylistListOptions {
   limit?: number;
   offset?: number;
-  trackId?: string;
+  mediaId?: string;
   query?: string;
 }
 
@@ -928,7 +1112,7 @@ export function listPlaylists(
   if (options.offset !== undefined) {
     params.set("offset", String(options.offset));
   }
-  if (options.trackId) params.set("trackId", options.trackId);
+  if (options.mediaId) params.set("mediaId", options.mediaId);
   if (options.query) params.set("query", options.query);
   const suffix = params.size ? `?${params.toString()}` : "";
   return authenticatedRequestJson<PlaylistListResponse>(
@@ -1090,11 +1274,11 @@ export function revertArtistMetadata(
 export function recordTrackPlay(
   serverAddress: string,
   token: string,
-  trackId: string,
+  mediaId: string,
 ) {
-  return authenticatedRequestJson<RecordTrackPlayResponse>(
+  return authenticatedRequestJson<RecordMediaPlayResponse>(
     serverAddress,
-    `/api/tracks/${encodeURIComponent(trackId)}/plays`,
+    `/api/media/${encodeURIComponent(mediaId)}/plays`,
     token,
     { method: "POST" },
   );
@@ -1111,7 +1295,7 @@ export function fetchQuickPicks(serverAddress: string, token: string) {
 export function listMetadataCandidates(
   serverAddress: string,
   token: string,
-  trackId: string,
+  mediaId: string,
   query?: string,
 ) {
   const params = new URLSearchParams();
@@ -1119,7 +1303,7 @@ export function listMetadataCandidates(
   const suffix = params.size ? `?${params.toString()}` : "";
   return authenticatedRequestJson<MetadataCandidateListResponse>(
     serverAddress,
-    `/api/tracks/${encodeURIComponent(trackId)}/metadata/candidates${suffix}`,
+    `/api/media/${encodeURIComponent(mediaId)}/metadata/candidates${suffix}`,
     token,
   );
 }
@@ -1127,12 +1311,12 @@ export function listMetadataCandidates(
 export function applyTrackMetadata(
   serverAddress: string,
   token: string,
-  trackId: string,
-  metadata: ApplyTrackMetadataRequest,
+  mediaId: string,
+  metadata: ApplyMediaMetadataRequest,
 ) {
   return authenticatedRequestJson<void>(
     serverAddress,
-    `/api/tracks/${encodeURIComponent(trackId)}/metadata`,
+    `/api/media/${encodeURIComponent(mediaId)}/metadata`,
     token,
     { method: "PUT", body: JSON.stringify(metadata) },
   );
@@ -1141,11 +1325,11 @@ export function applyTrackMetadata(
 export function revertTrackMetadata(
   serverAddress: string,
   token: string,
-  trackId: string,
+  mediaId: string,
 ) {
   return authenticatedRequestJson<void>(
     serverAddress,
-    `/api/tracks/${encodeURIComponent(trackId)}/metadata`,
+    `/api/media/${encodeURIComponent(mediaId)}/metadata`,
     token,
     { method: "DELETE" },
   );
@@ -1186,11 +1370,11 @@ export function deleteLike(
 export function createPlaybackToken(
   serverAddress: string,
   token: string,
-  trackId: string,
+  mediaId: string,
 ) {
   return authenticatedRequestJson<PlaybackTokenResponse>(
     serverAddress,
-    `/api/tracks/${encodeURIComponent(trackId)}/playback-token`,
+    `/api/media/${encodeURIComponent(mediaId)}/playback-token`,
     token,
     { method: "POST" },
   );
@@ -1198,29 +1382,34 @@ export function createPlaybackToken(
 
 export function trackAudioUrl(
   serverAddress: string,
-  trackId: string,
+  mediaId: string,
   playbackToken: string,
 ) {
-  return `${serverAddress}/api/tracks/${encodeURIComponent(trackId)}/audio?playbackToken=${encodeURIComponent(playbackToken)}`;
+  return `${serverAddress}/api/media/${encodeURIComponent(mediaId)}/audio?playbackToken=${encodeURIComponent(playbackToken)}`;
 }
 
 export function torznabClient(address: string, token: string) {
-  const base = "/api/torznab";
   const get = <T>(path: string, init?: RequestInit) =>
-    authenticatedRequestJson<T>(address, base + path, token, init);
+    authenticatedRequestJson<T>(address, path, token, init);
   return {
-    config: () => get<{ enabled: boolean }>(""),
+    config: () => get<{ enabled: boolean }>("/api/search/external/status"),
     search: (q: string) =>
-      get<import("@peridot/contracts").TorznabRelease[]>(
-        "/search?" + new URLSearchParams({ q }),
+      get<import("@peridot/contracts").ExternalSearchResponse>(
+        "/api/search/external?" + new URLSearchParams({ query: q }),
       ),
-    add: (id: string) =>
-      get<import("@peridot/contracts").TorznabImportResponse>(
-        "/imports/" + id,
-        { method: "POST" },
+    add: (indexerId: string, releaseId: string) =>
+      get<import("@peridot/contracts").ReleaseImportResponse>(
+        "/api/release-imports",
+        {
+          method: "POST",
+          body: JSON.stringify({ indexerId, releaseId }),
+          headers: { "Content-Type": "application/json" },
+        },
       ),
-    status: (id: string) =>
-      get<import("@peridot/contracts").TorznabImportStatus>("/imports/" + id),
+    status: (taskId: string) =>
+      get<import("@peridot/contracts").ReleaseImportStatus>(
+        "/api/release-imports/" + encodeURIComponent(taskId),
+      ),
   };
 }
 
@@ -1246,7 +1435,7 @@ export function downloadClientsApi(address: string, token: string) {
     remove: (id: string) => request<void>(base + "/" + id, "DELETE"),
     link: (id: string, input: DownloadLinkInput) =>
       request<void>(
-        "/api/admin/sources/" + id + "/download-client",
+        "/api/admin/release-indexers/" + id + "/download-client",
         "PUT",
         input,
       ),

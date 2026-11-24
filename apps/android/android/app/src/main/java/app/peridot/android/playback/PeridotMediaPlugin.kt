@@ -293,4 +293,10 @@ class PeridotMediaPlugin : Plugin() {
         sessions.read()?.let(offlineStore::clear)
         call.resolve()
     }
+
+    @PluginMethod
+    fun clearLegacyOfflineTracks(call: PluginCall) {
+        offlineStore.clearLegacy()
+        call.resolve()
+    }
 }

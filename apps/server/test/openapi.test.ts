@@ -115,21 +115,21 @@ test("OpenAPI endpoints publish every documented API route", async () => {
     }
 
     assert.deepEqual(document.paths["/api/health"]?.get?.security, []);
-    assert.deepEqual(document.paths["/api/tracks"]?.get?.security, [
+    assert.deepEqual(document.paths["/api/media"]?.get?.security, [
       { bearerAuth: [] },
     ]);
     assert.ok(
-      document.paths["/api/tracks/{id}/audio"]?.get?.security?.some(
+      document.paths["/api/media/{id}/audio"]?.get?.security?.some(
         (requirement) => "playbackToken" in requirement,
       ),
     );
-    assert.ok(document.paths["/api/tracks/resolve"]?.post?.requestBody);
+    assert.ok(document.paths["/api/media/resolve"]?.post?.requestBody);
     assert.equal(document.paths["/api/openapi.json"], undefined);
     assert.equal(document.paths["/api/docs"], undefined);
 
     assert.ok(document.components.securitySchemes.bearerAuth);
-    assert.ok(document.components.schemas.TrackResponse);
-    const trackSchema = document.components.schemas.TrackResponse as {
+    assert.ok(document.components.schemas.MediaResponse);
+    const trackSchema = document.components.schemas.MediaResponse as {
       properties?: Record<string, unknown>;
     };
     assert.ok(trackSchema.properties?.sourceKind);

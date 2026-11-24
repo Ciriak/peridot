@@ -5,11 +5,12 @@ import { buildApp } from "../src/app.js";
 import {
   decayedPlayScore,
   rankQuickPicks,
-  type PlayedTrackEvent,
-  type PlayedTrackInfo,
+  type PlayedMediaEvent,
+  type PlayedMediaInfo,
 } from "../src/quick-picks.js";
 import {
   createMemberSession,
+  createMediaFixture,
   createTestContext,
   type TestContext,
 } from "./helpers.js";
@@ -17,8 +18,8 @@ import {
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function track(
-  overrides: Partial<PlayedTrackInfo> & Pick<PlayedTrackInfo, "id">,
-): PlayedTrackInfo {
+  overrides: Partial<PlayedMediaInfo> & Pick<PlayedMediaInfo, "id">,
+): PlayedMediaInfo {
   return {
     artist: "Artist",
     album: "Album",
@@ -31,8 +32,8 @@ function track(
   };
 }
 
-function event(playedAt: Date, trackValue: PlayedTrackInfo): PlayedTrackEvent {
-  return { playedAt, track: trackValue };
+function event(playedAt: Date, media: PlayedMediaInfo): PlayedMediaEvent {
+  return { playedAt, media };
 }
 
 async function createTrack(
@@ -46,20 +47,23 @@ async function createTrack(
     available?: number;
   },
 ) {
-  return context.database.orm.Track.create({
-    title: overrides.title,
-    artist: overrides.artist ?? "Play Artist",
-    album: overrides.album ?? "Play Album",
-    metadataArtist: overrides.metadataArtist ?? null,
-    metadataAlbum: overrides.metadataAlbum ?? null,
-    available: overrides.available ?? 1,
-    relativePath: `${overrides.title.toLowerCase().replaceAll(" ", "-")}.mp3`,
-    mimeType: "audio/mpeg",
-    durationMs: 60_000,
-    fileSizeBytes: 1n,
-    fileModifiedAt: new Date(0),
-    trackNumber: 1,
-  });
+  return (
+    await createMediaFixture(context, {
+      media: {
+        title: overrides.title,
+        artist: overrides.artist ?? "Play Artist",
+        album: overrides.album ?? "Play Album",
+        metadataArtist: overrides.metadataArtist ?? null,
+        metadataAlbum: overrides.metadataAlbum ?? null,
+        available: overrides.available ?? 1,
+        durationMs: 60_000,
+        trackNumber: 1,
+      },
+      copy: {
+        relativePath: `${overrides.title.toLowerCase().replaceAll(" ", "-")}.mp3`,
+      },
+    })
+  ).media;
 }
 
 async function readQuickPicks(
@@ -116,10 +120,10 @@ test("ranking combines track and album scores with stable ties", () => {
     ranked.map((item) => item.key),
     [
       "album:album-shared",
-      "track:first",
+      "media:first",
       "album:album-third",
-      "track:third",
-      "track:second",
+      "media:third",
+      "media:second",
     ],
   );
 
@@ -132,7 +136,7 @@ test("ranking combines track and album scores with stable ties", () => {
   );
   assert.deepEqual(
     tied.map((item) => item.key),
-    ["track:a", "track:b"],
+    ["media:a", "media:b"],
   );
 });
 
@@ -178,7 +182,7 @@ test("album rankings use metadata identity and omit unavailable tracks", () => {
   });
   assert.equal(
     ranked.some(
-      (item) => item.kind === "track" && item.trackId === "unavailable",
+      (item) => item.kind === "media" && item.mediaId === "unavailable",
     ),
     false,
   );
@@ -197,36 +201,36 @@ test("play starts are authenticated, private, and persist across a restart", asy
     assert.deepEqual(await readQuickPicks(context), { items: [] });
     const anonymous = await context.app.inject({
       method: "POST",
-      url: `/api/tracks/${available.id}/plays`,
+      url: `/api/media/${available.id}/plays`,
     });
     assert.equal(anonymous.statusCode, 401);
     const missing = await context.app.inject({
       method: "POST",
-      url: "/api/tracks/missing/plays",
+      url: "/api/media/missing/plays",
       headers: context.authorization,
     });
     assert.equal(missing.statusCode, 404);
     const hidden = await context.app.inject({
       method: "POST",
-      url: `/api/tracks/${unavailable.id}/plays`,
+      url: `/api/media/${unavailable.id}/plays`,
       headers: context.authorization,
     });
     assert.equal(hidden.statusCode, 404);
 
     const recorded = await context.app.inject({
       method: "POST",
-      url: `/api/tracks/${available.id}/plays`,
+      url: `/api/media/${available.id}/plays`,
       headers: context.authorization,
     });
     assert.equal(recorded.statusCode, 201);
-    assert.equal(recorded.json().trackId, available.id);
+    assert.equal(recorded.json().mediaId, available.id);
     await context.app.inject({
       method: "POST",
-      url: `/api/tracks/${available.id}/plays`,
+      url: `/api/media/${available.id}/plays`,
       headers: context.authorization,
     });
-    const playCount = await context.database.orm.TrackPlayEvent.where({
-      trackId: available.id,
+    const playCount = await context.database.orm.MediaPlayEvent.where({
+      mediaId: available.id,
     }).aggregate((aggregate) => ({ count: aggregate.count() }));
     assert.equal(playCount.count, 2);
 
@@ -276,9 +280,9 @@ test("quick picks return at most eight mixed items", async () => {
           title: `Track ${index + 1}`,
           album: `Album ${index + 1}`,
         });
-        await context.database.orm.TrackPlayEvent.create({
+        await context.database.orm.MediaPlayEvent.create({
           userId,
-          trackId: trackValue.id,
+          mediaId: trackValue.id,
           playedAt: new Date(Date.now() - index * DAY_MS),
         });
       }),
@@ -288,7 +292,7 @@ test("quick picks return at most eight mixed items", async () => {
     assert.equal(response.items.length, 8);
     assert.deepEqual(
       response.items.map((item) => item.kind),
-      ["album", "track", "album", "track", "album", "track", "album", "track"],
+      ["album", "media", "album", "media", "album", "media", "album", "media"],
     );
   } finally {
     await context.close();

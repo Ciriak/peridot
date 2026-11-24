@@ -7,11 +7,11 @@ import { createStore, del, entries, get, set, type UseStore } from "idb-keyval";
 import type { QueryKey } from "@tanstack/vue-query";
 import { isPeridotQueryKey, PERIDOT_QUERY_ROOT } from "./query-keys.ts";
 
-export const QUERY_CACHE_BUSTER = "peridot-query-v1";
+export const QUERY_CACHE_BUSTER = "peridot-query-v2";
 export const QUERY_CACHE_PREFIX = "peridot-query";
 export const QUERY_DATABASE = "peridot-web-query";
 export const CATALOG_RESTORED_PAGE_LIMIT = 1;
-const QUERY_STORE = "query-cache";
+export const QUERY_STORE = "query-cache";
 
 export interface QueryPersisterRuntime {
   persister: ReturnType<typeof experimental_createQueryPersister>;

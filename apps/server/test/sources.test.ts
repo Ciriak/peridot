@@ -6,7 +6,7 @@ import type {
   AlbumListResponse,
   LikeListResponse,
   PlaylistDetailResponse,
-  TrackListResponse,
+  MediaListResponse,
 } from "@peridot/contracts";
 import {
   createMemberSession,
@@ -16,8 +16,6 @@ import {
   startScan,
   waitForScan,
 } from "./helpers.js";
-import { normalizeLegacyJellyfinSources } from "../src/sources.js";
-
 test("administrators can read server counts and the default source", async () => {
   const context = await createTestContext();
   try {
@@ -28,8 +26,8 @@ test("administrators can read server counts and the default source", async () =>
     });
     assert.equal(status.statusCode, 200);
     assert.deepEqual(status.json(), {
-      trackCount: 0,
-      availableTrackCount: 0,
+      mediaCount: 0,
+      availableMediaCount: 0,
       scanning: {
         workerCount: 6,
       },
@@ -47,7 +45,7 @@ test("administrators can read server counts and the default source", async () =>
 
     const sources = await context.app.inject({
       method: "GET",
-      url: "/api/admin/sources",
+      url: "/api/admin/library-sources",
       headers: context.authorization,
     });
     assert.equal(sources.statusCode, 200);
@@ -63,64 +61,13 @@ test("administrators can read server counts and the default source", async () =>
   }
 });
 
-test("legacy Jellyfin plugin sources are normalized from stored data", async () => {
-  const context = await createTestContext();
-  const serverUrl = "https://jellyfin.example.test/";
-  const libraryId = "music-library";
-  try {
-    await context.database.orm.Source.create({
-      kind: "plugin",
-      name: "Audio",
-      url: serverUrl,
-      configuration: JSON.stringify({ libraryId, url: serverUrl }),
-      position: 1,
-    });
-    await context.database.orm.Source.create({
-      kind: "plugin",
-      name: "Legacy plugin",
-      url: "https://plugin.example.test/",
-      configuration: JSON.stringify({ custom: "value" }),
-      position: 2,
-    });
-
-    assert.equal(await normalizeLegacyJellyfinSources(context.database), 1);
-
-    const normalized = await context.database.orm.Source.firstOrThrow({
-      name: "Audio",
-    });
-    assert.equal(normalized.kind, "jellyfin");
-    assert.deepEqual(JSON.parse(normalized.sourceIdentity!), [
-      serverUrl,
-      libraryId,
-    ]);
-
-    const untouched = await context.database.orm.Source.firstOrThrow({
-      name: "Legacy plugin",
-    });
-    assert.equal(untouched.kind, "plugin");
-    assert.equal(untouched.sourceIdentity, null);
-
-    const sources = await context.app.inject({
-      method: "GET",
-      url: "/api/admin/sources",
-      headers: context.authorization,
-    });
-    const listed = sources
-      .json<{ items: Array<{ id: string; kind: string }> }>()
-      .items.find((source) => source.id === normalized.id);
-    assert.equal(listed?.kind, "jellyfin");
-  } finally {
-    await context.close();
-  }
-});
-
 test("source mutations are allowed by the configured web origin", async () => {
   const context = await createTestContext();
   try {
     for (const method of ["PUT", "DELETE"]) {
       const response = await context.app.inject({
         method: "OPTIONS",
-        url: "/api/admin/sources/order",
+        url: "/api/admin/library-sources/order",
         headers: {
           origin: "http://127.0.0.1:17430",
           "access-control-request-method": method,
@@ -151,7 +98,7 @@ test("administrators can add and remove path and url sources", async () => {
     await writeFile(path.join(secondRoot, "added.wav"), createWav());
     const created = await context.app.inject({
       method: "POST",
-      url: "/api/admin/sources",
+      url: "/api/admin/library-sources",
       headers: context.authorization,
       payload: { kind: "path", path: secondRoot },
     });
@@ -164,7 +111,7 @@ test("administrators can add and remove path and url sources", async () => {
       task: {
         id: string;
         kind: string;
-        source: { id: string; name: string };
+        connector: { id: string; name: string };
         status: string;
       };
     }>();
@@ -172,8 +119,8 @@ test("administrators can add and remove path and url sources", async () => {
     assert.equal(createdSource.fileCount, 0);
     assert.equal(createdSource.lastSyncedAt, null);
     assert.equal(createdSource.task.kind, "library_scan");
-    assert.equal(createdSource.task.source.id, createdSource.id);
-    assert.equal(createdSource.task.source.name, "second");
+    assert.equal(createdSource.task.connector.id, createdSource.id);
+    assert.equal(createdSource.task.connector.name, "second");
     assert.equal(createdSource.task.status, "queued");
 
     const sourceScan = await waitForScan(context, createdSource.task.id);
@@ -183,19 +130,9 @@ test("administrators can add and remove path and url sources", async () => {
     assert.equal(sourceScan.metadataTotalCount, 1);
     assert.equal(sourceScan.metadataProcessedCount, 1);
 
-    const url = await context.app.inject({
-      method: "POST",
-      url: "/api/admin/sources",
-      headers: context.authorization,
-      payload: { kind: "url", url: "https://example.com/music" },
-    });
-    assert.equal(url.statusCode, 201);
-    assert.equal(url.json().url, "https://example.com/music");
-    assert.equal(url.json().task, null);
-
     const list = await context.app.inject({
       method: "GET",
-      url: "/api/admin/sources",
+      url: "/api/admin/library-sources",
       headers: context.authorization,
     });
     const listedSources = list.json<{
@@ -205,7 +142,7 @@ test("administrators can add and remove path and url sources", async () => {
         lastSyncedAt: string | null;
       }>;
     }>().items;
-    assert.equal(listedSources.length, 3);
+    assert.equal(listedSources.length, 2);
     const scannedSource = listedSources.find(
       (source) => source.id === createdSource.id,
     );
@@ -214,7 +151,7 @@ test("administrators can add and remove path and url sources", async () => {
 
     const tracksBeforeRemoval = await context.app.inject({
       method: "GET",
-      url: "/api/tracks",
+      url: "/api/media",
       headers: context.authorization,
     });
     const removedTrack = tracksBeforeRemoval
@@ -226,13 +163,13 @@ test("administrators can add and remove path and url sources", async () => {
 
     const removed = await context.app.inject({
       method: "DELETE",
-      url: `/api/admin/sources/${createdSource.id}`,
+      url: `/api/admin/library-sources/${createdSource.id}`,
       headers: context.authorization,
     });
     assert.equal(removed.statusCode, 200);
     assert.deepEqual(removed.json(), {
       sourceId: createdSource.id,
-      unavailableTrackCount: 1,
+      unavailableMediaCopyCount: 1,
       affectedAlbumCount: 0,
       affectedArtistCount: 1,
       durationMs: removed.json().durationMs,
@@ -240,21 +177,25 @@ test("administrators can add and remove path and url sources", async () => {
 
     const tracksAfterRemoval = await context.app.inject({
       method: "GET",
-      url: "/api/tracks",
+      url: "/api/media",
       headers: context.authorization,
     });
     assert.deepEqual(tracksAfterRemoval.json().items, []);
-    const retainedTrack = await context.database.orm.Track.where({
+    const retainedTrack = await context.database.orm.Media.where({
       id: removedTrack.id,
     }).first();
+    const retainedCopy = await context.database.orm.MediaCopy.first({
+      mediaId: removedTrack.id,
+    });
     assert.equal(retainedTrack?.available, 0);
-    assert.equal(retainedTrack?.sourceId, createdSource.id);
-    const retainedProjection = await context.database.orm.CatalogTrack.where({
+    assert.equal(retainedCopy?.librarySourceId, createdSource.id);
+    assert.equal(retainedCopy?.available, 0);
+    const retainedProjection = await context.database.orm.CatalogMedia.where({
       id: removedTrack.id,
     }).first();
     assert.equal(retainedProjection?.available, 0);
-    assert.equal(retainedProjection?.sourceId, createdSource.id);
-    const retainedSource = await context.database.orm.Source.where({
+    assert.equal(retainedProjection?.sourceKind, "path");
+    const retainedSource = await context.database.orm.LibrarySource.where({
       id: createdSource.id,
     }).first();
     assert.ok(retainedSource?.removedAt);
@@ -262,7 +203,7 @@ test("administrators can add and remove path and url sources", async () => {
 
     const sourcesAfterRemoval = await context.app.inject({
       method: "GET",
-      url: "/api/admin/sources",
+      url: "/api/admin/library-sources",
       headers: context.authorization,
     });
     assert.equal(
@@ -296,10 +237,10 @@ test("source removal preserves personal references and revives them when re-adde
 
     const tracks = await context.app.inject({
       method: "GET",
-      url: "/api/tracks?availability=all",
+      url: "/api/media?availability=all",
       headers: context.authorization,
     });
-    const track = tracks.json<TrackListResponse>().items[0];
+    const track = tracks.json<MediaListResponse>().items[0];
     assert.ok(track);
     assert.ok(track.albumId);
     assert.ok(track.album);
@@ -308,7 +249,7 @@ test("source removal preserves personal references and revives them when re-adde
       method: "POST",
       url: "/api/likes",
       headers: context.authorization,
-      payload: { kind: "track", trackId: track.id },
+      payload: { kind: "media", mediaId: track.id },
     });
     assert.equal(likedTrack.statusCode, 200);
     const likedAlbum = await context.app.inject({
@@ -336,16 +277,16 @@ test("source removal preserves personal references and revives them when re-adde
       method: "POST",
       url: `/api/playlists/${playlistId}/items`,
       headers: context.authorization,
-      payload: { kind: "catalog", trackId: track.id },
+      payload: { kind: "catalog", mediaId: track.id },
     });
     assert.equal(added.statusCode, 201);
 
-    const source = await context.database.orm.Source.firstOrThrow({
+    const source = await context.database.orm.LibrarySource.firstOrThrow({
       path: context.libraryRoot,
     });
     const removed = await context.app.inject({
       method: "DELETE",
-      url: `/api/admin/sources/${source.id}`,
+      url: `/api/admin/library-sources/${source.id}`,
       headers: context.authorization,
     });
     assert.equal(removed.statusCode, 200);
@@ -357,7 +298,7 @@ test("source removal preserves personal references and revives them when re-adde
     });
     const liked = likedAfterRemoval.json<LikeListResponse>();
     assert.deepEqual(
-      liked.tracks.map((item) => item.trackId),
+      liked.media.map((item) => item.mediaId),
       [track.id],
     );
     assert.deepEqual(
@@ -367,12 +308,12 @@ test("source removal preserves personal references and revives them when re-adde
 
     const unavailableLikedTracks = await context.app.inject({
       method: "GET",
-      url: "/api/tracks?liked=true&availability=all",
+      url: "/api/media?liked=true&availability=all",
       headers: context.authorization,
     });
     assert.equal(unavailableLikedTracks.statusCode, 200);
     assert.equal(
-      unavailableLikedTracks.json<TrackListResponse>().items[0]?.available,
+      unavailableLikedTracks.json<MediaListResponse>().items[0]?.available,
       false,
     );
 
@@ -399,11 +340,11 @@ test("source removal preserves personal references and revives them when re-adde
     });
     const playlistEntry =
       playlistAfterRemoval.json<PlaylistDetailResponse>().entries[0];
-    assert.equal(playlistEntry?.track?.id, track.id);
+    assert.equal(playlistEntry?.media?.id, track.id);
     assert.equal(playlistEntry?.available, false);
     const restored = await context.app.inject({
       method: "POST",
-      url: "/api/admin/sources",
+      url: "/api/admin/library-sources",
       headers: context.authorization,
       payload: { kind: "path", path: context.libraryRoot },
     });
@@ -417,15 +358,15 @@ test("source removal preserves personal references and revives them when re-adde
 
     const restoredTracks = await context.app.inject({
       method: "GET",
-      url: "/api/tracks?availability=all",
+      url: "/api/media?availability=all",
       headers: context.authorization,
     });
     assert.equal(
-      restoredTracks.json<TrackListResponse>().items[0]?.id,
+      restoredTracks.json<MediaListResponse>().items[0]?.id,
       track.id,
     );
     assert.equal(
-      restoredTracks.json<TrackListResponse>().items[0]?.available,
+      restoredTracks.json<MediaListResponse>().items[0]?.available,
       true,
     );
   } finally {
@@ -442,14 +383,12 @@ test("invalid sources are rejected with a clear error", async () => {
       { kind: "path" },
       { kind: "path", path: "" },
       { kind: "path", path: path.join(context.root, "missing") },
-      { kind: "url", url: "not-a-url" },
-      { kind: "url", url: "ftp://example.com/music" },
       { kind: "integration" },
     ];
     for (const payload of payloads) {
       const response = await context.app.inject({
         method: "POST",
-        url: "/api/admin/sources",
+        url: "/api/admin/library-sources",
         headers: context.authorization,
         payload,
       });
@@ -466,7 +405,7 @@ test("duplicate path sources are rejected", async () => {
   try {
     const response = await context.app.inject({
       method: "POST",
-      url: "/api/admin/sources",
+      url: "/api/admin/library-sources",
       headers: context.authorization,
       payload: { kind: "path", path: context.libraryRoot },
     });
@@ -596,19 +535,13 @@ test("administrators can reorder sources", async () => {
     await mkdir(secondRoot);
     await context.app.inject({
       method: "POST",
-      url: "/api/admin/sources",
+      url: "/api/admin/library-sources",
       headers: context.authorization,
       payload: { kind: "path", path: secondRoot },
     });
-    await context.app.inject({
-      method: "POST",
-      url: "/api/admin/sources",
-      headers: context.authorization,
-      payload: { kind: "url", url: "https://example.com/music" },
-    });
     const list = await context.app.inject({
       method: "GET",
-      url: "/api/admin/sources",
+      url: "/api/admin/library-sources",
       headers: context.authorization,
     });
     const ids = list
@@ -618,7 +551,7 @@ test("administrators can reorder sources", async () => {
 
     const reorder = await context.app.inject({
       method: "PUT",
-      url: "/api/admin/sources/order",
+      url: "/api/admin/library-sources/order",
       headers: context.authorization,
       payload: { ids: reversed },
     });
@@ -643,7 +576,7 @@ test("a rescan reads all configured path sources", async () => {
     await writeFile(path.join(secondRoot, "second.wav"), createWav());
     const secondSource = await context.app.inject({
       method: "POST",
-      url: "/api/admin/sources",
+      url: "/api/admin/library-sources",
       headers: context.authorization,
       payload: { kind: "path", path: secondRoot },
     });
@@ -668,7 +601,7 @@ test("source rescans isolate availability changes to the selected source", async
     await writeFile(path.join(secondRoot, "second.wav"), createWav());
     const secondSource = await context.app.inject({
       method: "POST",
-      url: "/api/admin/sources",
+      url: "/api/admin/library-sources",
       headers: context.authorization,
       payload: { kind: "path", path: secondRoot },
     });
@@ -679,26 +612,26 @@ test("source rescans isolate availability changes to the selected source", async
 
     const scoped = await context.app.inject({
       method: "POST",
-      url: `/api/admin/sources/${secondSource.json().id}/scans`,
+      url: `/api/admin/library-sources/${secondSource.json().id}/scans`,
       headers: context.authorization,
     });
     assert.equal(scoped.statusCode, 202);
-    assert.equal(scoped.json().source.id, secondSource.json().id);
-    assert.equal(scoped.json().source.name, "second");
+    assert.equal(scoped.json().connector.id, secondSource.json().id);
+    assert.equal(scoped.json().connector.name, "second");
     const scopedScan = await waitForScan(context, scoped.json().id);
     assert.equal(scopedScan.status, "completed");
     assert.equal(scopedScan.unavailableCount, 0);
 
     const availableAfterSecond = await context.app.inject({
       method: "GET",
-      url: "/api/tracks",
+      url: "/api/media",
       headers: context.authorization,
     });
     assert.equal(availableAfterSecond.json().items.length, 2);
 
     const firstSource = await context.app.inject({
       method: "GET",
-      url: "/api/admin/sources",
+      url: "/api/admin/library-sources",
       headers: context.authorization,
     });
     const firstSourceId = firstSource
@@ -708,38 +641,17 @@ test("source rescans isolate availability changes to the selected source", async
       .items.find((source) => source.path === context.libraryRoot)?.id;
     const firstScoped = await context.app.inject({
       method: "POST",
-      url: `/api/admin/sources/${firstSourceId}/scans`,
+      url: `/api/admin/library-sources/${firstSourceId}/scans`,
       headers: context.authorization,
     });
     assert.equal(firstScoped.statusCode, 202);
     await waitForScan(context, firstScoped.json().id);
     const availableAfterFirst = await context.app.inject({
       method: "GET",
-      url: "/api/tracks",
+      url: "/api/media",
       headers: context.authorization,
     });
     assert.equal(availableAfterFirst.json().items.length, 1);
-  } finally {
-    await context.close();
-  }
-});
-
-test("only local sources can be rescanned", async () => {
-  const context = await createTestContext();
-  try {
-    const remote = await context.app.inject({
-      method: "POST",
-      url: "/api/admin/sources",
-      headers: context.authorization,
-      payload: { kind: "url", url: "https://example.com/music" },
-    });
-    const response = await context.app.inject({
-      method: "POST",
-      url: `/api/admin/sources/${remote.json().id}/scans`,
-      headers: context.authorization,
-    });
-    assert.equal(response.statusCode, 400);
-    assert.equal(response.json().error.code, "source_not_rescanable");
   } finally {
     await context.close();
   }
@@ -750,9 +662,9 @@ test("sources require an administrator", async () => {
   const member = await createMemberSession(context);
   try {
     for (const [method, url] of [
-      ["GET", "/api/admin/sources"],
-      ["POST", "/api/admin/sources"],
-      ["POST", "/api/admin/sources/missing/scans"],
+      ["GET", "/api/admin/library-sources"],
+      ["POST", "/api/admin/library-sources"],
+      ["POST", "/api/admin/library-sources/missing/scans"],
       ["GET", "/api/admin/filesystem/search?query=music"],
     ] as const) {
       const memberResponse = await context.app.inject({

@@ -1,7 +1,7 @@
 import type {
   AlbumSummaryResponse,
   MediaType,
-  TrackResponse,
+  MediaResponse,
 } from "@peridot/contracts";
 import { useState } from "#imports";
 import { computed, ref, watch } from "vue";
@@ -63,28 +63,28 @@ export function useOfflineTracks() {
     }
   }
 
-  function isSaved(trackId: string): boolean {
-    return savedTracks.value.some((saved) => saved.track.id === trackId);
+  function isSaved(mediaId: string): boolean {
+    return savedTracks.value.some((saved) => saved.track.id === mediaId);
   }
 
-  function isPending(trackId: string): boolean {
+  function isPending(mediaId: string): boolean {
     return (
-      pendingTrackIds.value.includes(trackId) ||
+      pendingTrackIds.value.includes(mediaId) ||
       downloadTasks.tasks.value.some(
         (task) =>
           downloadTasks.isActive(task) &&
-          task.request.kind === "track" &&
-          task.request.track.id === trackId,
+          task.request.kind === "media" &&
+          task.request.track.id === mediaId,
       )
     );
   }
 
-  function progressFor(trackId: string): number | null | undefined {
+  function progressFor(mediaId: string): number | null | undefined {
     const task = downloadTasks.tasks.value.find(
       (candidate) =>
         downloadTasks.isActive(candidate) &&
-        candidate.request.kind === "track" &&
-        candidate.request.track.id === trackId,
+        candidate.request.kind === "media" &&
+        candidate.request.track.id === mediaId,
     );
     return task ? downloadTasks.progressForTask(task) : undefined;
   }
@@ -120,7 +120,7 @@ export function useOfflineTracks() {
   }
 
   async function saveTrack(
-    track: TrackResponse,
+    track: MediaResponse,
     onProgress?: (progress: number | null) => void,
   ) {
     if (!scope.value || !token.value) {
@@ -141,7 +141,7 @@ export function useOfflineTracks() {
     return saved;
   }
 
-  async function save(track: TrackResponse): Promise<boolean> {
+  async function save(track: MediaResponse): Promise<boolean> {
     if (!scope.value || !token.value) return false;
     if (isPending(track.id)) return false;
     error.value = null;
@@ -168,14 +168,14 @@ export function useOfflineTracks() {
     );
   }
 
-  async function remove(trackId: string): Promise<boolean> {
-    if (!scope.value || isPending(trackId)) return false;
-    pendingTrackIds.value = [...pendingTrackIds.value, trackId];
+  async function remove(mediaId: string): Promise<boolean> {
+    if (!scope.value || isPending(mediaId)) return false;
+    pendingTrackIds.value = [...pendingTrackIds.value, mediaId];
     error.value = null;
     try {
-      await removeTrackForOffline(scope.value, trackId);
+      await removeTrackForOffline(scope.value, mediaId);
       savedTracks.value = savedTracks.value.filter(
-        (candidate) => candidate.track.id !== trackId,
+        (candidate) => candidate.track.id !== mediaId,
       );
       playerSavedTrackIds.value = savedTracks.value.map(
         (candidate) => candidate.track.id,
@@ -186,7 +186,7 @@ export function useOfflineTracks() {
       return false;
     } finally {
       pendingTrackIds.value = pendingTrackIds.value.filter(
-        (pendingId) => pendingId !== trackId,
+        (pendingId) => pendingId !== mediaId,
       );
     }
   }
@@ -213,7 +213,7 @@ export function useOfflineTracks() {
           );
         } finally {
           pendingTrackIds.value = pendingTrackIds.value.filter(
-            (trackId) => trackId !== saved.track.id,
+            (mediaId) => mediaId !== saved.track.id,
           );
         }
       }
@@ -245,12 +245,12 @@ export function useOfflineTracks() {
 
   async function removePlaylist(
     playlistId: string,
-    trackIds: readonly string[],
+    mediaIds: readonly string[],
   ): Promise<boolean> {
     if (!scope.value || isAlbumPending(playlistId)) return false;
-    const trackIdSet = new Set(trackIds);
+    const mediaIdSet = new Set(mediaIds);
     const playlistTracks = savedTracks.value.filter((saved) =>
-      trackIdSet.has(saved.track.id),
+      mediaIdSet.has(saved.track.id),
     );
     if (playlistTracks.some((saved) => isPending(saved.track.id))) return false;
 
@@ -269,7 +269,7 @@ export function useOfflineTracks() {
           );
         } finally {
           pendingTrackIds.value = pendingTrackIds.value.filter(
-            (trackId) => trackId !== saved.track.id,
+            (mediaId) => mediaId !== saved.track.id,
           );
         }
       }
@@ -284,17 +284,17 @@ export function useOfflineTracks() {
     }
   }
 
-  async function resolve(trackId: string): Promise<SavedOfflineTrack | null> {
+  async function resolve(mediaId: string): Promise<SavedOfflineTrack | null> {
     if (!scope.value) return null;
     const saved =
-      savedTracks.value.find((item) => item.track.id === trackId) ??
-      (await readSavedOfflineTrack(scope.value, trackId));
+      savedTracks.value.find((item) => item.track.id === mediaId) ??
+      (await readSavedOfflineTrack(scope.value, mediaId));
     return saved ?? null;
   }
 
   async function tracksMatching(
-    predicate: (track: TrackResponse) => boolean,
-  ): Promise<TrackResponse[]> {
+    predicate: (track: MediaResponse) => boolean,
+  ): Promise<MediaResponse[]> {
     if (!loaded.value) await refresh();
     return savedTracks.value.map((saved) => saved.track).filter(predicate);
   }

@@ -19,7 +19,7 @@ test("playback tokens authorize only their track's audio stream", () => {
   assert.equal(
     service.authorizeRequest(
       "GET",
-      `/api/tracks/track-1/audio?playbackToken=${encodeURIComponent(token)}`,
+      `/api/media/track-1/audio?playbackToken=${encodeURIComponent(token)}`,
       1_001,
     ),
     true,
@@ -27,7 +27,7 @@ test("playback tokens authorize only their track's audio stream", () => {
   assert.equal(
     service.authorizeRequest(
       "POST",
-      `/api/tracks/track-1/audio?playbackToken=${encodeURIComponent(token)}`,
+      `/api/media/track-1/audio?playbackToken=${encodeURIComponent(token)}`,
       1_001,
     ),
     false,
@@ -35,7 +35,7 @@ test("playback tokens authorize only their track's audio stream", () => {
   assert.equal(
     service.authorizeRequest(
       "GET",
-      `/api/tracks/track-2/audio?playbackToken=${encodeURIComponent(token)}`,
+      `/api/media/track-2/audio?playbackToken=${encodeURIComponent(token)}`,
       1_001,
     ),
     false,
@@ -90,7 +90,7 @@ test("cover tokens authorize only their stored cover image", () => {
   assert.equal(
     service.authorizeRequest(
       "GET",
-      `/api/tracks/track-1/audio?playbackToken=${encodeURIComponent(issued.token)}`,
+      `/api/media/track-1/audio?playbackToken=${encodeURIComponent(issued.token)}`,
       1_001,
     ),
     false,
@@ -149,13 +149,13 @@ test("artist image tokens authorize only their cached portrait", () => {
 test("playback tokens are removed from request log URLs", () => {
   assert.equal(
     redactPlaybackToken(
-      "/api/tracks/track-1/audio?playbackToken=secret-value&other=kept",
+      "/api/media/track-1/audio?playbackToken=secret-value&other=kept",
     ),
-    "/api/tracks/track-1/audio?playbackToken=%5Bredacted%5D&other=kept",
+    "/api/media/track-1/audio?playbackToken=%5Bredacted%5D&other=kept",
   );
   assert.equal(
-    redactPlaybackToken("/api/tracks/track-1/audio"),
-    "/api/tracks/track-1/audio",
+    redactPlaybackToken("/api/media/track-1/audio"),
+    "/api/media/track-1/audio",
   );
   assert.equal(
     redactPlaybackToken(

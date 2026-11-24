@@ -119,7 +119,7 @@ test("waiting release imports do not block queued work and promote explicitly", 
   tasks.registerExecutor("release_import", async (task) => {
     executions.push(`release:${task.id}`);
   });
-  tasks.registerExecutor("catalog_fetch", async (task) => {
+  tasks.registerExecutor("catalog_projection", async (task) => {
     executions.push(`catalog:${task.id}`);
   });
   await tasks.initialize();
@@ -132,7 +132,7 @@ test("waiting release imports do not block queued work and promote explicitly", 
       details: [],
     });
     const queued = await tasks.enqueue({
-      kind: "catalog_fetch",
+      kind: "catalog_projection",
       title: "Catalog work",
       details: [],
     });
@@ -205,12 +205,12 @@ test("task service runs FIFO, coalesces queued duplicates, and reports progress"
     determinateSeen = resolve;
   });
 
-  tasks.registerExecutor("catalog_fetch", async (task) => {
+  tasks.registerExecutor("catalog_projection", async (task) => {
     events.push(`start:${task.id}`);
     await blocker;
     events.push(`finish:${task.id}`);
   });
-  tasks.registerExecutor("metadata_fetch", async (task) => {
+  tasks.registerExecutor("metadata_enrichment", async (task) => {
     events.push(`start:${task.id}`);
     await delay();
     events.push(`finish:${task.id}`);
@@ -249,23 +249,23 @@ test("task service runs FIFO, coalesces queued duplicates, and reports progress"
 
   try {
     const blockerTask = await tasks.enqueue({
-      kind: "catalog_fetch",
+      kind: "catalog_projection",
       title: "Blocking task",
     });
     await waitForStatus(tasks, blockerTask.id, "running");
 
     const [first, duplicate] = await Promise.all([
       tasks.enqueue({
-        kind: "metadata_fetch",
+        kind: "metadata_enrichment",
         title: "Coalesced task",
-        sourceId: "source-1",
-        sourceName: "Music",
+        connectorId: "source-1",
+        connectorName: "Music",
       }),
       tasks.enqueue({
-        kind: "metadata_fetch",
+        kind: "metadata_enrichment",
         title: "Coalesced task",
-        sourceId: "source-1",
-        sourceName: "Music",
+        connectorId: "source-1",
+        connectorName: "Music",
       }),
     ]);
     assert.equal(first.id, duplicate.id);
@@ -336,11 +336,11 @@ test("scans, metadata, and catalog projection run before artwork retrieval", asy
     await scanGate;
     events.push(`finish:${task.kind}`);
   });
-  tasks.registerExecutor("metadata_fetch", async (task) => {
+  tasks.registerExecutor("metadata_enrichment", async (task) => {
     events.push(`start:${task.kind}`);
     events.push(`finish:${task.kind}`);
   });
-  tasks.registerExecutor("catalog_fetch", async (task) => {
+  tasks.registerExecutor("catalog_projection", async (task) => {
     events.push(`start:${task.kind}`);
     events.push(`finish:${task.kind}`);
   });
@@ -361,11 +361,11 @@ test("scans, metadata, and catalog projection run before artwork retrieval", asy
       title: "Artwork",
     });
     const metadata = await tasks.enqueue({
-      kind: "metadata_fetch",
+      kind: "metadata_enrichment",
       title: "Metadata",
     });
     const catalog = await tasks.enqueue({
-      kind: "catalog_fetch",
+      kind: "catalog_projection",
       title: "Catalog",
     });
 
@@ -376,10 +376,10 @@ test("scans, metadata, and catalog projection run before artwork retrieval", asy
     assert.deepEqual(events, [
       "start:library_scan",
       "finish:library_scan",
-      "start:metadata_fetch",
-      "finish:metadata_fetch",
-      "start:catalog_fetch",
-      "finish:catalog_fetch",
+      "start:metadata_enrichment",
+      "finish:metadata_enrichment",
+      "start:catalog_projection",
+      "finish:catalog_projection",
       "start:artwork_fetch",
       "finish:artwork_fetch",
     ]);
@@ -423,15 +423,15 @@ test("queued tasks are removed and running tasks are stopped", async () => {
     const running = await tasks.enqueue({
       kind: "library_scan",
       title: "Running work",
-      sourceId: "source-a",
-      sourceName: "Source A",
+      connectorId: "source-a",
+      connectorName: "Source A",
     });
     await sawStart;
     const queued = await tasks.enqueue({
       kind: "library_scan",
       title: "Queued work",
-      sourceId: "source-b",
-      sourceName: "Source B",
+      connectorId: "source-b",
+      connectorName: "Source B",
     });
 
     const removedQueued = await tasks.cancel(queued.id);
@@ -513,13 +513,13 @@ test("administrators cancel queued and running tasks", async () => {
 test("deleting a source stops relevant work and preserves unrelated tasks", async () => {
   const context = await createTestContext();
   try {
-    const source = await context.database.orm.Source.create({
+    const source = await context.database.orm.LibrarySource.create({
       kind: "path",
       name: "Remove me",
       path: context.libraryRoot,
       position: 1,
     });
-    const otherSource = await context.database.orm.Source.create({
+    const otherSource = await context.database.orm.LibrarySource.create({
       kind: "path",
       name: "Keep me",
       path: context.libraryRoot,
@@ -529,12 +529,12 @@ test("deleting a source stops relevant work and preserves unrelated tasks", asyn
       kind: "library_scan",
       status: "running",
       title: "Source scan",
-      sourceId: source.id,
-      sourceName: source.name,
+      connectorId: source.id,
+      connectorName: source.name,
       startedAt: new Date(),
     });
     const allSources = await context.database.orm.Task.create({
-      kind: "metadata_fetch",
+      kind: "metadata_enrichment",
       status: "queued",
       title: "Full library metadata",
     });
@@ -542,19 +542,20 @@ test("deleting a source stops relevant work and preserves unrelated tasks", asyn
       kind: "library_scan",
       status: "running",
       title: "Other source scan",
-      sourceId: otherSource.id,
-      sourceName: otherSource.name,
+      connectorId: otherSource.id,
+      connectorName: otherSource.name,
       startedAt: new Date(),
     });
 
     const removed = await context.app.inject({
       method: "DELETE",
-      url: `/api/admin/sources/${source.id}`,
+      url: `/api/admin/library-sources/${source.id}`,
       headers: context.authorization,
     });
     assert.equal(removed.statusCode, 200);
     assert.ok(
-      (await context.database.orm.Source.first({ id: source.id }))?.removedAt,
+      (await context.database.orm.LibrarySource.first({ id: source.id }))
+        ?.removedAt,
     );
     assert.equal(
       (await context.database.orm.Task.first({ id: relevant.id }))?.status,
@@ -598,13 +599,13 @@ test("task failures and restart interruptions are visible in server logs", async
       ),
     );
 
-    tasks.registerExecutor("catalog_fetch", async () => {
+    tasks.registerExecutor("catalog_projection", async () => {
       throw new Error("Jellyfin request failed");
     });
     const failed = await tasks.enqueue({
-      kind: "catalog_fetch",
+      kind: "catalog_projection",
       title: "Broken Jellyfin sync",
-      sourceName: "Media server",
+      connectorName: "Media server",
     });
     await waitForStatus(tasks, failed.id, "failed");
     assert.ok(
@@ -625,7 +626,7 @@ test("failed task executions are retried twice before terminal failure", async (
   await context.app.close();
   const tasks = new TaskService(context.database);
   const seenRetryCounts: number[] = [];
-  tasks.registerExecutor("catalog_fetch", async (task) => {
+  tasks.registerExecutor("catalog_projection", async (task) => {
     seenRetryCounts.push(task.retryCount);
     throw new Error("Catalog request failed");
   });
@@ -633,7 +634,7 @@ test("failed task executions are retried twice before terminal failure", async (
 
   try {
     const queued = await tasks.enqueue({
-      kind: "catalog_fetch",
+      kind: "catalog_projection",
       title: "Retry exhausted catalog task",
     });
     await waitForStatus(tasks, queued.id, "failed");
@@ -658,7 +659,7 @@ test("a failed task completes when an automatic retry succeeds", async () => {
   await context.app.close();
   const tasks = new TaskService(context.database);
   let executions = 0;
-  tasks.registerExecutor("catalog_fetch", async () => {
+  tasks.registerExecutor("catalog_projection", async () => {
     executions += 1;
     if (executions <= MAX_TASK_RETRIES) {
       throw new Error("Temporary catalog failure");
@@ -668,7 +669,7 @@ test("a failed task completes when an automatic retry succeeds", async () => {
 
   try {
     const queued = await tasks.enqueue({
-      kind: "catalog_fetch",
+      kind: "catalog_projection",
       title: "Eventually successful catalog task",
     });
     await waitForStatus(tasks, queued.id, "completed");
@@ -729,7 +730,7 @@ test("queued child tasks do not run after an interrupted parent", async () => {
       failureSummary: "The server stopped before this task completed.",
     });
     const child = await context.database.orm.Task.create({
-      kind: "metadata_fetch",
+      kind: "metadata_enrichment",
       status: "queued",
       title: "Blocked metadata",
       parentTaskId: parent.id,
@@ -790,7 +791,7 @@ test("background task details are bounded and source paths are not exposed", asy
     await mkdir(privatePath);
     const created = await context.app.inject({
       method: "POST",
-      url: "/api/admin/sources",
+      url: "/api/admin/library-sources",
       headers: context.authorization,
       payload: {
         kind: "path",
@@ -801,7 +802,7 @@ test("background task details are bounded and source paths are not exposed", asy
     const task = created.json<{ task: TaskResponse }>().task;
     assert.equal(task.kind, "library_scan");
     assert.equal(task.status, "queued");
-    assert.equal(task.source?.name, "private-source");
+    assert.equal(task.connector?.name, "private-source");
     assert.equal(JSON.stringify(task).includes(privatePath), false);
   } finally {
     await context.close();

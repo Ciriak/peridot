@@ -84,6 +84,11 @@ cannot be decrypted without the matching key. To roll back, stop the container,
 restore the database snapshot and its key on the same `/data` volume, then run
 the previous Peridot image.
 
+This Media and Connectors refactor is a pre-release schema reset. Existing
+Track/Source databases are not migrated. Back up the existing database, remove
+it from `/data`, and restart Peridot to initialize the new schema. Peridot will
+not delete or recreate an old database automatically.
+
 Album covers and artist portraits are regenerated from their configured sources
 after upgrading to the external artwork cache. To reclaim old SQLite BLOB pages
 after a migration, stop the server and run:
@@ -107,3 +112,54 @@ The process requires free disk space at least 20% larger than the database.
 
 - ### 🔄 Playlists import
 - ### ✨ AI suggestion *(But only if you want it !)*
+
+## Concepts
+
+### Files, Data & Hosting
+
+Peridot do NOT host or download audio files by itself.
+
+### Media
+
+<u>A media is **NOT** a file</u>
+
+Can be a music track, an audiobook or a podcast episode.
+
+A media can have multiple files associated to it (If provided from multiple data-source for example), if a data source is unreachable, another data-source can be used as a backup.
+
+### Library source
+
+A reachable location that provide the raw audio files for medias
+
+### Download client
+
+An external client that can be used to download files, a BitTorrent client for example.
+
+Download clients are **NOT** data source.
+
+### Metadata provider
+
+An external metadata source that can provide additional data about a media (artists, albums, cover art...)
+
+### Connectors
+
+Various services that can be integrated into Peridot to provide additional fonctionnality (Torrent search, playlist sync...)
+
+Connectors have explicit roles:
+
+- **Library source**: provides playable files, such as a folder or Jellyfin.
+- **Release indexer**: searches external releases, currently Torznab.
+- **Download client**: transfers a selected release, currently qBittorrent.
+- **Metadata provider**: enriches media with MusicBrainz or Discogs.
+- **Playlist account**: links and synchronizes a remote playlist. The contract
+  exists, but production playlist adapters are not included in this milestone.
+
+The settings sidebar keeps these roles separate with direct Library sources,
+Release indexers, Download clients, and Metadata providers destinations.
+Torznab is not a library source, and qBittorrent is not a media library.
+
+### Tasks
+
+Internal tasks that are run by the Peridot instance, like media scanning, metadata sync...
+
+

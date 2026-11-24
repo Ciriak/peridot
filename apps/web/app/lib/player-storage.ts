@@ -1,4 +1,4 @@
-export const PLAYER_STATE_STORAGE_VERSION = 1;
+export const PLAYER_STATE_STORAGE_VERSION = 2;
 export const PLAYER_STATE_STORAGE_PREFIX = "peridot:player-state";
 
 export interface PlayerStateScope {

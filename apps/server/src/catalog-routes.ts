@@ -3,9 +3,9 @@ import type {
   ArtistListResponse,
   AudiobookListResponse,
   PodcastListResponse,
-  ResolveTracksRequest,
-  ResolveTracksResponse,
-  TrackListResponse,
+  ResolveMediaRequest,
+  ResolveMediaResponse,
+  MediaListResponse,
 } from "@peridot/contracts";
 import { createReadStream } from "node:fs";
 import type { FastifyInstance } from "fastify";
@@ -69,10 +69,10 @@ export async function registerCatalogRoutes(
   artworkCache: ArtworkCache,
 ) {
   app.get<{ Querystring: CursorQuery }>(
-    "/api/tracks",
-    async (request, reply): Promise<TrackListResponse | undefined> => {
+    "/api/media",
+    async (request, reply): Promise<MediaListResponse | undefined> => {
       try {
-        return await catalog.listTracks({
+        return await catalog.listMedia({
           userId: request.authenticatedUser!.id,
           ...pageQuery(request.query),
         });
@@ -82,9 +82,9 @@ export async function registerCatalogRoutes(
     },
   );
 
-  app.post<{ Body: ResolveTracksRequest }>(
-    "/api/tracks/resolve",
-    async (request, reply): Promise<ResolveTracksResponse | undefined> => {
+  app.post<{ Body: ResolveMediaRequest }>(
+    "/api/media/resolve",
+    async (request, reply): Promise<ResolveMediaResponse | undefined> => {
       const ids = request.body?.ids;
       if (
         !Array.isArray(ids) ||
@@ -100,7 +100,7 @@ export async function registerCatalogRoutes(
         );
       }
       try {
-        return await catalog.resolveTracks(ids, request.authenticatedUser!.id);
+        return await catalog.resolveMedia(ids, request.authenticatedUser!.id);
       } catch (error) {
         return handleCatalogError(reply, error);
       }
@@ -177,10 +177,10 @@ export async function registerCatalogRoutes(
 
   app.get<{ Params: { id: string }; Querystring: CursorQuery }>(
     "/api/audiobooks/:id/chapters",
-    async (request, reply): Promise<TrackListResponse | undefined> => {
+    async (request, reply): Promise<MediaListResponse | undefined> => {
       try {
         const query = pageQuery(request.query);
-        return await catalog.listTracks({
+        return await catalog.listMedia({
           userId: request.authenticatedUser!.id,
           ...query,
           mediaType: "audiobook",
@@ -229,10 +229,10 @@ export async function registerCatalogRoutes(
 
   app.get<{ Params: { id: string }; Querystring: CursorQuery }>(
     "/api/podcasts/:id/episodes",
-    async (request, reply): Promise<TrackListResponse | undefined> => {
+    async (request, reply): Promise<MediaListResponse | undefined> => {
       try {
         const query = pageQuery(request.query);
-        return await catalog.listTracks({
+        return await catalog.listMedia({
           userId: request.authenticatedUser!.id,
           ...query,
           mediaType: "podcast",

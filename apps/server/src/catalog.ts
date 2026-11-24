@@ -13,10 +13,10 @@ import type {
   MessageDescriptor,
   PodcastListResponse,
   PodcastSummaryResponse,
-  ResolveTracksResponse,
-  TrackListResponse,
+  ResolveMediaResponse,
+  MediaListResponse,
 } from "@peridot/contracts";
-import type { MediaType, SourceKind } from "@peridot/contracts";
+import type { MediaType, LibrarySourceKind } from "@peridot/contracts";
 import type { Database } from "./database.js";
 import {
   parseStoredArtistCredits,
@@ -28,7 +28,6 @@ import type {
   ArtistImageRow,
   ArtistMetadataRow,
   TaskRow,
-  TrackRow,
 } from "./prisma/models.js";
 import {
   normalizeSearchText as normalize,
@@ -36,10 +35,17 @@ import {
 } from "./search-text.js";
 import {
   albumReleaseYear,
-  effectiveTrackFields,
+  effectiveMediaFields,
   toCoverUrl,
-  toTrackResponse,
-} from "./track-response.js";
+  toMediaResponse,
+} from "./media-response.js";
+import {
+  type RankedMediaCopy,
+  primaryCopiesForMediaIds,
+  primaryMediaCopy,
+  refreshCanonicalMediaFromCopies,
+} from "./media-copies.js";
+import { protectedAutomaticWrite } from "./media-overrides.js";
 import { parseStoredGenres } from "./genres.js";
 import { storedMediaType, trackMediaFilter } from "./media.js";
 import type { TaskExecutionResult, TaskService } from "./tasks.js";
@@ -114,14 +120,14 @@ interface CursorPayload {
 
 interface CatalogChange {
   revision: number;
-  sourceId: string | null;
+  librarySourceId: string | null;
   reason:
-    "scan" | "metadata" | "reset" | "source" | "source-removal" | "duplicate";
+    "scan" | "metadata" | "reset" | "source" | "source-removal" | "media-match";
   changedCount: number;
 }
 
-function parsedSourceKind(value: string): SourceKind | null {
-  if (value === "path" || value === "url" || value === "jellyfin") {
+function parsedLibrarySourceKind(value: string): LibrarySourceKind | null {
+  if (value === "path" || value === "jellyfin") {
     return value;
   }
   return null;
@@ -176,10 +182,13 @@ export interface CatalogAlbumIdentity {
 }
 
 export function catalogAlbumFolderKey(
-  sourceId: string | null,
+  primaryLibrarySourceId: string | null,
   relativePath: string,
 ): string {
-  return JSON.stringify([sourceId ?? "", path.dirname(relativePath)]);
+  return JSON.stringify([
+    primaryLibrarySourceId ?? "",
+    path.dirname(relativePath),
+  ]);
 }
 
 export function catalogAlbumReleaseKey(
@@ -494,7 +503,7 @@ export class CatalogService {
       this.lastRevision = existing.revision;
       if (existing.projectionVersion < PROJECTION_VERSION) {
         const trackCount = (
-          await this.database.orm.Track.aggregate((aggregate) => ({
+          await this.database.orm.Media.aggregate((aggregate) => ({
             count: aggregate.count(),
           }))
         ).count;
@@ -536,7 +545,7 @@ export class CatalogService {
   async rebuildAll(reason: CatalogChange["reason"] = "reset") {
     let offset = 0;
     while (true) {
-      const tracks = await this.database.orm.Track.orderBy((track) =>
+      const tracks = await this.database.orm.Media.orderBy((track) =>
         track.id.asc(),
       )
         .offset(offset)
@@ -544,7 +553,7 @@ export class CatalogService {
         .all();
       if (!tracks.length) break;
       for (const track of tracks) {
-        await this.reindexTrack(track.id, reason);
+        await this.reindexMedia(track.id, reason);
         await yieldToEventLoop();
       }
       offset += tracks.length;
@@ -567,43 +576,27 @@ export class CatalogService {
     return this.lastRevision;
   }
 
-  async indexTrackSummary(
-    track: TrackRow,
-    database: CatalogDatabase = this.database,
-  ): Promise<void> {
-    const values = this.trackSummaryValues(track);
-    const updated = await database.orm.CatalogTrack.where({
-      id: track.id,
-    }).updateAndCount(values);
-    if (!updated) {
-      await database.orm.CatalogTrack.create({ id: track.id, ...values });
-    }
-  }
-
-  async insertTrackSummaries(
-    tracks: readonly TrackRow[],
-    database: CatalogDatabase = this.database,
-  ): Promise<void> {
-    if (!tracks.length) return;
-    const plan = database.sql.CatalogTrack.insert(
-      tracks.map((track) => ({
-        id: track.id,
-        ...this.trackSummaryValues(track),
-      })),
-    ).build();
-    await database.execute(plan);
-  }
-
-  markScanBatchChanged(sourceId: string | null): Promise<number> {
-    this.markChanged(sourceId, "scan");
+  markScanBatchChanged(primaryLibrarySourceId: string | null): Promise<number> {
+    this.markChanged(primaryLibrarySourceId, "scan");
     return this.flushChanges();
   }
 
-  async hasPendingProjection(sourceId: string | null = null): Promise<boolean> {
-    let query = this.database.orm.Track.where({
+  async hasPendingProjection(
+    primaryLibrarySourceId: string | null = null,
+  ): Promise<boolean> {
+    let query = this.database.orm.Media.where({
       catalogProjectionPending: 1,
     });
-    if (sourceId) query = query.where({ sourceId });
+    if (primaryLibrarySourceId) {
+      const copies = await this.database.orm.MediaCopy.where({
+        librarySourceId: primaryLibrarySourceId,
+      })
+        .select("mediaId")
+        .all();
+      query = query.where((media) =>
+        media.id.in([...new Set(copies.map((copy) => copy.mediaId))]),
+      );
+    }
     return Boolean(await query.select("id").first());
   }
 
@@ -612,10 +605,19 @@ export class CatalogService {
     tasks: TaskService,
     signal: AbortSignal,
   ): Promise<TaskExecutionResult> {
-    let scoped = this.database.orm.Track.where({
+    let scoped = this.database.orm.Media.where({
       catalogProjectionPending: 1,
     });
-    if (task.sourceId) scoped = scoped.where({ sourceId: task.sourceId });
+    if (task.connectorId) {
+      const copies = await this.database.orm.MediaCopy.where({
+        librarySourceId: task.connectorId,
+      })
+        .select("mediaId")
+        .all();
+      scoped = scoped.where((media) =>
+        media.id.in([...new Set(copies.map((copy) => copy.mediaId))]),
+      );
+    }
     const { count: total } = await scoped.aggregate((aggregate) => ({
       count: aggregate.count(),
     }));
@@ -625,10 +627,19 @@ export class CatalogService {
       if (signal.aborted) {
         throw new DOMException("Catalog projection was stopped.", "AbortError");
       }
-      let query = this.database.orm.Track.where({
+      let query = this.database.orm.Media.where({
         catalogProjectionPending: 1,
       });
-      if (task.sourceId) query = query.where({ sourceId: task.sourceId });
+      if (task.connectorId) {
+        const copies = await this.database.orm.MediaCopy.where({
+          librarySourceId: task.connectorId,
+        })
+          .select("mediaId")
+          .all();
+        query = query.where((media) =>
+          media.id.in([...new Set(copies.map((copy) => copy.mediaId))]),
+        );
+      }
       const tracks = await query
         .orderBy((track) => track.createdAt.asc())
         .limit(PROJECTION_BATCH_SIZE)
@@ -642,7 +653,7 @@ export class CatalogService {
             "AbortError",
           );
         }
-        await this.reindexTrack(track.id, "scan");
+        await this.reindexMedia(track.id, "scan");
         completed += 1;
         if (completed % 10 === 0 || completed === total) {
           await tasks.updateProgress(task.id, completed, total);
@@ -655,9 +666,11 @@ export class CatalogService {
       details: [
         {
           key: "source",
-          value: task.sourceName ?? "All sources",
+          value: task.connectorName ?? "All sources",
           labelMessage: message("task.detail.source"),
-          valueMessage: task.sourceName ? null : message("common.allSources"),
+          valueMessage: task.connectorName
+            ? null
+            : message("common.allSources"),
         },
         {
           key: "tracks.processed",
@@ -669,34 +682,144 @@ export class CatalogService {
     };
   }
 
-  async reindexTrack(
-    trackId: string,
+  async reindexMedia(
+    mediaId: string,
     reason: CatalogChange["reason"] = "scan",
   ): Promise<void> {
     return this.serializeCatalog(() =>
-      this.reindexTrackUnlocked(trackId, reason, true),
+      this.reindexMediaUnlocked(mediaId, reason, true),
     );
   }
 
-  private async reindexTrackUnlocked(
-    trackId: string,
+  async reindexMediaBatch(
+    mediaIds: readonly string[],
+    reason: CatalogChange["reason"] = "scan",
+  ): Promise<void> {
+    return this.serializeCatalog(async () => {
+      const primaries = await primaryCopiesForMediaIds(this.database, mediaIds);
+      for (const mediaId of mediaIds) {
+        await this.reindexMediaUnlocked(
+          mediaId,
+          reason,
+          true,
+          primaries.get(mediaId),
+        );
+        await this.yieldCatalogWork();
+      }
+    });
+  }
+
+  async indexScanBatch(mediaIds: readonly string[]): Promise<void> {
+    return this.serializeCatalog(async () => {
+      if (!mediaIds.length) return;
+      const [mediaRows, primaries] = await Promise.all([
+        this.database.orm.Media.where((media) =>
+          media.id.in([...new Set(mediaIds)]),
+        ).all(),
+        primaryCopiesForMediaIds(this.database, mediaIds),
+      ]);
+      const prepared: Array<{ id: string; values: Record<string, unknown> }> =
+        [];
+      for (const media of mediaRows) {
+        const primary = primaries.get(media.id);
+        if (!primary) continue;
+        const effective = effectiveMediaFields(media);
+        const trackMediaType = storedMediaType(media.mediaType);
+        const album = effective.album?.trim() || null;
+        const albumFolderKey = catalogAlbumFolderKey(
+          primary.source.id,
+          primary.copy.relativePath,
+        );
+        const albumReleaseKey = catalogAlbumReleaseKey(
+          media.metadataProviderId,
+          media.metadataExternalReleaseId,
+        );
+        const albumId = album
+          ? catalogAlbumId({
+              mediaType: trackMediaType,
+              album,
+              albumArtists: effective.albumArtists,
+              albumReleaseKey,
+              albumFolderKey,
+            })
+          : null;
+        const values = {
+          sourceKind: parsedLibrarySourceKind(primary.source.kind),
+          mediaType: trackMediaType,
+          title: effective.title,
+          artist: effective.artist,
+          artistCredits: JSON.stringify(effective.artists),
+          albumArtist: effective.albumArtists.join(", "),
+          albumArtistCredits: JSON.stringify(effective.albumArtists),
+          album,
+          normalizedTitle: normalize(effective.title),
+          normalizedArtist: normalize(effective.artist),
+          normalizedAlbum: normalize(album ?? ""),
+          normalizedGenres: normalize(effective.genres.join(" ")),
+          durationMs: effective.durationMs,
+          publishedAt: media.publishedAt,
+          discNumber: effective.discNumber,
+          trackNumber: effective.trackNumber,
+          releaseYear: albumReleaseYear(media),
+          available: media.available,
+          coverId: media.coverId,
+          albumId,
+          albumFolderKey,
+          albumReleaseKey,
+        };
+        prepared.push({ id: media.id, values });
+      }
+      const existing = await this.database.orm.CatalogMedia.where((media) =>
+        media.id.in(prepared.map((item) => item.id)),
+      )
+        .select("id")
+        .all();
+      const existingIds = new Set(existing.map((media) => media.id));
+      const inserts = prepared.filter((item) => !existingIds.has(item.id));
+      if (inserts.length) {
+        const plan = this.database.sql.CatalogMedia.insert(
+          inserts.map((item) => ({ id: item.id, ...item.values })) as never,
+        ).build();
+        await this.database.execute(plan);
+      }
+      for (const item of prepared) {
+        if (!existingIds.has(item.id)) continue;
+        await this.database.orm.CatalogMedia.where({ id: item.id }).update(
+          item.values as never,
+        );
+      }
+      this.markChanged(
+        primaries.values().next().value?.source.id ?? null,
+        "scan",
+      );
+    });
+  }
+
+  private async reindexMediaUnlocked(
+    mediaId: string,
     reason: CatalogChange["reason"],
     propagateAlbumIdentity: boolean,
+    primaryCopyOverride?: RankedMediaCopy,
   ): Promise<void> {
-    const track = await this.database.orm.Track.first({ id: trackId });
+    const track = await this.database.orm.Media.first({ id: mediaId });
     if (!track) {
-      await this.removeTrackUnlocked(trackId);
+      await this.removeTrackUnlocked(mediaId);
       return;
     }
     const trackMediaType = storedMediaType(track.mediaType);
     const music = trackMediaType === "music";
-    const hiddenDuplicate = Boolean(track.duplicateOfId);
-    const effective = effectiveTrackFields(track);
+    const effective = effectiveMediaFields(track);
+    const primaryCopy =
+      primaryCopyOverride ?? (await primaryMediaCopy(this.database, mediaId));
+    const primaryLibrarySourceId = primaryCopy?.source.id ?? null;
+    const primarySourceKind = primaryCopy
+      ? parsedLibrarySourceKind(primaryCopy.source.kind)
+      : null;
     const album = effective.album?.trim() || null;
     const normalizedAlbum = normalize(album ?? "");
     const albumFolderKey = catalogAlbumFolderKey(
-      track.sourceId,
-      track.relativePath,
+      primaryLibrarySourceId,
+      primaryCopy?.copy.relativePath ?? track.id,
     );
     const albumReleaseKey = music
       ? catalogAlbumReleaseKey(
@@ -706,7 +829,7 @@ export class CatalogService {
       : null;
     const folderSiblings =
       album && !albumReleaseKey
-        ? await this.database.orm.CatalogTrack.where({
+        ? await this.database.orm.CatalogMedia.where({
             albumFolderKey,
             normalizedAlbum,
             mediaType: trackMediaType,
@@ -719,25 +842,25 @@ export class CatalogService {
         ),
       ),
     ];
-    const previous = await this.database.orm.CatalogTrack.first({
-      id: trackId,
+    const previous = await this.database.orm.CatalogMedia.first({
+      id: mediaId,
     });
-    const previousArtists = await this.database.orm.CatalogTrackArtist.where({
-      trackId,
+    const previousArtists = await this.database.orm.CatalogMediaArtist.where({
+      mediaId,
     }).all();
 
     if (previous) {
       for (const link of previousArtists) {
-        await this.removeArtistContribution(link.artistId, previous, trackId);
-        await this.database.orm.CatalogTrackArtist.where({
+        await this.removeArtistContribution(link.artistId, previous, mediaId);
+        await this.database.orm.CatalogMediaArtist.where({
           id: link.id,
         }).delete();
       }
-      await this.database.orm.CatalogTrack.where({
-        id: trackId,
+      await this.database.orm.CatalogMedia.where({
+        id: mediaId,
       }).deleteAndCount();
       if (previous.albumId) {
-        await this.refreshAlbum(previous.albumId, trackId);
+        await this.refreshAlbum(previous.albumId, mediaId);
       }
       if (
         previous.albumReleaseKey &&
@@ -752,8 +875,8 @@ export class CatalogService {
         );
       }
       const previousTerms = await this.database.orm.CatalogSearchTerm.where({
-        entityType: "track",
-        entityId: trackId,
+        entityType: "media",
+        entityId: mediaId,
       }).all();
       for (const term of previousTerms) {
         await this.database.orm.CatalogSearchTerm.where({
@@ -777,7 +900,7 @@ export class CatalogService {
       : null;
     const releaseYear = albumReleaseYear(track);
     const values = {
-      sourceId: track.sourceId,
+      sourceKind: primarySourceKind,
       mediaType: trackMediaType,
       title: effective.title,
       artist: effective.artist,
@@ -796,21 +919,20 @@ export class CatalogService {
       releaseYear,
       available: track.available ? 1 : 0,
       coverId: track.coverId,
-      albumId: !hiddenDuplicate && album ? albumId : null,
+      albumId: album ? albumId : null,
       albumFolderKey,
       albumReleaseKey,
-      duplicateOfId: track.duplicateOfId,
     };
 
-    await this.database.orm.CatalogTrack.create({ id: trackId, ...values });
+    await this.database.orm.CatalogMedia.create({ id: mediaId, ...values });
     await this.yieldCatalogWork();
 
-    if (!hiddenDuplicate && albumId && album) {
+    if (albumId && album) {
       await this.refreshAlbum(albumId);
       await this.yieldCatalogWork();
     }
 
-    if (!hiddenDuplicate && music) {
+    if (music) {
       for (const artist of effective.artists) {
         const artistId = catalogArtistId(artist);
         await this.addArtistContribution(
@@ -820,13 +942,13 @@ export class CatalogService {
           track.available ? effective.durationMs : null,
           track.available === 1,
         );
-        const artistLink = await this.database.orm.CatalogTrackArtist.first({
-          trackId,
+        const artistLink = await this.database.orm.CatalogMediaArtist.first({
+          mediaId,
           artistId,
         });
         if (!artistLink) {
-          await this.database.orm.CatalogTrackArtist.create({
-            trackId,
+          await this.database.orm.CatalogMediaArtist.create({
+            mediaId,
             artistId,
           });
         }
@@ -844,12 +966,12 @@ export class CatalogService {
       ...effective.albumArtists,
     ]);
     for (const term of trackTerms) {
-      await this.createSearchTerm("track", trackId, term);
+      await this.createSearchTerm("media", mediaId, term);
     }
     await this.yieldCatalogWork();
-    if (!track.available || hiddenDuplicate) {
-      this.markChanged(track.sourceId, reason);
-      await this.clearProjectionPending(trackId);
+    if (!track.available) {
+      this.markChanged(primaryLibrarySourceId, reason);
+      await this.clearProjectionPending(mediaId);
       return;
     }
     if (propagateAlbumIdentity && albumId && albumReleaseKey) {
@@ -860,91 +982,52 @@ export class CatalogService {
         reason,
       );
     }
-    this.markChanged(track.sourceId, reason);
-    await this.clearProjectionPending(trackId);
+    this.markChanged(primaryLibrarySourceId, reason);
+    await this.clearProjectionPending(mediaId);
   }
 
-  private async clearProjectionPending(trackId: string): Promise<void> {
-    await this.database.orm.Track.where({ id: trackId }).update({
+  private async clearProjectionPending(mediaId: string): Promise<void> {
+    await this.database.orm.Media.where({ id: mediaId }).update({
       catalogProjectionPending: 0,
     });
   }
 
-  private trackSummaryValues(track: TrackRow) {
-    const effective = effectiveTrackFields(track);
-    const trackMediaType = storedMediaType(track.mediaType);
-    const album = effective.album?.trim() || null;
-    const albumFolderKey = catalogAlbumFolderKey(
-      track.sourceId,
-      track.relativePath,
-    );
-    const albumReleaseKey = catalogAlbumReleaseKey(
-      track.metadataProviderId,
-      track.metadataExternalReleaseId,
-    );
-    const albumId =
-      track.available && album
-        ? catalogAlbumId({
-            mediaType: trackMediaType,
-            album,
-            albumArtists: effective.albumArtists,
-            albumReleaseKey,
-            albumFolderKey,
-          })
-        : null;
-    return {
-      sourceId: track.sourceId,
-      mediaType: trackMediaType,
-      title: effective.title,
-      artist: effective.artist,
-      artistCredits: JSON.stringify(effective.artists),
-      albumArtist: effective.albumArtists.join(", "),
-      albumArtistCredits: JSON.stringify(effective.albumArtists),
-      album,
-      normalizedTitle: normalize(effective.title),
-      normalizedArtist: normalize(effective.artist),
-      normalizedAlbum: normalize(album ?? ""),
-      normalizedGenres: normalize(effective.genres.join(" ")),
-      durationMs: effective.durationMs,
-      publishedAt: track.publishedAt,
-      discNumber: effective.discNumber,
-      trackNumber: effective.trackNumber,
-      releaseYear: albumReleaseYear(track),
-      available: track.available,
-      coverId: track.coverId,
-      albumId: track.duplicateOfId || !album ? null : albumId,
-      albumFolderKey,
-      albumReleaseKey,
-      duplicateOfId: track.duplicateOfId,
-    };
-  }
-
   async markSourceUnavailable(
-    sourceId: string,
+    primaryLibrarySourceId: string,
     database: CatalogDatabase = this.database,
     onProgress?: (completed: number, total: number) => Promise<void> | void,
   ): Promise<CatalogSourceUnavailableResult> {
-    const { count: total } = await database.orm.Track.where({
-      sourceId,
-    }).aggregate((aggregate) => ({ count: aggregate.count() }));
+    const affectedMediaIds = [
+      ...new Set(
+        (
+          await database.orm.MediaCopy.where({
+            librarySourceId: primaryLibrarySourceId,
+          })
+            .select("mediaId")
+            .all()
+        ).map((copy) => copy.mediaId),
+      ),
+    ];
+    const total = affectedMediaIds.length;
     const unavailableByAlbum = new Map<string, number>();
     const unavailableByArtist = new Map<string, number>();
     let completed = 0;
-    let offset = 0;
 
     await onProgress?.(completed, total);
-    while (true) {
-      const tracks = await database.orm.Track.where({ sourceId })
-        .orderBy((track) => track.id.asc())
-        .offset(offset)
-        .limit(SOURCE_REMOVAL_BATCH_SIZE)
-        .select("id", "available")
-        .all();
-      if (!tracks.length) break;
-
-      const trackIds = tracks.map((track) => track.id);
-      const projections = await database.orm.CatalogTrack.where((track) =>
-        track.id.in(trackIds),
+    await database.orm.MediaCopy.where({
+      librarySourceId: primaryLibrarySourceId,
+    }).update({ available: 0 });
+    for (
+      let offset = 0;
+      offset < affectedMediaIds.length;
+      offset += SOURCE_REMOVAL_BATCH_SIZE
+    ) {
+      const mediaIds = affectedMediaIds.slice(
+        offset,
+        offset + SOURCE_REMOVAL_BATCH_SIZE,
+      );
+      const projections = await database.orm.CatalogMedia.where((track) =>
+        track.id.in(mediaIds),
       ).all();
       const availableProjectionIds = new Set(
         projections
@@ -960,8 +1043,8 @@ export class CatalogService {
         }
       }
       if (availableProjectionIds.size) {
-        const artistLinks = await database.orm.CatalogTrackArtist.where(
-          (link) => link.trackId.in([...availableProjectionIds]),
+        const artistLinks = await database.orm.CatalogMediaArtist.where(
+          (link) => link.mediaId.in([...availableProjectionIds]),
         ).all();
         for (const link of artistLinks) {
           unavailableByArtist.set(
@@ -971,27 +1054,32 @@ export class CatalogService {
         }
       }
 
-      await database.orm.Track.where((track) =>
-        track.duplicateOfId.in(trackIds),
-      ).update({ duplicateOfId: null });
-      await database.orm.CatalogTrack.where((track) =>
-        track.duplicateOfId.in(trackIds),
-      ).update({ duplicateOfId: null });
-      await database.orm.Track.where((track) => track.id.in(trackIds)).update({
-        available: 0,
-        catalogProjectionPending: 0,
-      });
-      await database.orm.CatalogTrack.where((track) =>
-        track.id.in(trackIds),
-      ).update({
-        available: 0,
-        duplicateOfId: null,
-      });
+      for (const mediaId of mediaIds) {
+        const primary = await refreshCanonicalMediaFromCopies(
+          database,
+          mediaId,
+        );
+        if (primary) {
+          await database.orm.Media.where({ id: mediaId }).update({
+            catalogProjectionPending: 0,
+          });
+          await database.orm.CatalogMedia.where({ id: mediaId }).update({
+            available: 1,
+            sourceKind: parsedLibrarySourceKind(primary.source.kind),
+          });
+        } else {
+          await database.orm.Media.where({ id: mediaId }).update({
+            catalogProjectionPending: 0,
+          });
+          await database.orm.CatalogMedia.where({ id: mediaId }).update({
+            available: 0,
+            albumId: null,
+          });
+        }
+      }
 
-      completed += tracks.length;
-      offset += tracks.length;
+      completed += mediaIds.length;
       await onProgress?.(completed, total);
-      if (tracks.length < SOURCE_REMOVAL_BATCH_SIZE) break;
     }
 
     await this.adjustSourceAvailabilityCounts(
@@ -1004,7 +1092,7 @@ export class CatalogService {
       "CatalogArtist",
       unavailableByArtist,
     );
-    this.markChanged(sourceId, "source-removal");
+    this.markChanged(primaryLibrarySourceId, "source-removal");
     return {
       trackCount: total,
       albumCount: unavailableByAlbum.size,
@@ -1048,30 +1136,30 @@ export class CatalogService {
     }
   }
 
-  async removeTrack(trackId: string): Promise<void> {
-    return this.serializeCatalog(() => this.removeTrackUnlocked(trackId));
+  async removeTrack(mediaId: string): Promise<void> {
+    return this.serializeCatalog(() => this.removeTrackUnlocked(mediaId));
   }
 
-  private async removeTrackUnlocked(trackId: string): Promise<void> {
-    const previous = await this.database.orm.CatalogTrack.first({
-      id: trackId,
+  private async removeTrackUnlocked(mediaId: string): Promise<void> {
+    const previous = await this.database.orm.CatalogMedia.first({
+      id: mediaId,
     });
-    const previousArtists = await this.database.orm.CatalogTrackArtist.where({
-      trackId,
+    const previousArtists = await this.database.orm.CatalogMediaArtist.where({
+      mediaId,
     }).all();
     for (const link of previousArtists) {
       if (previous) {
-        await this.removeArtistContribution(link.artistId, previous, trackId);
+        await this.removeArtistContribution(link.artistId, previous, mediaId);
       }
-      await this.database.orm.CatalogTrackArtist.where({
+      await this.database.orm.CatalogMediaArtist.where({
         id: link.id,
       }).delete();
     }
-    await this.database.orm.CatalogTrack.where({
-      id: trackId,
+    await this.database.orm.CatalogMedia.where({
+      id: mediaId,
     }).deleteAndCount();
     if (previous?.albumId) {
-      await this.refreshAlbum(previous.albumId, trackId);
+      await this.refreshAlbum(previous.albumId, mediaId);
     }
     if (previous?.albumReleaseKey) {
       await this.reindexAlbumFallbackSiblings(
@@ -1083,16 +1171,16 @@ export class CatalogService {
       );
     }
     const terms = await this.database.orm.CatalogSearchTerm.where({
-      entityType: "track",
-      entityId: trackId,
+      entityType: "media",
+      entityId: mediaId,
     }).all();
     for (const term of terms) {
       await this.database.orm.CatalogSearchTerm.where({
         id: term.id,
       }).delete();
     }
-    await this.database.orm.CatalogTrack.where({
-      id: trackId,
+    await this.database.orm.CatalogMedia.where({
+      id: mediaId,
     }).deleteAndCount();
   }
 
@@ -1102,7 +1190,7 @@ export class CatalogService {
     albumId: string,
     reason: CatalogChange["reason"],
   ): Promise<void> {
-    const siblings = await this.database.orm.CatalogTrack.where({
+    const siblings = await this.database.orm.CatalogMedia.where({
       albumFolderKey,
       normalizedAlbum,
       mediaType: "music",
@@ -1121,7 +1209,7 @@ export class CatalogService {
       ) {
         continue;
       }
-      await this.reindexTrackUnlocked(sibling.id, reason, false);
+      await this.reindexMediaUnlocked(sibling.id, reason, false);
     }
   }
 
@@ -1133,7 +1221,7 @@ export class CatalogService {
     mediaType: MediaType,
   ): Promise<void> {
     if (!previousAlbumId) return;
-    const siblings = await this.database.orm.CatalogTrack.where({
+    const siblings = await this.database.orm.CatalogMedia.where({
       albumFolderKey,
       normalizedAlbum,
       albumId: previousAlbumId,
@@ -1141,29 +1229,31 @@ export class CatalogService {
     }).all();
     for (const sibling of siblings) {
       if (sibling.albumReleaseKey || !sibling.available) continue;
-      await this.reindexTrackUnlocked(sibling.id, reason, false);
+      await this.reindexMediaUnlocked(sibling.id, reason, false);
     }
   }
 
-  async markTrackChanged(trackId: string, reason: CatalogChange["reason"]) {
-    await this.reindexTrack(trackId, reason);
+  async markTrackChanged(mediaId: string, reason: CatalogChange["reason"]) {
+    await this.reindexMedia(mediaId, reason);
   }
 
-  async updateTrackCover(
-    trackId: string,
+  async updateMediaCover(
+    copyId: string,
     coverId: string | null,
     expectedCoverKey: string,
   ): Promise<boolean> {
     return this.serializeCatalog(async () => {
-      const track = await this.database.orm.Track.first({ id: trackId });
-      if (!track || track.externalCoverKey !== expectedCoverKey) return false;
-      await this.database.orm.Track.where({ id: trackId }).update({ coverId });
-      await this.database.orm.CatalogTrack.where({
-        id: trackId,
-      }).updateAndCount({
+      const copy = await this.database.orm.MediaCopy.first({ id: copyId });
+      if (!copy || copy.externalCoverKey !== expectedCoverKey) return false;
+      const protectedWrite = protectedAutomaticWrite(copy.manualOverrides, {
         coverId,
       });
-      this.markChanged(track.sourceId, "scan");
+      await this.database.orm.MediaCopy.where({ id: copyId }).update({
+        ...protectedWrite.values,
+        manualOverrides: protectedWrite.manualOverrides,
+      });
+      await refreshCanonicalMediaFromCopies(this.database, copy.mediaId);
+      await this.reindexMediaUnlocked(copy.mediaId, "scan", true);
       return true;
     });
   }
@@ -1193,7 +1283,7 @@ export class CatalogService {
     this.lastRevision = revision;
     const change: CatalogChange = {
       revision,
-      sourceId: this.pendingSourceId,
+      librarySourceId: this.pendingSourceId,
       reason: this.pendingReason,
       changedCount: this.pendingChangedCount,
     };
@@ -1210,9 +1300,9 @@ export class CatalogService {
     return this.flushChanges();
   }
 
-  async markSourceRemoval(sourceId: string): Promise<number> {
+  async markSourceRemoval(primaryLibrarySourceId: string): Promise<number> {
     this.pendingReason = "source-removal";
-    this.pendingSourceId = sourceId;
+    this.pendingSourceId = primaryLibrarySourceId;
     this.pendingChangedCount += 1;
     return this.flushChanges();
   }
@@ -1226,7 +1316,7 @@ export class CatalogService {
     await this.flushTail;
   }
 
-  async listTracks(options: TrackPageOptions): Promise<TrackListResponse> {
+  async listMedia(options: TrackPageOptions): Promise<MediaListResponse> {
     const limit = pageSize(options.limit, MAX_PAGE_SIZE, DEFAULT_PAGE_SIZE);
     const direction = sortDirection(options.direction);
     const sort = trackSort(options.sort);
@@ -1252,8 +1342,8 @@ export class CatalogService {
       };
     }
 
-    let query = this.database.orm.CatalogTrack.where((track) =>
-      track.duplicateOfId.isNull(),
+    let query = this.database.orm.CatalogMedia.where((track) =>
+      track.id.isNotNull(),
     );
     if (availability !== null) query = query.where({ available: availability });
     if (requestedMediaType !== "all") {
@@ -1356,10 +1446,10 @@ export class CatalogService {
     };
   }
 
-  async resolveTracks(
+  async resolveMedia(
     ids: readonly string[],
     userId: string,
-  ): Promise<ResolveTracksResponse> {
+  ): Promise<ResolveMediaResponse> {
     if (ids.length > 500) {
       throw new CatalogError(
         "invalid_catalog_query",
@@ -1374,29 +1464,27 @@ export class CatalogService {
       const visited = new Set<string>();
       while (!visited.has(canonicalId) && visited.size < 16) {
         visited.add(canonicalId);
-        const row = await this.database.orm.Track.select("duplicateOfId").first(
-          {
-            id: canonicalId,
-          },
-        );
-        if (!row?.duplicateOfId) break;
-        canonicalId = row.duplicateOfId;
+        const alias = await this.database.orm.MediaAlias.first({
+          aliasId: canonicalId,
+        });
+        if (!alias) break;
+        canonicalId = alias.mediaId;
       }
       if (canonicalId !== requestedId) aliases[requestedId] = canonicalId;
       if (!canonicalIds.includes(canonicalId)) canonicalIds.push(canonicalId);
     }
     let indexed = canonicalIds.length
-      ? await this.database.orm.CatalogTrack.where((track) =>
+      ? await this.database.orm.CatalogMedia.where((track) =>
           track.id.in(canonicalIds),
         ).all()
       : [];
     const indexedIdsBefore = new Set(indexed.map((track) => track.id));
     const missingIds = canonicalIds.filter((id) => !indexedIdsBefore.has(id));
     if (missingIds.length) {
-      for (const trackId of missingIds) {
-        await this.reindexTrack(trackId, "source");
+      for (const mediaId of missingIds) {
+        await this.reindexMedia(mediaId, "source");
       }
-      indexed = await this.database.orm.CatalogTrack.where((track) =>
+      indexed = await this.database.orm.CatalogMedia.where((track) =>
         track.id.in(canonicalIds),
       ).all();
     }
@@ -1501,7 +1589,7 @@ export class CatalogService {
     const pageRows = rows.slice(0, limit);
     const [likedIds, sourceKindsByAlbum] = await Promise.all([
       this.likedAlbumIds(options.userId),
-      this.albumSourceKinds(pageRows.map((album) => album.id)),
+      this.albumLibrarySourceKinds(pageRows.map((album) => album.id)),
     ]);
     return {
       items: pageRows.map((album) =>
@@ -1833,7 +1921,7 @@ export class CatalogService {
     }).first();
     if (!album || album.trackCount < 1) return null;
     const sourceKinds =
-      (await this.albumSourceKinds([album.id])).get(album.id) ?? [];
+      (await this.albumLibrarySourceKinds([album.id])).get(album.id) ?? [];
     return this.toAlbumSummary(
       album,
       (await this.likedAlbumIds(userId)).has(album.id),
@@ -1889,30 +1977,33 @@ export class CatalogService {
 
   private async hydrateTracks(ids: readonly string[], userId: string) {
     if (!ids.length) return [];
-    const [tracks, projected, likedRows] = await Promise.all([
-      this.database.orm.Track.where((track) => track.id.in([...ids]))
-        .include("source", (source) => source.select("kind"))
-        .all(),
-      this.database.orm.CatalogTrack.where((track) =>
+    const [tracks, projected, likedRows, primaryCopies] = await Promise.all([
+      this.database.orm.Media.where((track) => track.id.in([...ids])).all(),
+      this.database.orm.CatalogMedia.where((track) =>
         track.id.in([...ids]),
       ).all(),
-      this.database.orm.TrackLike.where({ userId })
-        .where((like) => like.trackId.in([...ids]))
+      this.database.orm.MediaLike.where({ userId })
+        .where((like) => like.mediaId.in([...ids]))
         .all(),
+      primaryCopiesForMediaIds(this.database, ids),
     ]);
-    const likedIds = new Set(likedRows.map((like) => like.trackId));
+    const likedIds = new Set(likedRows.map((like) => like.mediaId));
     const albumIds = new Map(
       projected.map((track) => [track.id, track.albumId]),
     );
     const byId = new Map(
       tracks.map((track) => [
         track.id,
-        toTrackResponse(
-          track,
-          this.playbackTokens,
-          likedIds.has(track.id),
-          albumIds.get(track.id) ?? null,
-        ),
+        toMediaResponse(track, this.playbackTokens, {
+          sourceKind: parsedLibrarySourceKind(
+            primaryCopies.get(track.id)?.source.kind ?? "",
+          ),
+          ...(primaryCopies.get(track.id)?.copy.mimeType
+            ? { mimeType: primaryCopies.get(track.id)!.copy.mimeType }
+            : {}),
+          liked: likedIds.has(track.id),
+          albumId: albumIds.get(track.id) ?? null,
+        }),
       ]),
     );
     return ids.flatMap((id) => {
@@ -1927,19 +2018,19 @@ export class CatalogService {
     const sets: Set<string>[] = [];
     const terms = searchTerms([options.query]);
     if (terms.length) {
-      sets.push(await this.searchIds("track", terms));
+      sets.push(await this.searchIds("media", terms));
     }
     if (options.artistId) {
-      const links = await this.database.orm.CatalogTrackArtist.where({
+      const links = await this.database.orm.CatalogMediaArtist.where({
         artistId: options.artistId,
       }).all();
-      sets.push(new Set(links.map((link) => link.trackId)));
+      sets.push(new Set(links.map((link) => link.mediaId)));
     }
     if (options.liked === "true") {
-      const likes = await this.database.orm.TrackLike.where({
+      const likes = await this.database.orm.MediaLike.where({
         userId: options.userId,
       }).all();
-      sets.push(new Set(likes.map((like) => like.trackId)));
+      sets.push(new Set(likes.map((like) => like.mediaId)));
     } else if (options.liked !== undefined && options.liked !== "false") {
       throw new CatalogError(
         "invalid_catalog_query",
@@ -1977,7 +2068,7 @@ export class CatalogService {
   }
 
   private async searchIds(
-    entityType: "track" | "album" | "artist",
+    entityType: "media" | "album" | "artist",
     terms: readonly string[],
   ): Promise<Set<string>> {
     let intersection: Set<string> | null = null;
@@ -2001,8 +2092,8 @@ export class CatalogService {
     }
     const candidates = [...(intersection ?? [])];
     if (!candidates.length) return new Set();
-    if (entityType === "track") {
-      const rows = await this.database.orm.CatalogTrack.where((track) =>
+    if (entityType === "media") {
+      const rows = await this.database.orm.CatalogMedia.where((track) =>
         track.id.in(candidates),
       ).all();
       return new Set(
@@ -2054,26 +2145,30 @@ export class CatalogService {
     return new Set(rows.map((row) => catalogArtistId(row.name)));
   }
 
-  private async albumSourceKinds(
+  private async albumLibrarySourceKinds(
     albumIds: readonly string[],
-  ): Promise<Map<string, SourceKind[]>> {
+  ): Promise<Map<string, LibrarySourceKind[]>> {
     if (!albumIds.length) return new Map();
-    const tracks = await this.database.orm.CatalogTrack.where((track) =>
+    const media = await this.database.orm.CatalogMedia.where((track) =>
       track.albumId.in([...albumIds]),
     )
       .where({ available: 1 })
-      .select("albumId", "sourceId")
+      .select("id", "albumId")
       .all();
-    const sourceIds = [
-      ...new Set(
-        tracks.flatMap((track) => (track.sourceId ? [track.sourceId] : [])),
-      ),
+    const copies = await this.database.orm.MediaCopy.where((copy) =>
+      copy.mediaId.in(media.map((item) => item.id)),
+    )
+      .where({ available: 1 })
+      .select("mediaId", "librarySourceId")
+      .all();
+    const librarySourceIds = [
+      ...new Set(copies.map((copy) => copy.librarySourceId)),
     ];
-    if (!sourceIds.length) {
+    if (!librarySourceIds.length) {
       return new Map(albumIds.map((albumId) => [albumId, []]));
     }
-    const sources = await this.database.orm.Source.where((source) =>
-      source.id.in(sourceIds),
+    const sources = await this.database.orm.LibrarySource.where((source) =>
+      source.id.in(librarySourceIds),
     )
       .orderBy([
         (source) => source.position.asc(),
@@ -2084,25 +2179,31 @@ export class CatalogService {
     const orderedKinds = [
       ...new Set(
         sources.flatMap((source) => {
-          const kind = parsedSourceKind(source.kind);
+          const kind = parsedLibrarySourceKind(source.kind);
           return kind ? [kind] : [];
         }),
       ),
     ];
     const kindBySourceId = new Map(
       sources.flatMap((source) => {
-        const kind = parsedSourceKind(source.kind);
+        const kind = parsedLibrarySourceKind(source.kind);
         return kind ? [[source.id, kind] as const] : [];
       }),
     );
-    const kindsByAlbum = new Map<string, Set<SourceKind>>();
-    for (const track of tracks) {
-      if (!track.albumId || !track.sourceId) continue;
-      const kind = kindBySourceId.get(track.sourceId);
+    const albumIdByMediaId = new Map(
+      media.flatMap((item) =>
+        item.albumId ? [[item.id, item.albumId] as const] : [],
+      ),
+    );
+    const kindsByAlbum = new Map<string, Set<LibrarySourceKind>>();
+    for (const copy of copies) {
+      const albumId = albumIdByMediaId.get(copy.mediaId);
+      if (!albumId) continue;
+      const kind = kindBySourceId.get(copy.librarySourceId);
       if (!kind) continue;
-      const kinds = kindsByAlbum.get(track.albumId) ?? new Set<SourceKind>();
+      const kinds = kindsByAlbum.get(albumId) ?? new Set<LibrarySourceKind>();
       kinds.add(kind);
-      kindsByAlbum.set(track.albumId, kinds);
+      kindsByAlbum.set(albumId, kinds);
     }
     return new Map(
       albumIds.map((albumId) => {
@@ -2122,14 +2223,14 @@ export class CatalogService {
       artist: string;
       artistCredits: string | null;
       coverId: string | null;
-      coverTrackId: string | null;
+      coverMediaId: string | null;
       trackCount: number;
       availableTrackCount: number;
       durationMs: number | null;
       releaseYear: number | null;
     },
     liked: boolean,
-    sourceKinds: SourceKind[],
+    sourceKinds: LibrarySourceKind[],
   ): AlbumSummaryResponse {
     let artists = [album.artist];
     try {
@@ -2275,7 +2376,7 @@ export class CatalogService {
 
   private async refreshAlbum(albumId: string, excludedTrackId?: string) {
     const tracks = (
-      await this.database.orm.CatalogTrack.where({
+      await this.database.orm.CatalogMedia.where({
         albumId,
       }).all()
     ).filter((track) => track.id !== excludedTrackId);
@@ -2327,7 +2428,7 @@ export class CatalogService {
           ? catalogArtistId(albumArtists[0] ?? first.artist)
           : null,
       coverId: coverTrack.coverId,
-      coverTrackId: coverTrack.coverId ? coverTrack.id : null,
+      coverMediaId: coverTrack.coverId ? coverTrack.id : null,
       artistCredits: JSON.stringify(albumArtists),
       trackCount: tracks.length,
       availableTrackCount: availableTracks.length,
@@ -2439,7 +2540,7 @@ export class CatalogService {
       durationMs: number | null;
       available: number;
     },
-    trackId: string,
+    mediaId: string,
   ) {
     const artist = await this.database.orm.CatalogArtist.first({
       id: artistId,
@@ -2483,10 +2584,10 @@ export class CatalogService {
       }).deleteAndCount();
       return;
     }
-    const remainingLinks = await this.database.orm.CatalogTrackArtist.where({
+    const remainingLinks = await this.database.orm.CatalogMediaArtist.where({
       artistId,
     }).all();
-    if (remainingLinks.length <= 1 && remainingLinks[0]?.trackId === trackId) {
+    if (remainingLinks.length <= 1 && remainingLinks[0]?.mediaId === mediaId) {
       await this.deleteSearchTerms("artist", artistId);
       await this.deleteArtistAlbums(artistId);
       await this.database.orm.CatalogArtist.where({
@@ -2514,7 +2615,7 @@ export class CatalogService {
   }
 
   private async createSearchTerm(
-    entityType: "track" | "album" | "artist",
+    entityType: "media" | "album" | "artist",
     entityId: string,
     term: string,
   ) {
@@ -2533,7 +2634,7 @@ export class CatalogService {
   }
 
   private async deleteSearchTerms(
-    entityType: "track" | "album" | "artist",
+    entityType: "media" | "album" | "artist",
     entityId: string,
   ) {
     const terms = await this.database.orm.CatalogSearchTerm.where({
@@ -2559,11 +2660,11 @@ export class CatalogService {
   }
 
   private markChanged(
-    sourceId: string | null,
+    primaryLibrarySourceId: string | null,
     reason: CatalogChange["reason"],
   ) {
     this.pendingChangedCount += 1;
-    this.pendingSourceId = sourceId ?? this.pendingSourceId;
+    this.pendingSourceId = primaryLibrarySourceId ?? this.pendingSourceId;
     this.pendingReason = reason;
     if (this.changeTimer) return;
     this.changeTimer = setTimeout(() => {
@@ -2586,7 +2687,7 @@ export class CatalogService {
     if (!state || state.projectionVersion >= PROJECTION_VERSION) return;
     let offset = 0;
     while (true) {
-      const tracks = await this.database.orm.Track.orderBy((track) =>
+      const tracks = await this.database.orm.Media.orderBy((track) =>
         track.id.asc(),
       )
         .offset(offset)
@@ -2594,7 +2695,7 @@ export class CatalogService {
         .all();
       if (!tracks.length) break;
       for (const track of tracks) {
-        await this.reindexTrack(track.id);
+        await this.reindexMedia(track.id);
         await yieldToEventLoop();
       }
       offset += tracks.length;

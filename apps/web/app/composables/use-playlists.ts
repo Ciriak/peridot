@@ -37,7 +37,7 @@ import { useSession } from "./use-session";
 
 interface PlaylistListQueryOptions {
   limit?: number;
-  trackId?: MaybeRefOrGetter<string | null>;
+  mediaId?: MaybeRefOrGetter<string | null>;
   query?: MaybeRefOrGetter<string | null | undefined>;
 }
 
@@ -47,14 +47,14 @@ export function usePlaylistList(options: PlaylistListQueryOptions = {}) {
   const { token } = useSession();
   const { errorMessage } = useLocalizedMessage();
   const targetTrackId = computed(() =>
-    options.trackId ? toValue(options.trackId) || undefined : undefined,
+    options.mediaId ? toValue(options.mediaId) || undefined : undefined,
   );
   const targetQuery = computed(() =>
     options.query ? toValue(options.query)?.trim() || undefined : undefined,
   );
   const listOptions = computed(() => ({
     limit,
-    ...(targetTrackId.value ? { trackId: targetTrackId.value } : {}),
+    ...(targetTrackId.value ? { mediaId: targetTrackId.value } : {}),
     ...(targetQuery.value ? { query: targetQuery.value } : {}),
   }));
   const queryKey = computed<QueryKey>(() =>

@@ -17,7 +17,7 @@ import ArtistCard from "../components/ArtistCard.vue";
 import AutoLoadMore from "../components/AutoLoadMore.vue";
 import CatalogCard from "../components/CatalogCard.vue";
 import MediaCollectionCard from "../components/MediaCollectionCard.vue";
-import TorznabResults from "../components/TorznabResults.vue";
+import ExternalResults from "../components/ExternalResults.vue";
 import TrackTable from "../components/TrackTable.vue";
 import VirtualCardGrid from "../components/VirtualCardGrid.vue";
 import {
@@ -46,7 +46,7 @@ import {
   type SearchTab,
 } from "../lib/search-history";
 import {
-  filterTorznabReleases,
+  filterReleaseResults,
   type ExternalResultFilter,
 } from "../lib/torznab-filters";
 
@@ -314,7 +314,7 @@ const visibleResultFilters = computed(() =>
   activeSearchTab.value === "external" ? externalResultFilters : resultFilters,
 );
 const filteredExternalReleases = computed(() =>
-  filterTorznabReleases(externalReleases.value, externalResultFilter.value),
+  filterReleaseResults(externalReleases.value, externalResultFilter.value),
 );
 const externalEmptyMessage = computed(() => {
   if (externalResultFilter.value === "music") return t("torznab.emptyMusic");
@@ -398,9 +398,9 @@ onMounted(() => {
               value="external"
               :aria-label="
                 externalResultCount === undefined
-                  ? t('page.search.externalSources')
+                  ? t('page.search.discover')
                   : t(
-                      'page.search.externalTabCount',
+                      'page.search.discoverTabCount',
                       {
                         count: externalResultCount,
                       },
@@ -408,7 +408,7 @@ onMounted(() => {
                     )
               "
             >
-              {{ t("page.search.externalSources") }}
+              {{ t("page.search.discover") }}
               <Badge
                 v-if="externalResultCount !== undefined"
                 variant="secondary"
@@ -686,7 +686,7 @@ onMounted(() => {
       </TabsContent>
 
       <TabsContent v-if="showSearchTabs" value="external" class="mt-0">
-        <TorznabResults
+        <ExternalResults
           :import-states="externalImportStates"
           :loading="externalSearchLoading"
           :playable-track-ids="externalPlayableTrackIds"

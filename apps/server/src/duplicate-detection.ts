@@ -1,23 +1,31 @@
 import type { MessageDescriptor } from "@peridot/contracts";
 import type { CatalogService } from "./catalog.js";
 import type { Database } from "./database.js";
-import { effectiveTrackFields } from "./track-response.js";
 import { message } from "./messages.js";
-import type { TaskRow, TrackRow } from "./prisma/models.js";
+import { protectedAutomaticWrite } from "./media-overrides.js";
+import type {
+  LibrarySourceRow,
+  MediaCopyRow,
+  MediaRow,
+  TaskRow,
+} from "./prisma/models.js";
 import { normalizeSearchText } from "./search-text.js";
+import { effectiveMediaFields } from "./media-response.js";
 import {
   parseRecordingIdentityKeys,
   recordingIdentity,
 } from "./track-identities.js";
 import type { TaskExecutionResult, TaskService } from "./tasks.js";
+import { refreshCanonicalMediaFromCopies } from "./media-copies.js";
 
-const ALGORITHM_VERSION = 1;
-const STATE_ID = "duplicates";
+const ALGORITHM_VERSION = 2;
+const STATE_ID = "media";
 const PAGE_SIZE = 1_000;
 const DURATION_TOLERANCE_MS = 1_000;
 
 interface Candidate {
-  track: TrackRow;
+  media: MediaRow;
+  copy: MediaCopyRow;
   sourcePosition: number;
   title: string;
   artistKey: string;
@@ -25,11 +33,10 @@ interface Candidate {
   identities: string[];
 }
 
-export interface DuplicateDetectionResult {
-  trackCount: number;
+export interface MediaMatchResult {
+  mediaCount: number;
   groupCount: number;
-  hiddenCount: number;
-  promotedCount: number;
+  mergedCount: number;
   referencesMoved: number;
 }
 
@@ -61,43 +68,19 @@ class DisjointSet {
   }
 }
 
-function completeness(track: TrackRow): number {
-  return [
-    track.coverId,
-    track.metadataProviderId,
-    track.metadataExternalTrackId,
-    track.album,
-    track.durationMs,
-    track.publishedAt,
-  ].filter((value) => value !== null).length;
-}
-
 function compareCandidates(left: Candidate, right: Candidate): number {
-  const lossless = right.track.audioLossless - left.track.audioLossless;
-  if (lossless !== 0) return lossless;
-  const bitrate =
-    (right.track.audioBitrate ?? 0) - (left.track.audioBitrate ?? 0);
-  if (bitrate !== 0) return bitrate;
-  if (left.track.fileSizeBytes !== right.track.fileSizeBytes) {
-    return left.track.fileSizeBytes > right.track.fileSizeBytes ? -1 : 1;
-  }
-  const metadata = completeness(right.track) - completeness(left.track);
-  if (metadata !== 0) return metadata;
-  if (left.sourcePosition !== right.sourcePosition) {
-    return left.sourcePosition - right.sourcePosition;
-  }
   const created =
-    left.track.createdAt.getTime() - right.track.createdAt.getTime();
+    left.media.createdAt.getTime() - right.media.createdAt.getTime();
   if (created !== 0) return created;
-  return left.track.id.localeCompare(right.track.id);
+  return left.media.id.localeCompare(right.media.id);
 }
 
-function identityKeys(track: TrackRow): string[] {
+function identityKeys(media: MediaRow, copy: MediaCopyRow): string[] {
   const keys = [
-    ...parseRecordingIdentityKeys(track.recordingIdentityKeys),
-    ...(track.metadataProviderKind === "musicbrainz"
+    ...parseRecordingIdentityKeys(copy.recordingIdentityKeys),
+    ...(media.metadataProviderKind === "musicbrainz"
       ? [
-          recordingIdentity("musicbrainz", track.metadataExternalTrackId),
+          recordingIdentity("musicbrainz", media.metadataExternalTrackId),
         ].filter((value): value is string => Boolean(value))
       : []),
   ];
@@ -106,35 +89,43 @@ function identityKeys(track: TrackRow): string[] {
 
 function fallbackKey(candidate: Candidate, durationBucket: number): string {
   return JSON.stringify([
-    candidate.track.mediaType,
+    candidate.media.mediaType,
     candidate.title,
     candidate.artistKey,
-    candidate.track.mediaType === "music" ? "" : candidate.albumKey,
+    candidate.media.mediaType === "music" ? "" : candidate.albumKey,
     durationBucket,
   ]);
 }
 
-async function allAvailableTracks(database: Database): Promise<TrackRow[]> {
-  const rows: TrackRow[] = [];
-  for (let offset = 0; ; offset += PAGE_SIZE) {
-    const page = await database.orm.Track.where({ available: 1 })
-      .orderBy((track) => track.id.asc())
-      .offset(offset)
-      .limit(PAGE_SIZE)
-      .all();
-    rows.push(...page);
-    if (page.length < PAGE_SIZE) return rows;
-  }
+function preferredCopy(
+  copies: readonly MediaCopyRow[],
+  sourcePositions: ReadonlyMap<string, number>,
+): MediaCopyRow | null {
+  return (
+    [...copies]
+      .filter((copy) => copy.available)
+      .sort((left, right) => {
+        const lossless = right.audioLossless - left.audioLossless;
+        if (lossless !== 0) return lossless;
+        const bitrate = (right.audioBitrate ?? 0) - (left.audioBitrate ?? 0);
+        if (bitrate !== 0) return bitrate;
+        const source =
+          (sourcePositions.get(left.librarySourceId) ?? 1_000_000) -
+          (sourcePositions.get(right.librarySourceId) ?? 1_000_000);
+        if (source !== 0) return source;
+        return left.id.localeCompare(right.id);
+      })[0] ?? null
+  );
 }
 
-export class DuplicateDetectionService {
+export class MediaMatchService {
   constructor(
     private readonly database: Database,
     private readonly catalog: CatalogService,
   ) {}
 
   async needsRun(): Promise<boolean> {
-    const state = await this.database.orm.DuplicateDetectionState.first({
+    const state = await this.database.orm.MediaMatchState.first({
       id: STATE_ID,
     });
     return !state || state.algorithmVersion < ALGORITHM_VERSION;
@@ -148,51 +139,77 @@ export class DuplicateDetectionService {
     const result = await this.detect(signal, async (completed, total) => {
       await tasks.updateProgress(task.id, completed, total);
     });
-    return { details: duplicateDetails(result) };
+    return { details: mediaMatchDetails(result) };
   }
 
   async detect(
     signal: AbortSignal,
     onProgress?: (completed: number, total: number) => Promise<void> | void,
-  ): Promise<DuplicateDetectionResult> {
+  ): Promise<MediaMatchResult> {
     if (signal.aborted) throw new DOMException("Stopped", "AbortError");
-    const [tracks, sources] = await Promise.all([
-      allAvailableTracks(this.database),
-      this.database.orm.Source.where((source) => source.removedAt.isNull())
+    const sources: LibrarySourceRow[] =
+      await this.database.orm.LibrarySource.where((source) =>
+        source.removedAt.isNull(),
+      )
         .orderBy((source) => source.position.asc())
-        .all(),
-    ]);
-    const sourcePosition = new Map(
+        .all();
+    const sourcePositions = new Map(
       sources.map((source, index) => [source.id, source.position ?? index]),
     );
-    const candidates = tracks.map((track): Candidate => {
-      const fields = effectiveTrackFields(track);
+    const mediaRows: MediaRow[] = [];
+    for (let offset = 0; ; offset += PAGE_SIZE) {
+      const page = await this.database.orm.Media.where({ available: 1 })
+        .orderBy((media) => media.id.asc())
+        .offset(offset)
+        .limit(PAGE_SIZE)
+        .all();
+      mediaRows.push(...page);
+      if (page.length < PAGE_SIZE) break;
+    }
+    const copies = await this.database.orm.MediaCopy.all();
+    const copiesByMedia = new Map<string, MediaCopyRow[]>();
+    for (const copy of copies) {
+      const group = copiesByMedia.get(copy.mediaId) ?? [];
+      group.push(copy);
+      copiesByMedia.set(copy.mediaId, group);
+    }
+    const candidates = mediaRows.flatMap((media): Candidate[] => {
+      const copy = preferredCopy(
+        copiesByMedia.get(media.id) ?? [],
+        sourcePositions,
+      );
+      if (!copy) return [];
+      const fields = effectiveMediaFields(media);
       const artists = fields.artists
         .map(normalizeSearchText)
         .filter(Boolean)
         .sort()
         .join("\u0000");
-      return {
-        track,
-        sourcePosition: sourcePosition.get(track.sourceId ?? "") ?? 1_000_000,
-        title: normalizeSearchText(fields.title),
-        artistKey: artists,
-        albumKey: normalizeSearchText(fields.album ?? ""),
-        identities: identityKeys(track),
-      };
+      return [
+        {
+          media,
+          copy,
+          sourcePosition:
+            sourcePositions.get(copy.librarySourceId) ?? 1_000_000,
+          title: normalizeSearchText(fields.title),
+          artistKey: artists,
+          albumKey: normalizeSearchText(fields.album ?? ""),
+          identities: identityKeys(media, copy),
+        },
+      ];
     });
     const candidateById = new Map(
-      candidates.map((candidate) => [candidate.track.id, candidate]),
+      candidates.map((candidate) => [candidate.media.id, candidate]),
     );
     const groups = new DisjointSet();
-    for (const candidate of candidates) groups.add(candidate.track.id);
+    for (const candidate of candidates) groups.add(candidate.media.id);
 
     const identityGroups = new Map<string, string[]>();
     for (const candidate of candidates) {
       for (const identity of candidate.identities) {
-        const key = `${candidate.track.mediaType}\u0000${identity}`;
+        const key = `${candidate.media.mediaType}\u0000${identity}`;
         const ids = identityGroups.get(key) ?? [];
-        ids.push(candidate.track.id);
+        ids.push(candidate.media.id);
         identityGroups.set(key, ids);
       }
     }
@@ -205,12 +222,12 @@ export class DuplicateDetectionService {
       if (
         !candidate.title ||
         !candidate.artistKey ||
-        candidate.track.durationMs === null ||
-        candidate.track.durationMs < 0
+        candidate.media.durationMs === null ||
+        candidate.media.durationMs < 0
       ) {
         continue;
       }
-      const bucket = Math.floor(candidate.track.durationMs / 1_000);
+      const bucket = Math.floor(candidate.media.durationMs / 1_000);
       const key = fallbackKey(candidate, bucket);
       const entries = fallbackBuckets.get(key) ?? [];
       entries.push(candidate);
@@ -218,20 +235,20 @@ export class DuplicateDetectionService {
     }
     for (const entries of fallbackBuckets.values()) {
       for (const candidate of entries.slice(1)) {
-        groups.union(entries[0]!.track.id, candidate.track.id);
+        groups.union(entries[0]!.media.id, candidate.media.id);
       }
       for (const candidate of entries) {
-        const bucket = Math.floor(candidate.track.durationMs! / 1_000);
+        const bucket = Math.floor(candidate.media.durationMs! / 1_000);
         for (const adjacent of [bucket - 1, bucket + 1]) {
-          const neighbours =
-            fallbackBuckets.get(fallbackKey(candidate, adjacent)) ?? [];
-          for (const neighbour of neighbours) {
+          for (const neighbour of fallbackBuckets.get(
+            fallbackKey(candidate, adjacent),
+          ) ?? []) {
             if (
               Math.abs(
-                candidate.track.durationMs! - neighbour.track.durationMs!,
+                candidate.media.durationMs! - neighbour.media.durationMs!,
               ) <= DURATION_TOLERANCE_MS
             ) {
-              groups.union(candidate.track.id, neighbour.track.id);
+              groups.union(candidate.media.id, neighbour.media.id);
             }
           }
         }
@@ -240,139 +257,155 @@ export class DuplicateDetectionService {
 
     const members = new Map<string, Candidate[]>();
     for (const candidate of candidates) {
-      const root = groups.find(candidate.track.id);
+      const root = groups.find(candidate.media.id);
       const group = members.get(root) ?? [];
       group.push(candidate);
       members.set(root, group);
     }
-    const duplicateGroups = [...members.values()]
+    const matchGroups = [...members.values()]
       .filter((group) => group.length > 1)
       .map((group) => group.sort(compareCandidates));
 
-    const desired = new Map<string, string | null>(
-      candidates.map((candidate) => [candidate.track.id, null]),
-    );
-    for (const group of duplicateGroups) {
-      const canonical = group[0]!;
-      for (const duplicate of group.slice(1)) {
-        desired.set(duplicate.track.id, canonical.track.id);
-      }
-    }
-
+    let mergedCount = 0;
     let referencesMoved = 0;
-    let promotedCount = 0;
-    const changed: string[] = [];
     let completed = 0;
     await onProgress?.(completed, candidates.length);
-    for (const candidate of candidates) {
+    for (const group of matchGroups) {
       if (signal.aborted) throw new DOMException("Stopped", "AbortError");
-      const current = candidateById.get(candidate.track.id)!;
-      const nextDuplicateOfId = desired.get(current.track.id) ?? null;
-      if (current.track.duplicateOfId !== nextDuplicateOfId) {
-        if (!nextDuplicateOfId && current.track.duplicateOfId) {
-          promotedCount += 1;
-        }
+      const survivor = group[0]!;
+      for (const duplicate of group.slice(1)) {
+        const current = candidateById.get(duplicate.media.id);
+        if (!current) continue;
         await this.database.transaction(async (transaction) => {
-          if (nextDuplicateOfId) {
-            referencesMoved += await this.transferReferences(
-              transaction,
-              current.track,
-              nextDuplicateOfId,
-            );
-          }
-          await transaction.orm.Track.where({ id: current.track.id }).update({
-            duplicateOfId: nextDuplicateOfId,
+          referencesMoved += await this.transferReferences(
+            transaction,
+            current.media,
+            survivor.media.id,
+          );
+          await transaction.orm.MediaCopy.where({
+            mediaId: current.media.id,
+          }).update({ mediaId: survivor.media.id });
+          await refreshCanonicalMediaFromCopies(transaction, survivor.media.id);
+          await transaction.orm.MediaAlias.where({
+            aliasId: current.media.id,
+          }).deleteAndCount();
+          await transaction.orm.MediaAlias.create({
+            aliasId: current.media.id,
+            mediaId: survivor.media.id,
           });
-          await transaction.orm.CatalogTrack.where({
-            id: current.track.id,
-          }).update({
-            duplicateOfId: nextDuplicateOfId,
+          await transaction.orm.CatalogMedia.where({
+            id: current.media.id,
+          }).deleteAndCount();
+          await transaction.orm.Media.where({
+            id: current.media.id,
+          }).deleteAndCount();
+          await transaction.orm.Media.where({ id: survivor.media.id }).update({
+            catalogProjectionPending: 1,
           });
         });
-        changed.push(current.track.id);
+        mergedCount += 1;
+        completed += 1;
       }
-      completed += 1;
-      if (completed % 50 === 0) {
-        await onProgress?.(completed, candidates.length);
-      }
+      await this.catalog.reindexMedia(survivor.media.id, "media-match");
     }
-    for (const trackId of changed) {
-      if (signal.aborted) throw new DOMException("Stopped", "AbortError");
-      await this.catalog.reindexTrack(trackId, "duplicate");
-    }
+    completed = candidates.length;
+    await onProgress?.(completed, candidates.length);
     await this.catalog.flushChanges();
     const result = {
-      trackCount: candidates.length,
-      groupCount: duplicateGroups.length,
-      hiddenCount: desired.size
-        ? [...desired.values()].filter((value) => value !== null).length
-        : 0,
-      promotedCount,
+      mediaCount: candidates.length,
+      groupCount: matchGroups.length,
+      mergedCount,
       referencesMoved,
     };
     const state = {
       algorithmVersion: ALGORITHM_VERSION,
       lastCompletedAt: new Date(),
-      hiddenCount: result.hiddenCount,
+      mergedCount: result.mergedCount,
       groupCount: result.groupCount,
     };
-    const existing = await this.database.orm.DuplicateDetectionState.first({
+    const existing = await this.database.orm.MediaMatchState.first({
       id: STATE_ID,
     });
     if (existing) {
-      await this.database.orm.DuplicateDetectionState.where({
-        id: STATE_ID,
-      }).update(state);
+      await this.database.orm.MediaMatchState.where({ id: STATE_ID }).update(
+        state,
+      );
     } else {
-      await this.database.orm.DuplicateDetectionState.create({
+      await this.database.orm.MediaMatchState.create({
         id: STATE_ID,
         ...state,
       });
     }
-    await onProgress?.(candidates.length, candidates.length);
     return result;
   }
 
   private async transferReferences(
     transaction: Parameters<Parameters<Database["transaction"]>[0]>[0],
-    duplicate: TrackRow,
+    duplicate: MediaRow,
     canonicalId: string,
   ): Promise<number> {
-    const canonical = await transaction.orm.Track.first({ id: canonicalId });
+    const canonical = await transaction.orm.Media.first({ id: canonicalId });
     if (!canonical) return 0;
+    if (!canonical.metadataProviderId && duplicate.metadataProviderId) {
+      const protectedWrite = protectedAutomaticWrite(
+        canonical.manualOverrides,
+        {
+          metadataMode: duplicate.metadataMode,
+          metadataTitle: duplicate.metadataTitle,
+          metadataArtist: duplicate.metadataArtist,
+          metadataArtistCredits: duplicate.metadataArtistCredits,
+          metadataAlbumArtist: duplicate.metadataAlbumArtist,
+          metadataAlbumArtistCredits: duplicate.metadataAlbumArtistCredits,
+          metadataAlbum: duplicate.metadataAlbum,
+          metadataGenres: duplicate.metadataGenres,
+          metadataDiscNumber: duplicate.metadataDiscNumber,
+          metadataTrackNumber: duplicate.metadataTrackNumber,
+          metadataProviderId: duplicate.metadataProviderId,
+          metadataProviderKind: duplicate.metadataProviderKind,
+          metadataProviderName: duplicate.metadataProviderName,
+          metadataExternalTrackId: duplicate.metadataExternalTrackId,
+          metadataExternalReleaseId: duplicate.metadataExternalReleaseId,
+          metadataSourceUrl: duplicate.metadataSourceUrl,
+          metadataDetails: duplicate.metadataDetails,
+          metadataMatchedAt: duplicate.metadataMatchedAt,
+          metadataAttemptedSignature: duplicate.metadataAttemptedSignature,
+        },
+      );
+      await transaction.orm.Media.where({ id: canonicalId }).update({
+        ...protectedWrite.values,
+        manualOverrides: protectedWrite.manualOverrides,
+      });
+    }
     let moved = 0;
-
-    const likes = await transaction.orm.TrackLike.where({
-      trackId: duplicate.id,
-    }).all();
-    for (const like of likes) {
-      const existing = await transaction.orm.TrackLike.first({
+    for (const like of await transaction.orm.MediaLike.where({
+      mediaId: duplicate.id,
+    }).all()) {
+      const existing = await transaction.orm.MediaLike.first({
         userId: like.userId,
-        trackId: canonicalId,
+        mediaId: canonicalId,
       });
       if (!existing) {
-        await transaction.orm.TrackLike.create({
+        await transaction.orm.MediaLike.create({
           userId: like.userId,
-          trackId: canonicalId,
+          mediaId: canonicalId,
           createdAt: like.createdAt,
         });
       }
-      await transaction.orm.TrackLike.where({
+      await transaction.orm.MediaLike.where({
         userId: like.userId,
-        trackId: duplicate.id,
+        mediaId: duplicate.id,
       }).delete();
       moved += 1;
     }
-    const plays = await transaction.orm.TrackPlayEvent.where({
-      trackId: duplicate.id,
-    }).updateAndCount({ trackId: canonicalId });
-    moved += plays;
+    moved += await transaction.orm.MediaPlayEvent.where({
+      mediaId: duplicate.id,
+    }).updateAndCount({ mediaId: canonicalId });
 
     const playlistItems = await transaction.orm.PlaylistItem.where({
-      trackId: duplicate.id,
+      mediaId: duplicate.id,
     }).all();
     const affectedPlaylists = new Set<string>();
-    const effective = effectiveTrackFields(canonical);
+    const effective = effectiveMediaFields(canonical);
     const canonicalIdentityKey = `catalog:${encodeURIComponent(canonicalId)}`;
     for (const item of playlistItems) {
       affectedPlaylists.add(item.playlistId);
@@ -384,12 +417,13 @@ export class DuplicateDetectionService {
         await transaction.orm.PlaylistItem.where({ id: item.id }).delete();
       } else {
         await transaction.orm.PlaylistItem.where({ id: item.id }).update({
-          trackId: canonicalId,
+          mediaId: canonicalId,
           identityKey: canonicalIdentityKey,
           snapshotTitle: effective.title,
           snapshotArtist: effective.artist,
           snapshotAlbum: effective.album,
           snapshotDuration: effective.durationMs,
+          matchStatus: "matched",
         });
       }
       moved += 1;
@@ -411,7 +445,7 @@ export class DuplicateDetectionService {
   }
 }
 
-export function duplicateDetails(result: DuplicateDetectionResult): Array<{
+export function mediaMatchDetails(result: MediaMatchResult): Array<{
   key: string;
   value: string;
   labelMessage: MessageDescriptor;
@@ -419,31 +453,25 @@ export function duplicateDetails(result: DuplicateDetectionResult): Array<{
 }> {
   return [
     {
-      key: "duplicates.tracks",
-      value: String(result.trackCount),
+      key: "media.count",
+      value: String(result.mediaCount),
       labelMessage: message("task.detail.tracks"),
       valueMessage: null,
     },
     {
-      key: "duplicates.groups",
+      key: "media.groups",
       value: String(result.groupCount),
       labelMessage: message("task.detail.duplicateGroups"),
       valueMessage: null,
     },
     {
-      key: "duplicates.hidden",
-      value: String(result.hiddenCount),
+      key: "media.merged",
+      value: String(result.mergedCount),
       labelMessage: message("task.detail.duplicatesHidden"),
       valueMessage: null,
     },
     {
-      key: "duplicates.promoted",
-      value: String(result.promotedCount),
-      labelMessage: message("task.detail.duplicatesPromoted"),
-      valueMessage: null,
-    },
-    {
-      key: "duplicates.referencesMoved",
+      key: "media.referencesMoved",
       value: String(result.referencesMoved),
       labelMessage: message("task.detail.referencesMoved"),
       valueMessage: null,

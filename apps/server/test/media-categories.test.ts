@@ -5,10 +5,10 @@ import test from "node:test";
 import type {
   AlbumListResponse,
   AudiobookListResponse,
-  CreateSourceResponse,
+  CreateLibrarySourceResponse,
   LikeListResponse,
   PodcastListResponse,
-  TrackListResponse,
+  MediaListResponse,
 } from "@peridot/contracts";
 import {
   createTaggedMp3,
@@ -60,7 +60,7 @@ test("one automatic source separates mixed music, audiobooks, and podcasts", asy
 
     const response = await context.app.inject({
       method: "POST",
-      url: "/api/admin/sources",
+      url: "/api/admin/library-sources",
       headers: context.authorization,
       payload: {
         kind: "path",
@@ -70,11 +70,11 @@ test("one automatic source separates mixed music, audiobooks, and podcasts", asy
       },
     });
     assert.equal(response.statusCode, 201, response.body);
-    const source = response.json<CreateSourceResponse>();
+    const source = response.json<CreateLibrarySourceResponse>();
     assert.ok(source.task);
     await waitForTask(context, source.task.id);
 
-    const tracks = await context.database.orm.Track.all();
+    const tracks = await context.database.orm.Media.all();
     const byTitle = new Map(tracks.map((track) => [track.title, track]));
     assert.equal(byTitle.get("Music Track")?.mediaType, "music");
     assert.equal(byTitle.get("Chapter One")?.mediaType, "audiobook");
@@ -156,7 +156,7 @@ test("automatic detection keeps books and shows separate from music", async () =
 
     const bookSourceResponse = await context.app.inject({
       method: "POST",
-      url: "/api/admin/sources",
+      url: "/api/admin/library-sources",
       headers: context.authorization,
       payload: {
         kind: "path",
@@ -164,7 +164,7 @@ test("automatic detection keeps books and shows separate from music", async () =
       },
     });
     assert.equal(bookSourceResponse.statusCode, 201);
-    const bookSource = bookSourceResponse.json<CreateSourceResponse>();
+    const bookSource = bookSourceResponse.json<CreateLibrarySourceResponse>();
     assert.ok(bookSource.task);
     await waitForTask(context, bookSource.task.id);
 
@@ -198,7 +198,7 @@ test("automatic detection keeps books and shows separate from music", async () =
     );
     const podcastSourceResponse = await context.app.inject({
       method: "POST",
-      url: "/api/admin/sources",
+      url: "/api/admin/library-sources",
       headers: context.authorization,
       payload: {
         kind: "path",
@@ -206,7 +206,8 @@ test("automatic detection keeps books and shows separate from music", async () =
       },
     });
     assert.equal(podcastSourceResponse.statusCode, 201);
-    const podcastSource = podcastSourceResponse.json<CreateSourceResponse>();
+    const podcastSource =
+      podcastSourceResponse.json<CreateLibrarySourceResponse>();
     assert.ok(podcastSource.task);
     await waitForTask(context, podcastSource.task.id);
 
@@ -252,7 +253,7 @@ test("automatic detection keeps books and shows separate from music", async () =
       url: `/api/audiobooks/${audiobook.id}/chapters`,
       headers: context.authorization,
     });
-    const chapters = chaptersResponse.json<TrackListResponse>();
+    const chapters = chaptersResponse.json<MediaListResponse>();
     assert.equal(chapters.totalCount, 2);
     assert.deepEqual(
       chapters.items.map((track) => track.title),
@@ -290,7 +291,7 @@ test("automatic detection keeps books and shows separate from music", async () =
       url: `/api/podcasts/${podcast.id}/episodes`,
       headers: context.authorization,
     });
-    const episodes = episodesResponse.json<TrackListResponse>();
+    const episodes = episodesResponse.json<MediaListResponse>();
     assert.equal(episodes.totalCount, 2);
     assert.deepEqual(
       episodes.items.map((track) => track.title),
@@ -335,10 +336,10 @@ test("automatic detection keeps books and shows separate from music", async () =
 test("media classification mutation routes are not exposed", async () => {
   const context = await createTestContext();
   try {
-    const source = await context.database.orm.Source.firstOrThrow();
+    const source = await context.database.orm.LibrarySource.firstOrThrow();
     const sourceUpdate = await context.app.inject({
       method: "PATCH",
-      url: `/api/admin/sources/${source.id}`,
+      url: `/api/admin/library-sources/${source.id}`,
       headers: context.authorization,
       payload: { classificationMode: "fixed", fixedMediaType: "audiobook" },
     });

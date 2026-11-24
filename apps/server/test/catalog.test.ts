@@ -8,11 +8,16 @@ import type {
   ArtistListResponse,
   AudiobookListResponse,
   PodcastListResponse,
-  TrackListResponse,
+  MediaListResponse,
 } from "@peridot/contracts";
 import { CatalogService } from "../src/catalog.js";
 import { PlaybackTokenService } from "../src/playback-tokens.js";
-import { createTaggedMp3, createTestContext, startScan } from "./helpers.js";
+import {
+  createMediaFixture,
+  createTaggedMp3,
+  createTestContext,
+  startScan,
+} from "./helpers.js";
 
 test("catalog endpoints page tracks, albums, artists, search, and likes", async () => {
   const context = await createTestContext();
@@ -39,11 +44,11 @@ test("catalog endpoints page tracks, albums, artists, search, and likes", async 
 
     const first = await context.app.inject({
       method: "GET",
-      url: "/api/tracks?limit=5&sort=title",
+      url: "/api/media?limit=5&sort=title",
       headers: context.authorization,
     });
     assert.equal(first.statusCode, 200);
-    const page = first.json<TrackListResponse>();
+    const page = first.json<MediaListResponse>();
     assert.equal(page.items.length, 5);
     assert.equal(page.totalCount, 12);
     assert.ok(page.nextCursor);
@@ -51,11 +56,11 @@ test("catalog endpoints page tracks, albums, artists, search, and likes", async 
 
     const second = await context.app.inject({
       method: "GET",
-      url: `/api/tracks?limit=5&sort=title&cursor=${encodeURIComponent(page.nextCursor!)}`,
+      url: `/api/media?limit=5&sort=title&cursor=${encodeURIComponent(page.nextCursor!)}`,
       headers: context.authorization,
     });
     assert.equal(second.statusCode, 200);
-    const secondPage = second.json<TrackListResponse>();
+    const secondPage = second.json<MediaListResponse>();
     assert.equal(secondPage.totalCount, 12);
     assert.equal(
       new Set([
@@ -67,11 +72,11 @@ test("catalog endpoints page tracks, albums, artists, search, and likes", async 
 
     const offsetPage = await context.app.inject({
       method: "GET",
-      url: "/api/tracks?limit=5&sort=title&offset=10",
+      url: "/api/media?limit=5&sort=title&offset=10",
       headers: context.authorization,
     });
     assert.equal(offsetPage.statusCode, 200);
-    const finalPage = offsetPage.json<TrackListResponse>();
+    const finalPage = offsetPage.json<MediaListResponse>();
     assert.equal(finalPage.items.length, 2);
     assert.equal(finalPage.totalCount, 12);
     assert.equal(
@@ -85,13 +90,13 @@ test("catalog endpoints page tracks, albums, artists, search, and likes", async 
 
     const invalid = await context.app.inject({
       method: "GET",
-      url: "/api/tracks?limit=500",
+      url: "/api/media?limit=500",
       headers: context.authorization,
     });
     assert.equal(invalid.statusCode, 400);
     const invalidOffset = await context.app.inject({
       method: "GET",
-      url: "/api/tracks?offset=-1",
+      url: "/api/media?offset=-1",
       headers: context.authorization,
     });
     assert.equal(invalidOffset.statusCode, 400);
@@ -137,18 +142,30 @@ test("catalog endpoints page tracks, albums, artists, search, and likes", async 
       })
     ).json<AlbumListResponse>().items[0];
     assert.equal(sharedAlbum?.title, "Shared Album");
-    const jellyfinSource = await context.database.orm.Source.create({
+    const jellyfinSource = await context.database.orm.LibrarySource.create({
       kind: "jellyfin",
       name: "Music server",
       position: 1,
     });
     const sharedProjection =
-      await context.database.orm.CatalogTrack.firstOrThrow({
+      await context.database.orm.CatalogMedia.firstOrThrow({
         albumId: sharedAlbum!.id,
       });
-    await context.database.orm.CatalogTrack.where({
-      id: sharedProjection.id,
-    }).update({ sourceId: jellyfinSource.id });
+    const sourceCopy = await context.database.orm.MediaCopy.firstOrThrow({
+      mediaId: sharedProjection.id,
+    });
+    const copyData = { ...sourceCopy } as Record<string, unknown>;
+    delete copyData.id;
+    delete copyData.librarySourceId;
+    delete copyData.relativePath;
+    delete copyData.createdAt;
+    delete copyData.updatedAt;
+    await context.database.orm.MediaCopy.create({
+      ...copyData,
+      mediaId: sharedProjection.id,
+      librarySourceId: jellyfinSource.id,
+      relativePath: "server/shared-album-track.mp3",
+    } as never);
     const sharedDetail = await context.app.inject({
       method: "GET",
       url: `/api/albums/${sharedAlbum!.id}`,
@@ -189,10 +206,10 @@ test("catalog endpoints page tracks, albums, artists, search, and likes", async 
     const search = (
       await context.app.inject({
         method: "GET",
-        url: "/api/tracks?query=track&sort=title&limit=20",
+        url: "/api/media?query=track&sort=title&limit=20",
         headers: context.authorization,
       })
-    ).json<TrackListResponse>();
+    ).json<MediaListResponse>();
     assert.equal(search.items.length, 12);
     assert.equal(search.totalCount, 12);
 
@@ -201,15 +218,15 @@ test("catalog endpoints page tracks, albums, artists, search, and likes", async 
       method: "POST",
       url: "/api/likes",
       headers: context.authorization,
-      payload: { kind: "track", trackId: likedTrack.id },
+      payload: { kind: "media", mediaId: likedTrack.id },
     });
     const liked = (
       await context.app.inject({
         method: "GET",
-        url: "/api/tracks?liked=true",
+        url: "/api/media?liked=true",
         headers: context.authorization,
       })
-    ).json<TrackListResponse>();
+    ).json<MediaListResponse>();
     assert.equal(liked.totalCount, 1);
     assert.deepEqual(
       liked.items.map((track) => track.id),
@@ -219,7 +236,7 @@ test("catalog endpoints page tracks, albums, artists, search, and likes", async 
 
     const resolved = await context.app.inject({
       method: "POST",
-      url: "/api/tracks/resolve",
+      url: "/api/media/resolve",
       headers: context.authorization,
       payload: { ids: [page.items[2]!.id, page.items[0]!.id] },
     });
@@ -266,19 +283,19 @@ test("catalog keyset pages survive changes between page requests", async () => {
     ]) {
       const firstPage = await context.app.inject({
         method: "GET",
-        url: `/api/tracks?limit=5&sort=${sort}`,
+        url: `/api/media?limit=5&sort=${sort}`,
         headers: context.authorization,
       });
       assert.equal(firstPage.statusCode, 200);
-      const firstPageBody = firstPage.json<TrackListResponse>();
+      const firstPageBody = firstPage.json<MediaListResponse>();
       assert.ok(firstPageBody.nextCursor);
       const secondPage = await context.app.inject({
         method: "GET",
-        url: `/api/tracks?limit=5&sort=${sort}&cursor=${encodeURIComponent(firstPageBody.nextCursor!)}`,
+        url: `/api/media?limit=5&sort=${sort}&cursor=${encodeURIComponent(firstPageBody.nextCursor!)}`,
         headers: context.authorization,
       });
       assert.equal(secondPage.statusCode, 200);
-      const secondPageBody = secondPage.json<TrackListResponse>();
+      const secondPageBody = secondPage.json<MediaListResponse>();
       assert.equal(
         new Set([
           ...firstPageBody.items.map((track) => track.id),
@@ -291,15 +308,15 @@ test("catalog keyset pages survive changes between page requests", async () => {
     const tracks = (
       await context.app.inject({
         method: "GET",
-        url: "/api/tracks?limit=5&sort=title",
+        url: "/api/media?limit=5&sort=title",
         headers: context.authorization,
       })
-    ).json<TrackListResponse>();
+    ).json<MediaListResponse>();
     assert.ok(tracks.nextCursor);
-    const trackRow = await context.database.orm.CatalogTrack.firstOrThrow({
+    const trackRow = await context.database.orm.CatalogMedia.firstOrThrow({
       id: tracks.items[0]!.id,
     });
-    await context.database.orm.CatalogTrack.create({
+    await context.database.orm.CatalogMedia.create({
       ...trackRow,
       id: "track-inserted-before-page",
       title: "Track 000",
@@ -311,11 +328,11 @@ test("catalog keyset pages survive changes between page requests", async () => {
 
     const changedTracks = await context.app.inject({
       method: "GET",
-      url: `/api/tracks?limit=5&sort=title&cursor=${encodeURIComponent(tracks.nextCursor!)}`,
+      url: `/api/media?limit=5&sort=title&cursor=${encodeURIComponent(tracks.nextCursor!)}`,
       headers: context.authorization,
     });
     assert.equal(changedTracks.statusCode, 200);
-    const nextTracks = changedTracks.json<TrackListResponse>();
+    const nextTracks = changedTracks.json<MediaListResponse>();
     assert.equal(
       new Set([
         ...tracks.items.map((track) => track.id),
@@ -494,24 +511,24 @@ test("scoped catalog search filters each media collection before paging", async 
     const music = (
       await context.app.inject({
         method: "GET",
-        url: "/api/tracks?query=harbor",
+        url: "/api/media?query=harbor",
         headers: context.authorization,
       })
-    ).json<TrackListResponse>();
+    ).json<MediaListResponse>();
     assert.equal(music.totalCount, 1);
     await context.app.inject({
       method: "POST",
       url: "/api/likes",
       headers: context.authorization,
-      payload: { kind: "track", trackId: music.items[0]!.id },
+      payload: { kind: "media", mediaId: music.items[0]!.id },
     });
     const liked = (
       await context.app.inject({
         method: "GET",
-        url: "/api/tracks?liked=true&query=harbor",
+        url: "/api/media?liked=true&query=harbor",
         headers: context.authorization,
       })
-    ).json<TrackListResponse>();
+    ).json<MediaListResponse>();
     assert.equal(liked.totalCount, 1);
     assert.equal(liked.items[0]?.id, music.items[0]?.id);
   } finally {
@@ -568,63 +585,60 @@ test("release identity groups varied track credits while preserving guest artist
   try {
     await catalog.initialize();
     const tracks = await Promise.all([
-      context.database.orm.Track.create({
-        title: "Opening",
-        artist: "Daft Punk",
-        album: "Random Access Memories",
-        metadataArtist: "Daft Punk, Nile Rodgers",
-        metadataArtistCredits: JSON.stringify(["Daft Punk", "Nile Rodgers"]),
-        metadataAlbumArtist: "Daft Punk",
-        metadataAlbumArtistCredits: JSON.stringify(["Daft Punk"]),
-        metadataProviderId: "provider-1",
-        metadataProviderKind: "musicbrainz",
-        metadataExternalTrackId: "track-1",
-        metadataExternalReleaseId: "release-1",
-        metadataMatchedAt: new Date(),
-        relativePath: "Random Access Memories/01 Opening.mp3",
-        mimeType: "audio/mpeg",
-        fileSizeBytes: 1n,
-        fileModifiedAt: new Date(0),
-        trackNumber: 1,
-      }),
-      context.database.orm.Track.create({
-        title: "Guests",
-        artist: "Daft Punk",
-        album: "Random Access Memories",
-        metadataArtist: "Daft Punk, Pharrell Williams, Nile Rodgers",
-        metadataArtistCredits: JSON.stringify([
-          "Daft Punk",
-          "Pharrell Williams",
-          "Nile Rodgers",
-        ]),
-        metadataAlbumArtist: "Daft Punk",
-        metadataAlbumArtistCredits: JSON.stringify(["Daft Punk"]),
-        metadataProviderId: "provider-1",
-        metadataProviderKind: "musicbrainz",
-        metadataExternalTrackId: "track-2",
-        metadataExternalReleaseId: "release-1",
-        metadataMatchedAt: new Date(),
-        relativePath: "Random Access Memories/02 Guests.mp3",
-        mimeType: "audio/mpeg",
-        fileSizeBytes: 1n,
-        fileModifiedAt: new Date(0),
-        trackNumber: 2,
-      }),
-      context.database.orm.Track.create({
-        title: "Unmatched",
-        artist: "Daft Punk, Panda Bear",
-        artistCredits: JSON.stringify(["Daft Punk", "Panda Bear"]),
-        album: "Random Access Memories",
-        relativePath: "Random Access Memories/03 Unmatched.mp3",
-        mimeType: "audio/mpeg",
-        fileSizeBytes: 1n,
-        fileModifiedAt: new Date(0),
-        trackNumber: 3,
-      }),
+      createMediaFixture(context, {
+        media: {
+          title: "Opening",
+          artist: "Daft Punk",
+          album: "Random Access Memories",
+          metadataArtist: "Daft Punk, Nile Rodgers",
+          metadataArtistCredits: JSON.stringify(["Daft Punk", "Nile Rodgers"]),
+          metadataAlbumArtist: "Daft Punk",
+          metadataAlbumArtistCredits: JSON.stringify(["Daft Punk"]),
+          metadataProviderId: "provider-1",
+          metadataProviderKind: "musicbrainz",
+          metadataExternalTrackId: "track-1",
+          metadataExternalReleaseId: "release-1",
+          metadataMatchedAt: new Date(),
+          trackNumber: 1,
+        },
+        copy: { relativePath: "Random Access Memories/01 Opening.mp3" },
+      }).then(({ media }) => media),
+      createMediaFixture(context, {
+        media: {
+          title: "Guests",
+          artist: "Daft Punk",
+          album: "Random Access Memories",
+          metadataArtist: "Daft Punk, Pharrell Williams, Nile Rodgers",
+          metadataArtistCredits: JSON.stringify([
+            "Daft Punk",
+            "Pharrell Williams",
+            "Nile Rodgers",
+          ]),
+          metadataAlbumArtist: "Daft Punk",
+          metadataAlbumArtistCredits: JSON.stringify(["Daft Punk"]),
+          metadataProviderId: "provider-1",
+          metadataProviderKind: "musicbrainz",
+          metadataExternalTrackId: "track-2",
+          metadataExternalReleaseId: "release-1",
+          metadataMatchedAt: new Date(),
+          trackNumber: 2,
+        },
+        copy: { relativePath: "Random Access Memories/02 Guests.mp3" },
+      }).then(({ media }) => media),
+      createMediaFixture(context, {
+        media: {
+          title: "Unmatched",
+          artist: "Daft Punk, Panda Bear",
+          artistCredits: JSON.stringify(["Daft Punk", "Panda Bear"]),
+          album: "Random Access Memories",
+          trackNumber: 3,
+        },
+        copy: { relativePath: "Random Access Memories/03 Unmatched.mp3" },
+      }).then(({ media }) => media),
     ]);
 
     for (const track of tracks) {
-      await catalog.reindexTrack(track.id, "metadata");
+      await catalog.reindexMedia(track.id, "metadata");
     }
 
     const response = await catalog.listAlbums({
@@ -648,7 +662,7 @@ test("release identity groups varied track credits while preserving guest artist
       [response.items[0]!.id],
     );
 
-    const albumTracks = await catalog.listTracks({
+    const albumTracks = await catalog.listMedia({
       userId: (await context.database.orm.User.firstOrThrow()).id,
       albumId: response.items[0]!.id,
       sort: "track",
@@ -681,69 +695,76 @@ test("album artists group a release across folders without collapsing ambiguous 
   );
   const base = {
     album: "Shared Album",
-    mimeType: "audio/mpeg",
-    fileSizeBytes: 1n,
-    fileModifiedAt: new Date(0),
   };
   try {
     await catalog.initialize();
     const tracks = await Promise.all([
-      context.database.orm.Track.create({
-        ...base,
-        title: "First",
-        artist: "Album Artist, Guest One",
-        artistCredits: JSON.stringify(["Album Artist", "Guest One"]),
-        albumArtist: "Album Artist",
-        albumArtistCredits: JSON.stringify(["Album Artist"]),
-        relativePath: "Edition A/01 First.mp3",
-        trackNumber: 1,
-      }),
-      context.database.orm.Track.create({
-        ...base,
-        title: "Second",
-        artist: "Album Artist, Guest Two",
-        artistCredits: JSON.stringify(["Album Artist", "Guest Two"]),
-        albumArtist: "Album Artist",
-        albumArtistCredits: JSON.stringify(["Album Artist"]),
-        relativePath: "Edition B/01 Second.mp3",
-        trackNumber: 1,
-      }),
-      context.database.orm.Track.create({
-        ...base,
-        title: "Release One",
-        artist: "Album Artist",
-        metadataProviderId: "provider-1",
-        metadataProviderKind: "musicbrainz",
-        metadataExternalTrackId: "release-one-track",
-        metadataExternalReleaseId: "release-one",
-        metadataMatchedAt: new Date(),
-        relativePath: "Ambiguous/01 One.mp3",
-        trackNumber: 1,
-      }),
-      context.database.orm.Track.create({
-        ...base,
-        title: "Release Two",
-        artist: "Album Artist",
-        metadataProviderId: "provider-1",
-        metadataProviderKind: "musicbrainz",
-        metadataExternalTrackId: "release-two-track",
-        metadataExternalReleaseId: "release-two",
-        metadataMatchedAt: new Date(),
-        relativePath: "Ambiguous/02 Two.mp3",
-        trackNumber: 2,
-      }),
-      context.database.orm.Track.create({
-        ...base,
-        title: "Ambiguous Unmatched",
-        artist: "Album Artist, Guest Three",
-        artistCredits: JSON.stringify(["Album Artist", "Guest Three"]),
-        relativePath: "Ambiguous/03 Three.mp3",
-        trackNumber: 3,
-      }),
+      createMediaFixture(context, {
+        media: {
+          ...base,
+          title: "First",
+          artist: "Album Artist, Guest One",
+          artistCredits: JSON.stringify(["Album Artist", "Guest One"]),
+          albumArtist: "Album Artist",
+          albumArtistCredits: JSON.stringify(["Album Artist"]),
+          trackNumber: 1,
+        },
+        copy: { relativePath: "Edition A/01 First.mp3" },
+      }).then(({ media }) => media),
+      createMediaFixture(context, {
+        media: {
+          ...base,
+          title: "Second",
+          artist: "Album Artist, Guest Two",
+          artistCredits: JSON.stringify(["Album Artist", "Guest Two"]),
+          albumArtist: "Album Artist",
+          albumArtistCredits: JSON.stringify(["Album Artist"]),
+          trackNumber: 1,
+        },
+        copy: { relativePath: "Edition B/01 Second.mp3" },
+      }).then(({ media }) => media),
+      createMediaFixture(context, {
+        media: {
+          ...base,
+          title: "Release One",
+          artist: "Album Artist",
+          metadataProviderId: "provider-1",
+          metadataProviderKind: "musicbrainz",
+          metadataExternalTrackId: "release-one-track",
+          metadataExternalReleaseId: "release-one",
+          metadataMatchedAt: new Date(),
+          trackNumber: 1,
+        },
+        copy: { relativePath: "Ambiguous/01 One.mp3" },
+      }).then(({ media }) => media),
+      createMediaFixture(context, {
+        media: {
+          ...base,
+          title: "Release Two",
+          artist: "Album Artist",
+          metadataProviderId: "provider-1",
+          metadataProviderKind: "musicbrainz",
+          metadataExternalTrackId: "release-two-track",
+          metadataExternalReleaseId: "release-two",
+          metadataMatchedAt: new Date(),
+          trackNumber: 2,
+        },
+        copy: { relativePath: "Ambiguous/02 Two.mp3" },
+      }).then(({ media }) => media),
+      createMediaFixture(context, {
+        media: {
+          ...base,
+          title: "Ambiguous Unmatched",
+          artist: "Album Artist, Guest Three",
+          artistCredits: JSON.stringify(["Album Artist", "Guest Three"]),
+          trackNumber: 3,
+        },
+        copy: { relativePath: "Ambiguous/03 Three.mp3" },
+      }).then(({ media }) => media),
     ]);
 
     for (const track of tracks) {
-      await catalog.reindexTrack(track.id, "metadata");
+      await catalog.reindexMedia(track.id, "metadata");
     }
 
     const albums = (
@@ -751,7 +772,23 @@ test("album artists group a release across folders without collapsing ambiguous 
         userId: (await context.database.orm.User.firstOrThrow()).id,
       })
     ).items;
-    assert.equal(albums.length, 4);
+    const projections = await context.database.orm.CatalogMedia.all();
+    assert.equal(
+      albums.length,
+      4,
+      JSON.stringify({
+        albums: albums.map((album) => [
+          album.id,
+          album.artist,
+          album.trackCount,
+        ]),
+        projections: projections.map((media) => [
+          media.title,
+          media.albumId,
+          media.albumReleaseKey,
+        ]),
+      }),
+    );
     assert.deepEqual(
       albums
         .map((album) => [album.artist, album.trackCount])

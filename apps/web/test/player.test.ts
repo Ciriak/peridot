@@ -23,7 +23,7 @@ test("the persistent player controls a native audio element", async () => {
   );
   assert.match(player, /\.catch\(\(\) => undefined\)/);
   assert.match(player, /trackAudioUrl\(/);
-  assert.match(player, /downloadTrack\(trackId = currentTrackId\.value\)/);
+  assert.match(player, /downloadTrack\(mediaId = currentTrackId\.value\)/);
   assert.match(player, /anchor\.download = trackDownloadFileName\(track\)/);
   assert.doesNotMatch(
     player,
@@ -55,7 +55,7 @@ test("the persistent player controls a native audio element", async () => {
   assert.doesNotMatch(player, /fetchQueue\(|\/api\/queue/);
   assert.match(
     player,
-    /const stored = readPersistedPlayerState\(window\.localStorage, scope\);[\s\S]*?setQueueSnapshot\([\s\S]*?trackIds: stored\.queueTrackIds[\s\S]*?activeTrackId: stored\.currentTrackId[\s\S]*?elapsed\.value = stored\.positionSeconds/,
+    /const stored = readPersistedPlayerState\(window\.localStorage, scope\);[\s\S]*?setQueueSnapshot\([\s\S]*?mediaIds: stored\.queueTrackIds[\s\S]*?activeTrackId: stored\.currentTrackId[\s\S]*?elapsed\.value = stored\.positionSeconds/,
     "A reload restores the selected track, active queue, and playback progress locally",
   );
   assert.match(
@@ -75,7 +75,7 @@ test("the persistent player controls a native audio element", async () => {
   );
   assert.match(
     player,
-    /aliases\[trackId\] \?\? trackId/,
+    /aliases\[mediaId\] \?\? mediaId/,
     "Queue hydration applies canonical duplicate aliases",
   );
   assert.match(
@@ -90,7 +90,7 @@ test("the persistent player controls a native audio element", async () => {
   );
   assert.match(
     player,
-    /previous !== undefined && trackId !== previousTrackId/,
+    /previous !== undefined && mediaId !== previousTrackId/,
     "Remounting the player preserves the current elapsed position",
   );
   assert.match(
@@ -348,7 +348,7 @@ test("the player replaces known track metadata without an unresolved frame", asy
   );
   assert.match(
     player,
-    /rememberQueueTrackDetails\(track \? \[track\] : \[\], trackIds\);\s+setQueueSnapshot\(/,
+    /rememberQueueTrackDetails\(track \? \[track\] : \[\], mediaIds\);\s+setQueueSnapshot\(/,
     "A selected known track is added before its queue snapshot becomes active",
   );
   assert.match(
@@ -368,7 +368,7 @@ test("the player replaces known track metadata without an unresolved frame", asy
   );
   assert.match(
     collections,
-    /Promise<TrackResponse\[\]>[\s\S]*tracks\.push\(\.\.\.page\.items\)/,
+    /Promise<MediaResponse\[\]>[\s\S]*tracks\.push\(\.\.\.page\.items\)/,
     "Collection loading retains track metadata instead of returning IDs only",
   );
 });

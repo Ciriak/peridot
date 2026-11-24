@@ -20,8 +20,8 @@ test("administrators can update and validate the source refresh schedule", async
     });
     assert.equal(updated.statusCode, 200);
     assert.deepEqual(updated.json(), {
-      trackCount: 0,
-      availableTrackCount: 0,
+      mediaCount: 0,
+      availableMediaCount: 0,
       scanning: {
         workerCount: 6,
       },

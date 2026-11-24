@@ -2,6 +2,20 @@ export const VIRTUAL_ALBUM_PAGE_SIZE = 100;
 export const VIRTUAL_WINDOW_LOAD_DELAY_MS = 250;
 const PAGE_NEIGHBORHOOD = 1;
 
+export function virtualCardRowPlaceholderCount(
+  rowIndex: number,
+  columns: number,
+  totalItemCount: number,
+  loadedRowItemCount: number,
+): number {
+  const rowStart = Math.max(0, rowIndex) * columns;
+  const rowItemCapacity = Math.min(
+    columns,
+    Math.max(0, totalItemCount - rowStart),
+  );
+  return Math.max(0, rowItemCapacity - loadedRowItemCount);
+}
+
 export function virtualAlbumPageOffsets(
   startIndex: number,
   endIndex: number,

@@ -1,4 +1,4 @@
-import type { TrackResponse } from "@peridot/contracts";
+import type { MediaResponse } from "@peridot/contracts";
 
 export interface PlaybackAvailability {
   serverLost: boolean;
@@ -7,7 +7,7 @@ export interface PlaybackAvailability {
 }
 
 export function isTrackPlayable(
-  track: TrackResponse,
+  track: MediaResponse,
   availability: PlaybackAvailability,
 ): boolean {
   if (availability.unavailableTrackIds?.has(track.id)) return false;
@@ -18,8 +18,8 @@ export function isTrackPlayable(
 }
 
 export function playableTracks(
-  tracks: readonly TrackResponse[],
+  tracks: readonly MediaResponse[],
   availability: PlaybackAvailability,
-): TrackResponse[] {
+): MediaResponse[] {
   return tracks.filter((track) => isTrackPlayable(track, availability));
 }

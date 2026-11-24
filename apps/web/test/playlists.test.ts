@@ -4,7 +4,7 @@ import test from "node:test";
 import type {
   PlaylistEntryResponse,
   PlaylistSummaryResponse,
-  TrackResponse,
+  MediaResponse,
 } from "@peridot/contracts";
 import {
   filterAddablePlaylists,
@@ -13,7 +13,7 @@ import {
   playlistPlayableTracks,
 } from "../app/lib/playlists.ts";
 
-function track(id: string, available = true): TrackResponse {
+function track(id: string, available = true): MediaResponse {
   return {
     id,
     title: `Track ${id}`,
@@ -24,6 +24,9 @@ function track(id: string, available = true): TrackResponse {
     discNumber: 1,
     trackNumber: 1,
     durationMs: 120000,
+    mediaType: "music",
+    mediaTypeOrigin: "embedded",
+    genres: [],
     mimeType: "audio/mpeg",
     available,
     coverUrl: `/api/covers/${id}?coverToken=token`,
@@ -34,7 +37,7 @@ function track(id: string, available = true): TrackResponse {
 
 function entry(
   id: string,
-  catalogTrack: TrackResponse | null,
+  catalogTrack: MediaResponse | null,
 ): PlaylistEntryResponse {
   return {
     id,
@@ -47,7 +50,7 @@ function entry(
     coverUrl: catalogTrack?.coverUrl ?? null,
     available: Boolean(catalogTrack?.available),
     liked: Boolean(catalogTrack?.liked),
-    track: catalogTrack,
+    media: catalogTrack,
     external: catalogTrack
       ? null
       : {
@@ -153,15 +156,15 @@ test("automatic playlist search matches title, artist, and album", () => {
   ];
 
   assert.deepEqual(
-    filterPlaylistEntries(entries, "drive").map((item) => item.track?.id),
+    filterPlaylistEntries(entries, "drive").map((item) => item.media?.id),
     ["a"],
   );
   assert.deepEqual(
-    filterPlaylistEntries(entries, "second").map((item) => item.track?.id),
+    filterPlaylistEntries(entries, "second").map((item) => item.media?.id),
     ["b"],
   );
   assert.deepEqual(
-    filterPlaylistEntries(entries, "road").map((item) => item.track?.id),
+    filterPlaylistEntries(entries, "road").map((item) => item.media?.id),
     ["a"],
   );
 });
@@ -268,20 +271,20 @@ test("playlist pages expose creation, unavailable tracks, editing, likes, and of
   assert.match(trackList, /useSortable/);
   assert.match(
     trackList,
-    /<Badge\s+v-if="\s*entry\.track && !entry\.track\.available && playable\(entry\)\s*"[\s\S]*?trackTable\.availableOffline/,
+    /<Badge\s+v-if="\s*entry\.media && !entry\.media\.available && playable\(entry\)\s*"[\s\S]*?trackTable\.availableOffline/,
   );
   assert.match(
     trackList,
-    /<Badge v-else-if="!entry\.track" variant="secondary">\s*\{\{ t\("playlistTracks\.unavailable"\) \}\}\s*<\/Badge>/,
+    /<Badge v-else-if="!entry\.media" variant="secondary">\s*\{\{ t\("playlistTracks\.unavailable"\) \}\}\s*<\/Badge>/,
   );
   assert.match(
     trackList,
-    /v-if="entry\.track && !playable\(entry\)"\s+:icon="icons\.cloudOff"/,
+    /v-if="entry\.media && !playable\(entry\)"\s+:icon="icons\.cloudOff"/,
     "Resolved but unplayable playlist tracks show the shared cloud-off hint",
   );
   assert.match(
     trackList,
-    /if \(!playable\(entry\)\) \{\s+retryUnavailableTrack\(entry\.track\);\s+return;\s+\}/,
+    /if \(!playable\(entry\)\) \{\s+retryUnavailableTrack\(entry\.media\);\s+return;\s+\}/,
     "Resolved but unplayable playlist tracks retry through the shared player",
   );
   assert.match(trackList, /emit\(\s*"reorder"/);
@@ -293,7 +296,7 @@ test("playlist pages expose creation, unavailable tracks, editing, likes, and of
   );
   assert.match(
     trackList,
-    /<ScrollingText\s+class="min-w-0"[\s\S]*>\s*\{\{ entry\.title \}\}\s*<\/ScrollingText>\s*<Icon\s+v-if="entry\.track && !playable\(entry\)"[\s\S]*?<Icon\s+v-if="isCurrent\(entry\)"\s+:icon="icons\.waveform"/,
+    /<ScrollingText\s+class="min-w-0"[\s\S]*>\s*\{\{ entry\.title \}\}\s*<\/ScrollingText>\s*<Icon\s+v-if="entry\.media && !playable\(entry\)"[\s\S]*?<Icon\s+v-if="isCurrent\(entry\)"\s+:icon="icons\.waveform"/,
     "Unavailable and current-track indicators follow the playlist title consistently",
   );
   assert.match(contextMenu, /<AddTrackToPlaylistSubmenu/);

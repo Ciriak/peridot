@@ -24,18 +24,18 @@ class PeridotApiClient(
         val session = requireSession()
         val response = requestJson(
             session,
-            "/api/tracks/${encodePath(trackId)}/playback-token",
+            "/api/media/${encodePath(trackId)}/playback-token",
             method = "POST",
         )
         val token = response.getString("token")
-        return "${session.serverAddress}/api/tracks/${encodePath(trackId)}/audio" +
+        return "${session.serverAddress}/api/media/${encodePath(trackId)}/audio" +
             "?playbackToken=${encodePath(token)}"
     }
 
     fun track(trackId: String): TrackSnapshot {
         val session = requireSession()
         return trackFromJson(
-            requestJson(session, "/api/tracks/${encodePath(trackId)}"),
+            requestJson(session, "/api/media/${encodePath(trackId)}"),
             session.serverAddress,
         )
     }
@@ -134,7 +134,7 @@ class PeridotApiClient(
         val entries = response.optJSONArray("entries") ?: JSONArray()
         return buildList {
             for (index in 0 until entries.length()) {
-                val track = entries.getJSONObject(index).optJSONObject("track") ?: continue
+                val track = entries.getJSONObject(index).optJSONObject("media") ?: continue
                 add(trackFromJson(track, session.serverAddress))
             }
         }
@@ -190,7 +190,7 @@ class PeridotApiClient(
     ): List<BrowseEntry> {
         val response = requestJson(
             session,
-            "/api/tracks${query(linkedMapOf("query" to text, "limit" to "40"))}",
+            "/api/media${query(linkedMapOf("query" to text, "limit" to "40"))}",
         )
         val items = response.optJSONArray("items") ?: JSONArray()
         return buildList {
@@ -253,7 +253,7 @@ class PeridotApiClient(
             cursor?.let { params["cursor"] = it }
             val page = requestJson(
                 session,
-                "/api/tracks${query(params)}",
+                "/api/media${query(params)}",
             )
             val items = page.optJSONArray("items") ?: JSONArray()
             for (index in 0 until items.length()) {

@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { SourceIntegrationDefinition } from "../src/source-integrations.js";
+import type { LibrarySourceConnectorDefinition } from "../src/source-integrations.js";
 import {
-  SourceIntegrationRegistry,
-  SourceIntegrationService,
+  LibrarySourceConnectorRegistry,
+  LibrarySourceConnectorService,
 } from "../src/source-integrations.js";
 import { CredentialStore } from "../src/credential-store.js";
 import { createTestContext } from "./helpers.js";
 
-function testIntegration(kind: string): SourceIntegrationDefinition {
+function testIntegration(kind: string): LibrarySourceConnectorDefinition {
   return {
     kind,
     async discover() {
@@ -39,11 +39,14 @@ function testIntegration(kind: string): SourceIntegrationDefinition {
 }
 
 test("built-in source registry dispatches to more than one integration", async () => {
-  const registry = new SourceIntegrationRegistry([
+  const registry = new LibrarySourceConnectorRegistry([
     testIntegration("jellyfin"),
     testIntegration("future-source"),
   ]);
-  const service = new SourceIntegrationService(registry, new CredentialStore());
+  const service = new LibrarySourceConnectorService(
+    registry,
+    new CredentialStore(),
+  );
 
   const options = await service.discover("future-source", {
     configuration: {},

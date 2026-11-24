@@ -39,7 +39,7 @@ test("request completions are debug and errors are warnings", async () => {
 
     const response = await context.app.inject({
       method: "DELETE",
-      url: "/api/admin/sources/missing",
+      url: "/api/admin/library-sources/missing",
       headers: {
         ...context.authorization,
         "content-type": "application/json",
@@ -60,7 +60,9 @@ test("request completions are debug and errors are warnings", async () => {
       entries.some(
         (entry) =>
           entry.level === "warn" &&
-          entry.message.startsWith("DELETE /api/admin/sources/missing 400 "),
+          entry.message.startsWith(
+            "DELETE /api/admin/library-sources/missing 400 ",
+          ),
       ),
     );
     assert.ok(

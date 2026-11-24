@@ -121,7 +121,7 @@ test("external results use a counted tab and render only through the external pa
     searchPage,
     /<TabsContent v-if="showSearchTabs" value="external"/,
   );
-  assert.match(searchPage, /<TorznabResults/);
+  assert.match(searchPage, /<ExternalResults/);
   assert.match(
     searchPage,
     /watch\(searching,[\s\S]*?router\.replace\([\s\S]*?buildSearchTabHistoryLocation\(route\.query, "library"\)[\s\S]*?\);/,
@@ -223,7 +223,7 @@ test("result-type tags are accessible quick filters", async () => {
   );
   assert.match(
     searchPage,
-    /filterTorznabReleases\(externalReleases\.value, externalResultFilter\.value\)/,
+    /filterReleaseResults\(externalReleases\.value, externalResultFilter\.value\)/,
   );
   assert.doesNotMatch(
     searchPage,

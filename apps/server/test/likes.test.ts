@@ -27,7 +27,7 @@ async function createCatalogTrack(
   );
   const scan = await startScan(context);
   assert.equal(scan.status, "completed");
-  return context.database.orm.Track.firstOrThrow();
+  return context.database.orm.Media.firstOrThrow();
 }
 
 async function listLikes(
@@ -55,7 +55,7 @@ test("likes persist for tracks, albums, and artists with normalized identities",
     const track = await createCatalogTrack(context);
     const album = await catalogAlbum(context);
     const targets = [
-      { kind: "track", trackId: track.id },
+      { kind: "media", mediaId: track.id },
       {
         kind: "album",
         albumId: album.id,
@@ -99,7 +99,7 @@ test("likes persist for tracks, albums, and artists with normalized identities",
 
     const likes = await listLikes(context);
     assert.deepEqual(
-      likes.tracks.map((item) => item.trackId),
+      likes.media.map((item) => item.mediaId),
       [track.id],
     );
     assert.deepEqual(
@@ -115,7 +115,7 @@ test("likes persist for tracks, albums, and artists with normalized identities",
       method: "DELETE",
       url: "/api/likes",
       headers: context.authorization,
-      payload: { kind: "track", trackId: track.id },
+      payload: { kind: "media", mediaId: track.id },
     });
     assert.equal(removed.statusCode, 204);
     assert.equal(
@@ -124,12 +124,12 @@ test("likes persist for tracks, albums, and artists with normalized identities",
           method: "DELETE",
           url: "/api/likes",
           headers: context.authorization,
-          payload: { kind: "track", trackId: track.id },
+          payload: { kind: "media", mediaId: track.id },
         })
       ).statusCode,
       204,
     );
-    assert.equal((await listLikes(context)).tracks.length, 0);
+    assert.equal((await listLikes(context)).media.length, 0);
     assert.equal((await listLikes(context)).albums.length, 1);
     assert.equal((await listLikes(context)).artists.length, 1);
 
@@ -153,7 +153,7 @@ test("likes persist for tracks, albums, and artists with normalized identities",
       }
     }
     assert.deepEqual(await listLikes(context), {
-      tracks: [],
+      media: [],
       albums: [],
       audiobooks: [],
       podcasts: [],
@@ -173,10 +173,10 @@ test("likes are private to each authenticated user", async () => {
       method: "POST",
       url: "/api/likes",
       headers: context.authorization,
-      payload: { kind: "track", trackId: track.id },
+      payload: { kind: "media", mediaId: track.id },
     });
     const member = await createMemberSession(context);
-    assert.equal((await listLikes(context, member)).tracks.length, 0);
+    assert.equal((await listLikes(context, member)).media.length, 0);
 
     await context.app.inject({
       method: "POST",
@@ -187,7 +187,7 @@ test("likes are private to each authenticated user", async () => {
         name: "Elliot Lake",
       },
     });
-    assert.equal((await listLikes(context)).tracks.length, 1);
+    assert.equal((await listLikes(context)).media.length, 1);
     assert.equal((await listLikes(context)).artists.length, 0);
     assert.equal((await listLikes(context, member)).artists.length, 1);
 
@@ -282,10 +282,10 @@ test("like validation rejects invalid targets and unknown tracks", async () => {
         method,
         url: "/api/likes",
         headers: context.authorization,
-        payload: { kind: "track", trackId: "missing" },
+        payload: { kind: "media", mediaId: "missing" },
       });
       assert.equal(response.statusCode, 404);
-      assert.equal(response.json().error.code, "track_not_found");
+      assert.equal(response.json().error.code, "media_not_found");
     }
   } finally {
     await context.close();
@@ -297,14 +297,14 @@ test("deleting a track or user removes their likes", async () => {
   try {
     const track = await createCatalogTrack(context);
     const album = await catalogAlbum(context);
-    await context.database.orm.TrackLike.create({
+    await context.database.orm.MediaLike.create({
       userId: (await context.database.orm.User.firstOrThrow()).id,
-      trackId: track.id,
+      mediaId: track.id,
     });
-    await context.database.orm.Track.where({ id: track.id }).delete();
+    await context.database.orm.Media.where({ id: track.id }).delete();
     assert.equal(
       (
-        await context.database.orm.TrackLike.aggregate((aggregate) => ({
+        await context.database.orm.MediaLike.aggregate((aggregate) => ({
           count: aggregate.count(),
         }))
       ).count,

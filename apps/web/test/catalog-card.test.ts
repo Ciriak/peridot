@@ -4,13 +4,13 @@ import test from "node:test";
 import type {
   AlbumSummaryResponse,
   PlaylistSummaryResponse,
-  TrackResponse,
+  MediaResponse,
 } from "@peridot/contracts";
 import {
   albumCatalogCard,
   catalogCardKey,
   playlistCatalogCard,
-  trackCatalogCard,
+  mediaCatalogCard,
 } from "../app/lib/catalog-cards.ts";
 
 const album: AlbumSummaryResponse = {
@@ -26,7 +26,7 @@ const album: AlbumSummaryResponse = {
   available: true,
   liked: false,
 };
-const track: TrackResponse = {
+const track: MediaResponse = {
   id: "track-1",
   mediaType: "music",
   mediaTypeOrigin: "embedded",
@@ -62,14 +62,14 @@ const playlist: PlaylistSummaryResponse = {
 
 test("catalog card items preserve their discriminated payload and key", () => {
   const albumItem = albumCatalogCard(album);
-  const trackItem = trackCatalogCard(track);
+  const trackItem = mediaCatalogCard(track);
   const playlistItem = playlistCatalogCard(playlist);
 
   assert.equal(catalogCardKey(albumItem), "album:album-1");
-  assert.equal(catalogCardKey(trackItem), "track:track-1");
+  assert.equal(catalogCardKey(trackItem), "media:track-1");
   assert.equal(catalogCardKey(playlistItem), "playlist:playlist-1");
   assert.equal(albumItem.kind, "album");
-  assert.equal(trackItem.kind, "track");
+  assert.equal(trackItem.kind, "media");
   assert.equal(playlistItem.kind, "playlist");
 });
 
@@ -150,13 +150,13 @@ test("the shared card adapts menus, playback, and likes by item type", async () 
   assert.match(card, /toggleCollectionPlayback\(\s*playlistTarget\.value/);
   assert.match(
     card,
-    /if \(album\.value\) \{[\s\S]*kind: "album"[\s\S]*if \(track\.value\?\.mediaType === "music"\) \{[\s\S]*kind: "track"[\s\S]*return null;/,
+    /if \(album\.value\) \{[\s\S]*kind: "album"[\s\S]*if \(track\.value\?\.mediaType === "music"\) \{[\s\S]*kind: "media"[\s\S]*return null;/,
   );
   assert.equal(card.match(/<LikeButton/g)?.length, 2);
   assert.match(card, /layout\?: "card" \| "row"/);
   assert.match(card, /layout === 'row'/);
   assert.match(card, /<SearchResultTag/);
-  assert.match(card, /:source-kinds="searchSourceKinds"/);
+  assert.match(card, /:source-kinds="searchLibrarySourceKinds"/);
   assert.ok(
     card.indexOf('<SearchResultTag class="shrink-0" :type="resultType" />') <
       card.indexOf('<div class="ml-auto flex shrink-0 items-center gap-2">'),

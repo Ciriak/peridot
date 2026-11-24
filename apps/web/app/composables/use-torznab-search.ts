@@ -1,5 +1,5 @@
 import { useI18n } from "#imports";
-import type { TorznabRelease } from "@peridot/contracts";
+import type { ReleaseResult } from "@peridot/contracts";
 import { queryOptions, useQueries, useQuery } from "@tanstack/vue-query";
 import { computed, ref, toValue, watch, type MaybeRefOrGetter } from "vue";
 import { PeridotApiError, torznabClient } from "../lib/peridot-client";
@@ -23,7 +23,7 @@ interface ImportAttempt {
   startedAt: number;
   state:
     | { kind: "adding" }
-    | { kind: "tracking" }
+    | { kind: "tracking"; taskId: string }
     | { kind: "already-added" }
     | { kind: "failed"; retryable: true };
 }
@@ -65,9 +65,9 @@ export function useTorznabSearch(query: MaybeRefOrGetter<string>) {
   });
 
   const trackingIds = computed(() =>
-    Object.entries(attempts.value)
-      .filter(([, attempt]) => attempt.state.kind === "tracking")
-      .map(([id]) => id),
+    Object.entries(attempts.value).flatMap(([, attempt]) =>
+      attempt.state.kind === "tracking" ? [attempt.state.taskId] : [],
+    ),
   );
   const statusQueries = useQueries({
     queries: () =>
@@ -87,7 +87,12 @@ export function useTorznabSearch(query: MaybeRefOrGetter<string>) {
       ),
   });
 
-  const releases = computed<TorznabRelease[]>(() => results.data.value ?? []);
+  const releases = computed<ReleaseResult[]>(
+    () =>
+      results.data.value?.items.flatMap((item) =>
+        item.type === "release" ? [item] : [],
+      ) ?? [],
+  );
   const loading = computed(
     () =>
       config.isFetching.value ||
@@ -102,9 +107,22 @@ export function useTorznabSearch(query: MaybeRefOrGetter<string>) {
     ) {
       return undefined;
     }
-    return results.data.value.length;
+    return results.data.value.items.length;
   });
-  const searchError = computed(() => errorMessage(results.error.value));
+  const searchError = computed(() => {
+    const providerError = results.data.value?.providers.find(
+      (provider) => !provider.ok,
+    );
+    return (
+      errorMessage(results.error.value) ??
+      (providerError?.errorMessage
+        ? t(
+            providerError.errorMessage.key,
+            providerError.errorMessage.params ?? {},
+          )
+        : null)
+    );
+  });
   const importStates = computed<Record<string, TorznabImportRowState>>(() => {
     const states: Record<string, TorznabImportRowState> = {};
     const queries = statusQueries.value;
@@ -113,12 +131,12 @@ export function useTorznabSearch(query: MaybeRefOrGetter<string>) {
         states[id] = attempt.state;
         continue;
       }
-      const query = queries[trackingIds.value.indexOf(id)];
+      const query = queries[trackingIds.value.indexOf(attempt.state.taskId)];
       const status = query?.data;
       if (query?.error) {
         states[id] = { kind: "failed", retryable: false };
-      } else if (status?.trackIds.length) {
-        states[id] = { kind: "ready", trackIds: status.trackIds };
+      } else if (status?.mediaIds.length) {
+        states[id] = { kind: "ready", mediaIds: status.mediaIds };
       } else if (torznabTerminalImportState(status?.state)) {
         states[id] = {
           kind: "failed",
@@ -139,14 +157,14 @@ export function useTorznabSearch(query: MaybeRefOrGetter<string>) {
         state.kind === "ready"
           ? [
               {
-                trackIds: state.trackIds,
+                mediaIds: state.mediaIds,
                 startedAt: attempts.value[id]?.startedAt ?? 0,
               },
             ]
           : [],
       )
       .sort((left, right) => left.startedAt - right.startedAt);
-    return ready.at(-1)?.trackIds ?? [];
+    return ready.at(-1)?.mediaIds ?? [];
   });
 
   function updateAttempt(id: string, attempt: ImportAttempt) {
@@ -156,19 +174,26 @@ export function useTorznabSearch(query: MaybeRefOrGetter<string>) {
   watch(
     statusQueries,
     (queries) => {
-      for (const [index, id] of trackingIds.value.entries()) {
+      for (const [index, taskId] of trackingIds.value.entries()) {
         const statusQuery = queries[index];
+        const releaseEntry = Object.entries(attempts.value).find(
+          ([, attempt]) =>
+            attempt.state.kind === "tracking" &&
+            attempt.state.taskId === taskId,
+        );
+        const releaseId = releaseEntry?.[0];
         if (
+          !releaseId ||
           !statusQuery ||
-          notifiedStatusFailures.has(id) ||
+          notifiedStatusFailures.has(releaseId) ||
           (!statusQuery.error &&
             !torznabTerminalImportState(statusQuery.data?.state))
         ) {
           continue;
         }
-        notifiedStatusFailures.add(id);
+        notifiedStatusFailures.add(releaseId);
         notifyReleaseDownloadFailed(
-          attempts.value[id]?.title ?? t("torznab.failed"),
+          attempts.value[releaseId]?.title ?? t("torznab.failed"),
           statusQuery.error
             ? (errorMessage(statusQuery.error) ?? t("torznab.failed"))
             : t("torznab.transferFailed"),
@@ -183,7 +208,7 @@ export function useTorznabSearch(query: MaybeRefOrGetter<string>) {
     notifiedStatusFailures.clear();
   });
 
-  async function addToLibrary(release: TorznabRelease) {
+  async function addToLibrary(release: ReleaseResult) {
     const existing = importStates.value[release.id];
     if (existing && !(existing.kind === "failed" && existing.retryable)) {
       return;
@@ -196,12 +221,12 @@ export function useTorznabSearch(query: MaybeRefOrGetter<string>) {
       state: { kind: "adding" },
     });
     try {
-      const response = await client.value.add(release.id);
+      const response = await client.value.add(release.indexerId, release.id);
       trackTask(response.task);
       updateAttempt(release.id, {
         title: release.title,
         startedAt,
-        state: { kind: "tracking" },
+        state: { kind: "tracking", taskId: response.taskId },
       });
     } catch (reason) {
       if (

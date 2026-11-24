@@ -3,10 +3,10 @@ import type { CatalogService } from "./catalog.js";
 import type { Database } from "./database.js";
 import type { ArtworkJobRow, TaskRow } from "./prisma/models.js";
 import {
-  SourceIntegrationError,
-  type SourceIntegrationDefinition,
-  type SourceIntegrationHandle,
-  type SourceIntegrationService,
+  LibrarySourceConnectorError,
+  type LibrarySourceConnectorDefinition,
+  type LibrarySourceConnectorHandle,
+  type LibrarySourceConnectorService,
 } from "./source-integrations.js";
 import {
   artworkDetails,
@@ -25,8 +25,8 @@ interface CoverImage {
 }
 
 interface ArtworkSource {
-  handle: SourceIntegrationHandle;
-  integration: SourceIntegrationDefinition;
+  handle: LibrarySourceConnectorHandle;
+  integration: LibrarySourceConnectorDefinition;
 }
 
 interface ArtworkGroup {
@@ -57,10 +57,10 @@ export function externalCoverKey(
 
 export async function hasPendingArtworkJobs(
   database: Database,
-  sourceId: string | null,
+  librarySourceId: string | null,
 ): Promise<boolean> {
-  const query = sourceId
-    ? database.orm.ArtworkJob.where({ sourceId })
+  const query = librarySourceId
+    ? database.orm.ArtworkJob.where({ librarySourceId })
     : database.orm.ArtworkJob;
   const result = await query.aggregate((aggregate) => ({
     count: aggregate.count(),
@@ -69,8 +69,8 @@ export async function hasPendingArtworkJobs(
 }
 
 export interface ArtworkJobSyncInput {
-  trackId: string;
-  sourceId: string;
+  copyId: string;
+  librarySourceId: string;
   externalCoverItemId: string | null;
   externalCoverTag: string | null;
 }
@@ -80,35 +80,35 @@ export async function syncArtworkJobsInBatch(
   inputs: readonly ArtworkJobSyncInput[],
 ): Promise<void> {
   if (!inputs.length) return;
-  const trackIds = [...new Set(inputs.map((input) => input.trackId))];
+  const copyIds = [...new Set(inputs.map((input) => input.copyId))];
   const existingRows = await database.orm.ArtworkJob.where((job) =>
-    job.trackId.in(trackIds),
+    job.copyId.in(copyIds),
   ).all();
-  const existingByTrackId = new Map(
-    existingRows.map((job) => [job.trackId, job]),
+  const existingByCopyId = new Map(
+    existingRows.map((job) => [job.copyId, job]),
   );
   const removeIds: string[] = [];
   const updates: Array<{
     id: string;
-    sourceId: string;
+    librarySourceId: string;
     externalCoverItemId: string;
     externalCoverTag: string | null;
   }> = [];
   const creates: Array<{
-    trackId: string;
-    sourceId: string;
+    copyId: string;
+    librarySourceId: string;
     externalCoverItemId: string;
     externalCoverTag: string | null;
   }> = [];
   for (const input of inputs) {
-    const existing = existingByTrackId.get(input.trackId);
+    const existing = existingByCopyId.get(input.copyId);
     if (!input.externalCoverItemId) {
       if (existing) removeIds.push(existing.id);
       continue;
     }
     if (existing) {
       if (
-        existing.sourceId === input.sourceId &&
+        existing.librarySourceId === input.librarySourceId &&
         existing.externalCoverItemId === input.externalCoverItemId &&
         existing.externalCoverTag === input.externalCoverTag
       ) {
@@ -116,15 +116,15 @@ export async function syncArtworkJobsInBatch(
       }
       updates.push({
         id: existing.id,
-        sourceId: input.sourceId,
+        librarySourceId: input.librarySourceId,
         externalCoverItemId: input.externalCoverItemId,
         externalCoverTag: input.externalCoverTag,
       });
       continue;
     }
     creates.push({
-      trackId: input.trackId,
-      sourceId: input.sourceId,
+      copyId: input.copyId,
+      librarySourceId: input.librarySourceId,
       externalCoverItemId: input.externalCoverItemId,
       externalCoverTag: input.externalCoverTag,
     });
@@ -136,7 +136,7 @@ export async function syncArtworkJobsInBatch(
   }
   for (const update of updates) {
     await database.orm.ArtworkJob.where({ id: update.id }).update({
-      sourceId: update.sourceId,
+      librarySourceId: update.librarySourceId,
       externalCoverItemId: update.externalCoverItemId,
       externalCoverTag: update.externalCoverTag,
       attemptCount: 0,
@@ -148,8 +148,8 @@ export async function syncArtworkJobsInBatch(
   }
 }
 
-function taskSourceName(task: TaskRow): string {
-  return task.sourceName || "All sources";
+function taskConnectorName(task: TaskRow): string {
+  return task.connectorName || "All sources";
 }
 
 function errorSummary(error: unknown): string {
@@ -161,7 +161,7 @@ function errorSummary(error: unknown): string {
 export class ArtworkService {
   constructor(
     private readonly database: Database,
-    private readonly sourceIntegrations: SourceIntegrationService,
+    private readonly sourceIntegrations: LibrarySourceConnectorService,
     private readonly catalog: CatalogService,
     private readonly artworkCache: ArtworkCache,
   ) {}
@@ -174,18 +174,20 @@ export class ArtworkService {
     if (signal.aborted) {
       throw new DOMException("The artwork task was stopped.", "AbortError");
     }
-    const jobQuery = task.sourceId
-      ? this.database.orm.ArtworkJob.where({ sourceId: task.sourceId })
+    const jobQuery = task.connectorId
+      ? this.database.orm.ArtworkJob.where({
+          librarySourceId: task.connectorId,
+        })
       : this.database.orm.ArtworkJob;
     const jobs = await jobQuery
       .orderBy([
-        (job) => job.sourceId.asc(),
+        (job) => job.librarySourceId.asc(),
         (job) => job.externalCoverItemId.asc(),
         (job) => job.externalCoverTag.asc(),
         (job) => job.createdAt.asc(),
       ])
       .all();
-    const sourceName = taskSourceName(task);
+    const sourceName = taskConnectorName(task);
     if (!jobs.length) {
       return {
         details: artworkDetails({
@@ -198,8 +200,8 @@ export class ArtworkService {
       };
     }
 
-    const sourceRows = await this.database.orm.Source.where((source) =>
-      source.id.in([...new Set(jobs.map((job) => job.sourceId))]),
+    const sourceRows = await this.database.orm.LibrarySource.where((source) =>
+      source.id.in([...new Set(jobs.map((job) => job.librarySourceId))]),
     ).all();
     const sources = new Map<string, ArtworkSource>();
     for (const source of sourceRows) {
@@ -212,8 +214,8 @@ export class ArtworkService {
     }
     const groups = new Map<string, ArtworkGroup>();
     for (const job of jobs) {
-      const source = sources.get(job.sourceId);
-      const key = `${job.sourceId}\u0000${externalCoverKey(
+      const source = sources.get(job.librarySourceId);
+      const key = `${job.librarySourceId}\u0000${externalCoverKey(
         job.externalCoverItemId,
         job.externalCoverTag,
       )}`;
@@ -298,8 +300,8 @@ export class ArtworkService {
         const coverId = cover ? await this.storeCover(cover) : null;
         let updatedJobs = 0;
         for (const job of group.jobs) {
-          const updated = await this.catalog.updateTrackCover(
-            job.trackId,
+          const updated = await this.catalog.updateMediaCover(
+            job.copyId,
             coverId,
             expectedKey,
           );
@@ -316,7 +318,7 @@ export class ArtworkService {
         ).deleteAndCount();
       } catch (error) {
         if (
-          error instanceof SourceIntegrationError &&
+          error instanceof LibrarySourceConnectorError &&
           (error.code === "invalid_credentials" || error.code === "unavailable")
         ) {
           unavailableSources.add(group.source.handle.id);
@@ -372,7 +374,7 @@ export class ArtworkService {
             if (unavailableSources.has(group.source.handle.id)) {
               return {
                 group,
-                error: new SourceIntegrationError(
+                error: new LibrarySourceConnectorError(
                   "The source integration could not provide artwork.",
                   "unavailable",
                   502,
@@ -411,10 +413,10 @@ export class ArtworkService {
 
   private async storeCover(cover: CoverImage): Promise<string> {
     const hash = await this.artworkCache.store(cover.data);
-    const existing = await this.database.orm.TrackCover.first({ hash });
+    const existing = await this.database.orm.Cover.first({ hash });
     const stored =
       existing ??
-      (await this.database.orm.TrackCover.create({
+      (await this.database.orm.Cover.create({
         hash,
       }));
     return stored.id;

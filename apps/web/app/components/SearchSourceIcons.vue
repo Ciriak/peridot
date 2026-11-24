@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { useI18n } from "#imports";
-import type { SourceKind } from "@peridot/contracts";
+import type { LibrarySourceKind } from "@peridot/contracts";
 import { Icon } from "@iconify/vue/offline";
 import { computed } from "vue";
 import { sourceKindIcon, sourceKindLabelKey } from "../lib/source-label";
 
 const props = defineProps<{
-  sourceKinds?: readonly SourceKind[] | null;
+  sourceKinds?: readonly (LibrarySourceKind | "torznab")[] | null;
 }>();
 const { t } = useI18n();
 

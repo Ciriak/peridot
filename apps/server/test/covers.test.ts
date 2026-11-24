@@ -36,7 +36,7 @@ test("embedded artwork is deduplicated and served through a signed URL", async (
     await startScan(context);
     assert.equal(
       (
-        await context.database.orm.TrackCover.aggregate((aggregate) => ({
+        await context.database.orm.Cover.aggregate((aggregate) => ({
           count: aggregate.count(),
         }))
       ).count,
@@ -44,7 +44,7 @@ test("embedded artwork is deduplicated and served through a signed URL", async (
     );
     const tracks = await context.app.inject({
       method: "GET",
-      url: "/api/tracks",
+      url: "/api/media",
       headers: context.authorization,
     });
     const items = tracks.json<{
@@ -73,7 +73,7 @@ test("embedded artwork is deduplicated and served through a signed URL", async (
 
     const playback = await context.app.inject({
       method: "POST",
-      url: `/api/tracks/${items[0]!.id}/playback-token`,
+      url: `/api/media/${items[0]!.id}/playback-token`,
       headers: context.authorization,
     });
     const wrongToken = await context.app.inject({
@@ -114,7 +114,7 @@ test("large artwork is normalized to webp with a 400 pixel maximum", async () =>
     await startScan(context);
     const tracks = await context.app.inject({
       method: "GET",
-      url: "/api/tracks",
+      url: "/api/media",
       headers: context.authorization,
     });
     const coverUrl = tracks.json<{
@@ -145,7 +145,7 @@ test("folder artwork is used when a file has no embedded cover", async () => {
     await startScan(context);
     const tracks = await context.app.inject({
       method: "GET",
-      url: "/api/tracks",
+      url: "/api/media",
       headers: context.authorization,
     });
     const track = tracks.json<{
@@ -164,7 +164,7 @@ test("tracks without artwork retain the null-cover fallback", async () => {
     await startScan(context);
     const tracks = await context.app.inject({
       method: "GET",
-      url: "/api/tracks",
+      url: "/api/media",
       headers: context.authorization,
     });
     assert.equal(tracks.json().items[0].coverUrl, null);

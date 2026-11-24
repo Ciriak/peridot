@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import type { TrackResponse } from "@peridot/contracts";
+import type { MediaResponse } from "@peridot/contracts";
 import { albumSummaryFromTrack } from "../app/lib/library.ts";
 
 test("shared catalog links combine navigation with their matching menus", async () => {
@@ -129,7 +129,7 @@ test("catalog surfaces render shared artist and album references", async () => {
 });
 
 test("track album summaries retain catalog identity for album menus", () => {
-  const track: TrackResponse = {
+  const track: MediaResponse = {
     id: "track-1",
     mediaType: "music",
     mediaTypeOrigin: "embedded",

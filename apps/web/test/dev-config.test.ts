@@ -74,3 +74,16 @@ test("Nuxt pre-bundles dependencies discovered by the first onboarding render", 
     "@lucide/vue must resolve from the web workspace for Vite optimization",
   );
 });
+
+test("Nuxt development exposes Vue DevTools through DevTools v4", async () => {
+  const [source, workspace] = await Promise.all([
+    readFile(new URL("../nuxt.config.ts", import.meta.url), "utf8"),
+    readFile(new URL("../../../pnpm-workspace.yaml", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(
+    source,
+    /devtools: \{\s*enabled: true,\s*vueDevTools: true,\s*mcp: false,\s*\}/,
+  );
+  assert.match(workspace, /overrides:\s*\n\s*"@nuxt\/devtools": 4\.2\.0/);
+});

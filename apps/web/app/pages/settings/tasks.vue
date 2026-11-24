@@ -122,12 +122,15 @@ const previousStatuses = new Map<string, TaskStatus>();
 function taskKindLabel(task: TaskResponse): string {
   if (task.kind === "release_import") return t("settings.tasks.releaseImport");
   if (task.kind === "library_scan") return t("settings.tasks.libraryScan");
-  if (task.kind === "catalog_fetch")
+  if (task.kind === "catalog_projection")
     return t("settings.tasks.catalogProjection");
-  if (task.kind === "metadata_fetch") return t("settings.tasks.metadataMatch");
+  if (task.kind === "metadata_enrichment")
+    return t("settings.tasks.metadataMatch");
   if (task.kind === "artwork_fetch") return t("settings.tasks.artworkFetch");
-  if (task.kind === "duplicate_detection")
+  if (task.kind === "media_match")
     return t("settings.tasks.duplicateDetection");
+  if (task.kind === "playlist_import") return "Playlist import";
+  if (task.kind === "playlist_sync") return "Playlist sync";
   return task.kind;
 }
 
@@ -168,7 +171,7 @@ function taskFailureMessageClass(row: TaskRow): string {
 
 function serverTaskContext(task: TaskResponse): string {
   const kind = taskKindLabel(task);
-  return task.source?.name ? `${kind} · ${task.source.name}` : kind;
+  return task.connector?.name ? `${kind} · ${task.connector.name}` : kind;
 }
 
 function serverQueuedLabel(task: TaskResponse): string {

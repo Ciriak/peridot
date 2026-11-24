@@ -16,15 +16,55 @@ test("settings is a fullscreen routed area with a separate administrator group",
     layout.indexOf("const adminCategories"),
     layout.indexOf("];", layout.indexOf("const adminCategories")) + 2,
   );
+  const connectorCategories = layout.slice(
+    layout.indexOf("const connectorCategories"),
+    layout.indexOf("];", layout.indexOf("const connectorCategories")) + 2,
+  );
   for (const category of ["account", "library", "tasks", "playback"]) {
     assert.match(layout, new RegExp(`to: "/settings/${category}"`));
   }
   assert.match(commonCategories, /labelKey: "settings\.profile"/);
   assert.doesNotMatch(commonCategories, /settings\.account"/);
-  for (const category of ["users", "sources", "metadata", "server"]) {
+  for (const category of ["medias", "users", "server"]) {
     assert.match(adminCategories, new RegExp(`to: "/settings/${category}"`));
   }
+  assert.doesNotMatch(adminCategories, /to: "\/settings\/connectors"/);
+  for (const category of [
+    "library-sources",
+    "release-indexers",
+    "download-clients",
+    "metadata-providers",
+  ]) {
+    assert.match(
+      connectorCategories,
+      new RegExp(`to: "/settings/connectors/${category}"`),
+    );
+  }
+  assert.match(
+    connectorCategories,
+    /labelKey: "settings\.connectors\.librarySources"/,
+  );
+  assert.match(
+    connectorCategories,
+    /labelKey: "settings\.connectors\.releaseIndexers"/,
+  );
+  assert.match(
+    connectorCategories,
+    /labelKey: "settings\.connectors\.downloadClients"/,
+  );
+  assert.match(
+    connectorCategories,
+    /labelKey: "settings\.connectors\.metadataProviders"/,
+  );
+  assert.match(layout, /v-for="connector in connectorCategories"/);
+  assert.doesNotMatch(layout, /to: "\/settings\/connectors"/);
+  assert.doesNotMatch(layout, /t\("settings\.connectors\.title"\)/);
+  assert.ok(
+    layout.indexOf('v-for="connector in connectorCategories"') <
+      layout.indexOf('v-for="item in adminCategories"'),
+  );
   assert.match(adminCategories, /labelKey: "settings\.users"/);
+  assert.match(adminCategories, /labelKey: "settings\.medias"/);
   assert.match(commonCategories, /labelKey: "settings\.tasks"/);
   assert.doesNotMatch(adminCategories, /to: "\/settings\/tasks"/);
   assert.doesNotMatch(commonCategories, /to: "\/settings\/plugins"/);
@@ -39,14 +79,21 @@ test("settings is a fullscreen routed area with a separate administrator group",
   assert.match(layout, /sourceCount/);
   assert.match(layout, /computed\(\(\) => sources\.value\.length\)/);
   assert.doesNotMatch(layout, /source\.fileCount/);
-  assert.match(layout, /item\.to === '\/settings\/sources'/);
+  assert.match(
+    layout,
+    /connector\.to ===\s*'\/settings\/connectors\/library-sources'/,
+  );
+  assert.match(
+    layout,
+    /connector\.to ===\s*'\/settings\/connectors\/metadata-providers'/,
+  );
   assert.match(layout, /variant="secondary"/);
   assert.match(layout, /n\(sourceCount, "integer"\)/);
   assert.doesNotMatch(layout, /activeSourceTasks/);
   assert.doesNotMatch(layout, /sourceTaskProgress/);
   assert.match(
     layout,
-    /v-if="item\.to === '\/settings\/sources' && sourcesLoaded"/,
+    /connector\.to ===\s*'\/settings\/connectors\/library-sources'\s*&&\s*sourcesLoaded/,
   );
   assert.match(layout, /activeMetadataTasks/);
   assert.match(layout, /activeTasks/);
@@ -55,9 +102,22 @@ test("settings is a fullscreen routed area with a separate administrator group",
   assert.match(layout, /combinedTaskProgress/);
   assert.match(layout, /useOfflineDownloadTasks/);
   assert.match(layout, /item\.to === '\/settings\/tasks'/);
-  assert.match(layout, /item\.to === '\/settings\/metadata'/);
+  assert.match(
+    layout,
+    /connector\.to ===\s*'\/settings\/connectors\/metadata-providers'/,
+  );
   assert.match(layout, /settings\.tasks\.progressFor/);
-  for (const page of ["tasks", "users", "sources", "metadata", "server"]) {
+  for (const page of [
+    "tasks",
+    "medias",
+    "users",
+    "connectors/index",
+    "connectors/library-sources",
+    "connectors/release-indexers",
+    "connectors/download-clients",
+    "connectors/metadata-providers",
+    "server",
+  ]) {
     const source = await readSource(`../app/pages/settings/${page}.vue`);
     assert.match(source, /layout: "settings"/);
   }
@@ -70,7 +130,7 @@ test("/settings redirects to account", async () => {
 
 test("Jellyfin is a direct built-in source integration", async () => {
   const [page, client, contracts] = await Promise.all([
-    readSource("../app/pages/settings/sources.vue"),
+    readSource("../app/pages/settings/connectors/library-sources.vue"),
     readSource("../app/lib/peridot-client.ts"),
     readSource("../../../packages/contracts/src/index.ts"),
   ]);
@@ -82,8 +142,8 @@ test("Jellyfin is a direct built-in source integration", async () => {
   assert.match(page, /kind: "jellyfin"/);
   assert.match(client, /source-integrations\/\$\{encodeURIComponent\(kind\)\}/);
   assert.doesNotMatch(client, /api\/admin\/plugins|api\/plugins/);
-  assert.match(contracts, /SourceIntegrationKind = "jellyfin"/);
-  assert.match(contracts, /CreateJellyfinSourceRequest/);
+  assert.match(contracts, /LibrarySourceKind = "path" \| "jellyfin"/);
+  assert.match(contracts, /CreateJellyfinLibrarySourceRequest/);
 });
 
 test("settings shows app metadata and profile owns confirmed logout", async () => {
@@ -221,7 +281,9 @@ test("the settings sidebar omits server details and its brand links back home", 
 });
 
 test("sources are managed on their own page with row action menus", async () => {
-  const page = await readSource("../app/pages/settings/sources.vue");
+  const page = await readSource(
+    "../app/pages/settings/connectors/library-sources.vue",
+  );
   assert.match(page, /useAdminSourcesQuery/);
   assert.match(page, /createSource/);
   assert.match(page, /deleteSource/);
@@ -335,7 +397,9 @@ test("sources are managed on their own page with row action menus", async () => 
 });
 
 test("metadata providers have a dedicated sortable management page", async () => {
-  const page = await readSource("../app/pages/settings/metadata.vue");
+  const page = await readSource(
+    "../app/pages/settings/connectors/metadata-providers.vue",
+  );
   const icons = await readSource("../app/lib/icons.ts");
   assert.match(page, /useMetadataProvidersQuery/);
   assert.match(page, /createMetadataProvider/);

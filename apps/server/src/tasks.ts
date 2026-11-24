@@ -41,6 +41,16 @@ export const MAX_TASK_RETRIES = 2;
 const MAX_TASK_PAYLOAD_ITEMS = 100_000;
 const MAX_TASK_PAYLOAD_ITEM_LENGTH = 4_096;
 
+export interface ReleaseImportTaskPayload {
+  kind: "release-import";
+  indexerId: string;
+  releaseId: string;
+  sourceId: string;
+  paths: readonly string[];
+}
+
+export type TaskPayload = readonly string[] | ReleaseImportTaskPayload;
+
 export interface EnqueueTaskInput {
   kind: TaskKind;
   title: string;
@@ -50,10 +60,11 @@ export interface EnqueueTaskInput {
   publish?: boolean;
   ownerUserId?: string | null;
   parentTaskId?: string | null;
-  sourceId?: string | null;
-  sourceName?: string | null;
+  connectorId?: string | null;
+  connectorKind?: string | null;
+  connectorName?: string | null;
   details?: TaskDetailResponse[];
-  payload?: readonly string[] | null;
+  payload?: TaskPayload | null;
   forceRefresh?: boolean;
 }
 
@@ -127,11 +138,36 @@ function parseStoredDetails(value: string): TaskDetailResponse[] {
 }
 
 function normalizeTaskPayload(
-  payload: readonly string[] | null | undefined,
+  payload: TaskPayload | null | undefined,
 ): string | null {
   if (payload === null || payload === undefined) return null;
+  if (!Array.isArray(payload)) {
+    const releasePayload = payload as ReleaseImportTaskPayload;
+    const paths = releasePayload.paths
+      .filter(
+        (item: string) =>
+          typeof item === "string" &&
+          item.length > 0 &&
+          item.length <= MAX_TASK_PAYLOAD_ITEM_LENGTH,
+      )
+      .slice(0, MAX_TASK_PAYLOAD_ITEMS);
+    return JSON.stringify({
+      kind: "release-import",
+      indexerId: releasePayload.indexerId.slice(
+        0,
+        MAX_TASK_PAYLOAD_ITEM_LENGTH,
+      ),
+      releaseId: releasePayload.releaseId.slice(
+        0,
+        MAX_TASK_PAYLOAD_ITEM_LENGTH,
+      ),
+      sourceId: releasePayload.sourceId.slice(0, MAX_TASK_PAYLOAD_ITEM_LENGTH),
+      paths: [...new Set(paths)],
+    } satisfies ReleaseImportTaskPayload);
+  }
+  const items = payload as readonly string[];
   return JSON.stringify(
-    [...new Set(payload)]
+    [...new Set(items)]
       .filter(
         (item) =>
           typeof item === "string" &&
@@ -155,6 +191,35 @@ export function readTaskPayload(
       : [];
   } catch {
     return [];
+  }
+}
+
+export function readReleaseImportTaskPayload(
+  task: Pick<TaskRow, "payload">,
+): ReleaseImportTaskPayload | null {
+  if (!task.payload) return null;
+  try {
+    const parsed = JSON.parse(
+      task.payload,
+    ) as Partial<ReleaseImportTaskPayload>;
+    return parsed.kind === "release-import" &&
+      typeof parsed.indexerId === "string" &&
+      typeof parsed.releaseId === "string" &&
+      typeof parsed.sourceId === "string" &&
+      Array.isArray(parsed.paths)
+      ? {
+          kind: "release-import",
+          indexerId: parsed.indexerId,
+          releaseId: parsed.releaseId,
+          sourceId: parsed.sourceId,
+          paths: parsed.paths.filter(
+            (item): item is string =>
+              typeof item === "string" && item.length > 0,
+          ),
+        }
+      : null;
+  } catch {
+    return null;
   }
 }
 
@@ -186,28 +251,28 @@ export function toTaskResponse(task: TaskRow): TaskResponse {
   const titleMessage =
     parseStoredMessage(task.titleMessage) ??
     (task.kind === "library_scan"
-      ? task.sourceName
-        ? message("task.title.sourceScan", { source: task.sourceName })
+      ? task.connectorName
+        ? message("task.title.sourceScan", { source: task.connectorName })
         : message("task.title.libraryScan")
-      : task.kind === "catalog_fetch"
-        ? task.sourceName
+      : task.kind === "catalog_projection"
+        ? task.connectorName
           ? message("task.title.sourceCatalogProjection", {
-              source: task.sourceName,
+              source: task.connectorName,
             })
           : message("task.title.catalogProjection")
-        : task.kind === "metadata_fetch"
-          ? task.sourceName
+        : task.kind === "metadata_enrichment"
+          ? task.connectorName
             ? message("task.title.sourceMetadataMatch", {
-                source: task.sourceName,
+                source: task.connectorName,
               })
             : message("task.title.metadataMatch")
           : task.kind === "artwork_fetch"
-            ? task.sourceName
+            ? task.connectorName
               ? message("task.title.sourceArtworkFetch", {
-                  source: task.sourceName,
+                  source: task.connectorName,
                 })
               : message("task.title.artworkFetch")
-            : task.kind === "duplicate_detection"
+            : task.kind === "media_match"
               ? message("task.title.duplicateDetection")
               : message("task.title.custom", { task: task.title }));
   return {
@@ -217,10 +282,11 @@ export function toTaskResponse(task: TaskRow): TaskResponse {
     titleMessage,
     ownerUserId: task.ownerUserId,
     parentTaskId: task.parentTaskId,
-    source: task.sourceName
+    connector: task.connectorName
       ? {
-          id: task.sourceId,
-          name: task.sourceName,
+          id: task.connectorId,
+          kind: task.connectorKind,
+          name: task.connectorName,
         }
       : null,
     progress: progressFor(task),
@@ -249,19 +315,26 @@ function isTaskKind(value: string): value is TaskKind {
   return (
     value === "library_scan" ||
     value === "release_import" ||
-    value === "catalog_fetch" ||
-    value === "metadata_fetch" ||
+    value === "catalog_projection" ||
+    value === "metadata_enrichment" ||
     value === "artwork_fetch" ||
-    value === "duplicate_detection"
+    value === "media_match" ||
+    value === "playlist_import" ||
+    value === "playlist_sync"
   );
 }
 
 function queuedTaskPriority(kind: string): number {
   if (kind === "release_import") return -1;
   if (kind === "library_scan") return 0;
-  if (kind === "metadata_fetch") return 1;
-  if (kind === "duplicate_detection") return 2;
-  if (kind === "catalog_fetch") return 3;
+  if (kind === "metadata_enrichment") return 1;
+  if (
+    kind === "media_match" ||
+    kind === "playlist_import" ||
+    kind === "playlist_sync"
+  )
+    return 2;
+  if (kind === "catalog_projection") return 3;
   if (kind === "artwork_fetch") return 4;
   return 1;
 }
@@ -350,7 +423,7 @@ export class TaskService {
     if (!title) throw new Error("Task title is required");
 
     return this.serializeAdmission(async () => {
-      const normalizedSourceId = input.sourceId ?? null;
+      const normalizedConnectorId = input.connectorId ?? null;
       const forceRefresh = input.forceRefresh ? 1 : 0;
       const initialStatus = input.initialStatus ?? "queued";
       const queued =
@@ -362,7 +435,7 @@ export class TaskService {
             }).all()
           : [];
       const duplicate = queued.find(
-        (task) => task.sourceId === normalizedSourceId,
+        (task) => task.connectorId === normalizedConnectorId,
       );
       if (duplicate) return duplicate;
 
@@ -373,9 +446,12 @@ export class TaskService {
         titleMessage: serializeMessage(input.titleMessage),
         ownerUserId: input.ownerUserId ?? null,
         parentTaskId: input.parentTaskId ?? null,
-        sourceId: normalizedSourceId,
-        sourceName: input.sourceName
-          ? boundedText(input.sourceName, MAX_TITLE_LENGTH)
+        connectorId: normalizedConnectorId,
+        connectorKind: input.connectorKind
+          ? boundedText(input.connectorKind, MAX_TITLE_LENGTH)
+          : null,
+        connectorName: input.connectorName
+          ? boundedText(input.connectorName, MAX_TITLE_LENGTH)
           : null,
         details: JSON.stringify(normalizeTaskDetails(input.details)),
         payload: normalizeTaskPayload(input.payload),
@@ -464,7 +540,7 @@ export class TaskService {
   async promoteWaiting(
     id: string,
     details?: readonly TaskDetailResponse[],
-    payload?: readonly string[] | null,
+    payload?: TaskPayload | null,
   ): Promise<void> {
     const promoted = await this.database.orm.Task.where({
       id,
@@ -628,12 +704,14 @@ export class TaskService {
     return this.get(id);
   }
 
-  async stopForSource(sourceId: string): Promise<TaskRow[]> {
+  async stopForConnector(connectorId: string): Promise<TaskRow[]> {
     const active = await this.database.orm.Task.where((task) =>
       task.status.in([...ACTIVE_TASK_STATUSES]),
     ).all();
     const ids = active
-      .filter((task) => task.sourceId === null || task.sourceId === sourceId)
+      .filter(
+        (task) => task.connectorId === null || task.connectorId === connectorId,
+      )
       .map((task) => task.id);
     return this.stopTasks(ids);
   }
@@ -900,7 +978,7 @@ export class TaskService {
 
 export function queueLibraryScan(
   tasks: TaskService,
-  source?: { id: string; name: string },
+  source?: { id: string; kind?: string; name: string },
 ): Promise<TaskRow> {
   return tasks.enqueue({
     kind: "library_scan",
@@ -908,8 +986,9 @@ export function queueLibraryScan(
     titleMessage: source
       ? message("task.title.sourceScan", { source: source.name })
       : message("task.title.libraryScan"),
-    sourceId: source?.id ?? null,
-    sourceName: source?.name ?? null,
+    connectorId: source?.id ?? null,
+    connectorKind: source?.kind ?? null,
+    connectorName: source?.name ?? null,
     details: [
       {
         key: "source",
@@ -921,17 +1000,17 @@ export function queueLibraryScan(
   });
 }
 
-export function queueMetadataFetch(
+export function queueMetadataEnrichment(
   tasks: TaskService,
   options: {
-    source?: { id: string; name: string } | null;
+    source?: { id: string; kind?: string; name: string } | null;
     parentTaskId?: string | null;
     force?: boolean;
-    trackIds?: readonly string[] | null;
+    mediaIds?: readonly string[] | null;
   } = {},
 ): Promise<TaskRow> {
   return tasks.enqueue({
-    kind: "metadata_fetch",
+    kind: "metadata_enrichment",
     title: options.source
       ? `${options.source.name} metadata matching`
       : "Library metadata matching",
@@ -941,10 +1020,11 @@ export function queueMetadataFetch(
         })
       : message("task.title.metadataMatch"),
     parentTaskId: options.parentTaskId ?? null,
-    sourceId: options.source?.id ?? null,
-    sourceName: options.source?.name ?? null,
+    connectorId: options.source?.id ?? null,
+    connectorKind: options.source?.kind ?? null,
+    connectorName: options.source?.name ?? null,
     forceRefresh: options.force ?? false,
-    payload: options.trackIds ?? null,
+    payload: options.mediaIds ?? null,
     details: [
       {
         key: "source",
@@ -956,28 +1036,28 @@ export function queueMetadataFetch(
   });
 }
 
-export function queueDuplicateDetection(
+export function queueMediaMatch(
   tasks: TaskService,
   parentTaskId: string | null = null,
 ): Promise<TaskRow> {
   return tasks.enqueue({
-    kind: "duplicate_detection",
-    title: "Duplicate track detection",
+    kind: "media_match",
+    title: "Media copy matching",
     titleMessage: message("task.title.duplicateDetection"),
     parentTaskId,
     details: [],
   });
 }
 
-export function queueCatalogFetch(
+export function queueCatalogProjection(
   tasks: TaskService,
   options: {
-    source?: { id: string; name: string } | null;
+    source?: { id: string; kind?: string; name: string } | null;
     parentTaskId?: string | null;
   } = {},
 ): Promise<TaskRow> {
   return tasks.enqueue({
-    kind: "catalog_fetch",
+    kind: "catalog_projection",
     title: options.source
       ? `${options.source.name} catalog projection`
       : "Library catalog projection",
@@ -987,8 +1067,9 @@ export function queueCatalogFetch(
         })
       : message("task.title.catalogProjection"),
     parentTaskId: options.parentTaskId ?? null,
-    sourceId: options.source?.id ?? null,
-    sourceName: options.source?.name ?? null,
+    connectorId: options.source?.id ?? null,
+    connectorKind: options.source?.kind ?? null,
+    connectorName: options.source?.name ?? null,
     details: [
       {
         key: "source",
@@ -1003,7 +1084,7 @@ export function queueCatalogFetch(
 export function queueArtworkFetch(
   tasks: TaskService,
   options: {
-    source?: { id: string; name: string } | null;
+    source?: { id: string; kind?: string; name: string } | null;
     parentTaskId?: string | null;
   } = {},
 ): Promise<TaskRow> {
@@ -1018,8 +1099,9 @@ export function queueArtworkFetch(
         })
       : message("task.title.artworkFetch"),
     parentTaskId: options.parentTaskId ?? null,
-    sourceId: options.source?.id ?? null,
-    sourceName: options.source?.name ?? null,
+    connectorId: options.source?.id ?? null,
+    connectorKind: options.source?.kind ?? null,
+    connectorName: options.source?.name ?? null,
     details: [
       {
         key: "source",

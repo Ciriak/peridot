@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import type { TrackResponse } from "@peridot/contracts";
+import type { MediaResponse } from "@peridot/contracts";
 import { ref } from "vue";
 import { useInteractionFrozenList } from "../app/composables/use-interaction-frozen-list.ts";
 import {
@@ -9,7 +9,7 @@ import {
   resolveQuickPicks,
 } from "../app/lib/quick-picks.ts";
 
-const tracks: TrackResponse[] = [
+const tracks: MediaResponse[] = [
   {
     id: "track-a",
     title: "Opening",
@@ -22,7 +22,7 @@ const tracks: TrackResponse[] = [
     durationMs: 180_000,
     mimeType: "audio/mpeg",
     available: true,
-    coverUrl: "/api/tracks/track-a/cover",
+    coverUrl: "/api/media/track-a/cover",
     metadata: null,
     liked: false,
   },
@@ -47,10 +47,10 @@ const tracks: TrackResponse[] = [
 test("quick pick responses preserve server-resolved track and album data", () => {
   const resolved = resolveQuickPicks([
     {
-      kind: "track",
-      key: "track:track-b",
-      trackId: "track-b",
-      track: tracks[1]!,
+      kind: "media",
+      key: "media:track-b",
+      mediaId: "track-b",
+      media: tracks[1]!,
     },
     {
       kind: "album",
@@ -62,7 +62,7 @@ test("quick pick responses preserve server-resolved track and album data", () =>
         title: "Night Sessions",
         artist: "Elliot Lake",
         artists: ["Elliot Lake"],
-        coverUrl: "/api/tracks/track-a/cover",
+        coverUrl: "/api/media/track-a/cover",
         trackCount: 2,
         durationMs: 380_000,
         releaseYear: null,
@@ -73,14 +73,14 @@ test("quick pick responses preserve server-resolved track and album data", () =>
 
   assert.deepEqual(
     resolved.map((item) => item.kind),
-    ["track", "album"],
+    ["media", "album"],
   );
   assert.equal(
-    resolved[0]?.kind === "track" ? resolved[0].track.title : null,
+    resolved[0]?.kind === "media" ? resolved[0].media.title : null,
     "Closing",
   );
   assert.equal(
-    resolved[0]?.kind === "track" ? resolved[0].track.coverUrl : null,
+    resolved[0]?.kind === "media" ? resolved[0].media.coverUrl : null,
     null,
   );
   assert.deepEqual(
@@ -95,10 +95,10 @@ test("quick pick responses preserve server-resolved track and album data", () =>
   ]);
   assert.deepEqual(
     quickPickArtistNames({
-      kind: "track",
-      key: "track:collaboration",
-      track: { ...tracks[0]!, artists: ["Elliot Lake", "Óra"] },
-      trackId: "collaboration",
+      kind: "media",
+      key: "media:collaboration",
+      media: { ...tracks[0]!, artists: ["Elliot Lake", "Óra"] },
+      mediaId: "collaboration",
     }),
     ["Elliot Lake", "Óra"],
   );
@@ -161,11 +161,11 @@ test("the sidebar renders linked, context-aware quick picks", async () => {
   assert.match(tile, /import AlbumContextMenu/);
   assert.match(
     tile,
-    /<TrackContextMenu[\s\S]*:track="item\.track"[\s\S]*@play="toggleItemPlayback"/,
+    /<TrackContextMenu[\s\S]*:track="item\.media"[\s\S]*@play="toggleItemPlayback"/,
   );
   assert.match(tile, /<AlbumContextMenu v-else :album="item\.album">/);
   assert.equal(tile.match(/<QuickPickTileContent/g)?.length, 2);
-  assert.match(tile, /props\.item\.kind === "track"[\s\S]*?track\.coverUrl/);
+  assert.match(tile, /props\.item\.kind === "media"[\s\S]*?media\.coverUrl/);
   assert.match(content, /props\.coverUrl/);
   assert.match(content, /group\/quick-pick/);
   assert.doesNotMatch(content, /props\.layout|aspect-square h-auto w-full/);
@@ -174,7 +174,7 @@ test("the sidebar renders linked, context-aware quick picks", async () => {
   assert.match(content, /group-hover\/quick-pick:opacity-100/);
   assert.match(content, /group-focus-within\/quick-pick:opacity-100/);
   assert.match(content, /activeItem && playing \? icons\.pause : icons\.play/);
-  assert.match(tile, /play\(props\.item\.track\)/);
+  assert.match(tile, /play\(props\.item\.media\)/);
   assert.match(
     tile,
     /toggleCollectionPlayback\(albumTarget\.value, albumTracks\)/,
@@ -183,7 +183,7 @@ test("the sidebar renders linked, context-aware quick picks", async () => {
   assert.match(tile, /togglePlayback\(\)/);
   assert.match(
     tile,
-    /async function toggleItemPlayback\(\) \{[\s\S]*?if \(props\.item\.kind === "track"\)[\s\S]*?play\(props\.item\.track\);[\s\S]*?await toggleCollectionPlayback\(albumTarget\.value, albumTracks\);/,
+    /async function toggleItemPlayback\(\) \{[\s\S]*?if \(props\.item\.kind === "media"\)[\s\S]*?play\(props\.item\.media\);[\s\S]*?await toggleCollectionPlayback\(albumTarget\.value, albumTracks\);/,
     "An album quick pick starts immediately and handles direct tracks synchronously",
   );
   assert.match(
@@ -196,10 +196,10 @@ test("the sidebar renders linked, context-aware quick picks", async () => {
     /quickPickArtistNames\(props\.item\)/,
     "Artist credits use the server-resolved credit list",
   );
-  assert.doesNotMatch(tile, /item\.kind === "track" \? "Track" : "Album"/);
+  assert.doesNotMatch(tile, /item\.kind === "media" \? "Track" : "Album"/);
   assert.match(
     content,
-    /item\.kind === "track" \? icons\.music : icons\.album/,
+    /item\.kind === "media" \? icons\.music : icons\.album/,
   );
   assert.match(
     content,
@@ -208,7 +208,7 @@ test("the sidebar renders linked, context-aware quick picks", async () => {
   assert.match(content, /size-3 shrink-0 text-muted-foreground/);
   assert.match(
     content,
-    /trackAlbumTitleRoute\(props\.item\.track\) \?\?[\s\S]*artistRoute\(\{ name: props\.item\.track\.artist \}\)[\s\S]*albumRoute\(props\.item\.album\)/,
+    /trackAlbumTitleRoute\(props\.item\.media\) \?\?[\s\S]*artistRoute\(\{ name: props\.item\.media\.artist \}\)[\s\S]*albumRoute\(props\.item\.album\)/,
     "Track and album names link to their album details",
   );
   assert.match(
@@ -228,7 +228,7 @@ test("the sidebar renders linked, context-aware quick picks", async () => {
   assert.match(composer, /fetchQuickPicks/);
   assert.match(
     client,
-    /\/api\/tracks\/\$\{encodeURIComponent\(trackId\)\}\/plays/,
+    /\/api\/media\/\$\{encodeURIComponent\(mediaId\)\}\/plays/,
   );
   assert.match(client, /\/api\/quick-picks/);
 });

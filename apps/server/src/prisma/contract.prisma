@@ -12,43 +12,83 @@ model User {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @onCreate(now()) @onUpdate(now())
   tasks                 Task[]
+  playlistAccounts      PlaylistAccount[]
 
   @@index([role])
 }
 
 model Playlist {
-  id        String         @id @onCreate(cuid(2))
+  id        String        @id @onCreate(cuid(2))
   userId    String
+  kind      String        @default("manual")
   name      String
-  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   items     PlaylistItem[]
   likes     PlaylistLike[]
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @onCreate(now()) @onUpdate(now())
+  link      PlaylistLink?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @onCreate(now()) @onUpdate(now())
 
   @@index([userId, updatedAt])
 }
 
+model PlaylistAccount {
+  id                   String         @id @onCreate(cuid(2))
+  userId               String
+  kind                 String
+  name                 String
+  configuration        String         @default("{}")
+  credentialCiphertext String?
+  enabled              Int            @default(1)
+  user                 User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  links                PlaylistLink[]
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @onCreate(now()) @onUpdate(now())
+
+  @@index([userId, kind])
+}
+
+model PlaylistLink {
+  id                 String          @id @onCreate(cuid(2))
+  playlistId         String          @unique
+  accountId          String
+  externalPlaylistId String
+  syncMode           String          @default("import")
+  syncCursor         String?
+  remoteVersion      String?
+  lastSyncedAt       DateTime?
+  enabled            Int             @default(1)
+  playlist           Playlist        @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  account            PlaylistAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @onCreate(now()) @onUpdate(now())
+
+  @@unique([accountId, externalPlaylistId])
+  @@index([accountId])
+}
+
 model PlaylistItem {
-  id               String    @id @onCreate(cuid(2))
+  id               String     @id @onCreate(cuid(2))
   playlistId       String
   position         Int
   identityKey      String
-  trackId          String?
+  mediaId          String?
   externalProvider String?
   externalTrackId  String?
+  matchStatus      String     @default("matched")
   snapshotTitle    String
   snapshotArtist   String
   snapshotAlbum    String?
   snapshotDuration Int?
-  playlist         Playlist  @relation(fields: [playlistId], references: [id], onDelete: Cascade)
-  track            Track?    @relation(fields: [trackId], references: [id], onDelete: SetNull)
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @onCreate(now()) @onUpdate(now())
+  playlist         Playlist   @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  media            Media?     @relation(fields: [mediaId], references: [id], onDelete: SetNull)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @onCreate(now()) @onUpdate(now())
 
   @@unique([playlistId, identityKey])
   @@index([playlistId, position])
-  @@index([trackId])
+  @@index([mediaId])
+  @@index([externalProvider, externalTrackId])
 }
 
 model PlaylistLike {
@@ -88,10 +128,64 @@ model PasswordResetToken {
   @@index([expiresAt])
 }
 
-model Track {
-  id                         String     @id @onCreate(cuid(2))
-  mediaType                  String     @default("music")
-  mediaTypeOrigin            String     @default("fallback")
+model LibrarySource {
+  id                   String       @id @onCreate(cuid(2))
+  kind                 String
+  name                 String?
+  path                 String?
+  url                  String?
+  sourceIdentity       String?
+  configuration        String?
+  credentialCiphertext String?
+  lastSyncedAt         DateTime?
+  position             Int          @default(0)
+  removedAt            DateTime?
+  copies               MediaCopy[]
+  artworkJobs          ArtworkJob[]
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @onCreate(now()) @onUpdate(now())
+
+  @@index([kind])
+  @@index([position])
+  @@index([removedAt])
+  @@unique([kind, sourceIdentity])
+}
+
+model ReleaseIndexer {
+  id                   String   @id @onCreate(cuid(2))
+  kind                 String   @default("torznab")
+  name                 String?
+  url                  String
+  sourceIdentity       String?
+  configuration        String?
+  credentialCiphertext String?
+  downloadClientId     String?
+  destinationSourceId  String?
+  position             Int      @default(0)
+  removedAt            DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @onCreate(now()) @onUpdate(now())
+
+  @@index([position])
+  @@index([removedAt])
+  @@unique([kind, sourceIdentity])
+}
+
+model DownloadClient {
+  id                   String   @id @onCreate(cuid(2))
+  kind                 String
+  name                 String
+  url                  String
+  username             String
+  credentialCiphertext String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @onCreate(now()) @onUpdate(now())
+}
+
+model Media {
+  id                         String          @id @onCreate(cuid(2))
+  mediaType                  String          @default("music")
+  mediaTypeOrigin            String          @default("fallback")
   title                      String
   artist                     String
   artistCredits              String?
@@ -101,14 +195,10 @@ model Track {
   genres                     String?
   discNumber                 Int?
   trackNumber                Int?
-  relativePath               String
-  mimeType                   String
   durationMs                 Int?
   publishedAt                DateTime?
-  fileSizeBytes              BigInt
-  fileModifiedAt             DateTime
-  metadataVersion            Int        @default(0)
-  metadataMode               String     @default("automatic")
+  metadataVersion            Int             @default(0)
+  metadataMode               String          @default("automatic")
   metadataTitle              String?
   metadataArtist             String?
   metadataArtistCredits      String?
@@ -128,36 +218,86 @@ model Track {
   metadataMatchedAt          DateTime?
   metadataAttemptedSignature String?
   coverId                    String?
-  externalId                 String?
-  externalVersion            String?
-  externalContainer          String?
-  externalCoverKey           String?
-  recordingIdentityKeys      String     @default("[]")
-  audioLossless              Int        @default(0)
-  audioBitrate               Int?
-  duplicateOfId              String?
-  available                  Int        @default(1)
-  lastSeenScanId             String?
-  catalogProjectionPending   Int        @default(0)
-  sourceId                   String?
-  source                     Source?    @relation(fields: [sourceId], references: [id], onDelete: SetNull)
-  artworkJob                 ArtworkJob?
-  createdAt                  DateTime   @default(now())
-  updatedAt                  DateTime   @onCreate(now()) @onUpdate(now())
+  available                  Int             @default(1)
+  catalogProjectionPending   Int             @default(0)
+  manualOverrides            String          @default("{}")
+  copies                     MediaCopy[]
+  aliases                    MediaAlias[]
+  likes                      MediaLike[]
+  playEvents                 MediaPlayEvent[]
+  playlistItems              PlaylistItem[]
+  createdAt                  DateTime        @default(now())
+  updatedAt                  DateTime        @onCreate(now()) @onUpdate(now())
 
-  @@unique([sourceId, relativePath])
-  @@unique([sourceId, externalId])
   @@index([available])
   @@index([mediaType])
   @@index([artist, album, title])
-  @@index([sourceId])
   @@index([catalogProjectionPending])
   @@index([coverId])
   @@index([metadataProviderKind, metadataExternalTrackId])
-  @@index([duplicateOfId])
+  @@index([updatedAt, id])
 }
 
-model TrackCover {
+model MediaCopy {
+  id                    String        @id @onCreate(cuid(2))
+  mediaId               String
+  librarySourceId       String
+  relativePath          String
+  mediaType             String        @default("music")
+  mediaTypeOrigin       String        @default("fallback")
+  title                 String
+  artist                String
+  artistCredits         String?
+  albumArtist           String?
+  albumArtistCredits    String?
+  album                 String?
+  genres                String?
+  discNumber            Int?
+  trackNumber           Int?
+  durationMs            Int?
+  publishedAt           DateTime?
+  mimeType              String
+  fileSizeBytes         BigInt
+  fileModifiedAt        DateTime
+  externalId            String?
+  externalVersion       String?
+  externalContainer     String?
+  externalCoverKey      String?
+  recordingIdentityKeys String        @default("[]")
+  audioLossless         Int           @default(0)
+  audioBitrate          Int?
+  coverId               String?
+  available             Int           @default(1)
+  lastSeenScanId        String?
+  metadataVersion       Int           @default(0)
+  manualOverrides       String        @default("{}")
+  media                 Media         @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  librarySource         LibrarySource @relation(fields: [librarySourceId], references: [id], onDelete: Cascade)
+  artworkJob            ArtworkJob?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @onCreate(now()) @onUpdate(now())
+
+  @@unique([librarySourceId, relativePath])
+  @@unique([librarySourceId, externalId])
+  @@index([mediaId, available])
+  @@index([librarySourceId])
+  @@index([lastSeenScanId])
+  @@index([mimeType])
+  @@index([audioLossless, audioBitrate])
+  @@index([fileSizeBytes])
+}
+
+model MediaAlias {
+  id        String   @id @onCreate(cuid(2))
+  aliasId   String   @unique
+  mediaId   String
+  media     Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([mediaId])
+}
+
+model Cover {
   id        String   @id @onCreate(cuid(2))
   hash      String   @unique
   createdAt DateTime @default(now())
@@ -165,53 +305,53 @@ model TrackCover {
 }
 
 model ArtworkJob {
-  id                   String    @id @onCreate(cuid(2))
-  trackId              String    @unique
-  sourceId             String
-  externalCoverItemId  String
-  externalCoverTag     String?
-  attemptCount         Int       @default(0)
-  lastAttemptAt        DateTime?
-  track                Track     @relation(fields: [trackId], references: [id], onDelete: Cascade)
-  source               Source    @relation(fields: [sourceId], references: [id], onDelete: Cascade)
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @onCreate(now()) @onUpdate(now())
+  id                  String        @id @onCreate(cuid(2))
+  copyId              String        @unique
+  librarySourceId     String
+  externalCoverItemId String
+  externalCoverTag    String?
+  attemptCount        Int           @default(0)
+  lastAttemptAt       DateTime?
+  copy                MediaCopy     @relation(fields: [copyId], references: [id], onDelete: Cascade)
+  librarySource       LibrarySource @relation(fields: [librarySourceId], references: [id], onDelete: Cascade)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @onCreate(now()) @onUpdate(now())
 
   @@index([createdAt])
-  @@index([sourceId, externalCoverItemId, externalCoverTag], name: "artwork_source_cover")
+  @@index([librarySourceId, externalCoverItemId, externalCoverTag], name: "artwork_source_cover")
 }
 
-model TrackLike {
+model MediaLike {
   userId    String
-  trackId   String
+  mediaId   String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  track     Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  media     Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 
-  @@id([userId, trackId])
-  @@index([trackId])
+  @@id([userId, mediaId])
+  @@index([mediaId])
 }
 
-model TrackPlayEvent {
+model MediaPlayEvent {
   id       String   @id @onCreate(cuid(2))
   userId   String
-  trackId  String
+  mediaId  String
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  track    Track    @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  media    Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
   playedAt DateTime @default(now())
 
   @@index([userId, playedAt])
-  @@index([trackId])
+  @@index([mediaId])
 }
 
 model AlbumLike {
-  id               String   @id @onCreate(cuid(2))
-  userId           String
-  albumId          String
-  title            String
-  artist           String
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt        DateTime @default(now())
+  id        String   @id @onCreate(cuid(2))
+  userId    String
+  albumId   String
+  title     String
+  artist    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
 
   @@unique([userId, albumId])
   @@index([userId, createdAt])
@@ -239,8 +379,9 @@ model Task {
   ownerUserId       String?
   ownerUser         User?     @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
   parentTaskId      String?
-  sourceId          String?
-  sourceName        String?
+  connectorId       String?
+  connectorKind     String?
+  connectorName     String?
   progressCompleted Int?
   progressTotal     Int?
   details           String    @default("[]")
@@ -258,6 +399,7 @@ model Task {
   @@index([kind, status])
   @@index([ownerUserId])
   @@index([parentTaskId])
+  @@index([connectorId])
 }
 
 model ServerSetting {
@@ -269,37 +411,6 @@ model ServerSetting {
   fileLoggingEnabled   Int      @default(1)
   fileLogRetentionDays Int      @default(5)
   updatedAt            DateTime @onCreate(now()) @onUpdate(now())
-}
-
-model DownloadClient {
-  id String @id @onCreate(cuid(2))
-  kind String
-  name String
-  url String
-  username String
-  credentialCiphertext String
-}
-
-model Source {
-  id                   String   @id @onCreate(cuid(2))
-  kind                 String
-  name                 String?
-  path                 String?
-  url                  String?
-  sourceIdentity       String?
-  configuration        String?
-  credentialCiphertext String?
-  lastSyncedAt         DateTime?
-  position             Int      @default(0)
-  removedAt            DateTime?
-  artworkJobs          ArtworkJob[]
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @onCreate(now()) @onUpdate(now())
-
-  @@index([kind])
-  @@index([position])
-  @@index([removedAt])
-  @@unique([kind, sourceIdentity])
 }
 
 model MetadataProvider {
@@ -324,72 +435,70 @@ model CatalogState {
   updatedAt         DateTime @onCreate(now()) @onUpdate(now())
 }
 
-model CatalogTrack {
-  id               String   @id
-  sourceId         String?
-  mediaType        String   @default("music")
-  title            String
-  artist           String
-  artistCredits    String
-  albumArtist      String
+model CatalogMedia {
+  id                 String   @id
+  sourceKind         String?
+  mediaType          String   @default("music")
+  title              String
+  artist             String
+  artistCredits      String
+  albumArtist        String
   albumArtistCredits String
-  album            String?
-  normalizedTitle  String
-  normalizedArtist String
-  normalizedAlbum  String
-  normalizedGenres String   @default("")
-  durationMs       Int?
-  publishedAt      DateTime?
-  discNumber       Int?
-  trackNumber      Int?
-  releaseYear      Int?
-  available        Int
-  coverId          String?
-  albumId          String?
-  albumFolderKey   String
-  albumReleaseKey  String?
-  duplicateOfId    String?
-  updatedAt        DateTime @onCreate(now()) @onUpdate(now())
+  album              String?
+  normalizedTitle    String
+  normalizedArtist   String
+  normalizedAlbum    String
+  normalizedGenres   String   @default("")
+  durationMs         Int?
+  publishedAt        DateTime?
+  discNumber         Int?
+  trackNumber        Int?
+  releaseYear        Int?
+  available          Int
+  coverId            String?
+  albumId            String?
+  albumFolderKey     String
+  albumReleaseKey    String?
+  updatedAt          DateTime @onCreate(now()) @onUpdate(now())
 
-  @@index([normalizedArtist, normalizedAlbum, normalizedTitle, id], map: "ct_artist_album_title")
-  @@index([normalizedArtist, normalizedTitle, id], map: "ct_artist_title")
-  @@index([normalizedAlbum, normalizedTitle, id], map: "ct_album_title")
-  @@index([normalizedTitle, id], map: "ct_title")
-  @@index([durationMs, id], map: "ct_duration")
+  @@index([normalizedArtist, normalizedAlbum, normalizedTitle, id], map: "cm_artist_album_title")
+  @@index([normalizedArtist, normalizedTitle, id], map: "cm_artist_title")
+  @@index([normalizedAlbum, normalizedTitle, id], map: "cm_album_title")
+  @@index([normalizedTitle, id], map: "cm_title")
+  @@index([durationMs, id], map: "cm_duration")
   @@index([available, id])
   @@index([mediaType, available, id])
-  @@index([sourceId])
+  @@index([sourceKind])
   @@index([albumId])
   @@index([albumFolderKey, normalizedAlbum, id])
-  @@index([duplicateOfId])
 }
 
-model DuplicateDetectionState {
+model MediaMatchState {
   id               String   @id
   algorithmVersion Int      @default(0)
   lastCompletedAt  DateTime?
-  hiddenCount      Int      @default(0)
+  mergedCount      Int      @default(0)
   groupCount       Int      @default(0)
   updatedAt        DateTime @onCreate(now()) @onUpdate(now())
 }
 
 model CatalogAlbum {
-  id               String   @id
-  mediaType        String   @default("music")
-  title            String
-  artist           String
-  normalizedTitle  String
-  normalizedArtist String
-  artistId         String?
-  coverId          String?
-  coverTrackId     String?
-  artistCredits    String?
-  trackCount       Int      @default(0)
-  availableTrackCount Int   @default(0)
-  durationMs       Int?
-  releaseYear      Int?
-  latestPublishedAt DateTime?
-  updatedAt        DateTime @onCreate(now()) @onUpdate(now())
+  id                  String   @id
+  mediaType           String   @default("music")
+  title               String
+  artist              String
+  normalizedTitle     String
+  normalizedArtist    String
+  artistId            String?
+  coverId             String?
+  coverMediaId        String?
+  artistCredits       String?
+  trackCount          Int      @default(0)
+  availableTrackCount Int      @default(0)
+  durationMs          Int?
+  releaseYear         Int?
+  latestPublishedAt   DateTime?
+  updatedAt           DateTime @onCreate(now()) @onUpdate(now())
 
   @@index([normalizedTitle, normalizedArtist, id], map: "ca_title_artist")
   @@index([mediaType, normalizedTitle, id])
@@ -398,16 +507,16 @@ model CatalogAlbum {
 }
 
 model CatalogArtist {
-  id                    String          @id
+  id                    String   @id
   name                  String
   normalizedName        String
-  displayName           String          @default("")
-  normalizedDisplayName String          @default("")
-  trackCount            Int             @default(0)
-  availableTrackCount   Int             @default(0)
-  albumCount            Int             @default(0)
+  displayName           String   @default("")
+  normalizedDisplayName String   @default("")
+  trackCount            Int      @default(0)
+  availableTrackCount   Int      @default(0)
+  albumCount            Int      @default(0)
   durationMs            Int?
-  updatedAt             DateTime        @onCreate(now()) @onUpdate(now())
+  updatedAt             DateTime @onCreate(now()) @onUpdate(now())
 
   @@index([normalizedName, id])
   @@index([normalizedDisplayName, id])
@@ -445,20 +554,20 @@ model ArtistMetadata {
   @@index([imageId])
 }
 
-model CatalogTrackArtist {
+model CatalogMediaArtist {
   id       String @id @onCreate(cuid(2))
-  trackId  String
+  mediaId  String
   artistId String
 
-  @@unique([trackId, artistId])
-  @@index([artistId, trackId])
+  @@unique([mediaId, artistId])
+  @@index([artistId, mediaId])
 }
 
 model CatalogArtistAlbum {
   id         String @id @onCreate(cuid(2))
-  artistId String
-  albumId  String
-  trackCount Int @default(0)
+  artistId   String
+  albumId    String
+  trackCount Int    @default(0)
 
   @@unique([artistId, albumId])
   @@index([albumId, artistId])

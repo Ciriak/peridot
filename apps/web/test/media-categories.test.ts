@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import type { TrackResponse } from "@peridot/contracts";
+import type { MediaResponse } from "@peridot/contracts";
 import { trackAlbumRoute } from "../app/lib/library.ts";
 import {
   discoverIntegrationSources,
@@ -48,7 +48,10 @@ test("automatic media categories remain wired without classification controls", 
       "utf8",
     ),
     readFile(
-      new URL("../app/pages/settings/sources.vue", import.meta.url),
+      new URL(
+        "../app/pages/settings/connectors/library-sources.vue",
+        import.meta.url,
+      ),
       "utf8",
     ),
     readFile(
@@ -87,7 +90,7 @@ test("automatic media categories remain wired without classification controls", 
 });
 
 test("track collection routes follow the normalized media type", () => {
-  const base: TrackResponse = {
+  const base: MediaResponse = {
     id: "track-id",
     mediaType: "music",
     mediaTypeOrigin: "fallback",

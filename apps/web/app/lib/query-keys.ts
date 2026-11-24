@@ -55,6 +55,9 @@ export const queryKeys = {
   tasks(scope: PeridotQueryScope, options: Record<string, unknown> = {}) {
     return [...peridotScopeKey(scope), "tasks", options];
   },
+  adminMedias(scope: PeridotQueryScope, options: Record<string, unknown> = {}) {
+    return [...peridotScopeKey(scope), "admin", "medias", options];
+  },
   serverSettings(scope: PeridotQueryScope) {
     return [...peridotScopeKey(scope), "admin", "server"];
   },
@@ -94,14 +97,14 @@ export const queryKeys = {
   },
   metadataCandidates(
     scope: PeridotQueryScope,
-    trackId: string,
+    mediaId: string,
     query?: string,
   ) {
     return [
       ...peridotScopeKey(scope),
       "metadata-candidates",
       "track",
-      trackId,
+      mediaId,
       { query: query?.trim() || null },
     ];
   },

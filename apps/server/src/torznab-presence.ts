@@ -1,4 +1,4 @@
-import type { TorznabClientTorrentStatus } from "@peridot/contracts";
+import type { DownloadClientTorrentStatus } from "@peridot/contracts";
 import { qbitRequest, type QbitConnection } from "./qbittorrent.js";
 
 const BASE32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
@@ -8,7 +8,7 @@ const PRESENCE_TIMEOUT_MS = 2_000;
 
 interface CachedPresence {
   expiresAt: number;
-  status: TorznabClientTorrentStatus | null;
+  status: DownloadClientTorrentStatus | null;
 }
 
 interface QbitTorrent {
@@ -77,7 +77,7 @@ export class TorrentPresenceIndex {
   set(
     clientId: string,
     hash: string,
-    status: TorznabClientTorrentStatus | null,
+    status: DownloadClientTorrentStatus | null,
   ) {
     const normalized = normalizeInfoHash(hash);
     if (!normalized) return;
@@ -94,7 +94,7 @@ export class TorrentPresenceIndex {
     connection: QbitConnection,
     hashes: readonly string[],
     onError?: () => void,
-  ): Promise<Map<string, TorznabClientTorrentStatus | null>> {
+  ): Promise<Map<string, DownloadClientTorrentStatus | null>> {
     const normalized = [
       ...new Set(
         hashes
@@ -104,7 +104,7 @@ export class TorrentPresenceIndex {
     ];
     const entries = this.cache.get(clientId) ?? new Map();
     this.cache.set(clientId, entries);
-    const result = new Map<string, TorznabClientTorrentStatus | null>();
+    const result = new Map<string, DownloadClientTorrentStatus | null>();
     const missing: string[] = [];
     const now = Date.now();
     for (const hash of normalized) {
@@ -129,14 +129,14 @@ export class TorrentPresenceIndex {
             PRESENCE_TIMEOUT_MS,
           )
         ).json();
-        const found = new Map<string, TorznabClientTorrentStatus>();
+        const found = new Map<string, DownloadClientTorrentStatus>();
         for (const torrent of torrents) {
           const status = {
             hash: torrent.hash,
             state: torrent.state,
             progress: torrent.progress,
             taskId: null,
-          } satisfies TorznabClientTorrentStatus;
+          } satisfies DownloadClientTorrentStatus;
           for (const value of [
             torrent.hash,
             torrent.infohash_v1,

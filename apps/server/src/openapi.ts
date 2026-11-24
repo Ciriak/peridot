@@ -128,10 +128,10 @@ const taskStatusSchema = enumeration(
 const taskKindSchema = enumeration(
   "release_import",
   "library_scan",
-  "catalog_fetch",
-  "metadata_fetch",
+  "catalog_projection",
+  "metadata_enrichment",
   "artwork_fetch",
-  "duplicate_detection",
+  "media_match",
 );
 
 const downloadLinkFields = {
@@ -235,12 +235,12 @@ const schemas: Record<string, SchemaObject> = {
     token: stringSchema,
     password: stringSchema,
   }),
-  TrackMetadataDetail: objectSchema({
+  MediaMetadataDetail: objectSchema({
     key: stringSchema,
     value: stringSchema,
     labelMessage: ref("MessageDescriptor"),
   }),
-  TrackMetadataResponse: objectSchema({
+  MediaMetadataResponse: objectSchema({
     providerId: stringSchema,
     providerKind: metadataProviderKindSchema,
     providerName: stringSchema,
@@ -250,13 +250,13 @@ const schemas: Record<string, SchemaObject> = {
     mode: enumeration("automatic", "manual"),
     sourceUrl: stringSchema,
     genres: arrayOf(stringSchema),
-    details: arrayOf(ref("TrackMetadataDetail")),
+    details: arrayOf(ref("MediaMetadataDetail")),
   }),
-  TrackResponse: objectSchema({
+  MediaResponse: objectSchema({
     id: stringSchema,
     mediaType: mediaTypeSchema,
     mediaTypeOrigin: trackMediaTypeOriginSchema,
-    sourceKind: nullable(enumeration("path", "url", "jellyfin", "torznab")),
+    sourceKind: nullable(enumeration("path", "jellyfin")),
     title: stringSchema,
     artist: stringSchema,
     artists: arrayOf(stringSchema),
@@ -270,30 +270,114 @@ const schemas: Record<string, SchemaObject> = {
     mimeType: stringSchema,
     available: booleanSchema,
     coverUrl: nullable(stringSchema),
-    metadata: nullable(ref("TrackMetadataResponse")),
+    metadata: nullable(ref("MediaMetadataResponse")),
     liked: booleanSchema,
   }),
-  ResolveTracksRequest: objectSchema({
+  ResolveMediaRequest: objectSchema({
     ids: {
       ...arrayOf(stringSchema),
       maxItems: 500,
     },
   }),
-  ResolveTracksResponse: objectSchema({
-    items: arrayOf(ref("TrackResponse")),
+  ResolveMediaResponse: objectSchema({
+    items: arrayOf(ref("MediaResponse")),
   }),
-  TrackListResponse: objectSchema({
-    items: arrayOf(ref("TrackResponse")),
+  MediaListResponse: objectSchema({
+    items: arrayOf(ref("MediaResponse")),
     nextCursor: nullable(stringSchema),
     totalCount: integerSchema,
     catalogRevision: integerSchema,
   }),
+  AdminMediaResponse: {
+    type: "object",
+    additionalProperties: true,
+  },
+  AdminMediaListResponse: objectSchema({
+    items: arrayOf(ref("AdminMediaResponse")),
+    page: integerSchema,
+    pageSize: integerSchema,
+    totalCount: integerSchema,
+    totalPages: integerSchema,
+    mimeTypes: arrayOf(stringSchema),
+  }),
+  AdminMediaFieldUpdate: objectSchema({
+    field: stringSchema,
+    value: {
+      anyOf: [
+        stringSchema,
+        numberSchema,
+        booleanSchema,
+        nullSchema,
+        arrayOf(stringSchema),
+        { type: "array", items: ref("MediaMetadataDetail") },
+      ],
+    },
+    expectedUpdatedAt: dateTimeSchema,
+  }),
+  CreateAdminMediaRequest: objectSchema(
+    {
+      mediaType: mediaTypeSchema,
+      title: stringSchema,
+      artist: stringSchema,
+      artistCredits: arrayOf(stringSchema),
+      albumArtist: nullable(stringSchema),
+      albumArtistCredits: arrayOf(stringSchema),
+      album: nullable(stringSchema),
+      genres: arrayOf(stringSchema),
+      discNumber: nullable(integerSchema),
+      trackNumber: nullable(integerSchema),
+      durationMs: nullable(integerSchema),
+      publishedAt: nullable(dateTimeSchema),
+      coverId: nullable(stringSchema),
+    },
+    ["mediaType", "title", "artist"],
+  ),
+  CreateAdminMediaCopyRequest: objectSchema(
+    {
+      librarySourceId: stringSchema,
+      relativePath: stringSchema,
+      mediaType: mediaTypeSchema,
+      mediaTypeOrigin: trackMediaTypeOriginSchema,
+      title: stringSchema,
+      artist: stringSchema,
+      artistCredits: arrayOf(stringSchema),
+      albumArtist: nullable(stringSchema),
+      albumArtistCredits: arrayOf(stringSchema),
+      album: nullable(stringSchema),
+      genres: arrayOf(stringSchema),
+      discNumber: nullable(integerSchema),
+      trackNumber: nullable(integerSchema),
+      durationMs: nullable(integerSchema),
+      publishedAt: nullable(dateTimeSchema),
+      mimeType: stringSchema,
+      fileSizeBytes: stringSchema,
+      fileModifiedAt: dateTimeSchema,
+      externalId: nullable(stringSchema),
+      externalVersion: nullable(stringSchema),
+      externalContainer: nullable(stringSchema),
+      externalCoverKey: nullable(stringSchema),
+      recordingIdentityKeys: arrayOf(stringSchema),
+      audioLossless: booleanSchema,
+      audioBitrate: nullable(integerSchema),
+      coverId: nullable(stringSchema),
+    },
+    [
+      "librarySourceId",
+      "relativePath",
+      "mediaType",
+      "title",
+      "artist",
+      "mimeType",
+      "fileSizeBytes",
+      "fileModifiedAt",
+    ],
+  ),
   AlbumSummaryResponse: objectSchema({
     id: stringSchema,
     title: stringSchema,
     artist: stringSchema,
     artists: arrayOf(stringSchema),
-    sourceKinds: arrayOf(enumeration("path", "url", "jellyfin", "torznab")),
+    sourceKinds: arrayOf(enumeration("path", "jellyfin")),
     coverUrl: nullable(stringSchema),
     trackCount: integerSchema,
     durationMs: nullable(integerSchema),
@@ -378,7 +462,7 @@ const schemas: Record<string, SchemaObject> = {
   }),
   PlaylistSummaryResponse: objectSchema({
     id: stringSchema,
-    kind: enumeration("manual", "liked-tracks"),
+    kind: enumeration("manual", "external", "liked-tracks"),
     name: stringSchema,
     trackCount: integerSchema,
     availableTrackCount: integerSchema,
@@ -389,7 +473,7 @@ const schemas: Record<string, SchemaObject> = {
     createdAt: dateTimeSchema,
     updatedAt: dateTimeSchema,
   }),
-  PlaylistExternalTrackReference: objectSchema({
+  ExternalMediaReference: objectSchema({
     provider: stringSchema,
     externalTrackId: stringSchema,
     title: stringSchema,
@@ -408,12 +492,12 @@ const schemas: Record<string, SchemaObject> = {
     coverUrl: nullable(stringSchema),
     available: booleanSchema,
     liked: booleanSchema,
-    track: nullable(ref("TrackResponse")),
-    external: nullable(ref("PlaylistExternalTrackReference")),
+    media: nullable(ref("MediaResponse")),
+    external: nullable(ref("ExternalMediaReference")),
   }),
   PlaylistDetailResponse: objectSchema({
     id: stringSchema,
-    kind: enumeration("manual", "liked-tracks"),
+    kind: enumeration("manual", "external", "liked-tracks"),
     name: stringSchema,
     trackCount: integerSchema,
     availableTrackCount: integerSchema,
@@ -424,6 +508,7 @@ const schemas: Record<string, SchemaObject> = {
     createdAt: dateTimeSchema,
     updatedAt: dateTimeSchema,
     entries: arrayOf(ref("PlaylistEntryResponse")),
+    link: nullable(ref("PlaylistLinkResponse")),
   }),
   PlaylistListResponse: objectSchema({
     items: arrayOf(ref("PlaylistSummaryResponse")),
@@ -440,11 +525,11 @@ const schemas: Record<string, SchemaObject> = {
     oneOf: [
       objectSchema({
         kind: { const: "catalog" },
-        trackId: stringSchema,
+        mediaId: stringSchema,
       }),
       objectSchema({
         kind: { const: "external" },
-        reference: ref("PlaylistExternalTrackReference"),
+        reference: ref("ExternalMediaReference"),
       }),
     ],
   },
@@ -454,6 +539,47 @@ const schemas: Record<string, SchemaObject> = {
   }),
   ReorderPlaylistItemsRequest: objectSchema({
     itemIds: arrayOf(stringSchema),
+  }),
+  PlaylistLinkResponse: objectSchema({
+    id: stringSchema,
+    accountId: stringSchema,
+    accountName: stringSchema,
+    externalPlaylistId: stringSchema,
+    syncMode: enumeration("import", "synchronize"),
+    remoteVersion: nullable(stringSchema),
+    lastSyncedAt: nullable(dateTimeSchema),
+  }),
+  PlaylistAccountResponse: objectSchema({
+    id: stringSchema,
+    kind: stringSchema,
+    name: stringSchema,
+    configuration: stringRecordSchema,
+    hasCredential: booleanSchema,
+    enabled: booleanSchema,
+  }),
+  PlaylistAccountListResponse: objectSchema({
+    items: arrayOf(ref("PlaylistAccountResponse")),
+  }),
+  RemotePlaylistResponse: objectSchema({
+    id: stringSchema,
+    title: stringSchema,
+    itemCount: nullable(integerSchema),
+  }),
+  RemotePlaylistListResponse: objectSchema({
+    items: arrayOf(ref("RemotePlaylistResponse")),
+  }),
+  CreatePlaylistLinkRequest: objectSchema({
+    accountId: stringSchema,
+    externalPlaylistId: stringSchema,
+    syncMode: enumeration("import", "synchronize"),
+  }),
+  PlaylistSyncResultResponse: objectSchema({
+    added: integerSchema,
+    matched: integerSchema,
+    removed: integerSchema,
+    unchanged: integerSchema,
+    unmatched: integerSchema,
+    playlist: ref("PlaylistDetailResponse"),
   }),
   MetadataCandidateResponse: objectSchema({
     providerId: stringSchema,
@@ -472,7 +598,7 @@ const schemas: Record<string, SchemaObject> = {
     durationMs: nullable(integerSchema),
     score: numberSchema,
     sourceUrl: stringSchema,
-    details: arrayOf(ref("TrackMetadataDetail")),
+    details: arrayOf(ref("MediaMetadataDetail")),
   }),
   MetadataCandidateListResponse: objectSchema({
     items: arrayOf(ref("MetadataCandidateResponse")),
@@ -491,7 +617,7 @@ const schemas: Record<string, SchemaObject> = {
   ArtistMetadataCandidateListResponse: objectSchema({
     items: arrayOf(ref("ArtistMetadataCandidateResponse")),
   }),
-  ApplyTrackMetadataRequest: objectSchema({
+  ApplyMediaMetadataRequest: objectSchema({
     providerId: stringSchema,
     externalTrackId: stringSchema,
     externalReleaseId: nullable(stringSchema),
@@ -504,7 +630,7 @@ const schemas: Record<string, SchemaObject> = {
     discNumber: nullable(integerSchema),
     trackNumber: nullable(integerSchema),
     sourceUrl: stringSchema,
-    details: arrayOf(ref("TrackMetadataDetail")),
+    details: arrayOf(ref("MediaMetadataDetail")),
   }),
   ApplyArtistMetadataRequest: objectSchema({
     providerId: stringSchema,
@@ -517,12 +643,12 @@ const schemas: Record<string, SchemaObject> = {
     token: stringSchema,
     expiresAt: dateTimeSchema,
   }),
-  RecordTrackPlayResponse: objectSchema({
-    trackId: stringSchema,
+  RecordMediaPlayResponse: objectSchema({
+    mediaId: stringSchema,
     playedAt: dateTimeSchema,
   }),
-  TrackLikeResponse: objectSchema({
-    trackId: stringSchema,
+  MediaLikeResponse: objectSchema({
+    mediaId: stringSchema,
     likedAt: dateTimeSchema,
   }),
   AlbumLikeResponse: objectSchema({
@@ -553,7 +679,7 @@ const schemas: Record<string, SchemaObject> = {
     likedAt: dateTimeSchema,
   }),
   LikeListResponse: objectSchema({
-    tracks: arrayOf(ref("TrackLikeResponse")),
+    media: arrayOf(ref("MediaLikeResponse")),
     albums: arrayOf(ref("AlbumLikeResponse")),
     audiobooks: arrayOf(ref("AudiobookLikeResponse")),
     podcasts: arrayOf(ref("PodcastLikeResponse")),
@@ -562,7 +688,7 @@ const schemas: Record<string, SchemaObject> = {
   }),
   LikeTarget: {
     oneOf: [
-      objectSchema({ kind: { const: "track" }, trackId: stringSchema }),
+      objectSchema({ kind: { const: "media" }, mediaId: stringSchema }),
       objectSchema({
         kind: { const: "album" },
         albumId: stringSchema,
@@ -592,8 +718,8 @@ const schemas: Record<string, SchemaObject> = {
   LikeResponse: {
     oneOf: [
       objectSchema({
-        kind: { const: "track" },
-        trackId: stringSchema,
+        kind: { const: "media" },
+        mediaId: stringSchema,
         likedAt: dateTimeSchema,
       }),
       objectSchema({
@@ -630,11 +756,11 @@ const schemas: Record<string, SchemaObject> = {
       }),
     ],
   },
-  QuickPickTrackResponse: objectSchema({
-    kind: { const: "track" },
+  QuickPickMediaResponse: objectSchema({
+    kind: { const: "media" },
     key: stringSchema,
-    trackId: stringSchema,
-    track: ref("TrackResponse"),
+    mediaId: stringSchema,
+    media: ref("MediaResponse"),
   }),
   QuickPickAlbumResponse: objectSchema({
     kind: { const: "album" },
@@ -647,7 +773,7 @@ const schemas: Record<string, SchemaObject> = {
     items: {
       type: "array",
       items: {
-        oneOf: [ref("QuickPickTrackResponse"), ref("QuickPickAlbumResponse")],
+        oneOf: [ref("QuickPickMediaResponse"), ref("QuickPickAlbumResponse")],
       },
     },
   }),
@@ -671,8 +797,9 @@ const schemas: Record<string, SchemaObject> = {
     labelMessage: ref("MessageDescriptor"),
     valueMessage: nullable(ref("MessageDescriptor")),
   }),
-  TaskSourceResponse: objectSchema({
+  TaskConnectorResponse: objectSchema({
     id: nullable(stringSchema),
+    kind: nullable(stringSchema),
     name: stringSchema,
   }),
   TaskResponse: objectSchema({
@@ -682,7 +809,7 @@ const schemas: Record<string, SchemaObject> = {
     titleMessage: ref("MessageDescriptor"),
     ownerUserId: nullable(stringSchema),
     parentTaskId: nullable(stringSchema),
-    source: nullable(ref("TaskSourceResponse")),
+    connector: nullable(ref("TaskConnectorResponse")),
     progress: ref("TaskProgressResponse"),
     details: arrayOf(ref("TaskDetailResponse")),
     failureMessage: nullable(ref("MessageDescriptor")),
@@ -696,58 +823,79 @@ const schemas: Record<string, SchemaObject> = {
     activeCount: integerSchema,
     queuedCount: integerSchema,
   }),
-  SourceRemovalProgressResponse: objectSchema({
+  LibrarySourceRemovalProgressResponse: objectSchema({
     operationId: stringSchema,
-    sourceId: stringSchema,
+    mediaId: stringSchema,
     phase: enumeration("stopping", "tracks", "catalog"),
     completed: integerSchema,
     total: integerSchema,
   }),
-  SourceResponse: objectSchema({
+  LibrarySourceResponse: objectSchema({
     id: stringSchema,
-    kind: enumeration("path", "url", "jellyfin", "torznab"),
+    kind: enumeration("path", "jellyfin"),
     name: nullable(stringSchema),
     path: nullable(stringSchema),
     url: nullable(stringSchema),
     configuration: nullable(stringRecordSchema),
     fileCount: integerSchema,
     lastSyncedAt: nullable(dateTimeSchema),
-    removal: nullable(ref("SourceRemovalProgressResponse")),
+    removal: nullable(ref("LibrarySourceRemovalProgressResponse")),
   }),
-  CreateSourceResponse: objectSchema({
+  ConnectorDescriptorResponse: objectSchema({
+    kind: stringSchema,
+    role: stringSchema,
+    name: stringSchema,
+    capabilities: arrayOf(stringSchema),
+  }),
+  ConnectorListResponse: objectSchema({
+    items: arrayOf(ref("ConnectorDescriptorResponse")),
+  }),
+  ReleaseIndexerInput: objectSchema(
+    {
+      name: stringSchema,
+      url: stringSchema,
+      apiKey: stringSchema,
+      downloadClientId: stringSchema,
+      librarySourceId: stringSchema,
+      category: stringSchema,
+      tags: stringSchema,
+      categoryPath: booleanSchema,
+      savePath: stringSchema,
+    },
+    ["url"],
+  ),
+  ReleaseIndexerResponse: objectSchema({
     id: stringSchema,
-    kind: enumeration("path", "url", "jellyfin", "torznab"),
+    kind: enumeration("torznab"),
+    name: nullable(stringSchema),
+    url: stringSchema,
+    configuration: objectSchema({}),
+    downloadClientId: nullable(stringSchema),
+    destinationSourceId: nullable(stringSchema),
+    lastSyncedAt: nullable(stringSchema),
+  }),
+  ReleaseIndexerListResponse: objectSchema({
+    items: arrayOf(ref("ReleaseIndexerResponse")),
+  }),
+  CreateLibrarySourceResponse: objectSchema({
+    id: stringSchema,
+    kind: enumeration("path", "jellyfin"),
     name: nullable(stringSchema),
     path: nullable(stringSchema),
     url: nullable(stringSchema),
     configuration: nullable(stringRecordSchema),
     fileCount: integerSchema,
     lastSyncedAt: nullable(dateTimeSchema),
-    removal: nullable(ref("SourceRemovalProgressResponse")),
+    removal: nullable(ref("LibrarySourceRemovalProgressResponse")),
     task: nullable(ref("TaskResponse")),
   }),
-  CreateSourceRequest: {
+  CreateLibrarySourceRequest: {
     oneOf: [
       objectSchema({
         kind: { const: "path" },
         name: nullable(stringSchema),
         path: stringSchema,
       }),
-      objectSchema({
-        kind: { const: "url" },
-        name: nullable(stringSchema),
-        url: stringSchema,
-      }),
-      objectSchema(
-        {
-          kind: { const: "torznab" },
-          name: stringSchema,
-          url: stringSchema,
-          apiKey: stringSchema,
-          ...downloadLinkFields,
-        },
-        ["kind", "url"],
-      ),
       objectSchema({
         kind: { const: "jellyfin" },
         name: nullable(stringSchema),
@@ -758,30 +906,30 @@ const schemas: Record<string, SchemaObject> = {
       }),
     ],
   },
-  SourceListResponse: objectSchema({
-    items: arrayOf(ref("SourceResponse")),
+  LibrarySourceListResponse: objectSchema({
+    items: arrayOf(ref("LibrarySourceResponse")),
   }),
-  SourceRemovalResponse: objectSchema({
-    sourceId: stringSchema,
+  LibrarySourceRemovalResponse: objectSchema({
+    mediaId: stringSchema,
     unavailableTrackCount: integerSchema,
     affectedAlbumCount: integerSchema,
     affectedArtistCount: integerSchema,
     durationMs: integerSchema,
   }),
-  ReorderSourcesRequest: objectSchema({
+  ReorderLibrarySourcesRequest: objectSchema({
     ids: arrayOf(stringSchema),
   }),
-  DiscoverSourceIntegrationRequest: objectSchema({
+  DiscoverLibrarySourceRequest: objectSchema({
     configuration: stringRecordSchema,
     credentials: stringRecordSchema,
   }),
-  SourceIntegrationOptionResponse: objectSchema({
+  LibrarySourceConnectorOptionResponse: objectSchema({
     id: stringSchema,
     label: stringSchema,
     configuration: stringRecordSchema,
   }),
-  SourceIntegrationOptionListResponse: objectSchema({
-    items: arrayOf(ref("SourceIntegrationOptionResponse")),
+  LibrarySourceConnectorOptionListResponse: objectSchema({
+    items: arrayOf(ref("LibrarySourceConnectorOptionResponse")),
   }),
   MetadataProviderFieldDefinition: objectSchema({
     key: stringSchema,
@@ -1108,22 +1256,22 @@ const routes: Record<string, OpenApiOperation> = {
     ref("UserPreferencesResponse"),
     { body: ref("UpdateUserPreferencesRequest") },
   ),
-  "GET /api/tracks": jsonOperation(
+  "GET /api/media": jsonOperation(
     "Catalog",
-    "List tracks",
-    ref("TrackListResponse"),
+    "List media",
+    ref("MediaListResponse"),
     { query: trackListQuery },
   ),
-  "POST /api/tracks/resolve": jsonOperation(
+  "POST /api/media/resolve": jsonOperation(
     "Catalog",
-    "Resolve catalog tracks in requested order",
-    ref("ResolveTracksResponse"),
-    { body: ref("ResolveTracksRequest") },
+    "Resolve catalog media in requested order",
+    ref("ResolveMediaResponse"),
+    { body: ref("ResolveMediaRequest") },
   ),
-  "GET /api/tracks/:id": jsonOperation(
+  "GET /api/media/:id": jsonOperation(
     "Catalog",
-    "Get a track",
-    ref("TrackResponse"),
+    "Get media",
+    ref("MediaResponse"),
   ),
   "GET /api/albums": jsonOperation(
     "Albums",
@@ -1161,7 +1309,7 @@ const routes: Record<string, OpenApiOperation> = {
   "GET /api/audiobooks/:id/chapters": jsonOperation(
     "Audiobooks",
     "List audiobook chapters",
-    ref("TrackListResponse"),
+    ref("MediaListResponse"),
     { query: trackCollectionQuery },
   ),
   "GET /api/podcasts": jsonOperation(
@@ -1178,7 +1326,7 @@ const routes: Record<string, OpenApiOperation> = {
   "GET /api/podcasts/:id/episodes": jsonOperation(
     "Podcasts",
     "List podcast episodes",
-    ref("TrackListResponse"),
+    ref("MediaListResponse"),
     { query: trackCollectionQuery },
   ),
   "POST /api/library/scans": jsonOperation(
@@ -1187,9 +1335,9 @@ const routes: Record<string, OpenApiOperation> = {
     ref("TaskResponse"),
     { status: 202 },
   ),
-  "POST /api/tracks/:id/playback-token": jsonOperation(
+  "POST /api/media/:id/playback-token": jsonOperation(
     "Playback",
-    "Create a track playback token",
+    "Create a media playback token",
     ref("PlaybackTokenResponse"),
   ),
   "GET /api/artists/:id/image": operationWithResponses(
@@ -1222,7 +1370,7 @@ const routes: Record<string, OpenApiOperation> = {
   ),
   "GET /api/covers/:id": operationWithResponses(
     "Artwork",
-    "Get track cover artwork",
+    "Get media cover artwork",
     {
       200: response({ type: "string", format: "binary" }, "WebP cover"),
     },
@@ -1230,15 +1378,15 @@ const routes: Record<string, OpenApiOperation> = {
   ),
   "HEAD /api/covers/:id": operationWithResponses(
     "Artwork",
-    "Get track cover metadata",
+    "Get media cover metadata",
     {
       200: response({ type: "string", format: "binary" }, "WebP cover headers"),
     },
     { produces: ["image/webp"], security: coverTokenSecurity },
   ),
-  "GET /api/tracks/:id/audio": operationWithResponses(
+  "GET /api/media/:id/audio": operationWithResponses(
     "Playback",
-    "Stream original track audio",
+    "Stream original media audio",
     {
       200: response(
         { type: "string", format: "binary" },
@@ -1252,9 +1400,9 @@ const routes: Record<string, OpenApiOperation> = {
     },
     { produces: audioMimeTypes, security: playbackTokenSecurity },
   ),
-  "HEAD /api/tracks/:id/audio": operationWithResponses(
+  "HEAD /api/media/:id/audio": operationWithResponses(
     "Playback",
-    "Get track audio metadata",
+    "Get media audio metadata",
     {
       200: response(
         { type: "string", format: "binary" },
@@ -1285,23 +1433,23 @@ const routes: Record<string, OpenApiOperation> = {
     null,
     { status: 204, body: ref("LikeTarget") },
   ),
-  "GET /api/tracks/:id/metadata/candidates": jsonOperation(
+  "GET /api/media/:id/metadata/candidates": jsonOperation(
     "Metadata",
-    "Find metadata matches for a track",
+    "Find metadata matches for media",
     ref("MetadataCandidateListResponse"),
     {
       query: objectSchema({ query: stringSchema }, []),
     },
   ),
-  "PUT /api/tracks/:id/metadata": jsonOperation(
+  "PUT /api/media/:id/metadata": jsonOperation(
     "Metadata",
-    "Apply track metadata",
+    "Apply media metadata",
     null,
-    { status: 204, body: ref("ApplyTrackMetadataRequest") },
+    { status: 204, body: ref("ApplyMediaMetadataRequest") },
   ),
-  "DELETE /api/tracks/:id/metadata": jsonOperation(
+  "DELETE /api/media/:id/metadata": jsonOperation(
     "Metadata",
-    "Restore original track metadata",
+    "Restore original media metadata",
     null,
     { status: 204 },
   ),
@@ -1334,7 +1482,7 @@ const routes: Record<string, OpenApiOperation> = {
         {
           limit: { type: "integer", minimum: 1, maximum: 100 },
           offset: { type: "integer", minimum: 0 },
-          trackId: stringSchema,
+          mediaId: stringSchema,
           query: stringSchema,
         },
         [],
@@ -1385,10 +1533,57 @@ const routes: Record<string, OpenApiOperation> = {
     ref("PlaylistDetailResponse"),
     { body: ref("ReorderPlaylistItemsRequest") },
   ),
-  "POST /api/tracks/:id/plays": jsonOperation(
+  "GET /api/playlist-accounts": jsonOperation(
+    "Playlists",
+    "List the current user's playlist accounts",
+    ref("PlaylistAccountListResponse"),
+  ),
+  "POST /api/playlist-accounts": jsonOperation(
+    "Playlists",
+    "Create a playlist account",
+    ref("PlaylistAccountResponse"),
+    {
+      status: 201,
+      body: objectSchema({
+        kind: stringSchema,
+        name: stringSchema,
+        configuration: stringRecordSchema,
+        credential: stringRecordSchema,
+      }),
+    },
+  ),
+  "DELETE /api/playlist-accounts/:id": jsonOperation(
+    "Playlists",
+    "Delete a playlist account",
+    null,
+    { status: 204 },
+  ),
+  "GET /api/playlist-accounts/:id/playlists": jsonOperation(
+    "Playlists",
+    "List remote playlists for an account",
+    ref("RemotePlaylistListResponse"),
+  ),
+  "POST /api/playlist-accounts/:id/links": jsonOperation(
+    "Playlists",
+    "Link and import a remote playlist",
+    ref("PlaylistSyncResultResponse"),
+    {
+      status: 201,
+      body: objectSchema({
+        externalPlaylistId: stringSchema,
+        syncMode: enumeration("import", "synchronize"),
+      }),
+    },
+  ),
+  "POST /api/playlists/:id/sync": jsonOperation(
+    "Playlists",
+    "Synchronize a linked playlist",
+    ref("PlaylistSyncResultResponse"),
+  ),
+  "POST /api/media/:id/plays": jsonOperation(
     "Quick picks",
     "Record a playback start",
-    ref("RecordTrackPlayResponse"),
+    ref("RecordMediaPlayResponse"),
   ),
   "GET /api/quick-picks": jsonOperation(
     "Quick picks",
@@ -1489,18 +1684,46 @@ const routes: Record<string, OpenApiOperation> = {
     "List qBittorrent categories and tags",
     downloadOptions,
   ),
-  "PUT /api/admin/sources/:id/download-client": jsonOperation(
+  "PUT /api/admin/release-indexers/:id/download-client": jsonOperation(
     "Server administration",
     "Set the indexer download destination",
     null,
     { status: 204, body: objectSchema(downloadLinkFields, []) },
   ),
-  "GET /api/torznab": jsonOperation(
+  "GET /api/admin/connectors": jsonOperation(
+    "Connectors",
+    "List available connector roles and capabilities",
+    ref("ConnectorListResponse"),
+  ),
+  "GET /api/admin/release-indexers": jsonOperation(
+    "Connectors",
+    "List release indexers",
+    ref("ReleaseIndexerListResponse"),
+  ),
+  "POST /api/admin/release-indexers": jsonOperation(
+    "Connectors",
+    "Create a release indexer",
+    ref("ReleaseIndexerResponse"),
+    { status: 201, body: ref("ReleaseIndexerInput") },
+  ),
+  "PUT /api/admin/release-indexers/order": jsonOperation(
+    "Connectors",
+    "Reorder release indexers",
+    ref("ReleaseIndexerListResponse"),
+    { body: objectSchema({ ids: arrayOf(stringSchema) }) },
+  ),
+  "DELETE /api/admin/release-indexers/:id": jsonOperation(
+    "Connectors",
+    "Remove a release indexer",
+    null,
+    { status: 204 },
+  ),
+  "GET /api/search/external/status": jsonOperation(
     "Library",
     "Check external search availability",
     objectSchema({ enabled: booleanSchema }),
   ),
-  "GET /api/torznab/search": jsonOperation(
+  "GET /api/search/external": jsonOperation(
     "Library",
     "Search audio releases",
     arrayOf(
@@ -1526,13 +1749,14 @@ const routes: Record<string, OpenApiOperation> = {
     ),
     { query: objectSchema({ q: stringSchema }) },
   ),
-  "POST /api/torznab/imports/:id": operationWithResponses(
+  "POST /api/release-imports": operationWithResponses(
     "Library",
     "Import a release",
     {
       "202": response(
         objectSchema({
-          id: stringSchema,
+          taskId: stringSchema,
+          releaseId: stringSchema,
           task: ref("TaskResponse"),
         }),
         "Import task queued",
@@ -1556,16 +1780,75 @@ const routes: Record<string, OpenApiOperation> = {
         "Download client rejected the release",
       ),
     },
+    {
+      body: objectSchema({
+        indexerId: stringSchema,
+        releaseId: stringSchema,
+      }),
+    },
   ),
-  "GET /api/torznab/imports/:id": jsonOperation(
+  "GET /api/release-imports/:taskId": jsonOperation(
     "Library",
     "Get release import progress",
     objectSchema({
+      taskId: stringSchema,
+      releaseId: stringSchema,
       progress: numberSchema,
       state: stringSchema,
-      trackIds: arrayOf(stringSchema),
+      mediaIds: arrayOf(stringSchema),
     }),
   ),
+  "GET /api/admin/medias": jsonOperation(
+    "Media manager",
+    "List and filter all known media",
+    ref("AdminMediaListResponse"),
+  ),
+  "POST /api/admin/medias": jsonOperation(
+    "Media manager",
+    "Create a media record",
+    ref("AdminMediaResponse"),
+    { status: 201, body: ref("CreateAdminMediaRequest") },
+  ),
+  "PATCH /api/admin/medias/:mediaId": jsonOperation(
+    "Media manager",
+    "Update one media field with a persistent override",
+    ref("AdminMediaResponse"),
+    { body: ref("AdminMediaFieldUpdate") },
+  ),
+  "DELETE /api/admin/medias/:mediaId": jsonOperation(
+    "Media manager",
+    "Delete a media record and its catalog references",
+    null,
+    { status: 204 },
+  ),
+  "DELETE /api/admin/medias/:mediaId/overrides/:field": jsonOperation(
+    "Media manager",
+    "Reset one media field to its source value",
+    ref("AdminMediaResponse"),
+  ),
+  "POST /api/admin/medias/:mediaId/copies": jsonOperation(
+    "Media manager",
+    "Create a file record for a media item",
+    ref("AdminMediaResponse"),
+    { status: 201, body: ref("CreateAdminMediaCopyRequest") },
+  ),
+  "PATCH /api/admin/medias/:mediaId/copies/:copyId": jsonOperation(
+    "Media manager",
+    "Update one file field with a persistent override",
+    ref("AdminMediaResponse"),
+    { body: ref("AdminMediaFieldUpdate") },
+  ),
+  "DELETE /api/admin/medias/:mediaId/copies/:copyId": jsonOperation(
+    "Media manager",
+    "Delete a file record without changing files on disk",
+    ref("AdminMediaResponse"),
+  ),
+  "DELETE /api/admin/medias/:mediaId/copies/:copyId/overrides/:field":
+    jsonOperation(
+      "Media manager",
+      "Reset one file field to its source value",
+      ref("AdminMediaResponse"),
+    ),
   "GET /api/admin/server": jsonOperation(
     "Server administration",
     "Get server settings",
@@ -1606,29 +1889,29 @@ const routes: Record<string, OpenApiOperation> = {
       ),
     },
   ),
-  "GET /api/admin/sources": jsonOperation(
+  "GET /api/admin/library-sources": jsonOperation(
     "Sources",
     "List library sources",
-    ref("SourceListResponse"),
+    ref("LibrarySourceListResponse"),
   ),
-  "POST /api/admin/sources": jsonOperation(
+  "POST /api/admin/library-sources": jsonOperation(
     "Sources",
     "Create a library source",
-    ref("CreateSourceResponse"),
-    { status: 201, body: ref("CreateSourceRequest") },
+    ref("CreateLibrarySourceResponse"),
+    { status: 201, body: ref("CreateLibrarySourceRequest") },
   ),
-  "PUT /api/admin/sources/order": jsonOperation(
+  "PUT /api/admin/library-sources/order": jsonOperation(
     "Sources",
     "Reorder library sources",
-    ref("SourceListResponse"),
-    { body: ref("ReorderSourcesRequest") },
+    ref("LibrarySourceListResponse"),
+    { body: ref("ReorderLibrarySourcesRequest") },
   ),
-  "DELETE /api/admin/sources/:id": jsonOperation(
+  "DELETE /api/admin/library-sources/:id": jsonOperation(
     "Sources",
     "Remove a library source while retaining its catalog as unavailable",
-    ref("SourceRemovalResponse"),
+    ref("LibrarySourceRemovalResponse"),
   ),
-  "POST /api/admin/sources/:id/scans": jsonOperation(
+  "POST /api/admin/library-sources/:id/scans": jsonOperation(
     "Sources",
     "Queue a source scan",
     ref("TaskResponse"),
@@ -1642,8 +1925,8 @@ const routes: Record<string, OpenApiOperation> = {
   "POST /api/admin/source-integrations/:kind/discover": jsonOperation(
     "Sources",
     "Discover source choices from a built-in integration",
-    ref("SourceIntegrationOptionListResponse"),
-    { body: ref("DiscoverSourceIntegrationRequest") },
+    ref("LibrarySourceConnectorOptionListResponse"),
+    { body: ref("DiscoverLibrarySourceRequest") },
   ),
   "GET /api/admin/metadata-providers/definitions": jsonOperation(
     "Metadata providers",
@@ -1782,7 +2065,7 @@ const tags = [
   },
   {
     name: "Metadata",
-    description: "Track and artist metadata matching.",
+    description: "Media and artist metadata matching.",
   },
   {
     name: "Playlists",
@@ -1805,8 +2088,8 @@ const tags = [
     description: "Authenticated realtime WebSocket subscription.",
   },
   {
-    name: "Sources",
-    description: "Administrator library source management.",
+    name: "Connectors",
+    description: "Administrator connector and library source management.",
   },
   {
     name: "Metadata providers",
@@ -1850,16 +2133,17 @@ function operationId(method: string, path: string): string {
 }
 
 function fallbackTag(method: string, path: string): string {
+  if (path.startsWith("/api/admin/medias")) return "Media manager";
   if (path.startsWith("/api/admin/users")) return "User management";
-  if (path.startsWith("/api/admin/sources")) return "Sources";
-  if (path.startsWith("/api/admin/source-integrations")) return "Sources";
+  if (path.startsWith("/api/admin/library-sources")) return "Connectors";
+  if (path.startsWith("/api/admin/source-integrations")) return "Connectors";
   if (path.startsWith("/api/admin/metadata")) return "Metadata providers";
   if (path.startsWith("/api/admin/filesystem")) return "Filesystem";
   if (path.startsWith("/api/admin/logs")) return "Logs";
   if (path.startsWith("/api/admin")) return "Server administration";
   if (path.startsWith("/api/auth")) return "Authentication";
   if (path.startsWith("/api/users")) return "Users";
-  if (path.startsWith("/api/tracks")) return "Catalog";
+  if (path.startsWith("/api/media")) return "Catalog";
   if (path.startsWith("/api/albums")) return "Albums";
   if (path.startsWith("/api/artists")) return "Artists";
   if (path.startsWith("/api/audiobooks")) return "Audiobooks";
@@ -2094,7 +2378,7 @@ export async function registerOpenApi(app: FastifyInstance) {
         ...document.paths["/api/covers/{id}"],
         head: {
           tags: ["Artwork"],
-          summary: "Get track cover metadata",
+          summary: "Get media cover metadata",
           operationId: "head-api-covers-by-id",
           security: coverTokenSecurity,
           parameters: [
@@ -2128,12 +2412,12 @@ export async function registerOpenApi(app: FastifyInstance) {
           },
         },
       };
-      document.paths["/api/tracks/{id}/audio"] = {
-        ...document.paths["/api/tracks/{id}/audio"],
+      document.paths["/api/media/{id}/audio"] = {
+        ...document.paths["/api/media/{id}/audio"],
         head: {
           tags: ["Playback"],
-          summary: "Get track audio metadata",
-          operationId: "head-api-tracks-by-id-audio",
+          summary: "Get media audio metadata",
+          operationId: "head-api-media-by-id-audio",
           security: playbackTokenSecurity,
           parameters: [
             {

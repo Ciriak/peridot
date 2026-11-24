@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from "#imports";
-import type { PlaylistDetailResponse, TrackResponse } from "@peridot/contracts";
+import type { PlaylistDetailResponse, MediaResponse } from "@peridot/contracts";
 import { Icon } from "@iconify/vue/offline";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
@@ -73,19 +73,19 @@ const existingIds = computed(
   () =>
     new Set(
       props.playlist.entries.flatMap((entry) =>
-        entry.track ? [entry.track.id] : [],
+        entry.media ? [entry.media.id] : [],
       ),
     ),
 );
 
-async function add(track: TrackResponse) {
+async function add(track: MediaResponse) {
   if (addingId.value || existingIds.value.has(track.id)) return;
   addingId.value = track.id;
   error.value = null;
   try {
     const result = await actions.add(props.playlist.id, {
       kind: "catalog",
-      trackId: track.id,
+      mediaId: track.id,
     });
     emit("added", result.playlist);
   } catch (reason) {

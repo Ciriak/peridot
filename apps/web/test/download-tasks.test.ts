@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import type { TrackResponse } from "@peridot/contracts";
+import type { MediaResponse } from "@peridot/contracts";
 import {
   createDownloadTask,
   DOWNLOAD_TASK_MAX_TERMINAL,
@@ -19,7 +19,7 @@ const scope = {
   userId: "user-1",
 };
 
-function track(id: string): TrackResponse {
+function track(id: string): MediaResponse {
   return {
     id,
     mediaType: "music",
@@ -46,7 +46,7 @@ function task(id: string, overrides: Partial<DownloadTask> = {}): DownloadTask {
   return {
     ...createDownloadTask(scope, {
       id,
-      request: { kind: "track", track: track(id) },
+      request: { kind: "media", track: track(id) },
       title: `Track ${id}`,
       titleMessage: message("downloadTasks.title.track", {
         item: `Track ${id}`,
@@ -67,7 +67,7 @@ test("download tasks are scoped and expose aggregate progress", () => {
   );
   assert.equal(sameDownloadTaskTarget(first, second.request), false);
   assert.equal(
-    sameDownloadTaskTarget(first, { kind: "track", track: track("one") }),
+    sameDownloadTaskTarget(first, { kind: "media", track: track("one") }),
     true,
   );
 

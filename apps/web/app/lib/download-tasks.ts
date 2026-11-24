@@ -2,19 +2,19 @@ import type {
   AlbumSummaryResponse,
   MediaType,
   MessageDescriptor,
-  TrackResponse,
+  MediaResponse,
 } from "@peridot/contracts";
 import { createStore, del, entries, set } from "idb-keyval";
 import type { PeridotQueryScope } from "./query-keys";
 
-export const DOWNLOAD_TASK_DATABASE = "peridot-web-download-tasks-v1";
-export const DOWNLOAD_TASK_STORAGE_VERSION = 1;
+export const DOWNLOAD_TASK_DATABASE = "peridot-web-download-tasks-v2";
+export const DOWNLOAD_TASK_STORAGE_VERSION = 2;
 export const DOWNLOAD_TASK_MAX_TERMINAL = 100;
 export const DOWNLOAD_TASK_TERMINAL_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const DOWNLOAD_TASK_STORE = "download-tasks";
 
 export type DownloadTaskKind =
-  "track" | "album" | "collection" | "playlist" | "liked_titles";
+  "media" | "album" | "collection" | "playlist" | "liked_titles";
 
 export type DownloadTaskStatus =
   | "queued"
@@ -26,7 +26,7 @@ export type DownloadTaskStatus =
   | "cancelled";
 
 export type DownloadTaskRequest =
-  | { kind: "track"; track: TrackResponse }
+  | { kind: "media"; track: MediaResponse }
   | { kind: "album"; album: AlbumSummaryResponse }
   | {
       kind: "collection";
@@ -110,7 +110,7 @@ export function isDownloadTaskTerminal(task: DownloadTask): boolean {
 }
 
 export function downloadTaskTarget(kind: DownloadTaskKind): string {
-  if (kind === "track") return "track";
+  if (kind === "media") return "track";
   if (kind === "album") return "album";
   if (kind === "collection") return "collection";
   if (kind === "playlist") return "playlist";
@@ -122,8 +122,8 @@ export function sameDownloadTaskTarget(
   request: DownloadTaskRequest,
 ): boolean {
   if (left.request.kind !== request.kind) return false;
-  if (request.kind === "track") {
-    return left.request.kind === "track"
+  if (request.kind === "media") {
+    return left.request.kind === "media"
       ? left.request.track.id === request.track.id
       : false;
   }
@@ -181,7 +181,7 @@ export function createDownloadTask(
     request: input.request,
     kind: input.request.kind,
     targetId:
-      input.request.kind === "track"
+      input.request.kind === "media"
         ? input.request.track.id
         : input.request.kind === "album"
           ? input.request.album.id

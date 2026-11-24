@@ -1,17 +1,17 @@
 import type {
   MessageDescriptor,
-  SourceIntegrationOptionResponse,
+  LibrarySourceConnectorOptionResponse,
 } from "@peridot/contracts";
 import {
-  SourceIntegrationError,
-  type SourceIntegrationArtworkInput,
-  type SourceIntegrationConfiguration,
-  type SourceIntegrationDefinition,
-  type SourceIntegrationDiscoveryInput,
-  type SourceIntegrationPlaybackInput,
-  type SourceIntegrationScanInput,
-  type SourceIntegrationValidationInput,
-  type SourceIntegrationTrackRecord,
+  LibrarySourceConnectorError,
+  type LibrarySourceArtworkInput,
+  type LibrarySourceConnectorConfiguration,
+  type LibrarySourceConnectorDefinition,
+  type LibrarySourceConnectorDiscoveryInput,
+  type LibrarySourcePlaybackInput,
+  type LibrarySourceScanInput,
+  type LibrarySourceConnectorValidationInput,
+  type LibrarySourceTrackRecord,
   type ValidatedIntegrationSource,
 } from "../source-integrations.js";
 import {
@@ -27,7 +27,7 @@ function message(key: string): MessageDescriptor {
 }
 
 function integrationError(error: unknown): never {
-  if (error instanceof SourceIntegrationError) throw error;
+  if (error instanceof LibrarySourceConnectorError) throw error;
   if (error instanceof JellyfinError) {
     const code =
       error.code === "invalid_credentials"
@@ -37,7 +37,7 @@ function integrationError(error: unknown): never {
           : error.code === "invalid_response"
             ? "invalid_response"
             : "invalid_configuration";
-    throw new SourceIntegrationError(
+    throw new LibrarySourceConnectorError(
       error.message,
       code,
       error.statusCode,
@@ -49,7 +49,7 @@ function integrationError(error: unknown): never {
 
 function normalizedUrl(value: string | undefined): string {
   if (!value?.trim()) {
-    throw new SourceIntegrationError(
+    throw new LibrarySourceConnectorError(
       "Enter a Jellyfin server URL.",
       "invalid_configuration",
       400,
@@ -60,7 +60,7 @@ function normalizedUrl(value: string | undefined): string {
   try {
     url = new URL(value.trim());
   } catch {
-    throw new SourceIntegrationError(
+    throw new LibrarySourceConnectorError(
       "Enter a Jellyfin server URL.",
       "invalid_configuration",
       400,
@@ -75,7 +75,7 @@ function normalizedUrl(value: string | undefined): string {
     url.search ||
     url.hash
   ) {
-    throw new SourceIntegrationError(
+    throw new LibrarySourceConnectorError(
       "Enter a Jellyfin server URL.",
       "invalid_configuration",
       400,
@@ -86,10 +86,10 @@ function normalizedUrl(value: string | undefined): string {
   return url.toString();
 }
 
-function apiKey(configuration: SourceIntegrationConfiguration): string {
+function apiKey(configuration: LibrarySourceConnectorConfiguration): string {
   const value = configuration.apiKey?.trim() ?? "";
   if (!value || value.length > 1_024) {
-    throw new SourceIntegrationError(
+    throw new LibrarySourceConnectorError(
       "Enter a Jellyfin API key.",
       "invalid_configuration",
       400,
@@ -99,10 +99,10 @@ function apiKey(configuration: SourceIntegrationConfiguration): string {
   return value;
 }
 
-function libraryId(configuration: SourceIntegrationConfiguration): string {
+function libraryId(configuration: LibrarySourceConnectorConfiguration): string {
   const value = configuration.libraryId?.trim() ?? "";
   if (!value) {
-    throw new SourceIntegrationError(
+    throw new LibrarySourceConnectorError(
       "Choose a Jellyfin library.",
       "invalid_configuration",
       400,
@@ -154,8 +154,8 @@ function mediaType(
 
 function trackRecord(
   item: JellyfinAudioItem,
-  configuration: SourceIntegrationConfiguration,
-): SourceIntegrationTrackRecord {
+  configuration: LibrarySourceConnectorConfiguration,
+): LibrarySourceTrackRecord {
   const detected = mediaType(item, configuration.libraryCollectionType);
   const albumArtists =
     detected.mediaType !== "music" && item.albumArtists.length === 0
@@ -202,7 +202,7 @@ export interface JellyfinIntegrationOptions {
 
 export function createJellyfinIntegration(
   options: JellyfinIntegrationOptions = {},
-): SourceIntegrationDefinition {
+): LibrarySourceConnectorDefinition {
   const client = new JellyfinClient(
     options.fetch ?? fetch,
     options.requestTimeoutMs,
@@ -211,8 +211,8 @@ export function createJellyfinIntegration(
   return {
     kind: "jellyfin",
     async discover(
-      input: SourceIntegrationDiscoveryInput,
-    ): Promise<SourceIntegrationOptionResponse[]> {
+      input: LibrarySourceConnectorDiscoveryInput,
+    ): Promise<LibrarySourceConnectorOptionResponse[]> {
       try {
         const url = normalizedUrl(input.configuration.url);
         const libraries = await client.listLibraries(
@@ -230,7 +230,7 @@ export function createJellyfinIntegration(
       }
     },
     async validateSource(
-      input: SourceIntegrationValidationInput,
+      input: LibrarySourceConnectorValidationInput,
     ): Promise<ValidatedIntegrationSource> {
       try {
         const url = normalizedUrl(input.configuration.url);
@@ -244,7 +244,7 @@ export function createJellyfinIntegration(
           (candidate) => candidate.id === selectedLibraryId,
         );
         if (!library) {
-          throw new SourceIntegrationError(
+          throw new LibrarySourceConnectorError(
             "Choose an available Jellyfin library.",
             "invalid_configuration",
             400,
@@ -264,7 +264,7 @@ export function createJellyfinIntegration(
         integrationError(error);
       }
     },
-    async scan(input: SourceIntegrationScanInput): Promise<void> {
+    async scan(input: LibrarySourceScanInput): Promise<void> {
       try {
         await client.listAudio(
           input.source.configuration.url ?? "",
@@ -286,7 +286,7 @@ export function createJellyfinIntegration(
         integrationError(error);
       }
     },
-    async artwork(input: SourceIntegrationArtworkInput) {
+    async artwork(input: LibrarySourceArtworkInput) {
       try {
         return await client.cover(
           input.source.configuration.url ?? "",
@@ -299,7 +299,7 @@ export function createJellyfinIntegration(
         integrationError(error);
       }
     },
-    async openAudio(input: SourceIntegrationPlaybackInput): Promise<Response> {
+    async openAudio(input: LibrarySourcePlaybackInput): Promise<Response> {
       try {
         return await client.audio(
           input.source.configuration.url ?? "",

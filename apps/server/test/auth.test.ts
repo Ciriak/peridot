@@ -25,7 +25,7 @@ test("an empty server requires one administrator and closes bootstrap afterward"
     assert.deepEqual(status.json(), { requiresAdminUser: true });
     const blocked = await context.app.inject({
       method: "GET",
-      url: "/api/tracks",
+      url: "/api/media",
     });
     assert.equal(blocked.statusCode, 428);
     assert.equal(blocked.json().error.code, "setup_required");

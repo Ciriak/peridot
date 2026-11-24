@@ -24,7 +24,7 @@ export function likeSuccessToast(target: LikeTarget): LikeToastContent {
 
   return {
     titleMessage: message(
-      target.kind === "track"
+      target.kind === "media"
         ? "toast.trackLikedTitle"
         : target.kind === "album"
           ? "toast.albumLikedTitle"

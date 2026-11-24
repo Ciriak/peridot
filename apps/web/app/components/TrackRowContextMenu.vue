@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { TrackResponse } from "@peridot/contracts";
+import type { MediaResponse } from "@peridot/contracts";
 import TrackContextMenu from "./TrackContextMenu.vue";
 
-defineProps<{ track: TrackResponse | null }>();
+defineProps<{ track: MediaResponse | null }>();
 const emit = defineEmits<{ play: [] }>();
 </script>
 

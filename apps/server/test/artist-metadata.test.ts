@@ -247,7 +247,7 @@ test("artist profiles combine provider names with cached Discogs portraits", asy
     });
     assert.equal(reset.statusCode, 200, reset.body);
     assert.deepEqual(reset.json<ResetMetadataResponse>(), {
-      trackCount: 1,
+      mediaCount: 1,
       artistCount: 0,
     });
     assert.equal(review.json().name, "Elliot Lake");

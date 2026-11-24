@@ -1,4 +1,4 @@
-import type { TrackResponse } from "@peridot/contracts";
+import type { MediaResponse } from "@peridot/contracts";
 import { registerPlugin, type PluginListenerHandle } from "@capacitor/core";
 import { trackCoverUrl } from "./library.ts";
 
@@ -30,7 +30,7 @@ export interface AndroidPlaybackSnapshot extends Omit<
   AndroidPlaybackQueue,
   "tracks"
 > {
-  trackIds: string[];
+  mediaIds: string[];
   tracks: AndroidTrackSnapshot[];
   unavailableTrackIds?: string[];
   loading: boolean;
@@ -70,22 +70,23 @@ interface PeridotMediaPlugin {
     track: AndroidTrackSnapshot;
     savedAt: string;
   }): Promise<void>;
-  removeCachedTrack(options: { trackId: string }): Promise<void>;
+  removeCachedTrack(options: { mediaId: string }): Promise<void>;
   clearOfflineTracks(): Promise<void>;
+  clearLegacyOfflineTracks(): Promise<void>;
   addListener(
     eventName: "playbackStateChanged",
     listener: (event: { snapshot: AndroidPlaybackSnapshot }) => void,
   ): Promise<PluginListenerHandle>;
   addListener(
     eventName: "offlineProgress",
-    listener: (event: { trackId: string; progress: number | null }) => void,
+    listener: (event: { mediaId: string; progress: number | null }) => void,
   ): Promise<PluginListenerHandle>;
 }
 
 export const PeridotMedia = registerPlugin<PeridotMediaPlugin>("PeridotMedia");
 
 export function androidTrackSnapshot(
-  track: TrackResponse,
+  track: MediaResponse,
   serverAddress: string,
 ): AndroidTrackSnapshot {
   return {
@@ -103,7 +104,7 @@ export function androidTrackSnapshot(
 }
 
 export function androidQueue(
-  tracks: readonly TrackResponse[],
+  tracks: readonly MediaResponse[],
   state: {
     activeTrackId: string | null;
     positionSeconds: number;
@@ -129,7 +130,7 @@ export function androidQueue(
 
 export function trackResponseFromAndroid(
   track: AndroidTrackSnapshot,
-): TrackResponse {
+): MediaResponse {
   let coverUrl: string | null = track.coverUrl;
   if (coverUrl) {
     try {

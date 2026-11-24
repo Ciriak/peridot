@@ -72,7 +72,7 @@ async function scanTracks(
   }
   const result = await startScan(context);
   assert.equal(result.status, "completed");
-  return context.database.orm.Track.orderBy((track) => track.title.asc()).all();
+  return context.database.orm.Media.orderBy((track) => track.title.asc()).all();
 }
 
 async function createPlaylist(
@@ -107,13 +107,13 @@ async function getPlaylist(
 async function addTrack(
   context: TestContext,
   playlistId: string,
-  trackId: string,
+  mediaId: string,
 ) {
   const response = await context.app.inject({
     method: "POST",
     url: `/api/playlists/${playlistId}/items`,
     headers: context.authorization,
-    payload: { kind: "catalog", trackId },
+    payload: { kind: "catalog", mediaId },
   });
   assert.ok([200, 201].includes(response.statusCode));
   return {
@@ -273,31 +273,31 @@ test("liked tracks produce a read-only automatic playlist", async () => {
     const newest = tracks.find((track) => track.title === "Newest Like")!;
     const older = tracks.find((track) => track.title === "Older Like")!;
     const audiobook = tracks.find((track) => track.title === "Not Music")!;
-    await context.database.orm.TrackLike.create({
+    await context.database.orm.MediaLike.create({
       userId: user.id,
-      trackId: older.id,
+      mediaId: older.id,
       createdAt: new Date("2026-01-01T10:00:00.000Z"),
     });
-    await context.database.orm.TrackLike.create({
+    await context.database.orm.MediaLike.create({
       userId: user.id,
-      trackId: newest.id,
+      mediaId: newest.id,
       createdAt: new Date("2026-01-02T10:00:00.000Z"),
     });
-    await context.database.orm.TrackLike.create({
+    await context.database.orm.MediaLike.create({
       userId: user.id,
-      trackId: audiobook.id,
+      mediaId: audiobook.id,
       createdAt: new Date("2026-01-03T10:00:00.000Z"),
     });
-    await context.database.orm.Track.where({ id: audiobook.id }).update({
+    await context.database.orm.Media.where({ id: audiobook.id }).update({
       mediaType: "audiobook",
     });
-    await context.database.orm.CatalogTrack.where({ id: audiobook.id }).update({
+    await context.database.orm.CatalogMedia.where({ id: audiobook.id }).update({
       mediaType: "audiobook",
     });
-    await context.database.orm.Track.where({ id: older.id }).update({
+    await context.database.orm.Media.where({ id: older.id }).update({
       available: 0,
     });
-    await context.database.orm.CatalogTrack.where({ id: older.id }).update({
+    await context.database.orm.CatalogMedia.where({ id: older.id }).update({
       available: 0,
     });
 
@@ -328,7 +328,7 @@ test("liked tracks produce a read-only automatic playlist", async () => {
 
     const contains = await context.app.inject({
       method: "GET",
-      url: `/api/playlists?trackId=${encodeURIComponent(newest.id)}`,
+      url: `/api/playlists?mediaId=${encodeURIComponent(newest.id)}`,
       headers: context.authorization,
     });
     assert.equal(
@@ -377,7 +377,7 @@ test("liked tracks produce a read-only automatic playlist", async () => {
         method: "POST",
         url: "/api/playlists/liked/items",
         headers: context.authorization,
-        payload: { kind: "catalog", trackId: newest.id },
+        payload: { kind: "catalog", mediaId: newest.id },
       }),
       await context.app.inject({
         method: "DELETE",
@@ -427,7 +427,7 @@ test("playlist items append, deduplicate, reorder, and compact after removal", a
     );
     const membership = await context.app.inject({
       method: "GET",
-      url: `/api/playlists?trackId=${encodeURIComponent(tracks[1]!.id)}`,
+      url: `/api/playlists?mediaId=${encodeURIComponent(tracks[1]!.id)}`,
       headers: context.authorization,
     });
     assert.equal(membership.statusCode, 200);
@@ -508,7 +508,7 @@ test("external playlist references stay unavailable until an exact stable ID mat
     const added = response.json<AddPlaylistItemResponse>();
     const entry = added.playlist.entries[0]!;
     assert.equal(entry.available, false);
-    assert.equal(entry.track, null);
+    assert.equal(entry.media, null);
     assert.deepEqual(entry.external, {
       provider: "musicbrainz",
       externalTrackId: "recording-stable-id",
@@ -518,7 +518,7 @@ test("external playlist references stay unavailable until an exact stable ID mat
       durationMs: 214000,
     });
 
-    await context.database.orm.Track.where({ id: track.id }).update({
+    await context.database.orm.Media.where({ id: track.id }).update({
       metadataProviderId: "provider-1",
       metadataProviderKind: "musicbrainz",
       metadataProviderName: "MusicBrainz",
@@ -530,7 +530,7 @@ test("external playlist references stay unavailable until an exact stable ID mat
 
     const resolved = await getPlaylist(context, playlist.id);
     assert.equal(resolved.entries[0]!.available, true);
-    assert.equal(resolved.entries[0]!.track?.id, track.id);
+    assert.equal(resolved.entries[0]!.media?.id, track.id);
     assert.equal(resolved.entries[0]!.title, "External Match");
   } finally {
     await context.close();
@@ -619,9 +619,9 @@ test("playlist likes are private and catalog deletion preserves display snapshot
     });
     assert.equal(memberLike.statusCode, 404);
 
-    await context.database.orm.Track.where({ id: track.id }).delete();
+    await context.database.orm.Media.where({ id: track.id }).delete();
     const afterDeletion = await getPlaylist(context, playlist.id);
-    assert.equal(afterDeletion.entries[0]!.track, null);
+    assert.equal(afterDeletion.entries[0]!.media, null);
     assert.equal(afterDeletion.entries[0]!.title, "Snapshot Track");
     assert.equal(afterDeletion.entries[0]!.available, false);
   } finally {

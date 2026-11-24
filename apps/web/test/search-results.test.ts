@@ -65,7 +65,7 @@ test("search cards place category tags by titles and sources in actions", async 
     table,
     /:source-kinds="\s*item\.track\.sourceKind \? \[item\.track\.sourceKind\] : \[\]\s*"/,
   );
-  assert.match(card, /:source-kinds="searchSourceKinds"/);
+  assert.match(card, /:source-kinds="searchLibrarySourceKinds"/);
   assert.match(
     card,
     /if \(album\.value\) return album\.value\.sourceKinds \?\? \[\]/,

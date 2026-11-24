@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue/offline";
-import type { TrackResponse } from "@peridot/contracts";
+import type { MediaResponse } from "@peridot/contracts";
 import { computed } from "vue";
 import { useCachedArtwork } from "../composables/use-cached-artwork";
 import { icons } from "../lib/icons";
@@ -8,7 +8,7 @@ import { trackCoverUrl } from "../lib/library";
 import FadeInImage from "./FadeInImage.vue";
 
 const props = defineProps<{
-  track: TrackResponse;
+  track: MediaResponse;
   serverAddress: string;
 }>();
 

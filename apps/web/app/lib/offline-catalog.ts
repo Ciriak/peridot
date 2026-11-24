@@ -3,7 +3,7 @@ import type {
   ArtistSummaryResponse,
   AudiobookSummaryResponse,
   PodcastSummaryResponse,
-  TrackResponse,
+  MediaResponse,
 } from "@peridot/contracts";
 import { clear, createStore, del, get, set } from "idb-keyval";
 import {
@@ -34,7 +34,7 @@ const OFFLINE_CATALOG_STATE_KEY = "catalog-sync-state";
 export interface OfflineCatalogSnapshot {
   version: typeof OFFLINE_CATALOG_VERSION;
   scope: PeridotQueryScope;
-  tracks: TrackResponse[];
+  tracks: MediaResponse[];
   albums: AlbumSummaryResponse[];
   audiobooks: AudiobookSummaryResponse[];
   podcasts: PodcastSummaryResponse[];
@@ -70,7 +70,7 @@ export interface OfflineCatalogClient {
     serverAddress: string,
     token: string,
     options: TrackListOptions,
-  ) => Promise<OfflineCatalogPage<TrackResponse>>;
+  ) => Promise<OfflineCatalogPage<MediaResponse>>;
   listAlbums: (
     serverAddress: string,
     token: string,
@@ -138,7 +138,7 @@ function compareDirection(
 export function offlineTracks(
   snapshot: OfflineCatalogSnapshot,
   options: TrackListOptions = {},
-): TrackResponse[] {
+): MediaResponse[] {
   const artistNames =
     options.artistId === undefined
       ? null

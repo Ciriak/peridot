@@ -1,4 +1,4 @@
-import type { SourceListResponse } from "@peridot/contracts";
+import type { LibrarySourceListResponse } from "@peridot/contracts";
 import type { QueryClient, QueryKey } from "@tanstack/vue-query";
 
 export function removeSourceFromQueryCache(
@@ -6,22 +6,23 @@ export function removeSourceFromQueryCache(
   queryKey: QueryKey,
   sourceId: string,
 ): (() => void) | null {
-  const current = queryClient.getQueryData<SourceListResponse>(queryKey);
+  const current = queryClient.getQueryData<LibrarySourceListResponse>(queryKey);
   const removedIndex =
     current?.items.findIndex((source) => source.id === sourceId) ?? -1;
   if (!current || removedIndex < 0) return null;
 
   const removed = current.items[removedIndex]!;
-  queryClient.setQueryData<SourceListResponse>(queryKey, {
+  queryClient.setQueryData<LibrarySourceListResponse>(queryKey, {
     items: current.items.filter((source) => source.id !== sourceId),
   });
 
   return () => {
-    const latest = queryClient.getQueryData<SourceListResponse>(queryKey);
+    const latest =
+      queryClient.getQueryData<LibrarySourceListResponse>(queryKey);
     if (!latest || latest.items.some((source) => source.id === sourceId))
       return;
     const items = [...latest.items];
     items.splice(Math.min(removedIndex, items.length), 0, removed);
-    queryClient.setQueryData<SourceListResponse>(queryKey, { items });
+    queryClient.setQueryData<LibrarySourceListResponse>(queryKey, { items });
   };
 }

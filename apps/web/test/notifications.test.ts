@@ -288,11 +288,17 @@ test("task and log updates use the shared realtime subscription", async () => {
     "utf8",
   );
   const sources = await readFile(
-    new URL("../app/pages/settings/sources.vue", import.meta.url),
+    new URL(
+      "../app/pages/settings/connectors/library-sources.vue",
+      import.meta.url,
+    ),
     "utf8",
   );
   const metadata = await readFile(
-    new URL("../app/pages/settings/metadata.vue", import.meta.url),
+    new URL(
+      "../app/pages/settings/connectors/metadata-providers.vue",
+      import.meta.url,
+    ),
     "utf8",
   );
   const serverSettings = await readFile(

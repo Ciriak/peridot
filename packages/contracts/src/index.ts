@@ -74,7 +74,7 @@ export interface CompletePasswordResetRequest {
   password: string;
 }
 
-export interface TrackReference {
+export interface MediaReference {
   id: string;
   title: string;
   artist: string;
@@ -84,14 +84,26 @@ export interface TrackReference {
 }
 
 export type MediaType = "music" | "audiobook" | "podcast";
-export type TrackMediaFilter = MediaType | "all";
-export type TrackMediaTypeOrigin = "source" | "embedded" | "fallback";
+export type MediaFilter = MediaType | "all";
+export type MediaTypeOrigin = "source" | "embedded" | "fallback";
 
-export interface TrackResponse {
+export interface MediaCopyResponse {
+  id: string;
+  librarySourceId: string;
+  librarySourceKind: LibrarySourceKind;
+  relativePath: string;
+  mimeType: string;
+  available: boolean;
+  fileSizeBytes: string;
+  audioLossless: boolean;
+  audioBitrate: number | null;
+}
+
+export interface MediaResponse {
   id: string;
   mediaType: MediaType;
-  mediaTypeOrigin: TrackMediaTypeOrigin;
-  sourceKind: SourceKind | null;
+  mediaTypeOrigin: MediaTypeOrigin;
+  sourceKind: LibrarySourceKind | null;
   title: string;
   artist: string;
   artists: string[];
@@ -105,8 +117,312 @@ export interface TrackResponse {
   mimeType: string;
   available: boolean;
   coverUrl: string | null;
-  metadata: TrackMetadataResponse | null;
+  metadata: MediaMetadataResponse | null;
   liked: boolean;
+  copies?: MediaCopyResponse[];
+}
+
+export type AdminMediaField =
+  | "mediaType"
+  | "title"
+  | "artist"
+  | "artistCredits"
+  | "albumArtist"
+  | "albumArtistCredits"
+  | "album"
+  | "genres"
+  | "discNumber"
+  | "trackNumber"
+  | "durationMs"
+  | "publishedAt"
+  | "metadataMode"
+  | "metadataTitle"
+  | "metadataArtist"
+  | "metadataArtistCredits"
+  | "metadataAlbumArtist"
+  | "metadataAlbumArtistCredits"
+  | "metadataAlbum"
+  | "metadataGenres"
+  | "metadataDiscNumber"
+  | "metadataTrackNumber"
+  | "metadataProviderId"
+  | "metadataProviderKind"
+  | "metadataProviderName"
+  | "metadataExternalTrackId"
+  | "metadataExternalReleaseId"
+  | "metadataSourceUrl"
+  | "metadataDetails"
+  | "metadataMatchedAt"
+  | "coverId";
+
+export type AdminMediaCopyField =
+  | "librarySourceId"
+  | "relativePath"
+  | "mediaType"
+  | "mediaTypeOrigin"
+  | "title"
+  | "artist"
+  | "artistCredits"
+  | "albumArtist"
+  | "albumArtistCredits"
+  | "album"
+  | "genres"
+  | "discNumber"
+  | "trackNumber"
+  | "durationMs"
+  | "publishedAt"
+  | "mimeType"
+  | "fileSizeBytes"
+  | "fileModifiedAt"
+  | "externalId"
+  | "externalVersion"
+  | "externalContainer"
+  | "externalCoverKey"
+  | "recordingIdentityKeys"
+  | "audioLossless"
+  | "audioBitrate"
+  | "coverId";
+
+export type AdminMediaFieldValue =
+  string | number | boolean | null | string[] | MediaMetadataDetail[];
+
+export type AdminMediaFilter = "all" | "music" | "audiobook" | "podcast";
+
+export type AdminMediaAvailabilityFilter = "all" | "available" | "unavailable";
+
+export type AdminMediaMetadataFilter =
+  "all" | "matched" | "unmatched" | "manual" | "file";
+
+export type AdminMediaCopyCountFilter = "any" | "zero" | "one" | "multiple";
+
+export type AdminMediaLosslessFilter = "any" | "true" | "false";
+
+export type AdminMediaMissingFilter =
+  | "none"
+  | "album"
+  | "genres"
+  | "duration"
+  | "publishedAt"
+  | "cover"
+  | "metadata"
+  | "copy";
+
+export type AdminMediaManualFilter = "any" | "none" | "media" | "copy";
+
+export type AdminMediaSortField =
+  | "title"
+  | "artist"
+  | "album"
+  | "mediaType"
+  | "available"
+  | "duration"
+  | "published"
+  | "copyCount"
+  | "createdAt"
+  | "updatedAt";
+
+export interface AdminMediaListQuery {
+  page?: number;
+  pageSize?: 25 | 50 | 100;
+  query?: string;
+  mediaType?: AdminMediaFilter;
+  availability?: AdminMediaAvailabilityFilter;
+  sourceId?: string;
+  metadataState?: AdminMediaMetadataFilter;
+  providerId?: string;
+  copyCount?: AdminMediaCopyCountFilter;
+  lossless?: AdminMediaLosslessFilter;
+  mimeType?: string;
+  minBitrate?: number;
+  maxBitrate?: number;
+  minFileSizeBytes?: string;
+  maxFileSizeBytes?: string;
+  missing?: AdminMediaMissingFilter;
+  manual?: AdminMediaManualFilter;
+  publishedFrom?: string;
+  publishedTo?: string;
+  fileModifiedFrom?: string;
+  fileModifiedTo?: string;
+  sort?: AdminMediaSortField;
+  direction?: CatalogSortDirection;
+}
+
+export interface AdminMediaCopyResponse {
+  id: string;
+  mediaId: string;
+  librarySourceId: string;
+  librarySourceName: string;
+  librarySourceKind: LibrarySourceKind;
+  librarySourcePath: string | null;
+  librarySourceRemoved: boolean;
+  relativePath: string;
+  mediaType: MediaType;
+  mediaTypeOrigin: MediaTypeOrigin;
+  title: string;
+  artist: string;
+  artistCredits: string[];
+  albumArtist: string | null;
+  albumArtistCredits: string[];
+  album: string | null;
+  genres: string[];
+  discNumber: number | null;
+  trackNumber: number | null;
+  durationMs: number | null;
+  publishedAt: string | null;
+  mimeType: string;
+  fileSizeBytes: string;
+  fileModifiedAt: string;
+  externalId: string | null;
+  externalVersion: string | null;
+  externalContainer: string | null;
+  externalCoverKey: string | null;
+  recordingIdentityKeys: string[];
+  audioLossless: boolean;
+  audioBitrate: number | null;
+  coverId: string | null;
+  available: boolean;
+  lastSeenScanId: string | null;
+  metadataVersion: number;
+  manualOverrideFields: AdminMediaCopyField[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminMediaUsageResponse {
+  copyCount: number;
+  likeCount: number;
+  playCount: number;
+  playlistItemCount: number;
+  aliasCount: number;
+}
+
+export interface AdminMediaResponse {
+  id: string;
+  mediaType: MediaType;
+  mediaTypeOrigin: MediaTypeOrigin;
+  title: string;
+  artist: string;
+  artistCredits: string[];
+  albumArtist: string | null;
+  albumArtistCredits: string[];
+  album: string | null;
+  genres: string[];
+  discNumber: number | null;
+  trackNumber: number | null;
+  durationMs: number | null;
+  publishedAt: string | null;
+  metadataVersion: number;
+  metadataMode: string;
+  metadataTitle: string | null;
+  metadataArtist: string | null;
+  metadataArtistCredits: string[];
+  metadataAlbumArtist: string | null;
+  metadataAlbumArtistCredits: string[];
+  metadataAlbum: string | null;
+  metadataGenres: string[];
+  metadataDiscNumber: number | null;
+  metadataTrackNumber: number | null;
+  metadataProviderId: string | null;
+  metadataProviderKind: string | null;
+  metadataProviderName: string | null;
+  metadataExternalTrackId: string | null;
+  metadataExternalReleaseId: string | null;
+  metadataSourceUrl: string | null;
+  metadataDetails: MediaMetadataDetail[];
+  metadataMatchedAt: string | null;
+  metadataAttemptedSignature: string | null;
+  coverId: string | null;
+  available: boolean;
+  catalogProjectionPending: boolean;
+  manualOverrideFields: AdminMediaField[];
+  usage: AdminMediaUsageResponse;
+  copies: AdminMediaCopyResponse[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminMediaListResponse {
+  items: AdminMediaResponse[];
+  page: number;
+  pageSize: 25 | 50 | 100;
+  totalCount: number;
+  totalPages: number;
+  mimeTypes: string[];
+}
+
+export interface CreateAdminMediaRequest {
+  mediaType: MediaType;
+  title: string;
+  artist: string;
+  artistCredits?: string[];
+  albumArtist?: string | null;
+  albumArtistCredits?: string[];
+  album?: string | null;
+  genres?: string[];
+  discNumber?: number | null;
+  trackNumber?: number | null;
+  durationMs?: number | null;
+  publishedAt?: string | null;
+  metadataMode?: string;
+  metadataTitle?: string | null;
+  metadataArtist?: string | null;
+  metadataArtistCredits?: string[];
+  metadataAlbumArtist?: string | null;
+  metadataAlbumArtistCredits?: string[];
+  metadataAlbum?: string | null;
+  metadataGenres?: string[];
+  metadataDiscNumber?: number | null;
+  metadataTrackNumber?: number | null;
+  metadataProviderId?: string | null;
+  metadataProviderKind?: string | null;
+  metadataProviderName?: string | null;
+  metadataExternalTrackId?: string | null;
+  metadataExternalReleaseId?: string | null;
+  metadataSourceUrl?: string | null;
+  metadataDetails?: MediaMetadataDetail[];
+  metadataMatchedAt?: string | null;
+  coverId?: string | null;
+}
+
+export interface UpdateAdminMediaRequest {
+  field: AdminMediaField;
+  value: AdminMediaFieldValue;
+  expectedUpdatedAt: string;
+}
+
+export interface CreateAdminMediaCopyRequest {
+  librarySourceId: string;
+  relativePath: string;
+  mediaType: MediaType;
+  mediaTypeOrigin?: MediaTypeOrigin;
+  title: string;
+  artist: string;
+  artistCredits?: string[];
+  albumArtist?: string | null;
+  albumArtistCredits?: string[];
+  album?: string | null;
+  genres?: string[];
+  discNumber?: number | null;
+  trackNumber?: number | null;
+  durationMs?: number | null;
+  publishedAt?: string | null;
+  mimeType: string;
+  fileSizeBytes: string;
+  fileModifiedAt: string;
+  externalId?: string | null;
+  externalVersion?: string | null;
+  externalContainer?: string | null;
+  externalCoverKey?: string | null;
+  recordingIdentityKeys?: string[];
+  audioLossless?: boolean;
+  audioBitrate?: number | null;
+  coverId?: string | null;
+}
+
+export interface UpdateAdminMediaCopyRequest {
+  field: AdminMediaCopyField;
+  value: AdminMediaFieldValue;
+  expectedUpdatedAt: string;
 }
 
 export type CatalogSortField =
@@ -121,14 +437,14 @@ export interface CursorPageResponse<T> {
   catalogRevision: number;
 }
 
-export type TrackListResponse = CursorPageResponse<TrackResponse>;
+export type MediaListResponse = CursorPageResponse<MediaResponse>;
 
-export interface ResolveTracksRequest {
+export interface ResolveMediaRequest {
   ids: string[];
 }
 
-export interface ResolveTracksResponse {
-  items: TrackResponse[];
+export interface ResolveMediaResponse {
+  items: MediaResponse[];
   aliases: Record<string, string>;
 }
 
@@ -137,7 +453,7 @@ export interface AlbumSummaryResponse {
   title: string;
   artist: string;
   artists: string[];
-  sourceKinds: SourceKind[];
+  sourceKinds: LibrarySourceKind[];
   coverUrl: string | null;
   trackCount: number;
   durationMs: number | null;
@@ -218,7 +534,7 @@ export interface ArtistListResponse {
 export const LIKED_TRACKS_PLAYLIST_ID = "liked";
 export const LIKED_TRACKS_PLAYLIST_NAME = "Liked tracks";
 
-export type PlaylistKind = "manual" | "liked-tracks";
+export type PlaylistKind = "manual" | "external" | "liked-tracks";
 
 export interface PlaylistSummaryResponse {
   id: string;
@@ -234,7 +550,7 @@ export interface PlaylistSummaryResponse {
   updatedAt: string;
 }
 
-export interface PlaylistExternalTrackReference {
+export interface ExternalMediaReference {
   provider: string;
   externalTrackId: string;
   title: string;
@@ -254,12 +570,13 @@ export interface PlaylistEntryResponse {
   coverUrl: string | null;
   available: boolean;
   liked: boolean;
-  track: TrackResponse | null;
-  external: PlaylistExternalTrackReference | null;
+  media: MediaResponse | null;
+  external: ExternalMediaReference | null;
 }
 
 export interface PlaylistDetailResponse extends PlaylistSummaryResponse {
   entries: PlaylistEntryResponse[];
+  link?: PlaylistLinkResponse | null;
 }
 
 export interface PlaylistListResponse {
@@ -279,11 +596,11 @@ export interface UpdatePlaylistRequest {
 export type AddPlaylistItemRequest =
   | {
       kind: "catalog";
-      trackId: string;
+      mediaId: string;
     }
   | {
       kind: "external";
-      reference: PlaylistExternalTrackReference;
+      reference: ExternalMediaReference;
     };
 
 export interface AddPlaylistItemResponse {
@@ -293,6 +610,63 @@ export interface AddPlaylistItemResponse {
 
 export interface ReorderPlaylistItemsRequest {
   itemIds: string[];
+}
+
+export type PlaylistSyncMode = "import" | "synchronize";
+
+export interface PlaylistAccountResponse {
+  id: string;
+  kind: string;
+  name: string;
+  configuration: Record<string, string>;
+  hasCredential: boolean;
+  enabled: boolean;
+}
+
+export interface PlaylistAccountListResponse {
+  items: PlaylistAccountResponse[];
+}
+
+export interface CreatePlaylistAccountRequest {
+  kind: string;
+  name: string;
+  configuration?: Record<string, string>;
+  credential?: Record<string, string>;
+}
+
+export interface RemotePlaylistResponse {
+  id: string;
+  title: string;
+  itemCount: number | null;
+}
+
+export interface RemotePlaylistListResponse {
+  items: RemotePlaylistResponse[];
+}
+
+export interface PlaylistLinkResponse {
+  id: string;
+  accountId: string;
+  accountName: string;
+  externalPlaylistId: string;
+  syncMode: PlaylistSyncMode;
+  remoteVersion: string | null;
+  lastSyncedAt: string | null;
+}
+
+export interface CreatePlaylistLinkRequest {
+  accountId: string;
+  externalPlaylistId: string;
+  syncMode?: PlaylistSyncMode;
+}
+
+export interface PlaylistSyncResultResponse {
+  added: number;
+  matched: number;
+  removed: number;
+  unchanged: number;
+  unmatched: number;
+  playlist: PlaylistDetailResponse;
 }
 
 export type ArtistMetadataMatchMode = "automatic" | "manual";
@@ -341,16 +715,16 @@ export interface PlaybackTokenResponse {
   expiresAt: string;
 }
 
-export interface RecordTrackPlayResponse {
-  trackId: string;
+export interface RecordMediaPlayResponse {
+  mediaId: string;
   playedAt: string;
 }
 
-export interface QuickPickTrackResponse {
-  kind: "track";
+export interface QuickPickMediaResponse {
+  kind: "media";
   key: string;
-  trackId: string;
-  track: TrackResponse;
+  mediaId: string;
+  media: MediaResponse;
 }
 
 export interface QuickPickAlbumResponse {
@@ -362,14 +736,14 @@ export interface QuickPickAlbumResponse {
 }
 
 export type QuickPickItemResponse =
-  QuickPickTrackResponse | QuickPickAlbumResponse;
+  QuickPickMediaResponse | QuickPickAlbumResponse;
 
 export interface QuickPickListResponse {
   items: QuickPickItemResponse[];
 }
 
-export interface TrackLikeResponse {
-  trackId: string;
+export interface MediaLikeResponse {
+  mediaId: string;
   likedAt: string;
 }
 
@@ -406,7 +780,7 @@ export interface PlaylistLikeResponse {
 }
 
 export interface LikeListResponse {
-  tracks: TrackLikeResponse[];
+  media: MediaLikeResponse[];
   albums: AlbumLikeResponse[];
   audiobooks: AudiobookLikeResponse[];
   podcasts: PodcastLikeResponse[];
@@ -415,7 +789,7 @@ export interface LikeListResponse {
 }
 
 export type LikeTarget =
-  | { kind: "track"; trackId: string }
+  | { kind: "media"; mediaId: string }
   | { kind: "album"; albumId: string; title: string; artist: string }
   | {
       kind: "audiobook";
@@ -433,7 +807,7 @@ export type LikeTarget =
   | { kind: "playlist"; playlistId: string; name: string };
 
 export type LikeResponse =
-  | ({ kind: "track" } & TrackLikeResponse)
+  | ({ kind: "media" } & MediaLikeResponse)
   | ({ kind: "album" } & AlbumLikeResponse)
   | ({ kind: "audiobook" } & AudiobookLikeResponse)
   | ({ kind: "podcast" } & PodcastLikeResponse)
@@ -452,10 +826,12 @@ export type TaskStatus =
 export type TaskKind =
   | "release_import"
   | "library_scan"
-  | "catalog_fetch"
-  | "metadata_fetch"
+  | "catalog_projection"
+  | "metadata_enrichment"
   | "artwork_fetch"
-  | "duplicate_detection";
+  | "media_match"
+  | "playlist_import"
+  | "playlist_sync";
 
 export const TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY =
   "metadata.activeProvider";
@@ -482,8 +858,9 @@ export interface TaskDetailResponse {
   valueMessage: MessageDescriptor | null;
 }
 
-export interface TaskSourceResponse {
+export interface TaskConnectorResponse {
   id: string | null;
+  kind: string | null;
   name: string;
 }
 
@@ -494,7 +871,7 @@ export interface TaskResponse {
   titleMessage: MessageDescriptor;
   ownerUserId?: string | null;
   parentTaskId: string | null;
-  source: TaskSourceResponse | null;
+  connector: TaskConnectorResponse | null;
   progress: TaskProgressResponse;
   details: TaskDetailResponse[];
   failureMessage: MessageDescriptor | null;
@@ -517,13 +894,29 @@ export interface ApiErrorResponse {
   };
 }
 
-export type SourceIntegrationKind = "jellyfin";
+export type LibrarySourceKind = "path" | "jellyfin";
 
-export type SourceKind = "torznab" | "path" | "url" | SourceIntegrationKind;
+export type ConnectorRole =
+  | "library-source"
+  | "release-indexer"
+  | "download-client"
+  | "metadata-provider"
+  | "playlist-account";
 
-export type SourceRemovalPhase = "stopping" | "tracks" | "catalog";
+export interface ConnectorDescriptorResponse {
+  kind: string;
+  role: ConnectorRole;
+  name: string;
+  capabilities: string[];
+}
 
-export interface SourceRemovalProgressResponse {
+export interface ConnectorListResponse {
+  items: ConnectorDescriptorResponse[];
+}
+
+export type SourceRemovalPhase = "stopping" | "copies" | "catalog";
+
+export interface LibrarySourceRemovalProgressResponse {
   operationId: string;
   sourceId: string;
   phase: SourceRemovalPhase;
@@ -531,47 +924,41 @@ export interface SourceRemovalProgressResponse {
   total: number;
 }
 
-export interface SourceResponse {
+export interface LibrarySourceResponse {
   id: string;
-  kind: SourceKind;
+  kind: LibrarySourceKind;
   name: string | null;
   path: string | null;
   url: string | null;
   configuration: Record<string, string> | null;
   fileCount: number;
   lastSyncedAt: string | null;
-  removal: SourceRemovalProgressResponse | null;
+  removal: LibrarySourceRemovalProgressResponse | null;
 }
 
-export interface CreateSourceResponse extends SourceResponse {
+export interface CreateLibrarySourceResponse extends LibrarySourceResponse {
   task: TaskResponse | null;
 }
 
-export interface SourceListResponse {
-  items: SourceResponse[];
+export interface LibrarySourceListResponse {
+  items: LibrarySourceResponse[];
 }
 
-export interface SourceRemovalResponse {
+export interface LibrarySourceRemovalResponse {
   sourceId: string;
-  unavailableTrackCount: number;
+  unavailableMediaCopyCount: number;
   affectedAlbumCount: number;
   affectedArtistCount: number;
   durationMs: number;
 }
 
-export interface CreatePathSourceRequest {
+export interface CreatePathLibrarySourceRequest {
   kind: "path";
   name?: string | null;
   path: string;
 }
 
-export interface CreateUrlSourceRequest {
-  kind: "url";
-  name?: string | null;
-  url: string;
-}
-
-export interface CreateJellyfinSourceRequest {
+export interface CreateJellyfinLibrarySourceRequest {
   kind: "jellyfin";
   name?: string | null;
   url: string;
@@ -605,40 +992,56 @@ export interface DownloadClientOptions {
 }
 export interface DownloadLinkInput {
   downloadClientId?: string;
-  folderId?: string;
+  librarySourceId?: string;
   savePath?: string;
   category?: string;
   tags?: string;
   categoryPath?: boolean;
 }
-export interface CreateTorznabSourceRequest extends DownloadLinkInput {
-  kind: "torznab";
+export interface ReleaseIndexerInput extends DownloadLinkInput {
   name?: string;
   url: string;
   apiKey?: string;
 }
-export type CreateSourceRequest =
-  | CreateTorznabSourceRequest
-  | CreatePathSourceRequest
-  | CreateUrlSourceRequest
-  | CreateJellyfinSourceRequest;
 
-export interface SourceIntegrationOptionResponse {
+export interface ReleaseIndexerResponse {
+  id: string;
+  kind: "torznab";
+  name: string | null;
+  url: string;
+  configuration: Record<string, string>;
+  downloadClientId: string | null;
+  destinationSourceId: string | null;
+  lastSyncedAt: string | null;
+}
+
+export interface ReleaseIndexerListResponse {
+  items: ReleaseIndexerResponse[];
+}
+
+export type CreateLibrarySourceRequest =
+  CreatePathLibrarySourceRequest | CreateJellyfinLibrarySourceRequest;
+
+export interface LibrarySourceConnectorOptionResponse {
   id: string;
   label: string;
   configuration: Record<string, string>;
 }
 
-export interface SourceIntegrationOptionListResponse {
-  items: SourceIntegrationOptionResponse[];
+export interface LibrarySourceConnectorOptionListResponse {
+  items: LibrarySourceConnectorOptionResponse[];
 }
 
-export interface DiscoverSourceIntegrationRequest {
+export interface DiscoverLibrarySourceRequest {
   configuration: Record<string, string>;
   credentials: Record<string, string>;
 }
 
-export interface ReorderSourcesRequest {
+export interface ReorderLibrarySourcesRequest {
+  ids: string[];
+}
+
+export interface ReorderReleaseIndexersRequest {
   ids: string[];
 }
 
@@ -700,22 +1103,22 @@ export interface ReorderMetadataProvidersRequest {
   ids: string[];
 }
 
-export type TrackMetadataMatchMode = "automatic" | "manual";
+export type MediaMetadataMatchMode = "automatic" | "manual";
 
-export interface TrackMetadataResponse {
+export interface MediaMetadataResponse {
   providerId: string;
   providerKind: MetadataProviderKind;
   providerName: string;
   externalTrackId: string;
   externalReleaseId: string | null;
   matchedAt: string;
-  mode: TrackMetadataMatchMode;
+  mode: MediaMetadataMatchMode;
   sourceUrl: string;
   genres: string[];
-  details: TrackMetadataDetail[];
+  details: MediaMetadataDetail[];
 }
 
-export interface TrackMetadataDetail {
+export interface MediaMetadataDetail {
   key: string;
   value: string;
   labelMessage: MessageDescriptor;
@@ -738,14 +1141,14 @@ export interface MetadataCandidateResponse {
   durationMs: number | null;
   score: number;
   sourceUrl: string;
-  details: TrackMetadataDetail[];
+  details: MediaMetadataDetail[];
 }
 
 export interface MetadataCandidateListResponse {
   items: MetadataCandidateResponse[];
 }
 
-export interface ApplyTrackMetadataRequest {
+export interface ApplyMediaMetadataRequest {
   providerId: string;
   externalTrackId: string;
   externalReleaseId: string | null;
@@ -758,11 +1161,11 @@ export interface ApplyTrackMetadataRequest {
   discNumber: number | null;
   trackNumber: number | null;
   sourceUrl: string;
-  details: TrackMetadataDetail[];
+  details: MediaMetadataDetail[];
 }
 
 export interface ResetMetadataResponse {
-  trackCount: number;
+  mediaCount: number;
   artistCount: number;
 }
 
@@ -787,8 +1190,8 @@ export const DEFAULT_FILE_LOG_RETENTION_DAYS = 5;
 export const MAX_FILE_LOG_RETENTION_DAYS = 3650;
 
 export interface ServerSettingsResponse {
-  trackCount: number;
-  availableTrackCount: number;
+  mediaCount: number;
+  availableMediaCount: number;
   scanning: ScanWorkerSettingsResponse;
   sourceRefresh: SourceRefreshSettingsResponse;
   fileLogging: FileLoggingSettingsResponse;
@@ -854,7 +1257,7 @@ export interface LogListResponse {
   items: LogEntryResponse[];
 }
 
-export type RealtimeTopic = "tasks" | "catalog" | "logs" | "sources";
+export type RealtimeTopic = "tasks" | "catalog" | "logs" | "library-sources";
 
 export interface RealtimeTicketResponse {
   ticket: string;
@@ -901,13 +1304,13 @@ export interface RealtimeCatalogChangedEvent {
   eventId: number;
   occurredAt: string;
   revision: number;
-  sourceId: string | null;
+  librarySourceId: string | null;
   reason:
-    "scan" | "metadata" | "reset" | "source" | "source-removal" | "duplicate";
+    "scan" | "metadata" | "reset" | "source" | "source-removal" | "media-match";
   changedCount: number;
 }
 
-export interface RealtimeSourceRemovalProgressEvent extends SourceRemovalProgressResponse {
+export interface RealtimeLibrarySourceRemovalProgressEvent extends LibrarySourceRemovalProgressResponse {
   type: "source.removal.progress";
   eventId: number;
   occurredAt: string;
@@ -927,10 +1330,12 @@ export type RealtimeServerMessage =
   | RealtimeErrorMessage
   | RealtimeTaskUpdatedEvent
   | RealtimeCatalogChangedEvent
-  | RealtimeSourceRemovalProgressEvent
+  | RealtimeLibrarySourceRemovalProgressEvent
   | RealtimeLogAppendedEvent;
 
-export interface TorznabRelease {
+export interface ReleaseResult {
+  type: "release";
+  indexerId: string;
   sourceName: string;
   canImport: boolean;
   id: string;
@@ -938,23 +1343,68 @@ export interface TorznabRelease {
   mediaType: MediaType | null;
   seeders: number | null;
   bytes: number | null;
-  torrentStatus?: TorznabClientTorrentStatus | null;
+  torrentStatus?: DownloadClientTorrentStatus | null;
 }
 
-export interface TorznabClientTorrentStatus {
+export interface DownloadClientTorrentStatus {
   hash: string;
   state: string;
   progress: number;
   taskId: string | null;
 }
 
-export interface TorznabImportResponse {
-  id: string;
+export interface TrackReferenceResult {
+  type: "track-reference";
+  connectorId: string;
+  sourceName: string;
+  externalId: string;
+  title: string;
+  artist: string;
+  album: string | null;
+  durationMs: number | null;
+  isrc: string | null;
+}
+
+export interface PlaylistResult {
+  type: "playlist";
+  connectorId: string;
+  sourceName: string;
+  externalId: string;
+  title: string;
+  itemCount: number | null;
+}
+
+export type ExternalSearchResult =
+  ReleaseResult | TrackReferenceResult | PlaylistResult;
+
+export interface ExternalProviderStatus {
+  connectorId: string;
+  kind: string;
+  name: string;
+  ok: boolean;
+  errorMessage: MessageDescriptor | null;
+}
+
+export interface ExternalSearchResponse {
+  items: ExternalSearchResult[];
+  providers: ExternalProviderStatus[];
+}
+
+export interface CreateReleaseImportRequest {
+  indexerId: string;
+  releaseId: string;
+}
+
+export interface ReleaseImportResponse {
+  taskId: string;
+  releaseId: string;
   task: TaskResponse;
 }
 
-export interface TorznabImportStatus {
+export interface ReleaseImportStatus {
+  taskId: string;
+  releaseId: string;
   progress: number;
   state: string;
-  trackIds: string[];
+  mediaIds: string[];
 }

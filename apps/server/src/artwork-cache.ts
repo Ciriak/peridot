@@ -42,7 +42,7 @@ export async function pruneReferencedArtwork(
   cache: ArtworkCache,
 ): Promise<number> {
   const [covers, portraits] = await Promise.all([
-    database.orm.TrackCover.select("hash").all(),
+    database.orm.Cover.select("hash").all(),
     database.orm.ArtistImage.select("hash").all(),
   ]);
   return cache.prune(

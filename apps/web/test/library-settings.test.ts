@@ -4,8 +4,8 @@ import test from "node:test";
 import type {
   AlbumListResponse,
   AlbumSummaryResponse,
-  TrackListResponse,
-  TrackResponse,
+  MediaListResponse,
+  MediaResponse,
 } from "@peridot/contracts";
 import {
   defaultLibrarySettings,
@@ -37,7 +37,7 @@ function createStorage(): LibrarySettingsStorage {
   };
 }
 
-function track(id: string): TrackResponse {
+function track(id: string): MediaResponse {
   return {
     id,
     title: id,
@@ -57,9 +57,9 @@ function track(id: string): TrackResponse {
 }
 
 function page(
-  items: TrackResponse[],
+  items: MediaResponse[],
   nextCursor: string | null,
-): TrackListResponse {
+): MediaListResponse {
   return { items, nextCursor, totalCount: items.length, catalogRevision: 1 };
 }
 
@@ -176,7 +176,7 @@ test("automatic liked-track saving continues after a failed download", async () 
   const result = await saveLikedTracksOffline(
     [track("saved"), track("failed"), track("next")],
     {
-      isSaved: (trackId) => trackId === "saved",
+      isSaved: (mediaId) => mediaId === "saved",
       save: async (item) => {
         if (item.id === "failed") return false;
         saved.push(item.id);

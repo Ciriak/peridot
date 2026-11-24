@@ -1,0 +1,314 @@
+[
+  {
+    "id": "column.Media.manualOverrides",
+    "label": "Add column manualOverrides on Media",
+    "summary": "Adds column manualOverrides on Media",
+    "operationClass": "additive",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "column",
+        "name": "manualOverrides",
+        "table": "Media"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"manualOverrides\" is missing",
+        "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM pragma_table_info(?1) WHERE \"name\" = ?2",
+        "params": [
+          "Media",
+          "manualOverrides"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "column \"manualOverrides\" on \"Media\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"manualOverrides\"",
+        "sql": "ALTER TABLE \"Media\" ADD COLUMN \"manualOverrides\" TEXT DEFAULT '{}' NOT NULL"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"manualOverrides\" exists",
+        "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM pragma_table_info(?1) WHERE \"name\" = ?2",
+        "params": [
+          "Media",
+          "manualOverrides"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "column \"manualOverrides\" on \"Media\""
+        }
+      },
+      {
+        "description": "verify column \"manualOverrides\" on \"Media\" has type TEXT and is required",
+        "sql": "SELECT COUNT(*) > 0 FROM pragma_table_info('Media') WHERE name = 'manualOverrides' AND LOWER(type) = 'text' AND \"notnull\" = 1"
+      }
+    ]
+  },
+  {
+    "id": "column.MediaCopy.manualOverrides",
+    "label": "Add column manualOverrides on MediaCopy",
+    "summary": "Adds column manualOverrides on MediaCopy",
+    "operationClass": "additive",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "column",
+        "name": "manualOverrides",
+        "table": "MediaCopy"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"manualOverrides\" is missing",
+        "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM pragma_table_info(?1) WHERE \"name\" = ?2",
+        "params": [
+          "MediaCopy",
+          "manualOverrides"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "column \"manualOverrides\" on \"MediaCopy\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"manualOverrides\"",
+        "sql": "ALTER TABLE \"MediaCopy\" ADD COLUMN \"manualOverrides\" TEXT DEFAULT '{}' NOT NULL"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"manualOverrides\" exists",
+        "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM pragma_table_info(?1) WHERE \"name\" = ?2",
+        "params": [
+          "MediaCopy",
+          "manualOverrides"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "column \"manualOverrides\" on \"MediaCopy\""
+        }
+      },
+      {
+        "description": "verify column \"manualOverrides\" on \"MediaCopy\" has type TEXT and is required",
+        "sql": "SELECT COUNT(*) > 0 FROM pragma_table_info('MediaCopy') WHERE name = 'manualOverrides' AND LOWER(type) = 'text' AND \"notnull\" = 1"
+      }
+    ]
+  },
+  {
+    "id": "index.Media.Media_updatedAt_id_idx_88868a1d",
+    "label": "Create index Media_updatedAt_id_idx_88868a1d on Media",
+    "summary": "Creates index Media_updatedAt_id_idx_88868a1d on Media",
+    "operationClass": "additive",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "index",
+        "name": "Media_updatedAt_id_idx_88868a1d",
+        "table": "Media"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"Media_updatedAt_id_idx_88868a1d\" is missing",
+        "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
+        "params": [
+          "index",
+          "Media_updatedAt_id_idx_88868a1d"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "index \"Media_updatedAt_id_idx_88868a1d\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"Media_updatedAt_id_idx_88868a1d\"",
+        "sql": "CREATE INDEX \"Media_updatedAt_id_idx_88868a1d\" ON \"Media\" (\"updatedAt\", \"id\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"Media_updatedAt_id_idx_88868a1d\" exists",
+        "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
+        "params": [
+          "index",
+          "Media_updatedAt_id_idx_88868a1d"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "index \"Media_updatedAt_id_idx_88868a1d\""
+        }
+      },
+      {
+        "description": "verify index \"Media_updatedAt_id_idx_88868a1d\" on \"Media\" covers (updatedAt, id)",
+        "sql": "SELECT EXISTS (SELECT 1 FROM pragma_index_list('Media') WHERE name = 'Media_updatedAt_id_idx_88868a1d' AND \"unique\" = 0) AND (SELECT COUNT(*) FROM pragma_index_info('Media_updatedAt_id_idx_88868a1d')) = 2 AND (SELECT COUNT(*) FROM pragma_index_info('Media_updatedAt_id_idx_88868a1d') WHERE (seqno, name) IN (VALUES (0, 'updatedAt'), (1, 'id'))) = 2"
+      }
+    ]
+  },
+  {
+    "id": "index.MediaCopy.MediaCopy_audioLossless_audioBitrate_idx_c82c122e",
+    "label": "Create index MediaCopy_audioLossless_audioBitrate_idx_c82c122e on MediaCopy",
+    "summary": "Creates index MediaCopy_audioLossless_audioBitrate_idx_c82c122e on MediaCopy",
+    "operationClass": "additive",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "index",
+        "name": "MediaCopy_audioLossless_audioBitrate_idx_c82c122e",
+        "table": "MediaCopy"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"MediaCopy_audioLossless_audioBitrate_idx_c82c122e\" is missing",
+        "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
+        "params": [
+          "index",
+          "MediaCopy_audioLossless_audioBitrate_idx_c82c122e"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "index \"MediaCopy_audioLossless_audioBitrate_idx_c82c122e\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"MediaCopy_audioLossless_audioBitrate_idx_c82c122e\"",
+        "sql": "CREATE INDEX \"MediaCopy_audioLossless_audioBitrate_idx_c82c122e\" ON \"MediaCopy\" (\"audioLossless\", \"audioBitrate\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"MediaCopy_audioLossless_audioBitrate_idx_c82c122e\" exists",
+        "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
+        "params": [
+          "index",
+          "MediaCopy_audioLossless_audioBitrate_idx_c82c122e"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "index \"MediaCopy_audioLossless_audioBitrate_idx_c82c122e\""
+        }
+      },
+      {
+        "description": "verify index \"MediaCopy_audioLossless_audioBitrate_idx_c82c122e\" on \"MediaCopy\" covers (audioLossless, audioBitrate)",
+        "sql": "SELECT EXISTS (SELECT 1 FROM pragma_index_list('MediaCopy') WHERE name = 'MediaCopy_audioLossless_audioBitrate_idx_c82c122e' AND \"unique\" = 0) AND (SELECT COUNT(*) FROM pragma_index_info('MediaCopy_audioLossless_audioBitrate_idx_c82c122e')) = 2 AND (SELECT COUNT(*) FROM pragma_index_info('MediaCopy_audioLossless_audioBitrate_idx_c82c122e') WHERE (seqno, name) IN (VALUES (0, 'audioLossless'), (1, 'audioBitrate'))) = 2"
+      }
+    ]
+  },
+  {
+    "id": "index.MediaCopy.MediaCopy_fileSizeBytes_idx_2e2c7971",
+    "label": "Create index MediaCopy_fileSizeBytes_idx_2e2c7971 on MediaCopy",
+    "summary": "Creates index MediaCopy_fileSizeBytes_idx_2e2c7971 on MediaCopy",
+    "operationClass": "additive",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "index",
+        "name": "MediaCopy_fileSizeBytes_idx_2e2c7971",
+        "table": "MediaCopy"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"MediaCopy_fileSizeBytes_idx_2e2c7971\" is missing",
+        "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
+        "params": [
+          "index",
+          "MediaCopy_fileSizeBytes_idx_2e2c7971"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "index \"MediaCopy_fileSizeBytes_idx_2e2c7971\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"MediaCopy_fileSizeBytes_idx_2e2c7971\"",
+        "sql": "CREATE INDEX \"MediaCopy_fileSizeBytes_idx_2e2c7971\" ON \"MediaCopy\" (\"fileSizeBytes\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"MediaCopy_fileSizeBytes_idx_2e2c7971\" exists",
+        "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
+        "params": [
+          "index",
+          "MediaCopy_fileSizeBytes_idx_2e2c7971"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "index \"MediaCopy_fileSizeBytes_idx_2e2c7971\""
+        }
+      },
+      {
+        "description": "verify index \"MediaCopy_fileSizeBytes_idx_2e2c7971\" on \"MediaCopy\" covers (fileSizeBytes)",
+        "sql": "SELECT EXISTS (SELECT 1 FROM pragma_index_list('MediaCopy') WHERE name = 'MediaCopy_fileSizeBytes_idx_2e2c7971' AND \"unique\" = 0) AND (SELECT COUNT(*) FROM pragma_index_info('MediaCopy_fileSizeBytes_idx_2e2c7971')) = 1 AND (SELECT COUNT(*) FROM pragma_index_info('MediaCopy_fileSizeBytes_idx_2e2c7971') WHERE (seqno, name) IN (VALUES (0, 'fileSizeBytes'))) = 1"
+      }
+    ]
+  },
+  {
+    "id": "index.MediaCopy.MediaCopy_mimeType_idx_064291e0",
+    "label": "Create index MediaCopy_mimeType_idx_064291e0 on MediaCopy",
+    "summary": "Creates index MediaCopy_mimeType_idx_064291e0 on MediaCopy",
+    "operationClass": "additive",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "index",
+        "name": "MediaCopy_mimeType_idx_064291e0",
+        "table": "MediaCopy"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"MediaCopy_mimeType_idx_064291e0\" is missing",
+        "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
+        "params": [
+          "index",
+          "MediaCopy_mimeType_idx_064291e0"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "index \"MediaCopy_mimeType_idx_064291e0\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"MediaCopy_mimeType_idx_064291e0\"",
+        "sql": "CREATE INDEX \"MediaCopy_mimeType_idx_064291e0\" ON \"MediaCopy\" (\"mimeType\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"MediaCopy_mimeType_idx_064291e0\" exists",
+        "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM \"sqlite_master\" WHERE (\"type\" = ?1 AND \"name\" = ?2)",
+        "params": [
+          "index",
+          "MediaCopy_mimeType_idx_064291e0"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "index \"MediaCopy_mimeType_idx_064291e0\""
+        }
+      },
+      {
+        "description": "verify index \"MediaCopy_mimeType_idx_064291e0\" on \"MediaCopy\" covers (mimeType)",
+        "sql": "SELECT EXISTS (SELECT 1 FROM pragma_index_list('MediaCopy') WHERE name = 'MediaCopy_mimeType_idx_064291e0' AND \"unique\" = 0) AND (SELECT COUNT(*) FROM pragma_index_info('MediaCopy_mimeType_idx_064291e0')) = 1 AND (SELECT COUNT(*) FROM pragma_index_info('MediaCopy_mimeType_idx_064291e0') WHERE (seqno, name) IN (VALUES (0, 'mimeType'))) = 1"
+      }
+    ]
+  }
+]

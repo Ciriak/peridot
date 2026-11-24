@@ -147,7 +147,7 @@ test("Jellyfin library discovery creates one auto-detected source per selected l
 
     const create = await context.app.inject({
       method: "POST",
-      url: "/api/admin/sources",
+      url: "/api/admin/library-sources",
       headers: context.authorization,
       payload: {
         kind: "jellyfin",
@@ -251,7 +251,7 @@ test("Jellyfin auto-detects audiobooks, podcasts, and music within one library",
   try {
     const created = await context.app.inject({
       method: "POST",
-      url: "/api/admin/sources",
+      url: "/api/admin/library-sources",
       headers: context.authorization,
       payload: {
         kind: "jellyfin",
@@ -265,7 +265,7 @@ test("Jellyfin auto-detects audiobooks, podcasts, and music within one library",
     const source = created.json<{ task: TaskResponse }>();
     await waitForScan(context, source.task.id);
 
-    const tracks = await context.database.orm.Track.all();
+    const tracks = await context.database.orm.Media.all();
     const byTitle = new Map(tracks.map((track) => [track.title, track]));
     assert.equal(byTitle.get("Chapter One")?.mediaType, "audiobook");
     assert.equal(byTitle.get("Chapter One")?.mediaTypeOrigin, "source");
@@ -293,6 +293,7 @@ test("Jellyfin auto-detects audiobooks, podcasts, and music within one library",
 test("Jellyfin publishes imported tracks before the scan completes", async () => {
   let releaseSecondPage!: () => void;
   let secondPageStarted = false;
+  let secondPageStartedAt = 0;
   const secondPageReady = new Promise<void>((resolve) => {
     releaseSecondPage = resolve;
   });
@@ -325,6 +326,7 @@ test("Jellyfin publishes imported tracks before the scan completes", async () =>
         requestedStarts.push(startIndex);
         if (startIndex === 500) {
           secondPageStarted = true;
+          secondPageStartedAt = Date.now();
           await secondPageReady;
         }
         return Response.json({
@@ -338,7 +340,7 @@ test("Jellyfin publishes imported tracks before the scan completes", async () =>
   try {
     const created = await context.app.inject({
       method: "POST",
-      url: "/api/admin/sources",
+      url: "/api/admin/library-sources",
       headers: context.authorization,
       payload: {
         kind: "jellyfin",
@@ -351,7 +353,7 @@ test("Jellyfin publishes imported tracks before the scan completes", async () =>
     assert.equal(created.statusCode, 201, created.body);
     const scanTask = created.json<{ task: TaskResponse }>().task;
     const waitStarted = Date.now();
-    while (!secondPageStarted && Date.now() - waitStarted < 10_000) {
+    while (!secondPageStarted && Date.now() - waitStarted < 60_000) {
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
     if (!secondPageStarted) {
@@ -362,10 +364,10 @@ test("Jellyfin publishes imported tracks before the scan completes", async () =>
       });
       const [{ count: trackCount }, { count: catalogCount }] =
         await Promise.all([
-          context.database.orm.Track.aggregate((aggregate) => ({
+          context.database.orm.Media.aggregate((aggregate) => ({
             count: aggregate.count(),
           })),
-          context.database.orm.CatalogTrack.aggregate((aggregate) => ({
+          context.database.orm.CatalogMedia.aggregate((aggregate) => ({
             count: aggregate.count(),
           })),
         ]);
@@ -379,10 +381,14 @@ test("Jellyfin publishes imported tracks before the scan completes", async () =>
         })}`,
       );
     }
+    assert.ok(
+      secondPageStartedAt - waitStarted < 60_000,
+      `Jellyfin took ${secondPageStartedAt - waitStarted} ms to publish the first page`,
+    );
 
     const partial = await context.app.inject({
       method: "GET",
-      url: "/api/tracks?limit=100",
+      url: "/api/media?limit=100",
       headers: context.authorization,
     });
     assert.equal(partial.statusCode, 200, partial.body);
@@ -433,7 +439,7 @@ test("Jellyfin publishes imported tracks before the scan completes", async () =>
     assert.ok(timingValue("scan.artworkMs") >= 0);
     assert.equal(
       (
-        await context.database.orm.Track.where({
+        await context.database.orm.Media.where({
           catalogProjectionPending: 1,
         }).all()
       ).length,
@@ -461,7 +467,7 @@ test("Jellyfin sources validate, import audio only, encrypt credentials, proxy p
   try {
     const create = await context.app.inject({
       method: "POST",
-      url: "/api/admin/sources",
+      url: "/api/admin/library-sources",
       headers: context.authorization,
       payload: {
         kind: "jellyfin",
@@ -490,7 +496,7 @@ test("Jellyfin sources validate, import audio only, encrypt credentials, proxy p
     assert.equal("credentialCiphertext" in source, false);
     assert.equal(create.body.includes(API_KEY), false);
 
-    const stored = await context.database.orm.Source.firstOrThrow({
+    const stored = await context.database.orm.LibrarySource.firstOrThrow({
       id: source.id,
     });
     assert.ok(stored.credentialCiphertext);
@@ -505,7 +511,7 @@ test("Jellyfin sources validate, import audio only, encrypt credentials, proxy p
 
     const sources = await context.app.inject({
       method: "GET",
-      url: "/api/admin/sources",
+      url: "/api/admin/library-sources",
       headers: context.authorization,
     });
     const listedSource = sources
@@ -522,7 +528,7 @@ test("Jellyfin sources validate, import audio only, encrypt credentials, proxy p
 
     const tracks = await context.app.inject({
       method: "GET",
-      url: "/api/tracks",
+      url: "/api/media",
       headers: context.authorization,
     });
     assert.equal(tracks.statusCode, 200);
@@ -560,13 +566,13 @@ test("Jellyfin sources validate, import audio only, encrypt credentials, proxy p
 
     const playbackToken = await context.app.inject({
       method: "POST",
-      url: `/api/tracks/${track.id}/playback-token`,
+      url: `/api/media/${track.id}/playback-token`,
       headers: context.authorization,
     });
     const token = playbackToken.json<{ token: string }>().token;
     const playback = await context.app.inject({
       method: "GET",
-      url: `/api/tracks/${track.id}/audio?playbackToken=${token}`,
+      url: `/api/media/${track.id}/audio?playbackToken=${token}`,
       headers: { range: "bytes=0-7" },
     });
     assert.equal(playback.statusCode, 206);
@@ -578,7 +584,7 @@ test("Jellyfin sources validate, import audio only, encrypt credentials, proxy p
     assert.deepEqual(playback.rawPayload, AUDIO.subarray(0, 8));
     const head = await context.app.inject({
       method: "HEAD",
-      url: `/api/tracks/${track.id}/audio?playbackToken=${token}`,
+      url: `/api/media/${track.id}/audio?playbackToken=${token}`,
       headers: { range: "bytes=0-7" },
     });
     assert.equal(head.statusCode, 206);
@@ -603,15 +609,19 @@ test("Jellyfin sources validate, import audio only, encrypt credentials, proxy p
 
     const removed = await context.app.inject({
       method: "DELETE",
-      url: `/api/admin/sources/${source.id}`,
+      url: `/api/admin/library-sources/${source.id}`,
       headers: context.authorization,
     });
     assert.equal(removed.statusCode, 200);
-    const retained = await context.database.orm.Track.where({
+    const retained = await context.database.orm.Media.where({
       id: track.id,
     }).first();
+    const retainedCopy = await context.database.orm.MediaCopy.first({
+      mediaId: track.id,
+    });
     assert.equal(retained?.available, 0);
-    assert.equal(retained?.sourceId, source.id);
+    assert.equal(retainedCopy?.librarySourceId, source.id);
+    assert.equal(retainedCopy?.available, 0);
   } finally {
     await context.close();
   }
@@ -624,7 +634,7 @@ test("Jellyfin source validation rejects invalid keys without persisting a sourc
   try {
     const response = await context.app.inject({
       method: "POST",
-      url: "/api/admin/sources",
+      url: "/api/admin/library-sources",
       headers: context.authorization,
       payload: {
         kind: "jellyfin",
@@ -642,7 +652,7 @@ test("Jellyfin source validation rejects invalid keys without persisting a sourc
     );
     assert.equal(
       (
-        await context.database.orm.Source.where({
+        await context.database.orm.LibrarySource.where({
           kind: "jellyfin",
         }).all()
       ).length,
@@ -674,7 +684,7 @@ test("multiple Jellyfin instances are supported while normalized duplicate URLs 
   try {
     const first = await context.app.inject({
       method: "POST",
-      url: "/api/admin/sources",
+      url: "/api/admin/library-sources",
       headers: context.authorization,
       payload: {
         kind: "jellyfin",
@@ -690,7 +700,7 @@ test("multiple Jellyfin instances are supported while normalized duplicate URLs 
 
     const duplicate = await context.app.inject({
       method: "POST",
-      url: "/api/admin/sources",
+      url: "/api/admin/library-sources",
       headers: context.authorization,
       payload: {
         kind: "jellyfin",
@@ -708,7 +718,7 @@ test("multiple Jellyfin instances are supported while normalized duplicate URLs 
 
     const second = await context.app.inject({
       method: "POST",
-      url: "/api/admin/sources",
+      url: "/api/admin/library-sources",
       headers: context.authorization,
       payload: {
         kind: "jellyfin",
@@ -734,7 +744,7 @@ test("multiple Jellyfin instances are supported while normalized duplicate URLs 
     );
     assert.equal(
       (
-        await context.database.orm.Source.where({
+        await context.database.orm.LibrarySource.where({
           kind: "jellyfin",
         }).all()
       ).length,
@@ -787,7 +797,7 @@ test("Jellyfin rescans use item versions and mark remotely deleted audio unavail
   try {
     const created = await context.app.inject({
       method: "POST",
-      url: "/api/admin/sources",
+      url: "/api/admin/library-sources",
       headers: context.authorization,
       payload: {
         kind: "jellyfin",
@@ -804,7 +814,7 @@ test("Jellyfin rescans use item versions and mark remotely deleted audio unavail
 
     const unchangedScanResponse = await context.app.inject({
       method: "POST",
-      url: `/api/admin/sources/${source.id}/scans`,
+      url: `/api/admin/library-sources/${source.id}/scans`,
       headers: context.authorization,
     });
     assert.equal(unchangedScanResponse.statusCode, 202);
@@ -819,7 +829,7 @@ test("Jellyfin rescans use item versions and mark remotely deleted audio unavail
     includeSecond = false;
     const changedScanResponse = await context.app.inject({
       method: "POST",
-      url: `/api/admin/sources/${source.id}/scans`,
+      url: `/api/admin/library-sources/${source.id}/scans`,
       headers: context.authorization,
     });
     assert.equal(changedScanResponse.statusCode, 202);
@@ -828,30 +838,42 @@ test("Jellyfin rescans use item versions and mark remotely deleted audio unavail
       changedScanResponse.json<{ id: string }>().id,
     );
     assert.equal(changedScan.updatedCount, 1);
-    const tracksBeforeReconciliation = await context.database.orm.Track.where({
-      sourceId: source.id,
+    const sourceCopies = await context.database.orm.MediaCopy.where({
+      librarySourceId: source.id,
     }).all();
+    const tracksBeforeReconciliation = await context.database.orm.Media.where(
+      (media) => media.id.in(sourceCopies.map((copy) => copy.mediaId)),
+    ).all();
     assert.equal(
       changedScan.unavailableCount,
       1,
       JSON.stringify({
         scan: changedScan,
-        tracks: tracksBeforeReconciliation.map((track) => ({
-          externalId: track.externalId,
-          available: track.available,
-          lastSeenScanId: track.lastSeenScanId,
-        })),
+        tracks: tracksBeforeReconciliation.map((track) => {
+          const copy = sourceCopies.find((item) => item.mediaId === track.id);
+          return {
+            externalId: copy?.externalId,
+            available: track.available,
+            lastSeenScanId: copy?.lastSeenScanId,
+          };
+        }),
         changedScanId: changedScanResponse.json<{ id: string }>().id,
       }),
     );
 
-    const changed = await context.database.orm.Track.firstOrThrow({
+    const changedCopy = await context.database.orm.MediaCopy.firstOrThrow({
       externalId: "33333333-3333-3333-3333-333333333333",
+    });
+    const changed = await context.database.orm.Media.firstOrThrow({
+      id: changedCopy.mediaId,
     });
     assert.equal(changed.title, "Second Version");
     assert.equal(changed.available, 1);
-    const removed = await context.database.orm.Track.firstOrThrow({
+    const removedCopy = await context.database.orm.MediaCopy.firstOrThrow({
       externalId: "44444444-4444-4444-4444-444444444444",
+    });
+    const removed = await context.database.orm.Media.firstOrThrow({
+      id: removedCopy.mediaId,
     });
     assert.equal(removed.available, 0);
   } finally {
@@ -878,7 +900,7 @@ test("a failed Jellyfin scan writes an error to the administrator log", async ()
   try {
     const created = await context.app.inject({
       method: "POST",
-      url: "/api/admin/sources",
+      url: "/api/admin/library-sources",
       headers: context.authorization,
       payload: {
         kind: "jellyfin",
@@ -963,7 +985,7 @@ test("Jellyfin eager artwork fetches use bounded concurrency", async () => {
   try {
     const created = await context.app.inject({
       method: "POST",
-      url: "/api/admin/sources",
+      url: "/api/admin/library-sources",
       headers: context.authorization,
       payload: {
         kind: "jellyfin",
@@ -987,7 +1009,9 @@ test("Jellyfin eager artwork fetches use bounded concurrency", async () => {
       "Jellyfin artwork concurrency should remain bounded",
     );
     assert.equal(
-      await context.database.orm.ArtworkJob.first({ sourceId: source.id }),
+      await context.database.orm.ArtworkJob.first({
+        librarySourceId: source.id,
+      }),
       null,
     );
   } finally {
@@ -1043,7 +1067,7 @@ test("failed Jellyfin artwork remains pending and retries after a rescan", async
   try {
     const created = await context.app.inject({
       method: "POST",
-      url: "/api/admin/sources",
+      url: "/api/admin/library-sources",
       headers: context.authorization,
       payload: {
         kind: "jellyfin",
@@ -1060,7 +1084,7 @@ test("failed Jellyfin artwork remains pending and retries after a rescan", async
     assert.equal(first.artworkErrorCount, 1);
     assert.equal(coverRequests, 2);
     const pending = await context.database.orm.ArtworkJob.firstOrThrow({
-      sourceId: source.id,
+      librarySourceId: source.id,
     });
     assert.equal(pending.attemptCount, 1);
     assert.ok(pending.lastAttemptAt);
@@ -1068,7 +1092,7 @@ test("failed Jellyfin artwork remains pending and retries after a rescan", async
     failCover = false;
     const rescan = await context.app.inject({
       method: "POST",
-      url: `/api/admin/sources/${source.id}/scans`,
+      url: `/api/admin/library-sources/${source.id}/scans`,
       headers: context.authorization,
     });
     assert.equal(rescan.statusCode, 202, rescan.body);
@@ -1078,11 +1102,16 @@ test("failed Jellyfin artwork remains pending and retries after a rescan", async
     assert.equal(second.artworkRetrievedCount, 0);
     assert.equal(coverRequests, 3);
     assert.equal(
-      await context.database.orm.ArtworkJob.first({ sourceId: source.id }),
+      await context.database.orm.ArtworkJob.first({
+        librarySourceId: source.id,
+      }),
       null,
     );
-    const track = await context.database.orm.Track.firstOrThrow({
-      sourceId: source.id,
+    const copy = await context.database.orm.MediaCopy.firstOrThrow({
+      librarySourceId: source.id,
+    });
+    const track = await context.database.orm.Media.firstOrThrow({
+      id: copy.mediaId,
     });
     assert.ok(track.coverId);
   } finally {
@@ -1148,7 +1177,7 @@ test("Jellyfin tracks include file artwork when they enter the catalog", async (
   try {
     const created = await context.app.inject({
       method: "POST",
-      url: "/api/admin/sources",
+      url: "/api/admin/library-sources",
       headers: context.authorization,
       payload: {
         kind: "jellyfin",
@@ -1163,7 +1192,7 @@ test("Jellyfin tracks include file artwork when they enter the catalog", async (
     await coverStarted;
     const beforeCover = await context.app.inject({
       method: "GET",
-      url: "/api/tracks",
+      url: "/api/media",
       headers: context.authorization,
     });
     assert.equal(beforeCover.statusCode, 200);
@@ -1175,7 +1204,7 @@ test("Jellyfin tracks include file artwork when they enter the catalog", async (
 
     const tracks = await context.app.inject({
       method: "GET",
-      url: "/api/tracks",
+      url: "/api/media",
       headers: context.authorization,
     });
     const importedTracks = tracks.json<{

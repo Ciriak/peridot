@@ -19,9 +19,9 @@ import type {
 } from '@prisma/orm-sqlite/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'4ec7a4c60e9a0744c3ae6737869dfeff69184c2a83bec1a720f953fb929efdc9'>;
+  StorageHashBase<'7fb2e91df85da52ca54ad7f6ff71621577a757d8b112f95a109d4653e0773135'>;
 export type ExecutionHash =
-  ExecutionHashBase<'4dc5ec34a7ada0a7604910a7f1410b9814a4e624330a6fecab7762fe2abe3491'>;
+  ExecutionHashBase<'f5ba018940425231a1ebe82ea868c89b274c2b48ee35eb5ae80c79124cce62ce'>;
 export type ProfileHash =
   ProfileHashBase<'260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53'>;
 
@@ -267,17 +267,17 @@ export namespace Models {
   };
   export type ArtworkJob = {
     attemptCount: FieldOutputTypes['__unbound__']['ArtworkJob']['attemptCount'];
+    copyId: FieldOutputTypes['__unbound__']['ArtworkJob']['copyId'];
     createdAt: FieldOutputTypes['__unbound__']['ArtworkJob']['createdAt'];
     externalCoverItemId: FieldOutputTypes['__unbound__']['ArtworkJob']['externalCoverItemId'];
     externalCoverTag: FieldOutputTypes['__unbound__']['ArtworkJob']['externalCoverTag'];
     id: FieldOutputTypes['__unbound__']['ArtworkJob']['id'];
     lastAttemptAt: FieldOutputTypes['__unbound__']['ArtworkJob']['lastAttemptAt'];
-    sourceId: FieldOutputTypes['__unbound__']['ArtworkJob']['sourceId'];
-    trackId: FieldOutputTypes['__unbound__']['ArtworkJob']['trackId'];
+    librarySourceId: FieldOutputTypes['__unbound__']['ArtworkJob']['librarySourceId'];
     updatedAt: FieldOutputTypes['__unbound__']['ArtworkJob']['updatedAt'];
-    source: Source;
-    track: Track;
-    readonly [RelationKeys]?: 'source' | 'track';
+    copy: MediaCopy;
+    librarySource: LibrarySource;
+    readonly [RelationKeys]?: 'copy' | 'librarySource';
   };
   export type CatalogAlbum = {
     artist: FieldOutputTypes['__unbound__']['CatalogAlbum']['artist'];
@@ -285,7 +285,7 @@ export namespace Models {
     artistId: FieldOutputTypes['__unbound__']['CatalogAlbum']['artistId'];
     availableTrackCount: FieldOutputTypes['__unbound__']['CatalogAlbum']['availableTrackCount'];
     coverId: FieldOutputTypes['__unbound__']['CatalogAlbum']['coverId'];
-    coverTrackId: FieldOutputTypes['__unbound__']['CatalogAlbum']['coverTrackId'];
+    coverMediaId: FieldOutputTypes['__unbound__']['CatalogAlbum']['coverMediaId'];
     durationMs: FieldOutputTypes['__unbound__']['CatalogAlbum']['durationMs'];
     id: FieldOutputTypes['__unbound__']['CatalogAlbum']['id'];
     latestPublishedAt: FieldOutputTypes['__unbound__']['CatalogAlbum']['latestPublishedAt'];
@@ -318,6 +318,39 @@ export namespace Models {
     trackCount: FieldOutputTypes['__unbound__']['CatalogArtistAlbum']['trackCount'];
     readonly [RelationKeys]?: never;
   };
+  export type CatalogMedia = {
+    album: FieldOutputTypes['__unbound__']['CatalogMedia']['album'];
+    albumArtist: FieldOutputTypes['__unbound__']['CatalogMedia']['albumArtist'];
+    albumArtistCredits: FieldOutputTypes['__unbound__']['CatalogMedia']['albumArtistCredits'];
+    albumFolderKey: FieldOutputTypes['__unbound__']['CatalogMedia']['albumFolderKey'];
+    albumId: FieldOutputTypes['__unbound__']['CatalogMedia']['albumId'];
+    albumReleaseKey: FieldOutputTypes['__unbound__']['CatalogMedia']['albumReleaseKey'];
+    artist: FieldOutputTypes['__unbound__']['CatalogMedia']['artist'];
+    artistCredits: FieldOutputTypes['__unbound__']['CatalogMedia']['artistCredits'];
+    available: FieldOutputTypes['__unbound__']['CatalogMedia']['available'];
+    coverId: FieldOutputTypes['__unbound__']['CatalogMedia']['coverId'];
+    discNumber: FieldOutputTypes['__unbound__']['CatalogMedia']['discNumber'];
+    durationMs: FieldOutputTypes['__unbound__']['CatalogMedia']['durationMs'];
+    id: FieldOutputTypes['__unbound__']['CatalogMedia']['id'];
+    mediaType: FieldOutputTypes['__unbound__']['CatalogMedia']['mediaType'];
+    normalizedAlbum: FieldOutputTypes['__unbound__']['CatalogMedia']['normalizedAlbum'];
+    normalizedArtist: FieldOutputTypes['__unbound__']['CatalogMedia']['normalizedArtist'];
+    normalizedGenres: FieldOutputTypes['__unbound__']['CatalogMedia']['normalizedGenres'];
+    normalizedTitle: FieldOutputTypes['__unbound__']['CatalogMedia']['normalizedTitle'];
+    publishedAt: FieldOutputTypes['__unbound__']['CatalogMedia']['publishedAt'];
+    releaseYear: FieldOutputTypes['__unbound__']['CatalogMedia']['releaseYear'];
+    sourceKind: FieldOutputTypes['__unbound__']['CatalogMedia']['sourceKind'];
+    title: FieldOutputTypes['__unbound__']['CatalogMedia']['title'];
+    trackNumber: FieldOutputTypes['__unbound__']['CatalogMedia']['trackNumber'];
+    updatedAt: FieldOutputTypes['__unbound__']['CatalogMedia']['updatedAt'];
+    readonly [RelationKeys]?: never;
+  };
+  export type CatalogMediaArtist = {
+    artistId: FieldOutputTypes['__unbound__']['CatalogMediaArtist']['artistId'];
+    id: FieldOutputTypes['__unbound__']['CatalogMediaArtist']['id'];
+    mediaId: FieldOutputTypes['__unbound__']['CatalogMediaArtist']['mediaId'];
+    readonly [RelationKeys]?: never;
+  };
   export type CatalogSearchTerm = {
     entityId: FieldOutputTypes['__unbound__']['CatalogSearchTerm']['entityId'];
     entityType: FieldOutputTypes['__unbound__']['CatalogSearchTerm']['entityType'];
@@ -332,57 +365,163 @@ export namespace Models {
     updatedAt: FieldOutputTypes['__unbound__']['CatalogState']['updatedAt'];
     readonly [RelationKeys]?: never;
   };
-  export type CatalogTrack = {
-    album: FieldOutputTypes['__unbound__']['CatalogTrack']['album'];
-    albumArtist: FieldOutputTypes['__unbound__']['CatalogTrack']['albumArtist'];
-    albumArtistCredits: FieldOutputTypes['__unbound__']['CatalogTrack']['albumArtistCredits'];
-    albumFolderKey: FieldOutputTypes['__unbound__']['CatalogTrack']['albumFolderKey'];
-    albumId: FieldOutputTypes['__unbound__']['CatalogTrack']['albumId'];
-    albumReleaseKey: FieldOutputTypes['__unbound__']['CatalogTrack']['albumReleaseKey'];
-    artist: FieldOutputTypes['__unbound__']['CatalogTrack']['artist'];
-    artistCredits: FieldOutputTypes['__unbound__']['CatalogTrack']['artistCredits'];
-    available: FieldOutputTypes['__unbound__']['CatalogTrack']['available'];
-    coverId: FieldOutputTypes['__unbound__']['CatalogTrack']['coverId'];
-    discNumber: FieldOutputTypes['__unbound__']['CatalogTrack']['discNumber'];
-    duplicateOfId: FieldOutputTypes['__unbound__']['CatalogTrack']['duplicateOfId'];
-    durationMs: FieldOutputTypes['__unbound__']['CatalogTrack']['durationMs'];
-    id: FieldOutputTypes['__unbound__']['CatalogTrack']['id'];
-    mediaType: FieldOutputTypes['__unbound__']['CatalogTrack']['mediaType'];
-    normalizedAlbum: FieldOutputTypes['__unbound__']['CatalogTrack']['normalizedAlbum'];
-    normalizedArtist: FieldOutputTypes['__unbound__']['CatalogTrack']['normalizedArtist'];
-    normalizedGenres: FieldOutputTypes['__unbound__']['CatalogTrack']['normalizedGenres'];
-    normalizedTitle: FieldOutputTypes['__unbound__']['CatalogTrack']['normalizedTitle'];
-    publishedAt: FieldOutputTypes['__unbound__']['CatalogTrack']['publishedAt'];
-    releaseYear: FieldOutputTypes['__unbound__']['CatalogTrack']['releaseYear'];
-    sourceId: FieldOutputTypes['__unbound__']['CatalogTrack']['sourceId'];
-    title: FieldOutputTypes['__unbound__']['CatalogTrack']['title'];
-    trackNumber: FieldOutputTypes['__unbound__']['CatalogTrack']['trackNumber'];
-    updatedAt: FieldOutputTypes['__unbound__']['CatalogTrack']['updatedAt'];
-    readonly [RelationKeys]?: never;
-  };
-  export type CatalogTrackArtist = {
-    artistId: FieldOutputTypes['__unbound__']['CatalogTrackArtist']['artistId'];
-    id: FieldOutputTypes['__unbound__']['CatalogTrackArtist']['id'];
-    trackId: FieldOutputTypes['__unbound__']['CatalogTrackArtist']['trackId'];
+  export type Cover = {
+    createdAt: FieldOutputTypes['__unbound__']['Cover']['createdAt'];
+    hash: FieldOutputTypes['__unbound__']['Cover']['hash'];
+    id: FieldOutputTypes['__unbound__']['Cover']['id'];
+    updatedAt: FieldOutputTypes['__unbound__']['Cover']['updatedAt'];
     readonly [RelationKeys]?: never;
   };
   export type DownloadClient = {
+    createdAt: FieldOutputTypes['__unbound__']['DownloadClient']['createdAt'];
     credentialCiphertext: FieldOutputTypes['__unbound__']['DownloadClient']['credentialCiphertext'];
     id: FieldOutputTypes['__unbound__']['DownloadClient']['id'];
     kind: FieldOutputTypes['__unbound__']['DownloadClient']['kind'];
     name: FieldOutputTypes['__unbound__']['DownloadClient']['name'];
+    updatedAt: FieldOutputTypes['__unbound__']['DownloadClient']['updatedAt'];
     url: FieldOutputTypes['__unbound__']['DownloadClient']['url'];
     username: FieldOutputTypes['__unbound__']['DownloadClient']['username'];
     readonly [RelationKeys]?: never;
   };
-  export type DuplicateDetectionState = {
-    algorithmVersion: FieldOutputTypes['__unbound__']['DuplicateDetectionState']['algorithmVersion'];
-    groupCount: FieldOutputTypes['__unbound__']['DuplicateDetectionState']['groupCount'];
-    hiddenCount: FieldOutputTypes['__unbound__']['DuplicateDetectionState']['hiddenCount'];
-    id: FieldOutputTypes['__unbound__']['DuplicateDetectionState']['id'];
-    lastCompletedAt: FieldOutputTypes['__unbound__']['DuplicateDetectionState']['lastCompletedAt'];
-    updatedAt: FieldOutputTypes['__unbound__']['DuplicateDetectionState']['updatedAt'];
+  export type LibrarySource = {
+    configuration: FieldOutputTypes['__unbound__']['LibrarySource']['configuration'];
+    createdAt: FieldOutputTypes['__unbound__']['LibrarySource']['createdAt'];
+    credentialCiphertext: FieldOutputTypes['__unbound__']['LibrarySource']['credentialCiphertext'];
+    id: FieldOutputTypes['__unbound__']['LibrarySource']['id'];
+    kind: FieldOutputTypes['__unbound__']['LibrarySource']['kind'];
+    lastSyncedAt: FieldOutputTypes['__unbound__']['LibrarySource']['lastSyncedAt'];
+    name: FieldOutputTypes['__unbound__']['LibrarySource']['name'];
+    path: FieldOutputTypes['__unbound__']['LibrarySource']['path'];
+    position: FieldOutputTypes['__unbound__']['LibrarySource']['position'];
+    removedAt: FieldOutputTypes['__unbound__']['LibrarySource']['removedAt'];
+    sourceIdentity: FieldOutputTypes['__unbound__']['LibrarySource']['sourceIdentity'];
+    updatedAt: FieldOutputTypes['__unbound__']['LibrarySource']['updatedAt'];
+    url: FieldOutputTypes['__unbound__']['LibrarySource']['url'];
+    artworkJobs: ArtworkJob[];
+    copies: MediaCopy[];
+    readonly [RelationKeys]?: 'artworkJobs' | 'copies';
+  };
+  export type Media = {
+    album: FieldOutputTypes['__unbound__']['Media']['album'];
+    albumArtist: FieldOutputTypes['__unbound__']['Media']['albumArtist'];
+    albumArtistCredits: FieldOutputTypes['__unbound__']['Media']['albumArtistCredits'];
+    artist: FieldOutputTypes['__unbound__']['Media']['artist'];
+    artistCredits: FieldOutputTypes['__unbound__']['Media']['artistCredits'];
+    available: FieldOutputTypes['__unbound__']['Media']['available'];
+    catalogProjectionPending: FieldOutputTypes['__unbound__']['Media']['catalogProjectionPending'];
+    coverId: FieldOutputTypes['__unbound__']['Media']['coverId'];
+    createdAt: FieldOutputTypes['__unbound__']['Media']['createdAt'];
+    discNumber: FieldOutputTypes['__unbound__']['Media']['discNumber'];
+    durationMs: FieldOutputTypes['__unbound__']['Media']['durationMs'];
+    genres: FieldOutputTypes['__unbound__']['Media']['genres'];
+    id: FieldOutputTypes['__unbound__']['Media']['id'];
+    manualOverrides: FieldOutputTypes['__unbound__']['Media']['manualOverrides'];
+    mediaType: FieldOutputTypes['__unbound__']['Media']['mediaType'];
+    mediaTypeOrigin: FieldOutputTypes['__unbound__']['Media']['mediaTypeOrigin'];
+    metadataAlbum: FieldOutputTypes['__unbound__']['Media']['metadataAlbum'];
+    metadataAlbumArtist: FieldOutputTypes['__unbound__']['Media']['metadataAlbumArtist'];
+    metadataAlbumArtistCredits: FieldOutputTypes['__unbound__']['Media']['metadataAlbumArtistCredits'];
+    metadataArtist: FieldOutputTypes['__unbound__']['Media']['metadataArtist'];
+    metadataArtistCredits: FieldOutputTypes['__unbound__']['Media']['metadataArtistCredits'];
+    metadataAttemptedSignature: FieldOutputTypes['__unbound__']['Media']['metadataAttemptedSignature'];
+    metadataDetails: FieldOutputTypes['__unbound__']['Media']['metadataDetails'];
+    metadataDiscNumber: FieldOutputTypes['__unbound__']['Media']['metadataDiscNumber'];
+    metadataExternalReleaseId: FieldOutputTypes['__unbound__']['Media']['metadataExternalReleaseId'];
+    metadataExternalTrackId: FieldOutputTypes['__unbound__']['Media']['metadataExternalTrackId'];
+    metadataGenres: FieldOutputTypes['__unbound__']['Media']['metadataGenres'];
+    metadataMatchedAt: FieldOutputTypes['__unbound__']['Media']['metadataMatchedAt'];
+    metadataMode: FieldOutputTypes['__unbound__']['Media']['metadataMode'];
+    metadataProviderId: FieldOutputTypes['__unbound__']['Media']['metadataProviderId'];
+    metadataProviderKind: FieldOutputTypes['__unbound__']['Media']['metadataProviderKind'];
+    metadataProviderName: FieldOutputTypes['__unbound__']['Media']['metadataProviderName'];
+    metadataSourceUrl: FieldOutputTypes['__unbound__']['Media']['metadataSourceUrl'];
+    metadataTitle: FieldOutputTypes['__unbound__']['Media']['metadataTitle'];
+    metadataTrackNumber: FieldOutputTypes['__unbound__']['Media']['metadataTrackNumber'];
+    metadataVersion: FieldOutputTypes['__unbound__']['Media']['metadataVersion'];
+    publishedAt: FieldOutputTypes['__unbound__']['Media']['publishedAt'];
+    title: FieldOutputTypes['__unbound__']['Media']['title'];
+    trackNumber: FieldOutputTypes['__unbound__']['Media']['trackNumber'];
+    updatedAt: FieldOutputTypes['__unbound__']['Media']['updatedAt'];
+    aliases: MediaAlias[];
+    copies: MediaCopy[];
+    likes: MediaLike[];
+    playEvents: MediaPlayEvent[];
+    playlistItems: PlaylistItem[];
+    readonly [RelationKeys]?: 'aliases' | 'copies' | 'likes' | 'playEvents' | 'playlistItems';
+  };
+  export type MediaAlias = {
+    aliasId: FieldOutputTypes['__unbound__']['MediaAlias']['aliasId'];
+    createdAt: FieldOutputTypes['__unbound__']['MediaAlias']['createdAt'];
+    id: FieldOutputTypes['__unbound__']['MediaAlias']['id'];
+    mediaId: FieldOutputTypes['__unbound__']['MediaAlias']['mediaId'];
+    media: Media;
+    readonly [RelationKeys]?: 'media';
+  };
+  export type MediaCopy = {
+    album: FieldOutputTypes['__unbound__']['MediaCopy']['album'];
+    albumArtist: FieldOutputTypes['__unbound__']['MediaCopy']['albumArtist'];
+    albumArtistCredits: FieldOutputTypes['__unbound__']['MediaCopy']['albumArtistCredits'];
+    artist: FieldOutputTypes['__unbound__']['MediaCopy']['artist'];
+    artistCredits: FieldOutputTypes['__unbound__']['MediaCopy']['artistCredits'];
+    audioBitrate: FieldOutputTypes['__unbound__']['MediaCopy']['audioBitrate'];
+    audioLossless: FieldOutputTypes['__unbound__']['MediaCopy']['audioLossless'];
+    available: FieldOutputTypes['__unbound__']['MediaCopy']['available'];
+    coverId: FieldOutputTypes['__unbound__']['MediaCopy']['coverId'];
+    createdAt: FieldOutputTypes['__unbound__']['MediaCopy']['createdAt'];
+    discNumber: FieldOutputTypes['__unbound__']['MediaCopy']['discNumber'];
+    durationMs: FieldOutputTypes['__unbound__']['MediaCopy']['durationMs'];
+    externalContainer: FieldOutputTypes['__unbound__']['MediaCopy']['externalContainer'];
+    externalCoverKey: FieldOutputTypes['__unbound__']['MediaCopy']['externalCoverKey'];
+    externalId: FieldOutputTypes['__unbound__']['MediaCopy']['externalId'];
+    externalVersion: FieldOutputTypes['__unbound__']['MediaCopy']['externalVersion'];
+    fileModifiedAt: FieldOutputTypes['__unbound__']['MediaCopy']['fileModifiedAt'];
+    fileSizeBytes: FieldOutputTypes['__unbound__']['MediaCopy']['fileSizeBytes'];
+    genres: FieldOutputTypes['__unbound__']['MediaCopy']['genres'];
+    id: FieldOutputTypes['__unbound__']['MediaCopy']['id'];
+    lastSeenScanId: FieldOutputTypes['__unbound__']['MediaCopy']['lastSeenScanId'];
+    librarySourceId: FieldOutputTypes['__unbound__']['MediaCopy']['librarySourceId'];
+    manualOverrides: FieldOutputTypes['__unbound__']['MediaCopy']['manualOverrides'];
+    mediaId: FieldOutputTypes['__unbound__']['MediaCopy']['mediaId'];
+    mediaType: FieldOutputTypes['__unbound__']['MediaCopy']['mediaType'];
+    mediaTypeOrigin: FieldOutputTypes['__unbound__']['MediaCopy']['mediaTypeOrigin'];
+    metadataVersion: FieldOutputTypes['__unbound__']['MediaCopy']['metadataVersion'];
+    mimeType: FieldOutputTypes['__unbound__']['MediaCopy']['mimeType'];
+    publishedAt: FieldOutputTypes['__unbound__']['MediaCopy']['publishedAt'];
+    recordingIdentityKeys: FieldOutputTypes['__unbound__']['MediaCopy']['recordingIdentityKeys'];
+    relativePath: FieldOutputTypes['__unbound__']['MediaCopy']['relativePath'];
+    title: FieldOutputTypes['__unbound__']['MediaCopy']['title'];
+    trackNumber: FieldOutputTypes['__unbound__']['MediaCopy']['trackNumber'];
+    updatedAt: FieldOutputTypes['__unbound__']['MediaCopy']['updatedAt'];
+    artworkJob: ArtworkJob | null;
+    librarySource: LibrarySource;
+    media: Media;
+    readonly [RelationKeys]?: 'artworkJob' | 'librarySource' | 'media';
+  };
+  export type MediaLike = {
+    createdAt: FieldOutputTypes['__unbound__']['MediaLike']['createdAt'];
+    mediaId: FieldOutputTypes['__unbound__']['MediaLike']['mediaId'];
+    userId: FieldOutputTypes['__unbound__']['MediaLike']['userId'];
+    media: Media;
+    user: User;
+    readonly [RelationKeys]?: 'media' | 'user';
+  };
+  export type MediaMatchState = {
+    algorithmVersion: FieldOutputTypes['__unbound__']['MediaMatchState']['algorithmVersion'];
+    groupCount: FieldOutputTypes['__unbound__']['MediaMatchState']['groupCount'];
+    id: FieldOutputTypes['__unbound__']['MediaMatchState']['id'];
+    lastCompletedAt: FieldOutputTypes['__unbound__']['MediaMatchState']['lastCompletedAt'];
+    mergedCount: FieldOutputTypes['__unbound__']['MediaMatchState']['mergedCount'];
+    updatedAt: FieldOutputTypes['__unbound__']['MediaMatchState']['updatedAt'];
     readonly [RelationKeys]?: never;
+  };
+  export type MediaPlayEvent = {
+    id: FieldOutputTypes['__unbound__']['MediaPlayEvent']['id'];
+    mediaId: FieldOutputTypes['__unbound__']['MediaPlayEvent']['mediaId'];
+    playedAt: FieldOutputTypes['__unbound__']['MediaPlayEvent']['playedAt'];
+    userId: FieldOutputTypes['__unbound__']['MediaPlayEvent']['userId'];
+    media: Media;
+    user: User;
+    readonly [RelationKeys]?: 'media' | 'user';
   };
   export type MetadataProvider = {
     accountLabel: FieldOutputTypes['__unbound__']['MetadataProvider']['accountLabel'];
@@ -409,13 +548,29 @@ export namespace Models {
   export type Playlist = {
     createdAt: FieldOutputTypes['__unbound__']['Playlist']['createdAt'];
     id: FieldOutputTypes['__unbound__']['Playlist']['id'];
+    kind: FieldOutputTypes['__unbound__']['Playlist']['kind'];
     name: FieldOutputTypes['__unbound__']['Playlist']['name'];
     updatedAt: FieldOutputTypes['__unbound__']['Playlist']['updatedAt'];
     userId: FieldOutputTypes['__unbound__']['Playlist']['userId'];
     items: PlaylistItem[];
     likes: PlaylistLike[];
+    link: PlaylistLink | null;
     user: User;
-    readonly [RelationKeys]?: 'items' | 'likes' | 'user';
+    readonly [RelationKeys]?: 'items' | 'likes' | 'link' | 'user';
+  };
+  export type PlaylistAccount = {
+    configuration: FieldOutputTypes['__unbound__']['PlaylistAccount']['configuration'];
+    createdAt: FieldOutputTypes['__unbound__']['PlaylistAccount']['createdAt'];
+    credentialCiphertext: FieldOutputTypes['__unbound__']['PlaylistAccount']['credentialCiphertext'];
+    enabled: FieldOutputTypes['__unbound__']['PlaylistAccount']['enabled'];
+    id: FieldOutputTypes['__unbound__']['PlaylistAccount']['id'];
+    kind: FieldOutputTypes['__unbound__']['PlaylistAccount']['kind'];
+    name: FieldOutputTypes['__unbound__']['PlaylistAccount']['name'];
+    updatedAt: FieldOutputTypes['__unbound__']['PlaylistAccount']['updatedAt'];
+    userId: FieldOutputTypes['__unbound__']['PlaylistAccount']['userId'];
+    links: PlaylistLink[];
+    user: User;
+    readonly [RelationKeys]?: 'links' | 'user';
   };
   export type PlaylistItem = {
     createdAt: FieldOutputTypes['__unbound__']['PlaylistItem']['createdAt'];
@@ -423,17 +578,18 @@ export namespace Models {
     externalTrackId: FieldOutputTypes['__unbound__']['PlaylistItem']['externalTrackId'];
     id: FieldOutputTypes['__unbound__']['PlaylistItem']['id'];
     identityKey: FieldOutputTypes['__unbound__']['PlaylistItem']['identityKey'];
+    matchStatus: FieldOutputTypes['__unbound__']['PlaylistItem']['matchStatus'];
+    mediaId: FieldOutputTypes['__unbound__']['PlaylistItem']['mediaId'];
     playlistId: FieldOutputTypes['__unbound__']['PlaylistItem']['playlistId'];
     position: FieldOutputTypes['__unbound__']['PlaylistItem']['position'];
     snapshotAlbum: FieldOutputTypes['__unbound__']['PlaylistItem']['snapshotAlbum'];
     snapshotArtist: FieldOutputTypes['__unbound__']['PlaylistItem']['snapshotArtist'];
     snapshotDuration: FieldOutputTypes['__unbound__']['PlaylistItem']['snapshotDuration'];
     snapshotTitle: FieldOutputTypes['__unbound__']['PlaylistItem']['snapshotTitle'];
-    trackId: FieldOutputTypes['__unbound__']['PlaylistItem']['trackId'];
     updatedAt: FieldOutputTypes['__unbound__']['PlaylistItem']['updatedAt'];
+    media: Media | null;
     playlist: Playlist;
-    track: Track | null;
-    readonly [RelationKeys]?: 'playlist' | 'track';
+    readonly [RelationKeys]?: 'media' | 'playlist';
   };
   export type PlaylistLike = {
     createdAt: FieldOutputTypes['__unbound__']['PlaylistLike']['createdAt'];
@@ -443,6 +599,38 @@ export namespace Models {
     playlist: Playlist;
     user: User;
     readonly [RelationKeys]?: 'playlist' | 'user';
+  };
+  export type PlaylistLink = {
+    accountId: FieldOutputTypes['__unbound__']['PlaylistLink']['accountId'];
+    createdAt: FieldOutputTypes['__unbound__']['PlaylistLink']['createdAt'];
+    enabled: FieldOutputTypes['__unbound__']['PlaylistLink']['enabled'];
+    externalPlaylistId: FieldOutputTypes['__unbound__']['PlaylistLink']['externalPlaylistId'];
+    id: FieldOutputTypes['__unbound__']['PlaylistLink']['id'];
+    lastSyncedAt: FieldOutputTypes['__unbound__']['PlaylistLink']['lastSyncedAt'];
+    playlistId: FieldOutputTypes['__unbound__']['PlaylistLink']['playlistId'];
+    remoteVersion: FieldOutputTypes['__unbound__']['PlaylistLink']['remoteVersion'];
+    syncCursor: FieldOutputTypes['__unbound__']['PlaylistLink']['syncCursor'];
+    syncMode: FieldOutputTypes['__unbound__']['PlaylistLink']['syncMode'];
+    updatedAt: FieldOutputTypes['__unbound__']['PlaylistLink']['updatedAt'];
+    account: PlaylistAccount;
+    playlist: Playlist;
+    readonly [RelationKeys]?: 'account' | 'playlist';
+  };
+  export type ReleaseIndexer = {
+    configuration: FieldOutputTypes['__unbound__']['ReleaseIndexer']['configuration'];
+    createdAt: FieldOutputTypes['__unbound__']['ReleaseIndexer']['createdAt'];
+    credentialCiphertext: FieldOutputTypes['__unbound__']['ReleaseIndexer']['credentialCiphertext'];
+    destinationSourceId: FieldOutputTypes['__unbound__']['ReleaseIndexer']['destinationSourceId'];
+    downloadClientId: FieldOutputTypes['__unbound__']['ReleaseIndexer']['downloadClientId'];
+    id: FieldOutputTypes['__unbound__']['ReleaseIndexer']['id'];
+    kind: FieldOutputTypes['__unbound__']['ReleaseIndexer']['kind'];
+    name: FieldOutputTypes['__unbound__']['ReleaseIndexer']['name'];
+    position: FieldOutputTypes['__unbound__']['ReleaseIndexer']['position'];
+    removedAt: FieldOutputTypes['__unbound__']['ReleaseIndexer']['removedAt'];
+    sourceIdentity: FieldOutputTypes['__unbound__']['ReleaseIndexer']['sourceIdentity'];
+    updatedAt: FieldOutputTypes['__unbound__']['ReleaseIndexer']['updatedAt'];
+    url: FieldOutputTypes['__unbound__']['ReleaseIndexer']['url'];
+    readonly [RelationKeys]?: never;
   };
   export type ServerSetting = {
     fileLogRetentionDays: FieldOutputTypes['__unbound__']['ServerSetting']['fileLogRetentionDays'];
@@ -464,25 +652,11 @@ export namespace Models {
     user: User;
     readonly [RelationKeys]?: 'user';
   };
-  export type Source = {
-    configuration: FieldOutputTypes['__unbound__']['Source']['configuration'];
-    createdAt: FieldOutputTypes['__unbound__']['Source']['createdAt'];
-    credentialCiphertext: FieldOutputTypes['__unbound__']['Source']['credentialCiphertext'];
-    id: FieldOutputTypes['__unbound__']['Source']['id'];
-    kind: FieldOutputTypes['__unbound__']['Source']['kind'];
-    lastSyncedAt: FieldOutputTypes['__unbound__']['Source']['lastSyncedAt'];
-    name: FieldOutputTypes['__unbound__']['Source']['name'];
-    path: FieldOutputTypes['__unbound__']['Source']['path'];
-    position: FieldOutputTypes['__unbound__']['Source']['position'];
-    removedAt: FieldOutputTypes['__unbound__']['Source']['removedAt'];
-    sourceIdentity: FieldOutputTypes['__unbound__']['Source']['sourceIdentity'];
-    updatedAt: FieldOutputTypes['__unbound__']['Source']['updatedAt'];
-    url: FieldOutputTypes['__unbound__']['Source']['url'];
-    artworkJobs: ArtworkJob[];
-    readonly [RelationKeys]?: 'artworkJobs';
-  };
   export type Task = {
     completedAt: FieldOutputTypes['__unbound__']['Task']['completedAt'];
+    connectorId: FieldOutputTypes['__unbound__']['Task']['connectorId'];
+    connectorKind: FieldOutputTypes['__unbound__']['Task']['connectorKind'];
+    connectorName: FieldOutputTypes['__unbound__']['Task']['connectorName'];
     createdAt: FieldOutputTypes['__unbound__']['Task']['createdAt'];
     details: FieldOutputTypes['__unbound__']['Task']['details'];
     failureMessage: FieldOutputTypes['__unbound__']['Task']['failureMessage'];
@@ -496,8 +670,6 @@ export namespace Models {
     progressCompleted: FieldOutputTypes['__unbound__']['Task']['progressCompleted'];
     progressTotal: FieldOutputTypes['__unbound__']['Task']['progressTotal'];
     retryCount: FieldOutputTypes['__unbound__']['Task']['retryCount'];
-    sourceId: FieldOutputTypes['__unbound__']['Task']['sourceId'];
-    sourceName: FieldOutputTypes['__unbound__']['Task']['sourceName'];
     startedAt: FieldOutputTypes['__unbound__']['Task']['startedAt'];
     status: FieldOutputTypes['__unbound__']['Task']['status'];
     title: FieldOutputTypes['__unbound__']['Task']['title'];
@@ -505,88 +677,6 @@ export namespace Models {
     updatedAt: FieldOutputTypes['__unbound__']['Task']['updatedAt'];
     ownerUser: User | null;
     readonly [RelationKeys]?: 'ownerUser';
-  };
-  export type Track = {
-    album: FieldOutputTypes['__unbound__']['Track']['album'];
-    albumArtist: FieldOutputTypes['__unbound__']['Track']['albumArtist'];
-    albumArtistCredits: FieldOutputTypes['__unbound__']['Track']['albumArtistCredits'];
-    artist: FieldOutputTypes['__unbound__']['Track']['artist'];
-    artistCredits: FieldOutputTypes['__unbound__']['Track']['artistCredits'];
-    audioBitrate: FieldOutputTypes['__unbound__']['Track']['audioBitrate'];
-    audioLossless: FieldOutputTypes['__unbound__']['Track']['audioLossless'];
-    available: FieldOutputTypes['__unbound__']['Track']['available'];
-    catalogProjectionPending: FieldOutputTypes['__unbound__']['Track']['catalogProjectionPending'];
-    coverId: FieldOutputTypes['__unbound__']['Track']['coverId'];
-    createdAt: FieldOutputTypes['__unbound__']['Track']['createdAt'];
-    discNumber: FieldOutputTypes['__unbound__']['Track']['discNumber'];
-    duplicateOfId: FieldOutputTypes['__unbound__']['Track']['duplicateOfId'];
-    durationMs: FieldOutputTypes['__unbound__']['Track']['durationMs'];
-    externalContainer: FieldOutputTypes['__unbound__']['Track']['externalContainer'];
-    externalCoverKey: FieldOutputTypes['__unbound__']['Track']['externalCoverKey'];
-    externalId: FieldOutputTypes['__unbound__']['Track']['externalId'];
-    externalVersion: FieldOutputTypes['__unbound__']['Track']['externalVersion'];
-    fileModifiedAt: FieldOutputTypes['__unbound__']['Track']['fileModifiedAt'];
-    fileSizeBytes: FieldOutputTypes['__unbound__']['Track']['fileSizeBytes'];
-    genres: FieldOutputTypes['__unbound__']['Track']['genres'];
-    id: FieldOutputTypes['__unbound__']['Track']['id'];
-    lastSeenScanId: FieldOutputTypes['__unbound__']['Track']['lastSeenScanId'];
-    mediaType: FieldOutputTypes['__unbound__']['Track']['mediaType'];
-    mediaTypeOrigin: FieldOutputTypes['__unbound__']['Track']['mediaTypeOrigin'];
-    metadataAlbum: FieldOutputTypes['__unbound__']['Track']['metadataAlbum'];
-    metadataAlbumArtist: FieldOutputTypes['__unbound__']['Track']['metadataAlbumArtist'];
-    metadataAlbumArtistCredits: FieldOutputTypes['__unbound__']['Track']['metadataAlbumArtistCredits'];
-    metadataArtist: FieldOutputTypes['__unbound__']['Track']['metadataArtist'];
-    metadataArtistCredits: FieldOutputTypes['__unbound__']['Track']['metadataArtistCredits'];
-    metadataAttemptedSignature: FieldOutputTypes['__unbound__']['Track']['metadataAttemptedSignature'];
-    metadataDetails: FieldOutputTypes['__unbound__']['Track']['metadataDetails'];
-    metadataDiscNumber: FieldOutputTypes['__unbound__']['Track']['metadataDiscNumber'];
-    metadataExternalReleaseId: FieldOutputTypes['__unbound__']['Track']['metadataExternalReleaseId'];
-    metadataExternalTrackId: FieldOutputTypes['__unbound__']['Track']['metadataExternalTrackId'];
-    metadataGenres: FieldOutputTypes['__unbound__']['Track']['metadataGenres'];
-    metadataMatchedAt: FieldOutputTypes['__unbound__']['Track']['metadataMatchedAt'];
-    metadataMode: FieldOutputTypes['__unbound__']['Track']['metadataMode'];
-    metadataProviderId: FieldOutputTypes['__unbound__']['Track']['metadataProviderId'];
-    metadataProviderKind: FieldOutputTypes['__unbound__']['Track']['metadataProviderKind'];
-    metadataProviderName: FieldOutputTypes['__unbound__']['Track']['metadataProviderName'];
-    metadataSourceUrl: FieldOutputTypes['__unbound__']['Track']['metadataSourceUrl'];
-    metadataTitle: FieldOutputTypes['__unbound__']['Track']['metadataTitle'];
-    metadataTrackNumber: FieldOutputTypes['__unbound__']['Track']['metadataTrackNumber'];
-    metadataVersion: FieldOutputTypes['__unbound__']['Track']['metadataVersion'];
-    mimeType: FieldOutputTypes['__unbound__']['Track']['mimeType'];
-    publishedAt: FieldOutputTypes['__unbound__']['Track']['publishedAt'];
-    recordingIdentityKeys: FieldOutputTypes['__unbound__']['Track']['recordingIdentityKeys'];
-    relativePath: FieldOutputTypes['__unbound__']['Track']['relativePath'];
-    sourceId: FieldOutputTypes['__unbound__']['Track']['sourceId'];
-    title: FieldOutputTypes['__unbound__']['Track']['title'];
-    trackNumber: FieldOutputTypes['__unbound__']['Track']['trackNumber'];
-    updatedAt: FieldOutputTypes['__unbound__']['Track']['updatedAt'];
-    artworkJob: ArtworkJob | null;
-    source: Source | null;
-    readonly [RelationKeys]?: 'artworkJob' | 'source';
-  };
-  export type TrackCover = {
-    createdAt: FieldOutputTypes['__unbound__']['TrackCover']['createdAt'];
-    hash: FieldOutputTypes['__unbound__']['TrackCover']['hash'];
-    id: FieldOutputTypes['__unbound__']['TrackCover']['id'];
-    updatedAt: FieldOutputTypes['__unbound__']['TrackCover']['updatedAt'];
-    readonly [RelationKeys]?: never;
-  };
-  export type TrackLike = {
-    createdAt: FieldOutputTypes['__unbound__']['TrackLike']['createdAt'];
-    trackId: FieldOutputTypes['__unbound__']['TrackLike']['trackId'];
-    userId: FieldOutputTypes['__unbound__']['TrackLike']['userId'];
-    track: Track;
-    user: User;
-    readonly [RelationKeys]?: 'track' | 'user';
-  };
-  export type TrackPlayEvent = {
-    id: FieldOutputTypes['__unbound__']['TrackPlayEvent']['id'];
-    playedAt: FieldOutputTypes['__unbound__']['TrackPlayEvent']['playedAt'];
-    trackId: FieldOutputTypes['__unbound__']['TrackPlayEvent']['trackId'];
-    userId: FieldOutputTypes['__unbound__']['TrackPlayEvent']['userId'];
-    track: Track;
-    user: User;
-    readonly [RelationKeys]?: 'track' | 'user';
   };
   export type User = {
     bootstrapKey: FieldOutputTypes['__unbound__']['User']['bootstrapKey'];
@@ -599,8 +689,9 @@ export namespace Models {
     passwordHash: FieldOutputTypes['__unbound__']['User']['passwordHash'];
     role: FieldOutputTypes['__unbound__']['User']['role'];
     updatedAt: FieldOutputTypes['__unbound__']['User']['updatedAt'];
+    playlistAccounts: PlaylistAccount[];
     tasks: Task[];
-    readonly [RelationKeys]?: 'tasks';
+    readonly [RelationKeys]?: 'playlistAccounts' | 'tasks';
   };
 }
 
@@ -613,25 +704,30 @@ export declare const models: {
   CatalogAlbum: Models.CatalogAlbum;
   CatalogArtist: Models.CatalogArtist;
   CatalogArtistAlbum: Models.CatalogArtistAlbum;
+  CatalogMedia: Models.CatalogMedia;
+  CatalogMediaArtist: Models.CatalogMediaArtist;
   CatalogSearchTerm: Models.CatalogSearchTerm;
   CatalogState: Models.CatalogState;
-  CatalogTrack: Models.CatalogTrack;
-  CatalogTrackArtist: Models.CatalogTrackArtist;
+  Cover: Models.Cover;
   DownloadClient: Models.DownloadClient;
-  DuplicateDetectionState: Models.DuplicateDetectionState;
+  LibrarySource: Models.LibrarySource;
+  Media: Models.Media;
+  MediaAlias: Models.MediaAlias;
+  MediaCopy: Models.MediaCopy;
+  MediaLike: Models.MediaLike;
+  MediaMatchState: Models.MediaMatchState;
+  MediaPlayEvent: Models.MediaPlayEvent;
   MetadataProvider: Models.MetadataProvider;
   PasswordResetToken: Models.PasswordResetToken;
   Playlist: Models.Playlist;
+  PlaylistAccount: Models.PlaylistAccount;
   PlaylistItem: Models.PlaylistItem;
   PlaylistLike: Models.PlaylistLike;
+  PlaylistLink: Models.PlaylistLink;
+  ReleaseIndexer: Models.ReleaseIndexer;
   ServerSetting: Models.ServerSetting;
   Session: Models.Session;
-  Source: Models.Source;
   Task: Models.Task;
-  Track: Models.Track;
-  TrackCover: Models.TrackCover;
-  TrackLike: Models.TrackLike;
-  TrackPlayEvent: Models.TrackPlayEvent;
   User: Models.User;
 };
 
@@ -980,6 +1076,12 @@ type ContractBase = Omit<
                   };
                   readonly many: false;
                 };
+                readonly copyId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
                 readonly createdAt: {
                   readonly dataType: 'sqlite/datetime';
                   readonly codecId: 'sqlite/datetime@1';
@@ -1011,13 +1113,7 @@ type ContractBase = Omit<
                   readonly nullable: true;
                   readonly many: false;
                 };
-                readonly sourceId: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly trackId: {
+                readonly librarySourceId: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
@@ -1031,7 +1127,7 @@ type ContractBase = Omit<
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
-              uniques: readonly [{ readonly columns: readonly ['trackId'] }];
+              uniques: readonly [{ readonly columns: readonly ['copyId'] }];
               indexes: readonly [
                 {
                   readonly name: 'ArtworkJob_createdAt_idx_9575dbd7';
@@ -1040,16 +1136,16 @@ type ContractBase = Omit<
                   readonly unique: false;
                 },
                 {
-                  readonly name: 'ArtworkJob_sourceId_idx_d92a2571';
-                  readonly prefix: 'ArtworkJob_sourceId_idx';
-                  readonly columns: readonly ['sourceId'];
+                  readonly name: 'ArtworkJob_librarySourceId_idx_4474db6e';
+                  readonly prefix: 'ArtworkJob_librarySourceId_idx';
+                  readonly columns: readonly ['librarySourceId'];
                   readonly unique: false;
                 },
                 {
-                  readonly name: 'artwork_source_cover_170ef716';
+                  readonly name: 'artwork_source_cover_6cd7126f';
                   readonly prefix: 'artwork_source_cover';
                   readonly columns: readonly [
-                    'sourceId',
+                    'librarySourceId',
                     'externalCoverItemId',
                     'externalCoverTag',
                   ];
@@ -1061,11 +1157,11 @@ type ContractBase = Omit<
                   readonly source: {
                     readonly namespaceId: '__unbound__' & NamespaceId;
                     readonly tableName: 'ArtworkJob';
-                    readonly columns: readonly ['trackId'];
+                    readonly columns: readonly ['copyId'];
                   };
                   readonly target: {
                     readonly namespaceId: '__unbound__' & NamespaceId;
-                    readonly tableName: 'Track';
+                    readonly tableName: 'MediaCopy';
                     readonly columns: readonly ['id'];
                   };
                 },
@@ -1073,11 +1169,11 @@ type ContractBase = Omit<
                   readonly source: {
                     readonly namespaceId: '__unbound__' & NamespaceId;
                     readonly tableName: 'ArtworkJob';
-                    readonly columns: readonly ['sourceId'];
+                    readonly columns: readonly ['librarySourceId'];
                   };
                   readonly target: {
                     readonly namespaceId: '__unbound__' & NamespaceId;
-                    readonly tableName: 'Source';
+                    readonly tableName: 'LibrarySource';
                     readonly columns: readonly ['id'];
                   };
                 },
@@ -1119,7 +1215,7 @@ type ContractBase = Omit<
                   readonly nullable: true;
                   readonly many: false;
                 };
-                readonly coverTrackId: {
+                readonly coverMediaId: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: true;
@@ -1366,6 +1462,260 @@ type ContractBase = Omit<
               ];
               foreignKeys: readonly [];
             };
+            readonly CatalogMedia: {
+              columns: {
+                readonly album: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly albumArtist: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly albumArtistCredits: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly albumFolderKey: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly albumId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly albumReleaseKey: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly artist: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly artistCredits: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly available: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly coverId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly discNumber: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly durationMs: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly id: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly mediaType: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/text@1', 'music'>;
+                  };
+                  readonly many: false;
+                };
+                readonly normalizedAlbum: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly normalizedArtist: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly normalizedGenres: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/text@1', ''>;
+                  };
+                  readonly many: false;
+                };
+                readonly normalizedTitle: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly publishedAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly releaseYear: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly sourceKind: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly title: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly trackNumber: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly updatedAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [
+                {
+                  readonly name: 'CatalogMedia_albumFolderKey_normalizedAlbum_id_idx_7c2010bb';
+                  readonly prefix: 'CatalogMedia_albumFolderKey_normalizedAlbum_id_idx';
+                  readonly columns: readonly ['albumFolderKey', 'normalizedAlbum', 'id'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'CatalogMedia_albumId_idx_921f6966';
+                  readonly prefix: 'CatalogMedia_albumId_idx';
+                  readonly columns: readonly ['albumId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'CatalogMedia_available_id_idx_2e938ac3';
+                  readonly prefix: 'CatalogMedia_available_id_idx';
+                  readonly columns: readonly ['available', 'id'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'CatalogMedia_mediaType_available_id_idx_16156cf2';
+                  readonly prefix: 'CatalogMedia_mediaType_available_id_idx';
+                  readonly columns: readonly ['mediaType', 'available', 'id'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'CatalogMedia_sourceKind_idx_16a6ebd0';
+                  readonly prefix: 'CatalogMedia_sourceKind_idx';
+                  readonly columns: readonly ['sourceKind'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'cm_album_title';
+                  readonly columns: readonly ['normalizedAlbum', 'normalizedTitle', 'id'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'cm_artist_album_title';
+                  readonly columns: readonly [
+                    'normalizedArtist',
+                    'normalizedAlbum',
+                    'normalizedTitle',
+                    'id',
+                  ];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'cm_artist_title';
+                  readonly columns: readonly ['normalizedArtist', 'normalizedTitle', 'id'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'cm_duration';
+                  readonly columns: readonly ['durationMs', 'id'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'cm_title';
+                  readonly columns: readonly ['normalizedTitle', 'id'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [];
+            };
+            readonly CatalogMediaArtist: {
+              columns: {
+                readonly artistId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly id: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly mediaId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [{ readonly columns: readonly ['mediaId', 'artistId'] }];
+              indexes: readonly [
+                {
+                  readonly name: 'CatalogMediaArtist_artistId_mediaId_idx_73f86c4e';
+                  readonly prefix: 'CatalogMediaArtist_artistId_mediaId_idx';
+                  readonly columns: readonly ['artistId', 'mediaId'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [];
+            };
             readonly CatalogSearchTerm: {
               columns: {
                 readonly entityId: {
@@ -1445,7 +1795,207 @@ type ContractBase = Omit<
               indexes: readonly [];
               foreignKeys: readonly [];
             };
-            readonly CatalogTrack: {
+            readonly Cover: {
+              columns: {
+                readonly createdAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                  readonly many: false;
+                };
+                readonly hash: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly id: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly updatedAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [{ readonly columns: readonly ['hash'] }];
+              indexes: readonly [];
+              foreignKeys: readonly [];
+            };
+            readonly DownloadClient: {
+              columns: {
+                readonly createdAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                  readonly many: false;
+                };
+                readonly credentialCiphertext: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly id: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly kind: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly name: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly updatedAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly url: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly username: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [];
+              foreignKeys: readonly [];
+            };
+            readonly LibrarySource: {
+              columns: {
+                readonly configuration: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly createdAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                  readonly many: false;
+                };
+                readonly credentialCiphertext: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly id: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly kind: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly lastSyncedAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly name: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly path: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly position: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
+                  };
+                  readonly many: false;
+                };
+                readonly removedAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly sourceIdentity: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly updatedAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly url: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [{ readonly columns: readonly ['kind', 'sourceIdentity'] }];
+              indexes: readonly [
+                {
+                  readonly name: 'LibrarySource_kind_idx_c9ca668f';
+                  readonly prefix: 'LibrarySource_kind_idx';
+                  readonly columns: readonly ['kind'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'LibrarySource_position_idx_82a01784';
+                  readonly prefix: 'LibrarySource_position_idx';
+                  readonly columns: readonly ['position'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'LibrarySource_removedAt_idx_fef869bb';
+                  readonly prefix: 'LibrarySource_removedAt_idx';
+                  readonly columns: readonly ['removedAt'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [];
+            };
+            readonly Media: {
               columns: {
                 readonly album: {
                   readonly dataType: 'sqlite/text';
@@ -1456,28 +2006,10 @@ type ContractBase = Omit<
                 readonly albumArtist: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly albumArtistCredits: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly albumFolderKey: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly albumId: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
                   readonly nullable: true;
                   readonly many: false;
                 };
-                readonly albumReleaseKey: {
+                readonly albumArtistCredits: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: true;
@@ -1492,13 +2024,27 @@ type ContractBase = Omit<
                 readonly artistCredits: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
+                  readonly nullable: true;
                   readonly many: false;
                 };
                 readonly available: {
                   readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/integer@1';
                   readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '1'>;
+                  };
+                  readonly many: false;
+                };
+                readonly catalogProjectionPending: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
+                  };
                   readonly many: false;
                 };
                 readonly coverId: {
@@ -1507,15 +2053,16 @@ type ContractBase = Omit<
                   readonly nullable: true;
                   readonly many: false;
                 };
+                readonly createdAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                  readonly many: false;
+                };
                 readonly discNumber: {
                   readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/integer@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly duplicateOfId: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
                   readonly nullable: true;
                   readonly many: false;
                 };
@@ -1525,10 +2072,26 @@ type ContractBase = Omit<
                   readonly nullable: true;
                   readonly many: false;
                 };
+                readonly genres: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
                 readonly id: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly manualOverrides: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/text@1', '{}'>;
+                  };
                   readonly many: false;
                 };
                 readonly mediaType: {
@@ -1541,49 +2104,147 @@ type ContractBase = Omit<
                   };
                   readonly many: false;
                 };
-                readonly normalizedAlbum: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly normalizedArtist: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly normalizedGenres: {
+                readonly mediaTypeOrigin: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
                   readonly default: {
                     readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/text@1', ''>;
+                    readonly value: DefaultLiteralValue<'sqlite/text@1', 'fallback'>;
                   };
                   readonly many: false;
                 };
-                readonly normalizedTitle: {
+                readonly metadataAlbum: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly publishedAt: {
-                  readonly dataType: 'sqlite/datetime';
-                  readonly codecId: 'sqlite/datetime@1';
                   readonly nullable: true;
                   readonly many: false;
                 };
-                readonly releaseYear: {
+                readonly metadataAlbumArtist: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly metadataAlbumArtistCredits: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly metadataArtist: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly metadataArtistCredits: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly metadataAttemptedSignature: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly metadataDetails: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly metadataDiscNumber: {
                   readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/integer@1';
                   readonly nullable: true;
                   readonly many: false;
                 };
-                readonly sourceId: {
+                readonly metadataExternalReleaseId: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly metadataExternalTrackId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly metadataGenres: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly metadataMatchedAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly metadataMode: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/text@1', 'automatic'>;
+                  };
+                  readonly many: false;
+                };
+                readonly metadataProviderId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly metadataProviderKind: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly metadataProviderName: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly metadataSourceUrl: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly metadataTitle: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly metadataTrackNumber: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly metadataVersion: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
+                  };
+                  readonly many: false;
+                };
+                readonly publishedAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
                   readonly nullable: true;
                   readonly many: false;
                 };
@@ -1610,80 +2271,63 @@ type ContractBase = Omit<
               uniques: readonly [];
               indexes: readonly [
                 {
-                  readonly name: 'CatalogTrack_albumFolderKey_normalizedAlbum_id_idx_7c2010bb';
-                  readonly prefix: 'CatalogTrack_albumFolderKey_normalizedAlbum_id_idx';
-                  readonly columns: readonly ['albumFolderKey', 'normalizedAlbum', 'id'];
+                  readonly name: 'Media_artist_album_title_idx_bdb66ee1';
+                  readonly prefix: 'Media_artist_album_title_idx';
+                  readonly columns: readonly ['artist', 'album', 'title'];
                   readonly unique: false;
                 },
                 {
-                  readonly name: 'CatalogTrack_albumId_idx_921f6966';
-                  readonly prefix: 'CatalogTrack_albumId_idx';
-                  readonly columns: readonly ['albumId'];
+                  readonly name: 'Media_available_idx_1b9f4739';
+                  readonly prefix: 'Media_available_idx';
+                  readonly columns: readonly ['available'];
                   readonly unique: false;
                 },
                 {
-                  readonly name: 'CatalogTrack_available_id_idx_2e938ac3';
-                  readonly prefix: 'CatalogTrack_available_id_idx';
-                  readonly columns: readonly ['available', 'id'];
+                  readonly name: 'Media_catalogProjectionPending_idx_95e4c1ad';
+                  readonly prefix: 'Media_catalogProjectionPending_idx';
+                  readonly columns: readonly ['catalogProjectionPending'];
                   readonly unique: false;
                 },
                 {
-                  readonly name: 'CatalogTrack_duplicateOfId_idx_28ac86a0';
-                  readonly prefix: 'CatalogTrack_duplicateOfId_idx';
-                  readonly columns: readonly ['duplicateOfId'];
+                  readonly name: 'Media_coverId_idx_daf0cb52';
+                  readonly prefix: 'Media_coverId_idx';
+                  readonly columns: readonly ['coverId'];
                   readonly unique: false;
                 },
                 {
-                  readonly name: 'CatalogTrack_mediaType_available_id_idx_16156cf2';
-                  readonly prefix: 'CatalogTrack_mediaType_available_id_idx';
-                  readonly columns: readonly ['mediaType', 'available', 'id'];
+                  readonly name: 'Media_mediaType_idx_c1745d97';
+                  readonly prefix: 'Media_mediaType_idx';
+                  readonly columns: readonly ['mediaType'];
                   readonly unique: false;
                 },
                 {
-                  readonly name: 'CatalogTrack_sourceId_idx_d92a2571';
-                  readonly prefix: 'CatalogTrack_sourceId_idx';
-                  readonly columns: readonly ['sourceId'];
+                  readonly name: 'Media_metadataProviderKind_metadataExternalTrackId_idx_9c545a1d';
+                  readonly prefix: 'Media_metadataProviderKind_metadataExternalTrackId_idx';
+                  readonly columns: readonly ['metadataProviderKind', 'metadataExternalTrackId'];
                   readonly unique: false;
                 },
                 {
-                  readonly name: 'ct_album_title';
-                  readonly columns: readonly ['normalizedAlbum', 'normalizedTitle', 'id'];
-                  readonly unique: false;
-                },
-                {
-                  readonly name: 'ct_artist_album_title';
-                  readonly columns: readonly [
-                    'normalizedArtist',
-                    'normalizedAlbum',
-                    'normalizedTitle',
-                    'id',
-                  ];
-                  readonly unique: false;
-                },
-                {
-                  readonly name: 'ct_artist_title';
-                  readonly columns: readonly ['normalizedArtist', 'normalizedTitle', 'id'];
-                  readonly unique: false;
-                },
-                {
-                  readonly name: 'ct_duration';
-                  readonly columns: readonly ['durationMs', 'id'];
-                  readonly unique: false;
-                },
-                {
-                  readonly name: 'ct_title';
-                  readonly columns: readonly ['normalizedTitle', 'id'];
+                  readonly name: 'Media_updatedAt_id_idx_88868a1d';
+                  readonly prefix: 'Media_updatedAt_id_idx';
+                  readonly columns: readonly ['updatedAt', 'id'];
                   readonly unique: false;
                 },
               ];
               foreignKeys: readonly [];
             };
-            readonly CatalogTrackArtist: {
+            readonly MediaAlias: {
               columns: {
-                readonly artistId: {
+                readonly aliasId: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly createdAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
                   readonly many: false;
                 };
                 readonly id: {
@@ -1692,7 +2336,7 @@ type ContractBase = Omit<
                   readonly nullable: false;
                   readonly many: false;
                 };
-                readonly trackId: {
+                readonly mediaId: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
@@ -1700,23 +2344,153 @@ type ContractBase = Omit<
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
-              uniques: readonly [{ readonly columns: readonly ['trackId', 'artistId'] }];
+              uniques: readonly [{ readonly columns: readonly ['aliasId'] }];
               indexes: readonly [
                 {
-                  readonly name: 'CatalogTrackArtist_artistId_trackId_idx_c6931953';
-                  readonly prefix: 'CatalogTrackArtist_artistId_trackId_idx';
-                  readonly columns: readonly ['artistId', 'trackId'];
+                  readonly name: 'MediaAlias_mediaId_idx_6b06655c';
+                  readonly prefix: 'MediaAlias_mediaId_idx';
+                  readonly columns: readonly ['mediaId'];
                   readonly unique: false;
                 },
               ];
-              foreignKeys: readonly [];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'MediaAlias';
+                    readonly columns: readonly ['mediaId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'Media';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+              ];
             };
-            readonly DownloadClient: {
+            readonly MediaCopy: {
               columns: {
-                readonly credentialCiphertext: {
+                readonly album: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly albumArtist: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly albumArtistCredits: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly artist: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly artistCredits: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly audioBitrate: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly audioLossless: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
+                  };
+                  readonly many: false;
+                };
+                readonly available: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '1'>;
+                  };
+                  readonly many: false;
+                };
+                readonly coverId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly createdAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                  readonly many: false;
+                };
+                readonly discNumber: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly durationMs: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly externalContainer: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly externalCoverKey: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly externalId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly externalVersion: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly fileModifiedAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly fileSizeBytes: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/bigint@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly genres: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
                   readonly many: false;
                 };
                 readonly id: {
@@ -1725,37 +2499,253 @@ type ContractBase = Omit<
                   readonly nullable: false;
                   readonly many: false;
                 };
-                readonly kind: {
+                readonly lastSeenScanId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly librarySourceId: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
-                readonly name: {
+                readonly manualOverrides: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/text@1', '{}'>;
+                  };
+                  readonly many: false;
+                };
+                readonly mediaId: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
-                readonly url: {
+                readonly mediaType: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/text@1', 'music'>;
+                  };
+                  readonly many: false;
+                };
+                readonly mediaTypeOrigin: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/text@1', 'fallback'>;
+                  };
+                  readonly many: false;
+                };
+                readonly metadataVersion: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
+                  };
+                  readonly many: false;
+                };
+                readonly mimeType: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
-                readonly username: {
+                readonly publishedAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly recordingIdentityKeys: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/text@1', '[]'>;
+                  };
+                  readonly many: false;
+                };
+                readonly relativePath: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly title: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly trackNumber: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly updatedAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [
+                { readonly columns: readonly ['librarySourceId', 'relativePath'] },
+                { readonly columns: readonly ['librarySourceId', 'externalId'] },
+              ];
+              indexes: readonly [
+                {
+                  readonly name: 'MediaCopy_audioLossless_audioBitrate_idx_c82c122e';
+                  readonly prefix: 'MediaCopy_audioLossless_audioBitrate_idx';
+                  readonly columns: readonly ['audioLossless', 'audioBitrate'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'MediaCopy_fileSizeBytes_idx_2e2c7971';
+                  readonly prefix: 'MediaCopy_fileSizeBytes_idx';
+                  readonly columns: readonly ['fileSizeBytes'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'MediaCopy_lastSeenScanId_idx_d6a486dd';
+                  readonly prefix: 'MediaCopy_lastSeenScanId_idx';
+                  readonly columns: readonly ['lastSeenScanId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'MediaCopy_librarySourceId_idx_4474db6e';
+                  readonly prefix: 'MediaCopy_librarySourceId_idx';
+                  readonly columns: readonly ['librarySourceId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'MediaCopy_mediaId_available_idx_71dca26a';
+                  readonly prefix: 'MediaCopy_mediaId_available_idx';
+                  readonly columns: readonly ['mediaId', 'available'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'MediaCopy_mediaId_idx_6b06655c';
+                  readonly prefix: 'MediaCopy_mediaId_idx';
+                  readonly columns: readonly ['mediaId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'MediaCopy_mimeType_idx_064291e0';
+                  readonly prefix: 'MediaCopy_mimeType_idx';
+                  readonly columns: readonly ['mimeType'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'MediaCopy';
+                    readonly columns: readonly ['mediaId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'Media';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+                {
+                  readonly source: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'MediaCopy';
+                    readonly columns: readonly ['librarySourceId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'LibrarySource';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+              ];
+            };
+            readonly MediaLike: {
+              columns: {
+                readonly createdAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                  readonly many: false;
+                };
+                readonly mediaId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly userId: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
                   readonly many: false;
                 };
               };
-              primaryKey: { readonly columns: readonly ['id'] };
+              primaryKey: { readonly columns: readonly ['userId', 'mediaId'] };
               uniques: readonly [];
-              indexes: readonly [];
-              foreignKeys: readonly [];
+              indexes: readonly [
+                {
+                  readonly name: 'MediaLike_mediaId_idx_6b06655c';
+                  readonly prefix: 'MediaLike_mediaId_idx';
+                  readonly columns: readonly ['mediaId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'MediaLike_userId_idx_a489d58a';
+                  readonly prefix: 'MediaLike_userId_idx';
+                  readonly columns: readonly ['userId'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'MediaLike';
+                    readonly columns: readonly ['userId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'User';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+                {
+                  readonly source: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'MediaLike';
+                    readonly columns: readonly ['mediaId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'Media';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+              ];
             };
-            readonly DuplicateDetectionState: {
+            readonly MediaMatchState: {
               columns: {
                 readonly algorithmVersion: {
                   readonly dataType: 'sqlite/integer';
@@ -1777,16 +2767,6 @@ type ContractBase = Omit<
                   };
                   readonly many: false;
                 };
-                readonly hiddenCount: {
-                  readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/integer@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
-                  };
-                  readonly many: false;
-                };
                 readonly id: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
@@ -1797,6 +2777,16 @@ type ContractBase = Omit<
                   readonly dataType: 'sqlite/datetime';
                   readonly codecId: 'sqlite/datetime@1';
                   readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly mergedCount: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
+                  };
                   readonly many: false;
                 };
                 readonly updatedAt: {
@@ -1810,6 +2800,83 @@ type ContractBase = Omit<
               uniques: readonly [];
               indexes: readonly [];
               foreignKeys: readonly [];
+            };
+            readonly MediaPlayEvent: {
+              columns: {
+                readonly id: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly mediaId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly playedAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                  readonly many: false;
+                };
+                readonly userId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [
+                {
+                  readonly name: 'MediaPlayEvent_mediaId_idx_6b06655c';
+                  readonly prefix: 'MediaPlayEvent_mediaId_idx';
+                  readonly columns: readonly ['mediaId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'MediaPlayEvent_userId_idx_a489d58a';
+                  readonly prefix: 'MediaPlayEvent_userId_idx';
+                  readonly columns: readonly ['userId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'MediaPlayEvent_userId_playedAt_idx_b8af8d99';
+                  readonly prefix: 'MediaPlayEvent_userId_playedAt_idx';
+                  readonly columns: readonly ['userId', 'playedAt'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'MediaPlayEvent';
+                    readonly columns: readonly ['userId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'User';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+                {
+                  readonly source: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'MediaPlayEvent';
+                    readonly columns: readonly ['mediaId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'Media';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+              ];
             };
             readonly MetadataProvider: {
               columns: {
@@ -1979,6 +3046,16 @@ type ContractBase = Omit<
                   readonly nullable: false;
                   readonly many: false;
                 };
+                readonly kind: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/text@1', 'manual'>;
+                  };
+                  readonly many: false;
+                };
                 readonly name: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
@@ -2029,6 +3106,103 @@ type ContractBase = Omit<
                 },
               ];
             };
+            readonly PlaylistAccount: {
+              columns: {
+                readonly configuration: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/text@1', '{}'>;
+                  };
+                  readonly many: false;
+                };
+                readonly createdAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                  readonly many: false;
+                };
+                readonly credentialCiphertext: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly enabled: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '1'>;
+                  };
+                  readonly many: false;
+                };
+                readonly id: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly kind: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly name: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly updatedAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly userId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [
+                {
+                  readonly name: 'PlaylistAccount_userId_idx_a489d58a';
+                  readonly prefix: 'PlaylistAccount_userId_idx';
+                  readonly columns: readonly ['userId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'PlaylistAccount_userId_kind_idx_ed3360ff';
+                  readonly prefix: 'PlaylistAccount_userId_kind_idx';
+                  readonly columns: readonly ['userId', 'kind'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'PlaylistAccount';
+                    readonly columns: readonly ['userId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'User';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+              ];
+            };
             readonly PlaylistItem: {
               columns: {
                 readonly createdAt: {
@@ -2060,6 +3234,22 @@ type ContractBase = Omit<
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly matchStatus: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/text@1', 'matched'>;
+                  };
+                  readonly many: false;
+                };
+                readonly mediaId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
                   readonly many: false;
                 };
                 readonly playlistId: {
@@ -2098,12 +3288,6 @@ type ContractBase = Omit<
                   readonly nullable: false;
                   readonly many: false;
                 };
-                readonly trackId: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
                 readonly updatedAt: {
                   readonly dataType: 'sqlite/datetime';
                   readonly codecId: 'sqlite/datetime@1';
@@ -2115,6 +3299,18 @@ type ContractBase = Omit<
               uniques: readonly [{ readonly columns: readonly ['playlistId', 'identityKey'] }];
               indexes: readonly [
                 {
+                  readonly name: 'PlaylistItem_externalProvider_externalTrackId_idx_bb051544';
+                  readonly prefix: 'PlaylistItem_externalProvider_externalTrackId_idx';
+                  readonly columns: readonly ['externalProvider', 'externalTrackId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'PlaylistItem_mediaId_idx_6b06655c';
+                  readonly prefix: 'PlaylistItem_mediaId_idx';
+                  readonly columns: readonly ['mediaId'];
+                  readonly unique: false;
+                },
+                {
                   readonly name: 'PlaylistItem_playlistId_idx_470a517f';
                   readonly prefix: 'PlaylistItem_playlistId_idx';
                   readonly columns: readonly ['playlistId'];
@@ -2124,12 +3320,6 @@ type ContractBase = Omit<
                   readonly name: 'PlaylistItem_playlistId_position_idx_b321fdb7';
                   readonly prefix: 'PlaylistItem_playlistId_position_idx';
                   readonly columns: readonly ['playlistId', 'position'];
-                  readonly unique: false;
-                },
-                {
-                  readonly name: 'PlaylistItem_trackId_idx_8b560769';
-                  readonly prefix: 'PlaylistItem_trackId_idx';
-                  readonly columns: readonly ['trackId'];
                   readonly unique: false;
                 },
               ];
@@ -2150,11 +3340,11 @@ type ContractBase = Omit<
                   readonly source: {
                     readonly namespaceId: '__unbound__' & NamespaceId;
                     readonly tableName: 'PlaylistItem';
-                    readonly columns: readonly ['trackId'];
+                    readonly columns: readonly ['mediaId'];
                   };
                   readonly target: {
                     readonly namespaceId: '__unbound__' & NamespaceId;
-                    readonly tableName: 'Track';
+                    readonly tableName: 'Media';
                     readonly columns: readonly ['id'];
                   };
                 },
@@ -2236,6 +3426,232 @@ type ContractBase = Omit<
                   };
                 },
               ];
+            };
+            readonly PlaylistLink: {
+              columns: {
+                readonly accountId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly createdAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                  readonly many: false;
+                };
+                readonly enabled: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '1'>;
+                  };
+                  readonly many: false;
+                };
+                readonly externalPlaylistId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly id: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly lastSyncedAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly playlistId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly remoteVersion: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly syncCursor: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly syncMode: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/text@1', 'import'>;
+                  };
+                  readonly many: false;
+                };
+                readonly updatedAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [
+                { readonly columns: readonly ['playlistId'] },
+                { readonly columns: readonly ['accountId', 'externalPlaylistId'] },
+              ];
+              indexes: readonly [
+                {
+                  readonly name: 'PlaylistLink_accountId_idx_cbfb3085';
+                  readonly prefix: 'PlaylistLink_accountId_idx';
+                  readonly columns: readonly ['accountId'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'PlaylistLink';
+                    readonly columns: readonly ['playlistId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'Playlist';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+                {
+                  readonly source: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'PlaylistLink';
+                    readonly columns: readonly ['accountId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'PlaylistAccount';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+              ];
+            };
+            readonly ReleaseIndexer: {
+              columns: {
+                readonly configuration: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly createdAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                  readonly many: false;
+                };
+                readonly credentialCiphertext: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly destinationSourceId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly downloadClientId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly id: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly kind: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/text@1', 'torznab'>;
+                  };
+                  readonly many: false;
+                };
+                readonly name: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly position: {
+                  readonly dataType: 'sqlite/integer';
+                  readonly codecId: 'sqlite/integer@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
+                  };
+                  readonly many: false;
+                };
+                readonly removedAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly sourceIdentity: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly updatedAt: {
+                  readonly dataType: 'sqlite/datetime';
+                  readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly url: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [{ readonly columns: readonly ['kind', 'sourceIdentity'] }];
+              indexes: readonly [
+                {
+                  readonly name: 'ReleaseIndexer_position_idx_82a01784';
+                  readonly prefix: 'ReleaseIndexer_position_idx';
+                  readonly columns: readonly ['position'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'ReleaseIndexer_removedAt_idx_fef869bb';
+                  readonly prefix: 'ReleaseIndexer_removedAt_idx';
+                  readonly columns: readonly ['removedAt'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [];
             };
             readonly ServerSetting: {
               columns: {
@@ -2378,121 +3794,29 @@ type ContractBase = Omit<
                 },
               ];
             };
-            readonly Source: {
-              columns: {
-                readonly configuration: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly createdAt: {
-                  readonly dataType: 'sqlite/datetime';
-                  readonly codecId: 'sqlite/datetime@1';
-                  readonly nullable: false;
-                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
-                  readonly many: false;
-                };
-                readonly credentialCiphertext: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly id: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly kind: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly lastSyncedAt: {
-                  readonly dataType: 'sqlite/datetime';
-                  readonly codecId: 'sqlite/datetime@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly name: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly path: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly position: {
-                  readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/integer@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
-                  };
-                  readonly many: false;
-                };
-                readonly removedAt: {
-                  readonly dataType: 'sqlite/datetime';
-                  readonly codecId: 'sqlite/datetime@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly sourceIdentity: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly updatedAt: {
-                  readonly dataType: 'sqlite/datetime';
-                  readonly codecId: 'sqlite/datetime@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly url: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-              };
-              primaryKey: { readonly columns: readonly ['id'] };
-              uniques: readonly [{ readonly columns: readonly ['kind', 'sourceIdentity'] }];
-              indexes: readonly [
-                {
-                  readonly name: 'Source_kind_idx_c9ca668f';
-                  readonly prefix: 'Source_kind_idx';
-                  readonly columns: readonly ['kind'];
-                  readonly unique: false;
-                },
-                {
-                  readonly name: 'Source_position_idx_82a01784';
-                  readonly prefix: 'Source_position_idx';
-                  readonly columns: readonly ['position'];
-                  readonly unique: false;
-                },
-                {
-                  readonly name: 'Source_removedAt_idx_fef869bb';
-                  readonly prefix: 'Source_removedAt_idx';
-                  readonly columns: readonly ['removedAt'];
-                  readonly unique: false;
-                },
-              ];
-              foreignKeys: readonly [];
-            };
             readonly Task: {
               columns: {
                 readonly completedAt: {
                   readonly dataType: 'sqlite/datetime';
                   readonly codecId: 'sqlite/datetime@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly connectorId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly connectorKind: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly connectorName: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
                   readonly nullable: true;
                   readonly many: false;
                 };
@@ -2587,18 +3911,6 @@ type ContractBase = Omit<
                   };
                   readonly many: false;
                 };
-                readonly sourceId: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly sourceName: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
                 readonly startedAt: {
                   readonly dataType: 'sqlite/datetime';
                   readonly codecId: 'sqlite/datetime@1';
@@ -2634,6 +3946,12 @@ type ContractBase = Omit<
               uniques: readonly [];
               indexes: readonly [
                 {
+                  readonly name: 'Task_connectorId_idx_a980b131';
+                  readonly prefix: 'Task_connectorId_idx';
+                  readonly columns: readonly ['connectorId'];
+                  readonly unique: false;
+                },
+                {
                   readonly name: 'Task_kind_status_idx_8034fcaa';
                   readonly prefix: 'Task_kind_status_idx';
                   readonly columns: readonly ['kind', 'status'];
@@ -2668,605 +3986,6 @@ type ContractBase = Omit<
                   readonly target: {
                     readonly namespaceId: '__unbound__' & NamespaceId;
                     readonly tableName: 'User';
-                    readonly columns: readonly ['id'];
-                  };
-                },
-              ];
-            };
-            readonly Track: {
-              columns: {
-                readonly album: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly albumArtist: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly albumArtistCredits: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly artist: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly artistCredits: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly audioBitrate: {
-                  readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/integer@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly audioLossless: {
-                  readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/integer@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
-                  };
-                  readonly many: false;
-                };
-                readonly available: {
-                  readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/integer@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '1'>;
-                  };
-                  readonly many: false;
-                };
-                readonly catalogProjectionPending: {
-                  readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/integer@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
-                  };
-                  readonly many: false;
-                };
-                readonly coverId: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly createdAt: {
-                  readonly dataType: 'sqlite/datetime';
-                  readonly codecId: 'sqlite/datetime@1';
-                  readonly nullable: false;
-                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
-                  readonly many: false;
-                };
-                readonly discNumber: {
-                  readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/integer@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly duplicateOfId: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly durationMs: {
-                  readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/integer@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly externalContainer: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly externalCoverKey: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly externalId: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly externalVersion: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly fileModifiedAt: {
-                  readonly dataType: 'sqlite/datetime';
-                  readonly codecId: 'sqlite/datetime@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly fileSizeBytes: {
-                  readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/bigint@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly genres: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly id: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly lastSeenScanId: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly mediaType: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/text@1', 'music'>;
-                  };
-                  readonly many: false;
-                };
-                readonly mediaTypeOrigin: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/text@1', 'fallback'>;
-                  };
-                  readonly many: false;
-                };
-                readonly metadataAlbum: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly metadataAlbumArtist: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly metadataAlbumArtistCredits: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly metadataArtist: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly metadataArtistCredits: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly metadataAttemptedSignature: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly metadataDetails: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly metadataDiscNumber: {
-                  readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/integer@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly metadataExternalReleaseId: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly metadataExternalTrackId: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly metadataGenres: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly metadataMatchedAt: {
-                  readonly dataType: 'sqlite/datetime';
-                  readonly codecId: 'sqlite/datetime@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly metadataMode: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/text@1', 'automatic'>;
-                  };
-                  readonly many: false;
-                };
-                readonly metadataProviderId: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly metadataProviderKind: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly metadataProviderName: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly metadataSourceUrl: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly metadataTitle: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly metadataTrackNumber: {
-                  readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/integer@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly metadataVersion: {
-                  readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/integer@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/integer@1', '0'>;
-                  };
-                  readonly many: false;
-                };
-                readonly mimeType: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly publishedAt: {
-                  readonly dataType: 'sqlite/datetime';
-                  readonly codecId: 'sqlite/datetime@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly recordingIdentityKeys: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly default: {
-                    readonly kind: 'literal';
-                    readonly value: DefaultLiteralValue<'sqlite/text@1', '[]'>;
-                  };
-                  readonly many: false;
-                };
-                readonly relativePath: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly sourceId: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly title: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly trackNumber: {
-                  readonly dataType: 'sqlite/integer';
-                  readonly codecId: 'sqlite/integer@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
-                readonly updatedAt: {
-                  readonly dataType: 'sqlite/datetime';
-                  readonly codecId: 'sqlite/datetime@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-              };
-              primaryKey: { readonly columns: readonly ['id'] };
-              uniques: readonly [
-                { readonly columns: readonly ['sourceId', 'relativePath'] },
-                { readonly columns: readonly ['sourceId', 'externalId'] },
-              ];
-              indexes: readonly [
-                {
-                  readonly name: 'Track_artist_album_title_idx_bdb66ee1';
-                  readonly prefix: 'Track_artist_album_title_idx';
-                  readonly columns: readonly ['artist', 'album', 'title'];
-                  readonly unique: false;
-                },
-                {
-                  readonly name: 'Track_available_idx_1b9f4739';
-                  readonly prefix: 'Track_available_idx';
-                  readonly columns: readonly ['available'];
-                  readonly unique: false;
-                },
-                {
-                  readonly name: 'Track_catalogProjectionPending_idx_95e4c1ad';
-                  readonly prefix: 'Track_catalogProjectionPending_idx';
-                  readonly columns: readonly ['catalogProjectionPending'];
-                  readonly unique: false;
-                },
-                {
-                  readonly name: 'Track_coverId_idx_daf0cb52';
-                  readonly prefix: 'Track_coverId_idx';
-                  readonly columns: readonly ['coverId'];
-                  readonly unique: false;
-                },
-                {
-                  readonly name: 'Track_duplicateOfId_idx_28ac86a0';
-                  readonly prefix: 'Track_duplicateOfId_idx';
-                  readonly columns: readonly ['duplicateOfId'];
-                  readonly unique: false;
-                },
-                {
-                  readonly name: 'Track_mediaType_idx_c1745d97';
-                  readonly prefix: 'Track_mediaType_idx';
-                  readonly columns: readonly ['mediaType'];
-                  readonly unique: false;
-                },
-                {
-                  readonly name: 'Track_metadataProviderKind_metadataExternalTrackId_idx_9c545a1d';
-                  readonly prefix: 'Track_metadataProviderKind_metadataExternalTrackId_idx';
-                  readonly columns: readonly ['metadataProviderKind', 'metadataExternalTrackId'];
-                  readonly unique: false;
-                },
-                {
-                  readonly name: 'Track_sourceId_idx_d92a2571';
-                  readonly prefix: 'Track_sourceId_idx';
-                  readonly columns: readonly ['sourceId'];
-                  readonly unique: false;
-                },
-              ];
-              foreignKeys: readonly [
-                {
-                  readonly source: {
-                    readonly namespaceId: '__unbound__' & NamespaceId;
-                    readonly tableName: 'Track';
-                    readonly columns: readonly ['sourceId'];
-                  };
-                  readonly target: {
-                    readonly namespaceId: '__unbound__' & NamespaceId;
-                    readonly tableName: 'Source';
-                    readonly columns: readonly ['id'];
-                  };
-                },
-              ];
-            };
-            readonly TrackCover: {
-              columns: {
-                readonly createdAt: {
-                  readonly dataType: 'sqlite/datetime';
-                  readonly codecId: 'sqlite/datetime@1';
-                  readonly nullable: false;
-                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
-                  readonly many: false;
-                };
-                readonly hash: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly id: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly updatedAt: {
-                  readonly dataType: 'sqlite/datetime';
-                  readonly codecId: 'sqlite/datetime@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-              };
-              primaryKey: { readonly columns: readonly ['id'] };
-              uniques: readonly [{ readonly columns: readonly ['hash'] }];
-              indexes: readonly [];
-              foreignKeys: readonly [];
-            };
-            readonly TrackLike: {
-              columns: {
-                readonly createdAt: {
-                  readonly dataType: 'sqlite/datetime';
-                  readonly codecId: 'sqlite/datetime@1';
-                  readonly nullable: false;
-                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
-                  readonly many: false;
-                };
-                readonly trackId: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly userId: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-              };
-              primaryKey: { readonly columns: readonly ['userId', 'trackId'] };
-              uniques: readonly [];
-              indexes: readonly [
-                {
-                  readonly name: 'TrackLike_trackId_idx_8b560769';
-                  readonly prefix: 'TrackLike_trackId_idx';
-                  readonly columns: readonly ['trackId'];
-                  readonly unique: false;
-                },
-                {
-                  readonly name: 'TrackLike_userId_idx_a489d58a';
-                  readonly prefix: 'TrackLike_userId_idx';
-                  readonly columns: readonly ['userId'];
-                  readonly unique: false;
-                },
-              ];
-              foreignKeys: readonly [
-                {
-                  readonly source: {
-                    readonly namespaceId: '__unbound__' & NamespaceId;
-                    readonly tableName: 'TrackLike';
-                    readonly columns: readonly ['userId'];
-                  };
-                  readonly target: {
-                    readonly namespaceId: '__unbound__' & NamespaceId;
-                    readonly tableName: 'User';
-                    readonly columns: readonly ['id'];
-                  };
-                },
-                {
-                  readonly source: {
-                    readonly namespaceId: '__unbound__' & NamespaceId;
-                    readonly tableName: 'TrackLike';
-                    readonly columns: readonly ['trackId'];
-                  };
-                  readonly target: {
-                    readonly namespaceId: '__unbound__' & NamespaceId;
-                    readonly tableName: 'Track';
-                    readonly columns: readonly ['id'];
-                  };
-                },
-              ];
-            };
-            readonly TrackPlayEvent: {
-              columns: {
-                readonly id: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly playedAt: {
-                  readonly dataType: 'sqlite/datetime';
-                  readonly codecId: 'sqlite/datetime@1';
-                  readonly nullable: false;
-                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
-                  readonly many: false;
-                };
-                readonly trackId: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-                readonly userId: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: false;
-                  readonly many: false;
-                };
-              };
-              primaryKey: { readonly columns: readonly ['id'] };
-              uniques: readonly [];
-              indexes: readonly [
-                {
-                  readonly name: 'TrackPlayEvent_trackId_idx_8b560769';
-                  readonly prefix: 'TrackPlayEvent_trackId_idx';
-                  readonly columns: readonly ['trackId'];
-                  readonly unique: false;
-                },
-                {
-                  readonly name: 'TrackPlayEvent_userId_idx_a489d58a';
-                  readonly prefix: 'TrackPlayEvent_userId_idx';
-                  readonly columns: readonly ['userId'];
-                  readonly unique: false;
-                },
-                {
-                  readonly name: 'TrackPlayEvent_userId_playedAt_idx_b8af8d99';
-                  readonly prefix: 'TrackPlayEvent_userId_playedAt_idx';
-                  readonly columns: readonly ['userId', 'playedAt'];
-                  readonly unique: false;
-                },
-              ];
-              foreignKeys: readonly [
-                {
-                  readonly source: {
-                    readonly namespaceId: '__unbound__' & NamespaceId;
-                    readonly tableName: 'TrackPlayEvent';
-                    readonly columns: readonly ['userId'];
-                  };
-                  readonly target: {
-                    readonly namespaceId: '__unbound__' & NamespaceId;
-                    readonly tableName: 'User';
-                    readonly columns: readonly ['id'];
-                  };
-                },
-                {
-                  readonly source: {
-                    readonly namespaceId: '__unbound__' & NamespaceId;
-                    readonly tableName: 'TrackPlayEvent';
-                    readonly columns: readonly ['trackId'];
-                  };
-                  readonly target: {
-                    readonly namespaceId: '__unbound__' & NamespaceId;
-                    readonly tableName: 'Track';
                     readonly columns: readonly ['id'];
                   };
                 },
@@ -3395,6 +4114,14 @@ type ContractBase = Omit<
       readonly namespace: '__unbound__' & NamespaceId;
       readonly model: 'CatalogArtistAlbum';
     };
+    readonly CatalogMedia: {
+      readonly namespace: '__unbound__' & NamespaceId;
+      readonly model: 'CatalogMedia';
+    };
+    readonly CatalogMediaArtist: {
+      readonly namespace: '__unbound__' & NamespaceId;
+      readonly model: 'CatalogMediaArtist';
+    };
     readonly CatalogSearchTerm: {
       readonly namespace: '__unbound__' & NamespaceId;
       readonly model: 'CatalogSearchTerm';
@@ -3403,21 +4130,35 @@ type ContractBase = Omit<
       readonly namespace: '__unbound__' & NamespaceId;
       readonly model: 'CatalogState';
     };
-    readonly CatalogTrack: {
-      readonly namespace: '__unbound__' & NamespaceId;
-      readonly model: 'CatalogTrack';
-    };
-    readonly CatalogTrackArtist: {
-      readonly namespace: '__unbound__' & NamespaceId;
-      readonly model: 'CatalogTrackArtist';
-    };
+    readonly Cover: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Cover' };
     readonly DownloadClient: {
       readonly namespace: '__unbound__' & NamespaceId;
       readonly model: 'DownloadClient';
     };
-    readonly DuplicateDetectionState: {
+    readonly LibrarySource: {
       readonly namespace: '__unbound__' & NamespaceId;
-      readonly model: 'DuplicateDetectionState';
+      readonly model: 'LibrarySource';
+    };
+    readonly Media: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Media' };
+    readonly MediaAlias: {
+      readonly namespace: '__unbound__' & NamespaceId;
+      readonly model: 'MediaAlias';
+    };
+    readonly MediaCopy: {
+      readonly namespace: '__unbound__' & NamespaceId;
+      readonly model: 'MediaCopy';
+    };
+    readonly MediaLike: {
+      readonly namespace: '__unbound__' & NamespaceId;
+      readonly model: 'MediaLike';
+    };
+    readonly MediaMatchState: {
+      readonly namespace: '__unbound__' & NamespaceId;
+      readonly model: 'MediaMatchState';
+    };
+    readonly MediaPlayEvent: {
+      readonly namespace: '__unbound__' & NamespaceId;
+      readonly model: 'MediaPlayEvent';
     };
     readonly MetadataProvider: {
       readonly namespace: '__unbound__' & NamespaceId;
@@ -3431,6 +4172,10 @@ type ContractBase = Omit<
       readonly namespace: '__unbound__' & NamespaceId;
       readonly model: 'Playlist';
     };
+    readonly PlaylistAccount: {
+      readonly namespace: '__unbound__' & NamespaceId;
+      readonly model: 'PlaylistAccount';
+    };
     readonly PlaylistItem: {
       readonly namespace: '__unbound__' & NamespaceId;
       readonly model: 'PlaylistItem';
@@ -3438,6 +4183,14 @@ type ContractBase = Omit<
     readonly PlaylistLike: {
       readonly namespace: '__unbound__' & NamespaceId;
       readonly model: 'PlaylistLike';
+    };
+    readonly PlaylistLink: {
+      readonly namespace: '__unbound__' & NamespaceId;
+      readonly model: 'PlaylistLink';
+    };
+    readonly ReleaseIndexer: {
+      readonly namespace: '__unbound__' & NamespaceId;
+      readonly model: 'ReleaseIndexer';
     };
     readonly ServerSetting: {
       readonly namespace: '__unbound__' & NamespaceId;
@@ -3447,21 +4200,7 @@ type ContractBase = Omit<
       readonly namespace: '__unbound__' & NamespaceId;
       readonly model: 'Session';
     };
-    readonly Source: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Source' };
     readonly Task: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Task' };
-    readonly Track: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Track' };
-    readonly TrackCover: {
-      readonly namespace: '__unbound__' & NamespaceId;
-      readonly model: 'TrackCover';
-    };
-    readonly TrackLike: {
-      readonly namespace: '__unbound__' & NamespaceId;
-      readonly model: 'TrackLike';
-    };
-    readonly TrackPlayEvent: {
-      readonly namespace: '__unbound__' & NamespaceId;
-      readonly model: 'TrackPlayEvent';
-    };
     readonly User: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'User' };
   };
   readonly domain: {
@@ -3734,6 +4473,10 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
               };
+              readonly copyId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
               readonly createdAt: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
@@ -3754,11 +4497,7 @@ type ContractBase = Omit<
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
               };
-              readonly sourceId: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly trackId: {
+              readonly librarySourceId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
@@ -3768,27 +4507,27 @@ type ContractBase = Omit<
               };
             };
             readonly relations: {
-              readonly source: {
+              readonly copy: {
                 readonly to: {
                   readonly namespace: '__unbound__' & NamespaceId;
-                  readonly model: 'Source';
+                  readonly model: 'MediaCopy';
                 };
                 readonly cardinality: 'N:1';
                 readonly nullable: false;
                 readonly on: {
-                  readonly localFields: readonly ['sourceId'];
+                  readonly localFields: readonly ['copyId'];
                   readonly targetFields: readonly ['id'];
                 };
               };
-              readonly track: {
+              readonly librarySource: {
                 readonly to: {
                   readonly namespace: '__unbound__' & NamespaceId;
-                  readonly model: 'Track';
+                  readonly model: 'LibrarySource';
                 };
                 readonly cardinality: 'N:1';
                 readonly nullable: false;
                 readonly on: {
-                  readonly localFields: readonly ['trackId'];
+                  readonly localFields: readonly ['librarySourceId'];
                   readonly targetFields: readonly ['id'];
                 };
               };
@@ -3798,13 +4537,13 @@ type ContractBase = Omit<
               readonly namespaceId: '__unbound__';
               readonly fields: {
                 readonly attemptCount: { readonly column: 'attemptCount' };
+                readonly copyId: { readonly column: 'copyId' };
                 readonly createdAt: { readonly column: 'createdAt' };
                 readonly externalCoverItemId: { readonly column: 'externalCoverItemId' };
                 readonly externalCoverTag: { readonly column: 'externalCoverTag' };
                 readonly id: { readonly column: 'id' };
                 readonly lastAttemptAt: { readonly column: 'lastAttemptAt' };
-                readonly sourceId: { readonly column: 'sourceId' };
-                readonly trackId: { readonly column: 'trackId' };
+                readonly librarySourceId: { readonly column: 'librarySourceId' };
                 readonly updatedAt: { readonly column: 'updatedAt' };
               };
             };
@@ -3831,7 +4570,7 @@ type ContractBase = Omit<
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
-              readonly coverTrackId: {
+              readonly coverMediaId: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
@@ -3886,7 +4625,7 @@ type ContractBase = Omit<
                 readonly artistId: { readonly column: 'artistId' };
                 readonly availableTrackCount: { readonly column: 'availableTrackCount' };
                 readonly coverId: { readonly column: 'coverId' };
-                readonly coverTrackId: { readonly column: 'coverTrackId' };
+                readonly coverMediaId: { readonly column: 'coverMediaId' };
                 readonly durationMs: { readonly column: 'durationMs' };
                 readonly id: { readonly column: 'id' };
                 readonly latestPublishedAt: { readonly column: 'latestPublishedAt' };
@@ -3992,6 +4731,163 @@ type ContractBase = Omit<
               };
             };
           };
+          readonly CatalogMedia: {
+            readonly fields: {
+              readonly album: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly albumArtist: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly albumArtistCredits: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly albumFolderKey: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly albumId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly albumReleaseKey: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly artist: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly artistCredits: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly available: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly coverId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly discNumber: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly durationMs: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly mediaType: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly normalizedAlbum: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly normalizedArtist: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly normalizedGenres: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly normalizedTitle: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly publishedAt: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly releaseYear: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly sourceKind: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly title: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly trackNumber: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly updatedAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly table: 'CatalogMedia';
+              readonly namespaceId: '__unbound__';
+              readonly fields: {
+                readonly album: { readonly column: 'album' };
+                readonly albumArtist: { readonly column: 'albumArtist' };
+                readonly albumArtistCredits: { readonly column: 'albumArtistCredits' };
+                readonly albumFolderKey: { readonly column: 'albumFolderKey' };
+                readonly albumId: { readonly column: 'albumId' };
+                readonly albumReleaseKey: { readonly column: 'albumReleaseKey' };
+                readonly artist: { readonly column: 'artist' };
+                readonly artistCredits: { readonly column: 'artistCredits' };
+                readonly available: { readonly column: 'available' };
+                readonly coverId: { readonly column: 'coverId' };
+                readonly discNumber: { readonly column: 'discNumber' };
+                readonly durationMs: { readonly column: 'durationMs' };
+                readonly id: { readonly column: 'id' };
+                readonly mediaType: { readonly column: 'mediaType' };
+                readonly normalizedAlbum: { readonly column: 'normalizedAlbum' };
+                readonly normalizedArtist: { readonly column: 'normalizedArtist' };
+                readonly normalizedGenres: { readonly column: 'normalizedGenres' };
+                readonly normalizedTitle: { readonly column: 'normalizedTitle' };
+                readonly publishedAt: { readonly column: 'publishedAt' };
+                readonly releaseYear: { readonly column: 'releaseYear' };
+                readonly sourceKind: { readonly column: 'sourceKind' };
+                readonly title: { readonly column: 'title' };
+                readonly trackNumber: { readonly column: 'trackNumber' };
+                readonly updatedAt: { readonly column: 'updatedAt' };
+              };
+            };
+          };
+          readonly CatalogMediaArtist: {
+            readonly fields: {
+              readonly artistId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly mediaId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly table: 'CatalogMediaArtist';
+              readonly namespaceId: '__unbound__';
+              readonly fields: {
+                readonly artistId: { readonly column: 'artistId' };
+                readonly id: { readonly column: 'id' };
+                readonly mediaId: { readonly column: 'mediaId' };
+              };
+            };
+          };
           readonly CatalogSearchTerm: {
             readonly fields: {
               readonly entityId: {
@@ -4054,103 +4950,19 @@ type ContractBase = Omit<
               };
             };
           };
-          readonly CatalogTrack: {
+          readonly Cover: {
             readonly fields: {
-              readonly album: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
               };
-              readonly albumArtist: {
+              readonly hash: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly albumArtistCredits: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly albumFolderKey: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly albumId: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly albumReleaseKey: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly artist: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly artistCredits: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly available: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-              };
-              readonly coverId: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly discNumber: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-              };
-              readonly duplicateOfId: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly durationMs: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
               };
               readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly mediaType: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly normalizedAlbum: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly normalizedArtist: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly normalizedGenres: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly normalizedTitle: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly publishedAt: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
-              };
-              readonly releaseYear: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-              };
-              readonly sourceId: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly title: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly trackNumber: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
               };
               readonly updatedAt: {
                 readonly nullable: false;
@@ -4159,65 +4971,22 @@ type ContractBase = Omit<
             };
             readonly relations: Record<string, never>;
             readonly storage: {
-              readonly table: 'CatalogTrack';
+              readonly table: 'Cover';
               readonly namespaceId: '__unbound__';
               readonly fields: {
-                readonly album: { readonly column: 'album' };
-                readonly albumArtist: { readonly column: 'albumArtist' };
-                readonly albumArtistCredits: { readonly column: 'albumArtistCredits' };
-                readonly albumFolderKey: { readonly column: 'albumFolderKey' };
-                readonly albumId: { readonly column: 'albumId' };
-                readonly albumReleaseKey: { readonly column: 'albumReleaseKey' };
-                readonly artist: { readonly column: 'artist' };
-                readonly artistCredits: { readonly column: 'artistCredits' };
-                readonly available: { readonly column: 'available' };
-                readonly coverId: { readonly column: 'coverId' };
-                readonly discNumber: { readonly column: 'discNumber' };
-                readonly duplicateOfId: { readonly column: 'duplicateOfId' };
-                readonly durationMs: { readonly column: 'durationMs' };
+                readonly createdAt: { readonly column: 'createdAt' };
+                readonly hash: { readonly column: 'hash' };
                 readonly id: { readonly column: 'id' };
-                readonly mediaType: { readonly column: 'mediaType' };
-                readonly normalizedAlbum: { readonly column: 'normalizedAlbum' };
-                readonly normalizedArtist: { readonly column: 'normalizedArtist' };
-                readonly normalizedGenres: { readonly column: 'normalizedGenres' };
-                readonly normalizedTitle: { readonly column: 'normalizedTitle' };
-                readonly publishedAt: { readonly column: 'publishedAt' };
-                readonly releaseYear: { readonly column: 'releaseYear' };
-                readonly sourceId: { readonly column: 'sourceId' };
-                readonly title: { readonly column: 'title' };
-                readonly trackNumber: { readonly column: 'trackNumber' };
                 readonly updatedAt: { readonly column: 'updatedAt' };
-              };
-            };
-          };
-          readonly CatalogTrackArtist: {
-            readonly fields: {
-              readonly artistId: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly id: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly trackId: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-            };
-            readonly relations: Record<string, never>;
-            readonly storage: {
-              readonly table: 'CatalogTrackArtist';
-              readonly namespaceId: '__unbound__';
-              readonly fields: {
-                readonly artistId: { readonly column: 'artistId' };
-                readonly id: { readonly column: 'id' };
-                readonly trackId: { readonly column: 'trackId' };
               };
             };
           };
           readonly DownloadClient: {
             readonly fields: {
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
               readonly credentialCiphertext: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
@@ -4234,6 +5003,10 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
+              readonly updatedAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
               readonly url: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
@@ -4248,26 +5021,709 @@ type ContractBase = Omit<
               readonly table: 'DownloadClient';
               readonly namespaceId: '__unbound__';
               readonly fields: {
+                readonly createdAt: { readonly column: 'createdAt' };
                 readonly credentialCiphertext: { readonly column: 'credentialCiphertext' };
                 readonly id: { readonly column: 'id' };
                 readonly kind: { readonly column: 'kind' };
                 readonly name: { readonly column: 'name' };
+                readonly updatedAt: { readonly column: 'updatedAt' };
                 readonly url: { readonly column: 'url' };
                 readonly username: { readonly column: 'username' };
               };
             };
           };
-          readonly DuplicateDetectionState: {
+          readonly LibrarySource: {
+            readonly fields: {
+              readonly configuration: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly credentialCiphertext: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly kind: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly lastSyncedAt: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly name: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly path: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly position: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly removedAt: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly sourceIdentity: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly updatedAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly url: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+            };
+            readonly relations: {
+              readonly artworkJobs: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'ArtworkJob';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['librarySourceId'];
+                };
+              };
+              readonly copies: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'MediaCopy';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['librarySourceId'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'LibrarySource';
+              readonly namespaceId: '__unbound__';
+              readonly fields: {
+                readonly configuration: { readonly column: 'configuration' };
+                readonly createdAt: { readonly column: 'createdAt' };
+                readonly credentialCiphertext: { readonly column: 'credentialCiphertext' };
+                readonly id: { readonly column: 'id' };
+                readonly kind: { readonly column: 'kind' };
+                readonly lastSyncedAt: { readonly column: 'lastSyncedAt' };
+                readonly name: { readonly column: 'name' };
+                readonly path: { readonly column: 'path' };
+                readonly position: { readonly column: 'position' };
+                readonly removedAt: { readonly column: 'removedAt' };
+                readonly sourceIdentity: { readonly column: 'sourceIdentity' };
+                readonly updatedAt: { readonly column: 'updatedAt' };
+                readonly url: { readonly column: 'url' };
+              };
+            };
+          };
+          readonly Media: {
+            readonly fields: {
+              readonly album: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly albumArtist: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly albumArtistCredits: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly artist: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly artistCredits: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly available: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly catalogProjectionPending: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly coverId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly discNumber: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly durationMs: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly genres: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly manualOverrides: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly mediaType: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly mediaTypeOrigin: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly metadataAlbum: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly metadataAlbumArtist: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly metadataAlbumArtistCredits: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly metadataArtist: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly metadataArtistCredits: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly metadataAttemptedSignature: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly metadataDetails: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly metadataDiscNumber: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly metadataExternalReleaseId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly metadataExternalTrackId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly metadataGenres: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly metadataMatchedAt: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly metadataMode: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly metadataProviderId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly metadataProviderKind: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly metadataProviderName: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly metadataSourceUrl: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly metadataTitle: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly metadataTrackNumber: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly metadataVersion: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly publishedAt: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly title: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly trackNumber: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly updatedAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+            };
+            readonly relations: {
+              readonly aliases: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'MediaAlias';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['mediaId'];
+                };
+              };
+              readonly copies: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'MediaCopy';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['mediaId'];
+                };
+              };
+              readonly likes: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'MediaLike';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['mediaId'];
+                };
+              };
+              readonly playEvents: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'MediaPlayEvent';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['mediaId'];
+                };
+              };
+              readonly playlistItems: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'PlaylistItem';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['mediaId'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'Media';
+              readonly namespaceId: '__unbound__';
+              readonly fields: {
+                readonly album: { readonly column: 'album' };
+                readonly albumArtist: { readonly column: 'albumArtist' };
+                readonly albumArtistCredits: { readonly column: 'albumArtistCredits' };
+                readonly artist: { readonly column: 'artist' };
+                readonly artistCredits: { readonly column: 'artistCredits' };
+                readonly available: { readonly column: 'available' };
+                readonly catalogProjectionPending: { readonly column: 'catalogProjectionPending' };
+                readonly coverId: { readonly column: 'coverId' };
+                readonly createdAt: { readonly column: 'createdAt' };
+                readonly discNumber: { readonly column: 'discNumber' };
+                readonly durationMs: { readonly column: 'durationMs' };
+                readonly genres: { readonly column: 'genres' };
+                readonly id: { readonly column: 'id' };
+                readonly manualOverrides: { readonly column: 'manualOverrides' };
+                readonly mediaType: { readonly column: 'mediaType' };
+                readonly mediaTypeOrigin: { readonly column: 'mediaTypeOrigin' };
+                readonly metadataAlbum: { readonly column: 'metadataAlbum' };
+                readonly metadataAlbumArtist: { readonly column: 'metadataAlbumArtist' };
+                readonly metadataAlbumArtistCredits: {
+                  readonly column: 'metadataAlbumArtistCredits';
+                };
+                readonly metadataArtist: { readonly column: 'metadataArtist' };
+                readonly metadataArtistCredits: { readonly column: 'metadataArtistCredits' };
+                readonly metadataAttemptedSignature: {
+                  readonly column: 'metadataAttemptedSignature';
+                };
+                readonly metadataDetails: { readonly column: 'metadataDetails' };
+                readonly metadataDiscNumber: { readonly column: 'metadataDiscNumber' };
+                readonly metadataExternalReleaseId: {
+                  readonly column: 'metadataExternalReleaseId';
+                };
+                readonly metadataExternalTrackId: { readonly column: 'metadataExternalTrackId' };
+                readonly metadataGenres: { readonly column: 'metadataGenres' };
+                readonly metadataMatchedAt: { readonly column: 'metadataMatchedAt' };
+                readonly metadataMode: { readonly column: 'metadataMode' };
+                readonly metadataProviderId: { readonly column: 'metadataProviderId' };
+                readonly metadataProviderKind: { readonly column: 'metadataProviderKind' };
+                readonly metadataProviderName: { readonly column: 'metadataProviderName' };
+                readonly metadataSourceUrl: { readonly column: 'metadataSourceUrl' };
+                readonly metadataTitle: { readonly column: 'metadataTitle' };
+                readonly metadataTrackNumber: { readonly column: 'metadataTrackNumber' };
+                readonly metadataVersion: { readonly column: 'metadataVersion' };
+                readonly publishedAt: { readonly column: 'publishedAt' };
+                readonly title: { readonly column: 'title' };
+                readonly trackNumber: { readonly column: 'trackNumber' };
+                readonly updatedAt: { readonly column: 'updatedAt' };
+              };
+            };
+          };
+          readonly MediaAlias: {
+            readonly fields: {
+              readonly aliasId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly mediaId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+            };
+            readonly relations: {
+              readonly media: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'Media';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['mediaId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'MediaAlias';
+              readonly namespaceId: '__unbound__';
+              readonly fields: {
+                readonly aliasId: { readonly column: 'aliasId' };
+                readonly createdAt: { readonly column: 'createdAt' };
+                readonly id: { readonly column: 'id' };
+                readonly mediaId: { readonly column: 'mediaId' };
+              };
+            };
+          };
+          readonly MediaCopy: {
+            readonly fields: {
+              readonly album: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly albumArtist: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly albumArtistCredits: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly artist: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly artistCredits: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly audioBitrate: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly audioLossless: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly available: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly coverId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly discNumber: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly durationMs: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly externalContainer: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly externalCoverKey: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly externalId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly externalVersion: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly fileModifiedAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly fileSizeBytes: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/bigint@1' };
+              };
+              readonly genres: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly lastSeenScanId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly librarySourceId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly manualOverrides: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly mediaId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly mediaType: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly mediaTypeOrigin: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly metadataVersion: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly mimeType: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly publishedAt: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly recordingIdentityKeys: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly relativePath: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly title: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly trackNumber: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly updatedAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+            };
+            readonly relations: {
+              readonly artworkJob: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'ArtworkJob';
+                };
+                readonly cardinality: '1:1';
+                readonly nullable: true;
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['copyId'];
+                };
+              };
+              readonly librarySource: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'LibrarySource';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['librarySourceId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+              readonly media: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'Media';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['mediaId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'MediaCopy';
+              readonly namespaceId: '__unbound__';
+              readonly fields: {
+                readonly album: { readonly column: 'album' };
+                readonly albumArtist: { readonly column: 'albumArtist' };
+                readonly albumArtistCredits: { readonly column: 'albumArtistCredits' };
+                readonly artist: { readonly column: 'artist' };
+                readonly artistCredits: { readonly column: 'artistCredits' };
+                readonly audioBitrate: { readonly column: 'audioBitrate' };
+                readonly audioLossless: { readonly column: 'audioLossless' };
+                readonly available: { readonly column: 'available' };
+                readonly coverId: { readonly column: 'coverId' };
+                readonly createdAt: { readonly column: 'createdAt' };
+                readonly discNumber: { readonly column: 'discNumber' };
+                readonly durationMs: { readonly column: 'durationMs' };
+                readonly externalContainer: { readonly column: 'externalContainer' };
+                readonly externalCoverKey: { readonly column: 'externalCoverKey' };
+                readonly externalId: { readonly column: 'externalId' };
+                readonly externalVersion: { readonly column: 'externalVersion' };
+                readonly fileModifiedAt: { readonly column: 'fileModifiedAt' };
+                readonly fileSizeBytes: { readonly column: 'fileSizeBytes' };
+                readonly genres: { readonly column: 'genres' };
+                readonly id: { readonly column: 'id' };
+                readonly lastSeenScanId: { readonly column: 'lastSeenScanId' };
+                readonly librarySourceId: { readonly column: 'librarySourceId' };
+                readonly manualOverrides: { readonly column: 'manualOverrides' };
+                readonly mediaId: { readonly column: 'mediaId' };
+                readonly mediaType: { readonly column: 'mediaType' };
+                readonly mediaTypeOrigin: { readonly column: 'mediaTypeOrigin' };
+                readonly metadataVersion: { readonly column: 'metadataVersion' };
+                readonly mimeType: { readonly column: 'mimeType' };
+                readonly publishedAt: { readonly column: 'publishedAt' };
+                readonly recordingIdentityKeys: { readonly column: 'recordingIdentityKeys' };
+                readonly relativePath: { readonly column: 'relativePath' };
+                readonly title: { readonly column: 'title' };
+                readonly trackNumber: { readonly column: 'trackNumber' };
+                readonly updatedAt: { readonly column: 'updatedAt' };
+              };
+            };
+          };
+          readonly MediaLike: {
+            readonly fields: {
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly mediaId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly userId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+            };
+            readonly relations: {
+              readonly media: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'Media';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['mediaId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+              readonly user: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'User';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['userId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'MediaLike';
+              readonly namespaceId: '__unbound__';
+              readonly fields: {
+                readonly createdAt: { readonly column: 'createdAt' };
+                readonly mediaId: { readonly column: 'mediaId' };
+                readonly userId: { readonly column: 'userId' };
+              };
+            };
+          };
+          readonly MediaMatchState: {
             readonly fields: {
               readonly algorithmVersion: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
               };
               readonly groupCount: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-              };
-              readonly hiddenCount: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
               };
@@ -4279,6 +5735,10 @@ type ContractBase = Omit<
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
               };
+              readonly mergedCount: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
               readonly updatedAt: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
@@ -4286,15 +5746,71 @@ type ContractBase = Omit<
             };
             readonly relations: Record<string, never>;
             readonly storage: {
-              readonly table: 'DuplicateDetectionState';
+              readonly table: 'MediaMatchState';
               readonly namespaceId: '__unbound__';
               readonly fields: {
                 readonly algorithmVersion: { readonly column: 'algorithmVersion' };
                 readonly groupCount: { readonly column: 'groupCount' };
-                readonly hiddenCount: { readonly column: 'hiddenCount' };
                 readonly id: { readonly column: 'id' };
                 readonly lastCompletedAt: { readonly column: 'lastCompletedAt' };
+                readonly mergedCount: { readonly column: 'mergedCount' };
                 readonly updatedAt: { readonly column: 'updatedAt' };
+              };
+            };
+          };
+          readonly MediaPlayEvent: {
+            readonly fields: {
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly mediaId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly playedAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly userId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+            };
+            readonly relations: {
+              readonly media: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'Media';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['mediaId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+              readonly user: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'User';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['userId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'MediaPlayEvent';
+              readonly namespaceId: '__unbound__';
+              readonly fields: {
+                readonly id: { readonly column: 'id' };
+                readonly mediaId: { readonly column: 'mediaId' };
+                readonly playedAt: { readonly column: 'playedAt' };
+                readonly userId: { readonly column: 'userId' };
               };
             };
           };
@@ -4418,6 +5934,10 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
+              readonly kind: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
               readonly name: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
@@ -4454,6 +5974,18 @@ type ContractBase = Omit<
                   readonly targetFields: readonly ['playlistId'];
                 };
               };
+              readonly link: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'PlaylistLink';
+                };
+                readonly cardinality: '1:1';
+                readonly nullable: true;
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['playlistId'];
+                };
+              };
               readonly user: {
                 readonly to: {
                   readonly namespace: '__unbound__' & NamespaceId;
@@ -4473,6 +6005,87 @@ type ContractBase = Omit<
               readonly fields: {
                 readonly createdAt: { readonly column: 'createdAt' };
                 readonly id: { readonly column: 'id' };
+                readonly kind: { readonly column: 'kind' };
+                readonly name: { readonly column: 'name' };
+                readonly updatedAt: { readonly column: 'updatedAt' };
+                readonly userId: { readonly column: 'userId' };
+              };
+            };
+          };
+          readonly PlaylistAccount: {
+            readonly fields: {
+              readonly configuration: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly credentialCiphertext: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly enabled: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly kind: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly name: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly updatedAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly userId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+            };
+            readonly relations: {
+              readonly links: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'PlaylistLink';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['accountId'];
+                };
+              };
+              readonly user: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'User';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['userId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'PlaylistAccount';
+              readonly namespaceId: '__unbound__';
+              readonly fields: {
+                readonly configuration: { readonly column: 'configuration' };
+                readonly createdAt: { readonly column: 'createdAt' };
+                readonly credentialCiphertext: { readonly column: 'credentialCiphertext' };
+                readonly enabled: { readonly column: 'enabled' };
+                readonly id: { readonly column: 'id' };
+                readonly kind: { readonly column: 'kind' };
                 readonly name: { readonly column: 'name' };
                 readonly updatedAt: { readonly column: 'updatedAt' };
                 readonly userId: { readonly column: 'userId' };
@@ -4501,6 +6114,14 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
+              readonly matchStatus: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly mediaId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
               readonly playlistId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
@@ -4525,16 +6146,24 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
-              readonly trackId: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
               readonly updatedAt: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
               };
             };
             readonly relations: {
+              readonly media: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'Media';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: true;
+                readonly on: {
+                  readonly localFields: readonly ['mediaId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
               readonly playlist: {
                 readonly to: {
                   readonly namespace: '__unbound__' & NamespaceId;
@@ -4544,18 +6173,6 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly on: {
                   readonly localFields: readonly ['playlistId'];
-                  readonly targetFields: readonly ['id'];
-                };
-              };
-              readonly track: {
-                readonly to: {
-                  readonly namespace: '__unbound__' & NamespaceId;
-                  readonly model: 'Track';
-                };
-                readonly cardinality: 'N:1';
-                readonly nullable: true;
-                readonly on: {
-                  readonly localFields: readonly ['trackId'];
                   readonly targetFields: readonly ['id'];
                 };
               };
@@ -4569,13 +6186,14 @@ type ContractBase = Omit<
                 readonly externalTrackId: { readonly column: 'externalTrackId' };
                 readonly id: { readonly column: 'id' };
                 readonly identityKey: { readonly column: 'identityKey' };
+                readonly matchStatus: { readonly column: 'matchStatus' };
+                readonly mediaId: { readonly column: 'mediaId' };
                 readonly playlistId: { readonly column: 'playlistId' };
                 readonly position: { readonly column: 'position' };
                 readonly snapshotAlbum: { readonly column: 'snapshotAlbum' };
                 readonly snapshotArtist: { readonly column: 'snapshotArtist' };
                 readonly snapshotDuration: { readonly column: 'snapshotDuration' };
                 readonly snapshotTitle: { readonly column: 'snapshotTitle' };
-                readonly trackId: { readonly column: 'trackId' };
                 readonly updatedAt: { readonly column: 'updatedAt' };
               };
             };
@@ -4633,6 +6251,173 @@ type ContractBase = Omit<
                 readonly id: { readonly column: 'id' };
                 readonly playlistId: { readonly column: 'playlistId' };
                 readonly userId: { readonly column: 'userId' };
+              };
+            };
+          };
+          readonly PlaylistLink: {
+            readonly fields: {
+              readonly accountId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly enabled: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly externalPlaylistId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly lastSyncedAt: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly playlistId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly remoteVersion: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly syncCursor: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly syncMode: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly updatedAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+            };
+            readonly relations: {
+              readonly account: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'PlaylistAccount';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['accountId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+              readonly playlist: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'Playlist';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['playlistId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'PlaylistLink';
+              readonly namespaceId: '__unbound__';
+              readonly fields: {
+                readonly accountId: { readonly column: 'accountId' };
+                readonly createdAt: { readonly column: 'createdAt' };
+                readonly enabled: { readonly column: 'enabled' };
+                readonly externalPlaylistId: { readonly column: 'externalPlaylistId' };
+                readonly id: { readonly column: 'id' };
+                readonly lastSyncedAt: { readonly column: 'lastSyncedAt' };
+                readonly playlistId: { readonly column: 'playlistId' };
+                readonly remoteVersion: { readonly column: 'remoteVersion' };
+                readonly syncCursor: { readonly column: 'syncCursor' };
+                readonly syncMode: { readonly column: 'syncMode' };
+                readonly updatedAt: { readonly column: 'updatedAt' };
+              };
+            };
+          };
+          readonly ReleaseIndexer: {
+            readonly fields: {
+              readonly configuration: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly credentialCiphertext: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly destinationSourceId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly downloadClientId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly kind: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly name: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly position: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
+              };
+              readonly removedAt: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly sourceIdentity: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly updatedAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly url: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly table: 'ReleaseIndexer';
+              readonly namespaceId: '__unbound__';
+              readonly fields: {
+                readonly configuration: { readonly column: 'configuration' };
+                readonly createdAt: { readonly column: 'createdAt' };
+                readonly credentialCiphertext: { readonly column: 'credentialCiphertext' };
+                readonly destinationSourceId: { readonly column: 'destinationSourceId' };
+                readonly downloadClientId: { readonly column: 'downloadClientId' };
+                readonly id: { readonly column: 'id' };
+                readonly kind: { readonly column: 'kind' };
+                readonly name: { readonly column: 'name' };
+                readonly position: { readonly column: 'position' };
+                readonly removedAt: { readonly column: 'removedAt' };
+                readonly sourceIdentity: { readonly column: 'sourceIdentity' };
+                readonly updatedAt: { readonly column: 'updatedAt' };
+                readonly url: { readonly column: 'url' };
               };
             };
           };
@@ -4736,99 +6521,23 @@ type ContractBase = Omit<
               };
             };
           };
-          readonly Source: {
-            readonly fields: {
-              readonly configuration: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly createdAt: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
-              };
-              readonly credentialCiphertext: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly id: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly kind: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly lastSyncedAt: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
-              };
-              readonly name: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly path: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly position: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-              };
-              readonly removedAt: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
-              };
-              readonly sourceIdentity: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly updatedAt: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
-              };
-              readonly url: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-            };
-            readonly relations: {
-              readonly artworkJobs: {
-                readonly to: {
-                  readonly namespace: '__unbound__' & NamespaceId;
-                  readonly model: 'ArtworkJob';
-                };
-                readonly cardinality: '1:N';
-                readonly on: {
-                  readonly localFields: readonly ['id'];
-                  readonly targetFields: readonly ['sourceId'];
-                };
-              };
-            };
-            readonly storage: {
-              readonly table: 'Source';
-              readonly namespaceId: '__unbound__';
-              readonly fields: {
-                readonly configuration: { readonly column: 'configuration' };
-                readonly createdAt: { readonly column: 'createdAt' };
-                readonly credentialCiphertext: { readonly column: 'credentialCiphertext' };
-                readonly id: { readonly column: 'id' };
-                readonly kind: { readonly column: 'kind' };
-                readonly lastSyncedAt: { readonly column: 'lastSyncedAt' };
-                readonly name: { readonly column: 'name' };
-                readonly path: { readonly column: 'path' };
-                readonly position: { readonly column: 'position' };
-                readonly removedAt: { readonly column: 'removedAt' };
-                readonly sourceIdentity: { readonly column: 'sourceIdentity' };
-                readonly updatedAt: { readonly column: 'updatedAt' };
-                readonly url: { readonly column: 'url' };
-              };
-            };
-          };
           readonly Task: {
             readonly fields: {
               readonly completedAt: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
+              };
+              readonly connectorId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly connectorKind: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly connectorName: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
               readonly createdAt: {
                 readonly nullable: false;
@@ -4882,14 +6591,6 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
               };
-              readonly sourceId: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly sourceName: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
               readonly startedAt: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
@@ -4930,6 +6631,9 @@ type ContractBase = Omit<
               readonly namespaceId: '__unbound__';
               readonly fields: {
                 readonly completedAt: { readonly column: 'completedAt' };
+                readonly connectorId: { readonly column: 'connectorId' };
+                readonly connectorKind: { readonly column: 'connectorKind' };
+                readonly connectorName: { readonly column: 'connectorName' };
                 readonly createdAt: { readonly column: 'createdAt' };
                 readonly details: { readonly column: 'details' };
                 readonly failureMessage: { readonly column: 'failureMessage' };
@@ -4943,458 +6647,11 @@ type ContractBase = Omit<
                 readonly progressCompleted: { readonly column: 'progressCompleted' };
                 readonly progressTotal: { readonly column: 'progressTotal' };
                 readonly retryCount: { readonly column: 'retryCount' };
-                readonly sourceId: { readonly column: 'sourceId' };
-                readonly sourceName: { readonly column: 'sourceName' };
                 readonly startedAt: { readonly column: 'startedAt' };
                 readonly status: { readonly column: 'status' };
                 readonly title: { readonly column: 'title' };
                 readonly titleMessage: { readonly column: 'titleMessage' };
                 readonly updatedAt: { readonly column: 'updatedAt' };
-              };
-            };
-          };
-          readonly Track: {
-            readonly fields: {
-              readonly album: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly albumArtist: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly albumArtistCredits: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly artist: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly artistCredits: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly audioBitrate: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-              };
-              readonly audioLossless: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-              };
-              readonly available: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-              };
-              readonly catalogProjectionPending: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-              };
-              readonly coverId: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly createdAt: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
-              };
-              readonly discNumber: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-              };
-              readonly duplicateOfId: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly durationMs: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-              };
-              readonly externalContainer: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly externalCoverKey: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly externalId: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly externalVersion: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly fileModifiedAt: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
-              };
-              readonly fileSizeBytes: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/bigint@1' };
-              };
-              readonly genres: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly id: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly lastSeenScanId: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly mediaType: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly mediaTypeOrigin: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly metadataAlbum: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly metadataAlbumArtist: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly metadataAlbumArtistCredits: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly metadataArtist: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly metadataArtistCredits: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly metadataAttemptedSignature: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly metadataDetails: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly metadataDiscNumber: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-              };
-              readonly metadataExternalReleaseId: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly metadataExternalTrackId: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly metadataGenres: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly metadataMatchedAt: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
-              };
-              readonly metadataMode: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly metadataProviderId: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly metadataProviderKind: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly metadataProviderName: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly metadataSourceUrl: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly metadataTitle: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly metadataTrackNumber: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-              };
-              readonly metadataVersion: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-              };
-              readonly mimeType: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly publishedAt: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
-              };
-              readonly recordingIdentityKeys: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly relativePath: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly sourceId: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly title: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly trackNumber: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-              };
-              readonly updatedAt: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
-              };
-            };
-            readonly relations: {
-              readonly artworkJob: {
-                readonly to: {
-                  readonly namespace: '__unbound__' & NamespaceId;
-                  readonly model: 'ArtworkJob';
-                };
-                readonly cardinality: '1:1';
-                readonly nullable: true;
-                readonly on: {
-                  readonly localFields: readonly ['id'];
-                  readonly targetFields: readonly ['trackId'];
-                };
-              };
-              readonly source: {
-                readonly to: {
-                  readonly namespace: '__unbound__' & NamespaceId;
-                  readonly model: 'Source';
-                };
-                readonly cardinality: 'N:1';
-                readonly nullable: true;
-                readonly on: {
-                  readonly localFields: readonly ['sourceId'];
-                  readonly targetFields: readonly ['id'];
-                };
-              };
-            };
-            readonly storage: {
-              readonly table: 'Track';
-              readonly namespaceId: '__unbound__';
-              readonly fields: {
-                readonly album: { readonly column: 'album' };
-                readonly albumArtist: { readonly column: 'albumArtist' };
-                readonly albumArtistCredits: { readonly column: 'albumArtistCredits' };
-                readonly artist: { readonly column: 'artist' };
-                readonly artistCredits: { readonly column: 'artistCredits' };
-                readonly audioBitrate: { readonly column: 'audioBitrate' };
-                readonly audioLossless: { readonly column: 'audioLossless' };
-                readonly available: { readonly column: 'available' };
-                readonly catalogProjectionPending: { readonly column: 'catalogProjectionPending' };
-                readonly coverId: { readonly column: 'coverId' };
-                readonly createdAt: { readonly column: 'createdAt' };
-                readonly discNumber: { readonly column: 'discNumber' };
-                readonly duplicateOfId: { readonly column: 'duplicateOfId' };
-                readonly durationMs: { readonly column: 'durationMs' };
-                readonly externalContainer: { readonly column: 'externalContainer' };
-                readonly externalCoverKey: { readonly column: 'externalCoverKey' };
-                readonly externalId: { readonly column: 'externalId' };
-                readonly externalVersion: { readonly column: 'externalVersion' };
-                readonly fileModifiedAt: { readonly column: 'fileModifiedAt' };
-                readonly fileSizeBytes: { readonly column: 'fileSizeBytes' };
-                readonly genres: { readonly column: 'genres' };
-                readonly id: { readonly column: 'id' };
-                readonly lastSeenScanId: { readonly column: 'lastSeenScanId' };
-                readonly mediaType: { readonly column: 'mediaType' };
-                readonly mediaTypeOrigin: { readonly column: 'mediaTypeOrigin' };
-                readonly metadataAlbum: { readonly column: 'metadataAlbum' };
-                readonly metadataAlbumArtist: { readonly column: 'metadataAlbumArtist' };
-                readonly metadataAlbumArtistCredits: {
-                  readonly column: 'metadataAlbumArtistCredits';
-                };
-                readonly metadataArtist: { readonly column: 'metadataArtist' };
-                readonly metadataArtistCredits: { readonly column: 'metadataArtistCredits' };
-                readonly metadataAttemptedSignature: {
-                  readonly column: 'metadataAttemptedSignature';
-                };
-                readonly metadataDetails: { readonly column: 'metadataDetails' };
-                readonly metadataDiscNumber: { readonly column: 'metadataDiscNumber' };
-                readonly metadataExternalReleaseId: {
-                  readonly column: 'metadataExternalReleaseId';
-                };
-                readonly metadataExternalTrackId: { readonly column: 'metadataExternalTrackId' };
-                readonly metadataGenres: { readonly column: 'metadataGenres' };
-                readonly metadataMatchedAt: { readonly column: 'metadataMatchedAt' };
-                readonly metadataMode: { readonly column: 'metadataMode' };
-                readonly metadataProviderId: { readonly column: 'metadataProviderId' };
-                readonly metadataProviderKind: { readonly column: 'metadataProviderKind' };
-                readonly metadataProviderName: { readonly column: 'metadataProviderName' };
-                readonly metadataSourceUrl: { readonly column: 'metadataSourceUrl' };
-                readonly metadataTitle: { readonly column: 'metadataTitle' };
-                readonly metadataTrackNumber: { readonly column: 'metadataTrackNumber' };
-                readonly metadataVersion: { readonly column: 'metadataVersion' };
-                readonly mimeType: { readonly column: 'mimeType' };
-                readonly publishedAt: { readonly column: 'publishedAt' };
-                readonly recordingIdentityKeys: { readonly column: 'recordingIdentityKeys' };
-                readonly relativePath: { readonly column: 'relativePath' };
-                readonly sourceId: { readonly column: 'sourceId' };
-                readonly title: { readonly column: 'title' };
-                readonly trackNumber: { readonly column: 'trackNumber' };
-                readonly updatedAt: { readonly column: 'updatedAt' };
-              };
-            };
-          };
-          readonly TrackCover: {
-            readonly fields: {
-              readonly createdAt: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
-              };
-              readonly hash: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly id: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly updatedAt: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
-              };
-            };
-            readonly relations: Record<string, never>;
-            readonly storage: {
-              readonly table: 'TrackCover';
-              readonly namespaceId: '__unbound__';
-              readonly fields: {
-                readonly createdAt: { readonly column: 'createdAt' };
-                readonly hash: { readonly column: 'hash' };
-                readonly id: { readonly column: 'id' };
-                readonly updatedAt: { readonly column: 'updatedAt' };
-              };
-            };
-          };
-          readonly TrackLike: {
-            readonly fields: {
-              readonly createdAt: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
-              };
-              readonly trackId: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly userId: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-            };
-            readonly relations: {
-              readonly track: {
-                readonly to: {
-                  readonly namespace: '__unbound__' & NamespaceId;
-                  readonly model: 'Track';
-                };
-                readonly cardinality: 'N:1';
-                readonly nullable: false;
-                readonly on: {
-                  readonly localFields: readonly ['trackId'];
-                  readonly targetFields: readonly ['id'];
-                };
-              };
-              readonly user: {
-                readonly to: {
-                  readonly namespace: '__unbound__' & NamespaceId;
-                  readonly model: 'User';
-                };
-                readonly cardinality: 'N:1';
-                readonly nullable: false;
-                readonly on: {
-                  readonly localFields: readonly ['userId'];
-                  readonly targetFields: readonly ['id'];
-                };
-              };
-            };
-            readonly storage: {
-              readonly table: 'TrackLike';
-              readonly namespaceId: '__unbound__';
-              readonly fields: {
-                readonly createdAt: { readonly column: 'createdAt' };
-                readonly trackId: { readonly column: 'trackId' };
-                readonly userId: { readonly column: 'userId' };
-              };
-            };
-          };
-          readonly TrackPlayEvent: {
-            readonly fields: {
-              readonly id: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly playedAt: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
-              };
-              readonly trackId: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-              readonly userId: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
-            };
-            readonly relations: {
-              readonly track: {
-                readonly to: {
-                  readonly namespace: '__unbound__' & NamespaceId;
-                  readonly model: 'Track';
-                };
-                readonly cardinality: 'N:1';
-                readonly nullable: false;
-                readonly on: {
-                  readonly localFields: readonly ['trackId'];
-                  readonly targetFields: readonly ['id'];
-                };
-              };
-              readonly user: {
-                readonly to: {
-                  readonly namespace: '__unbound__' & NamespaceId;
-                  readonly model: 'User';
-                };
-                readonly cardinality: 'N:1';
-                readonly nullable: false;
-                readonly on: {
-                  readonly localFields: readonly ['userId'];
-                  readonly targetFields: readonly ['id'];
-                };
-              };
-            };
-            readonly storage: {
-              readonly table: 'TrackPlayEvent';
-              readonly namespaceId: '__unbound__';
-              readonly fields: {
-                readonly id: { readonly column: 'id' };
-                readonly playedAt: { readonly column: 'playedAt' };
-                readonly trackId: { readonly column: 'trackId' };
-                readonly userId: { readonly column: 'userId' };
               };
             };
           };
@@ -5442,6 +6699,17 @@ type ContractBase = Omit<
               };
             };
             readonly relations: {
+              readonly playlistAccounts: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'PlaylistAccount';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['userId'];
+                };
+              };
               readonly tasks: {
                 readonly to: {
                   readonly namespace: '__unbound__' & NamespaceId;
@@ -5578,6 +6846,23 @@ type ContractBase = Omit<
           };
         },
         {
+          readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly onUpdate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'CatalogMedia';
+            readonly field: 'updatedAt';
+            readonly namespace: '__unbound__';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'CatalogMediaArtist';
+            readonly field: 'id';
+            readonly namespace: '__unbound__';
+          };
+        },
+        {
           readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
           readonly ref: {
             readonly entry: 'CatalogSearchTerm';
@@ -5595,19 +6880,19 @@ type ContractBase = Omit<
           };
         },
         {
-          readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
-          readonly onUpdate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
           readonly ref: {
-            readonly entry: 'CatalogTrack';
-            readonly field: 'updatedAt';
+            readonly entry: 'Cover';
+            readonly field: 'id';
             readonly namespace: '__unbound__';
           };
         },
         {
-          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
+          readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly onUpdate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
           readonly ref: {
-            readonly entry: 'CatalogTrackArtist';
-            readonly field: 'id';
+            readonly entry: 'Cover';
+            readonly field: 'updatedAt';
             readonly namespace: '__unbound__';
           };
         },
@@ -5623,8 +6908,84 @@ type ContractBase = Omit<
           readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
           readonly onUpdate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
           readonly ref: {
-            readonly entry: 'DuplicateDetectionState';
+            readonly entry: 'DownloadClient';
             readonly field: 'updatedAt';
+            readonly namespace: '__unbound__';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'LibrarySource';
+            readonly field: 'id';
+            readonly namespace: '__unbound__';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly onUpdate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'LibrarySource';
+            readonly field: 'updatedAt';
+            readonly namespace: '__unbound__';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'Media';
+            readonly field: 'id';
+            readonly namespace: '__unbound__';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly onUpdate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'Media';
+            readonly field: 'updatedAt';
+            readonly namespace: '__unbound__';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'MediaAlias';
+            readonly field: 'id';
+            readonly namespace: '__unbound__';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'MediaCopy';
+            readonly field: 'id';
+            readonly namespace: '__unbound__';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly onUpdate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'MediaCopy';
+            readonly field: 'updatedAt';
+            readonly namespace: '__unbound__';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly onUpdate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'MediaMatchState';
+            readonly field: 'updatedAt';
+            readonly namespace: '__unbound__';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'MediaPlayEvent';
+            readonly field: 'id';
             readonly namespace: '__unbound__';
           };
         },
@@ -5673,6 +7034,23 @@ type ContractBase = Omit<
         {
           readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
           readonly ref: {
+            readonly entry: 'PlaylistAccount';
+            readonly field: 'id';
+            readonly namespace: '__unbound__';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly onUpdate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'PlaylistAccount';
+            readonly field: 'updatedAt';
+            readonly namespace: '__unbound__';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
+          readonly ref: {
             readonly entry: 'PlaylistItem';
             readonly field: 'id';
             readonly namespace: '__unbound__';
@@ -5696,6 +7074,40 @@ type ContractBase = Omit<
           };
         },
         {
+          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'PlaylistLink';
+            readonly field: 'id';
+            readonly namespace: '__unbound__';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly onUpdate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'PlaylistLink';
+            readonly field: 'updatedAt';
+            readonly namespace: '__unbound__';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'ReleaseIndexer';
+            readonly field: 'id';
+            readonly namespace: '__unbound__';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly onUpdate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'ReleaseIndexer';
+            readonly field: 'updatedAt';
+            readonly namespace: '__unbound__';
+          };
+        },
+        {
           readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
           readonly onUpdate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
           readonly ref: {
@@ -5715,23 +7127,6 @@ type ContractBase = Omit<
         {
           readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
           readonly ref: {
-            readonly entry: 'Source';
-            readonly field: 'id';
-            readonly namespace: '__unbound__';
-          };
-        },
-        {
-          readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
-          readonly onUpdate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
-          readonly ref: {
-            readonly entry: 'Source';
-            readonly field: 'updatedAt';
-            readonly namespace: '__unbound__';
-          };
-        },
-        {
-          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
-          readonly ref: {
             readonly entry: 'Task';
             readonly field: 'id';
             readonly namespace: '__unbound__';
@@ -5743,48 +7138,6 @@ type ContractBase = Omit<
           readonly ref: {
             readonly entry: 'Task';
             readonly field: 'updatedAt';
-            readonly namespace: '__unbound__';
-          };
-        },
-        {
-          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
-          readonly ref: {
-            readonly entry: 'Track';
-            readonly field: 'id';
-            readonly namespace: '__unbound__';
-          };
-        },
-        {
-          readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
-          readonly onUpdate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
-          readonly ref: {
-            readonly entry: 'Track';
-            readonly field: 'updatedAt';
-            readonly namespace: '__unbound__';
-          };
-        },
-        {
-          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
-          readonly ref: {
-            readonly entry: 'TrackCover';
-            readonly field: 'id';
-            readonly namespace: '__unbound__';
-          };
-        },
-        {
-          readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
-          readonly onUpdate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
-          readonly ref: {
-            readonly entry: 'TrackCover';
-            readonly field: 'updatedAt';
-            readonly namespace: '__unbound__';
-          };
-        },
-        {
-          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
-          readonly ref: {
-            readonly entry: 'TrackPlayEvent';
-            readonly field: 'id';
             readonly namespace: '__unbound__';
           };
         },

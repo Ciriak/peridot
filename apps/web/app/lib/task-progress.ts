@@ -24,8 +24,8 @@ function createdAt(task: TaskResponse): number {
 function taskKindPriority(task: TaskResponse): number {
   if (task.kind === "release_import") return -1;
   if (task.kind === "library_scan") return 0;
-  if (task.kind === "metadata_fetch") return 1;
-  if (task.kind === "catalog_fetch") return 2;
+  if (task.kind === "metadata_enrichment") return 1;
+  if (task.kind === "catalog_projection") return 2;
   if (task.kind === "artwork_fetch") return 3;
   return 1;
 }
@@ -51,13 +51,14 @@ export function activeTaskForSource(
   sourceId: string,
 ): TaskResponse | null {
   return (
-    orderedActiveTasks(tasks).find((task) => task.source?.id === sourceId) ??
+    orderedActiveTasks(tasks).find((task) => task.connector?.id === sourceId) ??
     null
   );
 }
 
 export function activeMetadataProviderId(task: TaskResponse): string | null {
-  if (task.kind !== "metadata_fetch" || task.status !== "running") return null;
+  if (task.kind !== "metadata_enrichment" || task.status !== "running")
+    return null;
   return (
     task.details.find(
       (detail) => detail.key === TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY,
@@ -81,7 +82,8 @@ export function runningMetadataTask(
 ): TaskResponse | null {
   return (
     orderedActiveTasks(tasks).find(
-      (task) => task.kind === "metadata_fetch" && task.status === "running",
+      (task) =>
+        task.kind === "metadata_enrichment" && task.status === "running",
     ) ?? null
   );
 }

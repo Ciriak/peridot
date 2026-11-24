@@ -1,4 +1,4 @@
-import type { MediaType, TrackMediaFilter } from "@peridot/contracts";
+import type { MediaType, MediaFilter } from "@peridot/contracts";
 
 const MEDIA_TYPES = new Set<MediaType>(["music", "audiobook", "podcast"]);
 
@@ -16,7 +16,7 @@ export function storedMediaType(value: string): MediaType {
   return mediaType(value);
 }
 
-export function trackMediaFilter(value: unknown): TrackMediaFilter {
+export function trackMediaFilter(value: unknown): MediaFilter {
   return value === "all" ? "all" : mediaType(value);
 }
 

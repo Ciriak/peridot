@@ -159,7 +159,7 @@ const clock = (seconds: number) =>
 const likedTrackCount = computed(() => likedTrackIds.value.length);
 const currentTrackLikeTarget = computed(() =>
   currentTrackId.value
-    ? ({ kind: "track", trackId: currentTrackId.value } as const)
+    ? ({ kind: "media", mediaId: currentTrackId.value } as const)
     : null,
 );
 const currentCoverUrl = computed(() =>
@@ -188,7 +188,7 @@ const currentArtworkRoute = computed(() => {
 
 function toggleCurrentTrackLike() {
   if (currentTrackId.value)
-    void toggleLike({ kind: "track", trackId: currentTrackId.value });
+    void toggleLike({ kind: "media", mediaId: currentTrackId.value });
 }
 
 function openQueueFromMobilePlayer() {
@@ -765,8 +765,7 @@ onBeforeUnmount(stopLoadingRay);
           <div
             class="flex items-center gap-3 text-xs tabular-nums text-muted-foreground"
           >
-            <span>{{ clock(elapsed) }}</span
-            ><Slider
+            <span>{{ clock(elapsed) }}</span><Slider
               :model-value="[elapsed]"
               :min="0"
               :max="Math.max(durationSeconds, 1)"
@@ -784,7 +783,7 @@ onBeforeUnmount(stopLoadingRay);
             class="shrink-0"
             :liked="
               currentTrackLikeTarget
-                ? likedTrackIds.includes(currentTrackLikeTarget.trackId)
+                ? likedTrackIds.includes(currentTrackLikeTarget.mediaId)
                 : false
             "
             :label="active?.title ?? t('player.currentTrack')"

@@ -1,4 +1,4 @@
-import type { SourceKind } from "@peridot/contracts";
+import type { LibrarySourceKind } from "@peridot/contracts";
 import { icons } from "./icons.ts";
 
 export function sourceFolderName(path: string): string {
@@ -13,19 +13,20 @@ export function sourceFolderName(path: string): string {
   return withoutTrailingSeparators.slice(separatorIndex + 1);
 }
 
-export function sourceKindIcon(kind: SourceKind | null | undefined) {
+export function sourceKindIcon(
+  kind: LibrarySourceKind | "torznab" | null | undefined,
+) {
   if (kind === "path") return icons.folder;
   if (kind === "jellyfin") return icons.jellyfin;
-  if (kind === "url" || kind === "torznab") return icons.globe;
+  if (kind === "torznab") return icons.download;
   return null;
 }
 
 export function sourceKindLabelKey(
-  kind: SourceKind | null | undefined,
+  kind: LibrarySourceKind | "torznab" | null | undefined,
 ): string | null {
   if (kind === "path") return "settings.sources.path";
   if (kind === "jellyfin") return "settings.sources.jellyfin.title";
   if (kind === "torznab") return "indexer.title";
-  if (kind === "url") return "settings.sources.url";
   return null;
 }

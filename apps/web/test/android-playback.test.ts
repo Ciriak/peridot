@@ -5,9 +5,9 @@ import {
   androidTrackSnapshot,
   trackResponseFromAndroid,
 } from "../app/lib/android-playback.ts";
-import type { TrackResponse } from "@peridot/contracts";
+import type { MediaResponse } from "@peridot/contracts";
 
-const track: TrackResponse = {
+const track: MediaResponse = {
   id: "track-1",
   mediaType: "music",
   title: "Local Song",

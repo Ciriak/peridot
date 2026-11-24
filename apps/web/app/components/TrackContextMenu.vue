@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { useI18n } from "#imports";
 import type {
-  ApplyTrackMetadataRequest,
+  ApplyMediaMetadataRequest,
   MetadataCandidateResponse,
-  TrackResponse,
+  MediaResponse,
 } from "@peridot/contracts";
 import { Icon } from "@iconify/vue/offline";
 import { Badge } from "@peridot/ui/components/ui/badge";
@@ -62,7 +62,7 @@ import {
 import AddTrackToPlaylistSubmenu from "./AddTrackToPlaylistSubmenu.vue";
 import DownloadProgressTooltip from "./DownloadProgressTooltip.vue";
 
-const props = defineProps<{ track: TrackResponse }>();
+const props = defineProps<{ track: MediaResponse }>();
 const emit = defineEmits<{ play: [] }>();
 const { t } = useI18n();
 const { translate, errorMessage } = useLocalizedMessage();
@@ -209,7 +209,7 @@ async function searchMetadata() {
 async function chooseMetadata(candidate: MetadataCandidateResponse) {
   applyingMetadataId.value = candidate.externalTrackId;
   metadataError.value = "";
-  const body: ApplyTrackMetadataRequest = {
+  const body: ApplyMediaMetadataRequest = {
     providerId: candidate.providerId,
     externalTrackId: candidate.externalTrackId,
     externalReleaseId: candidate.externalReleaseId,
@@ -296,9 +296,9 @@ async function revertMetadata() {
       <ContextMenuItem
         v-if="music"
         :disabled="
-          !likesLoaded || isLikePending({ kind: 'track', trackId: track.id })
+          !likesLoaded || isLikePending({ kind: 'media', mediaId: track.id })
         "
-        @select="toggleLike({ kind: 'track', trackId: track.id })"
+        @select="toggleLike({ kind: 'media', mediaId: track.id })"
       >
         <Icon
           :icon="

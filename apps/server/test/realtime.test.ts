@@ -162,7 +162,10 @@ test("catalog events are constant-size revision markers", async () => {
     try {
       const nextMessage = messageQueue(socket);
       socket.send(
-        JSON.stringify({ type: "subscribe", topics: ["sources", "catalog"] }),
+        JSON.stringify({
+          type: "subscribe",
+          topics: ["library-sources", "catalog"],
+        }),
       );
       await nextMessage();
       await nextMessage();
@@ -188,17 +191,12 @@ test("catalog events are constant-size revision markers", async () => {
 test("source removal emits a structural catalog event", async () => {
   const context = await createTestContext();
   try {
-    const created = await context.app.inject({
-      method: "POST",
-      url: "/api/admin/sources",
-      headers: context.authorization,
-      payload: {
-        kind: "url",
-        url: "https://example.com/source-to-remove",
-      },
+    const source = await context.database.orm.LibrarySource.create({
+      kind: "path",
+      path: context.libraryRoot,
+      position: 20,
     });
-    assert.equal(created.statusCode, 201);
-    const sourceId = created.json<{ id: string }>().id;
+    const sourceId = source.id;
 
     const issued = await ticket(context);
     const socket = await context.app.injectWS(
@@ -208,14 +206,17 @@ test("source removal emits a structural catalog event", async () => {
     try {
       const nextMessage = messageQueue(socket);
       socket.send(
-        JSON.stringify({ type: "subscribe", topics: ["sources", "catalog"] }),
+        JSON.stringify({
+          type: "subscribe",
+          topics: ["library-sources", "catalog"],
+        }),
       );
       await nextMessage();
       await nextMessage();
 
       const removed = await context.app.inject({
         method: "DELETE",
-        url: `/api/admin/sources/${sourceId}`,
+        url: `/api/admin/library-sources/${sourceId}`,
         headers: context.authorization,
       });
       assert.equal(removed.statusCode, 200);
@@ -226,10 +227,10 @@ test("source removal emits a structural catalog event", async () => {
         event = (await nextMessage()) as RealtimeServerMessage;
       }
       assert.equal(event.type, "catalog.changed");
-      assert.deepEqual(sourcePhases, ["stopping", "tracks", "catalog"]);
+      assert.deepEqual(sourcePhases, ["stopping", "copies", "catalog"]);
       event = event as RealtimeCatalogChangedEvent;
       assert.equal(event.reason, "source-removal");
-      assert.equal(event.sourceId, sourceId);
+      assert.equal(event.librarySourceId, sourceId);
     } finally {
       socket.terminate();
     }

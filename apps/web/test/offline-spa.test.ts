@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import test from "node:test";
-import type { TrackResponse } from "@peridot/contracts";
+import type { MediaResponse } from "@peridot/contracts";
 import { QueryClient, QueryObserver } from "@tanstack/vue-query";
 import {
   OFFLINE_AUDIO_CACHE,
@@ -149,7 +149,7 @@ test("query keys isolate server, user, resource, and list options", () => {
     "likes",
   ]);
   assert.equal(OFFLINE_DATABASE, "peridot-web-offline-catalog-v2");
-  assert.equal(OFFLINE_TRACK_DATABASE, "peridot-web-offline-tracks-v1");
+  assert.equal(OFFLINE_TRACK_DATABASE, "peridot-web-offline-tracks-v2");
   assert.notEqual(OFFLINE_DATABASE, OFFLINE_TRACK_DATABASE);
 });
 
@@ -223,7 +223,7 @@ test("offline audio keys are stable and scoped without bearer credentials", () =
     offlineTrackStorageKey(scope, "track-1"),
     offlineTrackStorageKey({ ...scope, userId: "user-2" }, "track-1"),
   );
-  assert.equal(OFFLINE_AUDIO_CACHE, "peridot-offline-audio-v1");
+  assert.equal(OFFLINE_AUDIO_CACHE, "peridot-offline-audio-v2");
   assert.equal(OFFLINE_ARTWORK_CACHE, "peridot-artwork-v2");
 });
 
@@ -259,7 +259,7 @@ test("offline track metadata becomes plain data before IndexedDB storage", () =>
     coverUrl: "/api/covers/cover-1",
     metadata: { provider: { detail: { state: "matched" } } },
     liked: true,
-  }) as unknown as TrackResponse;
+  }) as unknown as MediaResponse;
 
   assert.throws(() => structuredClone(track), { name: "DataCloneError" });
   const snapshot = snapshotTrackForOffline(track);
@@ -326,7 +326,7 @@ test("offline audio downloads use an indeterminate progress state without a leng
 });
 
 test("whole-album offline saves every available track with aggregate progress", async () => {
-  const track = (id: string, available = true): TrackResponse =>
+  const track = (id: string, available = true): MediaResponse =>
     ({
       id,
       title: id,
@@ -342,7 +342,7 @@ test("whole-album offline saves every available track with aggregate progress", 
       coverUrl: null,
       metadata: null,
       liked: false,
-    }) as TrackResponse;
+    }) as MediaResponse;
   const saved = new Set(["already-saved"]);
   const calls: string[] = [];
   const progress: Array<number | null> = [];
@@ -354,7 +354,7 @@ test("whole-album offline saves every available track with aggregate progress", 
       track("second-missing"),
     ],
     {
-      isSaved: (trackId) => saved.has(trackId),
+      isSaved: (mediaId) => saved.has(mediaId),
       save: async (item, onProgress) => {
         calls.push(item.id);
         onProgress?.(50);
@@ -396,11 +396,11 @@ test("whole-album offline stops at a failed track without dropping saved copies"
         coverUrl: null,
         metadata: null,
         liked: false,
-      }) as TrackResponse,
+      }) as MediaResponse,
   );
   const saved = new Set<string>();
   const result = await saveOfflineCollection(tracks, {
-    isSaved: (trackId) => saved.has(trackId),
+    isSaved: (mediaId) => saved.has(mediaId),
     save: async (track) => {
       if (track.id === "two") throw new Error("download failed");
       saved.add(track.id);
@@ -559,7 +559,7 @@ test("offline playback uses only saved copies while disconnected", () => {
 });
 
 test("saved offline copies follow canonical duplicate aliases", () => {
-  const duplicate: TrackResponse = {
+  const duplicate: MediaResponse = {
     id: "track-duplicate",
     mediaType: "music",
     mediaTypeOrigin: "source",
@@ -579,7 +579,7 @@ test("saved offline copies follow canonical duplicate aliases", () => {
     metadata: null,
     liked: false,
   };
-  const canonical: TrackResponse = {
+  const canonical: MediaResponse = {
     ...duplicate,
     id: "track-canonical",
     available: true,

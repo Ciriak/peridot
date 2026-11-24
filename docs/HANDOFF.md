@@ -1,5 +1,199 @@
 # Peridot handoff
 
+## Medias manager
+
+Administration now includes a Medias manager at `/settings/medias`. It lists all
+known media, including unavailable records and zero-copy drafts, with full
+metadata and source-backed file/location records. The page provides advanced
+filters, sorting, numbered pagination, a right-side inline editor, media and copy
+CRUD, persistent manual overrides with reset-to-source actions, and destructive
+delete confirmations.
+
+The route is full-bleed inside settings. The page title and subtitle are omitted,
+search and filters stay above the independently scrolling datatable, pagination
+stays below it, and date cells expose their raw ISO timestamp through a native
+`title` tooltip. The table owns vertical and horizontal scrolling.
+
+Verification:
+
+- `pnpm --filter @peridot/server test` (215 passing)
+- `pnpm --filter @peridot/web test` (319 passing)
+- `pnpm --filter @peridot/server typecheck`
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- `pnpm lint`
+- `pnpm format:check`
+- `pnpm db:validate`
+- Local migration marker and `db` ref advanced to
+  `7fb2e91df85da52ca54ad7f6ff71621577a757d8b112f95a109d4653e0773135`
+
+Known limits:
+
+- Live authenticated browser QA was not completed because Computer Use could not
+  verify the active browser URL.
+- The full-screen table layout should still be checked against a genuinely large
+  catalog at desktop and phone widths.
+- Manual overrides cover the exposed editable data fields; IDs, timestamps,
+  availability, aliases, and scan/projection internals intentionally remain
+  system-owned.
+
+Uncommitted changes:
+
+- Medias manager contracts, API routes, persistent override helpers and scan
+  integration, additive migration, web page/drawer/editors, tests, translations,
+  and documentation.
+
+Next:
+
+- Inspect `/settings/medias` at desktop and phone widths, exercise filters and
+  pagination with a multi-page catalog, then edit a scanned field and confirm it
+  survives a source rescan before using Reset to source.
+
+## Direct connector settings destinations
+
+The settings sidebar now lists Library sources, Release indexers, Download
+clients, and Metadata providers directly under Administration. There is no
+Connectors parent entry or heading. The connector overview remains available at
+`/settings/connectors` by direct URL and uses localized labels.
+
+Verification:
+
+- Focused settings navigation tests (16 passing)
+- `pnpm --filter @peridot/web test` (316 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm lint`
+- `pnpm format:check`
+- `pnpm version:check`
+- `pnpm install --frozen-lockfile --ignore-scripts`
+- `pnpm --filter @peridot/web build`
+
+Known limits:
+
+- The sidebar was verified through behavioral assertions and the production
+  build, not an authenticated browser session.
+
+Uncommitted changes:
+
+- Settings sidebar layout, connector overview localization, translations,
+  regression tests, documentation, the pnpm 11 lockfile regeneration, and
+  formatting-only Tauri configuration cleanup.
+
+Next:
+
+- Inspect the Administration group at desktop and phone widths while one
+  metadata task and several library sources are present.
+
+## Short album rows omit trailing placeholders
+
+The shared virtual card grid now limits placeholders to unloaded slots inside the
+complete result count. A fully loaded final row with fewer cards remains short,
+so a one-album collection no longer shows four loading skeletons. Fully unloaded
+rows and partially loaded rows before the end still reserve card placeholders.
+
+Verification:
+
+- Focused virtual album and virtual scroll tests (6 passing)
+- `pnpm --filter @peridot/web typecheck`
+- Focused ESLint and Prettier checks on the changed files
+- `pnpm --filter @peridot/web build`
+- `pnpm --filter @peridot/web test` (316 passing after the connector navigation
+  and short-row regression fixes)
+
+Known limits:
+
+- The corrected Albums row was verified through behavioral assertions and the
+  production build, not another authenticated browser session.
+
+Uncommitted changes:
+
+- Virtual card row placeholder calculation, grid wiring, regression tests, the
+  decision record, and this handoff section.
+
+Next:
+
+- Reload Albums at desktop and phone widths with collections whose last row has
+  fewer than two and fewer than five items.
+
+## Media and connector refactor
+
+Peridot now uses canonical `Media`, source-backed `MediaCopy`, and
+`MediaAlias` records. Likes, play history, playlists, queues, catalog
+projections, artwork selection, and offline references use Media IDs. Source
+paths, file properties, embedded metadata, recording identities, scan state,
+and availability live on copies. Automatic matching keeps the oldest canonical
+Media ID and redirects merged IDs through aliases.
+
+Playback ranks available copies by availability, lossless state, bitrate, file
+size, metadata completeness, library-source order, import time, and copy ID. It
+tries the next copy for pre-header failures. A mid-stream copy failure marks
+that copy unavailable so the client can retry the same range against the next
+ranked copy.
+
+The server now has one compile-time connector registry with explicit roles:
+library source, release indexer, download client, metadata provider, and
+playlist account. Path and Jellyfin are library sources. Torznab is the only
+live release-search connector. qBittorrent is a download client. MusicBrainz and
+Discogs are metadata providers. Playlist account/link persistence, capability
+interfaces, user-owned account routes, import matching, and idempotent sync are
+implemented and covered with a test-only typed connector; Spotify and YouTube
+Music have contracts but no production adapters.
+
+The public API uses `/api/media`. `/api/tracks`, `/api/torznab`, and
+`/api/admin/sources` are absent without aliases. Discover uses
+`/api/search/external` and release imports use task-ID status polling.
+Connector descriptors and separate connector CRUD routes are exposed under
+`/api/admin`.
+
+The migration graph is replaced by one baseline:
+`apps/server/migrations/app/20261124T1528_media_connector_baseline`. Existing
+legacy databases are intentionally unsupported. Startup reports an actionable
+backup-and-remove message and never deletes or recreates the database.
+
+Web query, player, download-task, and offline-manifest generations were bumped.
+First launch clears legacy metadata while preserving
+`peridot-offline-audio-v1`. Android writes new data under `files/offline-v2` and
+leaves `files/offline` untouched. Settings → Library exposes explicit legacy
+audio cleanup.
+
+Verification:
+
+- `pnpm test` (server 212, web 315, UI 19, desktop 5, plus shared packages)
+- `pnpm --filter @peridot/server test` (212 passing)
+- `pnpm --filter @peridot/web test` (316 passing)
+- `pnpm --filter @peridot/android test` (Gradle unit tests passing)
+- `connectedDebugAndroidTest` (7 passing on Pixel 8, API 37)
+- `pnpm typecheck`
+- `pnpm lint`
+- `pnpm format:check`
+- `pnpm version:check`
+- `pnpm db:validate` (one baseline at `30048626d798`)
+- `pnpm build`
+
+Known limits:
+
+- No production Spotify, YouTube Music, or other playlist adapter is included.
+- Existing Track/Source databases require a manual backup and reset; this
+  release performs no data backfill.
+- Legacy audio blobs remain until the owner invokes the explicit cleanup action.
+- Torznab remains the only live Discover connector in this milestone.
+
+Uncommitted changes:
+
+- The complete Media/MediaCopy/connector refactor, fresh baseline migration,
+  server/web/Android contract updates, client storage reset, tests, and
+  documentation changes in this worktree.
+- The owner's existing `README.md` concept edits were preserved and extended
+  with connector roles and the manual database reset.
+
+Next:
+
+- Back up and remove a real legacy test database, then exercise fresh startup.
+- Run desktop and phone visual QA for the connector settings destinations,
+  Discover import progress, linked playlist surfaces, Tasks, and legacy-cache
+  cleanup.
+- Validate a live Jellyfin server and live Torznab/qBittorrent pair after the
+  schema reset.
+
 ## Incremental external imports
 
 Completed Torznab downloads now store qBittorrent's completed, safe audio paths

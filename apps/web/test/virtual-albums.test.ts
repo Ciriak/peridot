@@ -4,7 +4,19 @@ import {
   VIRTUAL_ALBUM_PAGE_SIZE,
   VIRTUAL_WINDOW_LOAD_DELAY_MS,
   virtualAlbumPageOffsets,
+  virtualCardRowPlaceholderCount,
 } from "../app/lib/virtual-albums.ts";
+
+test("virtual card placeholders stop at the end of a short final row", () => {
+  assert.equal(virtualCardRowPlaceholderCount(0, 5, 1, 1), 0);
+  assert.equal(virtualCardRowPlaceholderCount(0, 5, 3, 3), 0);
+  assert.equal(virtualCardRowPlaceholderCount(1, 5, 7, 2), 0);
+  assert.equal(virtualCardRowPlaceholderCount(2, 5, 12, 2), 0);
+
+  assert.equal(virtualCardRowPlaceholderCount(1, 5, 500, 0), 5);
+  assert.equal(virtualCardRowPlaceholderCount(1, 5, 7, 0), 2);
+  assert.equal(virtualCardRowPlaceholderCount(1, 5, 7, 1), 1);
+});
 
 test("virtual album windows fetch pages around the visible range", () => {
   assert.deepEqual(virtualAlbumPageOffsets(0, 24), [0, 100]);

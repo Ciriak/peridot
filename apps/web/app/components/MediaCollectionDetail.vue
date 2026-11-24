@@ -21,7 +21,7 @@ import { icons } from "../lib/icons";
 import {
   formatTrackDuration,
   trackCoverUrl,
-  trackIdFromTitleHash,
+  mediaIdFromTitleHash,
   type TrackSort,
 } from "../lib/library";
 import {
@@ -105,7 +105,7 @@ const {
   sort: collectionSort.value,
   direction: trackSort.value.direction,
 }));
-const scrollToTrackId = computed(() => trackIdFromTitleHash(route.hash));
+const scrollToTrackId = computed(() => mediaIdFromTitleHash(route.hash));
 const icon = computed(() =>
   props.mediaType === "audiobook" ? icons.book : icons.podcast,
 );

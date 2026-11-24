@@ -1,31 +1,35 @@
 import { registerDownloadClients } from "./download-clients.js";
+import { registerAdminMediaRoutes } from "./admin-media-routes.js";
+import { registerReleaseIndexers } from "./release-indexers.js";
 import path from "node:path";
 import type {
   CreateUserRequest,
   CreateMetadataProviderRequest,
-  CreateSourceRequest,
-  CreateSourceResponse,
+  CreateLibrarySourceRequest,
+  CreateLibrarySourceResponse,
   DirectoryListResponse,
-  DiscoverSourceIntegrationRequest,
+  DiscoverLibrarySourceRequest,
   LogListResponse,
   MetadataProviderDefinitionListResponse,
   MetadataProviderListResponse,
   ReorderMetadataProvidersRequest,
-  ReorderSourcesRequest,
+  ReorderLibrarySourcesRequest,
   ResetMetadataResponse,
   RestartServerResponse,
   ServerSettingsResponse,
-  SourceListResponse,
-  SourceRemovalResponse,
+  LibrarySourceListResponse,
+  LibrarySourceRemovalResponse,
   UpdateMetadataProviderRequest,
   UpdateServerSettingsRequest,
   UpdateUserRequest,
   UserListResponse,
   UpdateStatusResponse,
-  SourceIntegrationOptionListResponse,
+  LibrarySourceConnectorOptionListResponse,
+  ConnectorListResponse,
 } from "@peridot/contracts";
 import type { FastifyInstance } from "fastify";
 import type { CatalogService } from "./catalog.js";
+import type { ConnectorRegistry } from "./connectors.js";
 import type { CredentialStore } from "./credential-store.js";
 import type { Database } from "./database.js";
 import { sendError } from "./http.js";
@@ -50,7 +54,7 @@ import {
 } from "./server-settings.js";
 import type { SourceRefreshScheduler } from "./source-refresh-scheduler.js";
 import { UpdateError, type UpdateService } from "./updates.js";
-import type { SourceIntegrationService } from "./source-integrations.js";
+import type { LibrarySourceConnectorService } from "./source-integrations.js";
 import {
   createSource,
   discoverIntegrationSources,
@@ -61,9 +65,9 @@ import {
   SourceError,
 } from "./sources.js";
 import {
-  queueDuplicateDetection,
+  queueMediaMatch,
   queueLibraryScan,
-  queueMetadataFetch,
+  queueMetadataEnrichment,
   toTaskResponse,
   type TaskService,
 } from "./tasks.js";
@@ -90,12 +94,13 @@ export async function registerAdminRoutes(
   metadataCredentials: CredentialStore,
   onSessionsRevoked?: (sessionIds: string[]) => void,
   restartServer?: () => void,
-  sourceIntegrations?: SourceIntegrationService,
+  sourceIntegrations?: LibrarySourceConnectorService,
   catalog?: CatalogService,
   sourceRefreshScheduler?: SourceRefreshScheduler,
   updates?: UpdateService,
   artworkCache?: ArtworkCache,
   sourceRemovals?: SourceRemovalRegistry,
+  connectors?: ConnectorRegistry,
 ) {
   await app.register(async (admin) => {
     admin.addHook("onRequest", async (request, reply) => {
@@ -110,21 +115,35 @@ export async function registerAdminRoutes(
       }
     });
 
-    registerDownloadClients(admin, database, metadataCredentials);
+    if (!connectors) {
+      throw new Error("Connector registry is unavailable.");
+    }
+    if (!catalog) {
+      throw new Error("Catalog service is unavailable.");
+    }
+    await registerAdminMediaRoutes(admin, database, catalog);
+    registerDownloadClients(admin, database, metadataCredentials, connectors);
+    registerReleaseIndexers(admin, database, metadataCredentials, connectors);
+    admin.get(
+      "/api/admin/connectors",
+      async (): Promise<ConnectorListResponse> => ({
+        items: connectors?.descriptors() ?? [],
+      }),
+    );
     admin.get(
       "/api/admin/server",
       async (): Promise<ServerSettingsResponse> => {
-        const [trackCount, availableTrackCount] = await Promise.all([
-          database.orm.Track.aggregate((aggregate) => ({
+        const [mediaCount, availableMediaCount] = await Promise.all([
+          database.orm.Media.aggregate((aggregate) => ({
             count: aggregate.count(),
           })),
-          database.orm.Track.where({ available: 1 }).aggregate((aggregate) => ({
+          database.orm.Media.where({ available: 1 }).aggregate((aggregate) => ({
             count: aggregate.count(),
           })),
         ]);
         return {
-          trackCount: trackCount.count,
-          availableTrackCount: availableTrackCount.count,
+          mediaCount: mediaCount.count,
+          availableMediaCount: availableMediaCount.count,
           scanning: await readScanWorkerSettings(database),
           sourceRefresh: sourceRefreshScheduler?.status() ?? {
             enabled: false,
@@ -165,17 +184,17 @@ export async function registerAdminRoutes(
                 ...(await readSourceRefreshSettings(database)),
                 nextRunAt: null,
               });
-          const [trackCount, availableTrackCount] = await Promise.all([
-            database.orm.Track.aggregate((aggregate) => ({
+          const [mediaCount, availableMediaCount] = await Promise.all([
+            database.orm.Media.aggregate((aggregate) => ({
               count: aggregate.count(),
             })),
-            database.orm.Track.where({ available: 1 }).aggregate(
+            database.orm.Media.where({ available: 1 }).aggregate(
               (aggregate) => ({ count: aggregate.count() }),
             ),
           ]);
           return {
-            trackCount: trackCount.count,
-            availableTrackCount: availableTrackCount.count,
+            mediaCount: mediaCount.count,
+            availableMediaCount: availableMediaCount.count,
             scanning: settings.scanning
               ? settings.scanning
               : await readScanWorkerSettings(database),
@@ -252,19 +271,22 @@ export async function registerAdminRoutes(
       }
     });
 
-    admin.get("/api/admin/sources", async (): Promise<SourceListResponse> => ({
-      items: await listSources(database, sourceRemovals),
-    }));
+    admin.get(
+      "/api/admin/library-sources",
+      async (): Promise<LibrarySourceListResponse> => ({
+        items: await listSources(database, sourceRemovals),
+      }),
+    );
 
     admin.post<{
       Params: { kind: string };
-      Body: DiscoverSourceIntegrationRequest;
+      Body: DiscoverLibrarySourceRequest;
     }>(
       "/api/admin/source-integrations/:kind/discover",
       async (
         request,
         reply,
-      ): Promise<SourceIntegrationOptionListResponse | undefined> => {
+      ): Promise<LibrarySourceConnectorOptionListResponse | undefined> => {
         try {
           if (!sourceIntegrations) {
             throw new Error("Source integration service is unavailable.");
@@ -364,8 +386,8 @@ export async function registerAdminRoutes(
       },
     );
 
-    admin.post<{ Body: CreateSourceRequest }>(
-      "/api/admin/sources",
+    admin.post<{ Body: CreateLibrarySourceRequest }>(
+      "/api/admin/library-sources",
       async (request, reply) => {
         try {
           if (!sourceIntegrations) {
@@ -382,6 +404,7 @@ export async function registerAdminRoutes(
             sourceIntegrations.registry.has(source.kind)
               ? await queueLibraryScan(tasks, {
                   id: source.id,
+                  kind: source.kind,
                   name:
                     source.name ||
                     (source.path
@@ -389,7 +412,7 @@ export async function registerAdminRoutes(
                       : "Integration source"),
                 })
               : null;
-          const response: CreateSourceResponse = {
+          const response: CreateLibrarySourceResponse = {
             ...source,
             task: task ? toTaskResponse(task) : null,
           };
@@ -409,14 +432,14 @@ export async function registerAdminRoutes(
       },
     );
 
-    admin.put<{ Body: ReorderSourcesRequest }>(
-      "/api/admin/sources/order",
+    admin.put<{ Body: ReorderLibrarySourcesRequest }>(
+      "/api/admin/library-sources/order",
       async (request, reply) => {
         try {
           const result = {
             items: await reorderSources(database, request.body?.ids),
           };
-          await queueDuplicateDetection(tasks);
+          await queueMediaMatch(tasks);
           return result;
         } catch (error) {
           if (error instanceof SourceError) {
@@ -434,9 +457,12 @@ export async function registerAdminRoutes(
     );
 
     admin.delete<{ Params: { id: string } }>(
-      "/api/admin/sources/:id",
-      async (request, reply): Promise<SourceRemovalResponse | undefined> => {
-        const source = await database.orm.Source.first({
+      "/api/admin/library-sources/:id",
+      async (
+        request,
+        reply,
+      ): Promise<LibrarySourceRemovalResponse | undefined> => {
+        const source = await database.orm.LibrarySource.first({
           id: request.params.id,
         });
         if (!source || source.removedAt) {
@@ -451,8 +477,8 @@ export async function registerAdminRoutes(
         if (!catalog || !sourceRemovals) {
           throw new Error("Source removal services are unavailable.");
         }
-        const { count: total } = await database.orm.Track.where({
-          sourceId: source.id,
+        const { count: total } = await database.orm.MediaCopy.where({
+          librarySourceId: source.id,
         }).aggregate((aggregate) => ({ count: aggregate.count() }));
         const startedAt = Date.now();
         let progress;
@@ -472,7 +498,7 @@ export async function registerAdminRoutes(
         }
 
         try {
-          await tasks.stopForSource(source.id);
+          await tasks.stopForConnector(source.id);
           const result = await database.transaction(async (transaction) => {
             const unavailable = await catalog.markSourceUnavailable(
               source.id,
@@ -480,7 +506,7 @@ export async function registerAdminRoutes(
               async (completed, taskTotal) => {
                 sourceRemovals.update(
                   source.id,
-                  "tracks",
+                  "copies",
                   completed,
                   taskTotal,
                 );
@@ -489,9 +515,9 @@ export async function registerAdminRoutes(
             );
             sourceRemovals.update(source.id, "catalog", total, total);
             await transaction.orm.ArtworkJob.where({
-              sourceId: source.id,
+              librarySourceId: source.id,
             }).deleteAndCount();
-            await transaction.orm.Source.where({
+            await transaction.orm.LibrarySource.where({
               id: source.id,
             }).update({
               removedAt: new Date(),
@@ -511,10 +537,10 @@ export async function registerAdminRoutes(
               },
             );
           }
-          await queueDuplicateDetection(tasks);
+          await queueMediaMatch(tasks);
           return {
             sourceId: source.id,
-            unavailableTrackCount: result.trackCount,
+            unavailableMediaCopyCount: result.trackCount,
             affectedAlbumCount: result.albumCount,
             affectedArtistCount: result.artistCount,
             durationMs: Date.now() - startedAt,
@@ -543,9 +569,9 @@ export async function registerAdminRoutes(
     );
 
     admin.post<{ Params: { id: string } }>(
-      "/api/admin/sources/:id/scans",
+      "/api/admin/library-sources/:id/scans",
       async (request, reply) => {
-        const source = await database.orm.Source.first({
+        const source = await database.orm.LibrarySource.first({
           id: request.params.id,
         });
         if (!source) {
@@ -571,6 +597,7 @@ export async function registerAdminRoutes(
         }
         const task = await queueLibraryScan(tasks, {
           id: source.id,
+          kind: source.kind,
           name:
             source.name ||
             (source.path ? path.basename(source.path) : "Integration source"),
@@ -691,18 +718,18 @@ export async function registerAdminRoutes(
         );
       }
       const artistCount = await metadataEnrichment.resetAllArtists();
-      const trackCount = await metadataEnrichment.resetAll();
-      await queueDuplicateDetection(tasks);
+      const mediaCount = await metadataEnrichment.resetAll();
+      await queueMediaMatch(tasks);
       const response: ResetMetadataResponse = {
-        trackCount,
+        mediaCount,
         artistCount,
       };
       return response;
     });
 
     admin.post("/api/admin/metadata/refresh", async (_request, reply) => {
-      const task = await queueMetadataFetch(tasks, { force: true });
-      await queueDuplicateDetection(tasks, task.id);
+      const task = await queueMetadataEnrichment(tasks, { force: true });
+      await queueMediaMatch(tasks, task.id);
       return reply.code(202).send(toTaskResponse(task));
     });
 

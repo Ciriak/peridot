@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { filterTorznabReleases } from "../app/lib/torznab-filters.ts";
+import { filterReleaseResults } from "../app/lib/torznab-filters.ts";
 import {
   torznabImportPercent,
   torznabImportShouldPoll,
@@ -47,7 +47,7 @@ test("query changes automatically trigger external search without a manual actio
 
 test("external rows mirror library rows with placeholder art and a download action", async () => {
   const row = await readFile(
-    new URL("../app/components/TorznabReleaseRow.vue", import.meta.url),
+    new URL("../app/components/ReleaseResultRow.vue", import.meta.url),
     "utf8",
   );
 
@@ -101,7 +101,7 @@ test("external rows mirror library rows with placeholder art and a download acti
 
 test("external results use the shared list surface and keep completion playback outside rows", async () => {
   const results = await readFile(
-    new URL("../app/components/TorznabResults.vue", import.meta.url),
+    new URL("../app/components/ExternalResults.vue", import.meta.url),
     "utf8",
   );
 
@@ -109,7 +109,7 @@ test("external results use the shared list surface and keep completion playback 
     results,
     /role="list"[\s\S]*class="divide-y overflow-hidden rounded-lg border"/,
   );
-  assert.match(results, /<TorznabReleaseRow[\s\S]*v-for="release in releases"/);
+  assert.match(results, /<ReleaseResultRow[\s\S]*v-for="release in releases"/);
   assert.match(results, /:import-state="importStateFor\(release\)"/);
   assert.match(results, /torrent\.progress >= 1/);
   assert.match(results, /kind: "already-added"/);
@@ -137,20 +137,18 @@ test("external filters expose media types and sort by seeders", () => {
     canImport: true,
     seeders: release.seeders,
     bytes: null,
-  })) as Parameters<typeof filterTorznabReleases>[0];
+  })) as Parameters<typeof filterReleaseResults>[0];
 
   assert.deepEqual(
-    filterTorznabReleases(releases, "all").map((release) => release.title),
+    filterReleaseResults(releases, "all").map((release) => release.title),
     ["Podcast", "Book", "Music", "Unknown", "Unknown music"],
   );
   assert.deepEqual(
-    filterTorznabReleases(releases, "music").map((release) => release.title),
+    filterReleaseResults(releases, "music").map((release) => release.title),
     ["Music", "Unknown music"],
   );
   assert.deepEqual(
-    filterTorznabReleases(releases, "audiobook").map(
-      (release) => release.title,
-    ),
+    filterReleaseResults(releases, "audiobook").map((release) => release.title),
     ["Book"],
   );
 });
@@ -170,15 +168,15 @@ test("torznab transfer states map to stable inline progress labels", () => {
   assert.equal(torznabTerminalImportState("uploading"), false);
   assert.equal(torznabImportShouldPoll(undefined), true);
   assert.equal(
-    torznabImportShouldPoll({ state: "downloading", trackIds: [] }),
+    torznabImportShouldPoll({ state: "downloading", mediaIds: [] }),
     true,
   );
   assert.equal(
-    torznabImportShouldPoll({ state: "uploading", trackIds: ["track"] }),
+    torznabImportShouldPoll({ state: "uploading", mediaIds: ["track"] }),
     false,
   );
   assert.equal(
-    torznabImportShouldPoll({ state: "error", trackIds: [] }),
+    torznabImportShouldPoll({ state: "error", mediaIds: [] }),
     false,
   );
 });

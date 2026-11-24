@@ -75,7 +75,7 @@ const clock = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 const currentTrackLikeTarget = computed(() =>
   currentTrackId.value
-    ? ({ kind: "track", trackId: currentTrackId.value } as const)
+    ? ({ kind: "media", mediaId: currentTrackId.value } as const)
     : null,
 );
 const currentCoverUrl = computed(() =>
@@ -110,7 +110,7 @@ const open = computed<boolean>({
 
 function toggleCurrentTrackLike() {
   if (currentTrackId.value)
-    void toggleLike({ kind: "track", trackId: currentTrackId.value });
+    void toggleLike({ kind: "media", mediaId: currentTrackId.value });
 }
 
 function playActiveTrack() {
@@ -308,7 +308,7 @@ const {
             class="-ml-1.5 transition-none hover:bg-transparent hover:text-current active:bg-transparent active:text-current dark:hover:bg-transparent dark:active:bg-transparent"
             :liked="
               currentTrackLikeTarget
-                ? likedTrackIds.includes(currentTrackLikeTarget.trackId)
+                ? likedTrackIds.includes(currentTrackLikeTarget.mediaId)
                 : false
             "
             :label="active?.title ?? t('player.currentTrack')"
@@ -471,7 +471,7 @@ const {
                       :liked="
                         currentTrackLikeTarget
                           ? likedTrackIds.includes(
-                              currentTrackLikeTarget.trackId,
+                              currentTrackLikeTarget.mediaId,
                             )
                           : false
                       "
