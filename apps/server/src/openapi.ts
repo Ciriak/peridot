@@ -117,6 +117,7 @@ const trackMediaTypeOriginSchema = enumeration(
 );
 const metadataProviderKindSchema = enumeration("musicbrainz", "discogs");
 const taskStatusSchema = enumeration(
+  "waiting",
   "queued",
   "running",
   "completed",
@@ -125,12 +126,37 @@ const taskStatusSchema = enumeration(
   "stopped",
 );
 const taskKindSchema = enumeration(
+  "release_import",
   "library_scan",
   "catalog_fetch",
   "metadata_fetch",
   "artwork_fetch",
+  "duplicate_detection",
 );
 
+const downloadLinkFields = {
+  downloadClientId: stringSchema,
+  folderId: stringSchema,
+  savePath: stringSchema,
+  category: stringSchema,
+  tags: stringSchema,
+  categoryPath: booleanSchema,
+};
+const downloadClientFields = {
+  authType: enumeration("apiKey", "password"),
+  username: stringSchema,
+  kind: enumeration("qbittorrent"),
+  name: stringSchema,
+  url: stringSchema,
+};
+const downloadClientInput = objectSchema(
+  { ...downloadClientFields, password: stringSchema, apiKey: stringSchema },
+  ["kind", "name", "url"],
+);
+const downloadOptions = objectSchema({
+  categories: arrayOf(stringSchema),
+  tags: arrayOf(stringSchema),
+});
 const schemas: Record<string, SchemaObject> = {
   MessageParams: {
     type: "object",
@@ -230,7 +256,7 @@ const schemas: Record<string, SchemaObject> = {
     id: stringSchema,
     mediaType: mediaTypeSchema,
     mediaTypeOrigin: trackMediaTypeOriginSchema,
-    sourceKind: nullable(enumeration("path", "url", "jellyfin")),
+    sourceKind: nullable(enumeration("path", "url", "jellyfin", "torznab")),
     title: stringSchema,
     artist: stringSchema,
     artists: arrayOf(stringSchema),
@@ -267,7 +293,7 @@ const schemas: Record<string, SchemaObject> = {
     title: stringSchema,
     artist: stringSchema,
     artists: arrayOf(stringSchema),
-    sourceKinds: arrayOf(enumeration("path", "url", "jellyfin")),
+    sourceKinds: arrayOf(enumeration("path", "url", "jellyfin", "torznab")),
     coverUrl: nullable(stringSchema),
     trackCount: integerSchema,
     durationMs: nullable(integerSchema),
@@ -654,6 +680,7 @@ const schemas: Record<string, SchemaObject> = {
     kind: taskKindSchema,
     status: taskStatusSchema,
     titleMessage: ref("MessageDescriptor"),
+    ownerUserId: nullable(stringSchema),
     parentTaskId: nullable(stringSchema),
     source: nullable(ref("TaskSourceResponse")),
     progress: ref("TaskProgressResponse"),
@@ -678,7 +705,7 @@ const schemas: Record<string, SchemaObject> = {
   }),
   SourceResponse: objectSchema({
     id: stringSchema,
-    kind: enumeration("path", "url", "jellyfin"),
+    kind: enumeration("path", "url", "jellyfin", "torznab"),
     name: nullable(stringSchema),
     path: nullable(stringSchema),
     url: nullable(stringSchema),
@@ -689,7 +716,7 @@ const schemas: Record<string, SchemaObject> = {
   }),
   CreateSourceResponse: objectSchema({
     id: stringSchema,
-    kind: enumeration("path", "url", "jellyfin"),
+    kind: enumeration("path", "url", "jellyfin", "torznab"),
     name: nullable(stringSchema),
     path: nullable(stringSchema),
     url: nullable(stringSchema),
@@ -711,6 +738,16 @@ const schemas: Record<string, SchemaObject> = {
         name: nullable(stringSchema),
         url: stringSchema,
       }),
+      objectSchema(
+        {
+          kind: { const: "torznab" },
+          name: stringSchema,
+          url: stringSchema,
+          apiKey: stringSchema,
+          ...downloadLinkFields,
+        },
+        ["kind", "url"],
+      ),
       objectSchema({
         kind: { const: "jellyfin" },
         name: nullable(stringSchema),
@@ -1401,6 +1438,133 @@ const routes: Record<string, OpenApiOperation> = {
       ),
       security: realtimeTicketSecurity,
     },
+  ),
+  "GET /api/admin/download-clients": jsonOperation(
+    "Server administration",
+    "List saved download clients",
+    arrayOf(
+      objectSchema({
+        ...downloadClientFields,
+        hasApiKey: booleanSchema,
+        id: stringSchema,
+      }),
+    ),
+  ),
+  "POST /api/admin/download-clients": jsonOperation(
+    "Server administration",
+    "Create a download client",
+    objectSchema({ id: stringSchema }),
+    { status: 201, body: downloadClientInput },
+  ),
+  "PUT /api/admin/download-clients/:id": jsonOperation(
+    "Server administration",
+    "Update a download client",
+    objectSchema({ id: stringSchema }),
+    { body: downloadClientInput },
+  ),
+  "DELETE /api/admin/download-clients/:id": jsonOperation(
+    "Server administration",
+    "Remove a download client",
+    null,
+    { status: 204 },
+  ),
+  "POST /api/admin/download-clients/test": jsonOperation(
+    "Server administration",
+    "Test qBittorrent credentials",
+    downloadOptions,
+    {
+      body: objectSchema(
+        {
+          ...downloadClientFields,
+          password: stringSchema,
+          apiKey: stringSchema,
+          id: stringSchema,
+        },
+        ["url", "kind"],
+      ),
+    },
+  ),
+  "GET /api/admin/download-clients/:id/options": jsonOperation(
+    "Server administration",
+    "List qBittorrent categories and tags",
+    downloadOptions,
+  ),
+  "PUT /api/admin/sources/:id/download-client": jsonOperation(
+    "Server administration",
+    "Set the indexer download destination",
+    null,
+    { status: 204, body: objectSchema(downloadLinkFields, []) },
+  ),
+  "GET /api/torznab": jsonOperation(
+    "Library",
+    "Check external search availability",
+    objectSchema({ enabled: booleanSchema }),
+  ),
+  "GET /api/torznab/search": jsonOperation(
+    "Library",
+    "Search audio releases",
+    arrayOf(
+      objectSchema(
+        {
+          id: stringSchema,
+          title: stringSchema,
+          sourceName: stringSchema,
+          canImport: booleanSchema,
+          seeders: nullable(integerSchema),
+          bytes: nullable(integerSchema),
+          torrentStatus: nullable(
+            objectSchema({
+              hash: stringSchema,
+              state: stringSchema,
+              progress: numberSchema,
+              taskId: nullable(stringSchema),
+            }),
+          ),
+        },
+        ["id", "title", "sourceName", "canImport", "seeders", "bytes"],
+      ),
+    ),
+    { query: objectSchema({ q: stringSchema }) },
+  ),
+  "POST /api/torznab/imports/:id": operationWithResponses(
+    "Library",
+    "Import a release",
+    {
+      "202": response(
+        objectSchema({
+          id: stringSchema,
+          task: ref("TaskResponse"),
+        }),
+        "Import task queued",
+      ),
+      "409": response(
+        objectSchema({
+          error: objectSchema({
+            code: stringSchema,
+            message: stringSchema,
+          }),
+        }),
+        "Release already exists in the download client",
+      ),
+      "502": response(
+        objectSchema({
+          error: objectSchema({
+            code: stringSchema,
+            message: stringSchema,
+          }),
+        }),
+        "Download client rejected the release",
+      ),
+    },
+  ),
+  "GET /api/torznab/imports/:id": jsonOperation(
+    "Library",
+    "Get release import progress",
+    objectSchema({
+      progress: numberSchema,
+      state: stringSchema,
+      trackIds: arrayOf(stringSchema),
+    }),
   ),
   "GET /api/admin/server": jsonOperation(
     "Server administration",

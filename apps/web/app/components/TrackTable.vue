@@ -7,7 +7,6 @@ import { Button } from "@peridot/ui/components/ui/button";
 import { ProgressCircle } from "@peridot/ui/components/ui/progress-circle";
 import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
-import AutoLoadMore from "./AutoLoadMore.vue";
 import AlbumLink from "./AlbumLink.vue";
 import DownloadProgressTooltip from "./DownloadProgressTooltip.vue";
 import LikeButton from "./LikeButton.vue";
@@ -17,6 +16,7 @@ import TrackArtistLinks from "./TrackArtistLinks.vue";
 import TrackArtwork from "./TrackArtwork.vue";
 import TrackContextMenu from "./TrackContextMenu.vue";
 import { useMainScrollVirtualizer } from "../composables/use-main-scroll-virtualizer";
+import { useVirtualLoadMore } from "../composables/use-virtual-load-more";
 import { useLikes } from "../composables/use-likes";
 import { useLibraryPlayer } from "../composables/use-library-player";
 import { useOfflineTracks } from "../composables/use-offline-tracks";
@@ -50,6 +50,7 @@ const props = withDefaults(
     sort?: TrackSort;
     hasMore?: boolean;
     loadingMore?: boolean;
+    totalCount?: number;
     showArtists?: boolean;
     allowTrackLike?: boolean;
   }>(),
@@ -98,9 +99,12 @@ const activeSort = computed(
   () => props.sort ?? defaultTrackSort(props.variant),
 );
 const isSearch = computed(() => props.variant === "search");
+const totalItemCount = computed(() =>
+  Math.max(props.tracks.length, props.totalCount ?? props.tracks.length),
+);
 const rowGroup = ref<HTMLElement | null>(null);
 const virtualizer = useMainScrollVirtualizer({
-  count: computed(() => props.tracks.length),
+  count: totalItemCount,
   estimateSize: 56,
   overscan: 8,
   wrapper: rowGroup,
@@ -112,6 +116,16 @@ const virtualRows = computed(() =>
     return track ? [{ ...row, track }] : [];
   }),
 );
+useVirtualLoadMore({
+  virtualItems: computed(() => virtualizer.virtualItems.value),
+  loadedItemCount: computed(() => props.tracks.length),
+  totalItemCount,
+  itemsPerRow: 1,
+  prefetchRows: 8,
+  enabled: computed(() => Boolean(props.hasMore)),
+  loading: computed(() => Boolean(props.loadingMore)),
+  onLoad: () => emit("load-more"),
+});
 
 function toggleSort(field: TrackSortField) {
   emit("sort-change", nextTrackSort(activeSort.value, field));
@@ -163,10 +177,6 @@ function isOfflineOnly(track: TrackResponse): boolean {
     !unavailableTrackIdSet.value.has(track.id) &&
     isSavedOffline(track.id)
   );
-}
-
-function loadMoreRows() {
-  if (props.hasMore && !props.loadingMore) emit("load-more");
 }
 
 function playFromList(track: TrackResponse, restart = false) {
@@ -281,7 +291,8 @@ onBeforeUnmount(() => {
 <template>
   <div
     :role="isSearch ? 'list' : 'table'"
-    :aria-rowcount="isSearch ? undefined : tracks.length + 1"
+    :aria-rowcount="isSearch ? undefined : totalItemCount + 1"
+    :aria-busy="loadingMore ? 'true' : undefined"
     :aria-label="isSearch ? t('page.search.results') : t('trackTable.label')"
     :class="isSearch ? 'text-sm' : 'rounded-lg border text-sm'"
     :style="{ overflowAnchor: 'none' }"
@@ -425,7 +436,7 @@ onBeforeUnmount(() => {
           :class="{
             'bg-primary/10': isTrackLinkHighlighted(item.track),
             'hover:bg-muted/50': !isTrackLinkHighlighted(item.track),
-            'border-0': item.index === tracks.length - 1,
+            'border-0': item.index === totalItemCount - 1,
           }"
           :style="virtualizer.virtualRowStyle(item)"
           @dblclick.prevent="playFromList(item.track)"
@@ -658,22 +669,6 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </TrackContextMenu>
-    </div>
-    <div v-if="hasMore" :role="isSearch ? undefined : 'rowgroup'">
-      <div
-        :role="isSearch ? undefined : 'row'"
-        :aria-rowindex="isSearch ? undefined : tracks.length + 2"
-      >
-        <AutoLoadMore
-          :role="isSearch ? undefined : 'cell'"
-          class="min-w-full"
-          :enabled="Boolean(hasMore)"
-          :loading="Boolean(loadingMore)"
-          :item-count="tracks.length"
-          :label="t('trackTable.loadingMore')"
-          @load="loadMoreRows"
-        />
-      </div>
     </div>
   </div>
 </template>

@@ -104,6 +104,11 @@ const {
 } = useTasks();
 const downloadTasks = useOfflineDownloadTasks();
 const canManageTasks = computed(() => user.value?.role === "admin");
+const visibleServerActiveTasks = computed(() =>
+  canManageTasks.value
+    ? activeTasks.value
+    : activeTasks.value.filter((task) => task.kind === "release_import"),
+);
 const serverLost = computed(() => serverStatus.value === "lost");
 const taskActionError = ref("");
 const historyQuery = useTaskHistoryQuery();
@@ -115,6 +120,7 @@ const historyError = computed(() => historyQuery.error.value ?? "");
 const previousStatuses = new Map<string, TaskStatus>();
 
 function taskKindLabel(task: TaskResponse): string {
+  if (task.kind === "release_import") return t("settings.tasks.releaseImport");
   if (task.kind === "library_scan") return t("settings.tasks.libraryScan");
   if (task.kind === "catalog_fetch")
     return t("settings.tasks.catalogProjection");
@@ -128,6 +134,8 @@ function taskKindLabel(task: TaskResponse): string {
 function taskStatusClass(status: TaskStatus | DownloadTaskStatus): string {
   switch (status) {
     case "running":
+      return "border-primary text-primary";
+    case "waiting":
       return "border-primary text-primary";
     case "queued":
       return "text-secondary-foreground";
@@ -165,6 +173,12 @@ function serverTaskContext(task: TaskResponse): string {
 
 function serverQueuedLabel(task: TaskResponse): string {
   return t("settings.tasks.queued", {
+    date: d(new Date(task.createdAt), "medium"),
+  });
+}
+
+function serverWaitingLabel(task: TaskResponse): string {
+  return t("settings.tasks.waitingSince", {
     date: d(new Date(task.createdAt), "medium"),
   });
 }
@@ -215,9 +229,13 @@ function downloadProgressLabel(task: DownloadTask): string {
 }
 
 function serverActiveRow(task: TaskResponse): TaskRow {
+  const waiting = task.status === "waiting";
   const queued = task.status === "queued";
+  const cancellable = waiting || queued;
   const remaining = serverRemainingLabel(task);
-  const action = queued ? "cancel" : "stop";
+  const canControlTask =
+    canManageTasks.value || task.ownerUserId === user.value?.id;
+  const action = canControlTask ? (cancellable ? "cancel" : "stop") : null;
   return {
     key: `server:${task.id}`,
     id: task.id,
@@ -227,23 +245,32 @@ function serverActiveRow(task: TaskResponse): TaskRow {
     status: task.status,
     statusLabel: translate(taskStatusMessage(task)),
     statusClass: serverTaskStatusClass(task),
-    progress: task.status === "running" ? activeTaskPercent(task) : null,
+    progress:
+      task.status === "running" || cancellable ? activeTaskPercent(task) : null,
     progressLabel: translate(taskProgressMessage(task)),
     action,
-    actionLabel: t(
-      action === "stop"
-        ? isCancellingTask(task.id)
-          ? "settings.tasks.stopping"
-          : "settings.tasks.stop"
-        : "common.cancel",
-    ),
+    actionLabel:
+      action === null
+        ? ""
+        : t(
+            action === "stop"
+              ? isCancellingTask(task.id)
+                ? "settings.tasks.stopping"
+                : "settings.tasks.stop"
+              : "common.cancel",
+          ),
     actionAriaLabel: t("settings.tasks.cancelTask", {
       title: translate(task.titleMessage),
     }),
-    actionDisabled: isCancellingTask(task.id) || serverLost.value,
+    actionDisabled:
+      action === null || isCancellingTask(task.id) || serverLost.value,
     failureMessage: task.failureMessage ? translate(task.failureMessage) : null,
-    timeDateTime: queued ? task.createdAt : null,
-    timeLabel: queued ? serverQueuedLabel(task) : remaining,
+    timeDateTime: cancellable ? task.createdAt : null,
+    timeLabel: waiting
+      ? serverWaitingLabel(task)
+      : queued
+        ? serverQueuedLabel(task)
+        : remaining,
     timeTitle: null,
     details: [],
     createdAt: task.createdAt,
@@ -289,6 +316,7 @@ function visibleDetails(task: TaskResponse) {
   return task.details.filter(
     (detail) =>
       detail.key !== "source" &&
+      !detail.key.startsWith("release.internal") &&
       detail.key !== TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY &&
       !detail.key.startsWith("progress."),
   );
@@ -361,11 +389,15 @@ function downloadHistoryRow(task: DownloadTask): TaskRow {
 
 const activeRows = computed(() => {
   const rank = (row: TaskRow) =>
-    row.status === "running" ? 0 : row.status === "queued" ? 1 : 2;
+    row.status === "running"
+      ? 0
+      : row.status === "waiting"
+        ? 1
+        : row.status === "queued"
+          ? 2
+          : 3;
   return [
-    ...(canManageTasks.value
-      ? orderedActiveTasks(activeTasks.value).map(serverActiveRow)
-      : []),
+    ...orderedActiveTasks(visibleServerActiveTasks.value).map(serverActiveRow),
     ...downloadTasks
       .orderedTasks()
       .filter(downloadTasks.isActive)
@@ -381,11 +413,18 @@ const activeRows = computed(() => {
 const activityLoading = computed(
   () =>
     activeRows.value.length === 0 &&
-    (!downloadTasks.loaded.value ||
-      (canManageTasks.value && !loaded.value && loading.value)),
+    (!downloadTasks.loaded.value || (!loaded.value && loading.value)),
 );
 const serverHistoryRows = computed(() =>
-  canManageTasks.value ? history.value.map(serverHistoryRow) : [],
+  canManageTasks.value
+    ? history.value.map(serverHistoryRow)
+    : tasks.value
+        .filter(
+          (task) =>
+            task.kind === "release_import" && !isActiveTaskStatus(task.status),
+        )
+        .slice(0, 20)
+        .map(serverHistoryRow),
 );
 const downloadHistoryRows = computed(() =>
   downloadTasks
@@ -405,12 +444,13 @@ const historyPending = computed(
   () =>
     historyRows.value.length === 0 &&
     (!downloadTasks.loaded.value ||
+      (!loaded.value && loading.value) ||
       (canManageTasks.value && historyLoading.value)),
 );
 const historyReady = computed(
   () =>
     downloadTasks.loaded.value &&
-    (!canManageTasks.value || historyLoaded.value),
+    (canManageTasks.value ? historyLoaded.value : loaded.value),
 );
 const combinedHistoryError = computed(() =>
   canManageTasks.value ? historyError.value : "",
@@ -448,7 +488,7 @@ async function runRowAction(row: TaskRow) {
       reason,
       row.source === "download"
         ? "downloadTasks.actionError"
-        : row.status === "queued"
+        : row.status === "queued" || row.status === "waiting"
           ? "settings.tasks.cancelError"
           : "settings.tasks.stopError",
     );
@@ -478,11 +518,10 @@ watch(tasks, (current) => {
 
 onMounted(() => {
   void downloadTasks.refresh();
-  if (!canManageTasks.value) return;
-  void refreshHistory();
   void refresh().catch(() => {
     // The shared task monitor retries transient status failures.
   });
+  if (canManageTasks.value) void refreshHistory();
 });
 </script>
 

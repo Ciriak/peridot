@@ -291,6 +291,9 @@ importers:
       '@prisma/orm-sqlite':
         specifier: 8.0.0-rc.23
         version: 8.0.0-rc.23(@prisma/cli-engine@0.9.0(@prisma/management-api-sdk@1.80.0)(magicast@0.5.5))(magicast@0.5.5)(temporal-polyfill@1.0.8)(typanion@3.14.0)(typescript@5.9.3)(vite@8.3.7(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))
+      '@xmldom/xmldom':
+        specifier: 0.9.12
+        version: 0.9.12
       croner:
         specifier: 10.0.1
         version: 10.0.1

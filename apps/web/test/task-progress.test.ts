@@ -316,6 +316,11 @@ test("task labels distinguish queued, determinate, and indeterminate work", () =
     "settings.tasks.status.completed",
   );
   assert.equal(
+    taskStatusMessage(task({ status: "waiting" })).key,
+    "settings.tasks.status.waiting",
+  );
+  assert.equal(activeTaskPercent(task({ status: "waiting" })), (8 / 12) * 100);
+  assert.equal(
     taskStatusMessage(
       task({
         status: "completed",
@@ -348,6 +353,25 @@ test("task labels distinguish queued, determinate, and indeterminate work", () =
     ),
     { key: "settings.tasks.progressIndeterminate" },
   );
+});
+
+test("waiting release imports are active determinate work", () => {
+  const waiting = task({
+    id: "release",
+    kind: "release_import",
+    status: "waiting",
+    ownerUserId: "user",
+  });
+  assert.deepEqual(
+    orderedActiveTasks([
+      task({ id: "queued", status: "queued" }),
+      waiting,
+      task({ id: "running", status: "running" }),
+    ]).map((entry) => entry.id),
+    ["running", "release", "queued"],
+  );
+  assert.equal(activeTaskPercent(waiting), (8 / 12) * 100);
+  assert.equal(overallTaskProgress([waiting]), (8 / 12) * 100);
 });
 
 test("task history renders partial completion with a completed warning", async () => {
@@ -435,7 +459,9 @@ test("task progress returns to the desktop application top bar", async () => {
     /<NuxtLink[\s\S]*?to="\/settings\/tasks#active-tasks"/,
   );
   assert.match(indicator, /:value="overallProgress"/);
-  assert.match(indicator, /orderedActiveTasks\(serverActiveTasks\.value\)/);
+  assert.match(indicator, /orderedActiveTasks\(visibleServerTasks\.value\)/);
+  assert.match(indicator, /task\.kind === "release_import"/);
+  assert.match(indicator, /task\.ownerUserId === user\.value\?\.id/);
   assert.match(indicator, /downloadTasks\s*\.orderedTasks\(\)/);
   assert.doesNotMatch(
     indicator,

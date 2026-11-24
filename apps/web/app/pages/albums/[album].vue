@@ -96,6 +96,7 @@ const {
   error: tracksError,
   loaded: tracksLoaded,
   hasMore,
+  totalCount: trackTotalCount,
   load: loadTracks,
   loadMore: loadMoreTracks,
 } = useCatalogTrackQuery(() => ({
@@ -415,6 +416,7 @@ onMounted(() => {
         :sort="trackSort"
         :has-more="hasMore"
         :loading-more="tracksLoadingMore"
+        :total-count="trackTotalCount"
         @sort-change="setTrackSort"
         @load-more="loadMoreTracks"
       />

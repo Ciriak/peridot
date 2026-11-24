@@ -1,4 +1,10 @@
 import type {
+  DownloadClientInput,
+  DownloadClientResponse,
+  DownloadClientOptions,
+  DownloadLinkInput,
+} from "@peridot/contracts";
+import type {
   AddPlaylistItemRequest,
   AddPlaylistItemResponse,
   ApiErrorResponse,
@@ -706,6 +712,7 @@ export function cancelTask(
 
 export interface TrackListOptions {
   cursor?: string | null;
+  offset?: number;
   limit?: number;
   sort?: "title" | "artist" | "album" | "duration" | "track" | "published";
   direction?: "asc" | "desc";
@@ -847,6 +854,7 @@ export function resolveTracks(
 
 export interface CardListOptions {
   cursor?: string | null;
+  offset?: number;
   limit?: number;
   sort?: string;
   direction?: "asc" | "desc";
@@ -1194,4 +1202,53 @@ export function trackAudioUrl(
   playbackToken: string,
 ) {
   return `${serverAddress}/api/tracks/${encodeURIComponent(trackId)}/audio?playbackToken=${encodeURIComponent(playbackToken)}`;
+}
+
+export function torznabClient(address: string, token: string) {
+  const base = "/api/torznab";
+  const get = <T>(path: string, init?: RequestInit) =>
+    authenticatedRequestJson<T>(address, base + path, token, init);
+  return {
+    config: () => get<{ enabled: boolean }>(""),
+    search: (q: string) =>
+      get<import("@peridot/contracts").TorznabRelease[]>(
+        "/search?" + new URLSearchParams({ q }),
+      ),
+    add: (id: string) =>
+      get<import("@peridot/contracts").TorznabImportResponse>(
+        "/imports/" + id,
+        { method: "POST" },
+      ),
+    status: (id: string) =>
+      get<import("@peridot/contracts").TorznabImportStatus>("/imports/" + id),
+  };
+}
+
+export function downloadClientsApi(address: string, token: string) {
+  const base = "/api/admin/download-clients";
+  const request = <T>(path: string, method = "GET", body?: unknown) =>
+    authenticatedRequestJson<T>(address, path, token, {
+      method,
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+  return {
+    list: () => request<DownloadClientResponse[]>(base),
+    save: (input: DownloadClientInput, id?: string) =>
+      request<{ id: string }>(
+        id ? base + "/" + id : base,
+        id ? "PUT" : "POST",
+        input,
+      ),
+    test: (input: DownloadClientInput, id?: string) =>
+      request<DownloadClientOptions>(base + "/test", "POST", { ...input, id }),
+    options: (id: string) =>
+      request<DownloadClientOptions>(base + "/" + id + "/options"),
+    remove: (id: string) => request<void>(base + "/" + id, "DELETE"),
+    link: (id: string, input: DownloadLinkInput) =>
+      request<void>(
+        "/api/admin/sources/" + id + "/download-client",
+        "PUT",
+        input,
+      ),
+  };
 }

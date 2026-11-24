@@ -441,9 +441,16 @@ export type LikeResponse =
   | ({ kind: "playlist" } & PlaylistLikeResponse);
 
 export type TaskStatus =
-  "queued" | "running" | "completed" | "failed" | "interrupted" | "stopped";
+  | "waiting"
+  | "queued"
+  | "running"
+  | "completed"
+  | "failed"
+  | "interrupted"
+  | "stopped";
 
 export type TaskKind =
+  | "release_import"
   | "library_scan"
   | "catalog_fetch"
   | "metadata_fetch"
@@ -452,6 +459,9 @@ export type TaskKind =
 
 export const TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY =
   "metadata.activeProvider";
+export const TASK_RELEASE_IMPORT_ID_DETAIL_KEY = "release.internalId";
+export const TASK_RELEASE_IMPORT_STAGE_DETAIL_KEY = "release.stage";
+export type TaskReleaseImportStage = "downloading" | "addingToLibrary";
 
 export type TaskProgressResponse =
   | {
@@ -482,6 +492,7 @@ export interface TaskResponse {
   kind: TaskKind;
   status: TaskStatus;
   titleMessage: MessageDescriptor;
+  ownerUserId?: string | null;
   parentTaskId: string | null;
   source: TaskSourceResponse | null;
   progress: TaskProgressResponse;
@@ -508,7 +519,7 @@ export interface ApiErrorResponse {
 
 export type SourceIntegrationKind = "jellyfin";
 
-export type SourceKind = "path" | "url" | SourceIntegrationKind;
+export type SourceKind = "torznab" | "path" | "url" | SourceIntegrationKind;
 
 export type SourceRemovalPhase = "stopping" | "tracks" | "catalog";
 
@@ -569,7 +580,45 @@ export interface CreateJellyfinSourceRequest {
   collectionType: string | null;
 }
 
+export type DownloadClientAuthType = "apiKey" | "password";
+export interface DownloadClientInput {
+  authType?: DownloadClientAuthType;
+  username?: string;
+  password?: string;
+  kind: "qbittorrent";
+  name: string;
+  url: string;
+  apiKey?: string;
+}
+export interface DownloadClientResponse {
+  id: string;
+  kind: "qbittorrent";
+  name: string;
+  url: string;
+  hasApiKey: boolean;
+  authType: DownloadClientAuthType;
+  username: string;
+}
+export interface DownloadClientOptions {
+  categories: string[];
+  tags: string[];
+}
+export interface DownloadLinkInput {
+  downloadClientId?: string;
+  folderId?: string;
+  savePath?: string;
+  category?: string;
+  tags?: string;
+  categoryPath?: boolean;
+}
+export interface CreateTorznabSourceRequest extends DownloadLinkInput {
+  kind: "torznab";
+  name?: string;
+  url: string;
+  apiKey?: string;
+}
 export type CreateSourceRequest =
+  | CreateTorznabSourceRequest
   | CreatePathSourceRequest
   | CreateUrlSourceRequest
   | CreateJellyfinSourceRequest;
@@ -880,3 +929,32 @@ export type RealtimeServerMessage =
   | RealtimeCatalogChangedEvent
   | RealtimeSourceRemovalProgressEvent
   | RealtimeLogAppendedEvent;
+
+export interface TorznabRelease {
+  sourceName: string;
+  canImport: boolean;
+  id: string;
+  title: string;
+  mediaType: MediaType | null;
+  seeders: number | null;
+  bytes: number | null;
+  torrentStatus?: TorznabClientTorrentStatus | null;
+}
+
+export interface TorznabClientTorrentStatus {
+  hash: string;
+  state: string;
+  progress: number;
+  taskId: string | null;
+}
+
+export interface TorznabImportResponse {
+  id: string;
+  task: TaskResponse;
+}
+
+export interface TorznabImportStatus {
+  progress: number;
+  state: string;
+  trackIds: string[];
+}

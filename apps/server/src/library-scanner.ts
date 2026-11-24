@@ -1,4 +1,5 @@
 import path from "node:path";
+import { lstat, realpath } from "node:fs/promises";
 import { or } from "@prisma/orm-sqlite/orm-client";
 import type { TrackMediaTypeOrigin } from "@peridot/contracts";
 import { pruneReferencedArtwork, type ArtworkCache } from "./artwork-cache.js";
@@ -25,7 +26,9 @@ import {
 } from "./media.js";
 import { message } from "./messages.js";
 import type { SourceRow, TaskRow, TrackRow } from "./prisma/models.js";
+import { normalizeReleaseImportPath } from "./release-import-files.js";
 import {
+  AUDIO_MIME_TYPES,
   type ScanWorkerCover,
   type ScanWorkerMetadata,
 } from "./scan-worker-protocol.js";
@@ -47,6 +50,7 @@ import {
   queueCatalogFetch,
   queueDuplicateDetection,
   queueMetadataFetch,
+  readTaskPayload,
   scanDetails,
   type ScanTimingMs,
   TaskExecutionError,
@@ -208,6 +212,64 @@ async function discoverAudioFiles(
   return files;
 }
 
+async function discoverReleaseImportFiles(
+  root: string,
+  relativePaths: readonly string[],
+  signal: AbortSignal,
+): Promise<{ files: DiscoveredFile[]; errorCount: number }> {
+  const files: DiscoveredFile[] = [];
+  const resolvedRoot = await realpath(root);
+  let errorCount = 0;
+  for (const value of relativePaths) {
+    throwIfAborted(signal);
+    const relativePath = normalizeReleaseImportPath(value);
+    const mimeType = relativePath
+      ? AUDIO_MIME_TYPES.get(path.extname(relativePath).toLowerCase())
+      : undefined;
+    if (!relativePath || !mimeType) {
+      errorCount += 1;
+      continue;
+    }
+    const absolutePath = path.resolve(resolvedRoot, relativePath);
+    const pathWithinRoot = path.relative(resolvedRoot, absolutePath);
+    if (
+      pathWithinRoot === ".." ||
+      pathWithinRoot.startsWith(`..${path.sep}`) ||
+      path.isAbsolute(pathWithinRoot)
+    ) {
+      errorCount += 1;
+      continue;
+    }
+    try {
+      const fileStat = await lstat(absolutePath, { bigint: true });
+      if (!fileStat.isFile() || fileStat.isSymbolicLink()) {
+        errorCount += 1;
+        continue;
+      }
+      const resolvedFile = await realpath(absolutePath);
+      const resolvedRelativePath = path.relative(resolvedRoot, resolvedFile);
+      if (
+        resolvedRelativePath === ".." ||
+        resolvedRelativePath.startsWith(`..${path.sep}`) ||
+        path.isAbsolute(resolvedRelativePath)
+      ) {
+        errorCount += 1;
+        continue;
+      }
+      files.push({
+        absolutePath: resolvedFile,
+        relativePath,
+        mimeType,
+        size: fileStat.size,
+        modifiedAt: new Date(Number(fileStat.mtimeMs)),
+      });
+    } catch {
+      errorCount += 1;
+    }
+  }
+  return { files, errorCount };
+}
+
 function coverImage(cover: ScanWorkerCover | null): CoverImage | null {
   return cover
     ? {
@@ -327,6 +389,10 @@ export class LibraryScanner {
       unchangedCount: 0,
       errorCount: 0,
     };
+    const importPaths =
+      task.kind === "release_import" ? readTaskPayload(task) : null;
+    const targetedImport = importPaths !== null;
+    let discoveryErrorCount = 0;
     const timings = createScanTimings();
     let workerPool: ScanWorkerPool | undefined;
     let closeWorkersOnAbort: (() => void) | undefined;
@@ -379,6 +445,13 @@ export class LibraryScanner {
           message("api.message.noSources"),
         );
       }
+      if (targetedImport && !requestedSource) {
+        throw new TaskExecutionError(
+          "The import folder is no longer available.",
+          "failed",
+          message("api.message.sourceUnavailable"),
+        );
+      }
       const sourceName =
         requestedSource?.name ||
         (requestedSource ? task.sourceName : null) ||
@@ -396,6 +469,19 @@ export class LibraryScanner {
             );
           }
           const sourcePath = source.path;
+          if (targetedImport) {
+            const discovered = await withTiming(timings.discovery, () =>
+              discoverReleaseImportFiles(sourcePath, importPaths, signal),
+            );
+            discoveryErrorCount += discovered.errorCount;
+            for (const file of discovered.files) {
+              files.push({
+                ...file,
+                sourceId: source.id,
+              });
+            }
+            continue;
+          }
           for (const file of await withTiming(timings.discovery, () =>
             discoverAudioFiles(
               sourcePath,
@@ -430,6 +516,7 @@ export class LibraryScanner {
         : discoveredCount;
       let processedItems = 0;
       let unsupportedCount = 0;
+      const processedTrackIds = new Set<string>();
       let completedRemoteTotal = 0;
       let lastProgressAt = 0;
       let lastYieldAt = Date.now();
@@ -452,7 +539,7 @@ export class LibraryScanner {
             updated: counts.updatedCount,
             unchanged: counts.unchangedCount,
             unavailable: 0,
-            errors: counts.errorCount + unsupportedCount,
+            errors: counts.errorCount + unsupportedCount + discoveryErrorCount,
             timingMs: scanTimingValues(timings),
           }),
         );
@@ -468,13 +555,14 @@ export class LibraryScanner {
       );
       for await (const prepared of pendingFiles) {
         throwIfAborted(signal);
-        await this.applyPreparedFile(
+        const processedTrackId = await this.applyPreparedFile(
           prepared,
           task.id,
           counts,
           signal,
           timings,
         );
+        if (processedTrackId) processedTrackIds.add(processedTrackId);
         processedItems += 1;
         if (shouldYield(lastYieldAt)) {
           await yieldToEventLoop();
@@ -535,84 +623,100 @@ export class LibraryScanner {
         discoveredCount = files.length + completedRemoteTotal;
       }
       throwIfAborted(signal);
-      await withTiming(timings.database, () => this.removeUnusedCovers());
-      if (this.artworkCache) {
-        await withTiming(timings.artwork, () =>
-          pruneReferencedArtwork(this.database, this.artworkCache!),
-        );
-      }
-
-      const trackQuery = this.database.orm.Track.where({ available: 1 }).where(
-        (track) => track.sourceId.in(sources.map((source) => source.id)),
-      );
-      const unavailableTracks = await trackQuery
-        .where((track) =>
-          or(track.lastSeenScanId.isNull(), track.lastSeenScanId.neq(task.id)),
-        )
-        .all();
-      for (
-        let offset = 0;
-        offset < unavailableTracks.length;
-        offset += IMPORT_BATCH_SIZE
-      ) {
-        const batch = unavailableTracks.slice(
-          offset,
-          offset + IMPORT_BATCH_SIZE,
-        );
-        await withTiming(timings.database, () =>
-          this.database.transaction(async (transaction) => {
-            for (const track of batch) {
-              await transaction.orm.Track.where({ id: track.id }).update({
-                available: 0,
-                catalogProjectionPending: 1,
-              });
-              await transaction.orm.CatalogTrack.where({
-                id: track.id,
-              }).update({
-                available: 0,
-                albumId: null,
-              });
-              await transaction.orm.ArtworkJob.where({
-                trackId: track.id,
-              }).deleteAndCount();
-            }
-          }),
-        );
-        if (this.catalog) {
-          await withTiming(timings.catalog, () =>
-            this.catalog!.markScanBatchChanged(requestedSource?.id ?? null),
+      let unavailableCount = 0;
+      if (!targetedImport) {
+        await withTiming(timings.database, () => this.removeUnusedCovers());
+        if (this.artworkCache) {
+          await withTiming(timings.artwork, () =>
+            pruneReferencedArtwork(this.database, this.artworkCache!),
           );
         }
-        await yieldToEventLoop();
-      }
-      const unavailableCount = (
-        await this.database.orm.Track.where({ available: 0 })
-          .where((track) =>
-            track.sourceId.in(sources.map((source) => source.id)),
-          )
+        const trackQuery = this.database.orm.Track.where({
+          available: 1,
+        }).where((track) =>
+          track.sourceId.in(sources.map((source) => source.id)),
+        );
+        const unavailableTracks = await trackQuery
           .where((track) =>
             or(
               track.lastSeenScanId.isNull(),
               track.lastSeenScanId.neq(task.id),
             ),
           )
-          .all()
-      ).length;
-      const syncedAt = new Date();
-      await withTiming(timings.database, async () => {
-        for (const source of sources) {
-          await this.database.orm.Source.where({ id: source.id }).update({
-            lastSyncedAt: syncedAt,
-          });
+          .all();
+        for (
+          let offset = 0;
+          offset < unavailableTracks.length;
+          offset += IMPORT_BATCH_SIZE
+        ) {
+          const batch = unavailableTracks.slice(
+            offset,
+            offset + IMPORT_BATCH_SIZE,
+          );
+          await withTiming(timings.database, () =>
+            this.database.transaction(async (transaction) => {
+              for (const track of batch) {
+                await transaction.orm.Track.where({ id: track.id }).update({
+                  available: 0,
+                  catalogProjectionPending: 1,
+                });
+                await transaction.orm.CatalogTrack.where({
+                  id: track.id,
+                }).update({
+                  available: 0,
+                  albumId: null,
+                });
+                await transaction.orm.ArtworkJob.where({
+                  trackId: track.id,
+                }).deleteAndCount();
+              }
+            }),
+          );
+          if (this.catalog) {
+            await withTiming(timings.catalog, () =>
+              this.catalog!.markScanBatchChanged(requestedSource?.id ?? null),
+            );
+          }
+          await yieldToEventLoop();
         }
-      });
+        unavailableCount = (
+          await this.database.orm.Track.where({ available: 0 })
+            .where((track) =>
+              track.sourceId.in(sources.map((source) => source.id)),
+            )
+            .where((track) =>
+              or(
+                track.lastSeenScanId.isNull(),
+                track.lastSeenScanId.neq(task.id),
+              ),
+            )
+            .all()
+        ).length;
+        const syncedAt = new Date();
+        await withTiming(timings.database, async () => {
+          for (const source of sources) {
+            await this.database.orm.Source.where({ id: source.id }).update({
+              lastSyncedAt: syncedAt,
+            });
+          }
+        });
+      }
 
-      const musicTrack = await this.database.orm.Track.where({
+      const metadataTrackQuery = this.database.orm.Track.where({
         available: 1,
         mediaType: "music",
-      })
-        .where((track) => track.sourceId.in(sources.map((source) => source.id)))
-        .first();
+      });
+      const musicTrack = targetedImport
+        ? processedTrackIds.size
+          ? await metadataTrackQuery
+              .where((track) => track.id.in([...processedTrackIds]))
+              .first()
+          : null
+        : await metadataTrackQuery
+            .where((track) =>
+              track.sourceId.in(sources.map((source) => source.id)),
+            )
+            .first();
       if (this.metadataEnrichment && musicTrack) {
         await queueMetadataFetch(tasks, {
           source: requestedSource
@@ -622,6 +726,7 @@ export class LibraryScanner {
               }
             : null,
           parentTaskId: task.id,
+          trackIds: targetedImport ? [...processedTrackIds] : null,
         });
       }
       await queueDuplicateDetection(tasks, task.id);
@@ -662,7 +767,7 @@ export class LibraryScanner {
           updated: counts.updatedCount,
           unchanged: counts.unchangedCount,
           unavailable: unavailableCount,
-          errors: counts.errorCount + unsupportedCount,
+          errors: counts.errorCount + unsupportedCount + discoveryErrorCount,
           timingMs: scanTimingValues(timings),
         }),
       };
@@ -705,7 +810,7 @@ export class LibraryScanner {
     counts: ScanCounts,
     signal: AbortSignal,
     timings: ScanTimings,
-  ): Promise<void> {
+  ): Promise<string | null> {
     throwIfAborted(signal);
     if (prepared.kind === "unchanged") {
       await withTiming(timings.database, () =>
@@ -722,7 +827,7 @@ export class LibraryScanner {
         );
       }
       counts.unchangedCount += 1;
-      return;
+      return prepared.existing.id;
     }
 
     if (prepared.kind === "failed") {
@@ -733,7 +838,7 @@ export class LibraryScanner {
           this.markFileError(prepared.file, failedExisting, scanId),
         );
       }
-      return;
+      return null;
     }
 
     const { file, existing, metadata } = prepared;
@@ -833,6 +938,7 @@ export class LibraryScanner {
             : Promise.resolve(),
         );
         counts.updatedCount += 1;
+        return existing.id;
       } else {
         const created = await withTiming(timings.database, () =>
           this.database.orm.Track.create({
@@ -847,6 +953,7 @@ export class LibraryScanner {
             : Promise.resolve(),
         );
         counts.createdCount += 1;
+        return created.id;
       }
     } catch (error) {
       if (signal.aborted) throw error;
@@ -856,6 +963,7 @@ export class LibraryScanner {
           this.markFileError(file, existing, scanId),
         );
       }
+      return null;
     }
   }
 

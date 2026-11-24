@@ -262,6 +262,63 @@ test("ProgressCircle exports its component and variants", async () => {
   assert.ok(progressCircle.ProgressCircle);
   assert.equal(typeof progressCircle.progressCircleVariants, "function");
 });
+test("Tabs exports accessible shadcn primitives for switchable result panels", async () => {
+  const tabs = await server.ssrLoadModule("/src/components/ui/tabs/index.ts");
+  assert.ok(tabs.Tabs);
+  assert.ok(tabs.TabsList);
+  assert.ok(tabs.TabsTrigger);
+  assert.ok(tabs.TabsContent);
+
+  const html = await renderToString(
+    createSSRApp({
+      render: () =>
+        h(
+          tabs.Tabs,
+          { modelValue: "library" },
+          {
+            default: () => [
+              h(
+                tabs.TabsList,
+                { "aria-label": "Search result groups" },
+                {
+                  default: () => [
+                    h(
+                      tabs.TabsTrigger,
+                      { value: "library" },
+                      { default: () => "Library" },
+                    ),
+                    h(
+                      tabs.TabsTrigger,
+                      { value: "external" },
+                      { default: () => "External" },
+                    ),
+                  ],
+                },
+              ),
+              h(
+                tabs.TabsContent,
+                { value: "library" },
+                { default: () => "Library results" },
+              ),
+              h(
+                tabs.TabsContent,
+                { value: "external" },
+                { default: () => "External results" },
+              ),
+            ],
+          },
+        ),
+    }),
+  );
+
+  assert.match(html, /data-slot="tabs"/);
+  assert.match(html, /role="tablist"/);
+  assert.match(html, /aria-label="Search result groups"/);
+  assert.match(html, /role="tab"[^>]*aria-selected="true"/);
+  assert.match(html, /role="tabpanel"/);
+  assert.match(html, /Library results/);
+  assert.doesNotMatch(html, /External results/);
+});
 test("ScrollingText preserves arbitrary slotted links and its activation mode", async () => {
   const { default: component } = await server.ssrLoadModule(
     "/src/components/ui/scrolling-text/ScrollingText.vue",

@@ -35,6 +35,8 @@ test("app layout respects the owner's Tailwind and shadcn styling authority", as
     "../app/components/ServerConnectionIndicator.vue",
     "../app/components/SearchSourceIcons.vue",
     "../app/components/SidebarQuickPicks.vue",
+    "../app/components/TorznabReleaseRow.vue",
+    "../app/components/TorznabResults.vue",
     "../app/components/TrackArtistLinks.vue",
     "../app/components/TrackContextMenu.vue",
     "../app/components/TrackTable.vue",
@@ -60,6 +62,10 @@ test("app layout respects the owner's Tailwind and shadcn styling authority", as
     "../../../packages/ui/src/components/ui/scrolling-text/ScrollingText.vue",
     "../../../packages/ui/src/components/ui/sonner/Sonner.vue",
     "../../../packages/ui/src/components/ui/spinner/PeridotSpinner.vue",
+    "../../../packages/ui/src/components/ui/tabs/Tabs.vue",
+    "../../../packages/ui/src/components/ui/tabs/TabsContent.vue",
+    "../../../packages/ui/src/components/ui/tabs/TabsList.vue",
+    "../../../packages/ui/src/components/ui/tabs/TabsTrigger.vue",
   ];
   const sources = await Promise.all(
     files.map(async (file) => ({

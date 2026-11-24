@@ -463,7 +463,7 @@ test("tasks have a settings view for active work and paginated history", async (
   assert.match(page, /downloadTasks\.progressForTask/);
   assert.match(
     page,
-    /onMounted\(\(\) => \{\s+void downloadTasks\.refresh\(\);\s+if \(!canManageTasks\.value\) return;/,
+    /onMounted\(\(\) => \{\s+void downloadTasks\.refresh\(\);[\s\S]*?void refresh\(\)[\s\S]*?if \(canManageTasks\.value\) void refreshHistory\(\)/,
   );
   assert.match(page, /useTasks/);
   assert.match(page, /isCancellingTask/);
@@ -476,7 +476,9 @@ test("tasks have a settings view for active work and paginated history", async (
   assert.match(page, /settings\.tasks\.stop/);
   assert.match(page, /settings\.tasks\.stopping/);
   assert.match(page, /runRowAction\(row\)/);
-  assert.match(page, /orderedActiveTasks\(activeTasks\.value\)/);
+  assert.match(page, /orderedActiveTasks\(visibleServerActiveTasks\.value\)/);
+  assert.match(page, /task\.kind === "release_import"/);
+  assert.match(page, /task\.ownerUserId === user\.value\?\.id/);
   assert.match(page, /useTaskHistoryQuery/);
   assert.match(page, /historyQuery\.loadMore\(\)/);
   assert.match(page, /settings\.tasks\.inProgress/);

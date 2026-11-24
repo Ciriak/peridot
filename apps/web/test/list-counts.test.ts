@@ -39,7 +39,7 @@ test("collection counts use exact totals beside section headings", async () => {
   assert.match(pages[6]!, /totalCount: audiobookTotalCount/);
   assert.match(pages[6]!, /totalCount: podcastTotalCount/);
   assert.doesNotMatch(pages[6]!, /totalCount: albumTotalCount/);
-  assert.doesNotMatch(pages[6]!, /totalCount: trackTotalCount/);
+  assert.match(pages[6]!, /totalCount: trackTotalCount/);
   assert.match(pages[7]!, /totalCount: albumTotalCount/);
   assert.match(pages[7]!, /totalCount: trackTotalCount/);
 });

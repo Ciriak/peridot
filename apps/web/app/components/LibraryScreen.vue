@@ -108,6 +108,7 @@ onMounted(() => {
       :sort="sort ?? undefined"
       :has-more="hasMore"
       :loading-more="loadingMore"
+      :total-count="totalCount"
       @sort-change="setSort"
       @load-more="loadMore"
     />

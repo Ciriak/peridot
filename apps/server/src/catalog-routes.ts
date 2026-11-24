@@ -16,6 +16,7 @@ import { message } from "./messages.js";
 
 interface CursorQuery {
   cursor?: string;
+  offset?: string;
   limit?: string;
   sort?: string;
   direction?: string;
@@ -32,6 +33,17 @@ function limitNumber(value: string | undefined): number | undefined {
   if (value === undefined) return undefined;
   const limit = Number(value);
   return Number.isSafeInteger(limit) ? limit : NaN;
+}
+
+function pageQuery(query: CursorQuery) {
+  const { limit: rawLimit, offset: rawOffset, ...filters } = query;
+  const limit = limitNumber(rawLimit);
+  const offset = limitNumber(rawOffset);
+  return {
+    ...filters,
+    ...(limit === undefined ? {} : { limit }),
+    ...(offset === undefined ? {} : { offset }),
+  };
 }
 
 function handleCatalogError(
@@ -60,12 +72,9 @@ export async function registerCatalogRoutes(
     "/api/tracks",
     async (request, reply): Promise<TrackListResponse | undefined> => {
       try {
-        const { limit: rawLimit, ...query } = request.query;
-        const limit = limitNumber(rawLimit);
         return await catalog.listTracks({
           userId: request.authenticatedUser!.id,
-          ...query,
-          ...(limit === undefined ? {} : { limit }),
+          ...pageQuery(request.query),
         });
       } catch (error) {
         return handleCatalogError(reply, error);
@@ -102,12 +111,9 @@ export async function registerCatalogRoutes(
     "/api/albums",
     async (request, reply): Promise<AlbumListResponse | undefined> => {
       try {
-        const { limit: rawLimit, ...query } = request.query;
-        const limit = limitNumber(rawLimit);
         return await catalog.listAlbums({
           userId: request.authenticatedUser!.id,
-          ...query,
-          ...(limit === undefined ? {} : { limit }),
+          ...pageQuery(request.query),
         });
       } catch (error) {
         return handleCatalogError(reply, error);
@@ -139,12 +145,9 @@ export async function registerCatalogRoutes(
     "/api/audiobooks",
     async (request, reply): Promise<AudiobookListResponse | undefined> => {
       try {
-        const { limit: rawLimit, ...query } = request.query;
-        const limit = limitNumber(rawLimit);
         return await catalog.listAudiobooks({
           userId: request.authenticatedUser!.id,
-          ...query,
-          ...(limit === undefined ? {} : { limit }),
+          ...pageQuery(request.query),
         });
       } catch (error) {
         return handleCatalogError(reply, error);
@@ -176,15 +179,13 @@ export async function registerCatalogRoutes(
     "/api/audiobooks/:id/chapters",
     async (request, reply): Promise<TrackListResponse | undefined> => {
       try {
-        const { limit: rawLimit, ...query } = request.query;
-        const limit = limitNumber(rawLimit);
+        const query = pageQuery(request.query);
         return await catalog.listTracks({
           userId: request.authenticatedUser!.id,
           ...query,
           mediaType: "audiobook",
           collectionId: request.params.id,
           sort: query.sort ?? "track",
-          ...(limit === undefined ? {} : { limit }),
         });
       } catch (error) {
         return handleCatalogError(reply, error);
@@ -196,12 +197,9 @@ export async function registerCatalogRoutes(
     "/api/podcasts",
     async (request, reply): Promise<PodcastListResponse | undefined> => {
       try {
-        const { limit: rawLimit, ...query } = request.query;
-        const limit = limitNumber(rawLimit);
         return await catalog.listPodcasts({
           userId: request.authenticatedUser!.id,
-          ...query,
-          ...(limit === undefined ? {} : { limit }),
+          ...pageQuery(request.query),
         });
       } catch (error) {
         return handleCatalogError(reply, error);
@@ -233,8 +231,7 @@ export async function registerCatalogRoutes(
     "/api/podcasts/:id/episodes",
     async (request, reply): Promise<TrackListResponse | undefined> => {
       try {
-        const { limit: rawLimit, ...query } = request.query;
-        const limit = limitNumber(rawLimit);
+        const query = pageQuery(request.query);
         return await catalog.listTracks({
           userId: request.authenticatedUser!.id,
           ...query,
@@ -242,7 +239,6 @@ export async function registerCatalogRoutes(
           collectionId: request.params.id,
           sort: query.sort ?? "published",
           direction: query.direction ?? "desc",
-          ...(limit === undefined ? {} : { limit }),
         });
       } catch (error) {
         return handleCatalogError(reply, error);
@@ -254,12 +250,9 @@ export async function registerCatalogRoutes(
     "/api/artists",
     async (request, reply): Promise<ArtistListResponse | undefined> => {
       try {
-        const { limit: rawLimit, ...query } = request.query;
-        const limit = limitNumber(rawLimit);
         return await catalog.listArtists({
           userId: request.authenticatedUser!.id,
-          ...query,
-          ...(limit === undefined ? {} : { limit }),
+          ...pageQuery(request.query),
         });
       } catch (error) {
         return handleCatalogError(reply, error);

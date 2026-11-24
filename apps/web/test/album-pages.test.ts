@@ -27,7 +27,7 @@ test("albums have list and detail routes with derived groups", async () => {
       ),
     ]);
 
-  assert.match(listPage, /useCatalogAlbumQuery/);
+  assert.match(listPage, /useVirtualAlbums/);
   assert.match(listPage, /items: albums/);
   assert.doesNotMatch(listPage, /library-search/);
   assert.match(listPage, /<VirtualCardGrid/);

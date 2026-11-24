@@ -26,6 +26,7 @@ const emit = defineEmits<{
     <Input
       :model-value="modelValue"
       type="search"
+      autocomplete="off"
       :aria-label="label"
       :placeholder="label"
       class="pl-9 pr-11"

@@ -1,3 +1,7 @@
+import {
+  downloadCredentialEnvelope,
+  migrateIndexerClients,
+} from "./download-clients.js";
 import Fastify, { LogController } from "fastify";
 import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
@@ -31,6 +35,7 @@ import {
   PlaybackTokenService,
   redactPlaybackToken,
 } from "./playback-tokens.js";
+import { registerTorznab } from "./torznab.js";
 import { registerAdminRoutes } from "./admin-routes.js";
 import { ArtworkService, hasPendingArtworkJobs } from "./artwork-fetch.js";
 import { createJellyfinIntegration } from "./jellyfin/index.js";
@@ -121,6 +126,14 @@ export async function buildApp(options: BuildAppOptions = {}) {
     ).flatMap((source) =>
       source.credentialCiphertext ? [source.credentialCiphertext] : [],
     );
+    const downloadCredentials = await database.orm.DownloadClient.select(
+      "credentialCiphertext",
+    ).all();
+    sourceCredentials.push(
+      ...downloadCredentials.map((c) =>
+        downloadCredentialEnvelope(c.credentialCiphertext),
+      ),
+    );
     credentials = await CredentialStore.fromConfig(
       config.credentialEncryptionKey,
       config.databaseUrl,
@@ -133,6 +146,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
     if (ownsDatabase) await database.close();
     throw error;
   }
+  await migrateIndexerClients(database, credentials);
   const registry = new MetadataResolverRegistry()
     .register(
       new MusicBrainzResolver(
@@ -202,6 +216,9 @@ export async function buildApp(options: BuildAppOptions = {}) {
     artworkCache,
   );
   tasks.registerExecutor("library_scan", (task, taskService, signal) =>
+    scanner.runTask(task, taskService, signal),
+  );
+  tasks.registerExecutor("release_import", (task, taskService, signal) =>
     scanner.runTask(task, taskService, signal),
   );
   tasks.registerExecutor("metadata_fetch", (task, taskService, signal) =>
@@ -318,6 +335,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
         artworkCache,
         sourceIntegrations,
       );
+      registerTorznab(protectedApp, database, tasks, credentials);
       await registerCatalogRoutes(protectedApp, catalog, artworkCache);
       await registerTaskRoutes(protectedApp, tasks);
       await registerLikeRoutes(protectedApp, database);

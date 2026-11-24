@@ -29,6 +29,7 @@ import {
   initializeUserPreferences,
   isAuthenticationRedirectError,
   listArtistMetadataCandidates,
+  listAlbums,
   listDirectories,
   listLikes,
   listMetadataCandidates,
@@ -408,6 +409,33 @@ test("library track listing sends the session to the catalog endpoint", async (c
 
   const result = await listTracks("http://127.0.0.1:17430", "session-token");
   assert.equal(result.items[0]?.title, "Blue Hours");
+});
+
+test("album listing sends bounded offset pages", async (context) => {
+  const originalFetch = globalThis.fetch;
+  context.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  let requestedUrl = "";
+  globalThis.fetch = async (input) => {
+    requestedUrl = String(input);
+    return Response.json({
+      items: [],
+      nextCursor: null,
+      totalCount: 5_161,
+      catalogRevision: 1,
+    });
+  };
+
+  await listAlbums("http://127.0.0.1:17430", "session-token", {
+    offset: 4_500,
+    limit: 100,
+    sort: "title",
+  });
+  assert.equal(
+    requestedUrl,
+    "http://127.0.0.1:17430/api/albums?offset=4500&limit=100&sort=title",
+  );
 });
 
 test("playback tokens are requested with authentication and produce a scoped audio URL", async (context) => {

@@ -130,6 +130,7 @@ function parsedSourceKind(value: string): SourceKind | null {
 interface TrackPageOptions {
   userId: string;
   cursor?: string;
+  offset?: number;
   limit?: number;
   sort?: string;
   direction?: string;
@@ -145,6 +146,7 @@ interface TrackPageOptions {
 interface CardPageOptions {
   userId: string;
   cursor?: string;
+  offset?: number;
   limit?: number;
   sort?: string;
   direction?: string;
@@ -355,6 +357,16 @@ function pageSize(
     throw new CatalogError(
       "invalid_catalog_query",
       `limit must be between 1 and ${maximum}`,
+    );
+  }
+  return value;
+}
+
+function pageOffset(value: number): number {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new CatalogError(
+      "invalid_catalog_query",
+      "offset must be a non-negative safe integer",
     );
   }
   return value;
@@ -1229,7 +1241,7 @@ export class CatalogService {
         "The catalog query changed while paging; reload from the first page",
       );
     }
-    const offset = cursor?.offset ?? 0;
+    const offset = pageOffset(options.offset ?? cursor?.offset ?? 0);
     const filterIds = await this.trackFilterIds(options);
     if (filterIds && !filterIds.size) {
       return {
@@ -1290,7 +1302,9 @@ export class CatalogService {
       ]);
     }
     let paged: typeof ordered;
-    if (cursor?.key && sort !== "published") {
+    if (options.offset !== undefined) {
+      paged = ordered.offset(offset);
+    } else if (cursor?.key && sort !== "published") {
       const key = cursor.key;
       if (sort === "track") {
         paged = ordered.cursor({
@@ -1415,6 +1429,7 @@ export class CatalogService {
         "The catalog query changed while paging; reload from the first page",
       );
     }
+    const offset = pageOffset(options.offset ?? cursor?.offset ?? 0);
     const filterIds = await this.cardFilterIds("album", options);
     if (filterIds && !filterIds.size) {
       return {
@@ -1464,7 +1479,9 @@ export class CatalogService {
             (album) => album.id[directionValue](),
           ]);
     let paged: typeof ordered;
-    if (cursor?.key) {
+    if (options.offset !== undefined) {
+      paged = ordered.offset(offset);
+    } else if (cursor?.key) {
       if (sort === "artist") {
         paged = ordered.cursor({
           normalizedArtist: cursorString(cursor.key, "normalizedArtist"),
@@ -1549,6 +1566,7 @@ export class CatalogService {
         "The catalog query changed while paging; reload from the first page",
       );
     }
+    const offset = pageOffset(options.offset ?? cursor?.offset ?? 0);
     const filterIds = await this.cardFilterIds("album", options);
     if (filterIds && !filterIds.size) {
       return {
@@ -1580,7 +1598,9 @@ export class CatalogService {
             (album) => album.id[directionValue](),
           ]);
     let paged: typeof ordered;
-    if (cursor?.key) {
+    if (options.offset !== undefined) {
+      paged = ordered.offset(offset);
+    } else if (cursor?.key) {
       if (sort === "artist") {
         paged = ordered.cursor({
           normalizedArtist: cursorString(cursor.key, "normalizedArtist"),
@@ -1736,6 +1756,7 @@ export class CatalogService {
         "The catalog query changed while paging; reload from the first page",
       );
     }
+    const offset = pageOffset(options.offset ?? cursor?.offset ?? 0);
     const filterIds = await this.cardFilterIds("artist", options);
     if (filterIds && !filterIds.size) {
       return {
@@ -1761,15 +1782,18 @@ export class CatalogService {
       (artist) => artist.normalizedDisplayName[directionValue](),
       (artist) => artist.id[directionValue](),
     ]);
-    const paged = cursor?.key
-      ? ordered.cursor({
-          normalizedDisplayName: cursorString(
-            cursor.key,
-            "normalizedDisplayName",
-          ),
-          id: cursorString(cursor.key, "id"),
-        })
-      : ordered.offset(cursor?.offset ?? 0);
+    const paged =
+      options.offset !== undefined
+        ? ordered.offset(offset)
+        : cursor?.key
+          ? ordered.cursor({
+              normalizedDisplayName: cursorString(
+                cursor.key,
+                "normalizedDisplayName",
+              ),
+              id: cursorString(cursor.key, "id"),
+            })
+          : ordered.offset(offset);
     const rows = await paged.limit(limit + 1).all();
     const hasMore = rows.length > limit;
     const pageRows = rows.slice(0, limit);

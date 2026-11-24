@@ -65,12 +65,36 @@ test("catalog endpoints page tracks, albums, artists, search, and likes", async 
       10,
     );
 
+    const offsetPage = await context.app.inject({
+      method: "GET",
+      url: "/api/tracks?limit=5&sort=title&offset=10",
+      headers: context.authorization,
+    });
+    assert.equal(offsetPage.statusCode, 200);
+    const finalPage = offsetPage.json<TrackListResponse>();
+    assert.equal(finalPage.items.length, 2);
+    assert.equal(finalPage.totalCount, 12);
+    assert.equal(
+      new Set(
+        [...page.items, ...secondPage.items, ...finalPage.items].map(
+          (track) => track.id,
+        ),
+      ).size,
+      12,
+    );
+
     const invalid = await context.app.inject({
       method: "GET",
       url: "/api/tracks?limit=500",
       headers: context.authorization,
     });
     assert.equal(invalid.statusCode, 400);
+    const invalidOffset = await context.app.inject({
+      method: "GET",
+      url: "/api/tracks?offset=-1",
+      headers: context.authorization,
+    });
+    assert.equal(invalidOffset.statusCode, 400);
 
     const albums = (
       await context.app.inject({
@@ -87,6 +111,22 @@ test("catalog endpoints page tracks, albums, artists, search, and likes", async 
         (album) =>
           album.sourceKinds.length === 1 && album.sourceKinds[0] === "path",
       ),
+    );
+    const offsetAlbums = await context.app.inject({
+      method: "GET",
+      url: "/api/albums?limit=3&sort=title&offset=3",
+      headers: context.authorization,
+    });
+    assert.equal(offsetAlbums.statusCode, 200);
+    const offsetAlbumPage = offsetAlbums.json<AlbumListResponse>();
+    assert.equal(offsetAlbumPage.items.length, 3);
+    assert.equal(offsetAlbumPage.totalCount, 9);
+    assert.equal(
+      new Set([
+        ...albums.items.map((album) => album.id),
+        ...offsetAlbumPage.items.map((album) => album.id),
+      ]).size,
+      6,
     );
 
     const sharedAlbum = (

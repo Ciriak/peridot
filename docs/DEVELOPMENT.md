@@ -195,3 +195,19 @@ pnpm db:migration:check
 Review destructive operations before applying them. When data preservation is
 required, add an explicit transform in the rendered migration source and
 self-emit it before applying the migration.
+
+### Jackett / Torznab imports
+
+In Settings → Sources, select + → Torznab indexer. Enter the feed URL, optional display name, and API key. Peridot reads the feed’s audio capabilities before saving it. Repeat for additional indexers. Existing environment-based installations must add their feeds through this dialog.
+
+Under Settings → Download clients → Add download client, choose qBittorrent. Enter the server base URL and choose an authentication method. Enter the Web UI username and password or an API key from qBittorrent 5.2+ (Preferences → Web UI → API Key), test the connection, and save. Repeat for additional instances. Select that client in each indexer’s download settings along with an existing Peridot folder source. Choose the qBittorrent category and any additional tags. Category save paths use automatic torrent management. Select a folder source that maps to the category’s completed directory. For manual paths, enter the qBittorrent-side path if the two services mount the directory differently. Keep incomplete downloads outside that directory.
+
+Existing per-indexer qBittorrent credentials are migrated at startup. Indexers with the same URL, username, and password share a saved client. Migrated clients use their saved Web UI credentials. Administrators can relink existing indexers from their source action menu.
+
+External imports create owner-scoped `release_import` tasks. While the torrent is
+in qBittorrent, the task has `waiting` status and reports transfer progress. Once
+complete, Peridot stores the torrent's completed audio paths on the task and
+scans only those files. Import tasks do not recursively scan the folder or mark
+unseen tracks unavailable, and their metadata child task is limited to the
+imported track IDs. Use a normal source rescan when the complete folder must be
+reconciled. Cancelling the task leaves the torrent and files untouched.

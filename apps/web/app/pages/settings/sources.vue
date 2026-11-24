@@ -19,6 +19,7 @@ import { Button } from "@peridot/ui/components/ui/button";
 import { Input } from "@peridot/ui/components/ui/input";
 import { ProgressCircle } from "@peridot/ui/components/ui/progress-circle";
 import { Switch } from "@peridot/ui/components/ui/switch";
+import DownloadClientLink from "../../components/DownloadClientLink.vue";
 import { useSortable } from "@vueuse/integrations/useSortable";
 import {
   AlertDialogAction,
@@ -60,6 +61,7 @@ import { useUser } from "../../composables/use-user";
 import { useLocalizedMessage } from "../../composables/use-localized-message";
 import { icons } from "../../lib/icons";
 import {
+  downloadClientsApi,
   createSource,
   deleteSource,
   discoverIntegrationSources,
@@ -106,7 +108,22 @@ const sourceList = ref<HTMLElement | null>(null);
 const loading = sourcesQuery.loading;
 const pageError = ref("");
 const addOpen = ref(false);
-type SourceChoice = "path" | "jellyfin";
+type SourceChoice = "path" | "jellyfin" | "torznab";
+function blankIndexer() {
+  return {
+    name: "",
+    url: "",
+    apiKey: "",
+    downloadClientId: "",
+    category: "",
+    tags: "",
+    categoryPath: false,
+    savePath: "",
+    folderId: "",
+  };
+}
+const editingLink = ref("");
+const indexer = ref(blankIndexer());
 const newKind = ref<SourceChoice | null>(null);
 const newPath = ref("");
 const newJellyfinUrl = ref("");
@@ -252,7 +269,25 @@ watch(sourcesQuery.error, (value) => {
   if (value) pageError.value = value;
 });
 
+function editDownloadLink(source: SourceResponse) {
+  openAddDialog();
+  editingLink.value = source.id;
+  newKind.value = "torznab";
+  const c = source.configuration || {};
+  indexer.value = {
+    ...blankIndexer(),
+    name: source.name || "",
+    url: source.url || "",
+    downloadClientId: c.downloadClientId || "",
+    category: c.category || "",
+    tags: c.tags || "",
+    categoryPath: c.categoryPath === "true",
+    folderId: c.folderId || "",
+    savePath: c.savePath || "",
+  };
+}
 function openAddDialog() {
+  editingLink.value = "";
   addError.value = "";
   newKind.value = null;
   newPath.value = "";
@@ -267,6 +302,7 @@ function chooseKind(kind: SourceChoice) {
 }
 
 function resetJellyfinForm() {
+  indexer.value = blankIndexer();
   newJellyfinUrl.value = "";
   newJellyfinApiKey.value = "";
   newJellyfinLibraryId.value = "";
@@ -293,6 +329,11 @@ function handleDialogBack() {
 }
 
 function canAdd(): boolean {
+  if (newKind.value === "torznab")
+    return Boolean(
+      indexer.value.url.trim() &&
+      (!indexer.value.downloadClientId || indexer.value.folderId),
+    );
   if (newKind.value === "path") return Boolean(newPath.value.trim());
   return (
     Boolean(newJellyfinUrl.value.trim()) &&
@@ -311,6 +352,14 @@ async function addSource() {
       kind: "path",
       path: newPath.value,
     };
+  } else if (newKind.value === "torznab") {
+    const { name, url, apiKey } = indexer.value;
+    body = {
+      kind: "torznab",
+      ...(indexer.value.downloadClientId
+        ? indexer.value
+        : { name, url, apiKey }),
+    };
   } else {
     if (!newJellyfinLibraryId.value) return;
     body = {
@@ -322,6 +371,15 @@ async function addSource() {
     };
   }
   try {
+    if (editingLink.value) {
+      await downloadClientsApi(address.value!, token.value!).link(
+        editingLink.value,
+        indexer.value.downloadClientId ? indexer.value : {},
+      );
+      closeAddDialog();
+      await loadSources();
+      return;
+    }
     const source = await createSource(
       address.value ?? "",
       token.value ?? "",
@@ -622,6 +680,16 @@ onBeforeUnmount(() => {
               {{ sourceLabel(source) }}
             </span>
             <span
+              v-if="source.kind === 'torznab'"
+              class="block text-xs text-muted-foreground"
+              >{{
+                t("indexer.audioCategories", {
+                  categories: source.configuration?.categories,
+                })
+              }}</span
+            >
+            <span
+              v-else
               class="mt-1 flex flex-wrap items-center gap-x-1 text-xs text-muted-foreground"
             >
               <span class="font-semibold text-foreground">{{
@@ -719,6 +787,12 @@ onBeforeUnmount(() => {
               <DropdownMenuContent
                 class="z-50 w-44 rounded-lg border bg-popover p-1 text-popover-foreground shadow-lg"
               >
+                <DropdownMenuItem
+                  v-if="source.kind === 'torznab'"
+                  class="cursor-pointer rounded-sm px-2 py-2 text-sm"
+                  @select="editDownloadLink(source)"
+                  >{{ t("clients.link") }}</DropdownMenuItem
+                >
                 <DropdownMenuItem
                   :disabled="
                     (source.kind !== 'path' && source.kind !== 'jellyfin') ||
@@ -851,7 +925,7 @@ onBeforeUnmount(() => {
         class="fixed left-1/2 top-1/2 z-50 max-h-svh w-full max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border bg-card p-6 text-card-foreground shadow-lg"
       >
         <DialogTitle class="text-lg font-semibold">
-          {{ t("settings.sources.addTitle") }}
+          {{ editingLink ? t("clients.link") : t("settings.sources.addTitle") }}
         </DialogTitle>
         <DialogDescription class="text-sm text-muted-foreground">
           {{ t("settings.sources.addDescription") }}
@@ -876,6 +950,15 @@ onBeforeUnmount(() => {
             <Icon :icon="icons.jellyfin" aria-hidden="true" class="size-5" />
             {{ t("settings.sources.jellyfin.title") }}
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            class="justify-start"
+            @click="chooseKind('torznab')"
+            ><Icon :icon="icons.globe" aria-hidden="true" class="size-5" />{{
+              t("indexer.title")
+            }}</Button
+          >
         </div>
 
         <div v-else class="mt-4 space-y-4">
@@ -889,6 +972,26 @@ onBeforeUnmount(() => {
             </p>
           </div>
 
+          <div v-else-if="newKind === 'torznab'" class="space-y-3">
+            <template v-if="!editingLink">
+              <label class="block space-y-1"
+                ><span>{{ t("indexer.name") }}</span
+                ><Input v-model="indexer.name" type="text" autocomplete="off"
+              /></label>
+              <label class="block space-y-1"
+                ><span>{{ t("indexer.url") }}</span
+                ><Input v-model="indexer.url" type="url" autocomplete="off"
+              /></label>
+              <label class="block space-y-1"
+                ><span>{{ t("indexer.apiKey") }}</span
+                ><Input
+                  v-model="indexer.apiKey"
+                  type="password"
+                  autocomplete="off"
+              /></label>
+            </template>
+            <DownloadClientLink v-model="indexer" :sources="sources" />
+          </div>
           <div v-else class="space-y-4">
             <div class="space-y-2">
               <label for="jellyfin-url" class="text-sm font-medium">
@@ -972,8 +1075,14 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="mt-6 flex justify-end gap-3">
-          <Button type="button" variant="outline" @click="handleDialogBack">
-            {{ newKind ? t("common.back") : t("common.cancel") }}
+          <Button
+            type="button"
+            variant="outline"
+            @click="editingLink ? closeAddDialog() : handleDialogBack()"
+          >
+            {{
+              newKind && !editingLink ? t("common.back") : t("common.cancel")
+            }}
           </Button>
           <Button
             v-if="newKind"
@@ -981,7 +1090,13 @@ onBeforeUnmount(() => {
             :disabled="adding || !canAdd() || serverLost"
             @click="addSource"
           >
-            {{ adding ? t("common.adding") : t("settings.sources.add") }}
+            {{
+              adding
+                ? t("common.adding")
+                : editingLink
+                  ? t("common.save")
+                  : t("settings.sources.add")
+            }}
           </Button>
         </div>
       </DialogContent>

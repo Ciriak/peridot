@@ -209,16 +209,17 @@ test("shared track tables virtualize against the main content scroll owner", asy
   );
 
   assert.match(table, /useMainScrollVirtualizer/);
+  assert.match(table, /useVirtualLoadMore/);
   assert.match(table, /v-for="item in virtualRows"/);
-  assert.match(table, /<AutoLoadMore/);
-  assert.match(table, /:item-count="tracks\.length"/);
-  assert.match(table, /@load="loadMoreRows"/);
+  assert.match(table, /count: totalItemCount/);
+  assert.match(table, /onLoad: \(\) => emit\("load-more"\)/);
+  assert.doesNotMatch(table, /<AutoLoadMore/);
   assert.doesNotMatch(table, /@click="loadMoreRows"/);
   assert.doesNotMatch(table, /t\("trackTable\.loadMore"\)/);
   assert.match(table, /:role="isSearch \? 'list' : 'table'"/);
   assert.match(
     table,
-    /:aria-rowcount="isSearch \? undefined : tracks\.length \+ 1"/,
+    /:aria-rowcount="isSearch \? undefined : totalItemCount \+ 1"/,
   );
   assert.match(
     table,

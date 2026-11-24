@@ -42,7 +42,9 @@ const activeTasks = computed(() =>
   tasks.value.filter((task) => isActiveTaskStatus(task.status)),
 );
 const activeServerTasks = computed(() =>
-  user.value?.role === "admin" ? activeTasks.value : [],
+  user.value?.role === "admin"
+    ? activeTasks.value
+    : activeTasks.value.filter((task) => task.kind === "release_import"),
 );
 const activeMetadataTasks = computed(() =>
   tasks.value.filter(
@@ -59,8 +61,9 @@ const combinedTaskProgress = computed(() => {
   const taskCount = activeTaskCount.value;
   if (!taskCount) return null;
   const hasRunningTask =
-    activeServerTasks.value.some((task) => task.status === "running") ||
-    activeDownloadTasks.value.some((task) => task.status === "running");
+    activeServerTasks.value.some(
+      (task) => task.status === "running" || task.status === "waiting",
+    ) || activeDownloadTasks.value.some((task) => task.status === "running");
   if (!hasRunningTask) return null;
   const values = [
     ...activeServerTasks.value.map(activeTaskPercent),
@@ -87,6 +90,11 @@ const commonCategories = [
   },
 ];
 const adminCategories = [
+  {
+    labelKey: "clients.title",
+    to: "/settings/download-clients",
+    icon: icons.server,
+  },
   { labelKey: "settings.users", to: "/settings/users", icon: icons.user },
   { labelKey: "settings.sources", to: "/settings/sources", icon: icons.folder },
   {

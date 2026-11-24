@@ -1,12 +1,14 @@
 import {
   TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY,
+  TASK_RELEASE_IMPORT_STAGE_DETAIL_KEY,
   type MessageDescriptor,
   type TaskResponse,
+  type TaskReleaseImportStage,
   type TaskStatus,
 } from "@peridot/contracts";
 import { message } from "./messages.ts";
 
-const ACTIVE_STATUSES = new Set<TaskStatus>(["queued", "running"]);
+const ACTIVE_STATUSES = new Set<TaskStatus>(["waiting", "queued", "running"]);
 const MIN_ESTIMATE_ELAPSED_MS = 10_000;
 const MIN_ESTIMATE_PROGRESS = 0.05;
 
@@ -20,6 +22,7 @@ function createdAt(task: TaskResponse): number {
 }
 
 function taskKindPriority(task: TaskResponse): number {
+  if (task.kind === "release_import") return -1;
   if (task.kind === "library_scan") return 0;
   if (task.kind === "metadata_fetch") return 1;
   if (task.kind === "catalog_fetch") return 2;
@@ -33,9 +36,10 @@ export function orderedActiveTasks(
   return tasks
     .filter((task) => isActiveTaskStatus(task.status))
     .sort((left, right) => {
-      if (left.status !== right.status) {
-        return left.status === "running" ? -1 : 1;
-      }
+      const rank = (status: TaskStatus) =>
+        status === "running" ? 0 : status === "waiting" ? 1 : 2;
+      if (left.status !== right.status)
+        return rank(left.status) - rank(right.status);
       const priority = taskKindPriority(left) - taskKindPriority(right);
       if (priority !== 0) return priority;
       return createdAt(left) - createdAt(right);
@@ -84,7 +88,7 @@ export function runningMetadataTask(
 
 export function activeTaskPercent(task: TaskResponse): number | null {
   if (task.status === "queued") return 0;
-  if (task.status !== "running") return null;
+  if (task.status !== "running" && task.status !== "waiting") return null;
   if (task.progress.state !== "determinate") return null;
   if (task.progress.total === 0) return 100;
 
@@ -147,7 +151,13 @@ export function overallTaskProgress(
 ): number | null {
   const active = orderedActiveTasks(tasks);
   if (!active.length) return null;
-  if (!active.some((task) => task.status === "running")) return null;
+  if (
+    !active.some(
+      (task) => task.status === "running" || task.status === "waiting",
+    )
+  ) {
+    return null;
+  }
 
   let total = 0;
   for (const task of active) {
@@ -174,6 +184,8 @@ export function taskStatusMessage(task: TaskResponse): MessageDescriptor {
     return message("settings.tasks.status.completedWithErrors");
   }
   switch (task.status) {
+    case "waiting":
+      return message("settings.tasks.status.waiting");
     case "running":
       return message("settings.tasks.status.running");
     case "queued":
@@ -187,6 +199,16 @@ export function taskStatusMessage(task: TaskResponse): MessageDescriptor {
     case "stopped":
       return message("settings.tasks.status.stopped");
   }
+}
+
+export function releaseImportStage(
+  task: TaskResponse,
+): TaskReleaseImportStage | null {
+  if (task.kind !== "release_import") return null;
+  const stage = task.details.find(
+    (detail) => detail.key === TASK_RELEASE_IMPORT_STAGE_DETAIL_KEY,
+  )?.value;
+  return stage === "downloading" || stage === "addingToLibrary" ? stage : null;
 }
 
 export function taskProgressMessage(task: TaskResponse): MessageDescriptor {

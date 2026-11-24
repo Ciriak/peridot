@@ -11,6 +11,7 @@ model User {
   bootstrapKey          String?  @unique
   createdAt             DateTime @default(now())
   updatedAt             DateTime @onCreate(now()) @onUpdate(now())
+  tasks                 Task[]
 
   @@index([role])
 }
@@ -235,12 +236,15 @@ model Task {
   status            String
   title             String
   titleMessage      String?
+  ownerUserId       String?
+  ownerUser         User?     @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
   parentTaskId      String?
   sourceId          String?
   sourceName        String?
   progressCompleted Int?
   progressTotal     Int?
   details           String    @default("[]")
+  payload           String?
   failureSummary    String?
   failureMessage    String?
   forceRefresh      Int       @default(0)
@@ -252,6 +256,7 @@ model Task {
 
   @@index([status, createdAt])
   @@index([kind, status])
+  @@index([ownerUserId])
   @@index([parentTaskId])
 }
 
@@ -264,6 +269,15 @@ model ServerSetting {
   fileLoggingEnabled   Int      @default(1)
   fileLogRetentionDays Int      @default(5)
   updatedAt            DateTime @onCreate(now()) @onUpdate(now())
+}
+
+model DownloadClient {
+  id String @id @onCreate(cuid(2))
+  kind String
+  name String
+  url String
+  username String
+  credentialCiphertext String
 }
 
 model Source {

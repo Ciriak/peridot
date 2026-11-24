@@ -4,13 +4,13 @@ import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { onMounted } from "vue";
-import AutoLoadMore from "../../components/AutoLoadMore.vue";
+import AlbumCardPlaceholder from "../../components/AlbumCardPlaceholder.vue";
 import CatalogCard from "../../components/CatalogCard.vue";
 import ListSearchBar from "../../components/ListSearchBar.vue";
 import VirtualCardGrid from "../../components/VirtualCardGrid.vue";
-import { useCatalogAlbumQuery } from "../../composables/use-catalog-query";
 import { useListSearch } from "../../composables/use-list-search";
 import { useLikes } from "../../composables/use-likes";
+import { useVirtualAlbums } from "../../composables/use-virtual-albums";
 import { albumCatalogCard } from "../../lib/catalog-cards";
 
 const { t } = useI18n();
@@ -25,9 +25,10 @@ const {
   loaded,
   hasMore,
   totalCount,
+  loadedCount,
   load,
-  loadMore,
-} = useCatalogAlbumQuery(() => ({
+  setVisibleRange,
+} = useVirtualAlbums(() => ({
   query: searchQuery.value || undefined,
 }));
 const { load: loadLikes } = useLikes();
@@ -88,19 +89,19 @@ onMounted(() => {
       layout="wide"
       :item-key="(album) => album.id"
       :estimate-row-height="300"
-      :aria-busy="loading"
+      :total-count="totalCount"
+      :loaded-count="loadedCount"
+      :has-more="hasMore"
+      :loading-more="loadingMore"
+      paging-mode="window"
+      :aria-busy="loading || loadingMore"
+      @visible-range="setVisibleRange"
     >
       <template #default="{ item }">
         <CatalogCard :item="albumCatalogCard(item)" />
       </template>
-      <template #footer>
-        <AutoLoadMore
-          :enabled="hasMore"
-          :loading="loadingMore"
-          :item-count="albums.length"
-          :label="t('page.albums.loadingMore')"
-          @load="loadMore"
-        />
+      <template #placeholder>
+        <AlbumCardPlaceholder />
       </template>
     </VirtualCardGrid>
     <p
