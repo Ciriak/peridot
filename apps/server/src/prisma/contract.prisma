@@ -220,6 +220,7 @@ model Media {
   coverId                    String?
   available                  Int             @default(1)
   catalogProjectionPending   Int             @default(0)
+  manualOverrides            String          @default("{}")
   copies                     MediaCopy[]
   aliases                    MediaAlias[]
   likes                      MediaLike[]
@@ -234,6 +235,7 @@ model Media {
   @@index([catalogProjectionPending])
   @@index([coverId])
   @@index([metadataProviderKind, metadataExternalTrackId])
+  @@index([updatedAt, id])
 }
 
 model MediaCopy {
@@ -268,6 +270,7 @@ model MediaCopy {
   available             Int           @default(1)
   lastSeenScanId        String?
   metadataVersion       Int           @default(0)
+  manualOverrides       String        @default("{}")
   media                 Media         @relation(fields: [mediaId], references: [id], onDelete: Cascade)
   librarySource         LibrarySource @relation(fields: [librarySourceId], references: [id], onDelete: Cascade)
   artworkJob            ArtworkJob?
@@ -279,6 +282,9 @@ model MediaCopy {
   @@index([mediaId, available])
   @@index([librarySourceId])
   @@index([lastSeenScanId])
+  @@index([mimeType])
+  @@index([audioLossless, audioBitrate])
+  @@index([fileSizeBytes])
 }
 
 model MediaAlias {

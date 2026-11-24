@@ -23,6 +23,7 @@ import {
   refreshCanonicalMediaFromCopies,
   refreshCanonicalMediaFromCopiesBatch,
 } from "./media-copies.js";
+import { protectedAutomaticWrite } from "./media-overrides.js";
 import {
   collectionFallbackTitle,
   mediaType,
@@ -987,9 +988,14 @@ export class LibraryScanner {
         const mediaId = prepared.media?.id ?? existing.mediaId;
         await withTiming(timings.database, () =>
           this.database.transaction(async (transaction) => {
-            await transaction.orm.MediaCopy.where({ id: existing.id }).update(
+            const protectedWrite = protectedAutomaticWrite(
+              existing.manualOverrides,
               copyData,
             );
+            await transaction.orm.MediaCopy.where({ id: existing.id }).update({
+              ...protectedWrite.values,
+              manualOverrides: protectedWrite.manualOverrides,
+            });
             await refreshCanonicalMediaFromCopies(transaction, mediaId);
           }),
         );
@@ -1038,11 +1044,18 @@ export class LibraryScanner {
   ): Promise<void> {
     try {
       await this.database.transaction(async (transaction) => {
+        const protectedWrite = protectedAutomaticWrite(
+          existing.manualOverrides,
+          {
+            fileSizeBytes: file.size,
+            fileModifiedAt: file.modifiedAt,
+            available: 1,
+            lastSeenScanId: scanId,
+          },
+        );
         await transaction.orm.MediaCopy.where({ id: existing.id }).update({
-          fileSizeBytes: file.size,
-          fileModifiedAt: file.modifiedAt,
-          available: 1,
-          lastSeenScanId: scanId,
+          ...protectedWrite.values,
+          manualOverrides: protectedWrite.manualOverrides,
         });
         await refreshCanonicalMediaFromCopies(transaction, existing.mediaId);
         await this.refreshMediaAvailability(
@@ -1258,11 +1271,18 @@ export class LibraryScanner {
               mediaType(existing.mediaType) === item.mediaType &&
               trackMediaTypeOrigin(existing.mediaTypeOrigin) ===
                 item.mediaTypeOrigin;
+            const protectedWrite = protectedAutomaticWrite(
+              existing.manualOverrides,
+              {
+                ...(unchanged ? {} : copyData),
+                available: 1,
+                lastSeenScanId: scanId,
+                ...(coverId ? { coverId } : {}),
+              },
+            );
             await transaction.orm.MediaCopy.where({ id: existing.id }).update({
-              ...(unchanged ? {} : copyData),
-              available: 1,
-              lastSeenScanId: scanId,
-              ...(coverId ? { coverId } : {}),
+              ...protectedWrite.values,
+              manualOverrides: protectedWrite.manualOverrides,
             });
             const existingMedia = mediaById.get(mediaId);
             mediaIdsToRefresh.add(mediaId);

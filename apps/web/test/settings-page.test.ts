@@ -25,7 +25,7 @@ test("settings is a fullscreen routed area with a separate administrator group",
   }
   assert.match(commonCategories, /labelKey: "settings\.profile"/);
   assert.doesNotMatch(commonCategories, /settings\.account"/);
-  for (const category of ["users", "server"]) {
+  for (const category of ["medias", "users", "server"]) {
     assert.match(adminCategories, new RegExp(`to: "/settings/${category}"`));
   }
   assert.doesNotMatch(adminCategories, /to: "\/settings\/connectors"/);
@@ -64,6 +64,7 @@ test("settings is a fullscreen routed area with a separate administrator group",
       layout.indexOf('v-for="item in adminCategories"'),
   );
   assert.match(adminCategories, /labelKey: "settings\.users"/);
+  assert.match(adminCategories, /labelKey: "settings\.medias"/);
   assert.match(commonCategories, /labelKey: "settings\.tasks"/);
   assert.doesNotMatch(adminCategories, /to: "\/settings\/tasks"/);
   assert.doesNotMatch(commonCategories, /to: "\/settings\/plugins"/);
@@ -108,6 +109,7 @@ test("settings is a fullscreen routed area with a separate administrator group",
   assert.match(layout, /settings\.tasks\.progressFor/);
   for (const page of [
     "tasks",
+    "medias",
     "users",
     "connectors/index",
     "connectors/library-sources",

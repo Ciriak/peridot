@@ -1850,6 +1850,13 @@
                   "kind": "scalar"
                 }
               },
+              "manualOverrides": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
               "mediaType": {
                 "nullable": false,
                 "type": {
@@ -2150,6 +2157,9 @@
                 },
                 "id": {
                   "column": "id"
+                },
+                "manualOverrides": {
+                  "column": "manualOverrides"
                 },
                 "mediaType": {
                   "column": "mediaType"
@@ -2458,6 +2468,13 @@
                   "kind": "scalar"
                 }
               },
+              "manualOverrides": {
+                "nullable": false,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
               "mediaId": {
                 "nullable": false,
                 "type": {
@@ -2653,6 +2670,9 @@
                 },
                 "librarySourceId": {
                   "column": "librarySourceId"
+                },
+                "manualOverrides": {
+                  "column": "manualOverrides"
                 },
                 "mediaId": {
                   "column": "mediaId"
@@ -5969,6 +5989,15 @@
                   "dataType": "sqlite/text",
                   "nullable": false
                 },
+                "manualOverrides": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "default": {
+                    "kind": "literal",
+                    "value": "{}"
+                  },
+                  "nullable": false
+                },
                 "mediaType": {
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
@@ -6167,6 +6196,15 @@
                   ],
                   "name": "Media_metadataProviderKind_metadataExternalTrackId_idx_9c545a1d",
                   "prefix": "Media_metadataProviderKind_metadataExternalTrackId_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "updatedAt",
+                    "id"
+                  ],
+                  "name": "Media_updatedAt_id_idx_88868a1d",
+                  "prefix": "Media_updatedAt_id_idx",
                   "unique": false
                 }
               ],
@@ -6373,6 +6411,15 @@
                   "dataType": "sqlite/text",
                   "nullable": false
                 },
+                "manualOverrides": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "default": {
+                    "kind": "literal",
+                    "value": "{}"
+                  },
+                  "nullable": false
+                },
                 "mediaId": {
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
@@ -6490,6 +6537,23 @@
               "indexes": [
                 {
                   "columns": [
+                    "audioLossless",
+                    "audioBitrate"
+                  ],
+                  "name": "MediaCopy_audioLossless_audioBitrate_idx_c82c122e",
+                  "prefix": "MediaCopy_audioLossless_audioBitrate_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "fileSizeBytes"
+                  ],
+                  "name": "MediaCopy_fileSizeBytes_idx_2e2c7971",
+                  "prefix": "MediaCopy_fileSizeBytes_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
                     "lastSeenScanId"
                   ],
                   "name": "MediaCopy_lastSeenScanId_idx_d6a486dd",
@@ -6519,6 +6583,14 @@
                   ],
                   "name": "MediaCopy_mediaId_idx_6b06655c",
                   "prefix": "MediaCopy_mediaId_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "mimeType"
+                  ],
+                  "name": "MediaCopy_mimeType_idx_064291e0",
+                  "prefix": "MediaCopy_mimeType_idx",
                   "unique": false
                 }
               ],
@@ -8158,7 +8230,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "30048626d798e2591129760b3069b6cd26b378a1dadc6fc43e8e2de7f8491711"
+    "storageHash": "7fb2e91df85da52ca54ad7f6ff71621577a757d8b112f95a109d4653e0773135"
   },
   "execution": {
     "executionHash": "f5ba018940425231a1ebe82ea868c89b274c2b48ee35eb5ae80c79124cce62ce",

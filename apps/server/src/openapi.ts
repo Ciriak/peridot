@@ -288,6 +288,90 @@ const schemas: Record<string, SchemaObject> = {
     totalCount: integerSchema,
     catalogRevision: integerSchema,
   }),
+  AdminMediaResponse: {
+    type: "object",
+    additionalProperties: true,
+  },
+  AdminMediaListResponse: objectSchema({
+    items: arrayOf(ref("AdminMediaResponse")),
+    page: integerSchema,
+    pageSize: integerSchema,
+    totalCount: integerSchema,
+    totalPages: integerSchema,
+    mimeTypes: arrayOf(stringSchema),
+  }),
+  AdminMediaFieldUpdate: objectSchema({
+    field: stringSchema,
+    value: {
+      anyOf: [
+        stringSchema,
+        numberSchema,
+        booleanSchema,
+        nullSchema,
+        arrayOf(stringSchema),
+        { type: "array", items: ref("MediaMetadataDetail") },
+      ],
+    },
+    expectedUpdatedAt: dateTimeSchema,
+  }),
+  CreateAdminMediaRequest: objectSchema(
+    {
+      mediaType: mediaTypeSchema,
+      title: stringSchema,
+      artist: stringSchema,
+      artistCredits: arrayOf(stringSchema),
+      albumArtist: nullable(stringSchema),
+      albumArtistCredits: arrayOf(stringSchema),
+      album: nullable(stringSchema),
+      genres: arrayOf(stringSchema),
+      discNumber: nullable(integerSchema),
+      trackNumber: nullable(integerSchema),
+      durationMs: nullable(integerSchema),
+      publishedAt: nullable(dateTimeSchema),
+      coverId: nullable(stringSchema),
+    },
+    ["mediaType", "title", "artist"],
+  ),
+  CreateAdminMediaCopyRequest: objectSchema(
+    {
+      librarySourceId: stringSchema,
+      relativePath: stringSchema,
+      mediaType: mediaTypeSchema,
+      mediaTypeOrigin: trackMediaTypeOriginSchema,
+      title: stringSchema,
+      artist: stringSchema,
+      artistCredits: arrayOf(stringSchema),
+      albumArtist: nullable(stringSchema),
+      albumArtistCredits: arrayOf(stringSchema),
+      album: nullable(stringSchema),
+      genres: arrayOf(stringSchema),
+      discNumber: nullable(integerSchema),
+      trackNumber: nullable(integerSchema),
+      durationMs: nullable(integerSchema),
+      publishedAt: nullable(dateTimeSchema),
+      mimeType: stringSchema,
+      fileSizeBytes: stringSchema,
+      fileModifiedAt: dateTimeSchema,
+      externalId: nullable(stringSchema),
+      externalVersion: nullable(stringSchema),
+      externalContainer: nullable(stringSchema),
+      externalCoverKey: nullable(stringSchema),
+      recordingIdentityKeys: arrayOf(stringSchema),
+      audioLossless: booleanSchema,
+      audioBitrate: nullable(integerSchema),
+      coverId: nullable(stringSchema),
+    },
+    [
+      "librarySourceId",
+      "relativePath",
+      "mediaType",
+      "title",
+      "artist",
+      "mimeType",
+      "fileSizeBytes",
+      "fileModifiedAt",
+    ],
+  ),
   AlbumSummaryResponse: objectSchema({
     id: stringSchema,
     title: stringSchema,
@@ -1714,6 +1798,57 @@ const routes: Record<string, OpenApiOperation> = {
       mediaIds: arrayOf(stringSchema),
     }),
   ),
+  "GET /api/admin/medias": jsonOperation(
+    "Media manager",
+    "List and filter all known media",
+    ref("AdminMediaListResponse"),
+  ),
+  "POST /api/admin/medias": jsonOperation(
+    "Media manager",
+    "Create a media record",
+    ref("AdminMediaResponse"),
+    { status: 201, body: ref("CreateAdminMediaRequest") },
+  ),
+  "PATCH /api/admin/medias/:mediaId": jsonOperation(
+    "Media manager",
+    "Update one media field with a persistent override",
+    ref("AdminMediaResponse"),
+    { body: ref("AdminMediaFieldUpdate") },
+  ),
+  "DELETE /api/admin/medias/:mediaId": jsonOperation(
+    "Media manager",
+    "Delete a media record and its catalog references",
+    null,
+    { status: 204 },
+  ),
+  "DELETE /api/admin/medias/:mediaId/overrides/:field": jsonOperation(
+    "Media manager",
+    "Reset one media field to its source value",
+    ref("AdminMediaResponse"),
+  ),
+  "POST /api/admin/medias/:mediaId/copies": jsonOperation(
+    "Media manager",
+    "Create a file record for a media item",
+    ref("AdminMediaResponse"),
+    { status: 201, body: ref("CreateAdminMediaCopyRequest") },
+  ),
+  "PATCH /api/admin/medias/:mediaId/copies/:copyId": jsonOperation(
+    "Media manager",
+    "Update one file field with a persistent override",
+    ref("AdminMediaResponse"),
+    { body: ref("AdminMediaFieldUpdate") },
+  ),
+  "DELETE /api/admin/medias/:mediaId/copies/:copyId": jsonOperation(
+    "Media manager",
+    "Delete a file record without changing files on disk",
+    ref("AdminMediaResponse"),
+  ),
+  "DELETE /api/admin/medias/:mediaId/copies/:copyId/overrides/:field":
+    jsonOperation(
+      "Media manager",
+      "Reset one file field to its source value",
+      ref("AdminMediaResponse"),
+    ),
   "GET /api/admin/server": jsonOperation(
     "Server administration",
     "Get server settings",
@@ -1998,6 +2133,7 @@ function operationId(method: string, path: string): string {
 }
 
 function fallbackTag(method: string, path: string): string {
+  if (path.startsWith("/api/admin/medias")) return "Media manager";
   if (path.startsWith("/api/admin/users")) return "User management";
   if (path.startsWith("/api/admin/library-sources")) return "Connectors";
   if (path.startsWith("/api/admin/source-integrations")) return "Connectors";

@@ -1,5 +1,54 @@
 # Peridot handoff
 
+## Medias manager
+
+Administration now includes a Medias manager at `/settings/medias`. It lists all
+known media, including unavailable records and zero-copy drafts, with full
+metadata and source-backed file/location records. The page provides advanced
+filters, sorting, numbered pagination, a right-side inline editor, media and copy
+CRUD, persistent manual overrides with reset-to-source actions, and destructive
+delete confirmations.
+
+The route is full-bleed inside settings. The page title and subtitle are omitted,
+search and filters stay above the independently scrolling datatable, pagination
+stays below it, and date cells expose their raw ISO timestamp through a native
+`title` tooltip. The table owns vertical and horizontal scrolling.
+
+Verification:
+
+- `pnpm --filter @peridot/server test` (215 passing)
+- `pnpm --filter @peridot/web test` (319 passing)
+- `pnpm --filter @peridot/server typecheck`
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- `pnpm lint`
+- `pnpm format:check`
+- `pnpm db:validate`
+- Local migration marker and `db` ref advanced to
+  `7fb2e91df85da52ca54ad7f6ff71621577a757d8b112f95a109d4653e0773135`
+
+Known limits:
+
+- Live authenticated browser QA was not completed because Computer Use could not
+  verify the active browser URL.
+- The full-screen table layout should still be checked against a genuinely large
+  catalog at desktop and phone widths.
+- Manual overrides cover the exposed editable data fields; IDs, timestamps,
+  availability, aliases, and scan/projection internals intentionally remain
+  system-owned.
+
+Uncommitted changes:
+
+- Medias manager contracts, API routes, persistent override helpers and scan
+  integration, additive migration, web page/drawer/editors, tests, translations,
+  and documentation.
+
+Next:
+
+- Inspect `/settings/medias` at desktop and phone widths, exercise filters and
+  pagination with a multi-page catalog, then edit a scanned field and confirm it
+  survives a source rescan before using Reset to source.
+
 ## Direct connector settings destinations
 
 The settings sidebar now lists Library sources, Release indexers, Download

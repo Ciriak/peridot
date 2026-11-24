@@ -1,4 +1,5 @@
 import type { Database } from "./database.js";
+import { protectedAutomaticWrite } from "./media-overrides.js";
 import type { LibrarySourceRow, MediaCopyRow } from "./prisma/models.js";
 
 type MediaCopyDatabase = Pick<Database, "orm">;
@@ -139,7 +140,11 @@ export async function refreshCanonicalMediaFromCopiesBatch(
   const sources = await database.orm.LibrarySource.where((source) =>
     source.id.in([...new Set(copies.map((copy) => copy.librarySourceId))]),
   ).all();
+  const mediaRows = await database.orm.Media.where((media) =>
+    media.id.in(uniqueIds),
+  ).all();
   const sourceById = new Map(sources.map((source) => [source.id, source]));
+  const mediaById = new Map(mediaRows.map((media) => [media.id, media]));
   const byMedia = new Map<string, RankedMediaCopy[]>();
   for (const copy of copies) {
     const source = sourceById.get(copy.librarySourceId);
@@ -163,7 +168,9 @@ export async function refreshCanonicalMediaFromCopiesBatch(
     const artwork =
       ranked.find(({ copy }) => copy.coverId)?.copy.coverId ?? null;
     const copy = primary.copy;
-    await database.orm.Media.where({ id: mediaId }).update({
+    const media = mediaById.get(mediaId);
+    if (!media) continue;
+    const protectedWrite = protectedAutomaticWrite(media.manualOverrides, {
       mediaType: copy.mediaType,
       mediaTypeOrigin: copy.mediaTypeOrigin,
       title: copy.title,
@@ -181,6 +188,10 @@ export async function refreshCanonicalMediaFromCopiesBatch(
       available: 1,
       metadataVersion: copy.metadataVersion,
       catalogProjectionPending: 1,
+    });
+    await database.orm.Media.where({ id: mediaId }).update({
+      ...protectedWrite.values,
+      manualOverrides: protectedWrite.manualOverrides,
     });
   }
   return primaryByMedia;
@@ -201,7 +212,9 @@ export async function refreshCanonicalMediaFromCopies(
   }
   const artwork = ranked.find(({ copy }) => copy.coverId)?.copy.coverId ?? null;
   const copy = primary.copy;
-  await database.orm.Media.where({ id: mediaId }).update({
+  const media = await database.orm.Media.first({ id: mediaId });
+  if (!media) return primary;
+  const protectedWrite = protectedAutomaticWrite(media.manualOverrides, {
     mediaType: copy.mediaType,
     mediaTypeOrigin: copy.mediaTypeOrigin,
     title: copy.title,
@@ -219,6 +232,10 @@ export async function refreshCanonicalMediaFromCopies(
     available: 1,
     metadataVersion: copy.metadataVersion,
     catalogProjectionPending: 1,
+  });
+  await database.orm.Media.where({ id: mediaId }).update({
+    ...protectedWrite.values,
+    manualOverrides: protectedWrite.manualOverrides,
   });
   return primary;
 }

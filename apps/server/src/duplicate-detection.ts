@@ -2,6 +2,7 @@ import type { MessageDescriptor } from "@peridot/contracts";
 import type { CatalogService } from "./catalog.js";
 import type { Database } from "./database.js";
 import { message } from "./messages.js";
+import { protectedAutomaticWrite } from "./media-overrides.js";
 import type {
   LibrarySourceRow,
   MediaCopyRow,
@@ -346,26 +347,33 @@ export class MediaMatchService {
     const canonical = await transaction.orm.Media.first({ id: canonicalId });
     if (!canonical) return 0;
     if (!canonical.metadataProviderId && duplicate.metadataProviderId) {
+      const protectedWrite = protectedAutomaticWrite(
+        canonical.manualOverrides,
+        {
+          metadataMode: duplicate.metadataMode,
+          metadataTitle: duplicate.metadataTitle,
+          metadataArtist: duplicate.metadataArtist,
+          metadataArtistCredits: duplicate.metadataArtistCredits,
+          metadataAlbumArtist: duplicate.metadataAlbumArtist,
+          metadataAlbumArtistCredits: duplicate.metadataAlbumArtistCredits,
+          metadataAlbum: duplicate.metadataAlbum,
+          metadataGenres: duplicate.metadataGenres,
+          metadataDiscNumber: duplicate.metadataDiscNumber,
+          metadataTrackNumber: duplicate.metadataTrackNumber,
+          metadataProviderId: duplicate.metadataProviderId,
+          metadataProviderKind: duplicate.metadataProviderKind,
+          metadataProviderName: duplicate.metadataProviderName,
+          metadataExternalTrackId: duplicate.metadataExternalTrackId,
+          metadataExternalReleaseId: duplicate.metadataExternalReleaseId,
+          metadataSourceUrl: duplicate.metadataSourceUrl,
+          metadataDetails: duplicate.metadataDetails,
+          metadataMatchedAt: duplicate.metadataMatchedAt,
+          metadataAttemptedSignature: duplicate.metadataAttemptedSignature,
+        },
+      );
       await transaction.orm.Media.where({ id: canonicalId }).update({
-        metadataMode: duplicate.metadataMode,
-        metadataTitle: duplicate.metadataTitle,
-        metadataArtist: duplicate.metadataArtist,
-        metadataArtistCredits: duplicate.metadataArtistCredits,
-        metadataAlbumArtist: duplicate.metadataAlbumArtist,
-        metadataAlbumArtistCredits: duplicate.metadataAlbumArtistCredits,
-        metadataAlbum: duplicate.metadataAlbum,
-        metadataGenres: duplicate.metadataGenres,
-        metadataDiscNumber: duplicate.metadataDiscNumber,
-        metadataTrackNumber: duplicate.metadataTrackNumber,
-        metadataProviderId: duplicate.metadataProviderId,
-        metadataProviderKind: duplicate.metadataProviderKind,
-        metadataProviderName: duplicate.metadataProviderName,
-        metadataExternalTrackId: duplicate.metadataExternalTrackId,
-        metadataExternalReleaseId: duplicate.metadataExternalReleaseId,
-        metadataSourceUrl: duplicate.metadataSourceUrl,
-        metadataDetails: duplicate.metadataDetails,
-        metadataMatchedAt: duplicate.metadataMatchedAt,
-        metadataAttemptedSignature: duplicate.metadataAttemptedSignature,
+        ...protectedWrite.values,
+        manualOverrides: protectedWrite.manualOverrides,
       });
     }
     let moved = 0;

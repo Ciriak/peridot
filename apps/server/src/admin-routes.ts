@@ -1,4 +1,5 @@
 import { registerDownloadClients } from "./download-clients.js";
+import { registerAdminMediaRoutes } from "./admin-media-routes.js";
 import { registerReleaseIndexers } from "./release-indexers.js";
 import path from "node:path";
 import type {
@@ -117,6 +118,10 @@ export async function registerAdminRoutes(
     if (!connectors) {
       throw new Error("Connector registry is unavailable.");
     }
+    if (!catalog) {
+      throw new Error("Catalog service is unavailable.");
+    }
+    await registerAdminMediaRoutes(admin, database, catalog);
     registerDownloadClients(admin, database, metadataCredentials, connectors);
     registerReleaseIndexers(admin, database, metadataCredentials, connectors);
     admin.get(

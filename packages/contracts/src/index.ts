@@ -122,6 +122,309 @@ export interface MediaResponse {
   copies?: MediaCopyResponse[];
 }
 
+export type AdminMediaField =
+  | "mediaType"
+  | "title"
+  | "artist"
+  | "artistCredits"
+  | "albumArtist"
+  | "albumArtistCredits"
+  | "album"
+  | "genres"
+  | "discNumber"
+  | "trackNumber"
+  | "durationMs"
+  | "publishedAt"
+  | "metadataMode"
+  | "metadataTitle"
+  | "metadataArtist"
+  | "metadataArtistCredits"
+  | "metadataAlbumArtist"
+  | "metadataAlbumArtistCredits"
+  | "metadataAlbum"
+  | "metadataGenres"
+  | "metadataDiscNumber"
+  | "metadataTrackNumber"
+  | "metadataProviderId"
+  | "metadataProviderKind"
+  | "metadataProviderName"
+  | "metadataExternalTrackId"
+  | "metadataExternalReleaseId"
+  | "metadataSourceUrl"
+  | "metadataDetails"
+  | "metadataMatchedAt"
+  | "coverId";
+
+export type AdminMediaCopyField =
+  | "librarySourceId"
+  | "relativePath"
+  | "mediaType"
+  | "mediaTypeOrigin"
+  | "title"
+  | "artist"
+  | "artistCredits"
+  | "albumArtist"
+  | "albumArtistCredits"
+  | "album"
+  | "genres"
+  | "discNumber"
+  | "trackNumber"
+  | "durationMs"
+  | "publishedAt"
+  | "mimeType"
+  | "fileSizeBytes"
+  | "fileModifiedAt"
+  | "externalId"
+  | "externalVersion"
+  | "externalContainer"
+  | "externalCoverKey"
+  | "recordingIdentityKeys"
+  | "audioLossless"
+  | "audioBitrate"
+  | "coverId";
+
+export type AdminMediaFieldValue =
+  string | number | boolean | null | string[] | MediaMetadataDetail[];
+
+export type AdminMediaFilter = "all" | "music" | "audiobook" | "podcast";
+
+export type AdminMediaAvailabilityFilter = "all" | "available" | "unavailable";
+
+export type AdminMediaMetadataFilter =
+  "all" | "matched" | "unmatched" | "manual" | "file";
+
+export type AdminMediaCopyCountFilter = "any" | "zero" | "one" | "multiple";
+
+export type AdminMediaLosslessFilter = "any" | "true" | "false";
+
+export type AdminMediaMissingFilter =
+  | "none"
+  | "album"
+  | "genres"
+  | "duration"
+  | "publishedAt"
+  | "cover"
+  | "metadata"
+  | "copy";
+
+export type AdminMediaManualFilter = "any" | "none" | "media" | "copy";
+
+export type AdminMediaSortField =
+  | "title"
+  | "artist"
+  | "album"
+  | "mediaType"
+  | "available"
+  | "duration"
+  | "published"
+  | "copyCount"
+  | "createdAt"
+  | "updatedAt";
+
+export interface AdminMediaListQuery {
+  page?: number;
+  pageSize?: 25 | 50 | 100;
+  query?: string;
+  mediaType?: AdminMediaFilter;
+  availability?: AdminMediaAvailabilityFilter;
+  sourceId?: string;
+  metadataState?: AdminMediaMetadataFilter;
+  providerId?: string;
+  copyCount?: AdminMediaCopyCountFilter;
+  lossless?: AdminMediaLosslessFilter;
+  mimeType?: string;
+  minBitrate?: number;
+  maxBitrate?: number;
+  minFileSizeBytes?: string;
+  maxFileSizeBytes?: string;
+  missing?: AdminMediaMissingFilter;
+  manual?: AdminMediaManualFilter;
+  publishedFrom?: string;
+  publishedTo?: string;
+  fileModifiedFrom?: string;
+  fileModifiedTo?: string;
+  sort?: AdminMediaSortField;
+  direction?: CatalogSortDirection;
+}
+
+export interface AdminMediaCopyResponse {
+  id: string;
+  mediaId: string;
+  librarySourceId: string;
+  librarySourceName: string;
+  librarySourceKind: LibrarySourceKind;
+  librarySourcePath: string | null;
+  librarySourceRemoved: boolean;
+  relativePath: string;
+  mediaType: MediaType;
+  mediaTypeOrigin: MediaTypeOrigin;
+  title: string;
+  artist: string;
+  artistCredits: string[];
+  albumArtist: string | null;
+  albumArtistCredits: string[];
+  album: string | null;
+  genres: string[];
+  discNumber: number | null;
+  trackNumber: number | null;
+  durationMs: number | null;
+  publishedAt: string | null;
+  mimeType: string;
+  fileSizeBytes: string;
+  fileModifiedAt: string;
+  externalId: string | null;
+  externalVersion: string | null;
+  externalContainer: string | null;
+  externalCoverKey: string | null;
+  recordingIdentityKeys: string[];
+  audioLossless: boolean;
+  audioBitrate: number | null;
+  coverId: string | null;
+  available: boolean;
+  lastSeenScanId: string | null;
+  metadataVersion: number;
+  manualOverrideFields: AdminMediaCopyField[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminMediaUsageResponse {
+  copyCount: number;
+  likeCount: number;
+  playCount: number;
+  playlistItemCount: number;
+  aliasCount: number;
+}
+
+export interface AdminMediaResponse {
+  id: string;
+  mediaType: MediaType;
+  mediaTypeOrigin: MediaTypeOrigin;
+  title: string;
+  artist: string;
+  artistCredits: string[];
+  albumArtist: string | null;
+  albumArtistCredits: string[];
+  album: string | null;
+  genres: string[];
+  discNumber: number | null;
+  trackNumber: number | null;
+  durationMs: number | null;
+  publishedAt: string | null;
+  metadataVersion: number;
+  metadataMode: string;
+  metadataTitle: string | null;
+  metadataArtist: string | null;
+  metadataArtistCredits: string[];
+  metadataAlbumArtist: string | null;
+  metadataAlbumArtistCredits: string[];
+  metadataAlbum: string | null;
+  metadataGenres: string[];
+  metadataDiscNumber: number | null;
+  metadataTrackNumber: number | null;
+  metadataProviderId: string | null;
+  metadataProviderKind: string | null;
+  metadataProviderName: string | null;
+  metadataExternalTrackId: string | null;
+  metadataExternalReleaseId: string | null;
+  metadataSourceUrl: string | null;
+  metadataDetails: MediaMetadataDetail[];
+  metadataMatchedAt: string | null;
+  metadataAttemptedSignature: string | null;
+  coverId: string | null;
+  available: boolean;
+  catalogProjectionPending: boolean;
+  manualOverrideFields: AdminMediaField[];
+  usage: AdminMediaUsageResponse;
+  copies: AdminMediaCopyResponse[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminMediaListResponse {
+  items: AdminMediaResponse[];
+  page: number;
+  pageSize: 25 | 50 | 100;
+  totalCount: number;
+  totalPages: number;
+  mimeTypes: string[];
+}
+
+export interface CreateAdminMediaRequest {
+  mediaType: MediaType;
+  title: string;
+  artist: string;
+  artistCredits?: string[];
+  albumArtist?: string | null;
+  albumArtistCredits?: string[];
+  album?: string | null;
+  genres?: string[];
+  discNumber?: number | null;
+  trackNumber?: number | null;
+  durationMs?: number | null;
+  publishedAt?: string | null;
+  metadataMode?: string;
+  metadataTitle?: string | null;
+  metadataArtist?: string | null;
+  metadataArtistCredits?: string[];
+  metadataAlbumArtist?: string | null;
+  metadataAlbumArtistCredits?: string[];
+  metadataAlbum?: string | null;
+  metadataGenres?: string[];
+  metadataDiscNumber?: number | null;
+  metadataTrackNumber?: number | null;
+  metadataProviderId?: string | null;
+  metadataProviderKind?: string | null;
+  metadataProviderName?: string | null;
+  metadataExternalTrackId?: string | null;
+  metadataExternalReleaseId?: string | null;
+  metadataSourceUrl?: string | null;
+  metadataDetails?: MediaMetadataDetail[];
+  metadataMatchedAt?: string | null;
+  coverId?: string | null;
+}
+
+export interface UpdateAdminMediaRequest {
+  field: AdminMediaField;
+  value: AdminMediaFieldValue;
+  expectedUpdatedAt: string;
+}
+
+export interface CreateAdminMediaCopyRequest {
+  librarySourceId: string;
+  relativePath: string;
+  mediaType: MediaType;
+  mediaTypeOrigin?: MediaTypeOrigin;
+  title: string;
+  artist: string;
+  artistCredits?: string[];
+  albumArtist?: string | null;
+  albumArtistCredits?: string[];
+  album?: string | null;
+  genres?: string[];
+  discNumber?: number | null;
+  trackNumber?: number | null;
+  durationMs?: number | null;
+  publishedAt?: string | null;
+  mimeType: string;
+  fileSizeBytes: string;
+  fileModifiedAt: string;
+  externalId?: string | null;
+  externalVersion?: string | null;
+  externalContainer?: string | null;
+  externalCoverKey?: string | null;
+  recordingIdentityKeys?: string[];
+  audioLossless?: boolean;
+  audioBitrate?: number | null;
+  coverId?: string | null;
+}
+
+export interface UpdateAdminMediaCopyRequest {
+  field: AdminMediaCopyField;
+  value: AdminMediaFieldValue;
+  expectedUpdatedAt: string;
+}
+
 export type CatalogSortField =
   "title" | "artist" | "album" | "duration" | "track" | "published";
 

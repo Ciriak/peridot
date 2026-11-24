@@ -45,6 +45,7 @@ import {
   primaryMediaCopy,
   refreshCanonicalMediaFromCopies,
 } from "./media-copies.js";
+import { protectedAutomaticWrite } from "./media-overrides.js";
 import { parseStoredGenres } from "./genres.js";
 import { storedMediaType, trackMediaFilter } from "./media.js";
 import type { TaskExecutionResult, TaskService } from "./tasks.js";
@@ -1244,8 +1245,12 @@ export class CatalogService {
     return this.serializeCatalog(async () => {
       const copy = await this.database.orm.MediaCopy.first({ id: copyId });
       if (!copy || copy.externalCoverKey !== expectedCoverKey) return false;
-      await this.database.orm.MediaCopy.where({ id: copyId }).update({
+      const protectedWrite = protectedAutomaticWrite(copy.manualOverrides, {
         coverId,
+      });
+      await this.database.orm.MediaCopy.where({ id: copyId }).update({
+        ...protectedWrite.values,
+        manualOverrides: protectedWrite.manualOverrides,
       });
       await refreshCanonicalMediaFromCopies(this.database, copy.mediaId);
       await this.reindexMediaUnlocked(copy.mediaId, "scan", true);

@@ -44,6 +44,7 @@ import {
   primaryCopiesForMediaIds,
   type RankedMediaCopy,
 } from "./media-copies.js";
+import { protectedAutomaticWrite } from "./media-overrides.js";
 import type {
   ArtistImageRow,
   CatalogArtistRow,
@@ -535,9 +536,13 @@ export class MetadataEnrichment {
         track: MediaRow,
         candidate: MetadataCandidateResponse,
       ) => {
-        await this.database.orm.Media.where({ id: track.id }).update({
+        const protectedWrite = protectedAutomaticWrite(track.manualOverrides, {
           ...matchData(candidate, "automatic"),
           metadataAttemptedSignature: inputSignature(track),
+        });
+        await this.database.orm.Media.where({ id: track.id }).update({
+          ...protectedWrite.values,
+          manualOverrides: protectedWrite.manualOverrides,
         });
         await this.catalog?.reindexMedia(track.id, "metadata");
         matchedCount += 1;

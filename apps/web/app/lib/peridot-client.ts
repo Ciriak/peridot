@@ -7,6 +7,11 @@ import type {
 import type {
   AddPlaylistItemRequest,
   AddPlaylistItemResponse,
+  AdminMediaCopyField,
+  AdminMediaField,
+  AdminMediaListQuery,
+  AdminMediaListResponse,
+  AdminMediaResponse,
   ApiErrorResponse,
   ApplyArtistMetadataRequest,
   ApplyMediaMetadataRequest,
@@ -19,6 +24,8 @@ import type {
   AuthStatusResponse,
   CompletePasswordResetRequest,
   CreateMetadataProviderRequest,
+  CreateAdminMediaCopyRequest,
+  CreateAdminMediaRequest,
   CreatePlaylistRequest,
   CreateLibrarySourceRequest,
   CreateLibrarySourceResponse,
@@ -60,6 +67,8 @@ import type {
   UpdatePlaylistRequest,
   UpdateUserProfileRequest,
   UpdateMetadataProviderRequest,
+  UpdateAdminMediaCopyRequest,
+  UpdateAdminMediaRequest,
   UpdateServerSettingsRequest,
   UpdateStatusResponse,
   UpdateUserRequest,
@@ -468,6 +477,150 @@ export function updateServerSettings(
     "/api/admin/server",
     token,
     { method: "PUT", body: JSON.stringify(settings) },
+  );
+}
+
+export function listAdminMedias(
+  serverAddress: string,
+  token: string,
+  options: AdminMediaListQuery = {},
+) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(options)) {
+    if (value === undefined || value === null || value === "") continue;
+    params.set(key, String(value));
+  }
+  const suffix = params.size ? `?${params.toString()}` : "";
+  return authenticatedRequestJson<AdminMediaListResponse>(
+    serverAddress,
+    `/api/admin/medias${suffix}`,
+    token,
+  );
+}
+
+export function createAdminMedia(
+  serverAddress: string,
+  token: string,
+  input: CreateAdminMediaRequest,
+) {
+  return authenticatedRequestJson<AdminMediaResponse>(
+    serverAddress,
+    "/api/admin/medias",
+    token,
+    { method: "POST", body: JSON.stringify(input) },
+  );
+}
+
+export function updateAdminMediaField(
+  serverAddress: string,
+  token: string,
+  mediaId: string,
+  field: AdminMediaField,
+  value: UpdateAdminMediaRequest["value"],
+  expectedUpdatedAt: string,
+) {
+  return authenticatedRequestJson<AdminMediaResponse>(
+    serverAddress,
+    `/api/admin/medias/${encodeURIComponent(mediaId)}`,
+    token,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ field, value, expectedUpdatedAt }),
+    },
+  );
+}
+
+export function resetAdminMediaField(
+  serverAddress: string,
+  token: string,
+  mediaId: string,
+  field: AdminMediaField,
+  expectedUpdatedAt: string,
+) {
+  const params = new URLSearchParams({ expectedUpdatedAt });
+  return authenticatedRequestJson<AdminMediaResponse>(
+    serverAddress,
+    `/api/admin/medias/${encodeURIComponent(mediaId)}/overrides/${encodeURIComponent(field)}?${params.toString()}`,
+    token,
+    { method: "DELETE" },
+  );
+}
+
+export function deleteAdminMedia(
+  serverAddress: string,
+  token: string,
+  mediaId: string,
+) {
+  return authenticatedRequestJson<void>(
+    serverAddress,
+    `/api/admin/medias/${encodeURIComponent(mediaId)}`,
+    token,
+    { method: "DELETE" },
+  );
+}
+
+export function createAdminMediaCopy(
+  serverAddress: string,
+  token: string,
+  mediaId: string,
+  input: CreateAdminMediaCopyRequest,
+) {
+  return authenticatedRequestJson<AdminMediaResponse>(
+    serverAddress,
+    `/api/admin/medias/${encodeURIComponent(mediaId)}/copies`,
+    token,
+    { method: "POST", body: JSON.stringify(input) },
+  );
+}
+
+export function updateAdminMediaCopyField(
+  serverAddress: string,
+  token: string,
+  mediaId: string,
+  copyId: string,
+  field: AdminMediaCopyField,
+  value: UpdateAdminMediaCopyRequest["value"],
+  expectedUpdatedAt: string,
+) {
+  return authenticatedRequestJson<AdminMediaResponse>(
+    serverAddress,
+    `/api/admin/medias/${encodeURIComponent(mediaId)}/copies/${encodeURIComponent(copyId)}`,
+    token,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ field, value, expectedUpdatedAt }),
+    },
+  );
+}
+
+export function resetAdminMediaCopyField(
+  serverAddress: string,
+  token: string,
+  mediaId: string,
+  copyId: string,
+  field: AdminMediaCopyField,
+  expectedUpdatedAt: string,
+) {
+  const params = new URLSearchParams({ expectedUpdatedAt });
+  return authenticatedRequestJson<AdminMediaResponse>(
+    serverAddress,
+    `/api/admin/medias/${encodeURIComponent(mediaId)}/copies/${encodeURIComponent(copyId)}/overrides/${encodeURIComponent(field)}?${params.toString()}`,
+    token,
+    { method: "DELETE" },
+  );
+}
+
+export function deleteAdminMediaCopy(
+  serverAddress: string,
+  token: string,
+  mediaId: string,
+  copyId: string,
+) {
+  return authenticatedRequestJson<AdminMediaResponse>(
+    serverAddress,
+    `/api/admin/medias/${encodeURIComponent(mediaId)}/copies/${encodeURIComponent(copyId)}`,
+    token,
+    { method: "DELETE" },
   );
 }
 

@@ -14,12 +14,16 @@ playlists, and trusted built-in connectors.
 The catalog uses one stable `Media` identity per recording or episode, with one
 or more source-backed `MediaCopy` records for playable files. Copy quality
 affects playback and display selection; it does not change canonical identity.
+Administrators can inspect and correct every canonical metadata and copy field
+from the Medias manager. Explicit administrator edits persist as field overrides;
+derived availability and system identity remain automatic.
 
 The core audio library also supports audiobooks and locally stored podcast
 episodes as first-class browse categories. Media type is detected per track
 from authoritative Jellyfin and embedded metadata. One source may contain music,
 books, and shows; ambiguous tracks default to music. Classification is
-automatic only and does not use title- or folder-name heuristics.
+automatic and does not use title- or folder-name heuristics. Only an explicit
+administrator override can replace the detected type.
 
 - Playlist account linking and synchronization: Spotify, Deezer, SoundCloud,
   YouTube Music. Keep external track references and show unmatched local tracks.

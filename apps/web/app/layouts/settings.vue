@@ -91,9 +91,15 @@ const commonCategories = [
   },
 ];
 const adminCategories = [
+  {
+    labelKey: "settings.medias",
+    to: "/settings/medias",
+    icon: icons.metadata,
+  },
   { labelKey: "settings.users", to: "/settings/users", icon: icons.user },
   { labelKey: "settings.server", to: "/settings/server", icon: icons.server },
 ];
+const wideContent = computed(() => route.path === "/settings/medias");
 const connectorCategories = [
   {
     labelKey: "settings.connectors.librarySources",
@@ -369,9 +375,19 @@ watch(tasks, (current) => {
       <main
         id="settings-content"
         tabindex="-1"
-        class="min-h-0 flex-1 overflow-y-auto p-4 md:p-6"
+        class="min-h-0 flex-1"
+        :class="
+          wideContent ? 'overflow-hidden p-0' : 'overflow-y-auto p-4 md:p-6'
+        "
       >
-        <div class="mx-auto flex min-h-full max-w-4xl flex-col space-y-8">
+        <div
+          class="flex w-full flex-col"
+          :class="
+            wideContent
+              ? 'h-full min-h-0 max-w-none space-y-0'
+              : 'mx-auto min-h-full max-w-4xl space-y-8'
+          "
+        >
           <slot />
         </div>
       </main>

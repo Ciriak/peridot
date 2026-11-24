@@ -75,6 +75,9 @@ playlists, queues, artwork selection, and offline references. A media item can
 have multiple source-backed `MediaCopy` rows. Copy rows own the source identity,
 path or external ID, embedded metadata, MIME type, bitrate, lossless state, file
 size, recording identities, availability, artwork source, and scan metadata.
+Both rows store administrator overrides in `manualOverrides`. Automatic writers
+must use the shared override helpers so edited values survive rescans while the
+latest source value remains available for reset.
 
 Automatic matching uses MusicBrainz recording IDs, ISRCs, and AcoustIDs first.
 The conservative fallback requires normalized title, artist set, duration within
@@ -196,6 +199,19 @@ styles, arbitrary Tailwind values, or local theme overrides.
 Render catalog artists through `ArtistLink` or `TrackArtistLinks`, and catalog
 albums through `AlbumLink`, so navigation and right-click menu behavior remain
 consistent across cards, tables, dialogs, the queue, and both player layouts.
+
+### Medias manager
+
+Administrators manage all `Media` and `MediaCopy` records at
+`/settings/medias`. `GET`, `POST`, and `PATCH /api/admin/medias` plus the
+copy-scoped routes provide filtered numbered pages, full-row metadata, and
+per-field updates. Field reset routes remove a manual override and restore its
+latest source value.
+
+The page is full-bleed within the settings content area. Search and advanced
+filters remain above the table, pagination remains below it, and the datatable
+owns both vertical and horizontal scrolling. Files on disk are never changed by
+this manager.
 
 ## Desktop and Android
 

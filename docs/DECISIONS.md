@@ -1,5 +1,27 @@
 # Peridot decisions
 
+## 2026-11-24: Medias manager uses persistent administrator overrides
+
+Administration includes a Medias manager at `/settings/medias`. It lists every
+canonical `Media`, including unavailable records and zero-copy drafts, and opens
+each record's metadata and source-backed copies in a right-side drawer.
+Administrators can create, edit, reset, and delete media and copy records without
+moving or deleting files on disk.
+
+Administrator edits are durable field overrides. The actual `Media` or
+`MediaCopy` column stores the edited value, while `manualOverrides` retains the
+latest automatic/source value used by rescans and reset actions. Scans,
+metadata enrichment, duplicate canonicalization, artwork updates, and canonical
+copy refreshes continue updating that hidden source value without replacing a
+manually overridden field. Availability, IDs, relationship identity, generated
+timestamps, aliases, and scan/projection state remain system-owned.
+
+Deleting a final copy leaves its media unavailable. Deleting media is a hard
+delete: likes, history, copies, and aliases are removed; playlist entries retain
+their snapshots and become unmatched. The manager's filters and paginator stay
+outside the datatable's own scroll area so only rows scroll vertically, while
+date cells expose the complete raw ISO timestamp through the native tooltip.
+
 ## 2026-11-24: Media owns identity and copies own files
 
 The catalog now separates a stable canonical `Media` identity from one or more

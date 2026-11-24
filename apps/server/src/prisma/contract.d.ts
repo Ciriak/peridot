@@ -19,7 +19,7 @@ import type {
 } from '@prisma/orm-sqlite/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'30048626d798e2591129760b3069b6cd26b378a1dadc6fc43e8e2de7f8491711'>;
+  StorageHashBase<'7fb2e91df85da52ca54ad7f6ff71621577a757d8b112f95a109d4653e0773135'>;
 export type ExecutionHash =
   ExecutionHashBase<'f5ba018940425231a1ebe82ea868c89b274c2b48ee35eb5ae80c79124cce62ce'>;
 export type ProfileHash =
@@ -415,6 +415,7 @@ export namespace Models {
     durationMs: FieldOutputTypes['__unbound__']['Media']['durationMs'];
     genres: FieldOutputTypes['__unbound__']['Media']['genres'];
     id: FieldOutputTypes['__unbound__']['Media']['id'];
+    manualOverrides: FieldOutputTypes['__unbound__']['Media']['manualOverrides'];
     mediaType: FieldOutputTypes['__unbound__']['Media']['mediaType'];
     mediaTypeOrigin: FieldOutputTypes['__unbound__']['Media']['mediaTypeOrigin'];
     metadataAlbum: FieldOutputTypes['__unbound__']['Media']['metadataAlbum'];
@@ -479,6 +480,7 @@ export namespace Models {
     id: FieldOutputTypes['__unbound__']['MediaCopy']['id'];
     lastSeenScanId: FieldOutputTypes['__unbound__']['MediaCopy']['lastSeenScanId'];
     librarySourceId: FieldOutputTypes['__unbound__']['MediaCopy']['librarySourceId'];
+    manualOverrides: FieldOutputTypes['__unbound__']['MediaCopy']['manualOverrides'];
     mediaId: FieldOutputTypes['__unbound__']['MediaCopy']['mediaId'];
     mediaType: FieldOutputTypes['__unbound__']['MediaCopy']['mediaType'];
     mediaTypeOrigin: FieldOutputTypes['__unbound__']['MediaCopy']['mediaTypeOrigin'];
@@ -2082,6 +2084,16 @@ type ContractBase = Omit<
                   readonly nullable: false;
                   readonly many: false;
                 };
+                readonly manualOverrides: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/text@1', '{}'>;
+                  };
+                  readonly many: false;
+                };
                 readonly mediaType: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
@@ -2294,6 +2306,12 @@ type ContractBase = Omit<
                   readonly columns: readonly ['metadataProviderKind', 'metadataExternalTrackId'];
                   readonly unique: false;
                 },
+                {
+                  readonly name: 'Media_updatedAt_id_idx_88868a1d';
+                  readonly prefix: 'Media_updatedAt_id_idx';
+                  readonly columns: readonly ['updatedAt', 'id'];
+                  readonly unique: false;
+                },
               ];
               foreignKeys: readonly [];
             };
@@ -2493,6 +2511,16 @@ type ContractBase = Omit<
                   readonly nullable: false;
                   readonly many: false;
                 };
+                readonly manualOverrides: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'sqlite/text@1', '{}'>;
+                  };
+                  readonly many: false;
+                };
                 readonly mediaId: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
@@ -2583,6 +2611,18 @@ type ContractBase = Omit<
               ];
               indexes: readonly [
                 {
+                  readonly name: 'MediaCopy_audioLossless_audioBitrate_idx_c82c122e';
+                  readonly prefix: 'MediaCopy_audioLossless_audioBitrate_idx';
+                  readonly columns: readonly ['audioLossless', 'audioBitrate'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'MediaCopy_fileSizeBytes_idx_2e2c7971';
+                  readonly prefix: 'MediaCopy_fileSizeBytes_idx';
+                  readonly columns: readonly ['fileSizeBytes'];
+                  readonly unique: false;
+                },
+                {
                   readonly name: 'MediaCopy_lastSeenScanId_idx_d6a486dd';
                   readonly prefix: 'MediaCopy_lastSeenScanId_idx';
                   readonly columns: readonly ['lastSeenScanId'];
@@ -2604,6 +2644,12 @@ type ContractBase = Omit<
                   readonly name: 'MediaCopy_mediaId_idx_6b06655c';
                   readonly prefix: 'MediaCopy_mediaId_idx';
                   readonly columns: readonly ['mediaId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'MediaCopy_mimeType_idx_064291e0';
+                  readonly prefix: 'MediaCopy_mimeType_idx';
+                  readonly columns: readonly ['mimeType'];
                   readonly unique: false;
                 },
               ];
@@ -5139,6 +5185,10 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
+              readonly manualOverrides: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
               readonly mediaType: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
@@ -5318,6 +5368,7 @@ type ContractBase = Omit<
                 readonly durationMs: { readonly column: 'durationMs' };
                 readonly genres: { readonly column: 'genres' };
                 readonly id: { readonly column: 'id' };
+                readonly manualOverrides: { readonly column: 'manualOverrides' };
                 readonly mediaType: { readonly column: 'mediaType' };
                 readonly mediaTypeOrigin: { readonly column: 'mediaTypeOrigin' };
                 readonly metadataAlbum: { readonly column: 'metadataAlbum' };
@@ -5487,6 +5538,10 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
+              readonly manualOverrides: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
               readonly mediaId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
@@ -5596,6 +5651,7 @@ type ContractBase = Omit<
                 readonly id: { readonly column: 'id' };
                 readonly lastSeenScanId: { readonly column: 'lastSeenScanId' };
                 readonly librarySourceId: { readonly column: 'librarySourceId' };
+                readonly manualOverrides: { readonly column: 'manualOverrides' };
                 readonly mediaId: { readonly column: 'mediaId' };
                 readonly mediaType: { readonly column: 'mediaType' };
                 readonly mediaTypeOrigin: { readonly column: 'mediaTypeOrigin' };
