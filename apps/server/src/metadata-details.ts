@@ -1,4 +1,4 @@
-import type { TrackMetadataDetail } from "@peridot/contracts";
+import type { MediaMetadataDetail } from "@peridot/contracts";
 import { normalizeMessageDescriptor } from "./messages.js";
 
 const MAX_DETAILS = 12;
@@ -12,9 +12,9 @@ function text(value: unknown, maximum: number): string {
 
 export function normalizeMetadataDetails(
   value: unknown,
-): TrackMetadataDetail[] {
+): MediaMetadataDetail[] {
   if (!Array.isArray(value)) return [];
-  const details: TrackMetadataDetail[] = [];
+  const details: MediaMetadataDetail[] = [];
   const keys = new Set<string>();
   for (const item of value) {
     if (!item || typeof item !== "object") continue;
@@ -41,7 +41,7 @@ export function serializeMetadataDetails(value: unknown): string | null {
 
 export function parseStoredMetadataDetails(
   value: string | null,
-): TrackMetadataDetail[] {
+): MediaMetadataDetail[] {
   if (!value) return [];
   try {
     return normalizeMetadataDetails(JSON.parse(value) as unknown);

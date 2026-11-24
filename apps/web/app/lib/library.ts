@@ -1,4 +1,4 @@
-import type { AlbumSummaryResponse, TrackResponse } from "@peridot/contracts";
+import type { AlbumSummaryResponse, MediaResponse } from "@peridot/contracts";
 
 export interface AlbumGroup {
   key: string;
@@ -7,8 +7,8 @@ export interface AlbumGroup {
   artist: string;
   artists: string[];
   coverUrl: string | null;
-  tracks: TrackResponse[];
-  trackIds: string[];
+  tracks: MediaResponse[];
+  mediaIds: string[];
   durationMs: number | null;
   releaseYear: number | null;
 }
@@ -16,8 +16,8 @@ export interface AlbumGroup {
 export interface ArtistGroup {
   key: string;
   name: string;
-  tracks: TrackResponse[];
-  trackIds: string[];
+  tracks: MediaResponse[];
+  mediaIds: string[];
   albumCount: number;
   durationMs: number | null;
 }
@@ -70,7 +70,7 @@ export function splitArtistCredit(value: string): string[] {
 }
 
 export function trackArtistNames(
-  track: Pick<TrackResponse, "artist" | "artists">,
+  track: Pick<MediaResponse, "artist" | "artists">,
 ): string[] {
   const candidates =
     Array.isArray(track.artists) && track.artists.length
@@ -140,8 +140,8 @@ function compareNumberValue(
 }
 
 function compareTrackNumber(
-  left: TrackResponse,
-  right: TrackResponse,
+  left: MediaResponse,
+  right: MediaResponse,
   direction: "asc" | "desc",
 ): number {
   const albumDifference = compareTextValue(left.album, right.album, direction);
@@ -156,8 +156,8 @@ function compareTrackNumber(
 }
 
 function compareTracksBy(
-  left: TrackResponse,
-  right: TrackResponse,
+  left: MediaResponse,
+  right: MediaResponse,
   sort: TrackSort,
 ): number {
   switch (sort.field) {
@@ -179,9 +179,9 @@ function compareTracksBy(
 }
 
 export function sortTracks(
-  tracks: readonly TrackResponse[],
+  tracks: readonly MediaResponse[],
   sort: TrackSort,
-): TrackResponse[] {
+): MediaResponse[] {
   return tracks
     .map((track, index) => ({ track, index }))
     .sort(
@@ -192,7 +192,7 @@ export function sortTracks(
     .map(({ track }) => track);
 }
 
-function compareAlbumTracks(left: TrackResponse, right: TrackResponse): number {
+function compareAlbumTracks(left: MediaResponse, right: MediaResponse): number {
   const numberingDifference =
     Number(left.trackNumber === null) - Number(right.trackNumber === null);
   if (numberingDifference !== 0) return numberingDifference;
@@ -210,8 +210,8 @@ function compareAlbumTracks(left: TrackResponse, right: TrackResponse): number {
 }
 
 function compareArtistTracks(
-  left: TrackResponse,
-  right: TrackResponse,
+  left: MediaResponse,
+  right: MediaResponse,
 ): number {
   const leftAlbum = left.album?.trim() ?? "";
   const rightAlbum = right.album?.trim() ?? "";
@@ -223,7 +223,7 @@ function compareArtistTracks(
   return compareAlbumTracks(left, right);
 }
 
-function totalDuration(tracks: readonly TrackResponse[]): number | null {
+function totalDuration(tracks: readonly MediaResponse[]): number | null {
   let duration = 0;
   let foundDuration = false;
   for (const track of tracks) {
@@ -234,7 +234,7 @@ function totalDuration(tracks: readonly TrackResponse[]): number | null {
   return foundDuration ? duration : null;
 }
 
-function albumReleaseYear(tracks: readonly TrackResponse[]): number | null {
+function albumReleaseYear(tracks: readonly MediaResponse[]): number | null {
   const years = new Set<number>();
   for (const track of tracks) {
     const detail = track.metadata?.details.find(
@@ -248,7 +248,7 @@ function albumReleaseYear(tracks: readonly TrackResponse[]): number | null {
   return years.size === 1 ? [...years][0]! : null;
 }
 
-export function groupArtists(tracks: readonly TrackResponse[]): ArtistGroup[] {
+export function groupArtists(tracks: readonly MediaResponse[]): ArtistGroup[] {
   const groups = new Map<string, ArtistGroup>();
   for (const track of tracks) {
     for (const name of trackArtistNames(track)) {
@@ -262,7 +262,7 @@ export function groupArtists(tracks: readonly TrackResponse[]): ArtistGroup[] {
         key,
         name,
         tracks: [track],
-        trackIds: [],
+        mediaIds: [],
         albumCount: 0,
         durationMs: null,
       });
@@ -272,7 +272,7 @@ export function groupArtists(tracks: readonly TrackResponse[]): ArtistGroup[] {
   return [...groups.values()]
     .map((artist) => {
       artist.tracks.sort(compareArtistTracks);
-      artist.trackIds = artist.tracks.map((track) => track.id);
+      artist.mediaIds = artist.tracks.map((track) => track.id);
       artist.albumCount = new Set(
         artist.tracks.flatMap((track) => {
           const album = track.album?.trim().toLowerCase();
@@ -314,7 +314,7 @@ export function artistRoute(artist: { name: string; localName?: string }) {
 }
 
 export function albumSummaryFromTrack(
-  track: TrackResponse,
+  track: MediaResponse,
 ): AlbumSummaryResponse {
   return {
     id: track.albumId ?? "",
@@ -345,7 +345,7 @@ function routeQuery(query: Record<string, string | undefined>): string {
     : "";
 }
 
-export function groupAlbums(tracks: readonly TrackResponse[]): AlbumGroup[] {
+export function groupAlbums(tracks: readonly MediaResponse[]): AlbumGroup[] {
   const groups = new Map<string, AlbumGroup>();
   for (const track of tracks) {
     const title = track.album?.trim();
@@ -367,7 +367,7 @@ export function groupAlbums(tracks: readonly TrackResponse[]): AlbumGroup[] {
       artists: trackArtistNames(track),
       coverUrl: track.coverUrl,
       tracks: [track],
-      trackIds: [],
+      mediaIds: [],
       durationMs: null,
       releaseYear: null,
     });
@@ -376,7 +376,7 @@ export function groupAlbums(tracks: readonly TrackResponse[]): AlbumGroup[] {
   return [...groups.values()]
     .map((album) => {
       album.tracks.sort(compareAlbumTracks);
-      album.trackIds = album.tracks.map((track) => track.id);
+      album.mediaIds = album.tracks.map((track) => track.id);
       album.durationMs = totalDuration(album.tracks);
       album.releaseYear = albumReleaseYear(album.tracks);
       return album;
@@ -428,7 +428,7 @@ export function albumRoute(
   })}`;
 }
 
-export function trackAlbumRoute(track: TrackResponse) {
+export function trackAlbumRoute(track: MediaResponse) {
   if (track.mediaType === "audiobook") {
     return `/audiobooks/${encodeURIComponent(track.album?.trim() ?? "")}${routeQuery(
       {
@@ -452,11 +452,11 @@ export function trackAlbumRoute(track: TrackResponse) {
   });
 }
 
-export function trackTitleAnchorId(trackId: string): string {
-  return `track-title-${trackId}`;
+export function trackTitleAnchorId(mediaId: string): string {
+  return `track-title-${mediaId}`;
 }
 
-export function trackIdFromTitleHash(hash: string): string | null {
+export function mediaIdFromTitleHash(hash: string): string | null {
   const prefix = `#${trackTitleAnchorId("")}`;
   if (!hash.startsWith(prefix)) return null;
   const encodedId = hash.slice(prefix.length);
@@ -468,7 +468,7 @@ export function trackIdFromTitleHash(hash: string): string | null {
   }
 }
 
-export function trackAlbumTitleRoute(track: TrackResponse) {
+export function trackAlbumTitleRoute(track: MediaResponse) {
   if (!track.album?.trim() || (!track.albumId && !track.artist.trim())) {
     return null;
   }
@@ -476,7 +476,7 @@ export function trackAlbumTitleRoute(track: TrackResponse) {
 }
 
 export function filterTracks(
-  tracks: readonly TrackResponse[],
+  tracks: readonly MediaResponse[],
   query: string,
   favorites?: readonly string[],
 ) {
@@ -490,7 +490,7 @@ export function filterTracks(
   });
 }
 
-export function trackDownloadFileName(track: TrackResponse): string {
+export function trackDownloadFileName(track: MediaResponse): string {
   const extensionByMime = new Map([
     ["audio/mpeg", "mp3"],
     ["audio/mp4", "m4a"],
@@ -528,7 +528,7 @@ export function formatTrackDuration(durationMs: number | null): string {
     : `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
-export function formatTrackNumber(track: TrackResponse): string {
+export function formatTrackNumber(track: MediaResponse): string {
   if (track.trackNumber === null) return "—";
   return track.discNumber !== null && track.discNumber > 1
     ? `${track.discNumber}-${String(track.trackNumber).padStart(2, "0")}`
@@ -536,9 +536,9 @@ export function formatTrackNumber(track: TrackResponse): string {
 }
 
 export function resolvePlayerQueue(
-  tracks: readonly TrackResponse[],
+  tracks: readonly MediaResponse[],
   queueTrackIds: readonly string[] | null,
-): TrackResponse[] {
+): MediaResponse[] {
   if (queueTrackIds === null) return [...tracks];
   const tracksById = new Map(tracks.map((track) => [track.id, track]));
   return [...new Set(queueTrackIds)].flatMap((id) => {
@@ -548,18 +548,18 @@ export function resolvePlayerQueue(
 }
 
 export function selectPlayerTrack(
-  tracks: readonly TrackResponse[],
+  tracks: readonly MediaResponse[],
   activeTrackId: string | null,
-): TrackResponse | null {
+): MediaResponse | null {
   if (!activeTrackId) return tracks[0] ?? null;
   return tracks.find((track) => track.id === activeTrackId) ?? null;
 }
 
 export function mergePlayerQueueTracks(
-  current: readonly TrackResponse[],
-  incoming: readonly TrackResponse[],
+  current: readonly MediaResponse[],
+  incoming: readonly MediaResponse[],
   queueTrackIds: readonly string[],
-): TrackResponse[] {
+): MediaResponse[] {
   const tracksById = new Map(
     [...current, ...incoming].map((track) => [track.id, track]),
   );
@@ -570,8 +570,8 @@ export function mergePlayerQueueTracks(
 }
 
 export function haveSameTrackReferences(
-  left: readonly TrackResponse[],
-  right: readonly TrackResponse[],
+  left: readonly MediaResponse[],
+  right: readonly MediaResponse[],
 ): boolean {
   return (
     left.length === right.length &&
@@ -580,7 +580,7 @@ export function haveSameTrackReferences(
 }
 
 export function nextQueueTrackId(
-  queue: readonly TrackResponse[],
+  queue: readonly MediaResponse[],
   currentTrackId: string | null,
   offset = 1,
 ): string | null {

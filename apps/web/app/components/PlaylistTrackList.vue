@@ -3,7 +3,7 @@ import { useI18n } from "#imports";
 import type {
   AlbumSummaryResponse,
   PlaylistEntryResponse,
-  TrackResponse,
+  MediaResponse,
 } from "@peridot/contracts";
 import { Icon } from "@iconify/vue/offline";
 import { Badge } from "@peridot/ui/components/ui/badge";
@@ -28,7 +28,7 @@ import ArtistLink from "./ArtistLink.vue";
 import LikeButton from "./LikeButton.vue";
 import TrackArtistLinks from "./TrackArtistLinks.vue";
 import TrackArtwork from "./TrackArtwork.vue";
-import TrackRowContextMenu from "./TrackRowContextMenu.vue";
+import MediaRowContextMenu from "./TrackRowContextMenu.vue";
 
 const props = defineProps<{
   entries: readonly PlaylistEntryResponse[];
@@ -39,7 +39,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   reorder: [itemIds: string[]];
   remove: [entry: PlaylistEntryResponse];
-  play: [track: TrackResponse];
+  play: [track: MediaResponse];
 }>();
 const { t } = useI18n();
 const list = ref<HTMLElement | null>(null);
@@ -91,8 +91,8 @@ useSortable(list, rows, {
 
 function playable(entry: PlaylistEntryResponse): boolean {
   return Boolean(
-    entry.track &&
-    isTrackPlayable(entry.track, {
+    entry.media &&
+    isTrackPlayable(entry.media, {
       serverLost: status.value === "lost",
       savedTrackIds: savedIds.value,
       unavailableTrackIds: unavailableTrackIdSet.value,
@@ -101,24 +101,24 @@ function playable(entry: PlaylistEntryResponse): boolean {
 }
 
 function isCurrent(entry: PlaylistEntryResponse): boolean {
-  return Boolean(entry.track && currentTrackId.value === entry.track.id);
+  return Boolean(entry.media && currentTrackId.value === entry.media.id);
 }
 
 function toggleEntryPlayback(entry: PlaylistEntryResponse) {
-  if (!entry.track) return;
+  if (!entry.media) return;
   if (!playable(entry)) {
-    retryUnavailableTrack(entry.track);
+    retryUnavailableTrack(entry.media);
     return;
   }
   if (isCurrent(entry)) {
-    play(entry.track);
+    play(entry.media);
     return;
   }
-  emit("play", entry.track);
+  emit("play", entry.media);
 }
 
 function albumForEntry(entry: PlaylistEntryResponse): AlbumSummaryResponse {
-  if (entry.track) return albumSummaryFromTrack(entry.track);
+  if (entry.media) return albumSummaryFromTrack(entry.media);
   return {
     id: "",
     title: entry.album?.trim() ?? "",
@@ -142,10 +142,10 @@ function albumForEntry(entry: PlaylistEntryResponse): AlbumSummaryResponse {
     :aria-label="t('playlistTracks.label')"
     class="rounded-lg border text-sm"
   >
-    <TrackRowContextMenu
+    <MediaRowContextMenu
       v-for="(entry, index) in rows"
       :key="entry.id"
-      :track="entry.track"
+      :track="entry.media"
       @play="toggleEntryPlayback(entry)"
     >
       <div
@@ -165,7 +165,7 @@ function albumForEntry(entry: PlaylistEntryResponse): AlbumSummaryResponse {
           {{ index + 1 }}
         </span>
         <Button
-          v-if="entry.track"
+          v-if="entry.media"
           variant="ghost"
           size="icon-sm"
           class="group size-10 shrink-0 overflow-hidden rounded-md p-0"
@@ -178,7 +178,7 @@ function albumForEntry(entry: PlaylistEntryResponse): AlbumSummaryResponse {
           "
           @click="toggleEntryPlayback(entry)"
         >
-          <TrackArtwork :track="entry.track" :server-address="address ?? ''">
+          <TrackArtwork :track="entry.media" :server-address="address ?? ''">
             <span
               aria-hidden="true"
               class="absolute inset-0 flex items-center justify-center bg-background/70 opacity-0 transition-opacity group-hover:opacity-100"
@@ -218,7 +218,7 @@ function albumForEntry(entry: PlaylistEntryResponse): AlbumSummaryResponse {
               {{ entry.title }}
             </ScrollingText>
             <Icon
-              v-if="entry.track && !playable(entry)"
+              v-if="entry.media && !playable(entry)"
               :icon="icons.cloudOff"
               aria-hidden="true"
               class="size-4 shrink-0 text-muted-foreground"
@@ -230,19 +230,19 @@ function albumForEntry(entry: PlaylistEntryResponse): AlbumSummaryResponse {
               class="size-4 shrink-0 text-primary"
             />
             <Badge
-              v-if="entry.track && !entry.track.available && playable(entry)"
+              v-if="entry.media && !entry.media.available && playable(entry)"
               variant="secondary"
             >
               {{ t("trackTable.availableOffline") }}
             </Badge>
-            <Badge v-else-if="!entry.track" variant="secondary">
+            <Badge v-else-if="!entry.media" variant="secondary">
               {{ t("playlistTracks.unavailable") }}
             </Badge>
           </div>
           <ScrollingText class="w-full text-xs text-muted-foreground">
             <TrackArtistLinks
-              v-if="entry.track?.mediaType === 'music'"
-              :artists="trackArtistNames(entry.track)"
+              v-if="entry.media?.mediaType === 'music'"
+              :artists="trackArtistNames(entry.media)"
             />
             <ArtistLink
               v-else-if="entry.artist.trim()"
@@ -271,13 +271,13 @@ function albumForEntry(entry: PlaylistEntryResponse): AlbumSummaryResponse {
           {{ formatTrackDuration(entry.durationMs) }}
         </span>
         <LikeButton
-          v-if="showTrackLikes !== false && entry.track?.mediaType === 'music'"
+          v-if="showTrackLikes !== false && entry.media?.mediaType === 'music'"
           compact
           :liked="entry.liked"
           :label="entry.title"
-          :pending="isLikePending({ kind: 'track', trackId: entry.track.id })"
+          :pending="isLikePending({ kind: 'media', mediaId: entry.media.id })"
           :disabled="!likesLoaded || status === 'lost'"
-          @toggle="toggleLike({ kind: 'track', trackId: entry.track!.id })"
+          @toggle="toggleLike({ kind: 'media', mediaId: entry.media!.id })"
         />
         <span v-else class="w-7 shrink-0" />
         <Button
@@ -293,6 +293,6 @@ function albumForEntry(entry: PlaylistEntryResponse): AlbumSummaryResponse {
           <Icon :icon="icons.close" aria-hidden="true" class="size-4" />
         </Button>
       </div>
-    </TrackRowContextMenu>
+    </MediaRowContextMenu>
   </div>
 </template>

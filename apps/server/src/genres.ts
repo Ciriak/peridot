@@ -1,4 +1,4 @@
-import type { TrackRow } from "./prisma/models.js";
+import type { MediaRow } from "./prisma/models.js";
 
 const MAX_TRACK_GENRES = 24;
 const MAX_GENRE_LENGTH = 80;
@@ -43,7 +43,7 @@ export function parseStoredGenres(value: string | null): string[] {
 }
 
 export function effectiveTrackGenres(
-  track: Pick<TrackRow, "genres" | "metadataGenres">,
+  track: Pick<MediaRow, "genres" | "metadataGenres">,
 ): string[] {
   const metadataGenres = parseStoredGenres(track.metadataGenres);
   return metadataGenres.length

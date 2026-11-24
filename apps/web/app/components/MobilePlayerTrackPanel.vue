@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from "#imports";
-import type { TrackResponse } from "@peridot/contracts";
+import type { MediaResponse } from "@peridot/contracts";
 import { Icon } from "@iconify/vue/offline";
 import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import { computed, watch } from "vue";
@@ -18,7 +18,7 @@ import {
 
 const props = withDefaults(
   defineProps<{
-    track: TrackResponse | null;
+    track: MediaResponse | null;
     serverAddress: string;
     interactive?: boolean;
     liked?: boolean;

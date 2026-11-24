@@ -7,7 +7,10 @@ import {
 import { computed, ref } from "vue";
 import { useMainScrollVirtualizer } from "../composables/use-main-scroll-virtualizer";
 import { useVirtualLoadMore } from "../composables/use-virtual-load-more";
-import { VIRTUAL_WINDOW_LOAD_DELAY_MS } from "../lib/virtual-albums";
+import {
+  VIRTUAL_WINDOW_LOAD_DELAY_MS,
+  virtualCardRowPlaceholderCount,
+} from "../lib/virtual-albums";
 
 export type VirtualCardLayout = "wide" | "standard" | "compact";
 
@@ -167,9 +170,11 @@ function rowKey(index: number) {
               :item-index="row.index * columns + itemIndex"
             />
             <template
-              v-for="placeholderIndex in Math.max(
-                0,
-                columns - rowItems(row.index).length,
+              v-for="placeholderIndex in virtualCardRowPlaceholderCount(
+                row.index,
+                columns,
+                totalItemCount,
+                rowItems(row.index).length,
               )"
               :key="`placeholder-${row.index}-${placeholderIndex}`"
             >

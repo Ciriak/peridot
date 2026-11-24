@@ -1,23 +1,23 @@
-import type { TrackResponse } from "@peridot/contracts";
+import type { MediaResponse } from "@peridot/contracts";
 
 export interface OfflineCollectionSaveResult {
   completed: number;
-  failure: { track: TrackResponse; reason: unknown } | null;
+  failure: { track: MediaResponse; reason: unknown } | null;
   savedTrackIds: string[];
   total: number;
 }
 
 interface OfflineCollectionSaveOptions {
-  isSaved: (trackId: string) => boolean;
+  isSaved: (mediaId: string) => boolean;
   save: (
-    track: TrackResponse,
+    track: MediaResponse,
     onProgress?: (progress: number | null) => void,
   ) => Promise<void>;
   onProgress?: (progress: number | null) => void;
 }
 
 export async function saveOfflineCollection(
-  tracks: TrackResponse[],
+  tracks: MediaResponse[],
   options: OfflineCollectionSaveOptions,
 ): Promise<OfflineCollectionSaveResult> {
   const available = tracks.filter((track) => track.available);

@@ -1,8 +1,8 @@
 import type {
   AlbumListResponse,
   AlbumSummaryResponse,
-  TrackListResponse,
-  TrackResponse,
+  MediaListResponse,
+  MediaResponse,
 } from "@peridot/contracts";
 
 export type LikedPageLoader<T> = (
@@ -11,7 +11,7 @@ export type LikedPageLoader<T> = (
 
 export type LikedTrackPageLoader = (
   cursor: string | null,
-) => Promise<TrackListResponse>;
+) => Promise<MediaListResponse>;
 export type LikedAlbumPageLoader = (
   cursor: string | null,
 ) => Promise<AlbumListResponse>;
@@ -46,7 +46,7 @@ async function loadAllLikedItems<T>(
 
 export function loadAllLikedTracks(
   loadPage: LikedTrackPageLoader,
-): Promise<TrackResponse[]> {
+): Promise<MediaResponse[]> {
   return loadAllLikedItems(loadPage, (track) => track.id, "track");
 }
 
@@ -57,8 +57,8 @@ export function loadAllLikedAlbums(
 }
 
 export interface LikedTrackOfflineSaveOptions {
-  isSaved: (trackId: string) => boolean;
-  save: (track: TrackResponse) => Promise<boolean>;
+  isSaved: (mediaId: string) => boolean;
+  save: (track: MediaResponse) => Promise<boolean>;
   shouldContinue?: () => boolean;
 }
 
@@ -69,7 +69,7 @@ export interface LikedTrackOfflineSaveResult {
 }
 
 export async function saveLikedTracksOffline(
-  tracks: TrackResponse[],
+  tracks: MediaResponse[],
   options: LikedTrackOfflineSaveOptions,
 ): Promise<LikedTrackOfflineSaveResult> {
   const failedTrackIds: string[] = [];
@@ -96,10 +96,10 @@ export async function saveLikedTracksOffline(
 }
 
 export interface LikedAlbumOfflineSaveOptions {
-  loadTracks: (album: AlbumSummaryResponse) => Promise<TrackResponse[]>;
+  loadTracks: (album: AlbumSummaryResponse) => Promise<MediaResponse[]>;
   save: (
     album: AlbumSummaryResponse,
-    tracks: TrackResponse[],
+    tracks: MediaResponse[],
   ) => Promise<boolean>;
   shouldContinue?: () => boolean;
 }

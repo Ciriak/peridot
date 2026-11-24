@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type {
   SourceRemovalPhase,
-  SourceRemovalProgressResponse,
+  LibrarySourceRemovalProgressResponse,
 } from "@peridot/contracts";
 
 export class SourceRemovalError extends Error {
@@ -15,13 +15,18 @@ export class SourceRemovalError extends Error {
 }
 
 export class SourceRemovalRegistry {
-  private readonly active = new Map<string, SourceRemovalProgressResponse>();
+  private readonly active = new Map<
+    string,
+    LibrarySourceRemovalProgressResponse
+  >();
 
   constructor(
-    private readonly publish: (progress: SourceRemovalProgressResponse) => void,
+    private readonly publish: (
+      progress: LibrarySourceRemovalProgressResponse,
+    ) => void,
   ) {}
 
-  start(sourceId: string, total: number): SourceRemovalProgressResponse {
+  start(sourceId: string, total: number): LibrarySourceRemovalProgressResponse {
     if (this.active.has(sourceId)) {
       throw new SourceRemovalError(
         "source_removal_in_progress",
@@ -45,7 +50,7 @@ export class SourceRemovalRegistry {
     phase: SourceRemovalPhase,
     completed: number,
     total: number,
-  ): SourceRemovalProgressResponse | null {
+  ): LibrarySourceRemovalProgressResponse | null {
     const current = this.active.get(sourceId);
     if (!current) return null;
     const progress = {
@@ -63,7 +68,7 @@ export class SourceRemovalRegistry {
     this.active.delete(sourceId);
   }
 
-  get(sourceId: string): SourceRemovalProgressResponse | null {
+  get(sourceId: string): LibrarySourceRemovalProgressResponse | null {
     return this.active.get(sourceId) ?? null;
   }
 }

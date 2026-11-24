@@ -1,25 +1,23 @@
-import { validateIndexer } from "./torznab.js";
-import type { CreateTorznabSourceRequest } from "@peridot/contracts";
 import { readdir, realpath, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import type {
   DirectorySearchResponse,
   MessageDescriptor,
-  SourceIntegrationOptionResponse,
-  SourceKind,
-  SourceRemovalProgressResponse,
-  SourceResponse,
+  LibrarySourceConnectorOptionResponse,
+  LibrarySourceKind,
+  LibrarySourceRemovalProgressResponse,
+  LibrarySourceResponse,
 } from "@peridot/contracts";
 import type { CredentialStore } from "./credential-store.js";
 import type { Database } from "./database.js";
 import { message } from "./messages.js";
-import type { SourceRow } from "./prisma/models.js";
+import type { LibrarySourceRow } from "./prisma/models.js";
 import type { SourceRemovalRegistry } from "./source-removal.js";
 import {
-  SourceIntegrationError,
-  type SourceIntegrationConfiguration,
-  type SourceIntegrationService,
+  LibrarySourceConnectorError,
+  type LibrarySourceConnectorConfiguration,
+  type LibrarySourceConnectorService,
 } from "./source-integrations.js";
 
 const DIRECTORY_ENTRY_LIMIT = 100;
@@ -49,15 +47,15 @@ export class SourceError extends Error {
   }
 }
 
-function toSourceResponse(
-  source: SourceRow,
+function toLibrarySourceResponse(
+  source: LibrarySourceRow,
   fileCount = 0,
   lastSyncedAt: Date | null = source.lastSyncedAt,
-  removal: SourceRemovalProgressResponse | null = null,
-): SourceResponse {
+  removal: LibrarySourceRemovalProgressResponse | null = null,
+): LibrarySourceResponse {
   return {
     id: source.id,
-    kind: source.kind as SourceKind,
+    kind: source.kind as LibrarySourceKind,
     name: source.name,
     path: source.path,
     url: source.url,
@@ -92,7 +90,7 @@ function parseSourceConfiguration(
 function integrationConfiguration(
   value: unknown,
   fallbackMessage: string,
-): SourceIntegrationConfiguration {
+): LibrarySourceConnectorConfiguration {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new SourceError(
       fallbackMessage,
@@ -111,11 +109,11 @@ export async function ensureDefaultSource(
   database: Database,
   seedLibraryRoot: string,
 ): Promise<void> {
-  const { count } = await database.orm.Source.aggregate((aggregate) => ({
+  const { count } = await database.orm.LibrarySource.aggregate((aggregate) => ({
     count: aggregate.count(),
   }));
   if (count === 0) {
-    await database.orm.Source.create({
+    await database.orm.LibrarySource.create({
       kind: "path",
       path: seedLibraryRoot,
       position: 0,
@@ -123,52 +121,11 @@ export async function ensureDefaultSource(
   }
 }
 
-export async function normalizeLegacyJellyfinSources(
-  database: Database,
-): Promise<number> {
-  return database.transaction(async (transaction) => {
-    const legacySources = await transaction.orm.Source.where({
-      kind: "plugin",
-    }).all();
-    let normalized = 0;
-
-    for (const source of legacySources) {
-      const configuration = parseSourceConfiguration(source.configuration);
-      const configuredUrl = configuration?.url?.trim();
-      const libraryId = configuration?.libraryId?.trim();
-      if (
-        !source.url ||
-        !configuredUrl ||
-        configuredUrl !== source.url ||
-        !libraryId
-      ) {
-        continue;
-      }
-
-      const sourceIdentity = JSON.stringify([source.url, libraryId]);
-      const existing = await transaction.orm.Source.where({
-        kind: "jellyfin",
-        sourceIdentity,
-      }).first();
-      if (existing) continue;
-
-      normalized += await transaction.orm.Source.where({
-        id: source.id,
-      }).updateAndCount({
-        kind: "jellyfin",
-        sourceIdentity,
-      });
-    }
-
-    return normalized;
-  });
-}
-
 export async function listSources(
   database: Database,
   removals?: SourceRemovalRegistry,
-): Promise<SourceResponse[]> {
-  const sources = await database.orm.Source.where((source) =>
+): Promise<LibrarySourceResponse[]> {
+  const sources = await database.orm.LibrarySource.where((source) =>
     source.removedAt.isNull(),
   )
     .orderBy([
@@ -179,8 +136,8 @@ export async function listSources(
   return Promise.all(
     sources.map(async (source) => {
       const [tracks, lastCompletedScan] = await Promise.all([
-        database.orm.Track.where({
-          sourceId: source.id,
+        database.orm.MediaCopy.where({
+          librarySourceId: source.id,
           available: 1,
         }).aggregate((aggregate) => ({ count: aggregate.count() })),
         source.lastSyncedAt
@@ -188,12 +145,12 @@ export async function listSources(
           : database.orm.Task.where({
               kind: "library_scan",
               status: "completed",
-              sourceId: source.id,
+              connectorId: source.id,
             })
               .orderBy((task) => task.completedAt.desc())
               .first(),
       ]);
-      return toSourceResponse(
+      return toLibrarySourceResponse(
         source,
         tracks.count,
         source.lastSyncedAt ?? lastCompletedScan?.completedAt ?? null,
@@ -206,9 +163,9 @@ export async function listSources(
 export async function createSource(
   database: Database,
   body: unknown,
-  integrations: SourceIntegrationService,
+  integrations: LibrarySourceConnectorService,
   credentials: CredentialStore,
-): Promise<SourceResponse> {
+): Promise<LibrarySourceResponse> {
   const value = (body ?? {}) as {
     kind?: unknown;
     name?: unknown;
@@ -219,12 +176,7 @@ export async function createSource(
     collectionType?: unknown;
   };
   const kind = value.kind;
-  if (
-    kind !== "path" &&
-    kind !== "url" &&
-    kind !== "jellyfin" &&
-    kind !== "torznab"
-  ) {
+  if (kind !== "path" && kind !== "jellyfin") {
     throw new SourceError(
       "Choose a valid source type.",
       message("api.message.sourceInvalid"),
@@ -234,7 +186,7 @@ export async function createSource(
     typeof value.name === "string" && value.name.trim()
       ? value.name.trim()
       : null;
-  const { count: position } = await database.orm.Source.where((source) =>
+  const { count: position } = await database.orm.LibrarySource.where((source) =>
     source.removedAt.isNull(),
   ).aggregate((aggregate) => ({ count: aggregate.count() }));
 
@@ -248,13 +200,13 @@ export async function createSource(
     const resolved = await resolveDirectory(
       typeof value.path === "string" ? value.path : "",
     );
-    const duplicate = await database.orm.Source.first({
+    const duplicate = await database.orm.LibrarySource.first({
       kind: "path",
       path: resolved,
     });
     if (duplicate) {
       if (duplicate.removedAt) {
-        const restored = await database.orm.Source.where({
+        const restored = await database.orm.LibrarySource.where({
           id: duplicate.id,
         }).updateAndCount({
           name,
@@ -265,8 +217,8 @@ export async function createSource(
           position,
         });
         if (restored) {
-          return toSourceResponse(
-            await database.orm.Source.firstOrThrow({ id: duplicate.id }),
+          return toLibrarySourceResponse(
+            await database.orm.LibrarySource.firstOrThrow({ id: duplicate.id }),
           );
         }
       }
@@ -275,54 +227,13 @@ export async function createSource(
         message("api.message.sourceFolderDuplicate"),
       );
     }
-    const source = await database.orm.Source.create({
+    const source = await database.orm.LibrarySource.create({
       kind,
       name,
       path: resolved,
       position,
     });
-    return toSourceResponse(source);
-  }
-
-  if (kind === "url") {
-    const url = normalizeSourceUrl(value.url);
-    if (!url) {
-      throw new SourceError(
-        "Enter a valid HTTP or HTTPS URL.",
-        message("api.message.sourceUrlInvalid"),
-      );
-    }
-    const duplicate = await database.orm.Source.first({ kind: "url", url });
-    if (duplicate) {
-      if (duplicate.removedAt) {
-        const restored = await database.orm.Source.where({
-          id: duplicate.id,
-        }).updateAndCount({
-          name,
-          url,
-          configuration: null,
-          credentialCiphertext: null,
-          removedAt: null,
-          position,
-        });
-        if (restored) {
-          return toSourceResponse(
-            await database.orm.Source.firstOrThrow({ id: duplicate.id }),
-          );
-        }
-      }
-      throw new SourceError(
-        "This URL is already a source.",
-        message("api.message.sourceUrlDuplicate"),
-      );
-    }
-    const source = await database.orm.Source.create({
-      kind,
-      name,
-      url,
-      position,
-    });
-    return toSourceResponse(source);
+    return toLibrarySourceResponse(source);
   }
 
   const configuration = {
@@ -337,28 +248,27 @@ export async function createSource(
   const suppliedCredentials = {
     ...(typeof value.apiKey === "string" ? { apiKey: value.apiKey } : {}),
   };
-  let validated;
+  let validated: Awaited<
+    ReturnType<LibrarySourceConnectorService["validateSource"]>
+  >;
   try {
-    validated =
-      kind === "torznab"
-        ? await validateIndexer(body as CreateTorznabSourceRequest, database)
-        : await integrations.validateSource(kind, {
-            configuration,
-            credentials: suppliedCredentials,
-          });
+    validated = await integrations.validateSource(kind, {
+      configuration,
+      credentials: suppliedCredentials,
+    });
   } catch (error) {
-    if (error instanceof SourceIntegrationError) {
+    if (error instanceof LibrarySourceConnectorError) {
       throw new SourceError(error.message, error.messageDescriptor);
     }
     throw error;
   }
-  const duplicate = await database.orm.Source.where({
+  const duplicate = await database.orm.LibrarySource.where({
     kind,
     sourceIdentity: validated.identity,
   }).first();
   if (duplicate) {
     if (duplicate.removedAt) {
-      const restored = await database.orm.Source.where({
+      const restored = await database.orm.LibrarySource.where({
         id: duplicate.id,
       }).updateAndCount({
         name: name || validated.name,
@@ -366,14 +276,17 @@ export async function createSource(
         sourceIdentity: validated.identity,
         configuration: JSON.stringify(validated.configuration),
         credentialCiphertext: Object.keys(validated.credentials).length
-          ? credentials.encrypt(JSON.stringify(validated.credentials), "source")
+          ? credentials.encrypt(
+              JSON.stringify(validated.credentials),
+              "library-source",
+            )
           : null,
         removedAt: null,
         position,
       });
       if (restored) {
-        return toSourceResponse(
-          await database.orm.Source.firstOrThrow({ id: duplicate.id }),
+        return toLibrarySourceResponse(
+          await database.orm.LibrarySource.firstOrThrow({ id: duplicate.id }),
         );
       }
     }
@@ -382,7 +295,7 @@ export async function createSource(
       message("api.message.sourceIntegrationDuplicate"),
     );
   }
-  const source = await database.orm.Source.create({
+  const source = await database.orm.LibrarySource.create({
     kind,
     name: name || validated.name,
     url: validated.configuration.url ?? null,
@@ -392,20 +305,20 @@ export async function createSource(
       ? {
           credentialCiphertext: credentials.encrypt(
             JSON.stringify(validated.credentials),
-            "source",
+            "library-source",
           ),
         }
       : {}),
     position,
   });
-  return toSourceResponse(source);
+  return toLibrarySourceResponse(source);
 }
 
 export async function discoverIntegrationSources(
-  integrations: SourceIntegrationService,
+  integrations: LibrarySourceConnectorService,
   kind: string,
   body: unknown,
-): Promise<SourceIntegrationOptionResponse[]> {
+): Promise<LibrarySourceConnectorOptionResponse[]> {
   const value = (body ?? {}) as {
     configuration?: unknown;
     credentials?: unknown;
@@ -424,7 +337,7 @@ export async function discoverIntegrationSources(
       credentials,
     });
   } catch (error) {
-    if (error instanceof SourceIntegrationError) {
+    if (error instanceof LibrarySourceConnectorError) {
       throw new SourceError(error.message, error.messageDescriptor);
     }
     throw error;
@@ -451,30 +364,17 @@ async function resolveDirectory(value: string): Promise<string> {
   }
 }
 
-function normalizeSourceUrl(value: unknown): string | null {
-  if (typeof value !== "string" || !value.trim()) return null;
-  let url: URL;
-  try {
-    url = new URL(value.trim());
-  } catch {
-    return null;
-  }
-  if (!["http:", "https:"].includes(url.protocol) || !url.hostname) return null;
-  if (url.username || url.password) return null;
-  return url.toString();
-}
-
 export async function reorderSources(
   database: Database,
   ids: unknown,
-): Promise<SourceResponse[]> {
+): Promise<LibrarySourceResponse[]> {
   if (!Array.isArray(ids) || ids.some((id) => typeof id !== "string")) {
     throw new SourceError(
       "Source order must be a list of source ids.",
       message("api.message.sourceOrderInvalid"),
     );
   }
-  const existing = await database.orm.Source.where((source) =>
+  const existing = await database.orm.LibrarySource.where((source) =>
     source.removedAt.isNull(),
   )
     .select("id")
@@ -492,7 +392,9 @@ export async function reorderSources(
   }
   await database.transaction(async (transaction) => {
     for (const [index, id] of ids.entries()) {
-      await transaction.orm.Source.where({ id }).update({ position: index });
+      await transaction.orm.LibrarySource.where({ id }).update({
+        position: index,
+      });
     }
   });
   return listSources(database);
@@ -507,11 +409,11 @@ export interface PathSource {
 export async function getPathSources(
   database: Database,
 ): Promise<PathSource[]> {
-  const sources = await database.orm.Source.where({ kind: "path" })
+  const sources = await database.orm.LibrarySource.where({ kind: "path" })
     .where((source) => source.removedAt.isNull())
     .all();
   return sources
-    .filter((source): source is SourceRow & { path: string } =>
+    .filter((source): source is LibrarySourceRow & { path: string } =>
       Boolean(source.path),
     )
     .map((source) => ({

@@ -3,29 +3,36 @@ import type {
   CreatePlaylistRequest,
   PlaylistDetailResponse,
   PlaylistEntryResponse,
-  PlaylistExternalTrackReference,
+  ExternalMediaReference,
   PlaylistListResponse,
   PlaylistSummaryResponse,
   ReorderPlaylistItemsRequest,
-  TrackResponse,
+  MediaResponse,
 } from "@peridot/contracts";
 import {
   LIKED_TRACKS_PLAYLIST_ID,
   LIKED_TRACKS_PLAYLIST_NAME,
 } from "@peridot/contracts";
 import type { FastifyInstance } from "fastify";
+import type { ConnectorRegistry } from "./connectors.js";
+import type { CredentialStore } from "./credential-store.js";
 import type { Database } from "./database.js";
-import { canonicalTrackId } from "./duplicate-resolver.js";
+import { canonicalMediaId } from "./media-resolver.js";
+import { primaryCopiesForMediaIds } from "./media-copies.js";
 import { sendError } from "./http.js";
 import { message } from "./messages.js";
+import {
+  playlistLinkResponse,
+  registerPlaylistLinkRoutes,
+} from "./playlist-links.js";
 import type { PlaybackTokenService } from "./playback-tokens.js";
 import type {
   PlaylistItemRow,
   PlaylistRow,
-  TrackRow,
+  MediaRow,
 } from "./prisma/models.js";
 import { normalizeSearchText, searchTerms } from "./search-text.js";
-import { effectiveTrackFields, toTrackResponse } from "./track-response.js";
+import { effectiveMediaFields, toMediaResponse } from "./media-response.js";
 
 const MAX_PLAYLIST_NAME_LENGTH = 120;
 const MAX_PLAYLIST_ITEMS = 10_000;
@@ -35,13 +42,13 @@ const MAX_LABEL_LENGTH = 512;
 const MAX_ID_LENGTH = 200;
 
 type ParsedPlaylistItem =
-  | { kind: "catalog"; trackId: string }
-  | { kind: "external"; reference: PlaylistExternalTrackReference };
+  | { kind: "catalog"; mediaId: string }
+  | { kind: "external"; reference: ExternalMediaReference };
 
 interface PlaylistListQuery {
   limit?: string;
   offset?: string;
-  trackId?: string;
+  mediaId?: string;
   query?: string;
 }
 
@@ -76,8 +83,8 @@ function parsePlaylistItem(value: unknown): ParsedPlaylistItem | null {
     reference?: Record<string, unknown>;
   };
   if (body.kind === "catalog") {
-    const trackId = parseId(body.trackId);
-    return trackId ? { kind: "catalog", trackId } : null;
+    const mediaId = parseId(body.mediaId);
+    return mediaId ? { kind: "catalog", mediaId } : null;
   }
   if (body.kind !== "external" || !body.reference) return null;
   const provider = parseLabel(body.reference.provider, MAX_PROVIDER_LENGTH);
@@ -120,7 +127,7 @@ function parsePlaylistItem(value: unknown): ParsedPlaylistItem | null {
 
 function identityKey(item: ParsedPlaylistItem): string {
   return item.kind === "catalog"
-    ? `catalog:${encodeURIComponent(item.trackId)}`
+    ? `catalog:${encodeURIComponent(item.mediaId)}`
     : `external:${encodeURIComponent(item.reference.provider)}:${encodeURIComponent(item.reference.externalTrackId)}`;
 }
 
@@ -156,24 +163,33 @@ function sendAutomaticPlaylistReadOnly(reply: Parameters<typeof sendError>[0]) {
   );
 }
 
+function sendLinkedPlaylistReadOnly(reply: Parameters<typeof sendError>[0]) {
+  return sendError(
+    reply,
+    409,
+    "external_playlist_read_only",
+    "Linked playlists are synchronized from their source and cannot be edited",
+    message("api.message.automaticPlaylistReadOnly"),
+  );
+}
+
 async function materializeLikedTracksPlaylist(
   database: Database,
   playbackTokens: PlaybackTokenService,
   userId: string,
   containsTrackId: string | null = null,
 ): Promise<PlaylistDetailResponse> {
-  const likes = await database.orm.TrackLike.where({ userId })
-    .orderBy([(like) => like.createdAt.desc(), (like) => like.trackId.desc()])
+  const likes = await database.orm.MediaLike.where({ userId })
+    .orderBy([(like) => like.createdAt.desc(), (like) => like.mediaId.desc()])
     .all();
-  const likedTrackIds = [...new Set(likes.map((like) => like.trackId))];
-  const [trackRows, projections] = await Promise.all([
+  const likedTrackIds = [...new Set(likes.map((like) => like.mediaId))];
+  const [trackRows, primaryCopies, projections] = await Promise.all([
     likedTrackIds.length
-      ? database.orm.Track.where((track) => track.id.in(likedTrackIds))
-          .include("source", (source) => source.select("kind"))
-          .all()
+      ? database.orm.Media.where((track) => track.id.in(likedTrackIds)).all()
       : Promise.resolve([]),
+    primaryCopiesForMediaIds(database, likedTrackIds),
     likedTrackIds.length
-      ? database.orm.CatalogTrack.where((track) =>
+      ? database.orm.CatalogMedia.where((track) =>
           track.id.in(likedTrackIds),
         ).all()
       : Promise.resolve([]),
@@ -183,20 +199,27 @@ async function materializeLikedTracksPlaylist(
     projections.map((track) => [track.id, track.albumId]),
   );
   const musicLikes = likes.flatMap((like) => {
-    const track = trackById.get(like.trackId);
-    if (!track || track.mediaType !== "music" || track.duplicateOfId !== null) {
+    const track = trackById.get(like.mediaId);
+    if (!track || track.mediaType !== "music") {
       return [];
     }
     return [{ track, likedAt: like.createdAt }];
   });
   const entries = musicLikes.map(
     ({ track }, position): PlaylistEntryResponse => {
-      const trackResponse = toTrackResponse(
-        track,
-        playbackTokens,
-        true,
-        albumIdByTrack.get(track.id) ?? null,
-      );
+      const trackResponse = toMediaResponse(track, playbackTokens, {
+        liked: true,
+        albumId: albumIdByTrack.get(track.id) ?? null,
+        sourceKind:
+          primaryCopies.get(track.id)?.source.kind === "jellyfin"
+            ? "jellyfin"
+            : primaryCopies.get(track.id)?.source.kind === "path"
+              ? "path"
+              : null,
+        ...(primaryCopies.get(track.id)?.copy.mimeType
+          ? { mimeType: primaryCopies.get(track.id)!.copy.mimeType }
+          : {}),
+      });
       return {
         id: `liked:${track.id}`,
         position,
@@ -208,7 +231,7 @@ async function materializeLikedTracksPlaylist(
         coverUrl: trackResponse.coverUrl,
         available: trackResponse.available,
         liked: true,
-        track: trackResponse,
+        media: trackResponse,
         external: null,
       };
     },
@@ -233,7 +256,7 @@ async function materializeLikedTracksPlaylist(
     coverUrls: [],
     liked: false,
     containsTrack: containsTrackId
-      ? entries.some((entry) => entry.track?.id === containsTrackId)
+      ? entries.some((entry) => entry.media?.id === containsTrackId)
       : false,
     createdAt,
     updatedAt,
@@ -241,9 +264,7 @@ async function materializeLikedTracksPlaylist(
   };
 }
 
-function itemSnapshot(
-  item: PlaylistItemRow,
-): PlaylistExternalTrackReference | null {
+function itemSnapshot(item: PlaylistItemRow): ExternalMediaReference | null {
   if (!item.externalProvider || !item.externalTrackId) return null;
   return {
     provider: item.externalProvider,
@@ -258,9 +279,9 @@ function itemSnapshot(
 async function matchingExternalTrack(
   database: Database,
   item: PlaylistItemRow,
-): Promise<TrackRow | null> {
+): Promise<MediaRow | null> {
   if (!item.externalProvider || !item.externalTrackId) return null;
-  const matches = await database.orm.Track.where({
+  const matches = await database.orm.Media.where({
     metadataProviderKind: item.externalProvider,
     metadataExternalTrackId: item.externalTrackId,
   }).all();
@@ -280,10 +301,10 @@ async function materializePlaylist(
     .orderBy((item) => item.position.asc())
     .all();
 
-  const externalMatches = new Map<string, TrackRow | null>();
+  const externalMatches = new Map<string, MediaRow | null>();
   for (const item of itemRows) {
     if (
-      item.trackId === null &&
+      item.mediaId === null &&
       item.externalProvider &&
       item.externalTrackId
     ) {
@@ -291,52 +312,66 @@ async function materializePlaylist(
     }
   }
 
-  const trackIds = [
+  const mediaIds = [
     ...new Set(
       itemRows.flatMap((item) => {
-        const trackId =
-          item.trackId ?? externalMatches.get(item.id)?.id ?? null;
-        return trackId ? [trackId] : [];
+        const mediaId =
+          item.mediaId ?? externalMatches.get(item.id)?.id ?? null;
+        return mediaId ? [mediaId] : [];
       }),
     ),
   ];
-  const [trackRows, projections, likedRows, likedPlaylist] = await Promise.all([
-    trackIds.length
-      ? database.orm.Track.where((track) => track.id.in(trackIds))
-          .include("source", (source) => source.select("kind"))
+  const [
+    trackRows,
+    projections,
+    likedRows,
+    primaryCopies,
+    likedPlaylist,
+    link,
+  ] = await Promise.all([
+    mediaIds.length
+      ? database.orm.Media.where((track) => track.id.in(mediaIds)).all()
+      : Promise.resolve([]),
+    mediaIds.length
+      ? database.orm.CatalogMedia.where((track) => track.id.in(mediaIds)).all()
+      : Promise.resolve([]),
+    mediaIds.length
+      ? database.orm.MediaLike.where({ userId })
+          .where((like) => like.mediaId.in(mediaIds))
           .all()
       : Promise.resolve([]),
-    trackIds.length
-      ? database.orm.CatalogTrack.where((track) => track.id.in(trackIds)).all()
-      : Promise.resolve([]),
-    trackIds.length
-      ? database.orm.TrackLike.where({ userId })
-          .where((like) => like.trackId.in(trackIds))
-          .all()
-      : Promise.resolve([]),
+    primaryCopiesForMediaIds(database, mediaIds),
     database.orm.PlaylistLike.where({
       userId,
       playlistId: playlist.id,
     }).first(),
+    database.orm.PlaylistLink.first({ playlistId: playlist.id }),
   ]);
   const trackById = new Map(trackRows.map((track) => [track.id, track]));
   const albumIdByTrack = new Map(
     projections.map((track) => [track.id, track.albumId]),
   );
-  const likedTrackIds = new Set(likedRows.map((like) => like.trackId));
+  const likedTrackIds = new Set(likedRows.map((like) => like.mediaId));
 
   const entries = itemRows.map((item): PlaylistEntryResponse => {
     const trackRow =
-      (item.trackId ? trackById.get(item.trackId) : undefined) ??
+      (item.mediaId ? trackById.get(item.mediaId) : undefined) ??
       externalMatches.get(item.id) ??
       null;
-    const track: TrackResponse | null = trackRow
-      ? toTrackResponse(
-          trackRow,
-          playbackTokens,
-          likedTrackIds.has(trackRow.id),
-          albumIdByTrack.get(trackRow.id) ?? null,
-        )
+    const track: MediaResponse | null = trackRow
+      ? toMediaResponse(trackRow, playbackTokens, {
+          liked: likedTrackIds.has(trackRow.id),
+          albumId: albumIdByTrack.get(trackRow.id) ?? null,
+          sourceKind:
+            primaryCopies.get(trackRow.id)?.source.kind === "jellyfin"
+              ? "jellyfin"
+              : primaryCopies.get(trackRow.id)?.source.kind === "path"
+                ? "path"
+                : null,
+          ...(primaryCopies.get(trackRow.id)?.copy.mimeType
+            ? { mimeType: primaryCopies.get(trackRow.id)!.copy.mimeType }
+            : {}),
+        })
       : null;
     return {
       id: item.id,
@@ -349,7 +384,7 @@ async function materializePlaylist(
       coverUrl: track?.coverUrl ?? null,
       available: Boolean(track?.available),
       liked: Boolean(track?.liked),
-      track,
+      media: track,
       external: itemSnapshot(item),
     };
   });
@@ -362,10 +397,14 @@ async function materializePlaylist(
   const durations = entries.flatMap((entry) =>
     entry.durationMs === null ? [] : [entry.durationMs],
   );
+  const linkedAccount = link
+    ? await database.orm.PlaylistAccount.first({ id: link.accountId })
+    : null;
+  const kind = playlist.kind === "external" ? "external" : "manual";
 
   return {
     id: playlist.id,
-    kind: "manual",
+    kind,
     name: playlist.name,
     trackCount: entries.length,
     availableTrackCount: entries.filter((entry) => entry.available).length,
@@ -375,11 +414,13 @@ async function materializePlaylist(
     coverUrls,
     liked: Boolean(likedPlaylist),
     containsTrack: containsTrackId
-      ? entries.some((entry) => entry.track?.id === containsTrackId)
+      ? entries.some((entry) => entry.media?.id === containsTrackId)
       : false,
     createdAt: playlist.createdAt.toISOString(),
     updatedAt: playlist.updatedAt.toISOString(),
     entries,
+    link:
+      link && linkedAccount ? playlistLinkResponse(link, linkedAccount) : null,
   };
 }
 
@@ -418,6 +459,8 @@ export async function registerPlaylistRoutes(
   app: FastifyInstance,
   database: Database,
   playbackTokens: PlaybackTokenService,
+  credentials: CredentialStore,
+  connectors: ConnectorRegistry,
 ) {
   app.get<{ Querystring: PlaylistListQuery }>(
     "/api/playlists",
@@ -434,15 +477,15 @@ export async function registerPlaylistRoutes(
         );
       }
       const containsTrackId =
-        request.query.trackId === undefined
+        request.query.mediaId === undefined
           ? null
-          : parseId(request.query.trackId);
-      if (request.query.trackId !== undefined && !containsTrackId) {
+          : parseId(request.query.mediaId);
+      if (request.query.mediaId !== undefined && !containsTrackId) {
         return sendError(
           reply,
           400,
           "invalid_playlist_track",
-          "trackId must be a non-empty track ID",
+          "mediaId must be a non-empty track ID",
           message("api.message.invalidPlaylistTrack"),
         );
       }
@@ -582,6 +625,9 @@ export async function registerPlaylistRoutes(
         request.params.id,
       );
       if (!playlist) return sendPlaylistNotFound(reply);
+      if (playlist.kind === "external") {
+        return sendLinkedPlaylistReadOnly(reply);
+      }
       const name = normalizeName(request.body?.name);
       if (!name) {
         return sendError(
@@ -635,6 +681,9 @@ export async function registerPlaylistRoutes(
         request.params.id,
       );
       if (!playlist) return sendPlaylistNotFound(reply);
+      if (playlist.kind === "external") {
+        return sendLinkedPlaylistReadOnly(reply);
+      }
       const parsed = parsePlaylistItem(request.body);
       if (!parsed) {
         return sendError(
@@ -650,7 +699,7 @@ export async function registerPlaylistRoutes(
         parsed.kind === "catalog"
           ? {
               ...parsed,
-              trackId: await canonicalTrackId(database, parsed.trackId),
+              mediaId: await canonicalMediaId(database, parsed.mediaId),
             }
           : parsed;
       const key = identityKey(normalized);
@@ -685,11 +734,11 @@ export async function registerPlaylistRoutes(
         );
       }
 
-      let snapshot: PlaylistExternalTrackReference | null = null;
-      let trackId: string | null = null;
+      let snapshot: ExternalMediaReference | null = null;
+      let mediaId: string | null = null;
       if (normalized.kind === "catalog") {
-        const track = await database.orm.Track.first({
-          id: normalized.trackId,
+        const track = await database.orm.Media.first({
+          id: normalized.mediaId,
         });
         if (!track) {
           return sendError(
@@ -700,7 +749,7 @@ export async function registerPlaylistRoutes(
             message("api.message.trackNotFound"),
           );
         }
-        const effective = effectiveTrackFields(track);
+        const effective = effectiveMediaFields(track);
         snapshot = {
           provider: "",
           externalTrackId: "",
@@ -709,7 +758,7 @@ export async function registerPlaylistRoutes(
           album: effective.album,
           durationMs: effective.durationMs,
         };
-        trackId = track.id;
+        mediaId = track.id;
       } else {
         snapshot = normalized.reference;
       }
@@ -726,7 +775,7 @@ export async function registerPlaylistRoutes(
           playlistId: playlist.id,
           position: nextPosition,
           identityKey: key,
-          trackId,
+          mediaId,
           externalProvider:
             normalized.kind === "external"
               ? normalized.reference.provider
@@ -769,6 +818,9 @@ export async function registerPlaylistRoutes(
         request.params.id,
       );
       if (!playlist) return sendPlaylistNotFound(reply);
+      if (playlist.kind === "external") {
+        return sendLinkedPlaylistReadOnly(reply);
+      }
       const item = await database.orm.PlaylistItem.where({
         id: request.params.itemId,
         playlistId: playlist.id,
@@ -818,6 +870,9 @@ export async function registerPlaylistRoutes(
       request.params.id,
     );
     if (!playlist) return sendPlaylistNotFound(reply);
+    if (playlist.kind === "external") {
+      return sendLinkedPlaylistReadOnly(reply);
+    }
     const itemIds = request.body?.itemIds;
     if (
       !Array.isArray(itemIds) ||
@@ -864,4 +919,13 @@ export async function registerPlaylistRoutes(
       (await loadOwnedPlaylist(database, userId, playlist.id))!,
     );
   });
+
+  registerPlaylistLinkRoutes(
+    app,
+    database,
+    credentials,
+    connectors,
+    (userId, playlist) =>
+      materializePlaylist(database, playbackTokens, userId, playlist),
+  );
 }

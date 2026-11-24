@@ -1,11 +1,11 @@
-import type { TorznabRelease } from "@peridot/contracts";
+import type { ReleaseResult } from "@peridot/contracts";
 
 export type ExternalResultFilter = "all" | "music" | "audiobook";
 
-export function filterTorznabReleases(
-  releases: readonly TorznabRelease[],
+export function filterReleaseResults(
+  releases: readonly ReleaseResult[],
   filter: ExternalResultFilter,
-): TorznabRelease[] {
+): ReleaseResult[] {
   const filtered =
     filter === "all"
       ? [...releases]

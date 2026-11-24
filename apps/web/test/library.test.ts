@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import type { TrackResponse } from "@peridot/contracts";
+import type { MediaResponse } from "@peridot/contracts";
 import {
   albumLikeKey,
   artistLikeKey,
@@ -29,11 +29,11 @@ import {
   trackAlbumRoute,
   trackAlbumTitleRoute,
   trackCoverUrl,
-  trackIdFromTitleHash,
+  mediaIdFromTitleHash,
   trackTitleAnchorId,
 } from "../app/lib/library.ts";
 
-const tracks: TrackResponse[] = [
+const tracks: MediaResponse[] = [
   {
     id: "track-1",
     title: "Blue Hours",
@@ -94,7 +94,7 @@ test("favorites filter preserves catalog order without mutating tracks", () => {
 });
 
 test("track text fields sort case-insensitively and toggle direction", () => {
-  const catalog: TrackResponse[] = [
+  const catalog: MediaResponse[] = [
     { ...tracks[0]!, id: "zebra", title: "Zebra", artist: "Óra" },
     { ...tracks[0]!, id: "alpha", title: "alpha", artist: "Beta" },
     { ...tracks[0]!, id: "middle", title: "Middle", artist: "alpha" },
@@ -305,7 +305,7 @@ test("unavailable tracks keep inert controls without an unavailable badge", asyn
   );
   assert.match(
     table,
-    /function isUnavailable\(track: TrackResponse\): boolean/,
+    /function isUnavailable\(track: MediaResponse\): boolean/,
   );
   assert.doesNotMatch(table, /t\("trackTable\.unavailable"\)/);
   assert.match(
@@ -314,13 +314,13 @@ test("unavailable tracks keep inert controls without an unavailable badge", asyn
   );
   assert.match(
     table,
-    /function isOfflineOnly\(track: TrackResponse\): boolean \{\s+return \(\s+!track\.available &&\s+!unavailableTrackIdSet\.value\.has\(track\.id\) &&\s+isSavedOffline\(track\.id\)/,
+    /function isOfflineOnly\(track: MediaResponse\): boolean \{\s+return \(\s+!track\.available &&\s+!unavailableTrackIdSet\.value\.has\(track\.id\) &&\s+isSavedOffline\(track\.id\)/,
     "A saved copy that also failed playback is shown as unavailable",
   );
 });
 
 test("missing text values sort last in both directions", () => {
-  const catalog: TrackResponse[] = [
+  const catalog: MediaResponse[] = [
     { ...tracks[0]!, id: "without-album", album: null },
     { ...tracks[0]!, id: "zebra", album: "Zebra" },
     { ...tracks[0]!, id: "alpha", album: "Alpha" },
@@ -341,7 +341,7 @@ test("missing text values sort last in both directions", () => {
 });
 
 test("duration sorts numerically with missing values last", () => {
-  const catalog: TrackResponse[] = [
+  const catalog: MediaResponse[] = [
     { ...tracks[0]!, id: "unknown", durationMs: null },
     { ...tracks[0]!, id: "long", durationMs: 300_000 },
     { ...tracks[0]!, id: "short", durationMs: 20_000 },
@@ -362,7 +362,7 @@ test("duration sorts numerically with missing values last", () => {
 });
 
 test("track-number sorting follows album, disc, and track order", () => {
-  const catalog: TrackResponse[] = [
+  const catalog: MediaResponse[] = [
     { ...tracks[0]!, id: "bonus", album: null, trackNumber: null },
     {
       ...tracks[0]!,
@@ -370,7 +370,7 @@ test("track-number sorting follows album, disc, and track order", () => {
       album: "Zebra",
       discNumber: 1,
       trackNumber: 1,
-      coverUrl: "/api/tracks/track-a/cover?coverToken=token",
+      coverUrl: "/api/media/track-a/cover?coverToken=token",
     },
     {
       ...tracks[0]!,
@@ -406,15 +406,15 @@ test("track cover URLs combine the connected server with the signed path", () =>
   assert.equal(
     trackCoverUrl(
       "http://127.0.0.1:17430",
-      "/api/tracks/track-1/cover?coverToken=token",
+      "/api/media/track-1/cover?coverToken=token",
     ),
-    "http://127.0.0.1:17430/api/tracks/track-1/cover?coverToken=token",
+    "http://127.0.0.1:17430/api/media/track-1/cover?coverToken=token",
   );
   assert.equal(trackCoverUrl("http://127.0.0.1:17430", null), null);
 });
 
 test("albums prefer canonical ids and fall back to artist and title", () => {
-  const catalog: TrackResponse[] = [
+  const catalog: MediaResponse[] = [
     {
       ...tracks[0]!,
       id: "track-a",
@@ -424,7 +424,7 @@ test("albums prefer canonical ids and fall back to artist and title", () => {
       album: "Night Sessions",
       discNumber: 1,
       trackNumber: 1,
-      coverUrl: "/api/tracks/track-a/cover?coverToken=token",
+      coverUrl: "/api/media/track-a/cover?coverToken=token",
     },
     {
       ...tracks[0]!,
@@ -453,11 +453,11 @@ test("albums prefer canonical ids and fall back to artist and title", () => {
   assert.equal(albums.length, 2);
   assert.equal(albums[0]?.title, "Night Sessions");
   assert.equal(albums[0]?.artist, "Elliot Lake");
-  assert.deepEqual(albums[0]?.trackIds, ["track-a", "track-b"]);
+  assert.deepEqual(albums[0]?.mediaIds, ["track-a", "track-b"]);
   assert.equal(albums[0]?.durationMs, 568_000);
   assert.equal(
     albums[0]?.coverUrl,
-    "/api/tracks/track-a/cover?coverToken=token",
+    "/api/media/track-a/cover?coverToken=token",
   );
   assert.equal(
     findAlbum(albums, " NIGHT SESSIONS ", "ELLIOT LAKE")?.key,
@@ -470,7 +470,7 @@ test("albums prefer canonical ids and fall back to artist and title", () => {
 });
 
 test("albums expose only an unambiguous provider release year", () => {
-  const releaseMetadata = (value: string): TrackResponse["metadata"] => ({
+  const releaseMetadata = (value: string): MediaResponse["metadata"] => ({
     providerId: "discogs-provider",
     providerKind: "discogs",
     providerName: "Discogs",
@@ -515,7 +515,7 @@ test("album like identities use the canonical album id", () => {
 });
 
 test("artists include albumless tracks and merge names case-insensitively", () => {
-  const catalog: TrackResponse[] = [
+  const catalog: MediaResponse[] = [
     {
       ...tracks[0]!,
       id: "track-a",
@@ -555,7 +555,7 @@ test("artists include albumless tracks and merge names case-insensitively", () =
     artists.map((artist) => artist.name),
     ["Elliot Lake", "Someone Else", "Óra"],
   );
-  assert.deepEqual(artists[0]?.trackIds, ["track-a", "track-b"]);
+  assert.deepEqual(artists[0]?.mediaIds, ["track-a", "track-b"]);
   assert.equal(artists[0]?.albumCount, 1);
   assert.equal(artists[0]?.durationMs, 568_000);
   assert.equal(artists[2]?.albumCount, 0);
@@ -567,7 +567,7 @@ test("artists include albumless tracks and merge names case-insensitively", () =
 });
 
 test("artist tracks sort by album and disc, with albumless tracks last", () => {
-  const artistTracks: TrackResponse[] = [
+  const artistTracks: MediaResponse[] = [
     {
       ...tracks[0]!,
       id: "bonus",
@@ -611,7 +611,7 @@ test("artist tracks sort by album and disc, with albumless tracks last", () => {
   ];
 
   const [artist] = groupArtists(artistTracks);
-  assert.deepEqual(artist?.trackIds, ["alpha-1", "alpha-2", "zebra", "bonus"]);
+  assert.deepEqual(artist?.mediaIds, ["alpha-1", "alpha-2", "zebra", "bonus"]);
   assert.equal(artist?.albumCount, 2);
 });
 
@@ -643,7 +643,7 @@ test("tracks with multiple artists appear in every credited artist group", () =>
     ["Elliot Lake", "Óra"],
   );
   assert.deepEqual(
-    artists.map((artist) => artist.trackIds),
+    artists.map((artist) => artist.mediaIds),
     [["collaboration"], ["collaboration"]],
   );
   assert.deepEqual(trackArtistNames(collaborative), ["Elliot Lake", "Óra"]);
@@ -676,7 +676,7 @@ test("downloads use safe track names with a format-aware extension", () => {
 });
 
 test("album tracks sort by disc, track number, then title", () => {
-  const albumTracks: TrackResponse[] = [
+  const albumTracks: MediaResponse[] = [
     { ...tracks[0]!, id: "untracked", title: "Bonus", trackNumber: null },
     {
       ...tracks[0]!,
@@ -760,11 +760,11 @@ test("album links encode title and fallback artist identity", () => {
 test("player track titles link to their anchored album title", () => {
   assert.equal(trackTitleAnchorId("track / one"), "track-title-track / one");
   assert.equal(
-    trackIdFromTitleHash("#track-title-track%20%2F%20one"),
+    mediaIdFromTitleHash("#track-title-track%20%2F%20one"),
     "track / one",
   );
-  assert.equal(trackIdFromTitleHash("#track-title-"), null);
-  assert.equal(trackIdFromTitleHash("#other-anchor"), null);
+  assert.equal(mediaIdFromTitleHash("#track-title-"), null);
+  assert.equal(mediaIdFromTitleHash("#other-anchor"), null);
   assert.equal(
     trackAlbumTitleRoute({
       ...tracks[0]!,

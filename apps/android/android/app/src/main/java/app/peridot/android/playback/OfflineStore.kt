@@ -18,7 +18,7 @@ data class CachedTrack(
 class OfflineStore(context: Context) {
     private val appContext = context.applicationContext
     private val preferences =
-        appContext.getSharedPreferences("peridot-offline", Context.MODE_PRIVATE)
+        appContext.getSharedPreferences("peridot-offline-v2", Context.MODE_PRIVATE)
 
     fun download(
         session: PeridotSession,
@@ -142,6 +142,14 @@ class OfflineStore(context: Context) {
         directory(session).deleteRecursively()
     }
 
+    fun clearLegacy() {
+        appContext.getSharedPreferences("peridot-offline", Context.MODE_PRIVATE)
+            .edit()
+            .clear()
+            .apply()
+        File(appContext.filesDir, "offline").deleteRecursively()
+    }
+
     fun audioFile(session: PeridotSession, trackId: String): File {
         return File(directory(session), "${safeFileName(trackId)}.audio")
     }
@@ -160,7 +168,7 @@ class OfflineStore(context: Context) {
         "${scopeKey(session)}:$trackId"
 
     private fun directory(session: PeridotSession): File =
-        File(File(appContext.filesDir, "offline"), scopeKey(session))
+        File(File(appContext.filesDir, "offline-v2"), scopeKey(session))
 
     private fun scopeKey(session: PeridotSession): String {
         val digest = MessageDigest.getInstance("SHA-256")

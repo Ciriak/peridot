@@ -2,45 +2,41 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import { test } from "node:test";
 import { syncArtworkJobsInBatch } from "../src/artwork-fetch.js";
-import { createTestContext } from "./helpers.js";
+import { createMediaFixture, createTestContext } from "./helpers.js";
 
 test("artwork job sync batches creates, updates, and removes pending jobs", async () => {
   const context = await createTestContext();
   try {
-    const source = await context.database.orm.Source.create({
+    const source = await context.database.orm.LibrarySource.create({
       kind: "path",
       path: path.join(context.root, "music"),
       position: 0,
     });
-    const first = await context.database.orm.Track.create({
-      title: "First",
-      artist: "Artist",
-      relativePath: "first.mp3",
-      mimeType: "audio/mpeg",
-      fileSizeBytes: 1n,
-      fileModifiedAt: new Date(0),
-      sourceId: source.id,
+    const { copy: first } = await createMediaFixture(context, {
+      media: { title: "First", artist: "Artist" },
+      copy: {
+        librarySourceId: source.id,
+        relativePath: "first.mp3",
+      },
     });
-    const second = await context.database.orm.Track.create({
-      title: "Second",
-      artist: "Artist",
-      relativePath: "second.mp3",
-      mimeType: "audio/mpeg",
-      fileSizeBytes: 1n,
-      fileModifiedAt: new Date(0),
-      sourceId: source.id,
+    const { copy: second } = await createMediaFixture(context, {
+      media: { title: "Second", artist: "Artist" },
+      copy: {
+        librarySourceId: source.id,
+        relativePath: "second.mp3",
+      },
     });
 
     await syncArtworkJobsInBatch(context.database, [
       {
-        trackId: first.id,
-        sourceId: source.id,
+        copyId: first.id,
+        librarySourceId: source.id,
         externalCoverItemId: "album-cover",
         externalCoverTag: "v1",
       },
       {
-        trackId: second.id,
-        sourceId: source.id,
+        copyId: second.id,
+        librarySourceId: source.id,
         externalCoverItemId: null,
         externalCoverTag: null,
       },
@@ -48,43 +44,43 @@ test("artwork job sync batches creates, updates, and removes pending jobs", asyn
     assert.equal(
       (
         await context.database.orm.ArtworkJob.first({
-          trackId: first.id,
+          copyId: first.id,
         })
       )?.externalCoverTag,
       "v1",
     );
     assert.equal(
       await context.database.orm.ArtworkJob.first({
-        trackId: second.id,
+        copyId: second.id,
       }),
       null,
     );
 
     await syncArtworkJobsInBatch(context.database, [
       {
-        trackId: first.id,
-        sourceId: source.id,
+        copyId: first.id,
+        librarySourceId: source.id,
         externalCoverItemId: "album-cover",
         externalCoverTag: "v2",
       },
     ]);
     const updated = await context.database.orm.ArtworkJob.first({
-      trackId: first.id,
+      copyId: first.id,
     });
     assert.equal(updated?.externalCoverTag, "v2");
     assert.equal(updated?.attemptCount, 0);
 
     await syncArtworkJobsInBatch(context.database, [
       {
-        trackId: first.id,
-        sourceId: source.id,
+        copyId: first.id,
+        librarySourceId: source.id,
         externalCoverItemId: null,
         externalCoverTag: null,
       },
     ]);
     assert.equal(
       await context.database.orm.ArtworkJob.first({
-        trackId: first.id,
+        copyId: first.id,
       }),
       null,
     );

@@ -1,4 +1,4 @@
-import type { TrackResponse } from "@peridot/contracts";
+import type { MediaResponse } from "@peridot/contracts";
 import { listTracks } from "./peridot-client";
 
 interface CollectionQuery {
@@ -12,8 +12,8 @@ export async function loadCollectionTracks(
   serverAddress: string,
   token: string,
   query: CollectionQuery,
-): Promise<TrackResponse[]> {
-  const tracks: TrackResponse[] = [];
+): Promise<MediaResponse[]> {
+  const tracks: MediaResponse[] = [];
   let cursor: string | null = null;
   do {
     const page = await listTracks(serverAddress, token, {

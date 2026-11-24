@@ -7,7 +7,7 @@ import {
   useRoute,
   useState,
 } from "#imports";
-import type { PlaylistEntryResponse, TrackResponse } from "@peridot/contracts";
+import type { PlaylistEntryResponse, MediaResponse } from "@peridot/contracts";
 import { Icon } from "@iconify/vue/offline";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
@@ -88,7 +88,7 @@ const currentEntries = computed(() => {
   const entries = playlist.value?.entries ?? [];
   if (!automatic.value || !likesLoaded.value) return entries;
   const liked = new Set(likedTrackIds.value);
-  return entries.filter((entry) => entry.track && liked.has(entry.track.id));
+  return entries.filter((entry) => entry.media && liked.has(entry.media.id));
 });
 const filteredEntries = computed(() =>
   automatic.value
@@ -125,7 +125,7 @@ useHead(() => ({
     : t("page.playlist.fallbackTitle"),
 }));
 
-function playFrom(track: TrackResponse) {
+function playFrom(track: MediaResponse) {
   if (!playlist.value || !playableTracks.value.length) return;
   activePlaylistId.value = playlist.value.id;
   playCollection(playableTracks.value, track.id, playlistTarget.value);

@@ -1,16 +1,17 @@
 import { copyFile, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { TaskResponse } from "@peridot/contracts";
 import { buildApp } from "../src/app.js";
 import { artworkCacheDirectory } from "../src/artwork-cache.js";
+import type { ConnectorRuntimeDefinition } from "../src/connectors.js";
 import { localCredentialKeyFile } from "../src/credential-store.js";
 import { createDatabase, type Database } from "../src/database.js";
 import { ServerLogBuffer, serverLogFilePath } from "../src/server-log.js";
 import { createJellyfinIntegration } from "../src/jellyfin/index.js";
-import type { SourceIntegrationDefinition } from "../src/source-integrations.js";
+import type { LibrarySourceConnectorDefinition } from "../src/source-integrations.js";
 import type { UpdateService } from "../src/updates.js";
 
 export interface TestContext {
@@ -24,6 +25,64 @@ export interface TestContext {
   authorization: { authorization: string };
   logBuffer: ServerLogBuffer;
   close(): Promise<void>;
+}
+
+export async function createMediaFixture(
+  context: Pick<TestContext, "database" | "libraryRoot">,
+  input: {
+    media: Record<string, unknown>;
+    copy?: Record<string, unknown>;
+  },
+) {
+  const librarySourceId =
+    typeof input.copy?.librarySourceId === "string"
+      ? input.copy.librarySourceId
+      : (
+          await context.database.orm.LibrarySource.first({
+            kind: "path",
+            removedAt: null,
+          })
+        )?.id;
+  if (!librarySourceId) {
+    throw new Error("A library source is required for a media fixture.");
+  }
+  const mediaInput = {
+    mediaType: "music",
+    mediaTypeOrigin: "fallback",
+    title: "Test media",
+    artist: "Test artist",
+    ...input.media,
+  };
+  const media = await context.database.orm.Media.create(mediaInput as never);
+  const copy = await context.database.orm.MediaCopy.create({
+    mediaId: media.id,
+    librarySourceId,
+    relativePath: `fixtures/${randomUUID()}.mp3`,
+    mediaType: media.mediaType,
+    mediaTypeOrigin: media.mediaTypeOrigin,
+    title: media.title,
+    artist: media.artist,
+    artistCredits: media.artistCredits,
+    albumArtist: media.albumArtist,
+    albumArtistCredits: media.albumArtistCredits,
+    album: media.album,
+    genres: media.genres,
+    discNumber: media.discNumber,
+    trackNumber: media.trackNumber,
+    durationMs: media.durationMs,
+    publishedAt: media.publishedAt,
+    coverId: media.coverId,
+    recordingIdentityKeys: "[]",
+    audioLossless: 0,
+    audioBitrate: null,
+    mimeType: "audio/mpeg",
+    fileSizeBytes: 1n,
+    fileModifiedAt: new Date(0),
+    available: 1,
+    metadataVersion: 1,
+    ...input.copy,
+  } as never);
+  return { media, copy };
 }
 
 export interface TestContextOptions {
@@ -41,7 +100,8 @@ export interface TestContextOptions {
   updateService?: UpdateService;
   webRoot?: string;
   persistedLogLines?: string[];
-  additionalSourceIntegrations?: readonly SourceIntegrationDefinition[];
+  additionalSourceIntegrations?: readonly LibrarySourceConnectorDefinition[];
+  connectors?: readonly ConnectorRuntimeDefinition[];
 }
 
 export async function createTestContext(
@@ -108,6 +168,7 @@ export async function createTestContext(
       }),
       ...(options.additionalSourceIntegrations ?? []),
     ],
+    ...(options.connectors ? { connectors: options.connectors } : {}),
     ...(options.discogsRequestIntervalMs !== undefined
       ? { discogsRequestIntervalMs: options.discogsRequestIntervalMs }
       : { discogsRequestIntervalMs: 0 }),
@@ -299,8 +360,8 @@ function taskResult(
   return {
     id: scan.id,
     status: scan.status,
-    sourceId: scan.source?.id ?? null,
-    sourceName: scan.source?.name ?? null,
+    connectorId: scan.connector?.id ?? null,
+    connectorName: scan.connector?.name ?? null,
     discoveredCount: taskDetailNumber(scan, "progress.total"),
     createdCount: taskDetailNumber(scan, "files.created"),
     updatedCount: taskDetailNumber(scan, "files.updated"),
@@ -384,14 +445,14 @@ export async function waitForScan(
   let metadata: TaskResponse | null = null;
   const metadataChild = await context.database.orm.Task.where({
     parentTaskId: scan.id,
-    kind: "metadata_fetch",
+    kind: "metadata_enrichment",
   }).first();
   if (metadataChild) {
     metadata = await waitForTask(context, metadataChild.id);
   }
   const duplicateChild = await context.database.orm.Task.where({
     parentTaskId: scan.id,
-    kind: "duplicate_detection",
+    kind: "media_match",
   }).first();
   if (duplicateChild) {
     await waitForTask(context, duplicateChild.id);
@@ -399,7 +460,7 @@ export async function waitForScan(
   let catalog: TaskResponse | null = null;
   const catalogChild = await context.database.orm.Task.where({
     parentTaskId: scan.id,
-    kind: "catalog_fetch",
+    kind: "catalog_projection",
   }).first();
   if (catalogChild) {
     catalog = await waitForTask(context, catalogChild.id);

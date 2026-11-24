@@ -1,7 +1,4 @@
-import {
-  downloadCredentialEnvelope,
-  migrateIndexerClients,
-} from "./download-clients.js";
+import { downloadCredentialEnvelope } from "./download-clients.js";
 import Fastify, { LogController } from "fastify";
 import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
@@ -11,6 +8,15 @@ import { ArtworkCache } from "./artwork-cache.js";
 import { CatalogService } from "./catalog.js";
 import { registerCatalogRoutes } from "./catalog-routes.js";
 import { loadServerConfig, type ServerConfig } from "./config.js";
+import {
+  createConnectorRegistry,
+  librarySourceConnectorDefinition,
+  metadataProviderConnectorDefinition,
+  pathLibrarySourceConnectorDefinition,
+  qBittorrentConnectorDefinition,
+  torznabConnectorDefinition,
+  type ConnectorRuntimeDefinition,
+} from "./connectors.js";
 import { CredentialStore } from "./credential-store.js";
 import {
   configureDatabase,
@@ -18,7 +24,7 @@ import {
   type Database,
 } from "./database.js";
 import { DiscogsClient, DiscogsResolver } from "./discogs.js";
-import { DuplicateDetectionService } from "./duplicate-detection.js";
+import { MediaMatchService } from "./duplicate-detection.js";
 import { registerLibraryRoutes } from "./library-routes.js";
 import { registerLikeRoutes } from "./like-routes.js";
 import { registerOpenApi, registerOpenApiRoutes } from "./openapi.js";
@@ -28,35 +34,32 @@ import { registerLocalDiscoveryRoute } from "./local-discovery.js";
 import { MetadataEnrichment } from "./metadata-enrichment.js";
 import { ensureDefaultMetadataProvider } from "./metadata-providers.js";
 import { MetadataResolverRegistry } from "./metadata-resolver.js";
-import { registerTrackMetadataRoutes } from "./metadata-routes.js";
+import { registerMediaMetadataRoutes } from "./metadata-routes.js";
 import { MusicBrainzClient, MusicBrainzResolver } from "./musicbrainz.js";
 import { registerQuickPickRoutes } from "./quick-picks-routes.js";
 import {
   PlaybackTokenService,
   redactPlaybackToken,
 } from "./playback-tokens.js";
-import { registerTorznab } from "./torznab.js";
+import { ReleaseImportService } from "./torznab.js";
 import { registerAdminRoutes } from "./admin-routes.js";
 import { ArtworkService, hasPendingArtworkJobs } from "./artwork-fetch.js";
 import { createJellyfinIntegration } from "./jellyfin/index.js";
 import {
-  SourceIntegrationRegistry,
-  SourceIntegrationService,
-  type SourceIntegrationDefinition,
+  LibrarySourceConnectorRegistry,
+  LibrarySourceConnectorService,
+  type LibrarySourceConnectorDefinition,
 } from "./source-integrations.js";
 import { registerTaskRoutes } from "./task-routes.js";
 import {
   queueArtworkFetch,
-  queueCatalogFetch,
-  queueDuplicateDetection,
+  queueCatalogProjection,
+  queueMediaMatch,
   TaskService,
 } from "./tasks.js";
 import { ensureServerSettings } from "./server-settings.js";
 import { SourceRefreshScheduler } from "./source-refresh-scheduler.js";
-import {
-  ensureDefaultSource,
-  normalizeLegacyJellyfinSources,
-} from "./sources.js";
+import { ensureDefaultSource } from "./sources.js";
 import { ServerLogBuffer, serverLogFilePath } from "./server-log.js";
 import {
   RealtimeHub,
@@ -84,7 +87,8 @@ export interface BuildAppOptions {
   metadataRequestIntervalMs?: number;
   discogsFetch?: typeof fetch;
   discogsRequestIntervalMs?: number;
-  sourceIntegrations?: readonly SourceIntegrationDefinition[];
+  sourceIntegrations?: readonly LibrarySourceConnectorDefinition[];
+  connectors?: readonly ConnectorRuntimeDefinition[];
   enableSourceRefreshScheduler?: boolean;
   enableUpdateCheckScheduler?: boolean;
   updateCheckSchedulerOptions?: UpdateCheckSchedulerOptions;
@@ -108,7 +112,6 @@ export async function buildApp(options: BuildAppOptions = {}) {
   const database = options.database ?? createDatabase(config.databaseUrl);
   const ownsDatabase = options.database === undefined;
   await configureDatabase(database);
-  await normalizeLegacyJellyfinSources(database);
   const artworkCache = new ArtworkCache(config.databaseUrl);
   let credentials: CredentialStore;
   try {
@@ -120,7 +123,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
       provider.credentialCiphertext ? [provider.credentialCiphertext] : [],
     );
     const sourceCredentials = (
-      await database.orm.Source.where((source) =>
+      await database.orm.LibrarySource.where((source) =>
         source.credentialCiphertext.isNotNull(),
       ).all()
     ).flatMap((source) =>
@@ -129,25 +132,38 @@ export async function buildApp(options: BuildAppOptions = {}) {
     const downloadCredentials = await database.orm.DownloadClient.select(
       "credentialCiphertext",
     ).all();
-    sourceCredentials.push(
-      ...downloadCredentials.map((c) =>
-        downloadCredentialEnvelope(c.credentialCiphertext),
-      ),
+    const releaseIndexerCredentials = (
+      await database.orm.ReleaseIndexer.where((indexer) =>
+        indexer.credentialCiphertext.isNotNull(),
+      ).all()
+    ).flatMap((indexer) =>
+      indexer.credentialCiphertext ? [indexer.credentialCiphertext] : [],
+    );
+    const playlistAccountCredentials = (
+      await database.orm.PlaylistAccount.where((account) =>
+        account.credentialCiphertext.isNotNull(),
+      ).all()
+    ).flatMap((account) =>
+      account.credentialCiphertext ? [account.credentialCiphertext] : [],
     );
     credentials = await CredentialStore.fromConfig(
       config.credentialEncryptionKey,
       config.databaseUrl,
       {
         metadataProvider: metadataProviderCredentials,
-        source: sourceCredentials,
+        librarySource: sourceCredentials,
+        releaseIndexer: releaseIndexerCredentials,
+        downloadClient: downloadCredentials.map((client) =>
+          downloadCredentialEnvelope(client.credentialCiphertext),
+        ),
+        playlistAccount: playlistAccountCredentials,
       },
     );
   } catch (error) {
     if (ownsDatabase) await database.close();
     throw error;
   }
-  await migrateIndexerClients(database, credentials);
-  const registry = new MetadataResolverRegistry()
+  const metadataRegistry = new MetadataResolverRegistry()
     .register(
       new MusicBrainzResolver(
         new MusicBrainzClient({
@@ -168,22 +184,37 @@ export async function buildApp(options: BuildAppOptions = {}) {
         }),
       ),
     );
-  const playbackTokens = new PlaybackTokenService();
-  const sourceIntegrations = new SourceIntegrationService(
-    new SourceIntegrationRegistry(
-      options.sourceIntegrations ?? [createJellyfinIntegration()],
+  const connectorRegistry = createConnectorRegistry([
+    pathLibrarySourceConnectorDefinition(),
+    ...(options.sourceIntegrations ?? [createJellyfinIntegration()]).map(
+      librarySourceConnectorDefinition,
     ),
+    torznabConnectorDefinition(),
+    qBittorrentConnectorDefinition(),
+    ...metadataRegistry.all().map(metadataProviderConnectorDefinition),
+    ...(options.connectors ?? []),
+  ]);
+  const playbackTokens = new PlaybackTokenService();
+  const librarySourceDefinitions = connectorRegistry
+    .librarySourceConnectors()
+    .flatMap((connector) =>
+      connector.librarySource && "scan" in connector.librarySource
+        ? [connector.librarySource]
+        : [],
+    );
+  const sourceIntegrations = new LibrarySourceConnectorService(
+    new LibrarySourceConnectorRegistry(librarySourceDefinitions),
     credentials,
   );
   const catalog = new CatalogService(database, playbackTokens);
-  const duplicateDetection = new DuplicateDetectionService(database, catalog);
+  const mediaMatch = new MediaMatchService(database, catalog);
   const realtime = new RealtimeHub(database);
   const sourceRemovals = new SourceRemovalRegistry((progress) =>
     realtime.publishSourceRemoval(progress),
   );
   const metadataEnrichment = new MetadataEnrichment(
     database,
-    registry,
+    metadataRegistry,
     credentials,
     catalog,
     artworkCache,
@@ -221,17 +252,17 @@ export async function buildApp(options: BuildAppOptions = {}) {
   tasks.registerExecutor("release_import", (task, taskService, signal) =>
     scanner.runTask(task, taskService, signal),
   );
-  tasks.registerExecutor("metadata_fetch", (task, taskService, signal) =>
+  tasks.registerExecutor("metadata_enrichment", (task, taskService, signal) =>
     metadataEnrichment.runTask(task, taskService, signal),
   );
-  tasks.registerExecutor("catalog_fetch", (task, taskService, signal) =>
+  tasks.registerExecutor("catalog_projection", (task, taskService, signal) =>
     catalog.runTask(task, taskService, signal),
   );
   tasks.registerExecutor("artwork_fetch", (task, taskService, signal) =>
     artworkService.runTask(task, taskService, signal),
   );
-  tasks.registerExecutor("duplicate_detection", (task, taskService, signal) =>
-    duplicateDetection.runTask(task, taskService, signal),
+  tasks.registerExecutor("media_match", (task, taskService, signal) =>
+    mediaMatch.runTask(task, taskService, signal),
   );
   logBuffer.onEntry((entry) => realtime.publishLog(entry));
   catalog.setPublisher((change) => realtime.publishCatalog(change));
@@ -305,8 +336,8 @@ export async function buildApp(options: BuildAppOptions = {}) {
   await ensureDefaultSource(database, config.libraryRoot);
   await ensureDefaultMetadataProvider(database);
   await tasks.initialize();
-  if (await duplicateDetection.needsRun()) {
-    await queueDuplicateDetection(tasks);
+  if (await mediaMatch.needsRun()) {
+    await queueMediaMatch(tasks);
   }
   const sourceRefreshScheduler = new SourceRefreshScheduler(
     database,
@@ -317,7 +348,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
     options.enableSourceRefreshScheduler ?? false,
   );
   if (await catalog.hasPendingProjection()) {
-    await queueCatalogFetch(tasks);
+    await queueCatalogProjection(tasks);
   }
   if (await hasPendingArtworkJobs(database, null)) {
     await queueArtworkFetch(tasks);
@@ -335,13 +366,21 @@ export async function buildApp(options: BuildAppOptions = {}) {
         artworkCache,
         sourceIntegrations,
       );
-      registerTorznab(protectedApp, database, tasks, credentials);
+      new ReleaseImportService(database, tasks, credentials).register(
+        protectedApp,
+      );
       await registerCatalogRoutes(protectedApp, catalog, artworkCache);
       await registerTaskRoutes(protectedApp, tasks);
       await registerLikeRoutes(protectedApp, database);
-      await registerPlaylistRoutes(protectedApp, database, playbackTokens);
+      await registerPlaylistRoutes(
+        protectedApp,
+        database,
+        playbackTokens,
+        credentials,
+        connectorRegistry,
+      );
       await registerQuickPickRoutes(protectedApp, database, catalog);
-      await registerTrackMetadataRoutes(
+      await registerMediaMetadataRoutes(
         protectedApp,
         metadataEnrichment,
         tasks,
@@ -352,7 +391,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
         logBuffer,
         tasks,
         metadataEnrichment,
-        registry,
+        metadataRegistry,
         credentials,
         (sessionIds) => {
           for (const sessionId of sessionIds) {
@@ -366,6 +405,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
         updateService,
         artworkCache,
         sourceRemovals,
+        connectorRegistry,
       );
     },
     (request) => playbackTokens.authorizeRequest(request.method, request.url),

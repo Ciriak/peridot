@@ -1,4 +1,4 @@
-import type { MediaType, TrackMediaTypeOrigin } from "@peridot/contracts";
+import type { MediaType, MediaTypeOrigin } from "@peridot/contracts";
 
 export interface MediaDetectionInput {
   extension?: string | null;
@@ -11,7 +11,7 @@ export interface MediaDetectionInput {
 
 export interface DetectedMediaType {
   mediaType: MediaType;
-  origin: TrackMediaTypeOrigin;
+  origin: MediaTypeOrigin;
 }
 
 function normalized(value: string | null | undefined): string {

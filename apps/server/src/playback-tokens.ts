@@ -2,7 +2,7 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 const PLAYBACK_TOKEN_DURATION_MS = 4 * 60 * 60 * 1000;
 const COVER_TOKEN_REUSE_MARGIN_MS = 60 * 1000;
-const AUDIO_ROUTE = /^\/api\/tracks\/([^/]+)\/audio$/;
+const AUDIO_ROUTE = /^\/api\/media\/([^/]+)\/audio$/;
 const COVER_ROUTE = /^\/api\/covers\/([^/]+)$/;
 const ARTIST_IMAGE_ROUTE = /^\/api\/artists\/([^/]+)\/image$/;
 

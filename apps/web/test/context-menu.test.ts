@@ -37,7 +37,7 @@ test("track rows expose a Reka context menu with playback, favorites, offline st
     /<ContextMenuItem :disabled="!playable" @select="emit\('play'\)">/,
   );
   assert.match(menu, /useLikes\(\)/);
-  assert.match(menu, /toggleLike\(\{ kind: 'track', trackId: track\.id \}\)/);
+  assert.match(menu, /toggleLike\(\{ kind: 'media', mediaId: track\.id \}\)/);
   assert.match(menu, /useOfflineTracks\(\)/);
   assert.match(menu, /saveOffline\(props\.track\)/);
   assert.match(menu, /removeOffline\(props\.track\.id\)/);
@@ -140,7 +140,7 @@ test("track list rows open their track menu while catalog links keep their own m
   );
   assert.match(
     playlistTracks,
-    /<TrackRowContextMenu\s+v-for="\(entry, index\) in rows"[\s\S]*:track="entry\.track"[\s\S]*role="listitem"[\s\S]*<TrackArtistLinks[\s\S]*<AlbumLink[\s\S]*<\/TrackRowContextMenu>/,
+    /<MediaRowContextMenu\s+v-for="\(entry, index\) in rows"[\s\S]*:track="entry\.media"[\s\S]*role="listitem"[\s\S]*<TrackArtistLinks[\s\S]*<AlbumLink[\s\S]*<\/MediaRowContextMenu>/,
     "The whole playlist track row is a context-menu trigger",
   );
   assert.doesNotMatch(

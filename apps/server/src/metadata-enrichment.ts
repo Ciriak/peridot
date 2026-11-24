@@ -3,10 +3,10 @@ import path from "node:path";
 import type {
   ApplyArtistMetadataRequest,
   ArtistMetadataCandidateResponse,
-  ApplyTrackMetadataRequest,
+  ApplyMediaMetadataRequest,
   MessageDescriptor,
   MetadataCandidateResponse,
-  TrackMetadataMatchMode,
+  MediaMetadataMatchMode,
 } from "@peridot/contracts";
 import {
   normalizeArtistCredits,
@@ -40,12 +40,16 @@ import {
   type MetadataTrackInput,
 } from "./metadata-resolver.js";
 import { message, normalizeMessageDescriptor } from "./messages.js";
+import {
+  primaryCopiesForMediaIds,
+  type RankedMediaCopy,
+} from "./media-copies.js";
 import type {
   ArtistImageRow,
   CatalogArtistRow,
   MetadataProviderRow,
   TaskRow,
-  TrackRow,
+  MediaRow,
 } from "./prisma/models.js";
 import {
   metadataDetails,
@@ -76,7 +80,7 @@ export class MetadataEnrichmentError extends Error {
   }
 }
 
-function trackInput(track: TrackRow): MetadataTrackInput {
+function trackInput(track: MediaRow): MetadataTrackInput {
   return {
     id: track.id,
     title: track.title,
@@ -88,7 +92,7 @@ function trackInput(track: TrackRow): MetadataTrackInput {
   };
 }
 
-function inputSignature(track: TrackRow): string {
+function inputSignature(track: MediaRow): string {
   return createHash("sha256")
     .update(
       JSON.stringify([
@@ -222,11 +226,14 @@ async function readBoundedArtistImage(
 
 interface FolderAlbum {
   title: string;
-  tracks: TrackRow[];
+  tracks: MediaRow[];
 }
 
-function folderKey(track: TrackRow): string {
-  return `${track.sourceId ?? ""}\u0000${path.dirname(track.relativePath)}`;
+function folderKey(
+  track: MediaRow,
+  primary: RankedMediaCopy | undefined,
+): string {
+  return `${primary?.source.id ?? ""}\u0000${path.dirname(primary?.copy.relativePath ?? track.id)}`;
 }
 
 function sourceFolderTitle(
@@ -241,7 +248,7 @@ function sourceFolderTitle(
 }
 
 function folderAlbumTitle(
-  tracks: readonly TrackRow[],
+  tracks: readonly MediaRow[],
   fallback: string,
 ): string {
   const taggedAlbums = tracks
@@ -259,7 +266,7 @@ function folderAlbumTitle(
 
 function matchData(
   candidate: MetadataCandidateResponse,
-  mode: TrackMetadataMatchMode,
+  mode: MediaMetadataMatchMode,
 ) {
   const details = normalizeMetadataDetails(candidate.details);
   return {
@@ -380,21 +387,34 @@ export class MetadataEnrichment {
         );
       }
 
-      const trackQuery = this.database.orm.Track.where({
+      const trackQuery = this.database.orm.Media.where({
         available: 1,
         metadataMode: "automatic",
         mediaType: "music",
       });
-      const payloadTrackIds = readTaskPayload(task);
-      const sourceTracks = task.sourceId
-        ? trackQuery.where({ sourceId: task.sourceId })
+      const payloadMediaIds = readTaskPayload(task);
+      const sourceMediaIds = task.connectorId
+        ? [
+            ...new Set(
+              (
+                await this.database.orm.MediaCopy.where({
+                  librarySourceId: task.connectorId,
+                })
+                  .select("mediaId")
+                  .all()
+              ).map((copy) => copy.mediaId),
+            ),
+          ]
+        : null;
+      const sourceTracks = sourceMediaIds
+        ? trackQuery.where((media) => media.id.in(sourceMediaIds))
         : trackQuery;
       const tracks =
-        payloadTrackIds === null
+        payloadMediaIds === null
           ? await sourceTracks.all()
-          : payloadTrackIds.length
+          : payloadMediaIds.length
             ? await sourceTracks
-                .where((track) => track.id.in(payloadTrackIds))
+                .where((track) => track.id.in(payloadMediaIds))
                 .all()
             : [];
       const targets = task.forceRefresh
@@ -421,7 +441,7 @@ export class MetadataEnrichment {
         targets.length + artistTargets.length,
         metadataDetails(
           {
-            source: task.sourceName ?? "All sources",
+            source: task.connectorName ?? "All sources",
             total: targets.length,
             processed: 0,
             matched: 0,
@@ -436,7 +456,7 @@ export class MetadataEnrichment {
         return {
           details: metadataDetails(
             {
-              source: task.sourceName ?? "All sources",
+              source: task.connectorName ?? "All sources",
               total: 0,
               processed: 0,
               matched: 0,
@@ -449,14 +469,22 @@ export class MetadataEnrichment {
         };
       }
 
+      const primaryCopies = await primaryCopiesForMediaIds(
+        this.database,
+        targets.map((track) => track.id),
+      );
+      const primaryLibrarySourceIds = [
+        ...new Set(
+          targets.flatMap((track) => {
+            const sourceId = primaryCopies.get(track.id)?.source.id;
+            return sourceId ? [sourceId] : [];
+          }),
+        ),
+      ];
       const sourcePaths = new Map(
         (
-          await this.database.orm.Source.where((source) =>
-            source.id.in([
-              ...new Set(
-                targets.flatMap(({ sourceId }) => (sourceId ? [sourceId] : [])),
-              ),
-            ]),
+          await this.database.orm.LibrarySource.where((source) =>
+            source.id.in(primaryLibrarySourceIds),
           )
             .select("id", "path")
             .all()
@@ -464,11 +492,12 @@ export class MetadataEnrichment {
       );
       const groups = new Map<string, FolderAlbum>();
       for (const track of targets) {
-        const key = folderKey(track);
+        const primary = primaryCopies.get(track.id);
+        const key = folderKey(track, primary);
         const group = groups.get(key) ?? {
           title: sourceFolderTitle(
-            track.relativePath,
-            sourcePaths.get(track.sourceId ?? ""),
+            primary?.copy.relativePath ?? track.id,
+            sourcePaths.get(primary?.source.id ?? ""),
           ),
           tracks: [],
         };
@@ -489,7 +518,7 @@ export class MetadataEnrichment {
           targets.length + artistTargets.length,
           metadataDetails(
             {
-              source: task.sourceName ?? "All sources",
+              source: task.connectorName ?? "All sources",
               total: targets.length,
               processed: processedCount,
               matched: matchedCount,
@@ -503,21 +532,21 @@ export class MetadataEnrichment {
       };
 
       const applyAutomatic = async (
-        track: TrackRow,
+        track: MediaRow,
         candidate: MetadataCandidateResponse,
       ) => {
-        await this.database.orm.Track.where({ id: track.id }).update({
+        await this.database.orm.Media.where({ id: track.id }).update({
           ...matchData(candidate, "automatic"),
           metadataAttemptedSignature: inputSignature(track),
         });
-        await this.catalog?.reindexTrack(track.id, "metadata");
+        await this.catalog?.reindexMedia(track.id, "metadata");
         matchedCount += 1;
         processedCount += 1;
         await recordProgress();
       };
 
-      const recordNoMatch = async (track: TrackRow) => {
-        await this.database.orm.Track.where({ id: track.id }).update({
+      const recordNoMatch = async (track: MediaRow) => {
+        await this.database.orm.Media.where({ id: track.id }).update({
           metadataAttemptedSignature: inputSignature(track),
         });
         unmatchedCount += 1;
@@ -559,7 +588,7 @@ export class MetadataEnrichment {
               })),
               requestSignal,
             );
-            const nextUnresolved: TrackRow[] = [];
+            const nextUnresolved: MediaRow[] = [];
             for (const track of unresolved) {
               const input = trackInput(track);
               const items = (candidates.get(track.id) ?? [])
@@ -679,7 +708,7 @@ export class MetadataEnrichment {
       return {
         details: metadataDetails(
           {
-            source: task.sourceName ?? "All sources",
+            source: task.connectorName ?? "All sources",
             total: targets.length,
             processed: processedCount,
             matched: matchedCount,
@@ -720,7 +749,7 @@ export class MetadataEnrichment {
     trackId: string,
     query?: string,
   ): Promise<MetadataCandidateResponse[]> {
-    const track = await this.database.orm.Track.first({ id: trackId });
+    const track = await this.database.orm.Media.first({ id: trackId });
     if (!track || !track.available) {
       throw new MetadataEnrichmentError(
         "Available track not found",
@@ -1034,7 +1063,7 @@ export class MetadataEnrichment {
   }
 
   async resetAll(): Promise<number> {
-    const count = await this.database.orm.Track.where((track) =>
+    const count = await this.database.orm.Media.where((track) =>
       track.id.isNotNull(),
     ).updateAndCount({
       metadataMode: "file",
@@ -1061,8 +1090,8 @@ export class MetadataEnrichment {
     return count;
   }
 
-  async apply(trackId: string, body: ApplyTrackMetadataRequest): Promise<void> {
-    const track = await this.database.orm.Track.first({ id: trackId });
+  async apply(trackId: string, body: ApplyMediaMetadataRequest): Promise<void> {
+    const track = await this.database.orm.Media.first({ id: trackId });
     if (!track) {
       throw new MetadataEnrichmentError(
         "Track not found",
@@ -1161,18 +1190,18 @@ export class MetadataEnrichment {
         message("api.message.invalidMetadataMatch"),
       );
     }
-    await this.database.orm.Track.where({ id: track.id }).update({
+    await this.database.orm.Media.where({ id: track.id }).update({
       ...matchData(candidate, "manual"),
       metadataAttemptedSignature: inputSignature(track),
     });
-    await this.catalog?.reindexTrack(track.id, "metadata");
+    await this.catalog?.reindexMedia(track.id, "metadata");
     await this.catalog?.flushChanges();
   }
 
   async revert(trackId: string): Promise<boolean> {
-    const track = await this.database.orm.Track.first({ id: trackId });
+    const track = await this.database.orm.Media.first({ id: trackId });
     if (!track) return false;
-    await this.database.orm.Track.where({ id: track.id }).update({
+    await this.database.orm.Media.where({ id: track.id }).update({
       metadataMode: "file",
       metadataTitle: null,
       metadataArtist: null,
@@ -1191,7 +1220,7 @@ export class MetadataEnrichment {
       metadataMatchedAt: null,
       metadataAttemptedSignature: inputSignature(track),
     });
-    await this.catalog?.reindexTrack(track.id, "metadata");
+    await this.catalog?.reindexMedia(track.id, "metadata");
     await this.catalog?.flushChanges();
     return true;
   }
@@ -1200,27 +1229,36 @@ export class MetadataEnrichment {
     let artists = await this.database.orm.CatalogArtist.where((artist) =>
       artist.trackCount.gt(0),
     ).all();
-    const payloadTrackIds = readTaskPayload(task);
-    if (task.sourceId || payloadTrackIds !== null) {
+    const payloadMediaIds = readTaskPayload(task);
+    if (task.connectorId || payloadMediaIds !== null) {
+      const connectorMediaIds = task.connectorId
+        ? [
+            ...new Set(
+              (
+                await this.database.orm.MediaCopy.where({
+                  librarySourceId: task.connectorId,
+                }).all()
+              ).map((copy) => copy.mediaId),
+            ),
+          ]
+        : [];
       const sourceTracks =
-        payloadTrackIds !== null
-          ? payloadTrackIds.length
-            ? await this.database.orm.Track.where({ available: 1 })
-                .where((track) => track.id.in(payloadTrackIds))
+        payloadMediaIds !== null
+          ? payloadMediaIds.length
+            ? await this.database.orm.Media.where({ available: 1 })
+                .where((track) => track.id.in(payloadMediaIds))
                 .select("id")
                 .all()
             : []
-          : task.sourceId
-            ? await this.database.orm.Track.where({
-                sourceId: task.sourceId,
-                available: 1,
-              })
+          : task.connectorId
+            ? await this.database.orm.Media.where({ available: 1 })
+                .where((media) => media.id.in(connectorMediaIds))
                 .select("id")
                 .all()
             : [];
       if (!sourceTracks.length) return [];
-      const links = await this.database.orm.CatalogTrackArtist.where((link) =>
-        link.trackId.in(sourceTracks.map((track) => track.id)),
+      const links = await this.database.orm.CatalogMediaArtist.where((link) =>
+        link.mediaId.in(sourceTracks.map((track) => track.id)),
       )
         .select("artistId")
         .all();
@@ -1425,14 +1463,14 @@ export class MetadataEnrichment {
   }
 }
 
-export function effectiveArtistCredits(track: TrackRow): string[] {
+export function effectiveArtistCredits(track: MediaRow): string[] {
   return parseStoredArtistCredits(
     track.metadataArtistCredits,
     track.metadataArtist ?? track.artist,
   );
 }
 
-export function effectiveAlbumArtistCredits(track: TrackRow): string[] {
+export function effectiveAlbumArtistCredits(track: MediaRow): string[] {
   return parseStoredOptionalArtistCredits(
     track.metadataAlbumArtistCredits ?? track.albumArtistCredits,
     track.metadataAlbumArtist ?? track.albumArtist,

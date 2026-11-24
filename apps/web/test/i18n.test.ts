@@ -84,8 +84,8 @@ test("en-US messages interpolate and pluralize", () => {
   assert.equal(i18n.global.t("page.search.resultType.release"), "Release");
   assert.equal(i18n.global.t("page.search.libraryTab"), "Library");
   assert.equal(
-    i18n.global.t("page.search.externalTabCount", { count: 2 }, 2),
-    "External sources, 2 results",
+    i18n.global.t("page.search.discoverTabCount", { count: 2 }, 2),
+    "Discover, 2 results",
   );
   assert.equal(
     i18n.global.t("toast.releaseDownloadFailed", {
@@ -94,7 +94,7 @@ test("en-US messages interpolate and pluralize", () => {
     }),
     "Daft Punk - Homework could not be added to the download client. Indexer failed.",
   );
-  assert.equal(i18n.global.t("torznab.loading"), "Searching external sources");
+  assert.equal(i18n.global.t("torznab.loading"), "Searching Discover");
   assert.equal(
     i18n.global.t("torznab.downloading", { percent: 42 }),
     "Downloading 42%",

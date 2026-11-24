@@ -36,7 +36,7 @@ test("player snapshots persist the current track, progress, and full queue", () 
 
   assert.equal(savePersistedPlayerState(storage, scope, state), true);
   assert.deepEqual(readPersistedPlayerState(storage, scope), state);
-  assert.match(playerStateStorageKey(scope), /^peridot:player-state:v1:/);
+  assert.match(playerStateStorageKey(scope), /^peridot:player-state:v2:/);
   assert.equal(
     readPersistedPlayerState(storage, { ...scope, userId: "user-2" }),
     null,

@@ -138,7 +138,7 @@ test("artist names link from navigation and track lists", async () => {
   assert.match(trackTable, /@dblclick\.stop/);
   assert.match(
     playlist,
-    /<TrackArtistLinks[\s\S]*:artists="trackArtistNames\(entry\.track\)"/,
+    /<TrackArtistLinks[\s\S]*:artists="trackArtistNames\(entry\.media\)"/,
   );
   assert.match(
     addDialog,

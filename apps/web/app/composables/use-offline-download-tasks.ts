@@ -3,7 +3,7 @@ import type {
   MediaType,
   MessageDescriptor,
   PlaylistDetailResponse,
-  TrackResponse,
+  MediaResponse,
 } from "@peridot/contracts";
 import { useI18n, useState } from "#imports";
 import { computed, watch } from "vue";
@@ -43,9 +43,9 @@ let refreshPromise: Promise<void> | null = null;
 let refreshKey: string | null = null;
 
 interface DownloadTaskAdapter {
-  isSaved: (trackId: string) => boolean;
+  isSaved: (mediaId: string) => boolean;
   save: (
-    track: TrackResponse,
+    track: MediaResponse,
     onProgress?: (progress: number | null) => void,
   ) => Promise<void>;
 }
@@ -188,9 +188,9 @@ export function useOfflineDownloadTasks() {
     return task;
   }
 
-  function enqueueTrack(track: TrackResponse, notify = true) {
+  function enqueueTrack(track: MediaResponse, notify = true) {
     return enqueue(
-      { kind: "track", track },
+      { kind: "media", track },
       track.title,
       trackTitleMessage("track", track.title),
       notify,
@@ -291,7 +291,7 @@ export function useOfflineDownloadTasks() {
     return retried;
   }
 
-  async function loadTaskTracks(task: DownloadTask): Promise<TrackResponse[]> {
+  async function loadTaskTracks(task: DownloadTask): Promise<MediaResponse[]> {
     const currentScope = scope.value;
     const currentToken = token.value;
     if (!currentScope || !currentToken) {
@@ -299,7 +299,7 @@ export function useOfflineDownloadTasks() {
     }
     const address = currentScope.serverAddress;
 
-    if (task.request.kind === "track") {
+    if (task.request.kind === "media") {
       const resolved = await resolveTracks(address, currentToken, [
         task.request.track.id,
       ]);
@@ -323,7 +323,7 @@ export function useOfflineDownloadTasks() {
         task.request.playlistId,
       );
       return playlist.entries.flatMap((entry) =>
-        entry.track ? [entry.track] : [],
+        entry.media ? [entry.media] : [],
       );
     }
 
@@ -343,7 +343,7 @@ export function useOfflineDownloadTasks() {
         }),
       ),
     ]);
-    const albumTracks: TrackResponse[] = [];
+    const albumTracks: MediaResponse[] = [];
     for (const album of likedAlbums) {
       albumTracks.push(
         ...(await loadCollectionTracks(address, currentToken, {
@@ -365,7 +365,7 @@ export function useOfflineDownloadTasks() {
 
   async function loadTaskTracksWithRetry(
     task: DownloadTask,
-  ): Promise<TrackResponse[]> {
+  ): Promise<MediaResponse[]> {
     let lastFailure: unknown;
     for (let attempt = 1; attempt <= MAX_ITEM_ATTEMPTS; attempt += 1) {
       if (!stillRunnable(task)) {
@@ -389,7 +389,7 @@ export function useOfflineDownloadTasks() {
 
   async function saveItem(
     task: DownloadTask,
-    track: TrackResponse,
+    track: MediaResponse,
     currentAdapter: DownloadTaskAdapter,
   ): Promise<"saved" | "failed" | "paused"> {
     let lastFailure: unknown;
@@ -448,7 +448,7 @@ export function useOfflineDownloadTasks() {
     try {
       const resolvedTracks = await loadTaskTracksWithRetry(task);
       if (
-        task.request.kind === "track" &&
+        task.request.kind === "media" &&
         (!resolvedTracks[0] || !resolvedTracks[0].available)
       ) {
         throw new Error("The track is no longer available.");

@@ -15,14 +15,14 @@ test("credential store encrypts, decrypts, and uses a fresh nonce", () => {
   const store = new CredentialStore(key);
   const first = store.encrypt("discogs-secret-token");
   const second = store.encrypt("discogs-secret-token");
-  const source = store.encrypt("jellyfin-api-key", "source");
+  const source = store.encrypt("jellyfin-api-key", "library-source");
 
   assert.notEqual(first, second);
   assert.match(first, /^v1\./);
   assert.doesNotMatch(first, /discogs-secret-token/);
   assert.equal(store.decrypt(first), "discogs-secret-token");
   assert.equal(store.decrypt(second), "discogs-secret-token");
-  assert.equal(store.decrypt(source, "source"), "jellyfin-api-key");
+  assert.equal(store.decrypt(source, "library-source"), "jellyfin-api-key");
   assert.throws(() => store.decrypt(source), /could not be decrypted/);
 });
 

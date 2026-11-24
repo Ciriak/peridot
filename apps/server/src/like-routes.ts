@@ -7,22 +7,22 @@ import type {
   LikeTarget,
   PlaylistLikeResponse,
   PodcastLikeResponse,
-  TrackLikeResponse,
+  MediaLikeResponse,
 } from "@peridot/contracts";
 import type { FastifyInstance } from "fastify";
 import type { Database } from "./database.js";
-import { canonicalTrackId } from "./duplicate-resolver.js";
+import { canonicalMediaId } from "./media-resolver.js";
 import { sendError } from "./http.js";
 import { message } from "./messages.js";
 import type {
   AlbumLikeRow,
   ArtistLikeRow,
   PlaylistLikeRow,
-  TrackLikeRow,
+  MediaLikeRow,
 } from "./prisma/models.js";
 
 const MAX_LIKE_LABEL_LENGTH = 512;
-const MAX_TRACK_ID_LENGTH = 200;
+const MAX_MEDIA_ID_LENGTH = 200;
 const MAX_ALBUM_ID_LENGTH = 200;
 
 function normalize(value: string): string {
@@ -37,23 +37,23 @@ function validLabel(value: unknown): value is string {
   );
 }
 
-function validTrackId(value: unknown): value is string {
+function validMediaId(value: unknown): value is string {
   return (
     typeof value === "string" &&
     value.trim().length > 0 &&
-    value.trim().length <= MAX_TRACK_ID_LENGTH
+    value.trim().length <= MAX_MEDIA_ID_LENGTH
   );
 }
 
 function parseLikeTarget(body: unknown): LikeTarget | null {
   if (!body || typeof body !== "object") return null;
   const value = body as Record<string, unknown>;
-  if (value.kind === "track" && validTrackId(value.trackId)) {
-    return { kind: "track", trackId: value.trackId.trim() };
+  if (value.kind === "media" && validMediaId(value.mediaId)) {
+    return { kind: "media", mediaId: value.mediaId.trim() };
   }
   if (
     value.kind === "album" &&
-    validTrackId(value.albumId) &&
+    validMediaId(value.albumId) &&
     String(value.albumId).trim().length <= MAX_ALBUM_ID_LENGTH &&
     validLabel(value.title) &&
     validLabel(value.artist)
@@ -67,7 +67,7 @@ function parseLikeTarget(body: unknown): LikeTarget | null {
   }
   if (
     value.kind === "audiobook" &&
-    validTrackId(value.audiobookId) &&
+    validMediaId(value.audiobookId) &&
     validLabel(value.title) &&
     validLabel(value.author)
   ) {
@@ -80,7 +80,7 @@ function parseLikeTarget(body: unknown): LikeTarget | null {
   }
   if (
     value.kind === "podcast" &&
-    validTrackId(value.podcastId) &&
+    validMediaId(value.podcastId) &&
     validLabel(value.title) &&
     validLabel(value.publisher)
   ) {
@@ -96,7 +96,7 @@ function parseLikeTarget(body: unknown): LikeTarget | null {
   }
   if (
     value.kind === "playlist" &&
-    validTrackId(value.playlistId) &&
+    validMediaId(value.playlistId) &&
     validLabel(value.name)
   ) {
     return {
@@ -108,9 +108,9 @@ function parseLikeTarget(body: unknown): LikeTarget | null {
   return null;
 }
 
-function trackLikeResponse(like: TrackLikeRow): TrackLikeResponse {
+function trackLikeResponse(like: MediaLikeRow): MediaLikeResponse {
   return {
-    trackId: like.trackId,
+    mediaId: like.mediaId,
     likedAt: like.createdAt.toISOString(),
   };
 }
@@ -167,7 +167,7 @@ export async function registerLikeRoutes(
   app.get("/api/likes", async (request): Promise<LikeListResponse> => {
     const userId = request.authenticatedUser!.id;
     const [tracks, albums, artists, playlists] = await Promise.all([
-      database.orm.TrackLike.where({ userId })
+      database.orm.MediaLike.where({ userId })
         .orderBy((like) => like.createdAt.desc())
         .all(),
       database.orm.AlbumLike.where({ userId })
@@ -182,7 +182,7 @@ export async function registerLikeRoutes(
         .all(),
     ]);
     return {
-      tracks: tracks.map(trackLikeResponse),
+      media: tracks.map(trackLikeResponse),
       albums: albums
         .filter((like) => like.albumId.startsWith("album_"))
         .map(albumLikeResponse),
@@ -212,31 +212,31 @@ export async function registerLikeRoutes(
     }
     const userId = request.authenticatedUser!.id;
 
-    if (target.kind === "track") {
-      const resolvedTrackId = await canonicalTrackId(database, target.trackId);
-      const track = await database.orm.Track.select("id").first({
-        id: resolvedTrackId,
+    if (target.kind === "media") {
+      const resolvedMediaId = await canonicalMediaId(database, target.mediaId);
+      const media = await database.orm.Media.select("id").first({
+        id: resolvedMediaId,
       });
-      if (!track) {
+      if (!media) {
         return sendError(
           reply,
           404,
-          "track_not_found",
-          "Track not found",
+          "media_not_found",
+          "Media not found",
           message("api.message.trackNotFound"),
         );
       }
       const like =
-        (await database.orm.TrackLike.where({
+        (await database.orm.MediaLike.where({
           userId,
-          trackId: track.id,
+          mediaId: media.id,
         }).first()) ??
-        (await database.orm.TrackLike.create({
+        (await database.orm.MediaLike.create({
           userId,
-          trackId: track.id,
+          mediaId: media.id,
         }));
       const response: LikeResponse = {
-        kind: "track",
+        kind: "media",
         ...trackLikeResponse(like),
       };
       return response;
@@ -379,23 +379,23 @@ export async function registerLikeRoutes(
     }
     const userId = request.authenticatedUser!.id;
 
-    if (target.kind === "track") {
-      const resolvedTrackId = await canonicalTrackId(database, target.trackId);
-      const track = await database.orm.Track.select("id").first({
-        id: resolvedTrackId,
+    if (target.kind === "media") {
+      const resolvedMediaId = await canonicalMediaId(database, target.mediaId);
+      const media = await database.orm.Media.select("id").first({
+        id: resolvedMediaId,
       });
-      if (!track) {
+      if (!media) {
         return sendError(
           reply,
           404,
-          "track_not_found",
-          "Track not found",
+          "media_not_found",
+          "Media not found",
           message("api.message.trackNotFound"),
         );
       }
-      await database.orm.TrackLike.where({
+      await database.orm.MediaLike.where({
         userId,
-        trackId: track.id,
+        mediaId: media.id,
       }).deleteAndCount();
     } else if (
       target.kind === "album" ||

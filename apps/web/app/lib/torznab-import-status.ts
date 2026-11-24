@@ -1,14 +1,14 @@
-import type { TorznabImportStatus } from "@peridot/contracts";
+import type { ReleaseImportStatus } from "@peridot/contracts";
 
 export type TorznabImportRowState =
   | { kind: "adding" }
-  | { kind: "tracking"; status: TorznabImportStatus }
-  | { kind: "ready"; trackIds: string[] }
+  | { kind: "tracking"; status: ReleaseImportStatus }
+  | { kind: "ready"; mediaIds: string[] }
   | { kind: "already-added" }
   | {
       kind: "failed";
       retryable: boolean;
-      status?: TorznabImportStatus;
+      status?: ReleaseImportStatus;
     };
 
 export type TorznabTransferPhase =
@@ -56,10 +56,10 @@ export function torznabTerminalImportState(state: string | undefined) {
 }
 
 export function torznabImportShouldPoll(
-  status: Pick<TorznabImportStatus, "state" | "trackIds"> | undefined,
+  status: Pick<ReleaseImportStatus, "state" | "mediaIds"> | undefined,
 ): boolean {
   return (
     !status ||
-    (!status.trackIds.length && !torznabTerminalImportState(status.state))
+    (!status.mediaIds.length && !torznabTerminalImportState(status.state))
   );
 }

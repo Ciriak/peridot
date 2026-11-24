@@ -1,6 +1,6 @@
 import type {
   MetadataCandidateResponse,
-  TrackMetadataDetail,
+  MediaMetadataDetail,
 } from "@peridot/contracts";
 import { normalizeArtistCredits } from "./artist-credits.js";
 import {
@@ -201,7 +201,7 @@ function parseDuration(value: string | undefined): number | null {
   return Number.isFinite(seconds) ? seconds * 1_000 : null;
 }
 
-function releaseDetails(release: DiscogsRelease): TrackMetadataDetail[] {
+function releaseDetails(release: DiscogsRelease): MediaMetadataDetail[] {
   const label = unique(
     (release.labels ?? []).flatMap((item) => (item.name ? [item.name] : [])),
   ).join(", ");
@@ -251,7 +251,7 @@ function releaseDetails(release: DiscogsRelease): TrackMetadataDetail[] {
           labelMessage: message("metadata.detail.format"),
         }
       : null,
-  ].filter((detail): detail is TrackMetadataDetail => detail !== null);
+  ].filter((detail): detail is MediaMetadataDetail => detail !== null);
 }
 
 function wait(milliseconds: number, signal?: AbortSignal): Promise<void> {

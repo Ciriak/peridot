@@ -3,7 +3,7 @@ import { useI18n, useState } from "#imports";
 import type {
   LikeTarget,
   PlaylistDetailResponse,
-  SourceKind,
+  LibrarySourceKind,
 } from "@peridot/contracts";
 import { Icon } from "@iconify/vue/offline";
 import { Button } from "@peridot/ui/components/ui/button";
@@ -95,7 +95,7 @@ const album = computed(() =>
   props.item.kind === "album" ? props.item.album : null,
 );
 const track = computed(() =>
-  props.item.kind === "track" ? props.item.track : null,
+  props.item.kind === "media" ? props.item.media : null,
 );
 const playlist = computed(() =>
   props.item.kind === "playlist" ? props.item.playlist : null,
@@ -105,7 +105,7 @@ const resultType = computed<SearchResultType>(() => {
   if (playlist.value) return "playlist";
   return trackSearchResultType(track.value!.mediaType);
 });
-const searchSourceKinds = computed<SourceKind[]>(() => {
+const searchLibrarySourceKinds = computed<LibrarySourceKind[]>(() => {
   if (album.value) return album.value.sourceKinds ?? [];
   return track.value?.sourceKind ? [track.value.sourceKind] : [];
 });
@@ -279,7 +279,7 @@ const likeTarget = computed<LikeTarget | null>(() => {
     };
   }
   if (track.value?.mediaType === "music") {
-    return { kind: "track", trackId: track.value.id };
+    return { kind: "media", mediaId: track.value.id };
   }
   return null;
 });
@@ -536,7 +536,7 @@ function toggleCardLike() {
           </ScrollingText>
         </div>
         <div class="ml-auto flex shrink-0 items-center gap-2">
-          <SearchSourceIcons :source-kinds="searchSourceKinds" />
+          <SearchSourceIcons :source-kinds="searchLibrarySourceKinds" />
           <TooltipProvider v-if="playlist" :delay-duration="150">
             <TooltipRoot :disabled="controlEnabled">
               <TooltipTrigger as-child>

@@ -4,7 +4,7 @@ import type {
   MetadataCandidateResponse,
   MetadataProviderDefinitionResponse,
   MetadataProviderKind,
-  TrackMetadataDetail,
+  MediaMetadataDetail,
 } from "@peridot/contracts";
 import { message } from "./messages.js";
 
@@ -129,9 +129,11 @@ export class MetadataResolverRegistry {
   }
 
   definitions(): MetadataProviderDefinitionResponse[] {
-    return [...this.resolvers.values()].map((resolver) =>
-      structuredClone(resolver.definition),
-    );
+    return this.all().map((resolver) => structuredClone(resolver.definition));
+  }
+
+  all(): MetadataResolver[] {
+    return [...this.resolvers.values()];
   }
 }
 
@@ -152,7 +154,7 @@ export function artistCandidateIdentity(
 }
 
 export function candidateDetails(
-  details: readonly TrackMetadataDetail[],
-): TrackMetadataDetail[] {
+  details: readonly MediaMetadataDetail[],
+): MediaMetadataDetail[] {
   return details.map((detail) => ({ ...detail }));
 }

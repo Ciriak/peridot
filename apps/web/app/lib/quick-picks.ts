@@ -5,7 +5,7 @@ export type ResolvedQuickPickItem = QuickPickItemResponse;
 export function quickPickArtistNames(
   item: ResolvedQuickPickItem,
 ): readonly string[] {
-  return item.kind === "track" ? item.track.artists : item.album.artists;
+  return item.kind === "media" ? item.media.artists : item.album.artists;
 }
 
 export function resolveQuickPicks(

@@ -1,5 +1,5 @@
 import { useEventListener, useSwipe } from "@vueuse/core";
-import type { TrackResponse } from "@peridot/contracts";
+import type { MediaResponse } from "@peridot/contracts";
 import {
   computed,
   nextTick,
@@ -37,11 +37,11 @@ export function useSwipePlayer({
   target: Ref<HTMLElement | null>;
   scrollArea: Ref<HTMLElement | null>;
   open: ComputedRef<boolean>;
-  active: ComputedRef<TrackResponse | null>;
+  active: ComputedRef<MediaResponse | null>;
   canGoNext: ComputedRef<boolean>;
-  nextTrack: ComputedRef<TrackResponse | null>;
-  previousTrack: ComputedRef<TrackResponse | null>;
-  prepareNextTrack: () => TrackResponse | null;
+  nextTrack: ComputedRef<MediaResponse | null>;
+  previousTrack: ComputedRef<MediaResponse | null>;
+  prepareNextTrack: () => MediaResponse | null;
   next: () => void;
   previous: () => void;
   close: () => void;

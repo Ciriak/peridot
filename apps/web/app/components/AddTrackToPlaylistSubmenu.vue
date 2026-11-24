@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from "#imports";
-import type { TrackResponse } from "@peridot/contracts";
+import type { MediaResponse } from "@peridot/contracts";
 import { Icon } from "@iconify/vue/offline";
 import {
   ContextMenuItem,
@@ -24,14 +24,14 @@ import { notifyPlaylistTrackAdded } from "../lib/toasts";
 import PlaylistNameDialog from "./PlaylistNameDialog.vue";
 
 const props = defineProps<{
-  track: TrackResponse;
+  track: MediaResponse;
   disabled?: boolean;
 }>();
 const { t } = useI18n();
 const rootContext = injectContextMenuRootContext();
 const { items, loading, error, load, loadMore, hasMore } = usePlaylistList({
   limit: 100,
-  trackId: () => props.track.id,
+  mediaId: () => props.track.id,
 });
 const actions = usePlaylistActions();
 const menuOpen = ref(false);
@@ -92,7 +92,7 @@ async function addTo(playlistId: string, playlistName: string, event: Event) {
   try {
     const result = await actions.add(playlistId, {
       kind: "catalog",
-      trackId: props.track.id,
+      mediaId: props.track.id,
     });
     notifyPlaylistTrackAdded(playlistName, props.track.title, result.added);
     rootContext?.onOpenChange(false);
@@ -115,7 +115,7 @@ async function createAndAdd(name: string) {
     const playlist = await actions.create(name);
     const result = await actions.add(playlist.id, {
       kind: "catalog",
-      trackId: props.track.id,
+      mediaId: props.track.id,
     });
     notifyPlaylistTrackAdded(playlist.name, props.track.title, result.added);
     createOpen.value = false;

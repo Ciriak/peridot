@@ -1,7 +1,7 @@
 export const QUICK_PICK_LIMIT = 8;
 const QUICK_PICK_HALF_LIFE_MS = 7 * 24 * 60 * 60 * 1000;
 
-export interface PlayedTrackInfo {
+export interface PlayedMediaInfo {
   id: string;
   mediaType?: string;
   artist: string;
@@ -13,9 +13,9 @@ export interface PlayedTrackInfo {
   available: number | boolean;
 }
 
-export interface PlayedTrackEvent {
+export interface PlayedMediaEvent {
   playedAt: Date;
-  track: PlayedTrackInfo;
+  media: PlayedMediaInfo;
 }
 
 interface RankedItem {
@@ -26,9 +26,9 @@ interface RankedItem {
 
 export type RankedQuickPick =
   | {
-      kind: "track";
+      kind: "media";
       key: string;
-      trackId: string;
+      mediaId: string;
     }
   | {
       kind: "album";
@@ -54,13 +54,13 @@ export function decayedPlayScore(
 }
 
 export function rankQuickPicks(
-  events: readonly PlayedTrackEvent[],
+  events: readonly PlayedMediaEvent[],
   now: Date,
   limit = QUICK_PICK_LIMIT,
 ): RankedQuickPick[] {
-  const tracks = new Map<
+  const media = new Map<
     string,
-    { score: number; lastPlayedAt: number; track: PlayedTrackInfo }
+    { score: number; lastPlayedAt: number; media: PlayedMediaInfo }
   >();
   const albums = new Map<
     string,
@@ -73,34 +73,34 @@ export function rankQuickPicks(
   >();
 
   for (const event of events) {
-    if (!event.track.available) continue;
+    if (!event.media.available) continue;
     if (
-      event.track.mediaType !== undefined &&
-      event.track.mediaType !== "music"
+      event.media.mediaType !== undefined &&
+      event.media.mediaType !== "music"
     ) {
       continue;
     }
     const playedAt = event.playedAt.getTime();
     const score = decayedPlayScore(event.playedAt, now);
-    const track = tracks.get(event.track.id);
-    if (track) {
-      track.score += score;
-      track.lastPlayedAt = Math.max(track.lastPlayedAt, playedAt);
+    const current = media.get(event.media.id);
+    if (current) {
+      current.score += score;
+      current.lastPlayedAt = Math.max(current.lastPlayedAt, playedAt);
     } else {
-      tracks.set(event.track.id, {
+      media.set(event.media.id, {
         score,
         lastPlayedAt: playedAt,
-        track: event.track,
+        media: event.media,
       });
     }
 
-    const title = (event.track.metadataAlbum ?? event.track.album)?.trim();
+    const title = (event.media.metadataAlbum ?? event.media.album)?.trim();
     const artist = (
-      event.track.albumArtist?.trim() ||
-      event.track.metadataArtist ||
-      event.track.artist
+      event.media.albumArtist?.trim() ||
+      event.media.metadataArtist ||
+      event.media.artist
     ).trim();
-    const albumId = event.track.albumId;
+    const albumId = event.media.albumId;
     if (!title || !artist || !albumId) continue;
     const album = albums.get(albumId);
     if (album) {
@@ -117,11 +117,11 @@ export function rankQuickPicks(
   }
 
   const ranked: RankedItem[] = [];
-  for (const [trackId, track] of tracks) {
+  for (const [mediaId, item] of media) {
     ranked.push({
-      score: track.score,
-      lastPlayedAt: track.lastPlayedAt,
-      item: { kind: "track", key: `track:${trackId}`, trackId },
+      score: item.score,
+      lastPlayedAt: item.lastPlayedAt,
+      item: { kind: "media", key: `media:${mediaId}`, mediaId },
     });
   }
   for (const [albumId, album] of albums) {

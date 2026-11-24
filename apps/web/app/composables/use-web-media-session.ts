@@ -1,4 +1,4 @@
-import type { TrackResponse } from "@peridot/contracts";
+import type { MediaResponse } from "@peridot/contracts";
 import type { Ref } from "vue";
 import { onBeforeUnmount, watch } from "vue";
 import { isTauriRuntime } from "../lib/desktop-runtime";
@@ -8,7 +8,7 @@ import { configureWebMediaSession } from "../lib/web-media-session";
 import { useServer } from "./use-server";
 
 export interface WebMediaSessionPlayer {
-  active: Readonly<Ref<TrackResponse | null>>;
+  active: Readonly<Ref<MediaResponse | null>>;
   currentTrackId: Readonly<Ref<string | null>>;
   durationSeconds: Readonly<Ref<number>>;
   elapsed: Readonly<Ref<number>>;

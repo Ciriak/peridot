@@ -441,7 +441,7 @@ test("metadata tasks identify the provider while its request is in flight", asyn
     ]);
 
     const metadata = await context.database.orm.Task.firstOrThrow({
-      kind: "metadata_fetch",
+      kind: "metadata_enrichment",
     });
     const provider = await context.database.orm.MetadataProvider.firstOrThrow({
       kind: "musicbrainz",
@@ -509,7 +509,7 @@ test("scans automatically enrich album tracks with MusicBrainz provenance", asyn
     assert.equal(scan.metadataTotalCount, 2);
     assert.equal(scan.metadataMatchedCount, 2);
     assert.equal(scan.metadataUnmatchedCount, 0);
-    const projectedTracks = await context.database.orm.CatalogTrack.all();
+    const projectedTracks = await context.database.orm.CatalogMedia.all();
     assert.equal(projectedTracks.length, 2);
     assert.ok(
       projectedTracks.every(
@@ -521,7 +521,7 @@ test("scans automatically enrich album tracks with MusicBrainz provenance", asyn
 
     const tracks = await context.app.inject({
       method: "GET",
-      url: "/api/tracks",
+      url: "/api/media",
       headers: context.authorization,
     });
     assert.equal(tracks.statusCode, 200, tracks.body);
@@ -655,7 +655,7 @@ test("Discogs credentials fall back after MusicBrainz and manual results merge p
 
     const catalog = await context.app.inject({
       method: "GET",
-      url: "/api/tracks",
+      url: "/api/media",
       headers: context.authorization,
     });
     const track = catalog.json<{
@@ -681,7 +681,7 @@ test("Discogs credentials fall back after MusicBrainz and manual results merge p
 
     const candidates = await context.app.inject({
       method: "GET",
-      url: `/api/tracks/${track.id}/metadata/candidates`,
+      url: `/api/media/${track.id}/metadata/candidates`,
       headers: context.authorization,
     });
     assert.equal(candidates.statusCode, 200);
@@ -716,7 +716,7 @@ test("Discogs credentials fall back after MusicBrainz and manual results merge p
     )!;
     const applied = await context.app.inject({
       method: "PUT",
-      url: `/api/tracks/${track.id}/metadata`,
+      url: `/api/media/${track.id}/metadata`,
       headers: context.authorization,
       payload: {
         providerId: discogsCandidate.providerId,
@@ -739,7 +739,7 @@ test("Discogs credentials fall back after MusicBrainz and manual results merge p
     assert.deepEqual(discogsCandidate.genres, ["Electronic", "Downtempo"]);
     assert.equal(
       (
-        await context.database.orm.CatalogTrack.firstOrThrow({
+        await context.database.orm.CatalogMedia.firstOrThrow({
           id: track.id,
         })
       ).albumArtist,
@@ -747,7 +747,7 @@ test("Discogs credentials fall back after MusicBrainz and manual results merge p
     );
     const manual = await context.app.inject({
       method: "GET",
-      url: `/api/tracks/${track.id}`,
+      url: `/api/media/${track.id}`,
       headers: context.authorization,
     });
     assert.equal(manual.json().metadata.mode, "manual");
@@ -935,7 +935,7 @@ test("members can replace and revert a manual metadata match", async () => {
     await startScan(context);
     const tracks = await context.app.inject({
       method: "GET",
-      url: "/api/tracks",
+      url: "/api/media",
       headers: member,
     });
     assert.equal(tracks.statusCode, 200, tracks.body);
@@ -944,7 +944,7 @@ test("members can replace and revert a manual metadata match", async () => {
 
     const candidates = await context.app.inject({
       method: "GET",
-      url: `/api/tracks/${track.id}/metadata/candidates`,
+      url: `/api/media/${track.id}/metadata/candidates`,
       headers: member,
     });
     assert.equal(candidates.statusCode, 200);
@@ -953,7 +953,7 @@ test("members can replace and revert a manual metadata match", async () => {
     }>().items[0]!;
     const applied = await context.app.inject({
       method: "PUT",
-      url: `/api/tracks/${track.id}/metadata`,
+      url: `/api/media/${track.id}/metadata`,
       headers: member,
       payload: {
         providerId: provider.id,
@@ -974,7 +974,7 @@ test("members can replace and revert a manual metadata match", async () => {
     assert.equal(applied.statusCode, 204);
     const matched = await context.app.inject({
       method: "GET",
-      url: `/api/tracks/${track.id}`,
+      url: `/api/media/${track.id}`,
       headers: member,
     });
     assert.equal(matched.json().metadata.mode, "manual");
@@ -983,13 +983,13 @@ test("members can replace and revert a manual metadata match", async () => {
 
     const reverted = await context.app.inject({
       method: "DELETE",
-      url: `/api/tracks/${track.id}/metadata`,
+      url: `/api/media/${track.id}/metadata`,
       headers: member,
     });
     assert.equal(reverted.statusCode, 204);
     const local = await context.app.inject({
       method: "GET",
-      url: `/api/tracks/${track.id}`,
+      url: `/api/media/${track.id}`,
       headers: member,
     });
     assert.equal(local.json().album, "Local Album");
@@ -999,7 +999,7 @@ test("members can replace and revert a manual metadata match", async () => {
     await startScan(context);
     const afterScan = await context.app.inject({
       method: "GET",
-      url: `/api/tracks/${track.id}`,
+      url: `/api/media/${track.id}`,
       headers: member,
     });
     assert.equal(afterScan.json().album, "Local Album");
@@ -1039,11 +1039,11 @@ test("administrators can reset all track metadata to file tags", async () => {
       }),
     );
     await startScan(context);
-    const tracks = await context.database.orm.Track.orderBy((track) =>
+    const tracks = await context.database.orm.Media.orderBy((track) =>
       track.title.asc(),
     ).all();
     assert.equal(tracks.length, 2);
-    await context.database.orm.Track.where({ id: tracks[0]!.id }).update({
+    await context.database.orm.Media.where({ id: tracks[0]!.id }).update({
       metadataMode: "manual",
       metadataAlbum: "Wrong Album",
     });
@@ -1075,9 +1075,9 @@ test("administrators can reset all track metadata to file tags", async () => {
       headers: context.authorization,
     });
     assert.equal(reset.statusCode, 200);
-    assert.deepEqual(reset.json(), { trackCount: 2, artistCount: 0 });
+    assert.deepEqual(reset.json(), { mediaCount: 2, artistCount: 0 });
 
-    const resetTracks = await context.database.orm.Track.orderBy((track) =>
+    const resetTracks = await context.database.orm.Media.orderBy((track) =>
       track.title.asc(),
     ).all();
     for (const track of resetTracks) {
@@ -1102,7 +1102,7 @@ test("administrators can reset all track metadata to file tags", async () => {
 
     const catalog = await context.app.inject({
       method: "GET",
-      url: "/api/tracks",
+      url: "/api/media",
       headers: context.authorization,
     });
     for (const track of catalog.json<{

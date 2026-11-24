@@ -48,7 +48,8 @@ const activeServerTasks = computed(() =>
 );
 const activeMetadataTasks = computed(() =>
   tasks.value.filter(
-    (task) => task.kind === "metadata_fetch" && isActiveTaskStatus(task.status),
+    (task) =>
+      task.kind === "metadata_enrichment" && isActiveTaskStatus(task.status),
   ),
 );
 const metadataTaskProgress = computed(() =>
@@ -90,19 +91,30 @@ const commonCategories = [
   },
 ];
 const adminCategories = [
-  {
-    labelKey: "clients.title",
-    to: "/settings/download-clients",
-    icon: icons.server,
-  },
   { labelKey: "settings.users", to: "/settings/users", icon: icons.user },
-  { labelKey: "settings.sources", to: "/settings/sources", icon: icons.folder },
+  { labelKey: "settings.server", to: "/settings/server", icon: icons.server },
+];
+const connectorCategories = [
   {
-    labelKey: "settings.metadata",
-    to: "/settings/metadata",
+    labelKey: "settings.connectors.librarySources",
+    to: "/settings/connectors/library-sources",
+    icon: icons.library,
+  },
+  {
+    labelKey: "settings.connectors.releaseIndexers",
+    to: "/settings/connectors/release-indexers",
+    icon: icons.globe,
+  },
+  {
+    labelKey: "settings.connectors.downloadClients",
+    to: "/settings/connectors/download-clients",
+    icon: icons.download,
+  },
+  {
+    labelKey: "settings.connectors.metadataProviders",
+    to: "/settings/connectors/metadata-providers",
     icon: icons.metadata,
   },
-  { labelKey: "settings.server", to: "/settings/server", icon: icons.server },
 ];
 const {
   isMobile: mobileNavigationViewport,
@@ -253,6 +265,51 @@ watch(tasks, (current) => {
             {{ t("navigation.admin") }}
           </h2>
           <Button
+            v-for="connector in connectorCategories"
+            :key="connector.to"
+            as-child
+            variant="ghost"
+            :class="[
+              'w-full justify-start',
+              route.path === connector.to &&
+                'bg-sidebar-accent text-sidebar-accent-foreground',
+            ]"
+          >
+            <NuxtLink
+              :to="connector.to"
+              :aria-current="route.path === connector.to ? 'page' : undefined"
+            >
+              <Icon :icon="connector.icon" aria-hidden="true" class="size-4" />
+              <span class="min-w-0 truncate">{{ t(connector.labelKey) }}</span>
+              <span class="ml-auto flex items-center gap-2">
+                <ProgressCircle
+                  v-if="
+                    connector.to ===
+                      '/settings/connectors/metadata-providers' &&
+                    activeMetadataTasks.length
+                  "
+                  size="sm"
+                  :value="metadataTaskProgress"
+                  :label="
+                    t('settings.tasks.progressFor', {
+                      title: t('settings.connectors.metadataProviders'),
+                    })
+                  "
+                  class="size-4"
+                />
+                <Badge
+                  v-if="
+                    connector.to === '/settings/connectors/library-sources' &&
+                    sourcesLoaded
+                  "
+                  variant="secondary"
+                >
+                  {{ n(sourceCount, "integer") }}
+                </Badge>
+              </span>
+            </NuxtLink>
+          </Button>
+          <Button
             v-for="item in adminCategories"
             :key="item.to"
             as-child
@@ -270,28 +327,6 @@ watch(tasks, (current) => {
               <Icon :icon="item.icon" aria-hidden="true" class="size-5" />{{
                 t(item.labelKey)
               }}
-              <span class="ml-auto flex items-center gap-2">
-                <ProgressCircle
-                  v-if="
-                    item.to === '/settings/metadata' &&
-                    activeMetadataTasks.length
-                  "
-                  size="sm"
-                  :value="metadataTaskProgress"
-                  :label="
-                    t('settings.tasks.progressFor', {
-                      title: t('settings.metadata'),
-                    })
-                  "
-                  class="size-4"
-                />
-                <Badge
-                  v-if="item.to === '/settings/sources' && sourcesLoaded"
-                  variant="secondary"
-                >
-                  {{ n(sourceCount, "integer") }}
-                </Badge>
-              </span>
             </NuxtLink>
           </Button>
         </section>

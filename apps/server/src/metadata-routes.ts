@@ -1,6 +1,6 @@
 import type {
   ApplyArtistMetadataRequest,
-  ApplyTrackMetadataRequest,
+  ApplyMediaMetadataRequest,
   ArtistMetadataCandidateListResponse,
   MetadataCandidateListResponse,
 } from "@peridot/contracts";
@@ -11,9 +11,9 @@ import {
   MetadataEnrichment,
   MetadataEnrichmentError,
 } from "./metadata-enrichment.js";
-import { queueDuplicateDetection, type TaskService } from "./tasks.js";
+import { queueMediaMatch, type TaskService } from "./tasks.js";
 
-export async function registerTrackMetadataRoutes(
+export async function registerMediaMetadataRoutes(
   app: FastifyInstance,
   metadataEnrichment: MetadataEnrichment,
   tasks: TaskService,
@@ -21,7 +21,7 @@ export async function registerTrackMetadataRoutes(
   app.get<{
     Params: { id: string };
     Querystring: { query?: string };
-  }>("/api/tracks/:id/metadata/candidates", async (request, reply) => {
+  }>("/api/media/:id/metadata/candidates", async (request, reply) => {
     try {
       const response: MetadataCandidateListResponse = {
         items: await metadataEnrichment.candidates(
@@ -46,11 +46,11 @@ export async function registerTrackMetadataRoutes(
 
   app.put<{
     Params: { id: string };
-    Body: ApplyTrackMetadataRequest;
-  }>("/api/tracks/:id/metadata", async (request, reply) => {
+    Body: ApplyMediaMetadataRequest;
+  }>("/api/media/:id/metadata", async (request, reply) => {
     try {
       await metadataEnrichment.apply(request.params.id, request.body);
-      await queueDuplicateDetection(tasks);
+      await queueMediaMatch(tasks);
       return reply.code(204).send();
     } catch (error) {
       if (error instanceof MetadataEnrichmentError) {
@@ -67,19 +67,19 @@ export async function registerTrackMetadataRoutes(
   });
 
   app.delete<{ Params: { id: string } }>(
-    "/api/tracks/:id/metadata",
+    "/api/media/:id/metadata",
     async (request, reply) => {
       const removed = await metadataEnrichment.revert(request.params.id);
       if (!removed) {
         return sendError(
           reply,
           404,
-          "track_not_found",
-          "Track not found",
+          "media_not_found",
+          "Media not found",
           message("api.message.trackNotFound"),
         );
       }
-      await queueDuplicateDetection(tasks);
+      await queueMediaMatch(tasks);
       return reply.code(204).send();
     },
   );

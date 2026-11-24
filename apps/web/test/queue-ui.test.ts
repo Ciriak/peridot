@@ -130,7 +130,7 @@ test("the player exposes randomize and a persistent right-side queue drawer", as
   );
   assert.match(
     player,
-    /function toggleRandomization\(\)[\s\S]*setQueueSnapshot\(\{\s*trackIds,\s*activeTrackId: currentTrackId\.value,\s*shuffleEnabled: true/,
+    /function toggleRandomization\(\)[\s\S]*setQueueSnapshot\(\{\s*mediaIds,\s*activeTrackId: currentTrackId\.value,\s*shuffleEnabled: true/,
     "Enabling randomization does not reorder source queue IDs",
   );
 });

@@ -19,12 +19,12 @@ test("protected library routes require a valid user session", async () => {
         authorization
           ? {
               method: "GET",
-              url: "/api/tracks",
+              url: "/api/media",
               headers: { authorization },
             }
           : {
               method: "GET",
-              url: "/api/tracks",
+              url: "/api/media",
             },
       );
       assert.equal(response.statusCode, 401);
@@ -39,7 +39,7 @@ test("protected library routes require a valid user session", async () => {
       (
         await context.app.inject({
           method: "GET",
-          url: "/api/tracks",
+          url: "/api/media",
           headers: context.authorization,
         })
       ).statusCode,
@@ -73,7 +73,7 @@ test("scans catalog supported regular files, reconcile availability, and persist
 
     const listResponse = await context.app.inject({
       method: "GET",
-      url: "/api/tracks",
+      url: "/api/media",
       headers: context.authorization,
     });
     assert.equal(listResponse.statusCode, 200);
@@ -111,10 +111,17 @@ test("scans catalog supported regular files, reconcile availability, and persist
 
     await rm(trackPath);
     const missingScan = await startScan(context);
+    assert.equal(missingScan.status, "completed");
+    assert.equal(
+      await context.database.orm.MediaCopy.aggregate((aggregate) => ({
+        count: aggregate.count(),
+      })).then((value) => value.count),
+      1,
+    );
     assert.equal(missingScan.unavailableCount, 1);
     const unavailable = await context.app.inject({
       method: "GET",
-      url: "/api/tracks?availability=unavailable",
+      url: "/api/media?availability=unavailable",
       headers: context.authorization,
     });
     assert.equal(unavailable.json<{ items: unknown[] }>().items.length, 1);
@@ -126,7 +133,7 @@ test("scans catalog supported regular files, reconcile availability, and persist
       (
         await context.app.inject({
           method: "GET",
-          url: "/api/tracks?availability=invalid",
+          url: "/api/media?availability=invalid",
           headers: context.authorization,
         })
       ).statusCode,
@@ -155,7 +162,10 @@ test("scans track, disc, and album tags and backfills legacy metadata once", asy
 
     const firstScan = await startScan(context);
     assert.equal(firstScan.status, "completed");
-    const firstTrack = await context.database.orm.Track.firstOrThrow();
+    const firstTrack = await context.database.orm.Media.firstOrThrow();
+    const firstCopy = await context.database.orm.MediaCopy.firstOrThrow({
+      mediaId: firstTrack.id,
+    });
     assert.equal(firstTrack.artist, "Elliot Lake, Óra");
     assert.equal(
       firstTrack.artistCredits,
@@ -167,19 +177,26 @@ test("scans track, disc, and album tags and backfills legacy metadata once", asy
       firstTrack.albumArtistCredits,
       JSON.stringify(["Elliot Lake"]),
     );
-    assert.equal(firstTrack.mimeType, "audio/mpeg");
+    assert.equal(firstCopy.mimeType, "audio/mpeg");
     assert.equal(firstTrack.discNumber, 2);
     assert.equal(firstTrack.trackNumber, 5);
     assert.equal(firstTrack.metadataVersion, 9);
 
-    await context.database.orm.Track.where({ id: firstTrack.id }).update({
+    await context.database.orm.Media.where({ id: firstTrack.id }).update({
+      metadataVersion: 0,
+      discNumber: null,
+      trackNumber: null,
+    });
+    await context.database.orm.MediaCopy.where({
+      mediaId: firstTrack.id,
+    }).update({
       metadataVersion: 0,
       discNumber: null,
       trackNumber: null,
     });
     const backfillScan = await startScan(context);
     assert.equal(backfillScan.updatedCount, 1);
-    const backfilledTrack = await context.database.orm.Track.firstOrThrow({
+    const backfilledTrack = await context.database.orm.Media.firstOrThrow({
       id: firstTrack.id,
     });
     assert.equal(backfilledTrack.discNumber, 2);
@@ -192,7 +209,7 @@ test("scans track, disc, and album tags and backfills legacy metadata once", asy
 
     const response = await context.app.inject({
       method: "GET",
-      url: `/api/tracks/${firstTrack.id}`,
+      url: `/api/media/${firstTrack.id}`,
       headers: context.authorization,
     });
     assert.equal(response.statusCode, 200);
@@ -209,18 +226,15 @@ test("scans track, disc, and album tags and backfills legacy metadata once", asy
       "Óra",
     ]);
 
-    await context.database.orm.Track.where({ id: firstTrack.id }).update({
-      sourceId: null,
-    });
     const legacyResponse = await context.app.inject({
       method: "GET",
-      url: `/api/tracks/${firstTrack.id}`,
+      url: `/api/media/${firstTrack.id}`,
       headers: context.authorization,
     });
     assert.equal(legacyResponse.statusCode, 200);
     assert.equal(
       legacyResponse.json<{ sourceKind: string | null }>().sourceKind,
-      null,
+      "path",
     );
   } finally {
     await context.close();
@@ -244,7 +258,7 @@ test("scans multi-valued track genres and makes them searchable", async () => {
     const scan = await startScan(context);
     assert.equal(scan.status, "completed");
 
-    const track = await context.database.orm.Track.firstOrThrow();
+    const track = await context.database.orm.Media.firstOrThrow();
     assert.deepEqual(JSON.parse(track.genres ?? "[]"), [
       "Electronic",
       "Ambient",
@@ -252,7 +266,7 @@ test("scans multi-valued track genres and makes them searchable", async () => {
 
     const response = await context.app.inject({
       method: "GET",
-      url: "/api/tracks?query=ambient",
+      url: "/api/media?query=ambient",
       headers: context.authorization,
     });
     assert.equal(response.statusCode, 200, response.body);
@@ -307,14 +321,17 @@ test("audio endpoint streams complete and ranged responses with a playback token
   try {
     await writeFile(trackPath, wav);
     await startScan(context);
-    const track = await context.database.orm.Track.where({
+    const copy = await context.database.orm.MediaCopy.where({
       relativePath: "range.wav",
     }).firstOrThrow();
-    const url = `/api/tracks/${track.id}/audio`;
+    const track = await context.database.orm.Media.firstOrThrow({
+      id: copy.mediaId,
+    });
+    const url = `/api/media/${track.id}/audio`;
 
     const tokenResponse = await context.app.inject({
       method: "POST",
-      url: `/api/tracks/${track.id}/playback-token`,
+      url: `/api/media/${track.id}/playback-token`,
       headers: context.authorization,
     });
     assert.equal(tokenResponse.statusCode, 200);
@@ -398,7 +415,7 @@ test("audio endpoint streams complete and ranged responses with a playback token
       404,
     );
     assert.equal(
-      (await context.database.orm.Track.firstOrThrow({ id: track.id }))
+      (await context.database.orm.Media.firstOrThrow({ id: track.id }))
         .available,
       0,
     );
@@ -419,7 +436,7 @@ test("failed traversal does not reconcile tracks", async () => {
     assert.equal(failedScan.status, "failed");
     assert.equal(failedScan.unavailableCount, 0);
     assert.equal(
-      (await context.database.orm.Track.firstOrThrow()).available,
+      (await context.database.orm.Media.firstOrThrow()).available,
       1,
     );
     await rename(movedRoot, musicRoot);
@@ -434,11 +451,11 @@ test("changed files with unreadable metadata retain their previous catalog metad
   try {
     await writeFile(trackPath, createWav());
     await startScan(context);
-    const before = await context.database.orm.Track.firstOrThrow();
+    const before = await context.database.orm.Media.firstOrThrow();
     await writeFile(trackPath, Buffer.alloc(0));
     const scan = await startScan(context);
     assert.equal(scan.errorCount, 1);
-    const after = await context.database.orm.Track.firstOrThrow();
+    const after = await context.database.orm.Media.firstOrThrow();
     assert.equal(after.title, before.title);
     assert.equal(after.artist, before.artist);
     assert.equal(after.available, 1);

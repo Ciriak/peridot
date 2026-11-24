@@ -17,7 +17,7 @@ test("playback queue state is not exposed by the server", async () => {
       url: "/api/queue",
       headers: context.authorization,
       payload: {
-        trackIds: [],
+        mediaIds: [],
         activeTrackId: null,
         shuffleEnabled: false,
         shuffleTrackIds: [],

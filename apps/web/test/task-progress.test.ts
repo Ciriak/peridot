@@ -27,7 +27,7 @@ function task(overrides: Partial<TaskResponse> = {}): TaskResponse {
     status: "running",
     titleMessage: { key: "task.title.libraryScan" },
     parentTaskId: null,
-    source: null,
+    connector: null,
     progress: { state: "determinate", completed: 8, total: 12 },
     details: [],
     failureMessage: null,
@@ -77,7 +77,7 @@ test("queued artwork follows metadata matching", () => {
     }),
     task({
       id: "metadata",
-      kind: "metadata_fetch",
+      kind: "metadata_enrichment",
       status: "queued",
       createdAt: "2026-11-11T10:05:00.000Z",
     }),
@@ -93,23 +93,23 @@ test("active source work prefers the running task for that source", () => {
     task({
       id: "queued-source-a",
       status: "queued",
-      source: { id: "source-a", name: "A" },
+      connector: { kind: null, id: "source-a", name: "A" },
       createdAt: "2026-11-11T10:00:00.000Z",
     }),
     task({
       id: "running-source-b",
-      source: { id: "source-b", name: "B" },
+      connector: { kind: null, id: "source-b", name: "B" },
       createdAt: "2026-11-11T10:02:00.000Z",
     }),
     task({
       id: "running-source-a",
-      source: { id: "source-a", name: "A" },
+      connector: { kind: null, id: "source-a", name: "A" },
       createdAt: "2026-11-11T10:03:00.000Z",
     }),
     task({
       id: "completed-source-a",
       status: "completed",
-      source: { id: "source-a", name: "A" },
+      connector: { kind: null, id: "source-a", name: "A" },
       createdAt: "2026-11-11T10:04:00.000Z",
     }),
   ];
@@ -216,18 +216,18 @@ test("metadata progress is attached only to the provider being fetched", () => {
   const tasks = [
     task({
       id: "metadata-running",
-      kind: "metadata_fetch",
+      kind: "metadata_enrichment",
       details: providerDetails,
     }),
     task({
       id: "metadata-queued",
-      kind: "metadata_fetch",
+      kind: "metadata_enrichment",
       status: "queued",
       details: providerDetails,
     }),
     task({
       id: "metadata-completed",
-      kind: "metadata_fetch",
+      kind: "metadata_enrichment",
       status: "completed",
       details: providerDetails,
     }),
@@ -244,12 +244,12 @@ test("running metadata work is represented by one shared task", () => {
   const tasks = [
     task({
       id: "metadata-queued",
-      kind: "metadata_fetch",
+      kind: "metadata_enrichment",
       status: "queued",
     }),
     task({
       id: "metadata-running",
-      kind: "metadata_fetch",
+      kind: "metadata_enrichment",
       status: "running",
     }),
   ];

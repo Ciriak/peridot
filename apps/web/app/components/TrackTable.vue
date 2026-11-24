@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from "#imports";
-import type { TrackResponse } from "@peridot/contracts";
+import type { MediaResponse } from "@peridot/contracts";
 import { Icon } from "@iconify/vue/offline";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
@@ -44,7 +44,7 @@ import { trackSearchResultType } from "../lib/search-results";
 
 const props = withDefaults(
   defineProps<{
-    tracks: readonly TrackResponse[];
+    tracks: readonly MediaResponse[];
     variant: TrackTableVariant;
     scrollToTrackId?: string | null;
     sort?: TrackSort;
@@ -155,15 +155,15 @@ function sortLabel(field: TrackSortField): string {
   return t("trackTable.resetSort", { label });
 }
 
-function isActive(track: TrackResponse): boolean {
+function isActive(track: MediaResponse): boolean {
   return currentTrackId.value === track.id;
 }
 
-function isPlaying(track: TrackResponse): boolean {
+function isPlaying(track: MediaResponse): boolean {
   return isActive(track) && playing.value;
 }
 
-function isUnavailable(track: TrackResponse): boolean {
+function isUnavailable(track: MediaResponse): boolean {
   return !isTrackPlayable(track, {
     serverLost: serverStatus.value === "lost",
     savedTrackIds: savedTrackIds.value,
@@ -171,7 +171,7 @@ function isUnavailable(track: TrackResponse): boolean {
   });
 }
 
-function isOfflineOnly(track: TrackResponse): boolean {
+function isOfflineOnly(track: MediaResponse): boolean {
   return (
     !track.available &&
     !unavailableTrackIdSet.value.has(track.id) &&
@@ -179,7 +179,7 @@ function isOfflineOnly(track: TrackResponse): boolean {
   );
 }
 
-function playFromList(track: TrackResponse, restart = false) {
+function playFromList(track: MediaResponse, restart = false) {
   if (isUnavailable(track)) {
     retryUnavailableTrack(track);
     return;
@@ -194,7 +194,7 @@ function playFromList(track: TrackResponse, restart = false) {
   );
 }
 
-async function toggleOffline(track: TrackResponse) {
+async function toggleOffline(track: MediaResponse) {
   if (isOfflinePending(track.id)) return;
   if (isSavedOffline(track.id)) {
     if (!(await removeOffline(track.id))) {
@@ -213,7 +213,7 @@ async function toggleOffline(track: TrackResponse) {
   }
 }
 
-function offlineActionLabel(track: TrackResponse): string {
+function offlineActionLabel(track: MediaResponse): string {
   if (isOfflinePending(track.id) && !isSavedOffline(track.id)) {
     return t("trackTable.savingOffline", { title: track.title });
   }
@@ -235,49 +235,49 @@ function clearTrackLinkHighlight() {
   trackLinkHighlightId.value = null;
 }
 
-function startTrackLinkHighlight(trackId: string) {
+function startTrackLinkHighlight(mediaId: string) {
   clearTrackLinkHighlight();
-  trackLinkHighlightId.value = trackId;
+  trackLinkHighlightId.value = mediaId;
   trackLinkHighlightTimer = setTimeout(() => {
     trackLinkHighlightId.value = null;
     trackLinkHighlightTimer = undefined;
   }, TRACK_LINK_HIGHLIGHT_DURATION_MS);
 }
 
-function isTrackLinkHighlighted(track: TrackResponse): boolean {
+function isTrackLinkHighlighted(track: MediaResponse): boolean {
   return trackLinkHighlightId.value === track.id;
 }
 
-async function scrollToTarget(trackId: string) {
+async function scrollToTarget(mediaId: string) {
   await nextTick();
   await virtualizer.refresh();
-  const index = props.tracks.findIndex((track) => track.id === trackId);
+  const index = props.tracks.findIndex((track) => track.id === mediaId);
   if (index < 0) return false;
   virtualizer.scrollToIndex(index, { align: "center" });
-  completedScrollTarget.value = trackId;
-  startTrackLinkHighlight(trackId);
+  completedScrollTarget.value = mediaId;
+  startTrackLinkHighlight(mediaId);
   return true;
 }
 
 watch(
   () => props.scrollToTrackId,
-  async (trackId) => {
+  async (mediaId) => {
     completedScrollTarget.value = null;
     clearTrackLinkHighlight();
-    if (import.meta.client && trackId) await scrollToTarget(trackId);
+    if (import.meta.client && mediaId) await scrollToTarget(mediaId);
   },
   { flush: "post", immediate: true },
 );
 watch(
   () => props.tracks,
   async () => {
-    const trackId = props.scrollToTrackId;
+    const mediaId = props.scrollToTrackId;
     if (
       import.meta.client &&
-      trackId &&
-      completedScrollTarget.value !== trackId
+      mediaId &&
+      completedScrollTarget.value !== mediaId
     ) {
-      await scrollToTarget(trackId);
+      await scrollToTarget(mediaId);
     }
   },
   { flush: "post" },
@@ -579,10 +579,10 @@ onBeforeUnmount(() => {
               "
               :label="item.track.title"
               :pending="
-                isLikePending({ kind: 'track', trackId: item.track.id })
+                isLikePending({ kind: 'media', mediaId: item.track.id })
               "
               :disabled="!likesLoaded"
-              @toggle="toggleLike({ kind: 'track', trackId: item.track.id })"
+              @toggle="toggleLike({ kind: 'media', mediaId: item.track.id })"
               @dblclick.stop
             />
           </div>
@@ -660,10 +660,10 @@ onBeforeUnmount(() => {
               "
               :label="item.track.title"
               :pending="
-                isLikePending({ kind: 'track', trackId: item.track.id })
+                isLikePending({ kind: 'media', mediaId: item.track.id })
               "
               :disabled="!likesLoaded"
-              @toggle="toggleLike({ kind: 'track', trackId: item.track.id })"
+              @toggle="toggleLike({ kind: 'media', mediaId: item.track.id })"
               @dblclick.stop
             />
           </div>

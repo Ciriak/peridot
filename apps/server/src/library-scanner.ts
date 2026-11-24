@@ -1,7 +1,7 @@
 import path from "node:path";
 import { lstat, realpath } from "node:fs/promises";
 import { or } from "@prisma/orm-sqlite/orm-client";
-import type { TrackMediaTypeOrigin } from "@peridot/contracts";
+import type { MediaTypeOrigin } from "@peridot/contracts";
 import { pruneReferencedArtwork, type ArtworkCache } from "./artwork-cache.js";
 import {
   normalizeArtistCredits,
@@ -20,12 +20,21 @@ import { serializeGenres } from "./genres.js";
 import type { MetadataEnrichment } from "./metadata-enrichment.js";
 import { detectMediaType } from "./media-classification.js";
 import {
+  refreshCanonicalMediaFromCopies,
+  refreshCanonicalMediaFromCopiesBatch,
+} from "./media-copies.js";
+import {
   collectionFallbackTitle,
   mediaType,
   parsePublishedAt,
 } from "./media.js";
 import { message } from "./messages.js";
-import type { SourceRow, TaskRow, TrackRow } from "./prisma/models.js";
+import type {
+  LibrarySourceRow,
+  MediaCopyRow,
+  MediaRow,
+  TaskRow,
+} from "./prisma/models.js";
 import { normalizeReleaseImportPath } from "./release-import-files.js";
 import {
   AUDIO_MIME_TYPES,
@@ -39,17 +48,18 @@ import {
   serializeRecordingIdentityKeys,
 } from "./track-identities.js";
 import {
-  SourceIntegrationError,
-  type SourceIntegrationDefinition,
-  type SourceIntegrationHandle,
-  type SourceIntegrationService,
-  type SourceIntegrationTrackRecord,
+  LibrarySourceConnectorError,
+  type LibrarySourceConnectorDefinition,
+  type LibrarySourceConnectorHandle,
+  type LibrarySourceConnectorService,
+  type LibrarySourceTrackRecord,
 } from "./source-integrations.js";
 import {
   queueArtworkFetch,
-  queueCatalogFetch,
-  queueDuplicateDetection,
-  queueMetadataFetch,
+  queueCatalogProjection,
+  queueMediaMatch,
+  queueMetadataEnrichment,
+  readReleaseImportTaskPayload,
   readTaskPayload,
   scanDetails,
   type ScanTimingMs,
@@ -74,12 +84,13 @@ interface DiscoveredFile {
 
 interface SourceFile extends DiscoveredFile {
   sourceId: string;
+  sourceKind: "path" | "jellyfin";
 }
 
 interface IntegrationSourceWork {
-  source: SourceRow;
-  integration: SourceIntegrationDefinition;
-  handle: SourceIntegrationHandle;
+  source: LibrarySourceRow;
+  integration: LibrarySourceConnectorDefinition;
+  handle: LibrarySourceConnectorHandle;
 }
 
 interface ScanCounts {
@@ -139,22 +150,25 @@ type PreparedFile =
   | {
       kind: "unchanged";
       file: SourceFile;
-      existing: TrackRow;
+      existing: MediaCopyRow;
+      media: MediaRow;
       wasUnavailable: boolean;
     }
   | {
       kind: "parsed";
       file: SourceFile;
-      existing: TrackRow | null;
+      existing: MediaCopyRow | null;
+      media: MediaRow | null;
       metadata: ScanWorkerMetadata;
     }
   | {
       kind: "failed";
       file: SourceFile;
-      existing: TrackRow | null;
+      existing: MediaCopyRow | null;
+      media: MediaRow | null;
     };
 
-function trackMediaTypeOrigin(value: string): TrackMediaTypeOrigin {
+function trackMediaTypeOrigin(value: string): MediaTypeOrigin {
   return value === "source" || value === "embedded" ? value : "fallback";
 }
 
@@ -279,7 +293,7 @@ function coverImage(cover: ScanWorkerCover | null): CoverImage | null {
     : null;
 }
 
-function remoteCoverKey(item: SourceIntegrationTrackRecord): string | null {
+function remoteCoverKey(item: LibrarySourceTrackRecord): string | null {
   return item.cover
     ? externalCoverKey(item.cover.itemId, item.cover.tag)
     : null;
@@ -308,6 +322,7 @@ async function* prepareFiles(
             kind: "failed",
             file,
             existing: null,
+            media: null,
           } satisfies PreparedFile;
         }),
       );
@@ -337,7 +352,7 @@ async function yieldToEventLoop(): Promise<void> {
 export class LibraryScanner {
   constructor(
     private readonly database: Database,
-    private readonly sourceIntegrations: SourceIntegrationService,
+    private readonly sourceIntegrations: LibrarySourceConnectorService,
     private readonly metadataEnrichment?: MetadataEnrichment,
     private readonly catalog?: CatalogService,
     private readonly artworkCache?: ArtworkCache,
@@ -349,19 +364,23 @@ export class LibraryScanner {
     signal: AbortSignal,
   ): Promise<PreparedFile> {
     throwIfAborted(signal);
-    const existing = await this.database.orm.Track.where({
-      sourceId: file.sourceId,
+    const existing = await this.database.orm.MediaCopy.where({
+      librarySourceId: file.sourceId,
       relativePath: file.relativePath,
     }).first();
+    const media = existing
+      ? await this.database.orm.Media.first({ id: existing.mediaId })
+      : null;
     const fileUnchanged =
       existing?.fileSizeBytes === file.size &&
       existing.fileModifiedAt.getTime() === file.modifiedAt.getTime() &&
       existing.metadataVersion >= CURRENT_METADATA_VERSION;
-    if (existing && fileUnchanged) {
+    if (existing && media && fileUnchanged) {
       return {
         kind: "unchanged",
         file,
         existing,
+        media,
         wasUnavailable: !existing.available,
       };
     }
@@ -370,11 +389,12 @@ export class LibraryScanner {
         kind: "parsed",
         file,
         existing,
+        media,
         metadata: await workerPool.parseFile(file.absolutePath),
       };
     } catch (error) {
       if (signal.aborted) throw error;
-      return { kind: "failed", file, existing };
+      return { kind: "failed", file, existing, media };
     }
   }
 
@@ -389,8 +409,14 @@ export class LibraryScanner {
       unchangedCount: 0,
       errorCount: 0,
     };
+    const releaseImport =
+      task.kind === "release_import"
+        ? readReleaseImportTaskPayload(task)
+        : null;
     const importPaths =
-      task.kind === "release_import" ? readTaskPayload(task) : null;
+      task.kind === "release_import"
+        ? (releaseImport?.paths ?? readTaskPayload(task))
+        : null;
     const targetedImport = importPaths !== null;
     let discoveryErrorCount = 0;
     const timings = createScanTimings();
@@ -406,10 +432,11 @@ export class LibraryScanner {
         void activeWorkerPool.close();
       };
       signal.addEventListener("abort", closeWorkersOnAbort, { once: true });
-      let requestedSource: SourceRow | undefined;
-      if (task.sourceId) {
-        const source = await this.database.orm.Source.first({
-          id: task.sourceId,
+      let requestedSource: LibrarySourceRow | undefined;
+      const requestedSourceId = releaseImport?.sourceId ?? task.connectorId;
+      if (requestedSourceId) {
+        const source = await this.database.orm.LibrarySource.first({
+          id: requestedSourceId,
         });
         if (
           !source ||
@@ -425,7 +452,7 @@ export class LibraryScanner {
         }
         requestedSource = source;
       }
-      const sourceQuery = this.database.orm.Source.where((source) =>
+      const sourceQuery = this.database.orm.LibrarySource.where((source) =>
         source.removedAt.isNull(),
       ).orderBy([
         (source) => source.position.asc(),
@@ -454,7 +481,7 @@ export class LibraryScanner {
       }
       const sourceName =
         requestedSource?.name ||
-        (requestedSource ? task.sourceName : null) ||
+        (requestedSource ? task.connectorName : null) ||
         "All sources";
       const files: SourceFile[] = [];
       const integrationSources: IntegrationSourceWork[] = [];
@@ -478,6 +505,7 @@ export class LibraryScanner {
               files.push({
                 ...file,
                 sourceId: source.id,
+                sourceKind: "path",
               });
             }
             continue;
@@ -493,6 +521,7 @@ export class LibraryScanner {
             files.push({
               ...file,
               sourceId: source.id,
+              sourceKind: "path",
             });
           }
           continue;
@@ -516,7 +545,7 @@ export class LibraryScanner {
         : discoveredCount;
       let processedItems = 0;
       let unsupportedCount = 0;
-      const processedTrackIds = new Set<string>();
+      const processedMediaIds = new Set<string>();
       let completedRemoteTotal = 0;
       let lastProgressAt = 0;
       let lastYieldAt = Date.now();
@@ -555,14 +584,14 @@ export class LibraryScanner {
       );
       for await (const prepared of pendingFiles) {
         throwIfAborted(signal);
-        const processedTrackId = await this.applyPreparedFile(
+        const processedMediaId = await this.applyPreparedFile(
           prepared,
           task.id,
           counts,
           signal,
           timings,
         );
-        if (processedTrackId) processedTrackIds.add(processedTrackId);
+        if (processedMediaId) processedMediaIds.add(processedMediaId);
         processedItems += 1;
         if (shouldYield(lastYieldAt)) {
           await yieldToEventLoop();
@@ -631,44 +660,43 @@ export class LibraryScanner {
             pruneReferencedArtwork(this.database, this.artworkCache!),
           );
         }
-        const trackQuery = this.database.orm.Track.where({
+        const copyQuery = this.database.orm.MediaCopy.where({
           available: 1,
-        }).where((track) =>
-          track.sourceId.in(sources.map((source) => source.id)),
+        }).where((copy) =>
+          copy.librarySourceId.in(sources.map((source) => source.id)),
         );
-        const unavailableTracks = await trackQuery
-          .where((track) =>
-            or(
-              track.lastSeenScanId.isNull(),
-              track.lastSeenScanId.neq(task.id),
-            ),
+        const unavailableCopies = await copyQuery
+          .where((copy) =>
+            or(copy.lastSeenScanId.isNull(), copy.lastSeenScanId.neq(task.id)),
           )
           .all();
         for (
           let offset = 0;
-          offset < unavailableTracks.length;
+          offset < unavailableCopies.length;
           offset += IMPORT_BATCH_SIZE
         ) {
-          const batch = unavailableTracks.slice(
+          const batch = unavailableCopies.slice(
             offset,
             offset + IMPORT_BATCH_SIZE,
           );
           await withTiming(timings.database, () =>
             this.database.transaction(async (transaction) => {
-              for (const track of batch) {
-                await transaction.orm.Track.where({ id: track.id }).update({
+              const mediaIds = new Set<string>();
+              for (const copy of batch) {
+                mediaIds.add(copy.mediaId);
+                await transaction.orm.MediaCopy.where({ id: copy.id }).update({
                   available: 0,
-                  catalogProjectionPending: 1,
-                });
-                await transaction.orm.CatalogTrack.where({
-                  id: track.id,
-                }).update({
-                  available: 0,
-                  albumId: null,
                 });
                 await transaction.orm.ArtworkJob.where({
-                  trackId: track.id,
+                  copyId: copy.id,
                 }).deleteAndCount();
+              }
+              for (const mediaId of mediaIds) {
+                await this.refreshMediaAvailability(
+                  mediaId,
+                  transaction,
+                  "scan",
+                );
               }
             }),
           );
@@ -679,46 +707,45 @@ export class LibraryScanner {
           }
           await yieldToEventLoop();
         }
-        unavailableCount = (
-          await this.database.orm.Track.where({ available: 0 })
-            .where((track) =>
-              track.sourceId.in(sources.map((source) => source.id)),
-            )
-            .where((track) =>
-              or(
-                track.lastSeenScanId.isNull(),
-                track.lastSeenScanId.neq(task.id),
-              ),
-            )
-            .all()
-        ).length;
+        unavailableCount = unavailableCopies.length;
         const syncedAt = new Date();
         await withTiming(timings.database, async () => {
           for (const source of sources) {
-            await this.database.orm.Source.where({ id: source.id }).update({
+            await this.database.orm.LibrarySource.where({
+              id: source.id,
+            }).update({
               lastSyncedAt: syncedAt,
             });
           }
         });
       }
 
-      const metadataTrackQuery = this.database.orm.Track.where({
-        available: 1,
-        mediaType: "music",
-      });
-      const musicTrack = targetedImport
-        ? processedTrackIds.size
-          ? await metadataTrackQuery
-              .where((track) => track.id.in([...processedTrackIds]))
+      const sourceMediaIds = targetedImport
+        ? [...processedMediaIds]
+        : (
+            await this.database.orm.MediaCopy.where((copy) =>
+              copy.librarySourceId.in(sources.map((source) => source.id)),
+            )
+              .select("mediaId")
+              .all()
+          ).map((copy) => copy.mediaId);
+      const musicMedia = targetedImport
+        ? processedMediaIds.size
+          ? await this.database.orm.Media.where({
+              available: 1,
+              mediaType: "music",
+            })
+              .where((media) => media.id.in([...processedMediaIds]))
               .first()
           : null
-        : await metadataTrackQuery
-            .where((track) =>
-              track.sourceId.in(sources.map((source) => source.id)),
-            )
+        : await this.database.orm.Media.where({
+            available: 1,
+            mediaType: "music",
+          })
+            .where((media) => media.id.in(sourceMediaIds))
             .first();
-      if (this.metadataEnrichment && musicTrack) {
-        await queueMetadataFetch(tasks, {
+      if (this.metadataEnrichment && musicMedia) {
+        await queueMetadataEnrichment(tasks, {
           source: requestedSource
             ? {
                 id: requestedSource.id,
@@ -726,14 +753,14 @@ export class LibraryScanner {
               }
             : null,
           parentTaskId: task.id,
-          trackIds: targetedImport ? [...processedTrackIds] : null,
+          mediaIds: targetedImport ? [...processedMediaIds] : null,
         });
       }
-      await queueDuplicateDetection(tasks, task.id);
+      await queueMediaMatch(tasks, task.id);
       if (
         await this.catalog?.hasPendingProjection(requestedSource?.id ?? null)
       ) {
-        await queueCatalogFetch(tasks, {
+        await queueCatalogProjection(tasks, {
           source: requestedSource
             ? {
                 id: requestedSource.id,
@@ -780,7 +807,7 @@ export class LibraryScanner {
         );
       }
       if (error instanceof TaskExecutionError) throw error;
-      if (error instanceof SourceIntegrationError) {
+      if (error instanceof LibrarySourceConnectorError) {
         throw new TaskExecutionError(
           error.message,
           "failed",
@@ -814,20 +841,25 @@ export class LibraryScanner {
     throwIfAborted(signal);
     if (prepared.kind === "unchanged") {
       await withTiming(timings.database, () =>
-        this.database.orm.Track.where({ id: prepared.existing.id }).update({
-          available: 1,
-          lastSeenScanId: scanId,
+        this.database.transaction(async (transaction) => {
+          await transaction.orm.MediaCopy.where({
+            id: prepared.existing.id,
+          }).update({
+            available: 1,
+            lastSeenScanId: scanId,
+          });
+          await refreshCanonicalMediaFromCopies(transaction, prepared.media.id);
         }),
       );
       if (prepared.wasUnavailable) {
         await withTiming(timings.catalog, () =>
           this.catalog
-            ? this.catalog.reindexTrack(prepared.existing.id, "scan")
+            ? this.catalog.reindexMedia(prepared.media.id, "scan")
             : Promise.resolve(),
         );
       }
       counts.unchangedCount += 1;
-      return prepared.existing.id;
+      return prepared.media.id;
     }
 
     if (prepared.kind === "failed") {
@@ -901,7 +933,7 @@ export class LibraryScanner {
         this.storeCover(coverImage(metadata.cover)),
       );
 
-      const trackData = {
+      const mediaData = {
         mediaType: detected.mediaType,
         mediaTypeOrigin: detected.origin,
         title,
@@ -918,38 +950,70 @@ export class LibraryScanner {
         durationMs,
         publishedAt,
         coverId,
-        recordingIdentityKeys,
-        audioLossless: metadata.audioLossless ? 1 : 0,
-        audioBitrate: metadata.audioBitrate,
+        available: 1,
+        catalogProjectionPending: 1,
+        metadataVersion: CURRENT_METADATA_VERSION,
+      };
+      const copyData = {
+        librarySourceId: file.sourceId,
+        relativePath: file.relativePath,
+        mediaType: detected.mediaType,
+        mediaTypeOrigin: detected.origin,
+        title,
+        artist,
+        artistCredits: serializeArtistCredits(artistCredits),
+        albumArtist,
+        albumArtistCredits: creatorCredits.length
+          ? JSON.stringify(creatorCredits)
+          : null,
+        album,
+        genres,
+        discNumber,
+        trackNumber,
+        durationMs,
+        publishedAt,
+        coverId,
         mimeType: file.mimeType,
         fileSizeBytes: file.size,
         fileModifiedAt: file.modifiedAt,
+        recordingIdentityKeys,
+        audioLossless: metadata.audioLossless ? 1 : 0,
+        audioBitrate: metadata.audioBitrate,
         available: 1,
         lastSeenScanId: scanId,
         metadataVersion: CURRENT_METADATA_VERSION,
       };
       if (existing) {
+        const mediaId = prepared.media?.id ?? existing.mediaId;
         await withTiming(timings.database, () =>
-          this.database.orm.Track.where({ id: existing.id }).update(trackData),
-        );
-        await withTiming(timings.catalog, () =>
-          this.catalog
-            ? this.catalog.reindexTrack(existing.id, "scan")
-            : Promise.resolve(),
-        );
-        counts.updatedCount += 1;
-        return existing.id;
-      } else {
-        const created = await withTiming(timings.database, () =>
-          this.database.orm.Track.create({
-            ...trackData,
-            relativePath: file.relativePath,
-            sourceId: file.sourceId,
+          this.database.transaction(async (transaction) => {
+            await transaction.orm.MediaCopy.where({ id: existing.id }).update(
+              copyData,
+            );
+            await refreshCanonicalMediaFromCopies(transaction, mediaId);
           }),
         );
         await withTiming(timings.catalog, () =>
           this.catalog
-            ? this.catalog.reindexTrack(created.id, "scan")
+            ? this.catalog.reindexMedia(mediaId, "scan")
+            : Promise.resolve(),
+        );
+        counts.updatedCount += 1;
+        return mediaId;
+      } else {
+        const created = await withTiming(timings.database, () =>
+          this.database.transaction(async (transaction) => {
+            const media = await transaction.orm.Media.create(mediaData);
+            await transaction.orm.MediaCopy.create({
+              ...copyData,
+              mediaId: media.id,
+            });
+            return media;
+          }),
+        );
+        await withTiming(timings.catalog, () =>
+          this.catalog
+            ? this.catalog.reindexMedia(created.id, "scan")
             : Promise.resolve(),
         );
         counts.createdCount += 1;
@@ -969,25 +1033,61 @@ export class LibraryScanner {
 
   private async markFileError(
     file: SourceFile,
-    existing: TrackRow,
+    existing: MediaCopyRow,
     scanId: string,
   ): Promise<void> {
     try {
-      await this.database.orm.Track.where({ id: existing.id }).update({
-        fileSizeBytes: file.size,
-        fileModifiedAt: file.modifiedAt,
-        available: 1,
-        lastSeenScanId: scanId,
+      await this.database.transaction(async (transaction) => {
+        await transaction.orm.MediaCopy.where({ id: existing.id }).update({
+          fileSizeBytes: file.size,
+          fileModifiedAt: file.modifiedAt,
+          available: 1,
+          lastSeenScanId: scanId,
+        });
+        await refreshCanonicalMediaFromCopies(transaction, existing.mediaId);
+        await this.refreshMediaAvailability(
+          existing.mediaId,
+          transaction,
+          "scan",
+        );
       });
-      await this.catalog?.reindexTrack(existing.id, "scan");
     } catch {
       // The file remains counted as an error if even the fallback write
       // cannot acquire SQLite's write lock.
     }
   }
 
+  private async refreshMediaAvailability(
+    mediaId: string,
+    transaction: Parameters<Parameters<Database["transaction"]>[0]>[0],
+    reason:
+      | "scan"
+      | "metadata"
+      | "reset"
+      | "source"
+      | "source-removal"
+      | "media-match",
+  ): Promise<void> {
+    const primary = await refreshCanonicalMediaFromCopies(transaction, mediaId);
+    const available = primary ? 1 : 0;
+    await transaction.orm.Media.where({ id: mediaId }).update({
+      available,
+      catalogProjectionPending: 1,
+    });
+    const projection = await transaction.orm.CatalogMedia.first({
+      id: mediaId,
+    });
+    if (projection) {
+      await transaction.orm.CatalogMedia.where({ id: mediaId }).update({
+        available,
+        ...(available ? {} : { albumId: null }),
+      });
+    }
+    void reason;
+  }
+
   private async applyRemoteBatch(
-    items: readonly SourceIntegrationTrackRecord[],
+    items: readonly LibrarySourceTrackRecord[],
     source: IntegrationSourceWork,
     scanId: string,
     counts: ScanCounts,
@@ -996,29 +1096,20 @@ export class LibraryScanner {
   ): Promise<void> {
     throwIfAborted(signal);
     if (!items.length) return;
-    const existingTracks = await this.database.orm.Track.where({
-      sourceId: source.source.id,
+    const existingCopies = await this.database.orm.MediaCopy.where({
+      librarySourceId: source.source.id,
     })
-      .where((track) =>
-        track.externalId.in(items.map((item) => item.externalId)),
-      )
+      .where((copy) => copy.externalId.in(items.map((item) => item.externalId)))
       .all();
     const existingByExternalId = new Map(
-      existingTracks.flatMap((track) =>
-        track.externalId ? [[track.externalId, track] as const] : [],
+      existingCopies.flatMap((copy) =>
+        copy.externalId ? [[copy.externalId, copy] as const] : [],
       ),
     );
-    const unchanged: Array<{
-      item: SourceIntegrationTrackRecord;
-      track: TrackRow;
-      coverKey: string | null;
-    }> = [];
-    const changed: Array<{
-      item: SourceIntegrationTrackRecord;
-      track: TrackRow;
-      coverKey: string | null;
-    }> = [];
-    const created: SourceIntegrationTrackRecord[] = [];
+    const existingMedia = await this.database.orm.Media.where((media) =>
+      media.id.in([...new Set(existingCopies.map((copy) => copy.mediaId))]),
+    ).all();
+    const mediaById = new Map(existingMedia.map((media) => [media.id, media]));
     const artworkSyncInputs: ArtworkJobSyncInput[] = [];
     const coverIds = new Map<string, string>();
     const missingCovers = new Map<
@@ -1040,24 +1131,6 @@ export class LibraryScanner {
           missingCovers.set(coverKey, item.cover);
         }
       }
-      if (!existing) {
-        created.push(item);
-        continue;
-      }
-      const isUnchanged =
-        existing.externalVersion === item.externalVersion &&
-        existing.metadataVersion >= CURRENT_METADATA_VERSION &&
-        mediaType(existing.mediaType) === item.mediaType &&
-        trackMediaTypeOrigin(existing.mediaTypeOrigin) === item.mediaTypeOrigin;
-      if (isUnchanged) {
-        unchanged.push({ item, track: existing, coverKey });
-        continue;
-      }
-      changed.push({
-        item,
-        track: existing,
-        coverKey,
-      });
     }
     if (missingCovers.size) {
       const fetchedCovers = await withTiming(timings.artwork, () =>
@@ -1067,11 +1140,10 @@ export class LibraryScanner {
         if (coverId) coverIds.set(key, coverId);
       }
     }
-    const trackDataFor = (
-      item: SourceIntegrationTrackRecord,
+    const mediaDataFor = (
+      item: LibrarySourceTrackRecord,
       coverId: string | null,
     ) => {
-      const coverKey = remoteCoverKey(item);
       const artistCredits = normalizeArtistCredits(
         item.artists.length ? item.artists : ["Unknown artist"],
       );
@@ -1085,7 +1157,45 @@ export class LibraryScanner {
       return {
         mediaType: item.mediaType,
         mediaTypeOrigin: item.mediaTypeOrigin,
+        title: item.title,
+        artist: artistCredits.join(", "),
+        artistCredits: serializeArtistCredits(artistCredits),
+        albumArtist: albumArtists.length ? albumArtists.join(", ") : null,
+        albumArtistCredits: albumArtists.length
+          ? JSON.stringify(albumArtists)
+          : null,
+        album: item.album,
+        genres: serializeGenres(item.genres),
+        discNumber: item.discNumber,
+        trackNumber: item.trackNumber,
+        durationMs: item.durationMs,
+        publishedAt: item.publishedAt ?? parsePublishedAt(item.fileModifiedAt),
+        coverId,
+        available: 1,
+        catalogProjectionPending: 1,
+        metadataVersion: CURRENT_METADATA_VERSION,
+      };
+    };
+    const copyDataFor = (
+      item: LibrarySourceTrackRecord,
+      coverId: string | null,
+      coverKey: string | null,
+    ) => {
+      const artistCredits = normalizeArtistCredits(
+        item.artists.length ? item.artists : ["Unknown artist"],
+      );
+      const itemAlbumArtists = normalizeOptionalArtistCredits(
+        item.albumArtists,
+      );
+      const albumArtists =
+        item.mediaType !== "music" && itemAlbumArtists.length === 0
+          ? artistCredits
+          : itemAlbumArtists;
+      return {
+        librarySourceId: source.source.id,
         relativePath: item.relativePath,
+        mediaType: item.mediaType,
+        mediaTypeOrigin: item.mediaTypeOrigin,
         title: item.title,
         artist: artistCredits.join(", "),
         artistCredits: serializeArtistCredits(artistCredits),
@@ -1114,133 +1224,80 @@ export class LibraryScanner {
         externalCoverKey: coverKey,
         available: 1,
         lastSeenScanId: scanId,
-        catalogProjectionPending: 1,
         metadataVersion: CURRENT_METADATA_VERSION,
       };
     };
+    const changedMediaIds = new Set<string>();
+    const mediaIdsToRefresh = new Set<string>();
 
     await withTiming(timings.database, () =>
       this.database.transaction(async (transaction) => {
-        if (unchanged.length) {
-          await transaction.orm.Track.where((track) =>
-            track.id.in(unchanged.map(({ track }) => track.id)),
-          ).update({
-            available: 1,
-            lastSeenScanId: scanId,
-          });
-        }
-        for (const { item, track, coverKey } of unchanged) {
+        for (const item of items) {
           throwIfAborted(signal);
-          const wasUnavailable = !track.available;
-          const currentCoverUsable = Boolean(
-            track.coverId &&
-            (track.externalCoverKey === null ||
-              track.externalCoverKey === coverKey),
-          );
-          const coverId =
-            (coverKey ? coverIds.get(coverKey) : null) ??
-            (currentCoverUsable ? track.coverId : null);
-          const coverChanged = coverId !== track.coverId;
-          const update = {
-            ...(wasUnavailable ? { catalogProjectionPending: 1 } : {}),
-            ...(coverChanged ? { coverId } : {}),
-            ...(coverKey && track.externalCoverKey !== coverKey
-              ? { externalCoverKey: coverKey }
-              : {}),
-          };
-          if (Object.keys(update).length) {
-            await transaction.orm.Track.where({ id: track.id }).update(update);
-          }
-          artworkSyncInputs.push({
-            trackId: track.id,
-            sourceId: source.source.id,
-            externalCoverItemId: coverId ? null : (item.cover?.itemId ?? null),
-            externalCoverTag: coverId ? null : (item.cover?.tag ?? null),
-          });
-          if ((wasUnavailable || coverChanged) && this.catalog) {
-            await this.catalog.indexTrackSummary(
-              { ...track, available: 1, ...update },
-              transaction,
-            );
-          }
-          counts.unchangedCount += 1;
-        }
-
-        for (const { item, track: existing, coverKey } of changed) {
-          throwIfAborted(signal);
+          const coverKey = remoteCoverKey(item);
+          const existing = existingByExternalId.get(item.externalId) ?? null;
           const existingCoverUsable = Boolean(
-            existing.coverId &&
+            existing?.coverId &&
             (existing.externalCoverKey === null ||
               existing.externalCoverKey === coverKey),
           );
           const coverId =
             (coverKey ? coverIds.get(coverKey) : null) ??
-            (existingCoverUsable ? existing.coverId : null);
-          const trackData = trackDataFor(item, coverId);
-          await transaction.orm.Track.where({ id: existing.id }).update(
-            trackData,
-          );
-          if (this.catalog) {
-            await this.catalog.indexTrackSummary(
-              { ...existing, ...trackData },
-              transaction,
-            );
+            (existingCoverUsable ? existing!.coverId : null);
+          const mediaData = mediaDataFor(item, coverId);
+          const copyData = copyDataFor(item, coverId, coverKey);
+          let copyId: string;
+          let mediaId: string;
+          if (existing) {
+            copyId = existing.id;
+            mediaId = existing.mediaId;
+            const unchanged =
+              existing.externalVersion === item.externalVersion &&
+              existing.metadataVersion >= CURRENT_METADATA_VERSION &&
+              Boolean(existing.available) &&
+              mediaType(existing.mediaType) === item.mediaType &&
+              trackMediaTypeOrigin(existing.mediaTypeOrigin) ===
+                item.mediaTypeOrigin;
+            await transaction.orm.MediaCopy.where({ id: existing.id }).update({
+              ...(unchanged ? {} : copyData),
+              available: 1,
+              lastSeenScanId: scanId,
+              ...(coverId ? { coverId } : {}),
+            });
+            const existingMedia = mediaById.get(mediaId);
+            mediaIdsToRefresh.add(mediaId);
+            if (unchanged && existingMedia?.available) {
+              counts.unchangedCount += 1;
+            } else {
+              counts.updatedCount += 1;
+              changedMediaIds.add(mediaId);
+            }
+          } else {
+            const createdMedia = await transaction.orm.Media.create(mediaData);
+            mediaId = createdMedia.id;
+            const createdCopy = await transaction.orm.MediaCopy.create({
+              ...copyData,
+              mediaId,
+            });
+            copyId = createdCopy.id;
+            counts.createdCount += 1;
+            changedMediaIds.add(mediaId);
           }
           artworkSyncInputs.push({
-            trackId: existing.id,
-            sourceId: source.source.id,
+            copyId,
+            librarySourceId: source.source.id,
             externalCoverItemId: coverId ? null : (item.cover?.itemId ?? null),
             externalCoverTag: coverId ? null : (item.cover?.tag ?? null),
           });
-          counts.updatedCount += 1;
         }
-
-        if (created.length) {
-          const rows = created.map((item) => ({
-            ...trackDataFor(
-              item,
-              item.cover ? (coverIds.get(remoteCoverKey(item)!) ?? null) : null,
-            ),
-            sourceId: source.source.id,
-          }));
-          const inserted = await transaction.query(
-            transaction.sql.Track.insert(rows)
-              .returning("id", "externalId")
-              .build(),
-          );
-          const newIds = inserted.flatMap(({ externalId }) =>
-            externalId ? [externalId] : [],
-          );
-          const newTracks = await transaction.orm.Track.where({
-            sourceId: source.source.id,
-          })
-            .where((track) => track.externalId.in(newIds))
-            .all();
-          if (this.catalog) {
-            await this.catalog.insertTrackSummaries(newTracks, transaction);
-          }
-          const itemByExternalId = new Map(
-            created.map((item) => [item.externalId, item] as const),
-          );
-          for (const track of newTracks) {
-            const item = track.externalId
-              ? itemByExternalId.get(track.externalId)
-              : null;
-            artworkSyncInputs.push({
-              trackId: track.id,
-              sourceId: source.source.id,
-              externalCoverItemId:
-                item?.cover && !track.coverId ? item.cover.itemId : null,
-              externalCoverTag:
-                item?.cover && !track.coverId ? item.cover.tag : null,
-            });
-          }
-          counts.createdCount += newTracks.length;
-        }
+        await refreshCanonicalMediaFromCopiesBatch(transaction, [
+          ...mediaIdsToRefresh,
+        ]);
         await syncArtworkJobsInBatch(transaction, artworkSyncInputs);
       }),
     );
     if (this.catalog) {
+      await this.catalog.indexScanBatch([...changedMediaIds]);
       await withTiming(timings.catalog, () =>
         this.catalog!.markScanBatchChanged(source.source.id),
       );
@@ -1314,7 +1371,7 @@ export class LibraryScanner {
   }
 
   private async applyRemoteBatchWithRetry(
-    items: readonly SourceIntegrationTrackRecord[],
+    items: readonly LibrarySourceTrackRecord[],
     source: IntegrationSourceWork,
     scanId: string,
     counts: ScanCounts,
@@ -1354,11 +1411,11 @@ export class LibraryScanner {
     if (!cover || !this.artworkCache) return null;
     try {
       const hash = await this.artworkCache.store(cover.data);
-      const existing = await this.database.orm.TrackCover.where({
+      const existing = await this.database.orm.Cover.where({
         hash,
       }).first();
       const stored =
-        existing ?? (await this.database.orm.TrackCover.create({ hash }));
+        existing ?? (await this.database.orm.Cover.create({ hash }));
       return stored.id;
     } catch {
       return null;
@@ -1366,7 +1423,7 @@ export class LibraryScanner {
   }
 
   private async removeUnusedCovers(): Promise<void> {
-    const tracks = await this.database.orm.Track.where((track) =>
+    const tracks = await this.database.orm.Media.where((track) =>
       track.coverId.isNotNull(),
     )
       .select("coverId")
@@ -1376,10 +1433,8 @@ export class LibraryScanner {
     ];
     await (
       coverIds.length
-        ? this.database.orm.TrackCover.where((cover) =>
-            cover.id.notIn(coverIds),
-          )
-        : this.database.orm.TrackCover.where((cover) => cover.id.isNotNull())
+        ? this.database.orm.Cover.where((cover) => cover.id.notIn(coverIds))
+        : this.database.orm.Cover.where((cover) => cover.id.isNotNull())
     ).deleteAndCount();
   }
 }

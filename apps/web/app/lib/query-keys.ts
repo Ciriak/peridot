@@ -94,14 +94,14 @@ export const queryKeys = {
   },
   metadataCandidates(
     scope: PeridotQueryScope,
-    trackId: string,
+    mediaId: string,
     query?: string,
   ) {
     return [
       ...peridotScopeKey(scope),
       "metadata-candidates",
       "track",
-      trackId,
+      mediaId,
       { query: query?.trim() || null },
     ];
   },

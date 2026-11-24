@@ -12,14 +12,29 @@ const CREDENTIAL_AAD = {
     "peridot-metadata-provider-credential:v1",
     "utf8",
   ),
-  source: Buffer.from("peridot-source-credential:v1", "utf8"),
+  "library-source": Buffer.from("peridot-library-source-credential:v1", "utf8"),
+  "release-indexer": Buffer.from(
+    "peridot-release-indexer-credential:v1",
+    "utf8",
+  ),
+  "download-client": Buffer.from(
+    "peridot-download-client-credential:v1",
+    "utf8",
+  ),
+  "playlist-account": Buffer.from(
+    "peridot-playlist-account-credential:v1",
+    "utf8",
+  ),
 } as const;
 
 export type CredentialPurpose = keyof typeof CREDENTIAL_AAD;
 
 export interface StoredCredentialCiphertexts {
   metadataProvider: readonly string[];
-  source: readonly string[];
+  librarySource: readonly string[];
+  releaseIndexer: readonly string[];
+  downloadClient: readonly string[];
+  playlistAccount: readonly string[];
 }
 
 export class CredentialStoreError extends Error {
@@ -146,11 +161,18 @@ export class CredentialStore {
     const groups: StoredCredentialCiphertexts = Array.isArray(storedCredentials)
       ? {
           metadataProvider: storedCredentials,
-          source: [],
+          librarySource: [],
+          releaseIndexer: [],
+          downloadClient: [],
+          playlistAccount: [],
         }
       : (storedCredentials as StoredCredentialCiphertexts);
     const storedCredentialCount =
-      groups.metadataProvider.length + groups.source.length;
+      groups.metadataProvider.length +
+      groups.librarySource.length +
+      groups.releaseIndexer.length +
+      groups.downloadClient.length +
+      groups.playlistAccount.length;
     if (encodedKey) {
       const store = new CredentialStore(encodedKey);
       try {
@@ -203,8 +225,17 @@ export class CredentialStore {
     for (const ciphertext of storedCredentials.metadataProvider) {
       this.decrypt(ciphertext, "metadata-provider");
     }
-    for (const ciphertext of storedCredentials.source) {
-      this.decrypt(ciphertext, "source");
+    for (const ciphertext of storedCredentials.librarySource) {
+      this.decrypt(ciphertext, "library-source");
+    }
+    for (const ciphertext of storedCredentials.releaseIndexer) {
+      this.decrypt(ciphertext, "release-indexer");
+    }
+    for (const ciphertext of storedCredentials.downloadClient) {
+      this.decrypt(ciphertext, "download-client");
+    }
+    for (const ciphertext of storedCredentials.playlistAccount) {
+      this.decrypt(ciphertext, "playlist-account");
     }
   }
 
@@ -249,7 +280,7 @@ export class CredentialStore {
       extra !== undefined
     ) {
       throw new CredentialStoreError(
-        "The stored metadata provider credential is invalid.",
+        "The stored connector credential is invalid.",
       );
     }
     try {
@@ -266,7 +297,7 @@ export class CredentialStore {
       ]).toString("utf8");
     } catch {
       throw new CredentialStoreError(
-        "The stored metadata provider credential could not be decrypted.",
+        "The stored connector credential could not be decrypted.",
       );
     }
   }

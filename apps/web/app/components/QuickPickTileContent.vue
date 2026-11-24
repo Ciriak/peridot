@@ -32,20 +32,20 @@ const {
   fromCache: coverFromCache,
 } = useCachedArtwork(() => props.coverUrl);
 const title = computed(() =>
-  props.item.kind === "track" ? props.item.track.title : props.item.album.title,
+  props.item.kind === "media" ? props.item.media.title : props.item.album.title,
 );
 const artistNames = computed(() => quickPickArtistNames(props.item));
 const typeIcon = computed(() =>
-  props.item.kind === "track" ? icons.music : icons.album,
+  props.item.kind === "media" ? icons.music : icons.album,
 );
 const titleRoute = computed(() =>
-  props.item.kind === "track"
-    ? (trackAlbumTitleRoute(props.item.track) ??
-      artistRoute({ name: props.item.track.artist }))
+  props.item.kind === "media"
+    ? (trackAlbumTitleRoute(props.item.media) ??
+      artistRoute({ name: props.item.media.artist }))
     : albumRoute(props.item.album),
 );
 const unavailableTitle = computed(() =>
-  props.item.kind === "track" && !props.playable
+  props.item.kind === "media" && !props.playable
     ? t("trackTable.unavailableTitle")
     : undefined,
 );

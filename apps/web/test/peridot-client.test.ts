@@ -69,7 +69,7 @@ import {
 
 function queuedTask(
   id: string,
-  kind: "library_scan" | "metadata_fetch",
+  kind: "library_scan" | "metadata_enrichment",
   source: { id: string; name: string } | null,
 ) {
   return {
@@ -141,7 +141,7 @@ test("metadata provider, source scan, and correction calls use authenticated end
     }
     if (url.endsWith("/api/admin/metadata/refresh")) {
       return Response.json(
-        queuedTask("scan-metadata", "metadata_fetch", null),
+        queuedTask("scan-metadata", "metadata_enrichment", null),
         { status: 202 },
       );
     }
@@ -310,20 +310,21 @@ test("metadata provider, source scan, and correction calls use authenticated end
         method: "POST",
       },
       {
-        input: "http://127.0.0.1:17430/api/admin/sources/source-1/scans",
+        input:
+          "http://127.0.0.1:17430/api/admin/library-sources/source-1/scans",
         method: "POST",
       },
       {
         input:
-          "http://127.0.0.1:17430/api/tracks/track%2Fone/metadata/candidates?query=blue+hours",
+          "http://127.0.0.1:17430/api/media/track%2Fone/metadata/candidates?query=blue+hours",
         method: undefined,
       },
       {
-        input: "http://127.0.0.1:17430/api/tracks/track%2Fone/metadata",
+        input: "http://127.0.0.1:17430/api/media/track%2Fone/metadata",
         method: "PUT",
       },
       {
-        input: "http://127.0.0.1:17430/api/tracks/track%2Fone/metadata",
+        input: "http://127.0.0.1:17430/api/media/track%2Fone/metadata",
         method: "DELETE",
       },
       {
@@ -386,7 +387,7 @@ test("library track listing sends the session to the catalog endpoint", async (c
     globalThis.fetch = originalFetch;
   });
   globalThis.fetch = async (input, init) => {
-    assert.equal(String(input), "http://127.0.0.1:17430/api/tracks");
+    assert.equal(String(input), "http://127.0.0.1:17430/api/media");
     const headers = new Headers(init?.headers);
     assert.equal(headers.get("Authorization"), "Bearer session-token");
     return Response.json({
@@ -446,7 +447,7 @@ test("playback tokens are requested with authentication and produce a scoped aud
   globalThis.fetch = async (input, init) => {
     assert.equal(
       String(input),
-      "http://127.0.0.1:17430/api/tracks/track%2Fone/playback-token",
+      "http://127.0.0.1:17430/api/media/track%2Fone/playback-token",
     );
     assert.equal(init?.method, "POST");
     assert.equal(
@@ -467,7 +468,7 @@ test("playback tokens are requested with authentication and produce a scoped aud
   assert.equal(issued.token, "signed-token");
   assert.equal(
     trackAudioUrl("http://127.0.0.1:17430", "track/one", issued.token),
-    "http://127.0.0.1:17430/api/tracks/track%2Fone/audio?playbackToken=signed-token",
+    "http://127.0.0.1:17430/api/media/track%2Fone/audio?playbackToken=signed-token",
   );
 });
 
@@ -481,12 +482,12 @@ test("play history writes and quick-pick reads use authenticated endpoints", asy
     requests.push({ input: String(input), init });
     if (String(input).endsWith("/plays")) {
       return Response.json(
-        { trackId: "track/one", playedAt: "2026-11-11T12:00:00.000Z" },
+        { mediaId: "track/one", playedAt: "2026-11-11T12:00:00.000Z" },
         { status: 201 },
       );
     }
     return Response.json({
-      items: [{ kind: "track", key: "track:track/one", trackId: "track/one" }],
+      items: [{ kind: "media", key: "media:track/one", mediaId: "track/one" }],
     });
   };
 
@@ -500,11 +501,11 @@ test("play history writes and quick-pick reads use authenticated endpoints", asy
     "session-token",
   );
 
-  assert.equal(recorded.trackId, "track/one");
-  assert.equal(quickPicks.items[0]?.kind, "track");
+  assert.equal(recorded.mediaId, "track/one");
+  assert.equal(quickPicks.items[0]?.kind, "media");
   assert.equal(
     requests[0]?.input,
-    "http://127.0.0.1:17430/api/tracks/track%2Fone/plays",
+    "http://127.0.0.1:17430/api/media/track%2Fone/plays",
   );
   assert.equal(requests[0]?.init?.method, "POST");
   assert.equal(requests[1]?.input, "http://127.0.0.1:17430/api/quick-picks");
@@ -527,8 +528,8 @@ test("like requests use the authenticated likes endpoint and expected targets", 
     if (init?.method === "DELETE") return new Response(null, { status: 204 });
     if (init?.method === "POST") {
       return Response.json({
-        kind: "track",
-        trackId: "track-1",
+        kind: "media",
+        mediaId: "track-1",
         likedAt: "2026-11-10T12:00:00.000Z",
       });
     }
@@ -547,8 +548,8 @@ test("like requests use the authenticated likes endpoint and expected targets", 
     playlists: [],
   });
   await createLike("http://127.0.0.1:17430", "session-token", {
-    kind: "track",
-    trackId: "track-1",
+    kind: "media",
+    mediaId: "track-1",
   });
   await deleteLike("http://127.0.0.1:17430", "session-token", {
     kind: "album",
@@ -579,8 +580,8 @@ test("like requests use the authenticated likes endpoint and expected targets", 
     assert.equal(headers.get("Authorization"), "Bearer session-token");
   }
   assert.deepEqual(JSON.parse(String(requests[1]?.init?.body)), {
-    kind: "track",
-    trackId: "track-1",
+    kind: "media",
+    mediaId: "track-1",
   });
   assert.deepEqual(JSON.parse(String(requests[2]?.init?.body)), {
     kind: "album",
@@ -642,7 +643,7 @@ test("playlist requests use authenticated owner-scoped endpoints and bodies", as
 
   await listPlaylists("http://127.0.0.1:17430", "session-token", {
     limit: 20,
-    trackId: "track/one",
+    mediaId: "track/one",
   });
   await createPlaylist("http://127.0.0.1:17430", "session-token", {
     name: "Road trip",
@@ -662,7 +663,7 @@ test("playlist requests use authenticated owner-scoped endpoints and bodies", as
     "http://127.0.0.1:17430",
     "session-token",
     "playlist/one",
-    { kind: "catalog", trackId: "track/one" },
+    { kind: "catalog", mediaId: "track/one" },
   );
   await reorderPlaylistItems(
     "http://127.0.0.1:17430",
@@ -687,7 +688,7 @@ test("playlist requests use authenticated owner-scoped endpoints and bodies", as
     [
       {
         input:
-          "http://127.0.0.1:17430/api/playlists?limit=20&trackId=track%2Fone",
+          "http://127.0.0.1:17430/api/playlists?limit=20&mediaId=track%2Fone",
         method: undefined,
       },
       {
@@ -733,7 +734,7 @@ test("playlist requests use authenticated owner-scoped endpoints and bodies", as
   });
   assert.deepEqual(JSON.parse(String(requests[4]?.init?.body)), {
     kind: "catalog",
-    trackId: "track/one",
+    mediaId: "track/one",
   });
   assert.deepEqual(JSON.parse(String(requests[5]?.init?.body)), {
     itemIds: ["item-2", "item-1"],
@@ -1198,7 +1199,7 @@ test("authenticated admin calls send the bearer token and expected bodies", asyn
         completedAt: "2026-11-11T10:01:00.000Z",
       });
     }
-    if (init?.method === "POST" && url.endsWith("/api/admin/sources")) {
+    if (init?.method === "POST" && url.endsWith("/api/admin/library-sources")) {
       return Response.json(
         {
           id: "src-1",
@@ -1214,7 +1215,10 @@ test("authenticated admin calls send the bearer token and expected bodies", asyn
     if (init?.method === "DELETE") {
       return new Response(null, { status: 204 });
     }
-    if (init?.method === "PUT" && url.endsWith("/api/admin/sources/order")) {
+    if (
+      init?.method === "PUT" &&
+      url.endsWith("/api/admin/library-sources/order")
+    ) {
       return Response.json({ items: [] });
     }
     if (url.includes("/api/admin/filesystem/tree")) {
@@ -1228,7 +1232,7 @@ test("authenticated admin calls send the bearer token and expected bodies", asyn
         truncated: false,
       });
     }
-    if (url.endsWith("/api/admin/sources")) {
+    if (url.endsWith("/api/admin/library-sources")) {
       return Response.json({ items: [] });
     }
     return Response.json({
@@ -1344,12 +1348,12 @@ test("authenticated admin calls send the bearer token and expected bodies", asyn
       "http://127.0.0.1:17430/api/admin/server",
       "http://127.0.0.1:17430/api/admin/server/restart",
       "http://127.0.0.1:17430/api/admin/server",
-      "http://127.0.0.1:17430/api/admin/sources",
-      "http://127.0.0.1:17430/api/admin/sources",
-      "http://127.0.0.1:17430/api/admin/sources/order",
+      "http://127.0.0.1:17430/api/admin/library-sources",
+      "http://127.0.0.1:17430/api/admin/library-sources",
+      "http://127.0.0.1:17430/api/admin/library-sources/order",
       "http://127.0.0.1:17430/api/admin/filesystem/tree?path=%2Fmusic",
       "http://127.0.0.1:17430/api/admin/filesystem/search?query=Deep+Music",
-      "http://127.0.0.1:17430/api/admin/sources/src-1",
+      "http://127.0.0.1:17430/api/admin/library-sources/src-1",
       "http://127.0.0.1:17430/api/auth/session",
       "http://127.0.0.1:17430/api/library/scans",
       "http://127.0.0.1:17430/api/tasks/scan-1",

@@ -5,7 +5,7 @@ import type {
   AudiobookSummaryResponse,
   PodcastSummaryResponse,
   RealtimeCatalogChangedEvent,
-  TrackResponse,
+  MediaResponse,
 } from "@peridot/contracts";
 import {
   useInfiniteQuery,
@@ -349,7 +349,7 @@ export function useCatalogTrackQuery(
 ) {
   const { scope } = useQueryScope();
   const optionKey = computed(() => options());
-  const query = useCatalogInfiniteQuery<TrackResponse>({
+  const query = useCatalogInfiniteQuery<MediaResponse>({
     queryKey: () => {
       const scopeValue = scope.value;
       return scopeValue

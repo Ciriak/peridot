@@ -1,8 +1,3 @@
-import {
-  migrateIndexerClients,
-  readClientConnections,
-} from "../src/download-clients.js";
-import { CredentialStore } from "../src/credential-store.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
@@ -17,7 +12,7 @@ import {
 import { qbitAddAccepted } from "../src/qbittorrent.js";
 import { completedAudioReleasePaths } from "../src/release-import-files.js";
 import { parseReleases } from "../src/torznab.js";
-import { readTaskPayload } from "../src/tasks.js";
+import { readReleaseImportTaskPayload, readTaskPayload } from "../src/tasks.js";
 
 test("rejects DTDs and indexer errors", () => {
   for (const xml of ["<!DOCTYPE rss><rss/>", '<error code="100"/>'])
@@ -117,6 +112,61 @@ test("completed release paths include only safe audio files", () => {
       { name: "C:\\outside.mp3", progress: 1 },
     ]),
     [path.join("album", "song.flac")],
+  );
+});
+
+test("external search reports partial connector failures without dropping successes", async (t) => {
+  const context = await createTestContext();
+  t.after(() => context.close());
+  t.mock.method(globalThis, "fetch", async (input: URL | RequestInfo) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    if (url.searchParams.get("t") === "caps") {
+      return new Response(
+        '<caps><searching><music-search available="yes" supportedParams="q"/></searching></caps>',
+      );
+    }
+    if (url.host === "failed.test") {
+      return new Response("indexer unavailable", { status: 503 });
+    }
+    return new Response(
+      '<rss xmlns:t="http://torznab.com/schemas/2015/feed"><channel><item><title>Available release</title><guid>available</guid><enclosure url="/download/available" length="100"/><t:attr name="category" value="3040"/></item></channel></rss>',
+    );
+  });
+
+  for (const host of ["working.test", "failed.test"]) {
+    const response = await context.app.inject({
+      method: "POST",
+      url: "/api/admin/release-indexers",
+      headers: context.authorization,
+      payload: {
+        kind: "torznab",
+        name: host,
+        url: `http://${host}/feed`,
+      },
+    });
+    assert.equal(response.statusCode, 201, response.body);
+  }
+
+  const response = await context.app.inject({
+    method: "GET",
+    url: "/api/search/external?query=release",
+    headers: context.authorization,
+  });
+  assert.equal(response.statusCode, 200, response.body);
+  const body = response.json<{
+    items: Array<{ title: string }>;
+    providers: Array<{ name: string; ok: boolean }>;
+  }>();
+  assert.deepEqual(
+    body.items.map((item) => item.title),
+    ["Available release"],
+  );
+  assert.deepEqual(
+    body.providers.map((provider) => [provider.name, provider.ok]).sort(),
+    [
+      ["failed.test", false],
+      ["working.test", true],
+    ],
   );
 });
 
@@ -241,7 +291,7 @@ test("an external release indexes only its completed audio files", async (t) => 
   const ctx = await createTestContext();
   t.after(() => ctx.close());
   const headers = await createMemberSession(ctx);
-  const folderSource = await ctx.database.orm.Source.create({
+  const folderSource = await ctx.database.orm.LibrarySource.create({
     kind: "path",
     path: folder,
     position: 1,
@@ -318,12 +368,12 @@ test("an external release indexes only its completed audio files", async (t) => 
     category: "music",
     tags: "lossless",
     categoryPath: true,
-    folderId: folderSource.id,
+    librarySourceId: folderSource.id,
   };
   for (const host of ["one", "two"]) {
     const added = await ctx.app.inject({
       method: "POST",
-      url: "/api/admin/sources",
+      url: "/api/admin/release-indexers",
       headers: ctx.authorization,
       payload: {
         ...input,
@@ -349,7 +399,7 @@ test("an external release indexes only its completed audio files", async (t) => 
   const addFeed = (suffix: string) =>
     ctx.app.inject({
       method: "POST",
-      url: "/api/admin/sources",
+      url: "/api/admin/release-indexers",
       headers: ctx.authorization,
       payload: { kind: "torznab", url: url + suffix },
     });
@@ -357,37 +407,50 @@ test("an external release indexes only its completed audio files", async (t) => 
   const mixed = await addFeed("/mixed");
   assert.equal(mixed.statusCode, 201, mixed.body);
   assert.equal(mixed.json().configuration.categories, "3000,3040");
-  const base = "/api/torznab";
+  const searchRoute = "/api/search/external";
   const denied = await ctx.app.inject({
-    url: base + "/search?q=test",
+    url: searchRoute + "?query=test",
   });
   assert.equal(denied.statusCode, 401);
   for (const sessionHeaders of [ctx.authorization, headers]) {
-    const config = await ctx.app.inject({ url: base, headers: sessionHeaders });
+    const config = await ctx.app.inject({
+      url: searchRoute + "/status",
+      headers: sessionHeaders,
+    });
     assert.deepEqual(config.json(), { enabled: true });
   }
   assert.equal(
-    (await ctx.app.inject({ method: "POST", url: base + "/imports/abc" }))
-      .statusCode,
+    (
+      await ctx.app.inject({
+        method: "POST",
+        url: "/api/release-imports",
+        payload: { releaseId: "abc" },
+      })
+    ).statusCode,
     401,
   );
   const result = await ctx.app.inject({
-    url: base + "/search?q=test",
+    url: searchRoute + "?query=test",
     headers,
   });
   assert.equal(result.statusCode, 200);
   assert.doesNotMatch(result.body, /hidden|test-key/);
-  assert.equal(result.json().length, 2);
-  const [release, second] = result.json();
+  assert.equal(result.json().items.length, 2);
+  const [release, second] = result.json().items;
   assert.notEqual(release.id, second.id);
   assert.notEqual(release.sourceName, second.sourceName);
   assert.equal(release.seeders, 4);
   assert.equal(release.mediaType, "music");
   assert.equal(torrentInfoRequests, 0, "search must not inspect torrents");
-  const route = base + "/imports/" + release.id;
+  const importRoute = "/api/release-imports";
+  const releaseImport = {
+    indexerId: release.indexerId,
+    releaseId: release.id,
+  };
   const imported = await ctx.app.inject({
     method: "POST",
-    url: route,
+    url: importRoute,
+    payload: releaseImport,
     headers,
   });
   assert.equal(imported.statusCode, 202);
@@ -397,7 +460,8 @@ test("an external release indexes only its completed audio files", async (t) => 
   const importTaskId = imported.json().task.id as string;
   const alreadyTagged = await ctx.app.inject({
     method: "POST",
-    url: route,
+    url: importRoute,
+    payload: releaseImport,
     headers,
   });
   assert.equal(alreadyTagged.statusCode, 409);
@@ -412,14 +476,29 @@ test("an external release indexes only its completed audio files", async (t) => 
   let id: string | undefined;
   for (let i = 0; i < 50 && !id; i++) {
     await new Promise((r) => setTimeout(r, 500));
-    id = (await ctx.app.inject({ url: route, headers })).json().trackIds[0];
+    const status = await ctx.app.inject({
+      url: importRoute + "/" + importTaskId,
+      headers,
+    });
+    const persistedImport = await ctx.database.orm.Task.first({
+      id: importTaskId,
+    });
+    assert.equal(
+      status.statusCode,
+      200,
+      JSON.stringify({
+        body: status.body,
+        task: persistedImport,
+      }),
+    );
+    id = status.json().mediaIds[0];
   }
   assert.ok(id, "completed audio should be indexed");
-  const sourceTracks = await ctx.database.orm.Track.where({
-    sourceId: folderSource.id,
+  const sourceCopies = await ctx.database.orm.MediaCopy.where({
+    librarySourceId: folderSource.id,
   }).all();
   assert.deepEqual(
-    sourceTracks.map((track) => track.relativePath),
+    sourceCopies.map((copy) => copy.relativePath),
     [importedRelativePath],
     "files outside the completed torrent must not be scanned",
   );
@@ -428,7 +507,7 @@ test("an external release indexes only its completed audio files", async (t) => 
   for (let i = 0; i < 50 && metadataTask?.status !== "completed"; i++) {
     metadataTask = (
       await ctx.database.orm.Task.where({
-        kind: "metadata_fetch",
+        kind: "metadata_enrichment",
         parentTaskId: importTaskId,
       }).all()
     )[0];
@@ -443,30 +522,37 @@ test("an external release indexes only its completed audio files", async (t) => 
     "completed",
   );
   assert.deepEqual(
-    readTaskPayload((await ctx.database.orm.Task.first({ id: importTaskId }))!),
+    readReleaseImportTaskPayload(
+      (await ctx.database.orm.Task.first({ id: importTaskId }))!,
+    )?.paths,
     [importedRelativePath],
   );
   const tokenResponse = await ctx.app.inject({
     method: "POST",
-    url: `/api/tracks/${id}/playback-token`,
+    url: `/api/media/${id}/playback-token`,
     headers,
   });
   assert.equal(tokenResponse.statusCode, 200);
   const playbackToken = tokenResponse.json<{ token: string }>().token;
   const audio = await ctx.app.inject({
     url:
-      "/api/tracks/" +
+      "/api/media/" +
       id +
       "/audio?playbackToken=" +
       encodeURIComponent(playbackToken),
   });
   assert.equal(audio.statusCode, 200, `${id} ${audio.body}`);
-  const secondImport = base + "/imports/" + second.id;
+  const secondImport = "/api/release-imports";
+  const secondImportBody = {
+    indexerId: second.indexerId,
+    releaseId: second.id,
+  };
   tags = [];
   addMode = "pending";
   const pending = await ctx.app.inject({
     method: "POST",
     url: secondImport,
+    payload: secondImportBody,
     headers,
   });
   assert.equal(pending.statusCode, 202, pending.body);
@@ -475,124 +561,9 @@ test("an external release indexes only its completed audio files", async (t) => 
   const duplicate = await ctx.app.inject({
     method: "POST",
     url: secondImport,
+    payload: secondImportBody,
     headers,
   });
   assert.equal(duplicate.statusCode, 409, duplicate.body);
   assert.equal(duplicate.json().error.code, "release_already_added");
-});
-
-test("legacy indexers share one migrated client and retain feed credentials after retry", async (t) => {
-  const key = Buffer.alloc(32, 17).toString("base64");
-  const ctx = await createTestContext({ credentialEncryptionKey: key });
-  t.after(() => ctx.close());
-  const store = new CredentialStore(key);
-  for (const feed of ["one", "two"]) {
-    await ctx.database.orm.Source.create({
-      kind: "torznab",
-      position: 1,
-      configuration: JSON.stringify({
-        clientUrl: "http://qbit.test/",
-        folderId: "music",
-      }),
-      credentialCiphertext: store.encrypt(
-        JSON.stringify({
-          feed,
-          apiKey: "fixture-key",
-          username: "fixture",
-          password: "old-password",
-        }),
-        "source",
-      ),
-    });
-  }
-  await migrateIndexerClients(ctx.database, store);
-  await migrateIndexerClients(ctx.database, store);
-  const clients = await ctx.database.orm.DownloadClient.all();
-  assert.equal(clients.length, 1);
-  assert.equal(
-    store.decrypt(clients[0]!.credentialCiphertext, "source"),
-    "old-password",
-  );
-  assert.equal(
-    (await readClientConnections(ctx.database, store)).get(clients[0]!.id)
-      ?.username,
-    "fixture",
-  );
-  const clientPath = "/api/admin/download-clients/" + clients[0]!.id;
-  const payload = {
-    name: "Reconfigured",
-    kind: "qbittorrent",
-    url: clients[0]!.url,
-  };
-  let logins = 0;
-  let requests = 0;
-  t.mock.method(globalThis, "fetch", async (url: URL, init: RequestInit) => {
-    const headers = new Headers(init.headers);
-    assert.equal(headers.has("authorization"), false);
-    if (url.pathname.endsWith("/auth/login")) {
-      assert.equal((init.body as URLSearchParams).get("username"), "fixture");
-      assert.equal(
-        (init.body as URLSearchParams).get("password"),
-        "old-password",
-      );
-      logins++;
-      const legacy = logins === 1;
-      return new Response(legacy ? "Ok." : null, {
-        status: legacy ? 200 : 204,
-        headers: {
-          "set-cookie":
-            (legacy ? "SID" : "QBT_SID_8080") + "=session; HttpOnly",
-        },
-      });
-    }
-    requests++;
-    if (requests === 2) return new Response("", { status: 403 });
-    assert.equal(
-      headers.get("cookie"),
-      logins === 1 ? "SID=session" : "QBT_SID_8080=session",
-    );
-    return Response.json(url.pathname.endsWith("/tags") ? [] : {});
-  });
-  assert.equal(
-    (
-      await ctx.app.inject({
-        url: clientPath + "/options",
-        headers: ctx.authorization,
-      })
-    ).statusCode,
-    200,
-  );
-  assert.equal(logins, 2);
-  for (const [body, expected] of [
-    [{ ...payload, authType: "password", username: "fixture" }, 200],
-    [{ ...payload, authType: "password", username: "changed" }, 400],
-    [payload, 400],
-    [{ ...payload, apiKey: "new-key" }, 200],
-  ] as const) {
-    const res = await ctx.app.inject({
-      method: "PUT",
-      url: clientPath,
-      headers: ctx.authorization,
-      payload: body,
-    });
-    assert.equal(res.statusCode, expected, res.body);
-  }
-  assert.equal(
-    (await readClientConnections(ctx.database, store)).get(clients[0]!.id)
-      ?.clientApiKey,
-    "new-key",
-  );
-  for (const row of await ctx.database.orm.Source.where({
-    kind: "torznab",
-  }).all()) {
-    assert.deepEqual(JSON.parse(row.configuration!), {
-      downloadClientId: clients[0]!.id,
-      folderId: "music",
-    });
-    const secrets = JSON.parse(
-      store.decrypt(row.credentialCiphertext!, "source"),
-    );
-    assert.equal(secrets.apiKey, "fixture-key");
-    assert.equal(secrets.password, undefined);
-  }
 });

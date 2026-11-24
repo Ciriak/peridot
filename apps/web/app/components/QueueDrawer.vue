@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from "#imports";
 import { Icon } from "@iconify/vue/offline";
-import type { TrackResponse } from "@peridot/contracts";
+import type { MediaResponse } from "@peridot/contracts";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
@@ -28,7 +28,7 @@ const open = defineModel<boolean>("open", { required: true });
 const { t } = useI18n();
 const queueList = ref<HTMLElement | null>(null);
 const panel = ref<HTMLElement | null>(null);
-const sortableTracks = ref<TrackResponse[]>([]);
+const sortableTracks = ref<MediaResponse[]>([]);
 const { address } = useServer();
 const { status: serverStatus } = useServerConnection();
 const { savedTracks } = useOfflineTracks();
@@ -48,7 +48,7 @@ const {
   togglePlayback,
 } = useLibraryPlayer();
 
-function isUnavailable(track: TrackResponse): boolean {
+function isUnavailable(track: MediaResponse): boolean {
   return !isTrackPlayable(track, {
     serverLost: serverStatus.value === "lost",
     savedTrackIds: savedTrackIds.value,

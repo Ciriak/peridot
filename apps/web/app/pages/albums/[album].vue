@@ -31,7 +31,7 @@ import { icons } from "../../lib/icons";
 import {
   formatTrackDuration,
   trackCoverUrl,
-  trackIdFromTitleHash,
+  mediaIdFromTitleHash,
   type TrackSort,
 } from "../../lib/library";
 import {
@@ -106,7 +106,7 @@ const {
   direction: trackSort.value.direction,
 }));
 
-const scrollToTrackId = computed(() => trackIdFromTitleHash(route.hash));
+const scrollToTrackId = computed(() => mediaIdFromTitleHash(route.hash));
 const albumActive = computed(() => {
   const current = active.value;
   return Boolean(current && album.value && current.albumId === album.value.id);

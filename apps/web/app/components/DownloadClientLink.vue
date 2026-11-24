@@ -3,12 +3,12 @@ import { computed } from "vue";
 import { useI18n } from "#imports";
 import { useQuery } from "@tanstack/vue-query";
 import { Input } from "@peridot/ui/components/ui/input";
-import type { SourceResponse } from "@peridot/contracts";
+import type { LibrarySourceResponse } from "@peridot/contracts";
 import { useServer } from "../composables/use-server";
 import { useSession } from "../composables/use-session";
 import { useQueryScope } from "../composables/use-query-scope";
 import { downloadClientsApi } from "../lib/peridot-client";
-const props = defineProps<{ sources: SourceResponse[] }>();
+const props = defineProps<{ sources: LibrarySourceResponse[] }>();
 const form = defineModel<{
   downloadClientId: string;
   category: string;
@@ -66,9 +66,11 @@ function switchClient(event: Event) {
       </option>
     </select></label
   >
-  <NuxtLink class="text-sm underline" to="/settings/download-clients">{{
-    t("clients.manage")
-  }}</NuxtLink>
+  <NuxtLink
+    class="text-sm underline"
+    to="/settings/connectors/download-clients"
+    >{{ t("clients.manage") }}</NuxtLink
+  >
   <template v-if="form.downloadClientId">
     <p v-if="options.error.value" role="alert">
       {{ t("clients.optionsFailed") }}

@@ -1,7 +1,7 @@
 import type {
   PlaylistEntryResponse,
   PlaylistSummaryResponse,
-  TrackResponse,
+  MediaResponse,
 } from "@peridot/contracts";
 import {
   isTrackPlayable,
@@ -13,10 +13,10 @@ export type PlaylistPlaybackAvailability = PlaybackAvailability;
 export function playlistPlayableTracks(
   entries: readonly PlaylistEntryResponse[],
   availability: PlaylistPlaybackAvailability,
-): TrackResponse[] {
+): MediaResponse[] {
   return entries.flatMap((entry) => {
-    if (!entry.track) return [];
-    return isTrackPlayable(entry.track, availability) ? [entry.track] : [];
+    if (!entry.media) return [];
+    return isTrackPlayable(entry.media, availability) ? [entry.media] : [];
   });
 }
 

@@ -7,7 +7,7 @@ import type {
   LikeTarget,
   PlaylistLikeResponse,
   PodcastLikeResponse,
-  TrackLikeResponse,
+  MediaLikeResponse,
 } from "@peridot/contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
 import { computed, ref } from "vue";
@@ -31,7 +31,7 @@ import { useServerConnection } from "./use-server-connection";
 import { useSession } from "./use-session";
 
 export function likeTargetKey(target: LikeTarget): string {
-  if (target.kind === "track") return `track:${target.trackId}`;
+  if (target.kind === "media") return `track:${target.mediaId}`;
   if (target.kind === "album") return `album:${target.albumId}`;
   if (target.kind === "audiobook") return `audiobook:${target.audiobookId}`;
   if (target.kind === "podcast") return `podcast:${target.podcastId}`;
@@ -40,7 +40,7 @@ export function likeTargetKey(target: LikeTarget): string {
 }
 
 function targetLabel(target: LikeTarget, trackLabel: string): string {
-  if (target.kind === "track") return trackLabel;
+  if (target.kind === "media") return trackLabel;
   if (target.kind === "album") return target.title;
   if (target.kind === "audiobook" || target.kind === "podcast")
     return target.title;
@@ -49,7 +49,7 @@ function targetLabel(target: LikeTarget, trackLabel: string): string {
 }
 
 const EMPTY_LIKES: LikeListResponse = {
-  tracks: [],
+  media: [],
   albums: [],
   audiobooks: [],
   podcasts: [],
@@ -62,31 +62,31 @@ function updateLikedTarget(
   target: LikeTarget,
   liked: boolean,
   item?:
-    | TrackLikeResponse
+    | MediaLikeResponse
     | AlbumLikeResponse
     | AudiobookLikeResponse
     | ArtistLikeResponse
     | PlaylistLikeResponse
     | PodcastLikeResponse,
 ): LikeListResponse {
-  if (target.kind === "track") {
+  if (target.kind === "media") {
     if (!liked) {
       return {
         ...current,
-        tracks: current.tracks.filter(
-          (entry) => entry.trackId !== target.trackId,
+        media: current.media.filter(
+          (entry) => entry.mediaId !== target.mediaId,
         ),
       };
     }
     const trackItem =
-      item && "trackId" in item
+      item && "mediaId" in item
         ? item
-        : { trackId: target.trackId, likedAt: new Date().toISOString() };
+        : { mediaId: target.mediaId, likedAt: new Date().toISOString() };
     return {
       ...current,
-      tracks: current.tracks.some((entry) => entry.trackId === target.trackId)
-        ? current.tracks
-        : [...current.tracks, trackItem],
+      media: current.media.some((entry) => entry.mediaId === target.mediaId)
+        ? current.media
+        : [...current.media, trackItem],
     };
   }
   if (target.kind === "album") {
@@ -233,14 +233,14 @@ export function useLikes() {
         }
       : EMPTY_LIKES;
   });
-  const trackItems = computed(() => likes.value.tracks);
+  const trackItems = computed(() => likes.value.media);
   const albumItems = computed(() => likes.value.albums);
   const audiobookItems = computed(() => likes.value.audiobooks);
   const podcastItems = computed(() => likes.value.podcasts);
   const artistItems = computed(() => likes.value.artists);
   const playlistItems = computed(() => likes.value.playlists);
   const likedTrackIds = computed(() =>
-    trackItems.value.map((item) => item.trackId),
+    trackItems.value.map((item) => item.mediaId),
   );
   const likedAlbumIds = computed(() =>
     albumItems.value.map((item) => item.albumId),
@@ -272,8 +272,8 @@ export function useLikes() {
   });
 
   function isTargetLiked(target: LikeTarget): boolean {
-    if (target.kind === "track")
-      return likedTrackIds.value.includes(target.trackId);
+    if (target.kind === "media")
+      return likedTrackIds.value.includes(target.mediaId);
     if (target.kind === "album")
       return likedAlbumIds.value.includes(target.albumId);
     if (target.kind === "audiobook")

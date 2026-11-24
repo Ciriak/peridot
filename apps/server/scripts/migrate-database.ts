@@ -81,6 +81,18 @@ async function readMigrationStatus(
   return assertPrismaSuccess(envelope, "prisma migration status").spaces;
 }
 
+function legacyDatabaseResetError(error: unknown): Error | null {
+  const text = error instanceof Error ? error.message : String(error);
+  return text.includes("MIGRATION.MARKER_MISMATCH") ||
+    text.includes("marker is not in the migration graph")
+    ? new Error(
+        "This Peridot release uses the new Media and connector schema. " +
+          "Back up and remove the existing SQLite database from /data, then restart Peridot. " +
+          "Legacy databases are intentionally not migrated.",
+      )
+    : null;
+}
+
 function backupTimestamp(now: Date): string {
   return now.toISOString().replace(/[-:]/g, "").replace(".", "");
 }
@@ -203,7 +215,12 @@ export async function runPendingMigrations({
     info(`Pruned ${removedBackups.length} expired database snapshot(s).`);
   }
 
-  const spaces = await readMigrationStatus(databaseUrl);
+  let spaces: MigrationStatus[];
+  try {
+    spaces = await readMigrationStatus(databaseUrl);
+  } catch (error) {
+    throw legacyDatabaseResetError(error) ?? error;
+  }
   const pending = spaces.flatMap((space) =>
     space.migrations.filter((migration) => migration.status === "pending"),
   );

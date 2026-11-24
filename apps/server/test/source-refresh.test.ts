@@ -25,8 +25,8 @@ test("source refresh runs at startup and on the configured cron schedule", async
   try {
     const startupScans = await waitForScanCount(context, 1);
     const startupScan = startupScans[0]!;
-    assert.equal(startupScan.sourceId, null);
-    assert.equal(startupScan.sourceName, null);
+    assert.equal(startupScan.connectorId, null);
+    assert.equal(startupScan.connectorName, null);
     await waitForTask(context, startupScan.id);
 
     const updated = await context.app.inject({

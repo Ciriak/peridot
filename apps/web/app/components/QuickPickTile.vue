@@ -36,13 +36,13 @@ const savedTrackIds = computed(
 const coverUrl = computed(() =>
   trackCoverUrl(
     address.value ?? "",
-    props.item.kind === "track"
-      ? props.item.track.coverUrl
+    props.item.kind === "media"
+      ? props.item.media.coverUrl
       : props.item.album.coverUrl,
   ),
 );
 const title = computed(() =>
-  props.item.kind === "track" ? props.item.track.title : props.item.album.title,
+  props.item.kind === "media" ? props.item.media.title : props.item.album.title,
 );
 const albumTarget = computed(() =>
   props.item.kind === "album"
@@ -51,8 +51,8 @@ const albumTarget = computed(() =>
 );
 const activeItem = computed(() => {
   const activeTrackId = active.value?.id;
-  if (props.item.kind === "track") {
-    return Boolean(activeTrackId && activeTrackId === props.item.track.id);
+  if (props.item.kind === "media") {
+    return Boolean(activeTrackId && activeTrackId === props.item.media.id);
   }
   return Boolean(
     (albumTarget.value && isPlaybackTargetActive(albumTarget.value)) ||
@@ -61,8 +61,8 @@ const activeItem = computed(() => {
 });
 const playable = computed(() => {
   const item = props.item;
-  if (item.kind === "track") {
-    return isTrackPlayable(item.track, {
+  if (item.kind === "media") {
+    return isTrackPlayable(item.media, {
       serverLost: serverStatus.value === "lost",
       savedTrackIds: savedTrackIds.value,
       unavailableTrackIds: unavailableTrackIdSet.value,
@@ -108,8 +108,8 @@ async function toggleItemPlayback() {
     togglePlayback();
     return;
   }
-  if (props.item.kind === "track") {
-    play(props.item.track);
+  if (props.item.kind === "media") {
+    play(props.item.media);
     return;
   }
   if (!albumTarget.value) return;
@@ -123,8 +123,8 @@ async function toggleItemPlayback() {
 
 <template>
   <TrackContextMenu
-    v-if="item.kind === 'track'"
-    :track="item.track"
+    v-if="item.kind === 'media'"
+    :track="item.media"
     @play="toggleItemPlayback"
   >
     <QuickPickTileContent

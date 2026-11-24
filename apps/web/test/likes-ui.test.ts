@@ -4,7 +4,7 @@ import test from "node:test";
 import { likeSuccessToast } from "../app/lib/like-toast.ts";
 
 test("successful likes map to target-specific confirmation toasts", () => {
-  assert.deepEqual(likeSuccessToast({ kind: "track", trackId: "track-1" }), {
+  assert.deepEqual(likeSuccessToast({ kind: "media", mediaId: "track-1" }), {
     titleMessage: { key: "toast.trackLikedTitle" },
     descriptionMessage: { key: "toast.trackLiked" },
     status: "success",

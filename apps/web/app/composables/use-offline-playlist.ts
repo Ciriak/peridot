@@ -20,7 +20,7 @@ export function useOfflinePlaylist(
   const catalogTracks = computed(
     () =>
       playlist.value?.entries.flatMap((entry) =>
-        entry.track ? [entry.track] : [],
+        entry.media ? [entry.media] : [],
       ) ?? [],
   );
   const availableTracks = computed(() =>

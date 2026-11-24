@@ -6,7 +6,7 @@ import type {
   ArtistSummaryResponse,
   AudiobookSummaryResponse,
   PodcastSummaryResponse,
-  TrackResponse,
+  MediaResponse,
 } from "@peridot/contracts";
 import {
   collectOfflineCatalog,
@@ -67,7 +67,7 @@ test("offline catalog uses valid track and card page sizes", async () => {
       listTracks: async (_address, _token, options) => {
         limits.push(options.limit ?? 0);
         return {
-          items: [{ id: "track-1" } as TrackResponse],
+          items: [{ id: "track-1" } as MediaResponse],
           nextCursor: null,
           catalogRevision: 2,
         };
@@ -125,7 +125,7 @@ test("oversized track catalogs stop before requesting card collections", async (
     (_, index) => ({
       id: `track-${index}`,
     }),
-  ) as TrackResponse[];
+  ) as MediaResponse[];
   const catalog = await collectOfflineCatalog(
     scope,
     "token",
@@ -172,7 +172,7 @@ test("combined offline snapshots stay within the memory safeguard", async () => 
   const trackPage = Array.from(
     { length: OFFLINE_CATALOG_TRACK_PAGE_SIZE },
     (_, index) => ({ id: `track-${index}` }),
-  ) as TrackResponse[];
+  ) as MediaResponse[];
   const cards = <T>(prefix: string) =>
     Array.from({ length: 4_000 }, (_, index) => ({
       id: `${prefix}-${index}`,
@@ -278,7 +278,10 @@ test("catalog revision handling is coalesced and queue hydration is incremental"
       "utf8",
     ),
     readFile(
-      new URL("../app/pages/settings/sources.vue", import.meta.url),
+      new URL(
+        "../app/pages/settings/connectors/library-sources.vue",
+        import.meta.url,
+      ),
       "utf8",
     ),
   ]);

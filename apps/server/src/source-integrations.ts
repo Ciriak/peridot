@@ -1,42 +1,42 @@
 import type {
   MediaType,
   MessageDescriptor,
-  SourceIntegrationKind,
-  SourceIntegrationOptionResponse,
-  TrackMediaTypeOrigin,
+  LibrarySourceConnectorOptionResponse,
+  LibrarySourceKind,
+  MediaTypeOrigin,
 } from "@peridot/contracts";
 import type { CredentialStore } from "./credential-store.js";
 
-export type SourceIntegrationConfiguration = Record<string, string>;
+export type LibrarySourceConnectorConfiguration = Record<string, string>;
 
-export interface SourceIntegrationHandle {
+export interface LibrarySourceConnectorHandle {
   id: string;
-  kind: SourceIntegrationKind;
+  kind: LibrarySourceKind;
   name: string | null;
-  configuration: SourceIntegrationConfiguration;
-  credentials: SourceIntegrationConfiguration;
+  configuration: LibrarySourceConnectorConfiguration;
+  credentials: LibrarySourceConnectorConfiguration;
 }
 
 export interface ValidatedIntegrationSource {
   identity: string;
   name: string;
-  configuration: SourceIntegrationConfiguration;
-  credentials: SourceIntegrationConfiguration;
+  configuration: LibrarySourceConnectorConfiguration;
+  credentials: LibrarySourceConnectorConfiguration;
 }
 
-export interface SourceIntegrationDiscoveryInput {
-  configuration: SourceIntegrationConfiguration;
-  credentials: SourceIntegrationConfiguration;
+export interface LibrarySourceConnectorDiscoveryInput {
+  configuration: LibrarySourceConnectorConfiguration;
+  credentials: LibrarySourceConnectorConfiguration;
   signal?: AbortSignal;
 }
 
-export interface SourceIntegrationValidationInput {
-  configuration: SourceIntegrationConfiguration;
-  credentials: SourceIntegrationConfiguration;
+export interface LibrarySourceConnectorValidationInput {
+  configuration: LibrarySourceConnectorConfiguration;
+  credentials: LibrarySourceConnectorConfiguration;
   signal?: AbortSignal;
 }
 
-export interface SourceIntegrationTrackRecord {
+export interface LibrarySourceTrackRecord {
   externalId: string;
   externalVersion: string;
   relativePath: string;
@@ -47,7 +47,7 @@ export interface SourceIntegrationTrackRecord {
   album: string | null;
   genres: readonly string[];
   mediaType: MediaType;
-  mediaTypeOrigin: TrackMediaTypeOrigin;
+  mediaTypeOrigin: MediaTypeOrigin;
   discNumber: number | null;
   trackNumber: number | null;
   durationMs: number | null;
@@ -65,21 +65,21 @@ export interface SourceIntegrationTrackRecord {
   } | null;
 }
 
-export interface SourceIntegrationScanPage {
-  items: readonly SourceIntegrationTrackRecord[];
+export interface LibrarySourceScanPage {
+  items: readonly LibrarySourceTrackRecord[];
   unsupportedCount: number;
   processedCount: number;
   totalCount: number | null;
 }
 
-export interface SourceIntegrationScanInput {
-  source: SourceIntegrationHandle;
+export interface LibrarySourceScanInput {
+  source: LibrarySourceConnectorHandle;
   signal: AbortSignal;
-  onPage(page: SourceIntegrationScanPage): Promise<void> | void;
+  onPage(page: LibrarySourceScanPage): Promise<void> | void;
 }
 
-export interface SourceIntegrationArtworkInput {
-  source: SourceIntegrationHandle;
+export interface LibrarySourceArtworkInput {
+  source: LibrarySourceConnectorHandle;
   reference: {
     itemId: string;
     tag: string | null;
@@ -87,13 +87,13 @@ export interface SourceIntegrationArtworkInput {
   signal: AbortSignal;
 }
 
-export interface SourceIntegrationArtwork {
+export interface LibrarySourceArtwork {
   data: Uint8Array;
   mimeType: string;
 }
 
-export interface SourceIntegrationPlaybackInput {
-  source: SourceIntegrationHandle;
+export interface LibrarySourcePlaybackInput {
+  source: LibrarySourceConnectorHandle;
   externalId: string;
   container: string | null;
   range: string | undefined;
@@ -101,44 +101,47 @@ export interface SourceIntegrationPlaybackInput {
   signal: AbortSignal;
 }
 
-export type SourceIntegrationErrorCode =
+export type LibrarySourceConnectorErrorCode =
   | "invalid_configuration"
   | "invalid_credentials"
   | "unavailable"
   | "invalid_response"
   | "unsupported";
 
-export class SourceIntegrationError extends Error {
+export class LibrarySourceConnectorError extends Error {
   constructor(
     message: string,
-    readonly code: SourceIntegrationErrorCode,
+    readonly code: LibrarySourceConnectorErrorCode,
     readonly statusCode = 400,
     readonly messageDescriptor?: MessageDescriptor,
   ) {
     super(message);
-    this.name = "SourceIntegrationError";
+    this.name = "LibrarySourceConnectorError";
   }
 }
 
-export interface SourceIntegrationDefinition {
+export interface LibrarySourceConnectorDefinition {
   kind: string;
   discover(
-    input: SourceIntegrationDiscoveryInput,
-  ): Promise<SourceIntegrationOptionResponse[]>;
+    input: LibrarySourceConnectorDiscoveryInput,
+  ): Promise<LibrarySourceConnectorOptionResponse[]>;
   validateSource(
-    input: SourceIntegrationValidationInput,
+    input: LibrarySourceConnectorValidationInput,
   ): Promise<ValidatedIntegrationSource>;
-  scan(input: SourceIntegrationScanInput): Promise<void>;
+  scan(input: LibrarySourceScanInput): Promise<void>;
   artwork(
-    input: SourceIntegrationArtworkInput,
-  ): Promise<SourceIntegrationArtwork | null>;
-  openAudio(input: SourceIntegrationPlaybackInput): Promise<Response>;
+    input: LibrarySourceArtworkInput,
+  ): Promise<LibrarySourceArtwork | null>;
+  openAudio(input: LibrarySourcePlaybackInput): Promise<Response>;
 }
 
-export class SourceIntegrationRegistry {
-  private readonly definitions = new Map<string, SourceIntegrationDefinition>();
+export class LibrarySourceConnectorRegistry {
+  private readonly definitions = new Map<
+    string,
+    LibrarySourceConnectorDefinition
+  >();
 
-  constructor(definitions: readonly SourceIntegrationDefinition[]) {
+  constructor(definitions: readonly LibrarySourceConnectorDefinition[]) {
     for (const definition of definitions) {
       if (this.definitions.has(definition.kind)) {
         throw new Error(`Duplicate source integration: ${definition.kind}`);
@@ -147,10 +150,10 @@ export class SourceIntegrationRegistry {
     }
   }
 
-  definition(kind: string): SourceIntegrationDefinition {
+  definition(kind: string): LibrarySourceConnectorDefinition {
     const definition = this.definitions.get(kind);
     if (!definition) {
-      throw new SourceIntegrationError(
+      throw new LibrarySourceConnectorError(
         "Source integration not found.",
         "invalid_configuration",
         404,
@@ -166,7 +169,7 @@ export class SourceIntegrationRegistry {
 
 function configurationValue(
   value: string | null,
-): SourceIntegrationConfiguration {
+): LibrarySourceConnectorConfiguration {
   if (!value) return {};
   try {
     const parsed = JSON.parse(value) as unknown;
@@ -185,21 +188,21 @@ function configurationValue(
   }
 }
 
-export class SourceIntegrationService {
+export class LibrarySourceConnectorService {
   constructor(
-    readonly registry: SourceIntegrationRegistry,
+    readonly registry: LibrarySourceConnectorRegistry,
     private readonly credentials: CredentialStore,
   ) {}
 
-  definition(kind: string): SourceIntegrationDefinition {
+  definition(kind: string): LibrarySourceConnectorDefinition {
     return this.registry.definition(kind);
   }
 
-  discover(kind: string, input: SourceIntegrationDiscoveryInput) {
+  discover(kind: string, input: LibrarySourceConnectorDiscoveryInput) {
     return this.definition(kind).discover(input);
   }
 
-  validateSource(kind: string, input: SourceIntegrationValidationInput) {
+  validateSource(kind: string, input: LibrarySourceConnectorValidationInput) {
     return this.definition(kind).validateSource(input);
   }
 
@@ -209,15 +212,18 @@ export class SourceIntegrationService {
     name: string | null;
     configuration: string | null;
     credentialCiphertext: string | null;
-  }): SourceIntegrationHandle {
+  }): LibrarySourceConnectorHandle {
     return {
       id: source.id,
-      kind: source.kind as SourceIntegrationKind,
+      kind: source.kind as LibrarySourceKind,
       name: source.name,
       configuration: configurationValue(source.configuration),
       credentials: source.credentialCiphertext
         ? configurationValue(
-            this.credentials.decrypt(source.credentialCiphertext, "source"),
+            this.credentials.decrypt(
+              source.credentialCiphertext,
+              "library-source",
+            ),
           )
         : {},
     };

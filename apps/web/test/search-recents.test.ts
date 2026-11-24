@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { TrackResponse } from "@peridot/contracts";
+import type { MediaResponse } from "@peridot/contracts";
 import { groupAlbums } from "../app/lib/library.ts";
 import {
   addRecentAlbum,
@@ -34,7 +34,7 @@ function track(
   artist: string,
   album: string,
   albumId: string,
-): TrackResponse {
+): MediaResponse {
   return {
     id,
     title,

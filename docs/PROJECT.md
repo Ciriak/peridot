@@ -8,8 +8,12 @@ can work from repository documentation.
 ## Product requirements
 
 Peridot is a flexible, self-hosted music platform for organizing and listening to
-an owner's music collection. Core owns users, the canonical library, audio,
-playlists, and trusted built-in source integrations.
+an owner's music collection. Core owns users, the canonical media library, audio,
+playlists, and trusted built-in connectors.
+
+The catalog uses one stable `Media` identity per recording or episode, with one
+or more source-backed `MediaCopy` records for playable files. Copy quality
+affects playback and display selection; it does not change canonical identity.
 
 The core audio library also supports audiobooks and locally stored podcast
 episodes as first-class browse categories. Media type is detected per track
@@ -23,8 +27,10 @@ automatic only and does not use title- or folder-name heuristics.
 - AudioMuse-AI compatibility via an optional connector to the user's own service.
 - User-provided API keys and user-hosted services. No mandatory cloud service,
   embedded provider keys, or Peridot-hosted credential proxy.
-- Jellyfin is a direct built-in library source. Future integrations are trusted
-  built-ins behind the same internal source interface and ship with Peridot.
+- Folder and Jellyfin are direct built-in library sources. Torznab is a release
+  indexer, qBittorrent is a download client, and MusicBrainz and Discogs are
+  metadata providers. Future connectors are trusted built-ins resolved through
+  the same role-based registry and ship with Peridot.
 - Never load untrusted integration code into the server process.
 - OpenSubsonic compatibility is a target requiring future interoperability tests.
 - Every catalog artist and album name is an interactive reference. Artist names
@@ -42,7 +48,7 @@ Use shadcn-vue for the component system as interactive screens are introduced.
 
 The foundation uses SQLite as a provisional local development starting point.
 Desktop shell, production storage, authentication, and additional built-in
-source integrations still require implementation decisions.
+connectors still require implementation decisions.
 
 Production deployment uses immutable multi-architecture GHCR images. The web
 application, authenticated API, audio, and realtime traffic share one Fastify

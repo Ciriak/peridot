@@ -239,17 +239,17 @@ test("albums have list and detail routes with derived groups", async () => {
   );
   assert.match(
     trackTable,
-    /const TRACK_LINK_HIGHLIGHT_DURATION_MS = 2000;[\s\S]*?trackLinkHighlightId\.value = trackId;[\s\S]*?trackLinkHighlightId\.value = null;/,
+    /const TRACK_LINK_HIGHLIGHT_DURATION_MS = 2000;[\s\S]*?trackLinkHighlightId\.value = mediaId;[\s\S]*?trackLinkHighlightId\.value = null;/,
     "A linked track keeps its highlight for two seconds before returning to its normal background",
   );
   assert.match(
     trackTable,
-    /function isActive\(track: TrackResponse\): boolean \{\s+return currentTrackId\.value === track\.id;/,
+    /function isActive\(track: MediaResponse\): boolean \{\s+return currentTrackId\.value === track\.id;/,
     "The row highlight follows the current track independently of playback",
   );
   assert.match(
     trackTable,
-    /function isPlaying\(track: TrackResponse\): boolean \{\s+return isActive\(track\) && playing\.value;/,
+    /function isPlaying\(track: MediaResponse\): boolean \{\s+return isActive\(track\) && playing\.value;/,
     "The pause icon still follows actual playback state",
   );
   assert.match(
@@ -325,7 +325,7 @@ test("albums have list and detail routes with derived groups", async () => {
   );
   assert.match(
     detailPage,
-    /trackIdFromTitleHash\(route\.hash\)/,
+    /mediaIdFromTitleHash\(route\.hash\)/,
     "Album pages translate title hashes into track targets",
   );
   assert.match(

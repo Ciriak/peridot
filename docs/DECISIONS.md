@@ -1,5 +1,63 @@
 # Peridot decisions
 
+## 2026-11-24: Media owns identity and copies own files
+
+The catalog now separates a stable canonical `Media` identity from one or more
+source-backed `MediaCopy` rows. Likes, play events, playlists, queues, artwork
+selection, catalog projections, and offline references use Media IDs. Source
+identity, paths or external IDs, embedded metadata, file properties, recording
+identities, and scan state live on copies.
+
+Automatic matching merges copies without replacing the first canonical Media ID.
+Aliases redirect stale IDs. Playback and display selection rank available copies
+by lossless state, bitrate, file size, metadata completeness, library-source
+order, import time, and copy ID. This makes canonical identity stable while
+allowing a newly discovered better file to become the preferred playback copy.
+
+## 2026-11-24: Connectors use explicit compile-time roles
+
+One connector registry resolves trusted built-in implementations by role:
+library source, release indexer, download client, metadata provider, or playlist
+account. Focused capability interfaces and role-specific settings replace the
+former mixed Source and Torznab model.
+
+Torznab is a release indexer, qBittorrent is a download client, Path and Jellyfin
+are library sources, and MusicBrainz and Discogs are metadata providers.
+Playlist account and link storage plus the capability interface ship now, but no
+production playlist adapter is registered. Connector code remains compiled into
+the server; no user or remote code is loaded.
+
+## 2026-11-24: Connector roles are direct settings destinations
+
+The settings sidebar lists Library sources, Release indexers, Download clients,
+and Metadata providers directly under Administration. There is no Connectors
+parent entry or heading. The `/settings/connectors` overview remains available
+as an unlinked direct-link page so existing links still resolve without adding a
+second navigation level.
+
+## 2026-11-24: This release uses a clean API and database break
+
+Public catalog routes use `/api/media`. The Track, Torznab, and generic Source
+compatibility APIs are removed without aliases. The migration graph is replaced
+by one baseline for the Media/connector contract.
+
+Existing server databases are not migrated or deleted automatically. Startup
+detects the unsupported legacy marker and instructs the owner to back up and
+remove the database manually. This avoids destructive startup behavior and
+avoids carrying an obsolete Track/Source migration chain into the release.
+
+## 2026-11-24: Client metadata resets while legacy audio waits for cleanup
+
+Web query cache, player state, download-task storage, and offline manifests use
+new generations. On first launch, the web client clears legacy metadata
+databases and state while preserving `peridot-offline-audio-v1`. Android writes
+new offline state under `files/offline-v2` and leaves existing `files/offline`
+audio untouched.
+
+Settings → Library exposes an explicit legacy-cache cleanup action. Old audio is
+not deleted during startup or migration because those blobs may be the only
+remaining playable copy of media unavailable from every connected source.
+
 ## 2026-11-24: Recent search albums use the library row list
 
 When the search query is empty, recently searched albums render through the
@@ -139,7 +197,9 @@ rows and task history.
 The Albums grid renders card-shaped loading placeholders for unloaded rows.
 Rows containing placeholders are not measured into the virtualizer, so their
 reserved estimate remains stable until real cards replace them. Reduced-motion
-users receive static placeholders.
+users receive static placeholders. Placeholders are limited to slots inside the
+complete result count, so a fully loaded final row with fewer than one full row
+of cards is not padded with misleading loading skeletons.
 
 ## Torznab release acquisition
 

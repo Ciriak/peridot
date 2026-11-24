@@ -6,32 +6,32 @@ export function nextRepeatMode(mode: RepeatMode): RepeatMode {
   return "off";
 }
 
-function withoutTrack(trackIds: readonly string[], trackId: string): string[] {
-  return trackIds.filter((candidate) => candidate !== trackId);
+function withoutTrack(mediaIds: readonly string[], mediaId: string): string[] {
+  return mediaIds.filter((candidate) => candidate !== mediaId);
 }
 
 export function normalizeQueueTrackIds(
-  trackIds: readonly string[],
+  mediaIds: readonly string[],
   availableTrackIds: ReadonlySet<string>,
 ): string[] {
-  return [...new Set(trackIds)].filter((trackId) =>
-    availableTrackIds.has(trackId),
+  return [...new Set(mediaIds)].filter((mediaId) =>
+    availableTrackIds.has(mediaId),
   );
 }
 
 export function moveTrackToFront(
-  trackIds: readonly string[],
-  trackId: string,
+  mediaIds: readonly string[],
+  mediaId: string,
 ): string[] {
-  return [trackId, ...withoutTrack(trackIds, trackId)];
+  return [mediaId, ...withoutTrack(mediaIds, mediaId)];
 }
 
 export function rotateQueueToTrack(
-  trackIds: readonly string[],
-  trackId: string,
+  mediaIds: readonly string[],
+  mediaId: string,
 ): string[] {
-  const uniqueTrackIds = [...new Set(trackIds)];
-  const startIndex = uniqueTrackIds.indexOf(trackId);
+  const uniqueTrackIds = [...new Set(mediaIds)];
+  const startIndex = uniqueTrackIds.indexOf(mediaId);
   if (startIndex <= 0) return uniqueTrackIds;
   return [
     ...uniqueTrackIds.slice(startIndex),
@@ -40,34 +40,34 @@ export function rotateQueueToTrack(
 }
 
 export function addTrackNext(
-  trackIds: readonly string[],
-  trackId: string,
+  mediaIds: readonly string[],
+  mediaId: string,
 ): string[] {
-  const activeTrackId = trackIds[0];
-  if (activeTrackId === trackId) return [...trackIds];
-  const remaining = withoutTrack(trackIds, trackId).filter(
+  const activeTrackId = mediaIds[0];
+  if (activeTrackId === mediaId) return [...mediaIds];
+  const remaining = withoutTrack(mediaIds, mediaId).filter(
     (candidate) => candidate !== activeTrackId,
   );
-  return activeTrackId ? [activeTrackId, trackId, ...remaining] : [trackId];
+  return activeTrackId ? [activeTrackId, mediaId, ...remaining] : [mediaId];
 }
 
 export function addTrackAfterActive(
-  trackIds: readonly string[],
+  mediaIds: readonly string[],
   activeTrackId: string | null,
-  trackId: string,
+  mediaId: string,
 ): string[] {
-  const normalized = [...new Set(trackIds)];
-  if (!activeTrackId) return [trackId];
-  if (activeTrackId === trackId) return normalized;
-  const next = withoutTrack(normalized, trackId);
+  const normalized = [...new Set(mediaIds)];
+  if (!activeTrackId) return [mediaId];
+  if (activeTrackId === mediaId) return normalized;
+  const next = withoutTrack(normalized, mediaId);
   const activeIndex = next.indexOf(activeTrackId);
-  if (activeIndex < 0) return [trackId, ...next];
-  next.splice(activeIndex + 1, 0, trackId);
+  if (activeIndex < 0) return [mediaId, ...next];
+  next.splice(activeIndex + 1, 0, mediaId);
   return next;
 }
 
-export function consumeQueue(trackIds: readonly string[]): string[] {
-  return trackIds.slice(1);
+export function consumeQueue(mediaIds: readonly string[]): string[] {
+  return mediaIds.slice(1);
 }
 
 export function nextPreviewTrackId({
@@ -90,17 +90,17 @@ export function nextPreviewTrackId({
   if (shuffleEnabled) {
     return (
       shuffleTrackIds.find(
-        (trackId) => trackId !== currentTrackId && playable.has(trackId),
+        (mediaId) => mediaId !== currentTrackId && playable.has(mediaId),
       ) ?? null
     );
   }
   const nextId = consumeQueue(playableTrackIds).find(
-    (trackId) => trackId !== currentTrackId,
+    (mediaId) => mediaId !== currentTrackId,
   );
   if (nextId) return nextId;
   if (repeatMode !== "all") return null;
   return (
-    repeatCycleTrackIds.find((trackId) => trackId !== currentTrackId) ?? null
+    repeatCycleTrackIds.find((mediaId) => mediaId !== currentTrackId) ?? null
   );
 }
 
@@ -111,61 +111,61 @@ export function lastAvailableHistoryTrackId(
   return (
     [...historyTrackIds]
       .reverse()
-      .find((trackId) => availableTrackIds.has(trackId)) ?? null
+      .find((mediaId) => availableTrackIds.has(mediaId)) ?? null
   );
 }
 
 export function removeQueueTrack(
-  trackIds: readonly string[],
-  trackId: string,
+  mediaIds: readonly string[],
+  mediaId: string,
 ): string[] {
-  return withoutTrack(trackIds, trackId);
+  return withoutTrack(mediaIds, mediaId);
 }
 
 export function reorderUpcoming(
-  trackIds: readonly string[],
+  mediaIds: readonly string[],
   upcomingTrackIds: readonly string[],
 ): string[] {
-  const activeTrackId = trackIds[0];
+  const activeTrackId = mediaIds[0];
   if (!activeTrackId) return [];
-  const allowed = new Set(trackIds.slice(1));
+  const allowed = new Set(mediaIds.slice(1));
   const next = [...new Set(upcomingTrackIds)].filter(
-    (trackId) => trackId !== activeTrackId && allowed.has(trackId),
+    (mediaId) => mediaId !== activeTrackId && allowed.has(mediaId),
   );
-  for (const trackId of trackIds.slice(1)) {
-    if (!next.includes(trackId)) next.push(trackId);
+  for (const mediaId of mediaIds.slice(1)) {
+    if (!next.includes(mediaId)) next.push(mediaId);
   }
   return [activeTrackId, ...next];
 }
 
 export function reorderSourceQueue(
-  trackIds: readonly string[],
+  mediaIds: readonly string[],
   activeTrackId: string | null,
   reorderedTrackIds: readonly string[],
 ): string[] {
   if (!activeTrackId) return [];
   const editable = new Set(
-    trackIds.filter((trackId) => trackId !== activeTrackId),
+    mediaIds.filter((mediaId) => mediaId !== activeTrackId),
   );
   const next = [...new Set(reorderedTrackIds)].filter(
-    (trackId) => editable.has(trackId) && trackId !== activeTrackId,
+    (mediaId) => editable.has(mediaId) && mediaId !== activeTrackId,
   );
-  for (const trackId of trackIds) {
-    if (trackId !== activeTrackId && !next.includes(trackId)) {
-      next.push(trackId);
+  for (const mediaId of mediaIds) {
+    if (mediaId !== activeTrackId && !next.includes(mediaId)) {
+      next.push(mediaId);
     }
   }
   let nextIndex = 0;
-  return trackIds.map((trackId) =>
-    trackId === activeTrackId ? trackId : next[nextIndex++]!,
+  return mediaIds.map((mediaId) =>
+    mediaId === activeTrackId ? mediaId : next[nextIndex++]!,
   );
 }
 
 export function shuffleTrackIds(
-  trackIds: readonly string[],
+  mediaIds: readonly string[],
   random: () => number = Math.random,
 ): string[] {
-  const shuffled = [...new Set(trackIds)];
+  const shuffled = [...new Set(mediaIds)];
   for (let index = shuffled.length - 1; index > 0; index -= 1) {
     const swapIndex = Math.floor(random() * (index + 1));
     [shuffled[index], shuffled[swapIndex]] = [
@@ -177,54 +177,54 @@ export function shuffleTrackIds(
 }
 
 export function shuffledPoolExcept(
-  trackIds: readonly string[],
+  mediaIds: readonly string[],
   excludedTrackId: string | null,
   random: () => number = Math.random,
 ): string[] {
   return shuffleTrackIds(
-    trackIds.filter((trackId) => trackId !== excludedTrackId),
+    mediaIds.filter((mediaId) => mediaId !== excludedTrackId),
     random,
   );
 }
 
 export function shuffleUpcoming(
-  trackIds: readonly string[],
+  mediaIds: readonly string[],
   random: () => number = Math.random,
 ): string[] {
-  const activeTrackId = trackIds[0];
+  const activeTrackId = mediaIds[0];
   if (!activeTrackId) return [];
   return [
     activeTrackId,
-    ...shuffledPoolExcept(trackIds.slice(1), activeTrackId, random),
+    ...shuffledPoolExcept(mediaIds.slice(1), activeTrackId, random),
   ];
 }
 
 export function removeFromShufflePool(
   shuffleTrackIds: readonly string[],
-  trackId: string,
+  mediaId: string,
 ): string[] {
-  return withoutTrack(shuffleTrackIds, trackId);
+  return withoutTrack(shuffleTrackIds, mediaId);
 }
 
 export function appendToShufflePool(
   shuffleTrackIds: readonly string[],
-  trackId: string,
+  mediaId: string,
 ): string[] {
-  return [...withoutTrack(shuffleTrackIds, trackId), trackId];
+  return [...withoutTrack(shuffleTrackIds, mediaId), mediaId];
 }
 
 export function advanceShuffle(
-  trackIds: readonly string[],
+  mediaIds: readonly string[],
   activeTrackId: string,
   shuffleTrackIds: readonly string[],
   repeatAll: boolean,
   random: () => number = Math.random,
 ): { activeTrackId: string; shuffleTrackIds: string[] } {
   const allowed = new Set(
-    trackIds.filter((trackId) => trackId !== activeTrackId),
+    mediaIds.filter((mediaId) => mediaId !== activeTrackId),
   );
-  const pool = [...new Set(shuffleTrackIds)].filter((trackId) =>
-    allowed.has(trackId),
+  const pool = [...new Set(shuffleTrackIds)].filter((mediaId) =>
+    allowed.has(mediaId),
   );
   const nextTrackId = pool[0];
   if (nextTrackId) {
@@ -233,8 +233,8 @@ export function advanceShuffle(
       shuffleTrackIds: pool.slice(1),
     };
   }
-  if (repeatAll && trackIds.length > 1) {
-    const renewed = shuffledPoolExcept(trackIds, activeTrackId, random);
+  if (repeatAll && mediaIds.length > 1) {
+    const renewed = shuffledPoolExcept(mediaIds, activeTrackId, random);
     return {
       activeTrackId: renewed[0]!,
       shuffleTrackIds: renewed.slice(1),
@@ -253,7 +253,7 @@ export function restorePreviousShuffleTrack(
 }
 
 export function compactQueueAfterShuffle(
-  trackIds: readonly string[],
+  mediaIds: readonly string[],
   activeTrackId: string | null,
   shuffleTrackIds: readonly string[],
 ): string[] {
@@ -261,21 +261,21 @@ export function compactQueueAfterShuffle(
   const unplayed = new Set(shuffleTrackIds);
   return [
     activeTrackId,
-    ...trackIds.filter(
-      (trackId) => trackId !== activeTrackId && unplayed.has(trackId),
+    ...mediaIds.filter(
+      (mediaId) => mediaId !== activeTrackId && unplayed.has(mediaId),
     ),
   ];
 }
 
 export function restorePreviousTrack(
-  trackIds: readonly string[],
+  mediaIds: readonly string[],
   previousTrackId: string,
 ): string[] {
-  const activeTrackId = trackIds[0];
+  const activeTrackId = mediaIds[0];
   if (!activeTrackId) return [previousTrackId];
   return [
     previousTrackId,
     activeTrackId,
-    ...withoutTrack(trackIds.slice(1), previousTrackId),
+    ...withoutTrack(mediaIds.slice(1), previousTrackId),
   ];
 }
