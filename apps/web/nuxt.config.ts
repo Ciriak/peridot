@@ -96,7 +96,11 @@ const pwaBuildRevision = new Date().toISOString();
 export default defineNuxtConfig({
   ssr: false,
   compatibilityDate: "2026-11-10",
-  devtools: { enabled: false },
+  devtools: {
+    enabled: true,
+    vueDevTools: true,
+    mcp: false,
+  },
   runtimeConfig: {
     public: {
       appVersion: rootPackage.version,

@@ -1,6 +1,8 @@
 packages:
   - apps/*
   - packages/*
+overrides:
+  "@nuxt/devtools": 4.2.0
 allowBuilds:
   "@prisma/engines": true
   better-sqlite3: true
