@@ -539,8 +539,7 @@ export class LibraryScanner {
             updated: counts.updatedCount,
             unchanged: counts.unchangedCount,
             unavailable: 0,
-            errors:
-              counts.errorCount + unsupportedCount + discoveryErrorCount,
+            errors: counts.errorCount + unsupportedCount + discoveryErrorCount,
             timingMs: scanTimingValues(timings),
           }),
         );
@@ -624,21 +623,25 @@ export class LibraryScanner {
         discoveredCount = files.length + completedRemoteTotal;
       }
       throwIfAborted(signal);
-      await withTiming(timings.database, () => this.removeUnusedCovers());
-      if (this.artworkCache) {
-        await withTiming(timings.artwork, () =>
-          pruneReferencedArtwork(this.database, this.artworkCache!),
-        );
-      }
-
       let unavailableCount = 0;
       if (!targetedImport) {
+        await withTiming(timings.database, () => this.removeUnusedCovers());
+        if (this.artworkCache) {
+          await withTiming(timings.artwork, () =>
+            pruneReferencedArtwork(this.database, this.artworkCache!),
+          );
+        }
         const trackQuery = this.database.orm.Track.where({
           available: 1,
-        }).where((track) => track.sourceId.in(sources.map((source) => source.id)));
+        }).where((track) =>
+          track.sourceId.in(sources.map((source) => source.id)),
+        );
         const unavailableTracks = await trackQuery
           .where((track) =>
-            or(track.lastSeenScanId.isNull(), track.lastSeenScanId.neq(task.id)),
+            or(
+              track.lastSeenScanId.isNull(),
+              track.lastSeenScanId.neq(task.id),
+            ),
           )
           .all();
         for (

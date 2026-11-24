@@ -142,14 +142,15 @@ function normalizeTaskPayload(
   );
 }
 
-export function readTaskPayload(task: Pick<TaskRow, "payload">): string[] | null {
+export function readTaskPayload(
+  task: Pick<TaskRow, "payload">,
+): string[] | null {
   if (task.payload === null) return null;
   try {
     const parsed = JSON.parse(task.payload) as unknown;
     return Array.isArray(parsed)
       ? parsed.filter(
-          (item): item is string =>
-            typeof item === "string" && item.length > 0,
+          (item): item is string => typeof item === "string" && item.length > 0,
         )
       : [];
   } catch {

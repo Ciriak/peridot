@@ -443,9 +443,7 @@ test("an external release indexes only its completed audio files", async (t) => 
     "completed",
   );
   assert.deepEqual(
-    readTaskPayload(
-      (await ctx.database.orm.Task.first({ id: importTaskId }))!,
-    ),
+    readTaskPayload((await ctx.database.orm.Task.first({ id: importTaskId }))!),
     [importedRelativePath],
   );
   const tokenResponse = await ctx.app.inject({

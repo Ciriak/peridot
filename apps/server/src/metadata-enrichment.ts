@@ -386,10 +386,9 @@ export class MetadataEnrichment {
         mediaType: "music",
       });
       const payloadTrackIds = readTaskPayload(task);
-      const sourceTracks =
-        task.sourceId
-          ? trackQuery.where({ sourceId: task.sourceId })
-          : trackQuery;
+      const sourceTracks = task.sourceId
+        ? trackQuery.where({ sourceId: task.sourceId })
+        : trackQuery;
       const tracks =
         payloadTrackIds === null
           ? await sourceTracks.all()

@@ -1,5 +1,56 @@
 # Peridot handoff
 
+## Incremental external imports
+
+Completed Torznab downloads now store qBittorrent's completed, safe audio paths
+on the durable release-import task. The scanner resolves only those paths instead
+of recursively reading the configured folder. Targeted imports also skip the
+source-wide unavailable-track, cover-cleanup, and artwork-cache passes and do not
+advance `lastSyncedAt`, because a partial import is not a complete source
+snapshot. Metadata matching receives the imported track IDs and stays scoped to
+the new release.
+
+Normal library and source rescans still perform full discovery and
+reconciliation. Release-import tasks created before the payload migration have
+no stored paths and use the full-scan fallback.
+
+Verification:
+
+- `pnpm --filter @peridot/server test` (207 passing)
+- Incremental path and mixed-folder import tests (43 passing)
+- `pnpm typecheck`
+- `pnpm --filter @peridot/server typecheck`
+- `pnpm --filter @peridot/server build`
+- `pnpm lint`
+- `pnpm format:check`
+- `pnpm db:validate` (21-migration graph current)
+- `pnpm db:migrate:dev` applied `20261124T1126_add_task_payload` and created a
+  pre-migration database backup
+
+Known limits:
+
+- Duplicate detection remains catalog-wide after an import so canonical-copy
+  selection stays correct. It reads database rows rather than rescanned files.
+- A live qBittorrent transfer against a folder containing more than 70,000 files
+  has not been measured in this run.
+- Browser-level import progress and toast behavior were not re-exercised after
+  the scanner change.
+
+Uncommitted changes:
+
+- The targeted-import skip for source-wide artwork and cover cleanup, final
+  formatting adjustments, the advanced database ref, and this handoff.
+- The durable payload migration, generated contract artifacts, path handling,
+  tests, decision record, and development notes are included in
+  `75ad868f feat: implemented download from external sources`.
+
+Next:
+
+- Import a small release into a real qBittorrent-backed folder with a large
+  existing library and confirm only the release's audio paths are read.
+- Exercise both category-managed and manual-path mappings, including a torrent
+  with nested directories and non-audio files.
+
 ## Recent search list layout
 
 Recently searched albums now render as the same bordered, divided row list as
