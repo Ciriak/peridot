@@ -850,6 +850,23 @@ const schemas: Record<string, SchemaObject> = {
   ConnectorListResponse: objectSchema({
     items: arrayOf(ref("ConnectorDescriptorResponse")),
   }),
+  ConnectorInstanceResponse: objectSchema({
+    kind: stringSchema,
+    id: stringSchema,
+    label: stringSchema,
+    url: stringSchema,
+    version: nullable(stringSchema),
+  }),
+  DiscoverConnectorInstancesRequest: objectSchema(
+    {
+      address: nullable(stringSchema),
+    },
+    [],
+  ),
+  DiscoverConnectorInstancesResponse: objectSchema({
+    items: arrayOf(ref("ConnectorInstanceResponse")),
+    scannedSubnets: arrayOf(stringSchema),
+  }),
   ReleaseIndexerInput: objectSchema(
     {
       name: stringSchema,
@@ -1694,6 +1711,12 @@ const routes: Record<string, OpenApiOperation> = {
     "Connectors",
     "List available connector roles and capabilities",
     ref("ConnectorListResponse"),
+  ),
+  "POST /api/admin/connectors/:kind/discover-instances": jsonOperation(
+    "Connectors",
+    "Discover instances for a connector on local networks",
+    ref("DiscoverConnectorInstancesResponse"),
+    { body: ref("DiscoverConnectorInstancesRequest") },
   ),
   "GET /api/admin/release-indexers": jsonOperation(
     "Connectors",

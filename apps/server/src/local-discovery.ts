@@ -1,12 +1,15 @@
-import {
-  networkInterfaces,
-  type NetworkInterfaceInfo,
-  type NetworkInterfaceInfoIPv4,
-} from "node:os";
+import type { NetworkInterfaceInfo } from "node:os";
 import type { FastifyInstance } from "fastify";
+import {
+  discoverConnectorInstances,
+  localPrivateSubnetPrefixes,
+  privateIpv4Prefix,
+} from "./connector-instance-discovery.js";
 
 export const DISCOVERY_PORT = 17430;
 export const DISCOVERY_PROTOCOLS = ["http", "https"] as const;
+
+export { localPrivateSubnetPrefixes, privateIpv4Prefix };
 
 type InterfaceMap = NodeJS.Dict<NetworkInterfaceInfo[]>;
 type DiscoveryFetch = (
@@ -22,44 +25,6 @@ export interface DiscoveredServer {
 export interface DiscoveryResult {
   items: DiscoveredServer[];
   scannedSubnets: string[];
-}
-
-export function privateIpv4Prefix(address: string): string | null {
-  const octets = address.split(".").map(Number);
-  if (
-    octets.length !== 4 ||
-    octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)
-  ) {
-    return null;
-  }
-  const [first, second, third] = octets as [number, number, number, number];
-  const isPrivate =
-    first === 10 ||
-    (first === 172 && second >= 16 && second <= 31) ||
-    (first === 192 && second === 168);
-  return isPrivate ? `${first}.${second}.${third}` : null;
-}
-
-export function localPrivateSubnetPrefixes(
-  interfaces: InterfaceMap = networkInterfaces(),
-): string[] {
-  const prefixes = Object.values(interfaces)
-    .flatMap((entries) => entries ?? [])
-    .filter(
-      (entry): entry is NetworkInterfaceInfoIPv4 =>
-        entry.family === "IPv4" && !entry.internal,
-    )
-    .map((entry) => privateIpv4Prefix(entry.address))
-    .filter((prefix): prefix is string => Boolean(prefix));
-  return [...new Set(prefixes)]
-    .sort((left, right) => subnetRank(left) - subnetRank(right))
-    .slice(0, 3);
-}
-
-function subnetRank(prefix: string): number {
-  if (prefix.startsWith("192.168.")) return 0;
-  if (prefix.startsWith("10.")) return 1;
-  return 2;
 }
 
 export async function discoverLocalPeridotServers(
@@ -78,74 +43,55 @@ export async function discoverLocalPeridotServers(
     (options.port ?? 0) <= 65_535
       ? (options.port as number)
       : DISCOVERY_PORT;
-  const prefixes = localPrivateSubnetPrefixes(options.interfaces);
-  const hosts = [
-    "localhost",
-    "127.0.0.1",
-    ...prefixes.flatMap((prefix) =>
-      Array.from({ length: 254 }, (_, index) => `${prefix}.${index + 1}`),
-    ),
-  ];
-  const targets = hosts.flatMap((host) =>
-    DISCOVERY_PROTOCOLS.map((protocol) => ({
-      address: `${protocol}://${host}:${port}`,
-      host,
-      protocol,
-    })),
-  );
-  const foundByHost = new Map<
-    string,
+  const result = await discoverConnectorInstances(
+    "peridot",
     {
-      address: string;
-      host: string;
-      protocol: (typeof DISCOVERY_PROTOCOLS)[number];
-    }
-  >();
-  let cursor = 0;
-
-  async function worker() {
-    while (cursor < targets.length) {
-      const target = targets[cursor++];
-      if (!target) continue;
-      try {
-        const response = await fetcher(`${target.address}/api/health`, {
+      defaultPorts: [port],
+      protocols: DISCOVERY_PROTOCOLS,
+      async probe(baseUrl, signal) {
+        const base = baseUrl.toString();
+        const healthUrl = new URL(
+          "api/health",
+          base.endsWith("/") ? base : `${base}/`,
+        );
+        const response = await fetcher(healthUrl, {
           headers: { accept: "application/json" },
-          signal: AbortSignal.timeout(options.timeoutMs ?? 350),
+          signal,
         });
-        if (!response.ok) continue;
+        if (!response.ok) return null;
         const body = (await response.json()) as {
           status?: unknown;
           service?: unknown;
         };
-        if (body.status === "ok" && body.service === "peridot") {
-          const existing = foundByHost.get(target.host);
-          if (
-            !existing ||
-            DISCOVERY_PROTOCOLS.indexOf(target.protocol) <
-              DISCOVERY_PROTOCOLS.indexOf(existing.protocol)
-          ) {
-            foundByHost.set(target.host, target);
-          }
-        }
-      } catch {
-        // Unreachable hosts are expected during local network discovery.
-      }
-    }
-  }
-
-  await Promise.all(
-    Array.from(
-      { length: Math.min(options.concurrency ?? 64, targets.length) },
-      () => worker(),
-    ),
+        return body.status === "ok" && body.service === "peridot"
+          ? {
+              id: baseUrl.hostname,
+              label: "Peridot",
+              version: null,
+            }
+          : null;
+      },
+    },
+    {
+      ...(options.interfaces ? { interfaces: options.interfaces } : {}),
+      ...(options.concurrency !== undefined
+        ? { concurrency: options.concurrency }
+        : {}),
+      ...(options.timeoutMs !== undefined
+        ? { timeoutMs: options.timeoutMs }
+        : {}),
+    },
   );
   return {
-    items: [...foundByHost.values()]
-      .map(({ address, host }) => ({ address, host }))
+    items: result.items
+      .map(({ url }) => ({
+        address: url,
+        host: new URL(url).hostname,
+      }))
       .sort((left, right) =>
         left.host.localeCompare(right.host, undefined, { numeric: true }),
       ),
-    scannedSubnets: prefixes.map((prefix) => `${prefix}.0/24`),
+    scannedSubnets: result.scannedSubnets,
   };
 }
 

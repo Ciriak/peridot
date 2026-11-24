@@ -8,7 +8,7 @@ import {
   type ConnectorRuntimeDefinition,
 } from "../src/connectors.js";
 import { CredentialStore } from "../src/credential-store.js";
-import { createTestContext } from "./helpers.js";
+import { createMemberSession, createTestContext } from "./helpers.js";
 
 test("connectors register once and resolve by their declared role", () => {
   const registry = createConnectorRegistry([
@@ -98,7 +98,123 @@ test("the admin connector endpoint exposes safe role descriptors", async () => {
         ["discogs", "metadata-provider"],
       ],
     );
+    assert.ok(
+      items
+        .find(({ kind }) => kind === "jellyfin")
+        ?.capabilities.includes("instance-discovery"),
+    );
     assert.doesNotMatch(response.body, /credential|apiKey|password/i);
+  } finally {
+    await context.close();
+  }
+});
+
+test("administrators can discover verified connector instances without credentials", async () => {
+  const requested: Array<{ url: string; headers: Headers }> = [];
+  const context = await createTestContext({
+    jellyfinFetch: async (input, init) => {
+      requested.push({
+        url: String(input),
+        headers: new Headers(init?.headers),
+      });
+      return Response.json({
+        ProductName: "Jellyfin Server",
+        ServerName: "Living room",
+        Version: "10.10.0",
+        Id: "jellyfin-server-id",
+      });
+    },
+  });
+  try {
+    const response = await context.app.inject({
+      method: "POST",
+      url: "/api/admin/connectors/jellyfin/discover-instances",
+      headers: context.authorization,
+      payload: { address: "192.168.1.5" },
+    });
+
+    assert.equal(response.statusCode, 200, response.body);
+    assert.deepEqual(response.json(), {
+      items: [
+        {
+          kind: "jellyfin",
+          id: "jellyfin-server-id",
+          label: "Living room",
+          url: "https://192.168.1.5:8096",
+          version: "10.10.0",
+        },
+      ],
+      scannedSubnets: [],
+    });
+    assert.deepEqual(requested.map(({ url }) => url).sort(), [
+      "http://192.168.1.5:8096/System/Info/Public",
+      "https://192.168.1.5:8096/System/Info/Public",
+    ]);
+    assert.ok(requested.every(({ headers }) => !headers.has("authorization")));
+
+    const unsupported = await context.app.inject({
+      method: "POST",
+      url: "/api/admin/connectors/torznab/discover-instances",
+      headers: context.authorization,
+      payload: {},
+    });
+    assert.equal(unsupported.statusCode, 404);
+    assert.equal(
+      unsupported.json<{ error: { code: string } }>().error.code,
+      "connector_discovery_unsupported",
+    );
+
+    const member = await createMemberSession(context);
+    const forbidden = await context.app.inject({
+      method: "POST",
+      url: "/api/admin/connectors/jellyfin/discover-instances",
+      headers: { authorization: member.authorization },
+      payload: {},
+    });
+    assert.equal(forbidden.statusCode, 403);
+  } finally {
+    await context.close();
+  }
+});
+
+test("administrators can discover qBittorrent Web UI instances", async () => {
+  const requested: string[] = [];
+  const context = await createTestContext({
+    qbittorrentFetch: async (input) => {
+      requested.push(String(input));
+      return new Response(
+        '<meta name="description" content="qBittorrent WebUI">',
+        {
+          headers: { "content-type": "text/html; charset=UTF-8" },
+        },
+      );
+    },
+  });
+  try {
+    const response = await context.app.inject({
+      method: "POST",
+      url: "/api/admin/connectors/qbittorrent/discover-instances",
+      headers: context.authorization,
+      payload: { address: "192.168.1.8" },
+    });
+
+    assert.equal(response.statusCode, 200, response.body);
+    assert.deepEqual(response.json(), {
+      items: [
+        {
+          kind: "qbittorrent",
+          id: "192.168.1.8:8080/",
+          label: "qBittorrent",
+          url: "https://192.168.1.8:8080",
+          version: null,
+        },
+      ],
+      scannedSubnets: [],
+    });
+    assert.deepEqual(requested.sort(), [
+      "http://192.168.1.8:8080/",
+      "https://192.168.1.8:8080/",
+    ]);
   } finally {
     await context.close();
   }

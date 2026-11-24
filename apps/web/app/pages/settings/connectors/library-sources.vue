@@ -10,6 +10,7 @@ import {
 } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import type {
+  ConnectorInstanceResponse,
   CreateLibrarySourceRequest,
   LibrarySourceConnectorOptionResponse,
   LibrarySourceRemovalProgressResponse,
@@ -18,6 +19,7 @@ import type {
 import { Button } from "@peridot/ui/components/ui/button";
 import { Input } from "@peridot/ui/components/ui/input";
 import { ProgressCircle } from "@peridot/ui/components/ui/progress-circle";
+import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { Switch } from "@peridot/ui/components/ui/switch";
 import { useSortable } from "@vueuse/integrations/useSortable";
 import {
@@ -62,6 +64,7 @@ import { icons } from "../../../lib/icons";
 import {
   createSource,
   deleteSource,
+  discoverConnectorInstances,
   discoverIntegrationSources,
   isAuthenticationRedirectError,
   reorderSources,
@@ -114,6 +117,12 @@ const newJellyfinApiKey = ref("");
 const newJellyfinLibraryId = ref("");
 const newJellyfinCollectionType = ref<string | null>(null);
 const jellyfinLibraries = ref<LibrarySourceConnectorOptionResponse[]>([]);
+const jellyfinInstances = ref<ConnectorInstanceResponse[]>([]);
+const selectedJellyfinInstance = ref<ConnectorInstanceResponse | null>(null);
+const jellyfinScanState = ref<"idle" | "scanning" | "complete" | "failed">(
+  "idle",
+);
+const jellyfinScanError = ref("");
 const discoveringSources = ref(false);
 const adding = ref(false);
 const addError = ref("");
@@ -128,6 +137,9 @@ const sourceRefreshCron = ref("0 3 * * *");
 const sourceRefreshSaving = ref(false);
 const sourceRefreshNotice = ref("");
 const sourceRefreshError = ref("");
+let jellyfinScanTimer: ReturnType<typeof setTimeout> | undefined;
+let jellyfinScanController: AbortController | undefined;
+let jellyfinScanSequence = 0;
 
 watch(
   serverSettings.settings,
@@ -143,6 +155,26 @@ const nextSourceRefresh = computed(() => {
   const nextRunAt = serverSettings.settings.value?.sourceRefresh.nextRunAt;
   return nextRunAt ? d(new Date(nextRunAt), "medium") : null;
 });
+
+watch(
+  newJellyfinUrl,
+  (value) => {
+    if (newKind.value !== "jellyfin") return;
+    if (selectedJellyfinInstance.value?.url === value.trim()) return;
+    selectedJellyfinInstance.value = null;
+    jellyfinLibraries.value = [];
+    newJellyfinLibraryId.value = "";
+    newJellyfinCollectionType.value = null;
+    if (jellyfinScanTimer) clearTimeout(jellyfinScanTimer);
+    jellyfinScanTimer = undefined;
+    if (!value.trim()) return;
+    jellyfinScanTimer = setTimeout(
+      () => void scanJellyfinInstances(value),
+      450,
+    );
+  },
+  { immediate: true },
+);
 
 useSortable(sourceList, sources, {
   animation: 150,
@@ -264,14 +296,24 @@ function chooseKind(kind: SourceChoice) {
   addError.value = "";
   newKind.value = kind;
   resetJellyfinForm();
+  if (kind === "jellyfin") void scanJellyfinInstances();
 }
 
 function resetJellyfinForm() {
+  if (jellyfinScanTimer) clearTimeout(jellyfinScanTimer);
+  jellyfinScanTimer = undefined;
+  jellyfinScanController?.abort();
+  jellyfinScanController = undefined;
+  jellyfinScanSequence += 1;
   newJellyfinUrl.value = "";
   newJellyfinApiKey.value = "";
   newJellyfinLibraryId.value = "";
   newJellyfinCollectionType.value = null;
   jellyfinLibraries.value = [];
+  jellyfinInstances.value = [];
+  selectedJellyfinInstance.value = null;
+  jellyfinScanState.value = "idle";
+  jellyfinScanError.value = "";
 }
 
 function closeAddDialog() {
@@ -292,10 +334,65 @@ function handleDialogBack() {
   }
 }
 
+async function scanJellyfinInstances(addressHint = "") {
+  if (
+    newKind.value !== "jellyfin" ||
+    !address.value ||
+    !token.value ||
+    serverLost.value
+  ) {
+    return;
+  }
+  if (jellyfinScanTimer) clearTimeout(jellyfinScanTimer);
+  jellyfinScanTimer = undefined;
+  jellyfinScanController?.abort();
+  const controller = new AbortController();
+  jellyfinScanController = controller;
+  const sequence = ++jellyfinScanSequence;
+  jellyfinScanState.value = "scanning";
+  jellyfinScanError.value = "";
+  try {
+    const result = await discoverConnectorInstances(
+      address.value,
+      token.value,
+      "jellyfin",
+      addressHint,
+      controller.signal,
+    );
+    if (sequence !== jellyfinScanSequence || controller.signal.aborted) return;
+    jellyfinInstances.value = result.items;
+    jellyfinScanState.value = "complete";
+  } catch (reason) {
+    if (
+      sequence !== jellyfinScanSequence ||
+      controller.signal.aborted ||
+      (reason instanceof DOMException && reason.name === "AbortError")
+    ) {
+      return;
+    }
+    jellyfinInstances.value = [];
+    jellyfinScanState.value = "failed";
+    jellyfinScanError.value = t("settings.sources.jellyfin.scanFailed");
+  } finally {
+    if (jellyfinScanController === controller) {
+      jellyfinScanController = undefined;
+    }
+  }
+}
+
+function selectJellyfinInstance(instance: ConnectorInstanceResponse) {
+  selectedJellyfinInstance.value = instance;
+  jellyfinLibraries.value = [];
+  newJellyfinLibraryId.value = "";
+  newJellyfinCollectionType.value = null;
+  addError.value = "";
+  newJellyfinUrl.value = instance.url;
+}
+
 function canAdd(): boolean {
   if (newKind.value === "path") return Boolean(newPath.value.trim());
   return (
-    Boolean(newJellyfinUrl.value.trim()) &&
+    Boolean(selectedJellyfinInstance.value) &&
     Boolean(newJellyfinApiKey.value.trim()) &&
     Boolean(newJellyfinLibraryId.value)
   );
@@ -312,10 +409,11 @@ async function addSource() {
       path: newPath.value,
     };
   } else {
-    if (!newJellyfinLibraryId.value) return;
+    const instance = selectedJellyfinInstance.value;
+    if (!instance || !newJellyfinLibraryId.value) return;
     body = {
       kind: "jellyfin",
-      url: newJellyfinUrl.value,
+      url: instance.url,
       apiKey: newJellyfinApiKey.value,
       libraryId: newJellyfinLibraryId.value,
       collectionType: newJellyfinCollectionType.value,
@@ -346,7 +444,8 @@ async function addSource() {
 }
 
 async function discoverJellyfinLibraries() {
-  if (!address.value || !token.value) return;
+  const instance = selectedJellyfinInstance.value;
+  if (!address.value || !token.value || !instance) return;
   discoveringSources.value = true;
   addError.value = "";
   try {
@@ -355,7 +454,7 @@ async function discoverJellyfinLibraries() {
       token.value,
       "jellyfin",
       {
-        configuration: { url: newJellyfinUrl.value },
+        configuration: { url: instance.url },
         credentials: { apiKey: newJellyfinApiKey.value },
       },
     );
@@ -516,6 +615,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   unsubscribeRemovals?.();
+  if (jellyfinScanTimer) clearTimeout(jellyfinScanTimer);
+  jellyfinScanController?.abort();
 });
 </script>
 
@@ -897,11 +998,107 @@ onBeforeUnmount(() => {
               <Input
                 id="jellyfin-url"
                 v-model="newJellyfinUrl"
-                type="url"
+                type="text"
+                inputmode="url"
                 required
                 autocomplete="off"
                 :placeholder="t('settings.sources.jellyfin.urlPlaceholder')"
               />
+              <p class="text-sm text-muted-foreground">
+                {{ t("settings.sources.jellyfin.scanHelp") }}
+              </p>
+              <div class="flex items-center justify-between gap-3">
+                <p
+                  class="flex min-w-0 items-center gap-2 text-sm text-muted-foreground"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <PeridotSpinner
+                    v-if="jellyfinScanState === 'scanning'"
+                    :label="t('settings.sources.jellyfin.scanning')"
+                    class="size-4"
+                  />
+                  <span v-if="jellyfinScanState === 'scanning'">
+                    {{ t("settings.sources.jellyfin.scanning") }}
+                  </span>
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  :disabled="jellyfinScanState === 'scanning' || serverLost"
+                  @click="scanJellyfinInstances(newJellyfinUrl)"
+                >
+                  <Icon :icon="icons.restart" aria-hidden="true" />
+                  {{ t("settings.sources.jellyfin.scanAgain") }}
+                </Button>
+              </div>
+              <p
+                v-if="jellyfinScanError"
+                role="alert"
+                class="text-sm text-destructive"
+              >
+                {{ jellyfinScanError }}
+              </p>
+              <div v-if="jellyfinInstances.length" class="space-y-2">
+                <p class="text-sm font-medium">
+                  {{ t("settings.sources.jellyfin.discovered") }}
+                </p>
+                <div class="grid gap-2">
+                  <Button
+                    v-for="instance in jellyfinInstances"
+                    :key="`${instance.kind}:${instance.id}`"
+                    type="button"
+                    variant="outline"
+                    class="h-auto justify-start py-3 text-left"
+                    @click="selectJellyfinInstance(instance)"
+                  >
+                    <Icon
+                      :icon="icons.server"
+                      aria-hidden="true"
+                      class="size-5 shrink-0"
+                    />
+                    <span class="min-w-0 flex-1">
+                      <span class="flex min-w-0 items-center gap-2">
+                        <span
+                          aria-hidden="true"
+                          class="relative flex size-2 shrink-0"
+                        >
+                          <span
+                            class="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-75 motion-reduce:animate-none"
+                          />
+                          <span
+                            class="relative inline-flex size-2 rounded-full bg-success"
+                          />
+                        </span>
+                        <span class="truncate font-medium">
+                          {{ instance.label }}
+                        </span>
+                        <span class="sr-only">{{ t("common.active") }}</span>
+                      </span>
+                      <span class="block truncate text-xs opacity-80">
+                        {{ instance.url }}
+                      </span>
+                      <span
+                        v-if="instance.version"
+                        class="block text-xs opacity-80"
+                      >
+                        {{
+                          t("settings.sources.jellyfin.version", {
+                            version: instance.version,
+                          })
+                        }}
+                      </span>
+                    </span>
+                  </Button>
+                </div>
+              </div>
+              <p
+                v-else-if="jellyfinScanState === 'complete'"
+                class="text-sm text-muted-foreground"
+              >
+                {{ t("settings.sources.jellyfin.noInstances") }}
+              </p>
             </div>
             <div class="space-y-2">
               <label for="jellyfin-api-key" class="text-sm font-medium">
@@ -923,7 +1120,7 @@ onBeforeUnmount(() => {
               variant="outline"
               :disabled="
                 discoveringSources ||
-                !newJellyfinUrl.trim() ||
+                !selectedJellyfinInstance ||
                 !newJellyfinApiKey.trim() ||
                 serverLost
               "

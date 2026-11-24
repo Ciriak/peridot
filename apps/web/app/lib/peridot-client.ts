@@ -33,6 +33,7 @@ import type {
   DirectoryListResponse,
   DirectorySearchResponse,
   DiscoverLibrarySourceRequest,
+  DiscoverConnectorInstancesResponse,
   LikeListResponse,
   LikeResponse,
   LikeTarget,
@@ -754,6 +755,26 @@ export function discoverIntegrationSources(
     `/api/admin/source-integrations/${encodeURIComponent(kind)}/discover`,
     token,
     { method: "POST", body: JSON.stringify(request) },
+  );
+}
+
+export function discoverConnectorInstances(
+  serverAddress: string,
+  token: string,
+  kind: string,
+  address?: string,
+  signal?: AbortSignal,
+) {
+  const trimmedAddress = address?.trim();
+  return authenticatedRequestJson<DiscoverConnectorInstancesResponse>(
+    serverAddress,
+    `/api/admin/connectors/${encodeURIComponent(kind)}/discover-instances`,
+    token,
+    {
+      method: "POST",
+      body: JSON.stringify(trimmedAddress ? { address: trimmedAddress } : {}),
+      ...(signal ? { signal } : {}),
+    },
   );
 }
 

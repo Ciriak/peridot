@@ -5,7 +5,9 @@ import type {
   MediaType,
   MetadataProviderKind,
 } from "@peridot/contracts";
+import type { ConnectorInstanceDiscoveryCapability } from "./connector-instance-discovery.js";
 import type { MetadataResolver } from "./metadata-resolver.js";
+import { createQbittorrentInstanceDiscovery } from "./qbittorrent-discovery.js";
 import type { LibrarySourceConnectorDefinition } from "./source-integrations.js";
 
 export interface ConnectorDefinition {
@@ -66,6 +68,7 @@ export interface PathLibrarySourceCapability {
 }
 
 export interface ConnectorRuntimeDefinition extends ConnectorDefinition {
+  instanceDiscovery?: ConnectorInstanceDiscoveryCapability;
   librarySource?:
     LibrarySourceConnectorDefinition | PathLibrarySourceCapability;
   releaseSearch?: ReleaseSearchCapability;
@@ -196,6 +199,12 @@ export class ConnectorRegistry {
 export function librarySourceConnectorDefinition(
   definition: LibrarySourceConnectorDefinition,
 ): ConnectorRuntimeDefinition {
+  const capabilities = [
+    "scan",
+    "artwork",
+    "playback",
+    ...(definition.instanceDiscovery ? ["instance-discovery"] : []),
+  ];
   return {
     kind: definition.kind,
     role: "library-source",
@@ -205,7 +214,10 @@ export function librarySourceConnectorDefinition(
         : definition.kind === "path"
           ? "Folder"
           : definition.kind,
-    capabilities: ["scan", "artwork", "playback"],
+    capabilities,
+    ...(definition.instanceDiscovery
+      ? { instanceDiscovery: definition.instanceDiscovery }
+      : {}),
     librarySource: definition,
   };
 }
@@ -265,12 +277,18 @@ export function torznabConnectorDefinition(): ConnectorRuntimeDefinition {
   };
 }
 
-export function qBittorrentConnectorDefinition(): ConnectorRuntimeDefinition {
+export function qBittorrentConnectorDefinition(
+  options: { fetch?: typeof fetch } = {},
+): ConnectorRuntimeDefinition {
+  const instanceDiscovery = createQbittorrentInstanceDiscovery(
+    options.fetch ?? fetch,
+  );
   return {
     kind: "qbittorrent",
     role: "download-client",
     name: "qBittorrent",
-    capabilities: ["transfer"],
+    capabilities: ["transfer", "instance-discovery"],
+    instanceDiscovery,
     downloadTransfer: { kind: "qbittorrent" },
   };
 }

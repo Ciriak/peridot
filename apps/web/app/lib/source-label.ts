@@ -18,7 +18,7 @@ export function sourceKindIcon(
 ) {
   if (kind === "path") return icons.folder;
   if (kind === "jellyfin") return icons.jellyfin;
-  if (kind === "torznab") return icons.download;
+  if (kind === "torznab") return icons.globe;
   return null;
 }
 

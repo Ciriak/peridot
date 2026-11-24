@@ -35,6 +35,8 @@ or default folder source.
 - `packages/config`: shared TypeScript configuration.
 - `apps/server/src/connectors.ts`: compile-time capability and role registry for
   trusted built-in connectors.
+- `apps/server/src/connector-instance-discovery.ts`: shared bounded network
+  scanning, connector probes, and result deduplication.
 - `apps/server/src/source-integrations.ts`: library-source scan, artwork, and
   playback capability adapter used by the connector runtime.
 - `apps/server/src/jellyfin`: Jellyfin discovery, scan, artwork, and playback.
@@ -56,6 +58,9 @@ sources implement discovery, validation, scans, artwork, and audio access.
 Release indexers implement release search. Download clients implement transfer
 management. Metadata providers implement lookup and validation. Playlist
 accounts implement remote playlist listing, reading, and synchronization input.
+Connectors that can identify their service on a network may also expose instance
+discovery. This capability records default ports and an unauthenticated service
+probe; the shared server engine owns host enumeration and protocol probing.
 
 Registering a trusted connector requires a server implementation, registration
 in `buildApp`, the public response contract when it is supported, and a matching
@@ -147,6 +152,47 @@ Libraries are discovered with
   "credentials": { "apiKey": "server-only-secret" }
 }
 ```
+
+Connector instances are discovered with
+`POST /api/admin/connectors/:kind/discover-instances`. An empty body searches
+the local networks visible to the Peridot server. An optional address hint
+limits the scan to one host:
+
+```json
+{
+  "address": "192.168.1.5"
+}
+```
+
+The response contains only verified, credential-free instance descriptors:
+
+```json
+{
+  "items": [
+    {
+      "kind": "jellyfin",
+      "id": "server-id",
+      "label": "Living room",
+      "url": "https://192.168.1.5:8096",
+      "version": "10.10.0"
+    }
+  ],
+  "scannedSubnets": []
+}
+```
+
+Jellyfin uses port `8096`, probes HTTPS before HTTP, and accepts only the
+`Jellyfin Server` public-info signature. The Add source form must use the
+selected scanner URL for library discovery and source creation; typed addresses
+are scan hints. Docker bridge networking can hide the host LAN, so entering the
+Jellyfin host address directly is the reliable container path.
+
+qBittorrent uses port `8080` and accepts only the official Web UI metadata or the
+older localized title and bundled Web UI asset. Download clients must use a
+scanner-selected URL for saving. Connection testing can probe the currently
+typed address directly, including scheme-less HTTP addresses, without
+persisting it. Existing saved clients remain editable until their URL changes.
+The same host-hint behavior applies when Docker cannot infer the host LAN.
 
 Library sources use `POST /api/admin/library-sources/:id/scans`. Administrators can
 cancel tasks with `POST /api/admin/tasks/:id/cancel`. Queued tasks are removed;
@@ -260,13 +306,22 @@ self-emit it before applying the migration.
 ### Discover and release imports
 
 In Settings → Release indexers, add a Torznab feed and optional display name and
-API key. Peridot reads the feed's audio capabilities before saving it. Repeat
-for additional indexers.
+API key from a modal dialog matching the other connector settings. Peridot reads
+the feed's audio capabilities before saving it, and keeps save errors visible in
+the dialog. Repeat for additional indexers.
 
-Under Settings → Download clients, choose qBittorrent. Enter the server base URL
-and choose an authentication method. Enter the Web UI username and password or
-an API key from qBittorrent 5.2+ (Preferences → Web UI → API Key), test the
-connection, and save. Repeat for additional instances.
+Under Settings → Download clients, choose qBittorrent. The form scans port
+`8080` automatically and places the scan controls and verified Web UI list
+first, directly below the dialog title. Enter a host or URL to scan one
+directly, choose a discovered instance to prefill the client fields, then choose
+an authentication method. The display name defaults to qBittorrent and remains
+editable. Enter the Web UI username and password or an API key from qBittorrent
+5.2+ (Preferences → Web UI → API Key), then save. Saving validates the live
+qBittorrent connection and rejects without persisting when authentication or
+connectivity fails. Repeat for additional instances. Saved rows lead with the
+bundled qBittorrent icon, use a cog-icon edit action, and keep removal in the
+row's three-dot action menu behind a confirmation dialog because it is
+destructive.
 
 Select a download client in each indexer's settings together with a destination
 folder library source. Choose the qBittorrent category and additional tags.

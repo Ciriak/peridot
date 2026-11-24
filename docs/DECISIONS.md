@@ -1,5 +1,48 @@
 # Peridot decisions
 
+## 2026-11-24: Connector instances use verified network discovery
+
+Trusted connectors may expose one shared instance-discovery capability. The
+server owns subnet enumeration, candidate generation, bounded concurrency,
+protocol probing, deduplication, and sanitized results; connector code only
+identifies its own service. Peridot onboarding now uses this engine while
+retaining its public discovery route, port `17430`, health signature, and
+response contract.
+
+Administrators discover connector instances through the authenticated
+`POST /api/admin/connectors/:kind/discover-instances` route. An empty request
+searches localhost, loopback, and up to three private IPv4 `/24` subnets visible
+to the Peridot server. An address hint limits the scan to that exact host, which
+supports Docker bridge deployments that cannot infer the host LAN. The same
+engine is available to future library-source and download-client connectors.
+
+Jellyfin currently advertises port `8096` and probes both HTTP and HTTPS
+regardless of a typed scheme. A response is accepted only when
+`System/Info/Public` identifies `ProductName` as `Jellyfin Server`. Verified
+HTTPS is preferred when one Jellyfin server responds on both schemes, and
+results are deduplicated by Jellyfin server ID. Standard certificate validation
+remains enabled; self-signed HTTPS is not accepted during this milestone.
+
+qBittorrent advertises port `8080` and probes both HTTP and HTTPS. A response is
+accepted only when the Web UI HTML contains the official
+`qBittorrent WebUI` metadata or the older localized qBittorrent title together
+with its bundled Web UI asset. The root page is inspected without credentials,
+and verified HTTPS is preferred when both schemes respond.
+
+The Jellyfin and qBittorrent forms start discovery automatically and provide a
+rescan action. Typing an address starts a debounced targeted scan.
+Administrators must explicitly choose a discovered result. Discovery rows
+prefill configuration and do not render a selected or checked state. The chosen
+scanner URL is the only value used for Jellyfin library discovery or qBittorrent
+saving. Saving a qBittorrent client performs a live authenticated options request
+and rejects with `connection_failed` without writing when the connection does not
+work. Editing the address invalidates the verified choice. Saved qBittorrent
+clients remain editable from their previously verified URL; changing that URL
+requires a new scanner result before saving. Credentials remain manual and are
+never sent to the unauthenticated instance probe.
+Removing a saved qBittorrent client is destructive: it is available only from
+the row action menu and requires an explicit confirmation that names the client.
+
 ## 2026-11-24: Medias manager uses persistent administrator overrides
 
 Administration includes a Medias manager at `/settings/medias`. It lists every

@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply } from "fastify";
 import type {
   DownloadClientInput,
   DownloadLinkInput,
@@ -15,6 +15,23 @@ function invalid(message: string): never {
     params: { reason: message },
   });
 }
+
+class DownloadClientConnectionError extends Error {
+  constructor() {
+    super("qBittorrent connection failed.");
+    this.name = "DownloadClientConnectionError";
+  }
+}
+
+function connectionFailed(reply: FastifyReply) {
+  return reply.code(502).send({
+    error: {
+      code: "connection_failed",
+      message: "qBittorrent connection failed.",
+    },
+  });
+}
+
 export async function importSettings(db: Database, input: DownloadLinkInput) {
   const text = (v: unknown) => (typeof v === "string" ? v.trim() : "");
   const downloadClientId = text(input.downloadClientId),
@@ -172,6 +189,11 @@ export function registerDownloadClients(
     const c = await connection(input, id);
     if (typeof input.name !== "string" || !input.name.trim())
       invalid("Enter a client name.");
+    try {
+      await qbitOptions(c);
+    } catch {
+      throw new DownloadClientConnectionError();
+    }
     const data = {
       name: input.name.trim(),
       kind: "qbittorrent",
@@ -187,12 +209,28 @@ export function registerDownloadClients(
     }
     return { id: (await clients.create(data)).id };
   }
-  app.post<{ Body: DownloadClientInput }>(base, async (req, reply) =>
-    reply.code(201).send(await save(req.body)),
-  );
+  app.post<{ Body: DownloadClientInput }>(base, async (req, reply) => {
+    try {
+      return reply.code(201).send(await save(req.body));
+    } catch (error) {
+      if (error instanceof DownloadClientConnectionError) {
+        return connectionFailed(reply);
+      }
+      throw error;
+    }
+  });
   app.put<{ Params: { id: string }; Body: DownloadClientInput }>(
     base + "/:id",
-    async (req) => save(req.body, req.params.id),
+    async (req, reply) => {
+      try {
+        return await save(req.body, req.params.id);
+      } catch (error) {
+        if (error instanceof DownloadClientConnectionError) {
+          return connectionFailed(reply);
+        }
+        throw error;
+      }
+    },
   );
   app.post<{ Body: DownloadClientInput & { id?: string } }>(
     base + "/test",

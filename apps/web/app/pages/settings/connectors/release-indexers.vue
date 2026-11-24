@@ -7,6 +7,14 @@ import type {
 } from "@peridot/contracts";
 import { Button } from "@peridot/ui/components/ui/button";
 import { Input } from "@peridot/ui/components/ui/input";
+import {
+  DialogContent,
+  DialogDescription,
+  DialogOverlay,
+  DialogPortal,
+  DialogRoot,
+  DialogTitle,
+} from "reka-ui";
 import { onMounted } from "vue";
 import DownloadClientLink from "../../../components/DownloadClientLink.vue";
 import { useServer } from "../../../composables/use-server";
@@ -21,6 +29,7 @@ const { user } = useUser();
 const indexers = ref<ReleaseIndexerResponse[]>([]);
 const sources = ref<LibrarySourceResponse[]>([]);
 const error = ref("");
+const formError = ref("");
 const loading = ref(false);
 const open = ref(false);
 const editing = ref<ReleaseIndexerResponse | null>(null);
@@ -61,6 +70,7 @@ async function load() {
 
 function beginAdd() {
   editing.value = null;
+  formError.value = "";
   form.value = {
     name: "",
     url: "",
@@ -77,6 +87,7 @@ function beginAdd() {
 
 function beginEdit(indexer: ReleaseIndexerResponse) {
   editing.value = indexer;
+  formError.value = "";
   form.value = {
     ...form.value,
     name: indexer.name ?? "",
@@ -94,7 +105,7 @@ function beginEdit(indexer: ReleaseIndexerResponse) {
 
 async function save() {
   if (!api.value || !form.value.url.trim()) return;
-  error.value = "";
+  formError.value = "";
   try {
     let saved = editing.value;
     if (!saved) {
@@ -124,7 +135,7 @@ async function save() {
     open.value = false;
     await load();
   } catch (reason) {
-    error.value = reason instanceof Error ? reason.message : "Save failed.";
+    formError.value = reason instanceof Error ? reason.message : "Save failed.";
   }
 }
 
@@ -172,30 +183,59 @@ onMounted(load);
       </p>
     </div>
 
-    <div
-      v-if="open"
-      class="space-y-4 rounded-lg border bg-card p-5 text-card-foreground"
-    >
-      <h3 class="text-lg font-semibold">
-        {{ editing ? "Configure indexer" : "Add indexer" }}
-      </h3>
-      <label class="block space-y-1">
-        <span>Name</span>
-        <Input v-model="form.name" autocomplete="off" />
-      </label>
-      <label class="block space-y-1">
-        <span>Feed URL</span>
-        <Input v-model="form.url" type="url" autocomplete="off" />
-      </label>
-      <label v-if="!editing" class="block space-y-1">
-        <span>API key</span>
-        <Input v-model="form.apiKey" type="password" autocomplete="off" />
-      </label>
-      <DownloadClientLink v-model="form" :sources="sources" />
-      <div class="flex justify-end gap-2">
-        <Button variant="outline" @click="open = false">Cancel</Button>
-        <Button @click="save">Save</Button>
-      </div>
-    </div>
+    <DialogRoot v-model:open="open">
+      <DialogPortal>
+        <DialogOverlay class="fixed inset-0 z-50 bg-background/80" />
+        <DialogContent
+          class="fixed left-1/2 top-1/2 z-50 max-h-svh w-full max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border bg-card p-6 text-card-foreground shadow-lg"
+        >
+          <DialogTitle class="text-lg font-semibold">
+            {{ editing ? "Configure indexer" : "Add indexer" }}
+          </DialogTitle>
+          <DialogDescription class="text-sm text-muted-foreground">
+            {{
+              editing
+                ? "Update this Torznab feed and its import destination."
+                : "Connect a Torznab feed and choose where completed releases are imported."
+            }}
+          </DialogDescription>
+          <form class="mt-4 space-y-4" @submit.prevent="save">
+            <label class="block space-y-2">
+              <span class="text-sm font-medium">Display name</span>
+              <Input v-model="form.name" autocomplete="off" />
+            </label>
+            <label class="block space-y-2">
+              <span class="text-sm font-medium">Torznab feed URL</span>
+              <Input
+                v-model="form.url"
+                type="url"
+                autocomplete="off"
+                required
+              />
+            </label>
+            <label v-if="!editing" class="block space-y-2">
+              <span class="text-sm font-medium">API key</span>
+              <Input
+                v-model="form.apiKey"
+                type="password"
+                autocomplete="new-password"
+              />
+            </label>
+            <DownloadClientLink v-model="form" :sources="sources" />
+            <p v-if="formError" role="alert" class="text-sm text-destructive">
+              {{ formError }}
+            </p>
+            <div class="flex justify-end gap-2">
+              <Button type="button" variant="outline" @click="open = false">
+                Cancel
+              </Button>
+              <Button type="submit" :disabled="loading || !form.url.trim()">
+                Save
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </DialogPortal>
+    </DialogRoot>
   </section>
 </template>

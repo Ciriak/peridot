@@ -1,5 +1,94 @@
 # Peridot handoff
 
+## Reusable connector instance discovery
+
+Connector discovery now uses one server-side engine for subnet enumeration,
+candidate normalization, bounded HTTP/HTTPS probing, result deduplication, and
+credential-free response mapping. Peridot onboarding remains on its existing
+public discovery endpoint and port `17430`, but now runs through the shared
+engine.
+
+Administrators can call
+`POST /api/admin/connectors/:kind/discover-instances` with an optional address
+hint. The connector registry accepts an optional instance-discovery capability,
+so future library sources and download clients can reuse the same contract
+without exposing arbitrary network probing. Jellyfin uses port `8096`, HTTPS
+preference, and the public `System/Info/Public` `Jellyfin Server` signature.
+qBittorrent uses port `8080` and its official Web UI metadata, including the
+older localized title and bundled asset markers.
+
+The Jellyfin Add source form starts a local-network scan automatically, supports
+explicit rescans, and starts a debounced targeted scan when an address is typed.
+Discovered servers show their name, URL, and version. Administrators must
+explicitly choose a result; the selected scanner URL is then used for library
+discovery and source creation. Editing the address invalidates the selection and
+loaded libraries.
+
+The qBittorrent form also starts a local-network scan, supports rescans and
+targeted address probes, and requires an explicit discovered result. Scan
+controls and the discovered list appear first below the dialog title.
+Saving uses the selected scanner URL and performs a live authenticated
+qBittorrent check before persisting; failed connections are rejected. Existing
+saved clients remain editable from their current verified URL until the
+administrator changes it. Choosing a discovered row prefills fields without
+showing a checked selection state. Discovered connector rows use a
+reduced-motion-aware green pulse to show that the scanner reached the instance,
+and new qBittorrent clients default their editable display name to qBittorrent.
+Saved download-client rows lead with the bundled qBittorrent icon, use a
+cog-icon Edit action, and keep the destructive Remove action inside a three-dot
+menu with an explicit confirmation dialog.
+
+Release-indexer Add and Configure actions now open the same modal-dialog pattern
+used by library sources and download clients. Torznab fields, import-destination
+controls, validation, and save errors remain inside the dialog.
+
+Verification:
+
+- `pnpm --filter @peridot/server test` (225 passing)
+- `pnpm --filter @peridot/web test` (323 passing)
+- `pnpm typecheck`
+- `pnpm lint`
+- `pnpm format:check`
+- `pnpm version:check`
+- `pnpm db:validate` (current at `7fb2e91df85d`, two migrations)
+- `pnpm build` (server, web, desktop, and Android debug build)
+- Focused connector discovery, local discovery, admin authorization, web client,
+  settings form, i18n, and OpenAPI tests
+
+Known limits:
+
+- No live Jellyfin or qBittorrent instance or authenticated browser session was
+  used for visual QA.
+- Automatic subnet enumeration only sees interfaces available to Peridot. The
+  default Docker bridge setup may hide the host LAN, so entering the Jellyfin
+  host address is the reliable container path.
+- Jellyfin currently advertises only port `8096`; later default ports and
+  suggested hosts can be added to the connector capability.
+- Standard TLS validation is enforced, so self-signed HTTPS Jellyfin endpoints
+  and qBittorrent endpoints are skipped and a valid HTTP endpoint may be selected
+  instead.
+- qBittorrent discovery supports the official built-in Web UI. Alternate Web UIs
+  and Web UI roots hidden behind HTTP basic authentication do not expose the
+  expected marker.
+
+Uncommitted changes:
+
+- Shared discovery engine and contracts, authenticated administrator route,
+  Jellyfin public-info probe, qBittorrent Web UI probe, onboarding refactor, web
+  client method, both connector forms, translations, tests, decisions, and
+  development notes.
+- Existing unrelated source-label icon changes and their tests remain untouched.
+
+Next:
+
+- Run Add source → Jellyfin against live HTTP and trusted HTTPS instances,
+  including multiple servers and a reverse-proxy path.
+- Verify the automatic sweep and typed-host path in both host-network and default
+  Docker bridge deployments.
+- Run Download clients → qBittorrent against qBittorrent 4.x and 5.x, with API
+  key and username/password authentication, and confirm the scanner URL appears
+  in the saved client.
+
 ## Medias manager
 
 Administration now includes a Medias manager at `/settings/medias`. It lists all

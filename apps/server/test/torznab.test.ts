@@ -261,6 +261,9 @@ test("an external release indexes only its completed audio files", async (t) => 
   t.mock.method(globalThis, "fetch", async (input: URL, init: RequestInit) => {
     const headers = new Headers(init.headers);
     if (input.pathname.startsWith("/api/v2/")) {
+      if (headers.get("authorization") === "Bearer offline-secret") {
+        throw new Error("qBittorrent is offline");
+      }
       assert.equal(
         headers.get("authorization"),
         input.host === "second.test"
@@ -303,6 +306,21 @@ test("an external release indexes only its completed audio files", async (t) => 
     url,
     apiKey: "client-secret",
   };
+  const unavailable = await ctx.app.inject({
+    method: "POST",
+    url: clients,
+    headers: ctx.authorization,
+    payload: {
+      ...clientInput,
+      name: "Offline downloader",
+      apiKey: "offline-secret",
+    },
+  });
+  assert.equal(unavailable.statusCode, 502, unavailable.body);
+  assert.equal(
+    unavailable.json<{ error: { code: string } }>().error.code,
+    "connection_failed",
+  );
   const saved = await ctx.app.inject({
     method: "POST",
     url: clients,

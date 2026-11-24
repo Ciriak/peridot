@@ -914,6 +914,23 @@ export interface ConnectorListResponse {
   items: ConnectorDescriptorResponse[];
 }
 
+export interface ConnectorInstanceResponse {
+  kind: string;
+  id: string;
+  label: string;
+  url: string;
+  version: string | null;
+}
+
+export interface DiscoverConnectorInstancesRequest {
+  address?: string | null;
+}
+
+export interface DiscoverConnectorInstancesResponse {
+  items: ConnectorInstanceResponse[];
+  scannedSubnets: string[];
+}
+
 export type SourceRemovalPhase = "stopping" | "copies" | "catalog";
 
 export interface LibrarySourceRemovalProgressResponse {

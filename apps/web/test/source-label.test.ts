@@ -21,9 +21,10 @@ test("source folder names preserve filesystem roots and trim surrounding space",
   assert.equal(sourceFolderName(""), "");
 });
 
-test("library source kinds map to bundled icons and localized labels", () => {
+test("source kinds map to bundled icons and localized labels", () => {
   assert.equal(sourceKindIcon("path"), icons.folder);
   assert.equal(sourceKindIcon("jellyfin"), icons.jellyfin);
+  assert.equal(sourceKindIcon("torznab"), icons.globe);
   assert.equal(sourceKindIcon(null), null);
   assert.equal(sourceKindIcon(undefined), null);
 
@@ -32,5 +33,6 @@ test("library source kinds map to bundled icons and localized labels", () => {
     sourceKindLabelKey("jellyfin"),
     "settings.sources.jellyfin.title",
   );
+  assert.equal(sourceKindLabelKey("torznab"), "indexer.title");
   assert.equal(sourceKindLabelKey(null), null);
 });

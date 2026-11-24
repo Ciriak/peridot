@@ -95,6 +95,7 @@ export interface TestContextOptions {
   discogsRequestIntervalMs?: number;
   jellyfinFetch?: typeof fetch;
   jellyfinRequestTimeoutMs?: number;
+  qbittorrentFetch?: typeof fetch;
   credentialEncryptionKey?: string;
   enableSourceRefreshScheduler?: boolean;
   updateService?: UpdateService;
@@ -169,6 +170,9 @@ export async function createTestContext(
       ...(options.additionalSourceIntegrations ?? []),
     ],
     ...(options.connectors ? { connectors: options.connectors } : {}),
+    ...(options.qbittorrentFetch
+      ? { qbittorrentFetch: options.qbittorrentFetch }
+      : {}),
     ...(options.discogsRequestIntervalMs !== undefined
       ? { discogsRequestIntervalMs: options.discogsRequestIntervalMs }
       : { discogsRequestIntervalMs: 0 }),
