@@ -107,3 +107,29 @@ The process requires free disk space at least 20% larger than the database.
 
 - ### 🔄 Playlists import
 - ### ✨ AI suggestion *(But only if you want it !)*
+
+## Concepts
+
+### Hosting
+
+Peridot do NOT host or download files by itself, only metadata are saved into it's database.
+
+### Media
+
+<u>A media is **NOT** a file</u>
+
+Can be a music track, an audiobook or a podcast episode.
+
+A media can have multiple files associated to it (If provided from multiple data-source for example), if a data source is unreachable, another data-source can be used as a backup.
+
+### Data source
+
+A reachable location that provide the raw audio files for medias
+
+### Download client
+
+An external client that can be used to search and download files
+
+### Metadata provider
+
+An external metadata source that can provide additional data about a media (artists, albums, cover art...)
