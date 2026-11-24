@@ -85,8 +85,5 @@ test("Nuxt development exposes Vue DevTools through DevTools v4", async () => {
     source,
     /devtools: \{\s*enabled: true,\s*vueDevTools: true,\s*mcp: false,\s*\}/,
   );
-  assert.match(
-    workspace,
-    /overrides:\s*\n\s*"@nuxt\/devtools": 4\.2\.0/,
-  );
+  assert.match(workspace, /overrides:\s*\n\s*"@nuxt\/devtools": 4\.2\.0/);
 });
