@@ -947,6 +947,13 @@ export function queueArtworkFetch(
   });
 }
 
+export interface ScanTimingMs {
+  discoveryMs: number;
+  artworkMs: number;
+  databaseMs: number;
+  catalogMs: number;
+}
+
 export function scanDetails(counts: {
   source: string;
   discovered: number;
@@ -955,6 +962,7 @@ export function scanDetails(counts: {
   unchanged: number;
   unavailable: number;
   errors: number;
+  timingMs?: ScanTimingMs;
 }): TaskDetailResponse[] {
   return [
     {
@@ -1005,6 +1013,30 @@ export function scanDetails(counts: {
       key: "files.failed",
       value: String(counts.errors),
       labelMessage: message("task.detail.filesFailed"),
+      valueMessage: null,
+    },
+    {
+      key: "scan.discoveryMs",
+      value: String(Math.round(counts.timingMs?.discoveryMs ?? 0)),
+      labelMessage: message("task.detail.discoveryMs"),
+      valueMessage: null,
+    },
+    {
+      key: "scan.artworkMs",
+      value: String(Math.round(counts.timingMs?.artworkMs ?? 0)),
+      labelMessage: message("task.detail.artworkMs"),
+      valueMessage: null,
+    },
+    {
+      key: "scan.databaseMs",
+      value: String(Math.round(counts.timingMs?.databaseMs ?? 0)),
+      labelMessage: message("task.detail.databaseMs"),
+      valueMessage: null,
+    },
+    {
+      key: "scan.catalogMs",
+      value: String(Math.round(counts.timingMs?.catalogMs ?? 0)),
+      labelMessage: message("task.detail.catalogMs"),
       valueMessage: null,
     },
   ];

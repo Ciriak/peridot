@@ -258,7 +258,7 @@ model Task {
 model ServerSetting {
   id                   String   @id
   libraryRoot          String
-  scanWorkerCount      Int      @default(3)
+  scanWorkerCount      Int      @default(6)
   sourceRefreshEnabled Int      @default(1)
   sourceRefreshCron    String   @default("0 3 * * *")
   fileLoggingEnabled   Int      @default(1)

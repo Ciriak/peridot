@@ -1,5 +1,42 @@
 # Peridot decisions
 
+## 2026-11-23: Desktop top bar shows task progress
+
+The default application top bar restores the compact circular task indicator
+at desktop widths and hides it below the `md` breakpoint. It combines active
+administrator server work with offline download work, links to Settings → Tasks,
+and lists the active work on hover.
+
+Queued-only work renders an empty 0% ring instead of an indeterminate spinner.
+A determinate combined percentage appears only while at least one task runs;
+indeterminate running work still uses the spinning state. The server-offline
+badge remains a separate indicator and stays visible at every breakpoint. This
+supersedes the 2026-11-20 decision that kept task progress out of application
+headers.
+
+## 2026-11-23: Faster Jellyfin imports
+
+Jellyfin scans fetch 500 audio items per API page instead of 100, so a 69 878
+item library needs roughly 140 listing requests rather than 699. Catalog import
+batches remain 100 rows and still publish before the next page is requested.
+
+The rescan fast path now syncs artwork jobs in batch. Tracks with an already
+valid cover and no pending job avoid per-track queries and writes, which were
+the dominant SQLite cost on unchanged Jellyfin items. The scan task also records
+cumulative discovery, artwork, database, and catalog timings so the slowest
+phase can be identified without adding external profiling.
+
+## 2026-11-23: Scan workers default to six
+
+New installations use six scan worker threads. File discovery and local tag
+parsing are the throughput-critical phases of a first scan, and three workers
+left capable music servers underused. The administrator warning now starts above
+eight workers so the default remains below the slow-storage warning while still
+benefiting newer CPUs.
+
+Existing saved worker counts are not rewritten by the migration. A server that
+already has an explicit value keeps it, including the previous default of three.
+
 ## 2026-11-22: Search cards separate category and source provenance
 
 Search result categories render beside the item title. Album and track playback

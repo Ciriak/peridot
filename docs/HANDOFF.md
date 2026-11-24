@@ -1,5 +1,111 @@
 # Peridot handoff
 
+## Desktop top-bar task spinner
+
+The default application top bar now shows combined server and offline-download
+task progress at desktop widths. The indicator is hidden below the `md`
+breakpoint, links to the active task list, and keeps the existing server-offline
+badge separate. Queued-only work is represented by an empty 0% ring rather than
+an indeterminate spinner.
+
+Verification:
+
+- `pnpm --filter @peridot/web test` (298 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Focused ESLint and Prettier checks on the changed files
+- `git diff --check`
+- Validation used Node 24.22.3 and pnpm 11.25.0
+
+Known limits:
+
+- Browser visual QA with active server and download tasks at desktop and mobile
+  widths was not run.
+
+Feature files:
+
+- `apps/web/app/components/TaskProgressIndicator.vue`
+- `apps/web/app/layouts/default.vue`
+- `apps/web/app/lib/task-progress.ts`
+- `apps/web/i18n/locales/en-US.json`
+- `apps/web/test/task-progress.test.ts`
+- `apps/web/test/download-tasks.test.ts`
+
+Uncommitted changes:
+
+- Desktop task-spinner restoration, queued-only empty progress behavior,
+  translations, tests, decision record, and this handoff section.
+
+## Faster Jellyfin scans
+
+Jellyfin scans now list 500 audio items per page instead of 100. Import
+batching stays at 100 rows, and the catalog still publishes after each batch,
+so the page-size change only reduces listing requests.
+
+Unchanged tracks now synchronize their artwork jobs in one batch per import
+transaction instead of one query and write per track. Tracks that already have
+a valid cover and no pending job are skipped entirely. Scan task details now
+include cumulative discovery, artwork, database, and catalog times in
+milliseconds so slow scans can be diagnosed from Settings → Tasks.
+
+Verification:
+
+- `pnpm --filter @peridot/server test` (195 passing)
+- `pnpm --filter @peridot/server typecheck`
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm lint`
+- `pnpm exec prettier --write` on the changed files
+
+Uncommitted changes:
+
+- Jellyfin page size, batched artwork-job sync, scan phase timings, translated
+  task-detail labels, Jellyfin and artwork-fetch tests, decision record, and
+  this handoff section.
+- Earlier scan-worker default and migration work remains uncommitted and was
+  preserved.
+
+Next:
+
+- Run the real Jellyfin source through one full scan and compare the discovery,
+  artwork, database, and catalog timings against the previous 100-item pages.
+
+## Scan worker default raised to six
+
+New server settings now default to six scan worker threads. The administrator
+warning appears only above eight workers, and the web copy names both values.
+The SQLite default is migrated through a table rebuild that copies every existing
+`ServerSetting` row unchanged.
+
+Existing saved worker counts are intentionally preserved, including servers that
+still hold the previous default of three. The new default applies when a server
+setting row is created.
+
+Verification:
+
+- `pnpm --filter @peridot/server test` (194 passing)
+- Focused web settings, i18n, and client tests (39 passing)
+- `pnpm typecheck` (6 tasks passing)
+- `pnpm lint`
+- `pnpm db:validate` (18-migration graph current)
+- Production builds for `@peridot/contracts`, `@peridot/server`, and
+  `@peridot/web`
+- `pnpm format:check`
+- `git diff --check`
+- `pnpm db:migrate:dev` applied the migration and advanced the `db` ref with a
+  verified pre-migration backup
+- The running development server still returns a healthy Peridot API response
+
+Uncommitted changes:
+
+- Shared scan-worker constants, Prisma contract and emitted artifacts, migration
+  and snapshot, default-setting tests, web copy, decision record, and this
+  handoff section.
+
+Next:
+
+- Open Settings → Server on a fresh server setting and confirm the worker field
+  shows six, then enter nine and verify the warning appears.
+
 ## Search results align categories, album playback, and provenance
 
 Search result categories now sit beside track and album titles instead of the

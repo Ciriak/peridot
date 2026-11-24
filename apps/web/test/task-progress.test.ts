@@ -11,6 +11,7 @@ import {
   activeTaskPercent,
   estimatedRemainingMs,
   estimatedTaskRemainingMs,
+  groupedTaskProgress,
   orderedActiveTasks,
   overallTaskProgress,
   runningMetadataTask,
@@ -363,18 +364,48 @@ test("task history renders partial completion with a completed warning", async (
   assert.match(page, /:class="taskFailureMessageClass\(row\)"/);
 });
 
-test("task progress stays out of the application headers", async () => {
-  const [layout, settingsLayout, indicator] = await Promise.all([
-    readFile(new URL("../app/layouts/default.vue", import.meta.url), "utf8"),
-    readFile(new URL("../app/layouts/settings.vue", import.meta.url), "utf8"),
-    readFile(
-      new URL(
-        "../app/components/ServerConnectionIndicator.vue",
-        import.meta.url,
+test("queued-only task groups render empty instead of spinning", () => {
+  assert.equal(
+    groupedTaskProgress([
+      { progress: 0, running: false },
+      { progress: 0, running: false },
+    ]),
+    0,
+  );
+  assert.equal(groupedTaskProgress([]), null);
+  assert.equal(
+    groupedTaskProgress([
+      { progress: 50, running: true },
+      { progress: 0, running: false },
+    ]),
+    25,
+  );
+  assert.equal(
+    groupedTaskProgress([
+      { progress: 50, running: true },
+      { progress: null, running: true },
+    ]),
+    null,
+  );
+});
+
+test("task progress returns to the desktop application top bar", async () => {
+  const [layout, settingsLayout, indicator, connectionIndicator] =
+    await Promise.all([
+      readFile(new URL("../app/layouts/default.vue", import.meta.url), "utf8"),
+      readFile(new URL("../app/layouts/settings.vue", import.meta.url), "utf8"),
+      readFile(
+        new URL("../app/components/TaskProgressIndicator.vue", import.meta.url),
+        "utf8",
       ),
-      "utf8",
-    ),
-  ]);
+      readFile(
+        new URL(
+          "../app/components/ServerConnectionIndicator.vue",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    ]);
   const header = layout.slice(
     layout.indexOf("<header"),
     layout.indexOf("</header>"),
@@ -384,37 +415,34 @@ test("task progress stays out of the application headers", async () => {
     settingsLayout.indexOf("</header>"),
   );
 
-  assert.doesNotMatch(layout, /TaskProgressIndicator/);
+  assert.match(
+    header,
+    /class="hidden md:flex"\s*>\s*<TaskProgressIndicator \/>/,
+    "The task spinner is limited to the desktop top bar",
+  );
   assert.doesNotMatch(settingsLayout, /TaskProgressIndicator/);
-  assert.doesNotMatch(header, /ProgressCircle|settings\/tasks#active-tasks/);
+  assert.match(header, /<ServerConnectionIndicator \/>/);
   assert.doesNotMatch(
     settingsHeader,
     /ProgressCircle|settings\/tasks#active-tasks/,
   );
-  assert.match(header, /<ServerConnectionIndicator \/>/);
   assert.match(settingsHeader, /<ServerConnectionIndicator \/>/);
-  assert.doesNotMatch(layout, /Fetching metadata/);
-  assert.match(indicator, /useServerConnection/);
-  assert.match(indicator, /v-if="status === 'lost'"/);
-  assert.match(indicator, /:icon="icons\.networkOff"/);
-  assert.match(indicator, /text-foreground/);
-  assert.doesNotMatch(indicator, /text-destructive|border-destructive/);
-  assert.doesNotMatch(indicator, /animate-pulse/);
-  assert.match(indicator, /t\('components\.serverConnection\.offline'\)/);
-  assert.match(indicator, /import \{ Badge \}/);
-  assert.match(indicator, /<Badge[\s\S]*variant="outline"[\s\S]*role="status"/);
+  assert.match(indicator, /useTasks/);
+  assert.match(indicator, /useOfflineDownloadTasks/);
+  assert.match(indicator, /<ProgressCircle/);
   assert.match(
     indicator,
-    /<Icon :icon="icons\.networkOff" aria-hidden="true" \/>/,
+    /<NuxtLink[\s\S]*?to="\/settings\/tasks#active-tasks"/,
   );
-  assert.match(
-    indicator,
-    /<span class="hidden md:inline">[\s\S]*?t\("components\.serverConnection\.offlineBadge"\)[\s\S]*?<\/span>/,
-    "The offline badge collapses to its icon on mobile",
-  );
-  assert.match(indicator, /<TooltipTrigger as-child>/);
+  assert.match(indicator, /:value="overallProgress"/);
+  assert.match(indicator, /orderedActiveTasks\(serverActiveTasks\.value\)/);
+  assert.match(indicator, /downloadTasks\s*\.orderedTasks\(\)/);
   assert.doesNotMatch(
     indicator,
+    /ServerConnectionIndicator|useServerConnection/,
+  );
+  assert.doesNotMatch(
+    connectionIndicator,
     /ProgressCircle|useTasks|useOfflineDownloadTasks/,
   );
 });

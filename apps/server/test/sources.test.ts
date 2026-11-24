@@ -31,7 +31,7 @@ test("administrators can read server counts and the default source", async () =>
       trackCount: 0,
       availableTrackCount: 0,
       scanning: {
-        workerCount: 3,
+        workerCount: 6,
       },
       sourceRefresh: {
         enabled: true,

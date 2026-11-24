@@ -24,6 +24,7 @@ import MobilePlayer from "../components/MobilePlayer.vue";
 import QueueDrawer from "../components/QueueDrawer.vue";
 import ServerConnectionIndicator from "../components/ServerConnectionIndicator.vue";
 import SidebarQuickPicks from "../components/SidebarQuickPicks.vue";
+import TaskProgressIndicator from "../components/TaskProgressIndicator.vue";
 import TrackContextMenu from "../components/TrackContextMenu.vue";
 import { useCachedArtwork } from "../composables/use-cached-artwork";
 import { useLikes } from "../composables/use-likes";
@@ -474,6 +475,9 @@ onBeforeUnmount(stopLoadingRay);
             </KbdGroup>
           </div>
           <div class="ml-auto flex shrink-0 items-center gap-2">
+            <div class="hidden md:flex">
+              <TaskProgressIndicator />
+            </div>
             <ServerConnectionIndicator />
             <Button as-child variant="ghost" size="icon" class="rounded-full">
               <NuxtLink
