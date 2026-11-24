@@ -117,6 +117,7 @@ const trackMediaTypeOriginSchema = enumeration(
 );
 const metadataProviderKindSchema = enumeration("musicbrainz", "discogs");
 const taskStatusSchema = enumeration(
+  "waiting",
   "queued",
   "running",
   "completed",
@@ -125,10 +126,12 @@ const taskStatusSchema = enumeration(
   "stopped",
 );
 const taskKindSchema = enumeration(
+  "release_import",
   "library_scan",
   "catalog_fetch",
   "metadata_fetch",
   "artwork_fetch",
+  "duplicate_detection",
 );
 
 const downloadLinkFields = {
@@ -677,6 +680,7 @@ const schemas: Record<string, SchemaObject> = {
     kind: taskKindSchema,
     status: taskStatusSchema,
     titleMessage: ref("MessageDescriptor"),
+    ownerUserId: nullable(stringSchema),
     parentTaskId: nullable(stringSchema),
     source: nullable(ref("TaskSourceResponse")),
     progress: ref("TaskProgressResponse"),
@@ -1500,22 +1504,58 @@ const routes: Record<string, OpenApiOperation> = {
     "Library",
     "Search audio releases",
     arrayOf(
-      objectSchema({
-        id: stringSchema,
-        title: stringSchema,
-        sourceName: stringSchema,
-        canImport: booleanSchema,
-        seeders: nullable(integerSchema),
-        bytes: nullable(integerSchema),
-      }),
+      objectSchema(
+        {
+          id: stringSchema,
+          title: stringSchema,
+          sourceName: stringSchema,
+          canImport: booleanSchema,
+          seeders: nullable(integerSchema),
+          bytes: nullable(integerSchema),
+          torrentStatus: nullable(
+            objectSchema({
+              hash: stringSchema,
+              state: stringSchema,
+              progress: numberSchema,
+              taskId: nullable(stringSchema),
+            }),
+          ),
+        },
+        ["id", "title", "sourceName", "canImport", "seeders", "bytes"],
+      ),
     ),
     { query: objectSchema({ q: stringSchema }) },
   ),
-  "POST /api/torznab/imports/:id": jsonOperation(
+  "POST /api/torznab/imports/:id": operationWithResponses(
     "Library",
     "Import a release",
-    objectSchema({ id: stringSchema }),
-    { status: 202 },
+    {
+      "202": response(
+        objectSchema({
+          id: stringSchema,
+          task: ref("TaskResponse"),
+        }),
+        "Import task queued",
+      ),
+      "409": response(
+        objectSchema({
+          error: objectSchema({
+            code: stringSchema,
+            message: stringSchema,
+          }),
+        }),
+        "Release already exists in the download client",
+      ),
+      "502": response(
+        objectSchema({
+          error: objectSchema({
+            code: stringSchema,
+            message: stringSchema,
+          }),
+        }),
+        "Download client rejected the release",
+      ),
+    },
   ),
   "GET /api/torznab/imports/:id": jsonOperation(
     "Library",

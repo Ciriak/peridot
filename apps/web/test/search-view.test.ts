@@ -27,6 +27,11 @@ test("search uses one full-content route with recent and local results", async (
     layout,
     /<Input[\s\S]*v-model="searchQuery"[\s\S]*@focus="openSearch"/,
   );
+  assert.match(
+    layout,
+    /<Input[\s\S]*v-model="searchQuery"[\s\S]*autocomplete="off"[\s\S]*@focus="openSearch"/,
+    "The global search input disables native autocomplete",
+  );
   assert.match(layout, /await router\.push\("\/search"\)/);
   assert.doesNotMatch(
     searchPage,
@@ -48,7 +53,11 @@ test("search uses one full-content route with recent and local results", async (
   assert.match(searchPage, /<CatalogCard/);
   assert.match(searchPage, /albumCatalogCard\(album\)/);
   assert.match(searchPage, /playlistCatalogCard\(playlist\)/);
-  assert.match(searchPage, /compact/);
+  assert.match(
+    searchPage,
+    /aria-labelledby="recent-searches-heading"[\s\S]*?role="list"\s+class="divide-y overflow-hidden rounded-lg border"[\s\S]*?<CatalogCard[\s\S]*?layout="row"[\s\S]*?@open="openAlbum\(album\)"/,
+    "Recent albums use the same divided list surface as library results",
+  );
   assert.match(searchPage, /<ArtistCard/);
   assert.match(searchPage, /<MediaCollectionCard/);
   assert.match(searchPage, /<TrackTable/);
@@ -70,6 +79,24 @@ test("external results use a counted tab and render only through the external pa
   );
 
   assert.match(searchPage, /<Tabs v-model="activeSearchTab"/);
+  assert.match(
+    searchPage,
+    /router\.push\(buildSearchTabHistoryLocation\(route\.query, tab\)\)/,
+  );
+  assert.match(
+    searchPage,
+    /normalizeSearchTab\(route\.query\[SEARCH_TAB_QUERY_PARAM\]\)/,
+  );
+  assert.match(
+    searchPage,
+    /requestedSearchTab\.value === "external" && showSearchTabs\.value[\s\S]*?external[\s\S]*?library/,
+    "An unavailable external tab falls back to Library",
+  );
+  assert.match(
+    searchPage,
+    /if \(requestedSearchTab\.value !== "library"\)[\s\S]*?router\.replace/,
+    "Clearing search removes a stale External tab from the URL",
+  );
   assert.match(searchPage, /<TabsList/);
   assert.match(searchPage, /v-if="showSearchTabs"/);
   assert.match(searchPage, /<TabsTrigger value="library">/);
@@ -85,9 +112,10 @@ test("external results use a counted tab and render only through the external pa
   );
   assert.match(
     searchPage,
-    /v-if="!showSearchTabs \|\| activeSearchTab === 'library'"/,
-    "Library category filters do not appear in the External tab",
+    /const visibleResultFilters = computed\([\s\S]*activeSearchTab\.value === "external"[\s\S]*externalResultFilters[\s\S]*resultFilters/,
+    "Each search tab exposes its own category filters",
   );
+  assert.match(searchPage, /:releases="filteredExternalReleases"/);
   assert.match(searchPage, /<TabsContent value="library"/);
   assert.match(
     searchPage,
@@ -96,7 +124,7 @@ test("external results use a counted tab and render only through the external pa
   assert.match(searchPage, /<TorznabResults/);
   assert.match(
     searchPage,
-    /watch\(searching,[\s\S]*?activeSearchTab\.value = "library"/,
+    /watch\(searching,[\s\S]*?router\.replace\([\s\S]*?buildSearchTabHistoryLocation\(route\.query, "library"\)[\s\S]*?\);/,
   );
 });
 
@@ -152,7 +180,10 @@ test("result-type tags are accessible quick filters", async () => {
     /class="sticky -top-4 z-20 -mx-4 -mt-4 border-b bg-background px-4 py-3 md:-top-6 md:-mx-6 md:-mt-6 md:px-6"/,
     "The quick filters stay flush with the main scroll viewport while results scroll",
   );
-  assert.match(searchPage, /aria-pressed="resultFilter === filter\.value"/);
+  assert.match(
+    searchPage,
+    /aria-pressed="activeResultFilter === filter\.value"/,
+  );
   assert.match(searchPage, /\{ value: "all", labelKey: "page\.search\.all" \}/);
   assert.match(
     searchPage,
@@ -177,6 +208,27 @@ test("result-type tags are accessible quick filters", async () => {
   assert.match(
     searchPage,
     /\{ value: "podcasts", labelKey: "page\.search\.podcasts" \}/,
+  );
+  assert.match(
+    searchPage,
+    /\{ value: "music", labelKey: "page\.search\.music" \}/,
+  );
+  assert.match(
+    searchPage,
+    /\{ value: "audiobook", labelKey: "page\.search\.audiobooks" \}/,
+  );
+  assert.match(
+    searchPage,
+    /externalResultFilter = ref<ExternalResultFilter>\("all"\)/,
+  );
+  assert.match(
+    searchPage,
+    /filterTorznabReleases\(externalReleases\.value, externalResultFilter\.value\)/,
+  );
+  assert.doesNotMatch(
+    searchPage,
+    /externalResultFilters[\s\S]{0,200}page\.search\.podcasts/,
+    "External filters currently expose only music and audiobooks",
   );
   assert.match(searchPage, /resultFilter\.value === "artists"/);
   assert.match(searchPage, /resultFilter\.value === "albums"/);

@@ -441,9 +441,16 @@ export type LikeResponse =
   | ({ kind: "playlist" } & PlaylistLikeResponse);
 
 export type TaskStatus =
-  "queued" | "running" | "completed" | "failed" | "interrupted" | "stopped";
+  | "waiting"
+  | "queued"
+  | "running"
+  | "completed"
+  | "failed"
+  | "interrupted"
+  | "stopped";
 
 export type TaskKind =
+  | "release_import"
   | "library_scan"
   | "catalog_fetch"
   | "metadata_fetch"
@@ -452,6 +459,9 @@ export type TaskKind =
 
 export const TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY =
   "metadata.activeProvider";
+export const TASK_RELEASE_IMPORT_ID_DETAIL_KEY = "release.internalId";
+export const TASK_RELEASE_IMPORT_STAGE_DETAIL_KEY = "release.stage";
+export type TaskReleaseImportStage = "downloading" | "addingToLibrary";
 
 export type TaskProgressResponse =
   | {
@@ -482,6 +492,7 @@ export interface TaskResponse {
   kind: TaskKind;
   status: TaskStatus;
   titleMessage: MessageDescriptor;
+  ownerUserId?: string | null;
   parentTaskId: string | null;
   source: TaskSourceResponse | null;
   progress: TaskProgressResponse;
@@ -927,6 +938,19 @@ export interface TorznabRelease {
   mediaType: MediaType | null;
   seeders: number | null;
   bytes: number | null;
+  torrentStatus?: TorznabClientTorrentStatus | null;
+}
+
+export interface TorznabClientTorrentStatus {
+  hash: string;
+  state: string;
+  progress: number;
+  taskId: string | null;
+}
+
+export interface TorznabImportResponse {
+  id: string;
+  task: TaskResponse;
 }
 
 export interface TorznabImportStatus {

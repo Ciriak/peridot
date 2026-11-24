@@ -18,6 +18,7 @@ import {
 import type { TaskRow } from "./prisma/models.js";
 
 export const ACTIVE_TASK_STATUSES: readonly TaskStatus[] = [
+  "waiting",
   "queued",
   "running",
 ];
@@ -37,15 +38,22 @@ const MAX_FAILURE_SUMMARY_LENGTH = 500;
 const TERMINAL_TASK_LIMIT = 500;
 const TERMINAL_TASK_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 export const MAX_TASK_RETRIES = 2;
+const MAX_TASK_PAYLOAD_ITEMS = 100_000;
+const MAX_TASK_PAYLOAD_ITEM_LENGTH = 4_096;
 
 export interface EnqueueTaskInput {
   kind: TaskKind;
   title: string;
   titleMessage?: MessageDescriptor | null;
+  initialStatus?: "waiting" | "queued";
+  dedupe?: boolean;
+  publish?: boolean;
+  ownerUserId?: string | null;
   parentTaskId?: string | null;
   sourceId?: string | null;
   sourceName?: string | null;
   details?: TaskDetailResponse[];
+  payload?: readonly string[] | null;
   forceRefresh?: boolean;
 }
 
@@ -118,6 +126,37 @@ function parseStoredDetails(value: string): TaskDetailResponse[] {
   }
 }
 
+function normalizeTaskPayload(
+  payload: readonly string[] | null | undefined,
+): string | null {
+  if (payload === null || payload === undefined) return null;
+  return JSON.stringify(
+    [...new Set(payload)]
+      .filter(
+        (item) =>
+          typeof item === "string" &&
+          item.length > 0 &&
+          item.length <= MAX_TASK_PAYLOAD_ITEM_LENGTH,
+      )
+      .slice(0, MAX_TASK_PAYLOAD_ITEMS),
+  );
+}
+
+export function readTaskPayload(task: Pick<TaskRow, "payload">): string[] | null {
+  if (task.payload === null) return null;
+  try {
+    const parsed = JSON.parse(task.payload) as unknown;
+    return Array.isArray(parsed)
+      ? parsed.filter(
+          (item): item is string =>
+            typeof item === "string" && item.length > 0,
+        )
+      : [];
+  } catch {
+    return [];
+  }
+}
+
 function progressFor(task: TaskRow): TaskProgressResponse {
   const total = task.progressTotal;
   const completed = task.progressCompleted;
@@ -175,6 +214,7 @@ export function toTaskResponse(task: TaskRow): TaskResponse {
     kind: task.kind as TaskKind,
     status: task.status as TaskStatus,
     titleMessage,
+    ownerUserId: task.ownerUserId,
     parentTaskId: task.parentTaskId,
     source: task.sourceName
       ? {
@@ -207,6 +247,7 @@ export function toTaskResponse(task: TaskRow): TaskResponse {
 function isTaskKind(value: string): value is TaskKind {
   return (
     value === "library_scan" ||
+    value === "release_import" ||
     value === "catalog_fetch" ||
     value === "metadata_fetch" ||
     value === "artwork_fetch" ||
@@ -215,6 +256,7 @@ function isTaskKind(value: string): value is TaskKind {
 }
 
 function queuedTaskPriority(kind: string): number {
+  if (kind === "release_import") return -1;
   if (kind === "library_scan") return 0;
   if (kind === "metadata_fetch") return 1;
   if (kind === "duplicate_detection") return 2;
@@ -234,8 +276,9 @@ function compareQueuedTasks(left: TaskRow, right: TaskRow): number {
 
 function activeRank(status: string): number {
   if (status === "running") return 0;
-  if (status === "queued") return 1;
-  return 2;
+  if (status === "waiting") return 1;
+  if (status === "queued") return 2;
+  return 3;
 }
 
 interface RunningTaskControl {
@@ -308,11 +351,15 @@ export class TaskService {
     return this.serializeAdmission(async () => {
       const normalizedSourceId = input.sourceId ?? null;
       const forceRefresh = input.forceRefresh ? 1 : 0;
-      const queued = await this.database.orm.Task.where({
-        kind: input.kind,
-        status: "queued",
-        forceRefresh,
-      }).all();
+      const initialStatus = input.initialStatus ?? "queued";
+      const queued =
+        initialStatus === "queued" && input.dedupe !== false
+          ? await this.database.orm.Task.where({
+              kind: input.kind,
+              status: "queued",
+              forceRefresh,
+            }).all()
+          : [];
       const duplicate = queued.find(
         (task) => task.sourceId === normalizedSourceId,
       );
@@ -320,19 +367,23 @@ export class TaskService {
 
       const task = await this.database.orm.Task.create({
         kind: input.kind,
-        status: "queued",
+        status: initialStatus,
         title,
         titleMessage: serializeMessage(input.titleMessage),
+        ownerUserId: input.ownerUserId ?? null,
         parentTaskId: input.parentTaskId ?? null,
         sourceId: normalizedSourceId,
         sourceName: input.sourceName
           ? boundedText(input.sourceName, MAX_TITLE_LENGTH)
           : null,
         details: JSON.stringify(normalizeTaskDetails(input.details)),
+        payload: normalizeTaskPayload(input.payload),
         forceRefresh,
       });
-      this.kick();
-      this.publishTask(task.id, true);
+      if (input.publish !== false) {
+        this.kick();
+        this.publishTask(task.id, true);
+      }
       return task;
     });
   }
@@ -358,8 +409,8 @@ export class TaskService {
       ),
     ]);
     const filtered = tasks.filter((task) => {
-      if (status === "active") return activeRank(task.status) < 2;
-      if (status === "terminal") return activeRank(task.status) === 2;
+      if (status === "active") return activeRank(task.status) < 3;
+      if (status === "terminal") return activeRank(task.status) === 3;
       return true;
     });
     filtered.sort((left, right) => {
@@ -401,10 +452,40 @@ export class TaskService {
     if (details) {
       update.details = JSON.stringify(normalizeTaskDetails(details));
     }
-    await this.database.orm.Task.where({ id, status: "running" }).update(
-      update,
-    );
+    await this.database.orm.Task.where((task) =>
+      task.status.in(["waiting", "running"]),
+    )
+      .where({ id })
+      .update(update);
     this.publishTask(id);
+  }
+
+  async promoteWaiting(
+    id: string,
+    details?: readonly TaskDetailResponse[],
+    payload?: readonly string[] | null,
+  ): Promise<void> {
+    const promoted = await this.database.orm.Task.where({
+      id,
+      status: "waiting",
+    }).updateAndCount({
+      status: "queued",
+      startedAt: null,
+      completedAt: null,
+      ...(details
+        ? { details: JSON.stringify(normalizeTaskDetails(details)) }
+        : {}),
+      ...(payload !== undefined
+        ? { payload: normalizeTaskPayload(payload) }
+        : {}),
+    });
+    if (promoted === 0) return;
+    this.publishTask(id, true);
+    this.kick();
+  }
+
+  async discardWaiting(id: string): Promise<void> {
+    await this.database.orm.Task.where({ id, status: "waiting" }).delete();
   }
 
   async complete(id: string, result: TaskExecutionResult = {}): Promise<void> {
@@ -845,6 +926,7 @@ export function queueMetadataFetch(
     source?: { id: string; name: string } | null;
     parentTaskId?: string | null;
     force?: boolean;
+    trackIds?: readonly string[] | null;
   } = {},
 ): Promise<TaskRow> {
   return tasks.enqueue({
@@ -861,6 +943,7 @@ export function queueMetadataFetch(
     sourceId: options.source?.id ?? null,
     sourceName: options.source?.name ?? null,
     forceRefresh: options.force ?? false,
+    payload: options.trackIds ?? null,
     details: [
       {
         key: "source",

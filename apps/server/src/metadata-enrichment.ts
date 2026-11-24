@@ -52,6 +52,7 @@ import {
   TaskExecutionError,
   type TaskExecutionResult,
   type TaskService,
+  readTaskPayload,
 } from "./tasks.js";
 
 export { parseStoredMetadataDetails };
@@ -384,11 +385,19 @@ export class MetadataEnrichment {
         metadataMode: "automatic",
         mediaType: "music",
       });
-      const tracks = await (
+      const payloadTrackIds = readTaskPayload(task);
+      const sourceTracks =
         task.sourceId
           ? trackQuery.where({ sourceId: task.sourceId })
-          : trackQuery
-      ).all();
+          : trackQuery;
+      const tracks =
+        payloadTrackIds === null
+          ? await sourceTracks.all()
+          : payloadTrackIds.length
+            ? await sourceTracks
+                .where((track) => track.id.in(payloadTrackIds))
+                .all()
+            : [];
       const targets = task.forceRefresh
         ? tracks
         : tracks.filter(
@@ -1192,13 +1201,24 @@ export class MetadataEnrichment {
     let artists = await this.database.orm.CatalogArtist.where((artist) =>
       artist.trackCount.gt(0),
     ).all();
-    if (task.sourceId) {
-      const sourceTracks = await this.database.orm.Track.where({
-        sourceId: task.sourceId,
-        available: 1,
-      })
-        .select("id")
-        .all();
+    const payloadTrackIds = readTaskPayload(task);
+    if (task.sourceId || payloadTrackIds !== null) {
+      const sourceTracks =
+        payloadTrackIds !== null
+          ? payloadTrackIds.length
+            ? await this.database.orm.Track.where({ available: 1 })
+                .where((track) => track.id.in(payloadTrackIds))
+                .select("id")
+                .all()
+            : []
+          : task.sourceId
+            ? await this.database.orm.Track.where({
+                sourceId: task.sourceId,
+                available: 1,
+              })
+                .select("id")
+                .all()
+            : [];
       if (!sourceTracks.length) return [];
       const links = await this.database.orm.CatalogTrackArtist.where((link) =>
         link.trackId.in(sourceTracks.map((track) => track.id)),

@@ -3,7 +3,9 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   buildSearchHistoryLocation,
+  buildSearchTabHistoryLocation,
   normalizeSearchQuery,
+  normalizeSearchTab,
   SEARCH_QUERY_PARAM,
 } from "../app/lib/search-history.ts";
 
@@ -42,6 +44,37 @@ test("completed searches build history entries without dropping route state", ()
       query: {
         player: "fullscreen",
       },
+    },
+  );
+});
+
+test("result tabs create history entries without dropping search state", () => {
+  assert.equal(normalizeSearchTab("external"), "external");
+  assert.equal(normalizeSearchTab(["external", "library"]), "external");
+  assert.equal(normalizeSearchTab("library"), "library");
+  assert.equal(normalizeSearchTab("unknown"), "library");
+  assert.deepEqual(
+    buildSearchTabHistoryLocation(
+      { q: "Night Sessions", player: "fullscreen" },
+      "external",
+    ),
+    {
+      path: "/search",
+      query: {
+        q: "Night Sessions",
+        player: "fullscreen",
+        tab: "external",
+      },
+    },
+  );
+  assert.deepEqual(
+    buildSearchTabHistoryLocation(
+      { q: "Night Sessions", tab: "external" },
+      "library",
+    ),
+    {
+      path: "/search",
+      query: { q: "Night Sessions" },
     },
   );
 });

@@ -1,17 +1,17 @@
 <script setup lang="ts">
 import { useI18n } from "#imports";
-import type { TorznabImportStatus, TorznabRelease } from "@peridot/contracts";
+import type { TorznabRelease } from "@peridot/contracts";
 import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { computed } from "vue";
+import type { TorznabImportRowState } from "../lib/torznab-import-status";
 import TorznabReleaseRow from "./TorznabReleaseRow.vue";
 
 const props = defineProps<{
-  activeImportId: string;
-  importBusy: boolean;
-  importFailed: boolean;
-  importStatus: TorznabImportStatus | null;
+  emptyMessage: string;
+  importStates: Readonly<Record<string, TorznabImportRowState>>;
   loading: boolean;
+  playableTrackIds: readonly string[];
   releases: readonly TorznabRelease[];
   searchError: string | null;
 }>();
@@ -21,6 +21,24 @@ const { t } = useI18n();
 const empty = computed(
   () => !props.loading && !props.searchError && props.releases.length === 0,
 );
+
+function importStateFor(release: TorznabRelease): TorznabImportRowState | null {
+  const local = props.importStates[release.id];
+  if (local) return local;
+  const torrent = release.torrentStatus;
+  if (!torrent) return null;
+  if (torrent.progress >= 1) {
+    return { kind: "already-added" };
+  }
+  return {
+    kind: "tracking",
+    status: {
+      state: torrent.state,
+      progress: torrent.progress,
+      trackIds: [],
+    },
+  };
+}
 </script>
 
 <template>
@@ -41,7 +59,7 @@ const empty = computed(
       role="status"
       class="rounded-lg border p-6 text-sm text-muted-foreground"
     >
-      {{ t("torznab.empty") }}
+      {{ emptyMessage }}
     </p>
 
     <div
@@ -53,30 +71,13 @@ const empty = computed(
         v-for="release in releases"
         :key="release.id"
         :release="release"
-        :busy="importBusy && activeImportId === release.id"
-        :imported="activeImportId === release.id"
+        :import-state="importStateFor(release)"
         @add="emit('add', $event)"
       />
     </div>
 
-    <template v-if="activeImportId && importStatus && !importFailed">
-      <Button
-        v-if="importStatus.trackIds.length"
-        type="button"
-        @click="emit('play')"
-      >
-        {{ t("torznab.play") }}
-      </Button>
-      <p v-else role="status" class="text-sm text-muted-foreground">
-        {{
-          importStatus.progress === 1
-            ? t("torznab.indexing")
-            : importStatus.state +
-              " · " +
-              Math.round(importStatus.progress * 100) +
-              "%"
-        }}
-      </p>
-    </template>
+    <Button v-if="playableTrackIds.length" type="button" @click="emit('play')">
+      {{ t("torznab.play") }}
+    </Button>
   </div>
 </template>

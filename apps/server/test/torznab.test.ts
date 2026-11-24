@@ -5,7 +5,7 @@ import {
 import { CredentialStore } from "../src/credential-store.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import Fastify from "fastify";
@@ -14,7 +14,10 @@ import {
   createMemberSession,
   createWav,
 } from "./helpers.js";
+import { qbitAddAccepted } from "../src/qbittorrent.js";
+import { completedAudioReleasePaths } from "../src/release-import-files.js";
 import { parseReleases } from "../src/torznab.js";
+import { readTaskPayload } from "../src/tasks.js";
 
 test("rejects DTDs and indexer errors", () => {
   for (const xml of ["<!DOCTYPE rss><rss/>", '<error code="100"/>'])
@@ -50,7 +53,74 @@ test("release media types follow standard and explicit categories", () => {
   );
 });
 
-test("an external release becomes a playable folder track after completion", async (t) => {
+test("torznab releases retain a normalized info hash for presence checks", () => {
+  const xml = `
+    <rss xmlns:t="http://torznab.com/schemas/2015/feed">
+      <channel>
+        <item>
+          <title>Hashed release</title>
+          <enclosure url="/download/1" />
+          <t:attr name="category" value="3040" />
+          <t:attr name="infohash" value="ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD" />
+        </item>
+      </channel>
+    </rss>
+  `;
+  assert.equal(
+    parseReleases(xml, new URL("https://indexer.test"))[0]?.infoHash,
+    "abcdefabcdefabcdefabcdefabcdefabcdefabcd",
+  );
+});
+
+test("qBittorrent add responses support legacy and current Web API formats", () => {
+  assert.equal(qbitAddAccepted("Ok."), true);
+  assert.equal(
+    qbitAddAccepted(
+      JSON.stringify({
+        success_count: 1,
+        failure_count: 0,
+        pending_count: 0,
+      }),
+    ),
+    true,
+  );
+  assert.equal(
+    qbitAddAccepted(
+      JSON.stringify({
+        success_count: 0,
+        failure_count: 0,
+        pending_count: 1,
+      }),
+    ),
+    true,
+  );
+  assert.equal(
+    qbitAddAccepted(
+      JSON.stringify({
+        success_count: 0,
+        failure_count: 1,
+        pending_count: 0,
+      }),
+    ),
+    false,
+  );
+  assert.equal(qbitAddAccepted("Fails."), false);
+});
+
+test("completed release paths include only safe audio files", () => {
+  assert.deepEqual(
+    completedAudioReleasePaths([
+      { name: "album/song.flac", progress: 1 },
+      { name: "cover.jpg", progress: 1 },
+      { name: "partial.wav", progress: 0.5 },
+      { name: "../outside.mp3", progress: 1 },
+      { name: "C:\\outside.mp3", progress: 1 },
+    ]),
+    [path.join("album", "song.flac")],
+  );
+});
+
+test("an external release indexes only its completed audio files", async (t) => {
   const folder = await realpath(
     await mkdtemp(path.join(os.tmpdir(), "torznab-test-")),
   );
@@ -58,6 +128,9 @@ test("an external release becomes a playable folder track after completion", asy
   let tags: string[] = [];
   let adds = 0;
   let done = false;
+  let addMode: "success" | "pending" | "duplicate" = "success";
+  let torrentInfoRequests = 0;
+  const importedRelativePath = path.join("album", "song.wav");
   upstream.get("/feed", async (req) => {
     if ((req.query as { t: string }).t === "caps")
       return '<caps><searching><music-search available="yes" supportedParams="q,artist"/></searching></caps>';
@@ -86,6 +159,9 @@ test("an external release becomes a playable folder track after completion", asy
     (_req, body, cb) => cb(null, new URLSearchParams(String(body))),
   );
   upstream.post("/api/v2/torrents/add", async (req) => {
+    if (addMode === "duplicate") {
+      return new Response("Conflict", { status: 409 });
+    }
     const form = req.body as URLSearchParams;
     assert.equal(form.get("savepath"), null);
     assert.equal(form.get("autoTMM"), "true");
@@ -93,10 +169,25 @@ test("an external release becomes a playable folder track after completion", asy
     assert.ok(form.get("tags")?.split(",").includes("lossless"));
     tags = form.get("tags")!.split(",");
     adds++;
-    return "Ok.";
+    if (addMode === "pending") {
+      return new Response(
+        JSON.stringify({
+          success_count: 0,
+          failure_count: 0,
+          pending_count: 1,
+        }),
+        { status: 202 },
+      );
+    }
+    return {
+      success_count: 1,
+      failure_count: 0,
+      pending_count: 0,
+    };
   });
-  upstream.get("/api/v2/torrents/info", async (req) =>
-    tags.includes((req.query as { tag: string }).tag)
+  upstream.get("/api/v2/torrents/info", async (req) => {
+    torrentInfoRequests++;
+    return tags.includes((req.query as { tag: string }).tag)
       ? [
           {
             hash: "abc",
@@ -106,10 +197,11 @@ test("an external release becomes a playable folder track after completion", asy
             progress: done ? 1 : 0,
           },
         ]
-      : [],
-  );
+      : [];
+  });
   upstream.get("/api/v2/torrents/files", async () => [
-    { name: "song.wav", progress: 1 },
+    { name: "album/song.wav", progress: 1 },
+    { name: "cover.jpg", progress: 1 },
   ]);
   upstream.post("/api/v2/torrents/removeTags", async () => {
     tags = tags.filter((t) => t !== "peridot-import");
@@ -291,15 +383,31 @@ test("an external release becomes a playable folder track after completion", asy
   assert.notEqual(release.sourceName, second.sourceName);
   assert.equal(release.seeders, 4);
   assert.equal(release.mediaType, "music");
+  assert.equal(torrentInfoRequests, 0, "search must not inspect torrents");
   const route = base + "/imports/" + release.id;
-  for (let i = 0; i < 2; i++)
-    assert.equal(
-      (await ctx.app.inject({ method: "POST", url: route, headers }))
-        .statusCode,
-      202,
-    );
+  const imported = await ctx.app.inject({
+    method: "POST",
+    url: route,
+    headers,
+  });
+  assert.equal(imported.statusCode, 202);
+  assert.equal(imported.json().task.kind, "release_import");
+  assert.equal(imported.json().task.status, "waiting");
+  assert.ok(imported.json().task.ownerUserId);
+  const importTaskId = imported.json().task.id as string;
+  const alreadyTagged = await ctx.app.inject({
+    method: "POST",
+    url: route,
+    headers,
+  });
+  assert.equal(alreadyTagged.statusCode, 409);
+  assert.equal(alreadyTagged.json().error.code, "release_already_added");
   assert.equal(adds, 1);
-  await writeFile(path.join(folder, "song.wav"), createWav());
+  await mkdir(path.join(folder, "album"), { recursive: true });
+  await Promise.all([
+    writeFile(path.join(folder, importedRelativePath), createWav()),
+    writeFile(path.join(folder, "untouched.wav"), createWav()),
+  ]);
   done = true;
   let id: string | undefined;
   for (let i = 0; i < 50 && !id; i++) {
@@ -307,6 +415,39 @@ test("an external release becomes a playable folder track after completion", asy
     id = (await ctx.app.inject({ url: route, headers })).json().trackIds[0];
   }
   assert.ok(id, "completed audio should be indexed");
+  const sourceTracks = await ctx.database.orm.Track.where({
+    sourceId: folderSource.id,
+  }).all();
+  assert.deepEqual(
+    sourceTracks.map((track) => track.relativePath),
+    [importedRelativePath],
+    "files outside the completed torrent must not be scanned",
+  );
+  let metadataTask:
+    Awaited<ReturnType<typeof ctx.database.orm.Task.first>> | undefined;
+  for (let i = 0; i < 50 && metadataTask?.status !== "completed"; i++) {
+    metadataTask = (
+      await ctx.database.orm.Task.where({
+        kind: "metadata_fetch",
+        parentTaskId: importTaskId,
+      }).all()
+    )[0];
+    if (metadataTask?.status !== "completed") {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+  }
+  assert.equal(metadataTask?.status, "completed");
+  assert.deepEqual(readTaskPayload(metadataTask!), [id]);
+  assert.equal(
+    (await ctx.database.orm.Task.first({ id: importTaskId }))?.status,
+    "completed",
+  );
+  assert.deepEqual(
+    readTaskPayload(
+      (await ctx.database.orm.Task.first({ id: importTaskId }))!,
+    ),
+    [importedRelativePath],
+  );
   const tokenResponse = await ctx.app.inject({
     method: "POST",
     url: `/api/tracks/${id}/playback-token`,
@@ -322,6 +463,24 @@ test("an external release becomes a playable folder track after completion", asy
       encodeURIComponent(playbackToken),
   });
   assert.equal(audio.statusCode, 200, `${id} ${audio.body}`);
+  const secondImport = base + "/imports/" + second.id;
+  tags = [];
+  addMode = "pending";
+  const pending = await ctx.app.inject({
+    method: "POST",
+    url: secondImport,
+    headers,
+  });
+  assert.equal(pending.statusCode, 202, pending.body);
+  tags = [];
+  addMode = "duplicate";
+  const duplicate = await ctx.app.inject({
+    method: "POST",
+    url: secondImport,
+    headers,
+  });
+  assert.equal(duplicate.statusCode, 409, duplicate.body);
+  assert.equal(duplicate.json().error.code, "release_already_added");
 });
 
 test("legacy indexers share one migrated client and retain feed credentials after retry", async (t) => {

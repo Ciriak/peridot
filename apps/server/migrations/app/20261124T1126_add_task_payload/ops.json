@@ -1,0 +1,54 @@
+[
+  {
+    "id": "column.Task.payload",
+    "label": "Add column payload on Task",
+    "summary": "Adds column payload on Task",
+    "operationClass": "additive",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "column",
+        "name": "payload",
+        "table": "Task"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"payload\" is missing",
+        "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM pragma_table_info(?1) WHERE \"name\" = ?2",
+        "params": [
+          "Task",
+          "payload"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "column \"payload\" on \"Task\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"payload\"",
+        "sql": "ALTER TABLE \"Task\" ADD COLUMN \"payload\" TEXT"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"payload\" exists",
+        "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM pragma_table_info(?1) WHERE \"name\" = ?2",
+        "params": [
+          "Task",
+          "payload"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "column \"payload\" on \"Task\""
+        }
+      },
+      {
+        "description": "verify column \"payload\" on \"Task\" has type TEXT and is optional",
+        "sql": "SELECT COUNT(*) > 0 FROM pragma_table_info('Task') WHERE name = 'payload' AND LOWER(type) = 'text' AND \"notnull\" = 0"
+      }
+    ]
+  }
+]

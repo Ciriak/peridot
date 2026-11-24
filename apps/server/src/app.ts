@@ -218,6 +218,9 @@ export async function buildApp(options: BuildAppOptions = {}) {
   tasks.registerExecutor("library_scan", (task, taskService, signal) =>
     scanner.runTask(task, taskService, signal),
   );
+  tasks.registerExecutor("release_import", (task, taskService, signal) =>
+    scanner.runTask(task, taskService, signal),
+  );
   tasks.registerExecutor("metadata_fetch", (task, taskService, signal) =>
     metadataEnrichment.runTask(task, taskService, signal),
   );

@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test, { mock } from "node:test";
 import {
+  TASK_RELEASE_IMPORT_STAGE_DETAIL_KEY,
+  type TaskResponse,
+} from "@peridot/contracts";
+import {
   isPeridotServerReachable,
   serverConnectionRestored,
 } from "../app/lib/server-connection.ts";
@@ -17,6 +21,7 @@ import {
 } from "../app/lib/offline-toast.ts";
 import { playbackFailureToast } from "../app/lib/playback-toast.ts";
 import { releaseDownloadFailureToast } from "../app/lib/release-download-toast.ts";
+import { unseenReleaseImportStage } from "../app/lib/release-import-notifications.ts";
 import { sourceMutationToast } from "../app/lib/source-toast.ts";
 import {
   TOAST_MOBILE_OFFSET,
@@ -122,6 +127,59 @@ test("external release failures map to an error toast", () => {
       kind: "error",
       duration: 8000,
     },
+  );
+});
+
+test("release import stage notifications are owner-scoped and exactly once", () => {
+  const task = {
+    id: "release-task",
+    kind: "release_import",
+    status: "waiting",
+    titleMessage: {
+      key: "task.title.releaseImport",
+      params: { release: "Album" },
+    },
+    ownerUserId: "owner",
+    parentTaskId: null,
+    source: null,
+    progress: { state: "determinate", completed: 25, total: 100 },
+    details: [
+      {
+        key: TASK_RELEASE_IMPORT_STAGE_DETAIL_KEY,
+        value: "downloading",
+        labelMessage: { key: "task.detail.releaseStage" },
+        valueMessage: { key: "task.releaseStage.downloading" },
+      },
+    ],
+    failureMessage: null,
+    createdAt: "2026-11-24T09:00:00.000Z",
+    startedAt: null,
+    completedAt: null,
+    updatedAt: "2026-11-24T09:00:01.000Z",
+  } satisfies TaskResponse;
+  const notified = new Set<string>();
+  const startedAt = Date.parse("2026-11-24T09:00:00.000Z");
+
+  assert.equal(
+    unseenReleaseImportStage(task, "owner", startedAt, notified),
+    "downloading",
+  );
+  assert.equal(
+    unseenReleaseImportStage(task, "owner", startedAt, notified),
+    null,
+  );
+  assert.equal(
+    unseenReleaseImportStage(task, "other-user", startedAt, new Set()),
+    null,
+  );
+  assert.equal(
+    unseenReleaseImportStage(
+      { ...task, updatedAt: "2026-11-24T08:59:59.000Z" },
+      "owner",
+      startedAt,
+      new Set(),
+    ),
+    null,
   );
 });
 
@@ -263,6 +321,10 @@ test("task and log updates use the shared realtime subscription", async () => {
   assert.match(notifications, /useServerConnection/);
   assert.match(notifications, /serverConnectionRestored\(previous, next\)/);
   assert.match(notifications, /notifyServerOnline\(\)/);
+  assert.match(notifications, /unseenReleaseImportStage/);
+  assert.match(notifications, /notifyReleaseDownloading/);
+  assert.match(notifications, /notifyReleaseAddingToLibrary/);
+  assert.match(notifications, /notificationsStartedAt/);
   assert.match(
     notifications,
     /route\.path === "\/onboarding" \|\| !address\.value \|\| !token\.value/,

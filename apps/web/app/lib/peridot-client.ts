@@ -1215,7 +1215,10 @@ export function torznabClient(address: string, token: string) {
         "/search?" + new URLSearchParams({ q }),
       ),
     add: (id: string) =>
-      get<{ id: string }>("/imports/" + id, { method: "POST" }),
+      get<import("@peridot/contracts").TorznabImportResponse>(
+        "/imports/" + id,
+        { method: "POST" },
+      ),
     status: (id: string) =>
       get<import("@peridot/contracts").TorznabImportStatus>("/imports/" + id),
   };

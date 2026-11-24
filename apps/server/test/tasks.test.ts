@@ -111,6 +111,78 @@ test("completed tasks with partial errors use completed warning messaging", asyn
   }
 });
 
+test("waiting release imports do not block queued work and promote explicitly", async () => {
+  const context = await createTestContext();
+  await context.app.close();
+  const tasks = new TaskService(context.database);
+  const executions: string[] = [];
+  tasks.registerExecutor("release_import", async (task) => {
+    executions.push(`release:${task.id}`);
+  });
+  tasks.registerExecutor("catalog_fetch", async (task) => {
+    executions.push(`catalog:${task.id}`);
+  });
+  await tasks.initialize();
+  try {
+    const waiting = await tasks.enqueue({
+      kind: "release_import",
+      initialStatus: "waiting",
+      dedupe: false,
+      title: "Release import",
+      details: [],
+    });
+    const queued = await tasks.enqueue({
+      kind: "catalog_fetch",
+      title: "Catalog work",
+      details: [],
+    });
+    await waitForStatus(tasks, queued.id, "completed");
+    assert.equal((await tasks.get(waiting.id))?.status, "waiting");
+    assert.deepEqual(executions, [`catalog:${queued.id}`]);
+
+    await tasks.updateProgress(waiting.id, 40, 100);
+    const active = toTaskResponse((await tasks.get(waiting.id))!);
+    assert.deepEqual(active.progress, {
+      state: "determinate",
+      completed: 40,
+      total: 100,
+    });
+
+    await tasks.promoteWaiting(waiting.id);
+    await waitForStatus(tasks, waiting.id, "completed");
+    assert.deepEqual(executions, [
+      `catalog:${queued.id}`,
+      `release:${waiting.id}`,
+    ]);
+  } finally {
+    await tasks.close();
+    await context.close();
+  }
+});
+
+test("waiting release imports survive service restart", async () => {
+  const context = await createTestContext();
+  await context.app.close();
+  const first = new TaskService(context.database);
+  const waiting = await first.enqueue({
+    kind: "release_import",
+    initialStatus: "waiting",
+    dedupe: false,
+    title: "Persistent import",
+    details: [],
+  });
+  await first.close();
+
+  const restarted = new TaskService(context.database);
+  await restarted.initialize();
+  try {
+    assert.equal((await restarted.get(waiting.id))?.status, "waiting");
+  } finally {
+    await restarted.close();
+    await context.close();
+  }
+});
+
 test("task service runs FIFO, coalesces queued duplicates, and reports progress", async () => {
   const context = await createTestContext();
   await context.app.close();

@@ -1,14 +1,34 @@
-import { qbitRequest as qb } from "./qbittorrent.js";
+import {
+  QbitRequestError,
+  qbitAddAccepted,
+  qbitRequest as qb,
+} from "./qbittorrent.js";
 import { importSettings, readClientConnections } from "./download-clients.js";
 import { createHash } from "node:crypto";
 import { DOMParser } from "@xmldom/xmldom";
 import type { FastifyInstance } from "fastify";
 import type { Database } from "./database.js";
-import { queueLibraryScan, type TaskService } from "./tasks.js";
+import type { TaskService } from "./tasks.js";
 
 import type { CredentialStore } from "./credential-store.js";
-import type { CreateTorznabSourceRequest, MediaType } from "@peridot/contracts";
+import {
+  TASK_RELEASE_IMPORT_ID_DETAIL_KEY,
+  TASK_RELEASE_IMPORT_STAGE_DETAIL_KEY,
+  type CreateTorznabSourceRequest,
+  type MediaType,
+  type TaskDetailResponse,
+  type TaskReleaseImportStage,
+  type TorznabClientTorrentStatus,
+  type TorznabRelease,
+} from "@peridot/contracts";
 import { SourceIntegrationError } from "./source-integrations.js";
+import { message } from "./messages.js";
+import {
+  completedAudioReleasePaths,
+  type TorrentFile,
+} from "./release-import-files.js";
+import { releaseInfoHash, TorrentPresenceIndex } from "./torznab-presence.js";
+import { readTaskPayload, toTaskResponse } from "./tasks.js";
 
 function invalid(reason: string): never {
   throw new SourceIntegrationError(reason, "invalid_configuration", 400, {
@@ -185,6 +205,10 @@ export function parseReleases(xml: string, feed: URL) {
       const seeders = attributes
         .find((a) => a.getAttribute("name") === "seeders")
         ?.getAttribute("value");
+      const attr = (name: string) =>
+        attributes
+          .find((a) => a.getAttribute("name") === name)
+          ?.getAttribute("value");
       const number = (v: string | null | undefined) =>
         v && /^\d+$/.test(v) ? Number(v) : null;
       return [
@@ -194,6 +218,11 @@ export function parseReleases(xml: string, feed: URL) {
           href: url.href,
           seeders: number(seeders),
           mediaType,
+          infoHash: releaseInfoHash(
+            url.href,
+            attr("infohash"),
+            attr("magneturl"),
+          ),
           bytes: number(
             field("size") ||
               item.getElementsByTagName("enclosure")[0]?.getAttribute("length"),
@@ -203,13 +232,68 @@ export function parseReleases(xml: string, feed: URL) {
     });
 }
 
+function releaseImportDetails(
+  importId: string,
+  stage: TaskReleaseImportStage,
+  transferState: string | null,
+  progress: number,
+): TaskDetailResponse[] {
+  return [
+    {
+      key: TASK_RELEASE_IMPORT_ID_DETAIL_KEY,
+      value: importId,
+      labelMessage: message("task.detail.releaseImport"),
+      valueMessage: null,
+    },
+    {
+      key: TASK_RELEASE_IMPORT_STAGE_DETAIL_KEY,
+      value: stage,
+      labelMessage: message("task.detail.releaseStage"),
+      valueMessage: message(
+        stage === "downloading"
+          ? "task.releaseStage.downloading"
+          : "task.releaseStage.addingToLibrary",
+      ),
+    },
+    ...(transferState
+      ? [
+          {
+            key: "release.transferState",
+            value: transferState,
+            labelMessage: message("task.detail.transferState"),
+            valueMessage: null,
+          },
+        ]
+      : []),
+    {
+      key: "release.progress",
+      value: `${Math.round(progress * 100)}%`,
+      labelMessage: message("task.detail.downloadProgress"),
+      valueMessage: null,
+    },
+  ];
+}
+
+function taskDetail(task: { details: string }, key: string) {
+  try {
+    const details = JSON.parse(task.details) as TaskDetailResponse[];
+    return details.find((detail) => detail.key === key)?.value ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function registerTorznab(
   app: FastifyInstance,
   db: Database,
   tasks: TaskService,
   credentials: CredentialStore,
 ) {
-  const cache = new Map<string, string>();
+  const cache = new Map<
+    string,
+    { href: string; infoHash: string | null; title: string; indexerId: string }
+  >();
+  const presence = new TorrentPresenceIndex();
   async function indexers() {
     const rows = await db.orm.Source.where({ kind: "torznab" })
       .where((s) => s.removedAt.isNull())
@@ -225,6 +309,9 @@ export function registerTorznab(
         name: row.name || "Torznab",
         feed: String(secrets.feed),
         apiKey: String(secrets.apiKey),
+        downloadClientId: config.downloadClientId
+          ? String(config.downloadClientId)
+          : "",
         ...(clients.get(config.downloadClientId) || {
           client: "",
           clientApiKey: "",
@@ -275,9 +362,22 @@ export function registerTorznab(
             });
             if (!response.ok) throw new Error();
             return parseReleases(await response.text(), url).map(
-              ({ id: hash, title, href, seeders, bytes, mediaType }) => {
+              ({
+                id: hash,
+                title,
+                href,
+                infoHash,
+                seeders,
+                bytes,
+                mediaType,
+              }) => {
                 const id = indexer.id + "." + hash;
-                cache.set(id, href);
+                cache.set(id, {
+                  href,
+                  infoHash,
+                  title,
+                  indexerId: indexer.id,
+                });
                 return {
                   id,
                   title,
@@ -286,6 +386,8 @@ export function registerTorznab(
                   mediaType,
                   sourceName: indexer.name,
                   canImport: Boolean(indexer.client),
+                  infoHash,
+                  indexer,
                 };
               },
             );
@@ -294,8 +396,69 @@ export function registerTorznab(
         if (responses.length && responses.every((r) => r.status === "rejected"))
           throw new Error();
         while (cache.size > 2000) cache.delete(cache.keys().next().value!);
-        return responses.flatMap((r) =>
+        const releases = responses.flatMap((r) =>
           r.status === "fulfilled" ? r.value : [],
+        );
+        const activeImportTasks = await db.orm.Task.where({
+          kind: "release_import",
+        })
+          .where((task) => task.status.in(["waiting", "queued", "running"]))
+          .all();
+        const tasksByReleaseId = new Map(
+          activeImportTasks.flatMap((task) => {
+            const importId = taskDetail(
+              task,
+              TASK_RELEASE_IMPORT_ID_DETAIL_KEY,
+            );
+            return importId ? [[importId, task.id] as const] : [];
+          }),
+        );
+        const hashesByClient = new Map<
+          string,
+          { indexer: Indexer; hashes: string[] }
+        >();
+        for (const release of releases) {
+          if (!release.infoHash || !release.indexer.downloadClientId) continue;
+          const group = hashesByClient.get(
+            release.indexer.downloadClientId,
+          ) ?? {
+            indexer: release.indexer,
+            hashes: [],
+          };
+          group.hashes.push(release.infoHash);
+          hashesByClient.set(release.indexer.downloadClientId, group);
+        }
+        const presenceByClient = new Map<
+          string,
+          Map<string, TorznabClientTorrentStatus | null>
+        >();
+        await Promise.all(
+          [...hashesByClient.entries()].map(async ([clientId, group]) => {
+            presenceByClient.set(
+              clientId,
+              await presence.lookup(clientId, group.indexer, group.hashes, () =>
+                app.log.warn("Could not check torrent presence in qBittorrent"),
+              ),
+            );
+          }),
+        );
+        return releases.map(
+          ({ infoHash, indexer, ...release }): TorznabRelease => {
+            const clientStatus = infoHash
+              ? presenceByClient.get(indexer.downloadClientId)?.get(infoHash)
+              : null;
+            return {
+              ...release,
+              ...(clientStatus
+                ? {
+                    torrentStatus: {
+                      ...clientStatus,
+                      taskId: tasksByReleaseId.get(release.id) ?? null,
+                    },
+                  }
+                : {}),
+            };
+          },
         );
       } catch {
         return reply.code(502).send({
@@ -312,8 +475,8 @@ export function registerTorznab(
     base + "/imports/:id",
     async (req, reply) => {
       const id = req.params.id;
-      const href = cache.get(id);
-      if (!href)
+      const release = cache.get(id);
+      if (!release)
         return reply.code(404).send({
           error: {
             code: "result_expired",
@@ -322,28 +485,93 @@ export function registerTorznab(
         });
       const indexer = (await indexers()).find((s) => s.id === id.split(".")[0]);
       if (!indexer?.client) return reply.code(409).send();
-      const { destination } = await source(indexer);
+      const src = await source(indexer);
+      const { destination } = src;
       const pending = "peridot-import-" + indexer.id;
       if ((await list(indexer, "peridot-" + id)).length)
-        return reply.code(202).send({ id });
-      const response = await qb(
-        indexer,
-        "torrents/add",
-        {
-          urls: href,
-          ...(indexer.category ? { category: indexer.category } : {}),
-          ...(indexer.categoryPath
-            ? { autoTMM: "true" }
-            : { savepath: destination, autoTMM: "false" }),
-          tags: [pending, "peridot-" + id, indexer.tags]
-            .filter(Boolean)
-            .join(","),
-        },
-        true,
+        return reply.code(409).send({
+          error: {
+            code: "release_already_added",
+            message: "This release is already in the download client.",
+          },
+        });
+      const importTask = await tasks.enqueue({
+        kind: "release_import",
+        initialStatus: "waiting",
+        dedupe: false,
+        publish: false,
+        ownerUserId: req.authenticatedUser?.id ?? null,
+        title: release.title,
+        titleMessage: message("task.title.releaseImport", {
+          release: release.title,
+        }),
+        sourceId: src.id,
+        sourceName: src.name,
+        details: releaseImportDetails(id, "downloading", null, 0),
+      });
+      let response: Response;
+      try {
+        response = await qb(
+          indexer,
+          "torrents/add",
+          {
+            urls: release.href,
+            ...(indexer.category ? { category: indexer.category } : {}),
+            ...(indexer.categoryPath
+              ? { autoTMM: "true" }
+              : { savepath: destination, autoTMM: "false" }),
+            tags: [pending, "peridot-" + id, indexer.tags]
+              .filter(Boolean)
+              .join(","),
+          },
+          true,
+        );
+      } catch (error) {
+        await tasks.discardWaiting(importTask.id);
+        if (error instanceof QbitRequestError && error.statusCode === 409) {
+          return reply.code(409).send({
+            error: {
+              code: "release_already_added",
+              message: "This release is already in the download client.",
+            },
+          });
+        }
+        if (error instanceof QbitRequestError) {
+          return reply.code(502).send({
+            error: {
+              code: "download_client_rejected",
+              message: "qBittorrent rejected the release.",
+            },
+          });
+        }
+        throw error;
+      }
+      if (!qbitAddAccepted(await response.text())) {
+        await tasks.discardWaiting(importTask.id);
+        return reply.code(502).send({
+          error: {
+            code: "download_client_rejected",
+            message: "qBittorrent rejected the release.",
+          },
+        });
+      }
+      await tasks.updateProgress(
+        importTask.id,
+        0,
+        100,
+        releaseImportDetails(id, "downloading", "pending", 0),
       );
-      if ((await response.text()).trim() !== "Ok.")
-        throw new Error("qBittorrent rejected the release");
-      return reply.code(202).send({ id });
+      if (release.infoHash) {
+        presence.set(indexer.downloadClientId, release.infoHash, {
+          hash: release.infoHash,
+          state: "pending",
+          progress: 0,
+          taskId: importTask.id,
+        });
+      }
+      const savedTask = await tasks.get(importTask.id);
+      if (!savedTask) throw new Error("Import task was not created.");
+      return reply.code(202).send({ id, task: toTaskResponse(savedTask) });
     },
   );
 
@@ -362,6 +590,29 @@ export function registerTorznab(
       torrent.tags.split(",").some((value) => value.trim() === tag),
     );
   }
+  async function importedTrackIds(sourceId: string, relativePaths: string[]) {
+    const ids: string[] = [];
+    for (let index = 0; index < relativePaths.length; index += 200) {
+      const rows = await db.orm.Track.where({
+        sourceId,
+        available: 1,
+      })
+        .where((track) =>
+          track.relativePath.in(relativePaths.slice(index, index + 200)),
+        )
+        .all();
+      ids.push(
+        ...rows
+          .sort((left, right) =>
+            left.relativePath.localeCompare(right.relativePath, undefined, {
+              numeric: true,
+            }),
+          )
+          .map((track) => track.id),
+      );
+    }
+    return ids;
+  }
   app.get<{ Params: { id: string } }>(
     base + "/imports/:id",
     async (req, reply) => {
@@ -371,6 +622,62 @@ export function registerTorznab(
       if (!indexer?.client) return reply.code(404).send();
       const src = await source(indexer);
       const { destination } = src;
+      const importTask = (
+        await db.orm.Task.where({ kind: "release_import" }).all()
+      )
+        .filter(
+          (task) =>
+            taskDetail(task, TASK_RELEASE_IMPORT_ID_DETAIL_KEY) ===
+            req.params.id,
+        )
+        .sort(
+          (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
+        )[0];
+      if (importTask) {
+        const taskProgress =
+          importTask.progressCompleted !== null &&
+          importTask.progressTotal !== null &&
+          importTask.progressTotal > 0
+            ? Math.min(
+                1,
+                Math.max(
+                  0,
+                  importTask.progressCompleted / importTask.progressTotal,
+                ),
+              )
+            : 0;
+        if (importTask.status === "waiting") {
+          return {
+            progress: taskProgress,
+            trackIds: [],
+            state: taskDetail(importTask, "release.transferState") ?? "pending",
+          };
+        }
+        if (importTask.status === "queued" || importTask.status === "running") {
+          return { progress: 1, trackIds: [], state: "adding" };
+        }
+        if (importTask.status === "completed") {
+          const relativePaths = readTaskPayload(importTask);
+          if (relativePaths) {
+            return {
+              progress: 1,
+              trackIds: await importedTrackIds(src.id, relativePaths),
+              state: taskDetail(importTask, "release.transferState") ?? "ready",
+            };
+          }
+        }
+        if (
+          importTask.status === "failed" ||
+          importTask.status === "interrupted" ||
+          importTask.status === "stopped"
+        ) {
+          return {
+            progress: taskProgress,
+            trackIds: [],
+            state: importTask.status,
+          };
+        }
+      }
       const [torrent] = await list(indexer, "peridot-" + req.params.id);
       const progress = torrent?.progress ?? 0;
       const trackIds: string[] = [];
@@ -381,66 +688,187 @@ export function registerTorznab(
           torrent.save_path.replace(/\/$/, "") ===
             destination.replace(/\/$/, ""))
       ) {
-        const files: { name: string; progress: number }[] = await (
+        const files: TorrentFile[] = await (
           await qb(indexer, "torrents/files", { hash: torrent.hash })
         ).json();
-        const names = files.filter((f) => f.progress === 1).map((f) => f.name);
-
-        for (let i = 0; i < names.length; i += 200) {
-          const rows = await db.orm.Track.where({
-            sourceId: src.id,
-            available: 1,
-          })
-            .where((t) => t.relativePath.in(names.slice(i, i + 200)))
-            .all();
-          trackIds.push(
-            ...rows
-              .sort((a, b) =>
-                a.relativePath.localeCompare(b.relativePath, undefined, {
-                  numeric: true,
-                }),
-              )
-              .map((r) => r.id),
-          );
-        }
+        trackIds.push(
+          ...(await importedTrackIds(
+            src.id,
+            completedAudioReleasePaths(files),
+          )),
+        );
       }
       return { progress, trackIds, state: torrent?.state ?? "pending" };
     },
   );
 
+  const IMPORT_MISSING_TIMEOUT_MS = 24 * 60 * 60 * 1000;
+  const TERMINAL_QBIT_STATES = new Set(["error", "missingFiles"]);
   let running: Promise<void> | undefined;
-  async function scanCompleted(indexer: Indexer) {
-    const pending = "peridot-import-" + indexer.id;
-    const completed = (await list(indexer, pending)).filter(
-      (t) => t.progress === 1 && t.state !== "moving",
-    );
-    if (!completed.length) return;
-    await queueLibraryScan(tasks, await source(indexer));
-    await qb(
-      indexer,
-      "torrents/removeTags",
-      { hashes: completed.map((t) => t.hash).join("|"), tags: pending },
-      true,
-    );
-  }
-  const timer = setInterval(() => {
-    running ??= indexers()
-      .then(async (rows) => {
-        await Promise.all(
-          rows
-            .filter((s) => s.client)
-            .map((s) =>
-              scanCompleted(s).catch(() =>
-                app.log.warn("Could not process indexer imports"),
-              ),
-            ),
-        );
-      })
-      .catch(() => app.log.warn("Could not process completed Torznab imports"))
+  async function pollWaitingImports() {
+    if (running) return running;
+    running = (async () => {
+      const releaseTasks = await db.orm.Task.where({
+        kind: "release_import",
+      }).all();
+      if (!releaseTasks.length) return;
+      const sources = await indexers();
+      const sourceById = new Map(sources.map((source) => [source.id, source]));
+      const tasksById = new Map<string, typeof releaseTasks>();
+      const recentlyUpdated = Date.now() - 5 * 60 * 1000;
+      for (const task of releaseTasks) {
+        if (
+          (task.status === "completed" ||
+            task.status === "stopped" ||
+            task.status === "failed" ||
+            task.status === "interrupted") &&
+          task.updatedAt.getTime() < recentlyUpdated
+        ) {
+          continue;
+        }
+        const importId = taskDetail(task, TASK_RELEASE_IMPORT_ID_DETAIL_KEY);
+        const sourceId = importId?.split(".")[0];
+        if (!importId || !sourceId) continue;
+        const indexer = sourceById.get(sourceId);
+        if (!indexer?.client) {
+          if (task.status === "waiting") {
+            await tasks.fail(
+              task.id,
+              "The indexer or download client is no longer available.",
+              "failed",
+              message("api.message.releaseImportUnavailable"),
+            );
+          }
+          continue;
+        }
+        const group = tasksById.get(indexer.id) ?? [];
+        group.push(task);
+        tasksById.set(indexer.id, group);
+      }
+
+      await Promise.all(
+        [...tasksById.entries()].map(async ([indexerId, indexerTasks]) => {
+          const indexer = sourceById.get(indexerId);
+          if (!indexer) return;
+          const pendingTag = "peridot-import-" + indexer.id;
+          let torrents: Torrent[];
+          try {
+            torrents = await list(indexer, pendingTag);
+          } catch {
+            app.log.warn("Could not check Torznab import progress");
+            return;
+          }
+          const torrentByImportId = new Map<string, Torrent>();
+          for (const torrent of torrents) {
+            const releaseTag = torrent.tags
+              .split(",")
+              .map((tag) => tag.trim())
+              .find(
+                (tag) =>
+                  tag.startsWith("peridot-") &&
+                  !tag.startsWith("peridot-import-"),
+              );
+            if (releaseTag) {
+              torrentByImportId.set(
+                releaseTag.slice("peridot-".length),
+                torrent,
+              );
+            }
+          }
+
+          const removeHashes = new Set<string>();
+          for (const task of indexerTasks) {
+            const importId = taskDetail(
+              task,
+              TASK_RELEASE_IMPORT_ID_DETAIL_KEY,
+            );
+            if (!importId) continue;
+            const torrent = torrentByImportId.get(importId);
+            if (!torrent) {
+              if (
+                task.status === "waiting" &&
+                Date.now() - task.createdAt.getTime() >=
+                  IMPORT_MISSING_TIMEOUT_MS
+              ) {
+                await tasks.fail(
+                  task.id,
+                  "The torrent was not found in the download client.",
+                  "failed",
+                  message("api.message.releaseImportMissing"),
+                );
+              }
+              continue;
+            }
+            if (task.status !== "waiting") {
+              removeHashes.add(torrent.hash);
+              continue;
+            }
+            if (TERMINAL_QBIT_STATES.has(torrent.state)) {
+              await tasks.fail(
+                task.id,
+                `The download client reported ${torrent.state}.`,
+                "failed",
+                message("api.message.releaseImportDownloadFailed"),
+              );
+              removeHashes.add(torrent.hash);
+              continue;
+            }
+            if (torrent.progress >= 1 && torrent.state !== "moving") {
+              let relativePaths: string[];
+              try {
+                const files: TorrentFile[] = await (
+                  await qb(indexer, "torrents/files", { hash: torrent.hash })
+                ).json();
+                relativePaths = completedAudioReleasePaths(files);
+              } catch {
+                app.log.warn("Could not read completed Torznab import files");
+                continue;
+              }
+              await tasks.promoteWaiting(
+                task.id,
+                releaseImportDetails(
+                  importId,
+                  "addingToLibrary",
+                  torrent.state,
+                  1,
+                ),
+                relativePaths,
+              );
+              removeHashes.add(torrent.hash);
+            } else {
+              await tasks.updateProgress(
+                task.id,
+                Math.round(torrent.progress * 100),
+                100,
+                releaseImportDetails(
+                  importId,
+                  "downloading",
+                  torrent.state,
+                  torrent.progress,
+                ),
+              );
+            }
+          }
+          if (removeHashes.size) {
+            await qb(
+              indexer,
+              "torrents/removeTags",
+              { hashes: [...removeHashes].join("|"), tags: pendingTag },
+              true,
+            );
+          }
+        }),
+      );
+    })()
+      .catch(() => app.log.warn("Could not process Torznab imports"))
       .finally(() => {
         running = undefined;
       });
-  }, 15000);
+    return running;
+  }
+  const timer = setInterval(() => {
+    void pollWaitingImports();
+  }, 5000);
   timer.unref();
   app.addHook("onClose", async () => {
     clearInterval(timer);

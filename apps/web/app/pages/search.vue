@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useHead, useI18n, useState } from "#imports";
+import { useHead, useI18n, useRoute, useRouter, useState } from "#imports";
 import type { AlbumSummaryResponse } from "@peridot/contracts";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
@@ -38,7 +38,17 @@ import { useTorznabSearch } from "../composables/use-torznab-search";
 import { albumCatalogCard, playlistCatalogCard } from "../lib/catalog-cards";
 import { listAlbums } from "../lib/peridot-client";
 import { queryKeys } from "../lib/query-keys";
-import { SEARCH_HISTORY_DEBOUNCE_MS } from "../lib/search-history";
+import {
+  buildSearchTabHistoryLocation,
+  normalizeSearchTab,
+  SEARCH_HISTORY_DEBOUNCE_MS,
+  SEARCH_TAB_QUERY_PARAM,
+  type SearchTab,
+} from "../lib/search-history";
+import {
+  filterTorznabReleases,
+  type ExternalResultFilter,
+} from "../lib/torznab-filters";
 
 const { t } = useI18n();
 useHead({ title: t("page.search.title") });
@@ -51,12 +61,12 @@ type ResultFilter =
   | "tracks"
   | "audiobooks"
   | "podcasts";
-type SearchTab = "library" | "external";
-
 const query = useState("search-query", () => "");
+const route = useRoute();
+const router = useRouter();
 const debouncedQuery = ref("");
 const resultFilter = ref<ResultFilter>("all");
-const activeSearchTab = ref<SearchTab>("library");
+const externalResultFilter = ref<ExternalResultFilter>("all");
 const { address } = useServer();
 const { token } = useSession();
 const { scope } = useQueryScope();
@@ -64,13 +74,11 @@ const { load: loadLikes } = useLikes();
 const { playCollection } = useLibraryPlayer();
 const { recents, remember } = useSearchRecents();
 const {
-  activeImportId: activeExternalImportId,
   addToLibrary: addExternalRelease,
   enabled: externalSearchEnabled,
-  importFailed: externalImportFailed,
-  importBusy: externalImportBusy,
-  importStatus: externalImportStatus,
+  importStates: externalImportStates,
   loading: externalSearchLoading,
+  playableTrackIds: externalPlayableTrackIds,
   releases: externalReleases,
   resultCount: externalResultCount,
   searchError: externalSearchError,
@@ -117,6 +125,19 @@ const searching = computed(() => debouncedQuery.value.length > 0);
 const showSearchTabs = computed(
   () => searching.value && externalSearchEnabled.value,
 );
+const requestedSearchTab = computed(() =>
+  normalizeSearchTab(route.query[SEARCH_TAB_QUERY_PARAM]),
+);
+const activeSearchTab = computed<SearchTab>({
+  get: () =>
+    requestedSearchTab.value === "external" && showSearchTabs.value
+      ? "external"
+      : "library",
+  set: (tab) => {
+    if (tab === activeSearchTab.value) return;
+    void router.push(buildSearchTabHistoryLocation(route.query, tab));
+  },
+});
 const searchTerm = computed(() =>
   searching.value ? debouncedQuery.value : "__peridot_no_search__",
 );
@@ -265,6 +286,43 @@ const resultFilters: { value: ResultFilter; labelKey: string }[] = [
   { value: "audiobooks", labelKey: "page.search.audiobooks" },
   { value: "podcasts", labelKey: "page.search.podcasts" },
 ];
+const externalResultFilters: {
+  value: ExternalResultFilter;
+  labelKey: string;
+}[] = [
+  { value: "all", labelKey: "page.search.all" },
+  { value: "music", labelKey: "page.search.music" },
+  { value: "audiobook", labelKey: "page.search.audiobooks" },
+];
+const activeResultFilter = computed<string>({
+  get: () =>
+    activeSearchTab.value === "external"
+      ? externalResultFilter.value
+      : resultFilter.value,
+  set: (value) => {
+    if (
+      activeSearchTab.value === "external" &&
+      ["all", "music", "audiobook"].includes(value)
+    ) {
+      externalResultFilter.value = value as ExternalResultFilter;
+      return;
+    }
+    resultFilter.value = value as ResultFilter;
+  },
+});
+const visibleResultFilters = computed(() =>
+  activeSearchTab.value === "external" ? externalResultFilters : resultFilters,
+);
+const filteredExternalReleases = computed(() =>
+  filterTorznabReleases(externalReleases.value, externalResultFilter.value),
+);
+const externalEmptyMessage = computed(() => {
+  if (externalResultFilter.value === "music") return t("torznab.emptyMusic");
+  if (externalResultFilter.value === "audiobook") {
+    return t("torznab.emptyAudiobook");
+  }
+  return t("torznab.empty");
+});
 
 function openAlbum(album: AlbumSummaryResponse) {
   remember({ albumId: album.id, title: album.title, artist: album.artist });
@@ -282,19 +340,31 @@ function retrySearch() {
 }
 
 function playExternalImport() {
-  if (externalImportStatus.value?.trackIds.length) {
-    playCollection(externalImportStatus.value.trackIds);
+  if (externalPlayableTrackIds.value.length) {
+    playCollection(externalPlayableTrackIds.value);
   }
 }
 
 watch(searching, (active) => {
   if (!active) {
     resultFilter.value = "all";
-    activeSearchTab.value = "library";
+    externalResultFilter.value = "all";
+    if (requestedSearchTab.value !== "library") {
+      void router.replace(
+        buildSearchTabHistoryLocation(route.query, "library"),
+      );
+    }
   }
 });
 watch(externalSearchEnabled, (enabled) => {
-  if (!enabled) activeSearchTab.value = "library";
+  if (!enabled) {
+    externalResultFilter.value = "all";
+    if (requestedSearchTab.value !== "library") {
+      void router.replace(
+        buildSearchTabHistoryLocation(route.query, "library"),
+      );
+    }
+  }
 });
 onMounted(() => {
   debouncedQuery.value = query.value.trim();
@@ -350,21 +420,22 @@ onMounted(() => {
           </TabsList>
 
           <div
-            v-if="!showSearchTabs || activeSearchTab === 'library'"
             data-sidebar-swipe-ignore
             role="group"
             :aria-label="t('page.search.filters')"
             class="scrollbar-hide flex flex-nowrap touch-pan-x items-center gap-2 overflow-x-auto overscroll-x-contain"
           >
             <Button
-              v-for="filter in resultFilters"
+              v-for="filter in visibleResultFilters"
               :key="filter.value"
-              :variant="resultFilter === filter.value ? 'default' : 'outline'"
+              :variant="
+                activeResultFilter === filter.value ? 'default' : 'outline'
+              "
               size="sm"
               class="rounded-full"
-              :aria-pressed="resultFilter === filter.value"
+              :aria-pressed="activeResultFilter === filter.value"
               :disabled="!searching"
-              @click="resultFilter = filter.value"
+              @click="activeResultFilter = filter.value"
             >
               {{ t(filter.labelKey) }}
             </Button>
@@ -413,13 +484,14 @@ onMounted(() => {
           </div>
           <div
             v-if="recentAlbums.length"
-            class="grid grid-cols-2 gap-1.5 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10"
+            role="list"
+            class="divide-y overflow-hidden rounded-lg border"
           >
             <CatalogCard
               v-for="album in recentAlbums"
               :key="album.id"
               :item="albumCatalogCard(album)"
-              compact
+              layout="row"
               @open="openAlbum(album)"
             />
           </div>
@@ -615,12 +687,11 @@ onMounted(() => {
 
       <TabsContent v-if="showSearchTabs" value="external" class="mt-0">
         <TorznabResults
-          :active-import-id="activeExternalImportId"
-          :import-failed="externalImportFailed"
-          :import-busy="externalImportBusy"
-          :import-status="externalImportStatus"
+          :import-states="externalImportStates"
           :loading="externalSearchLoading"
-          :releases="externalReleases"
+          :playable-track-ids="externalPlayableTrackIds"
+          :empty-message="externalEmptyMessage"
+          :releases="filteredExternalReleases"
           :search-error="externalSearchError"
           @add="addExternalRelease"
           @play="playExternalImport"

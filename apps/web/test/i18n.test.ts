@@ -94,6 +94,30 @@ test("en-US messages interpolate and pluralize", () => {
     }),
     "Daft Punk - Homework could not be added to the download client. Indexer failed.",
   );
+  assert.equal(i18n.global.t("torznab.loading"), "Searching external sources");
+  assert.equal(
+    i18n.global.t("torznab.downloading", { percent: 42 }),
+    "Downloading 42%",
+  );
+  assert.equal(i18n.global.t("torznab.alreadyAdded"), "Already added");
+  assert.equal(i18n.global.t("page.search.music"), "Music");
+  assert.equal(i18n.global.t("settings.tasks.status.waiting"), "Downloading");
+  assert.equal(
+    i18n.global.t("toast.releaseDownloading"),
+    "Downloading in the background. You can keep browsing.",
+  );
+  assert.equal(
+    i18n.global.t("task.releaseStage.addingToLibrary"),
+    "Adding to library",
+  );
+  assert.equal(
+    i18n.global.t("torznab.emptyAudiobook"),
+    "No audiobook releases found.",
+  );
+  assert.equal(
+    i18n.global.t("torznab.alreadyAddedError"),
+    "This release is already in the download client.",
+  );
   assert.equal(i18n.global.t("page.search.resultType.chapter"), "Chapter");
   assert.equal(i18n.global.t("page.search.resultType.episode"), "Episode");
   assert.equal(

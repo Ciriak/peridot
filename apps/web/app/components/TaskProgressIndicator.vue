@@ -36,22 +36,33 @@ const { activeTasks: serverActiveTasks } = useTasks();
 const downloadTasks = useOfflineDownloadTasks();
 const { user } = useUser();
 const canViewServerTasks = computed(() => user.value?.role === "admin");
+const visibleServerTasks = computed(() =>
+  serverActiveTasks.value.filter(
+    (task) =>
+      canViewServerTasks.value ||
+      (task.kind === "release_import" && task.ownerUserId === user.value?.id),
+  ),
+);
 const rows = computed<TaskProgressRow[]>(() => {
   const rank = (status: string) =>
-    status === "running" ? 0 : status === "queued" ? 1 : 2;
+    status === "running"
+      ? 0
+      : status === "waiting"
+        ? 1
+        : status === "queued"
+          ? 2
+          : 3;
   return [
-    ...(canViewServerTasks.value
-      ? orderedActiveTasks(serverActiveTasks.value).map((task) => ({
-          key: `server:${task.id}`,
-          title: translate(task.titleMessage),
-          statusLabel: translate(taskStatusMessage(task)),
-          progressLabel: translate(taskProgressMessage(task)),
-          progress: activeTaskPercent(task),
-          running: task.status === "running",
-          status: task.status,
-          createdAt: task.createdAt,
-        }))
-      : []),
+    ...orderedActiveTasks(visibleServerTasks.value).map((task) => ({
+      key: `server:${task.id}`,
+      title: translate(task.titleMessage),
+      statusLabel: translate(taskStatusMessage(task)),
+      progressLabel: translate(taskProgressMessage(task)),
+      progress: activeTaskPercent(task),
+      running: task.status === "running" || task.status === "waiting",
+      status: task.status,
+      createdAt: task.createdAt,
+    })),
     ...downloadTasks
       .orderedTasks()
       .filter(downloadTasks.isActive)

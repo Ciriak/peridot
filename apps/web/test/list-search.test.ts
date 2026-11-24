@@ -54,6 +54,11 @@ test("list search debounces trimmed input and clears immediately", async () => {
   assert.doesNotMatch(bar, /md:ml-auto/);
   assert.match(bar, /@keydown\.esc="emit\('clear'\)"/);
   assert.match(bar, /:aria-label="label"/);
+  assert.match(
+    bar,
+    /<Input[\s\S]*type="search"[\s\S]*autocomplete="off"/,
+    "List search inputs disable native autocomplete",
+  );
   assert.match(search, /LIST_SEARCH_DEBOUNCE_MS = 250/);
   assert.match(search, /searchQuery\.value = value\.trim\(\)/);
   assert.match(

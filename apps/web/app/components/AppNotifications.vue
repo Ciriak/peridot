@@ -8,13 +8,20 @@ import { useServer } from "../composables/use-server";
 import { useServerConnection } from "../composables/use-server-connection";
 import { useSession } from "../composables/use-session";
 import { useTasks } from "../composables/use-tasks";
+import { useUser } from "../composables/use-user";
+import { unseenReleaseImportStage } from "../lib/release-import-notifications";
 import { serverConnectionRestored } from "../lib/server-connection";
-import { notifyServerOnline } from "../lib/toasts";
+import {
+  notifyReleaseAddingToLibrary,
+  notifyReleaseDownloading,
+  notifyServerOnline,
+} from "../lib/toasts";
 
 const route = useRoute();
 const { address } = useServer();
 const { status: connectionStatus } = useServerConnection();
 const { token } = useSession();
+const { user } = useUser();
 const { refresh, upsert } = useTasks();
 const {
   applyRevision,
@@ -25,10 +32,30 @@ const {
 const realtime = useRealtime();
 let unsubscribe: (() => void) | undefined;
 let activeScope = "";
+let notificationsStartedAt = 0;
+const notifiedReleaseStages = new Set<string>();
+
+function notifyReleaseImport(message: RealtimeServerMessage) {
+  if (message.type !== "task.updated") return;
+  const task = message.task;
+  const stage = unseenReleaseImportStage(
+    task,
+    user.value?.id,
+    notificationsStartedAt,
+    notifiedReleaseStages,
+  );
+  if (!stage) return;
+  if (stage === "downloading") {
+    notifyReleaseDownloading(task.titleMessage);
+  } else {
+    notifyReleaseAddingToLibrary(task.titleMessage);
+  }
+}
 
 function onRealtimeMessage(message: RealtimeServerMessage) {
   if (message.type === "task.updated") {
     upsert(message.task);
+    notifyReleaseImport(message);
     return;
   }
   if (message.type === "catalog.changed") {
@@ -62,12 +89,16 @@ function start() {
     realtime.disconnect();
     activeScope = "";
     resetCatalogRevision();
+    notificationsStartedAt = 0;
+    notifiedReleaseStages.clear();
     return;
   }
   if (activeScope && activeScope !== currentScope()) {
     resetCatalogRevision();
   }
   activeScope = currentScope();
+  notificationsStartedAt = Date.now();
+  notifiedReleaseStages.clear();
   unsubscribe = realtime.subscribe(["tasks", "catalog"], onRealtimeMessage);
   void refresh().catch(() => undefined);
 }

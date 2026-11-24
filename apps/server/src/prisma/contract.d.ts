@@ -19,7 +19,7 @@ import type {
 } from '@prisma/orm-sqlite/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'62852c84f360700fb54d673a54a0791178d3f524fd14d42249cc7465c6681bd9'>;
+  StorageHashBase<'4ec7a4c60e9a0744c3ae6737869dfeff69184c2a83bec1a720f953fb929efdc9'>;
 export type ExecutionHash =
   ExecutionHashBase<'4dc5ec34a7ada0a7604910a7f1410b9814a4e624330a6fecab7762fe2abe3491'>;
 export type ProfileHash =
@@ -490,7 +490,9 @@ export namespace Models {
     forceRefresh: FieldOutputTypes['__unbound__']['Task']['forceRefresh'];
     id: FieldOutputTypes['__unbound__']['Task']['id'];
     kind: FieldOutputTypes['__unbound__']['Task']['kind'];
+    ownerUserId: FieldOutputTypes['__unbound__']['Task']['ownerUserId'];
     parentTaskId: FieldOutputTypes['__unbound__']['Task']['parentTaskId'];
+    payload: FieldOutputTypes['__unbound__']['Task']['payload'];
     progressCompleted: FieldOutputTypes['__unbound__']['Task']['progressCompleted'];
     progressTotal: FieldOutputTypes['__unbound__']['Task']['progressTotal'];
     retryCount: FieldOutputTypes['__unbound__']['Task']['retryCount'];
@@ -501,7 +503,8 @@ export namespace Models {
     title: FieldOutputTypes['__unbound__']['Task']['title'];
     titleMessage: FieldOutputTypes['__unbound__']['Task']['titleMessage'];
     updatedAt: FieldOutputTypes['__unbound__']['Task']['updatedAt'];
-    readonly [RelationKeys]?: never;
+    ownerUser: User | null;
+    readonly [RelationKeys]?: 'ownerUser';
   };
   export type Track = {
     album: FieldOutputTypes['__unbound__']['Track']['album'];
@@ -596,7 +599,8 @@ export namespace Models {
     passwordHash: FieldOutputTypes['__unbound__']['User']['passwordHash'];
     role: FieldOutputTypes['__unbound__']['User']['role'];
     updatedAt: FieldOutputTypes['__unbound__']['User']['updatedAt'];
-    readonly [RelationKeys]?: never;
+    tasks: Task[];
+    readonly [RelationKeys]?: 'tasks';
   };
 }
 
@@ -2543,7 +2547,19 @@ type ContractBase = Omit<
                   readonly nullable: false;
                   readonly many: false;
                 };
+                readonly ownerUserId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
                 readonly parentTaskId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly payload: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: true;
@@ -2624,6 +2640,12 @@ type ContractBase = Omit<
                   readonly unique: false;
                 },
                 {
+                  readonly name: 'Task_ownerUserId_idx_f93ae154';
+                  readonly prefix: 'Task_ownerUserId_idx';
+                  readonly columns: readonly ['ownerUserId'];
+                  readonly unique: false;
+                },
+                {
                   readonly name: 'Task_parentTaskId_idx_fb3d4259';
                   readonly prefix: 'Task_parentTaskId_idx';
                   readonly columns: readonly ['parentTaskId'];
@@ -2636,7 +2658,20 @@ type ContractBase = Omit<
                   readonly unique: false;
                 },
               ];
-              foreignKeys: readonly [];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'Task';
+                    readonly columns: readonly ['ownerUserId'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: '__unbound__' & NamespaceId;
+                    readonly tableName: 'User';
+                    readonly columns: readonly ['id'];
+                  };
+                },
+              ];
             };
             readonly Track: {
               columns: {
@@ -4823,7 +4858,15 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
+              readonly ownerUserId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
               readonly parentTaskId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
+              readonly payload: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
@@ -4868,7 +4911,20 @@ type ContractBase = Omit<
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
               };
             };
-            readonly relations: Record<string, never>;
+            readonly relations: {
+              readonly ownerUser: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'User';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: true;
+                readonly on: {
+                  readonly localFields: readonly ['ownerUserId'];
+                  readonly targetFields: readonly ['id'];
+                };
+              };
+            };
             readonly storage: {
               readonly table: 'Task';
               readonly namespaceId: '__unbound__';
@@ -4881,7 +4937,9 @@ type ContractBase = Omit<
                 readonly forceRefresh: { readonly column: 'forceRefresh' };
                 readonly id: { readonly column: 'id' };
                 readonly kind: { readonly column: 'kind' };
+                readonly ownerUserId: { readonly column: 'ownerUserId' };
                 readonly parentTaskId: { readonly column: 'parentTaskId' };
+                readonly payload: { readonly column: 'payload' };
                 readonly progressCompleted: { readonly column: 'progressCompleted' };
                 readonly progressTotal: { readonly column: 'progressTotal' };
                 readonly retryCount: { readonly column: 'retryCount' };
@@ -5383,7 +5441,19 @@ type ContractBase = Omit<
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
               };
             };
-            readonly relations: Record<string, never>;
+            readonly relations: {
+              readonly tasks: {
+                readonly to: {
+                  readonly namespace: '__unbound__' & NamespaceId;
+                  readonly model: 'Task';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['id'];
+                  readonly targetFields: readonly ['ownerUserId'];
+                };
+              };
+            };
             readonly storage: {
               readonly table: 'User';
               readonly namespaceId: '__unbound__';

@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { filterTorznabReleases } from "../app/lib/torznab-filters.ts";
+import {
+  torznabImportPercent,
+  torznabImportShouldPoll,
+  torznabTerminalImportState,
+  torznabTransferPhase,
+} from "../app/lib/torznab-import-status.ts";
 
 test("query changes automatically trigger external search without a manual action", async () => {
   const [composable, searchPage, english] = await Promise.all([
@@ -24,9 +31,15 @@ test("query changes automatically trigger external search without a manual actio
   assert.match(composable, /searchTerm\.value/);
   assert.match(composable, /staleTime: 0/);
   assert.match(composable, /notifyReleaseDownloadFailed/);
+  assert.match(composable, /useQueries/);
+  assert.match(composable, /"torznab-import", scope\.value, id/);
+  assert.match(composable, /torznabTerminalImportState/);
+  assert.match(composable, /reason\.code === "release_already_added"/);
+  assert.match(composable, /t\("torznab\.alreadyAddedError"\)/);
   assert.doesNotMatch(composable, /autoplay/i);
   assert.match(searchPage, /useTorznabSearch\(debouncedQuery\)/);
-  assert.match(searchPage, /:import-failed="externalImportFailed"/);
+  assert.match(searchPage, /:import-states="externalImportStates"/);
+  assert.match(searchPage, /:playable-track-ids="externalPlayableTrackIds"/);
   assert.doesNotMatch(searchPage, /torznab\.search/);
   assert.doesNotMatch(english, /"torznab\.search"/);
   assert.doesNotMatch(english, /"torznab\.autoplay"/);
@@ -67,10 +80,16 @@ test("external rows mirror library rows with placeholder art and a download acti
   assert.match(row, /resultType\.value === "music"\) return icons\.music/);
   assert.match(row, /return icons\.album/);
   assert.match(row, /<SearchSourceIcons :source-kinds="\['torznab'\]" \/>/);
-  assert.match(row, /:aria-label="t\('torznab\.add'\)"/);
-  assert.match(row, /:title="t\('torznab\.add'\)"/);
-  assert.match(row, /<Icon\s+:icon="icons\.download"/);
-  assert.match(row, /:disabled="busy \|\| imported"/);
+  assert.match(row, /:aria-label="actionLabel"/);
+  assert.match(row, /:title="actionLabel"/);
+  assert.match(row, /v-else[\s\S]*:icon="icons\.download"/);
+  assert.match(row, /<PeridotSpinner[\s\S]*class="size-6"/);
+  assert.match(row, /<ProgressCircle[\s\S]*:value="progressPercent"/);
+  assert.match(row, /:label="statusLabel"/);
+  assert.match(row, /icons\.check/);
+  assert.match(row, /icons\.warning/);
+  assert.match(row, /:disabled="disabled"/);
+  assert.match(row, /t\("torznab\.alreadyAdded"\)/);
   assert.doesNotMatch(row, /icons\.(?:play|pause)/);
   assert.doesNotMatch(row, /autoplay|torznab\.play/);
   assert.equal(
@@ -91,9 +110,75 @@ test("external results use the shared list surface and keep completion playback 
     /role="list"[\s\S]*class="divide-y overflow-hidden rounded-lg border"/,
   );
   assert.match(results, /<TorznabReleaseRow[\s\S]*v-for="release in releases"/);
-  assert.match(results, /importStatus\.trackIds\.length/);
+  assert.match(results, /:import-state="importStateFor\(release\)"/);
+  assert.match(results, /torrent\.progress >= 1/);
+  assert.match(results, /kind: "already-added"/);
+  assert.match(results, /state: torrent\.state/);
+  assert.match(results, /playableTrackIds\.length/);
   assert.match(results, /t\("torznab\.play"\)/);
+  assert.match(results, /\{\{ emptyMessage \}\}/);
   assert.match(results, /@click="emit\('play'\)"/);
+  assert.doesNotMatch(results, /importStatus\.progress/);
   assert.doesNotMatch(results, /actionError|v-if="actionError"/);
   assert.doesNotMatch(results, /autoplay|Play when ready/);
+});
+
+test("external filters expose media types and sort by seeders", () => {
+  const releases = [
+    { mediaType: "music", title: "Music", seeders: 5 },
+    { mediaType: "audiobook", title: "Book", seeders: 12 },
+    { mediaType: "podcast", title: "Podcast", seeders: 100 },
+    { mediaType: null, title: "Unknown", seeders: null },
+    { mediaType: "music", title: "Unknown music", seeders: null },
+  ].map((release) => ({
+    ...release,
+    id: release.title,
+    sourceName: "Indexer",
+    canImport: true,
+    seeders: release.seeders,
+    bytes: null,
+  })) as Parameters<typeof filterTorznabReleases>[0];
+
+  assert.deepEqual(
+    filterTorznabReleases(releases, "all").map((release) => release.title),
+    ["Podcast", "Book", "Music", "Unknown", "Unknown music"],
+  );
+  assert.deepEqual(
+    filterTorznabReleases(releases, "music").map((release) => release.title),
+    ["Music", "Unknown music"],
+  );
+  assert.deepEqual(
+    filterTorznabReleases(releases, "audiobook").map(
+      (release) => release.title,
+    ),
+    ["Book"],
+  );
+});
+
+test("torznab transfer states map to stable inline progress labels", () => {
+  assert.equal(torznabImportPercent(-0.2), 0);
+  assert.equal(torznabImportPercent(0.426), 43);
+  assert.equal(torznabImportPercent(1.2), 100);
+  assert.equal(torznabTransferPhase("queuedDL", 0), "queued");
+  assert.equal(torznabTransferPhase("metaDL", 0), "metadata");
+  assert.equal(torznabTransferPhase("checkingResumeData", 0.4), "checking");
+  assert.equal(torznabTransferPhase("stoppedDL", 0.3), "paused");
+  assert.equal(torznabTransferPhase("downloading", 0.3), "downloading");
+  assert.equal(torznabTransferPhase("uploading", 1), "indexing");
+  assert.equal(torznabTerminalImportState("error"), true);
+  assert.equal(torznabTerminalImportState("missingFiles"), true);
+  assert.equal(torznabTerminalImportState("uploading"), false);
+  assert.equal(torznabImportShouldPoll(undefined), true);
+  assert.equal(
+    torznabImportShouldPoll({ state: "downloading", trackIds: [] }),
+    true,
+  );
+  assert.equal(
+    torznabImportShouldPoll({ state: "uploading", trackIds: ["track"] }),
+    false,
+  );
+  assert.equal(
+    torznabImportShouldPoll({ state: "error", trackIds: [] }),
+    false,
+  );
 });

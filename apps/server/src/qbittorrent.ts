@@ -6,6 +6,35 @@ export interface QbitConnection {
   username?: string;
   password?: string;
 }
+
+export class QbitRequestError extends Error {
+  constructor(readonly statusCode: number) {
+    super("qBittorrent request failed");
+    this.name = "QbitRequestError";
+  }
+}
+
+export function qbitAddAccepted(value: string): boolean {
+  const text = value.trim();
+  if (text === "Ok.") return true;
+  try {
+    const response = JSON.parse(text) as {
+      success_count?: unknown;
+      failure_count?: unknown;
+      pending_count?: unknown;
+    };
+    const count = (value: unknown) =>
+      typeof value === "number" && Number.isFinite(value) && value >= 0
+        ? value
+        : 0;
+    return (
+      count(response.success_count) > 0 || count(response.pending_count) > 0
+    );
+  } catch {
+    return false;
+  }
+}
+
 const sessions = new Map<string, Promise<string>>();
 async function login(url: URL, username: string, password: string) {
   const response = await fetch(url, {
@@ -27,6 +56,7 @@ export async function qbitRequest(
   method: string,
   params: Record<string, string> = {},
   post = false,
+  timeoutMs = 12000,
 ): Promise<Response> {
   const url = new URL(
     connection.client.replace(/\/$/, "") + "/api/v2/" + method,
@@ -39,7 +69,7 @@ export async function qbitRequest(
       body: post ? body : null,
       headers,
       redirect: "error",
-      signal: AbortSignal.timeout(12000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   let response: Response;
   if (connection.clientApiKey) {
@@ -79,7 +109,7 @@ export async function qbitRequest(
       response = await request(sessions.get(key) ?? authenticate());
     }
   }
-  if (!response.ok) throw new Error("qBittorrent request failed");
+  if (!response.ok) throw new QbitRequestError(response.status);
   return response;
 }
 export async function qbitOptions(connection: QbitConnection) {

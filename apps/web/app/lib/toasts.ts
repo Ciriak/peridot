@@ -193,6 +193,26 @@ export function notifyReleaseDownloadFailed(
   addToast(releaseDownloadFailureToast(releaseTitle, detailMessage));
 }
 
+export function notifyReleaseDownloading(titleMessage: MessageDescriptor) {
+  addToast({
+    titleMessage,
+    descriptionMessage: message("toast.releaseDownloading"),
+    status: "success",
+    duration: 5000,
+    kind: "success",
+  });
+}
+
+export function notifyReleaseAddingToLibrary(titleMessage: MessageDescriptor) {
+  addToast({
+    titleMessage,
+    descriptionMessage: message("toast.releaseAddingToLibrary"),
+    status: "success",
+    duration: 5000,
+    kind: "success",
+  });
+}
+
 export function notifyPlaybackFailed(trackTitle?: string) {
   addToast(playbackFailureToast(trackTitle));
 }

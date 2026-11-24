@@ -1,5 +1,123 @@
 # Peridot decisions
 
+## 2026-11-24: Recent search albums use the library row list
+
+When the search query is empty, recently searched albums render through the
+same bordered, divided row surface and shared `CatalogCard` row layout as
+library search results. The compact cover grid made recents visually distinct
+from the results they open; the shared row list keeps navigation, playback,
+likes, categories, and source provenance consistent while preserving scanable
+album metadata at every viewport.
+
+## 2026-11-24: Search fields disable native autocomplete
+
+The global top-bar search and reusable list search set `autocomplete="off"`.
+Search suggestions should come only from Peridot's explicit recent-search and
+catalog surfaces instead of browser-entered history that varies by device.
+
+## 2026-11-24: Search result tabs are URL-backed history entries
+
+Switching the search results between Library and External sources uses
+`router.push`, so browser Back and Forward restore the previous tab. External
+sources is represented by `?tab=external`; Library omits the `tab` parameter.
+Both locations preserve the current search query and unrelated route state.
+
+Clearing the search or losing external-search availability canonicalizes the
+URL back to Library with `router.replace`. An External sources URL also falls
+back to Library while external results are unavailable, so the page never
+renders an empty External panel.
+
+## 2026-11-24: External imports use batched presence checks and durable tasks
+
+Torznab search extracts an info hash from the release's `infohash` attribute,
+`magneturl`, or magnet enclosure. Peridot never loads the complete qBittorrent
+torrent list for search. It checks deduplicated hashes in batches of 50 through
+qBittorrent's `hashes` filter, caches each client/hash result for 15 seconds, and
+limits presence lookups to two seconds. Presence failures are fail-open: search
+results still render without client status.
+
+Results with a qBittorrent match are disabled and display Already added or their
+current transfer progress. Results without a confirmed hash remain normal and
+continue to use add-time duplicate detection.
+
+Accepted imports create a durable `release_import` task owned by the initiating
+user. The task begins in a new `waiting` status, which represents qBittorrent's
+transfer without occupying the shared scan executor. A five-second monitor reads
+each indexer's pending-import tag once, updates task progress and transfer
+details, and promotes completed downloads to the normal task queue. Waiting
+tasks survive server restart; running scans retain the existing interruption
+behavior.
+
+After download completion, the release task runs the source scan that extracts
+embedded tags and queues the existing metadata-matching child task. Cancelling a
+waiting import stops tracking and removes its pending Peridot tag, but never
+removes the torrent or downloaded files from qBittorrent.
+
+Tasks remain visible to all signed-in users, while download-start and
+adding-to-library toasts are delivered only to their initiating user. Toast
+stage events are deduplicated and ignored during replay or a fresh reconnect so
+only new stage transitions notify.
+
+## 2026-11-24: Completed imports scan only their torrent files
+
+When a Torznab transfer completes, Peridot reads qBittorrent's file list and
+stores the completed, safe audio paths on the durable release-import task. The
+scanner resolves and scans only those paths. It does not recurse through the
+entire folder source or run the unavailable-track sweep because an import does
+not represent a complete source snapshot. A library with tens of thousands of
+existing files therefore adds the new release without restating every old file.
+
+The import's metadata child task carries the IDs of the tracks just processed,
+so automatic metadata matching is also limited to the new release. Normal
+library and source rescans continue to discover the full source, update
+`lastSyncedAt`, and mark unseen tracks unavailable. Release-import tasks created
+before this change have no stored path list and retain the full-scan fallback so
+an upgrade cannot leave an in-flight import incomplete.
+
+## 2026-11-24: External search exposes media filters
+
+The External sources tab uses the same horizontally scrolling pill filter
+surface as library search. Its initial filter set is All, Music, and Audiobooks,
+and the selected filter is page-local rather than URL history state.
+
+Music and Audiobook match only releases detected as that media type. Releases
+without a resolved type remain available under All. The External sources tab
+count continues to represent the complete result set so the Library tab can
+preview all external availability without applying this tab's filter.
+
+Filtered external results sort by seeder count descending. Releases with an
+unknown seeder count sort after known values, and equal counts preserve indexer
+result order.
+
+## 2026-11-24: Torznab imports show inline per-attempt status
+
+Torznab searches do not inspect qBittorrent for every returned release. That
+would add one external lookup per result and make search latency depend on the
+download client. Peridot tracks and polls only releases the user attempts to
+add, using one status query per active import.
+
+Each result row owns its import state. The download action becomes an
+indeterminate spinner while the add request is pending, a determinate spinning
+progress circle while qBittorrent reports progress, and a disabled check when
+the torrent is ready or already present. Row metadata shows a localized transfer
+state and percentage. Multiple attempts poll independently, and the existing
+Play imported tracks action uses the most recently completed import.
+
+qBittorrent Web API 2.14 changed `torrents/add` from the legacy `Ok.` text
+response to a JSON receipt with success, pending, and failure counts. Peridot
+accepts both formats and treats 202 JSON receipts as pending imports. When the
+download client returns 409, Peridot identifies the release as already present,
+shows a specific error toast, and leaves the row disabled as Already added.
+The same duplicate response applies when Peridot's own release tag already
+exists, so a previously tracked torrent is not mistaken for a new queued import.
+Legacy `Fails.` responses remain generic failures because they do not identify
+the conflict reason.
+
+Polling stops when tracks are available or qBittorrent reports a terminal
+failure. Attempt state is page-local: changing the search term does not cancel
+started imports, while changing server scope or leaving the page clears the
+queries.
+
 ## 2026-11-23: Virtual catalog surfaces reserve the full result count
 
 Cursor paged catalog responses already include the complete result count. Catalog

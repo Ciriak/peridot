@@ -459,6 +459,7 @@ onBeforeUnmount(stopLoadingRay);
               id="global-search"
               v-model="searchQuery"
               type="search"
+              autocomplete="off"
               :aria-label="t('navigation.searchPlaceholder')"
               aria-keyshortcuts="Control+K Meta+K"
               :placeholder="t('navigation.searchPlaceholder')"

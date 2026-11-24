@@ -1,5 +1,253 @@
 # Peridot handoff
 
+## Recent search list layout
+
+Recently searched albums now render as the same bordered, divided row list as
+library results. Each recent uses the shared row presentation, including cover
+playback, title category, artist metadata, source icons, and likes.
+
+Verification:
+
+- Focused search and virtual-scroll tests (8 passing)
+- `pnpm --filter @peridot/web test` (314 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Focused ESLint and Prettier checks on changed web and test files
+
+Known limits:
+
+- The recent list was verified through behavioral assertions and the production
+  build, not an authenticated browser session.
+
+Uncommitted changes:
+
+- Recent-list markup, updated behavioral assertions, decision record, and this
+  handoff section.
+
+## Search autocomplete disabled
+
+The global header search and reusable list search now disable native browser
+autocomplete. Their existing recent-search and catalog results remain unchanged.
+
+Verification:
+
+- Focused search and list-search tests (8 passing)
+- `pnpm --filter @peridot/web test` (314 passing)
+- `pnpm --filter @peridot/web typecheck`
+- Focused Prettier check
+- `git diff --check`
+
+Known limit:
+
+- Browser and operating-system text assistance remains platform-controlled
+  despite `autocomplete="off"`.
+
+Uncommitted changes:
+
+- Two search inputs, regression tests, the decision record, and this handoff
+  section. Existing `feature/tornzab` changes remain untouched.
+
+Next:
+
+- Reload the development client and confirm neither search field opens a native
+  suggestion menu while typing.
+
+## Search tab browser history
+
+Library and External sources search tabs are now backed by route history.
+Switching tabs pushes a new entry, while clearing the search or losing external
+search availability replaces the current entry with the canonical Library URL.
+The query and unrelated route state are preserved.
+
+Verification:
+
+- Focused search history and view tests (9 passing)
+- `pnpm --filter @peridot/web test` (314 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- `pnpm lint`
+- `pnpm format:check`
+- `git diff --check`
+
+Known limit:
+
+- Invalid or unavailable External sources URLs render Library until external
+  search becomes available.
+
+Uncommitted changes:
+
+- Search tab route-history helpers, page wiring, tests, and documentation.
+
+## Durable external imports and torrent presence
+
+Torznab search now extracts v1/v2 info hashes from Torznab attributes and magnet
+URLs. qBittorrent presence is checked in batches of 50 with a two-second timeout
+and a 15-second per-client hash cache. Search does not request the complete
+torrent list. Existing releases render as Already added or with their current
+transfer progress.
+
+Accepted imports create an owner-scoped `release_import` task in the new
+`waiting` status. The task manager polls each indexer's pending tag every five
+seconds, updates progress, and promotes completed transfers into the normal task
+queue. The release task then scans the folder for embedded tags and queues the
+existing metadata-matching child task.
+
+Waiting tasks survive navigation and server restarts. Cancelling stops tracking
+and removes only the pending Peridot tag; torrents and downloaded files remain in
+qBittorrent. Non-admin users see their own active release imports in the desktop
+task indicator, while shared tasks remain visible in Settings → Tasks.
+
+The initiating user receives one owner-scoped toast when downloading begins and
+one when the transfer completes and library importing starts. Replayed events
+and initial task loads do not emit retrospective toasts.
+
+Verification:
+
+- `pnpm --filter @peridot/web test` (313 passing)
+- `pnpm --filter @peridot/server test` (205 passing; the unrelated Jellyfin
+  paging test missed its timing window in the full parallel run, then passed
+  when rerun alone)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/server typecheck`
+- `pnpm typecheck`
+- Production server and web builds
+- `pnpm lint`
+- `pnpm format:check`
+- `pnpm db:validate` (20-migration graph current)
+- `pnpm version:check`
+- `pnpm db:migrate:dev` applied `20261124T1012_add_task_owner`
+- Development server health returned the expected Peridot response
+
+Known limits:
+
+- Releases without an info hash are checked only when added.
+- Manual qBittorrent transfers without a Peridot release task show the snapshot
+  returned by search but are not attached to a durable import task.
+- A missing torrent leaves its waiting task active for the 24-hour recovery
+  window before failing.
+
+Feature files:
+
+- `apps/server/src/torznab-presence.ts`
+- `apps/server/src/torznab.ts`
+- `apps/server/src/tasks.ts`
+- `apps/web/app/components/AppNotifications.vue`
+- `apps/web/app/components/TaskProgressIndicator.vue`
+
+Uncommitted changes:
+
+- Batched presence checks, durable release-import tasks, owner migration,
+  waiting-task presentation, stage toasts, tests, documentation, and generated
+  migration artifacts.
+
+Next:
+
+- Import a hash-bearing release from the live qBittorrent 5.3 seedbox, navigate
+  away from search, and confirm the two owner toasts, task progress, tag scan,
+  and metadata child.
+
+## External source media filters
+
+The External sources search tab now shows the shared sticky pill filters. All,
+Music, and Audiobooks replace the library filters while that tab is active.
+Music and Audiobook filter by the resolved Torznab media type; releases without
+a resolved type remain visible under All. The selected external filter is reset
+when the search is cleared or external search becomes unavailable.
+
+Empty filtered states use type-specific copy, while the External sources tab
+count remains the complete available result count. Known seeder counts sort
+descending, unknown counts remain last, and ties preserve indexer order.
+
+Verification:
+
+- `pnpm --filter @peridot/web test` (311 passing)
+- `pnpm --filter @peridot/web typecheck`
+- Production web build
+- `pnpm lint`
+- `pnpm format:check`
+- `git diff --check`
+- Running development server health returned the expected Peridot response
+
+Feature files:
+
+- `apps/web/app/pages/search.vue`
+- `apps/web/app/lib/torznab-filters.ts`
+- `apps/web/app/components/TorznabResults.vue`
+
+Uncommitted changes:
+
+- External media filters, type-specific empty copy, tests, translations,
+  decision record, and this handoff section.
+
+Next:
+
+- Inspect the External tab pill row and filtered empty states at phone width.
+
+## Inline Torznab import status
+
+Torznab release rows now show their own import state. Starting an import replaces
+the download action with an indeterminate Peridot spinner, then a determinate
+progress circle as qBittorrent reports transfer progress. Metadata shows a
+localized queued, metadata, downloading, checking, paused, indexing, ready, or
+failed state. Ready and already-present rows are muted and disabled.
+
+The external search loading status now reads “Searching external sources” in
+both the visible text and the spinner’s accessible label.
+
+Only attempted releases are polled. Search does not query qBittorrent torrent
+state for the result set. Multiple imports poll independently, and Play imported
+tracks uses the most recently ready import.
+
+The qBittorrent adapter now accepts legacy `Ok.` add responses and Web API 2.14+
+JSON receipts, including 202 pending additions. A qBittorrent 409 returns
+Peridot error code `release_already_added`; the attempted row becomes Already
+added and shows a specific error toast. The existing Peridot tag precheck
+returns the same duplicate response instead of starting a queued-status poll.
+
+Verification:
+
+- `pnpm --filter @peridot/web test` (310 passing)
+- `pnpm --filter @peridot/server test` (200 passing)
+- `pnpm typecheck`
+- Production web and server builds
+- `pnpm lint`
+- `pnpm format:check`
+- `pnpm db:validate` (19-migration graph current)
+- `git diff --check`
+- Running development server health returned the expected Peridot response
+- Focused en-US i18n tests (5 passing)
+- Focused Prettier check on the changed translation and test files
+
+Known limits:
+
+- Import state is page-local and relays qBittorrent progress only while the
+  search page remains mounted.
+- Legacy qBittorrent `Fails.` responses cannot be distinguished as duplicates
+  and remain generic import failures.
+- Visual validation with a real qBittorrent 5.3 transfer has not yet been run.
+
+Feature files:
+
+- `apps/server/src/qbittorrent.ts`
+- `apps/server/src/torznab.ts`
+- `apps/server/src/openapi.ts`
+- `apps/web/app/composables/use-torznab-search.ts`
+- `apps/web/app/components/TorznabReleaseRow.vue`
+- `apps/web/app/lib/torznab-import-status.ts`
+- `apps/web/i18n/locales/en-US.json`
+- `apps/web/test/i18n.test.ts`
+
+Uncommitted changes:
+
+- Inline Torznab row status, per-attempt queries, qBittorrent Web API 2.14+
+  compatibility, duplicate handling, translations, tests, decision record, and
+  this handoff section.
+
+Next:
+
+- Run one new and one duplicate import against the configured qBittorrent 5.3
+  seedbox, then inspect the rows at desktop and phone widths.
+
 ## Full-count virtual catalog paging
 
 Catalog card grids and track tables reserve the complete `totalCount` returned

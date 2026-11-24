@@ -102,7 +102,7 @@ test("catalog search uses the shared row surfaces for tracks and collections", a
   assert.match(search, /:total-count="podcastTotalCount"/);
   assert.match(
     search,
-    /grid grid-cols-2 gap-1\.5 sm:grid-cols-4/,
-    "Recent search cards render two columns at mobile widths",
+    /aria-labelledby="recent-searches-heading"[\s\S]*?role="list"\s+class="divide-y overflow-hidden rounded-lg border"[\s\S]*?<CatalogCard[\s\S]*?layout="row"/,
+    "Recent search results render through the shared row list surface",
   );
 });

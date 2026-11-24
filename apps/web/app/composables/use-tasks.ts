@@ -14,7 +14,7 @@ import { useQueryScope } from "./use-query-scope";
 import { useServerConnection } from "./use-server-connection";
 import { useSession } from "./use-session";
 
-const ACTIVE_STATUSES = new Set(["queued", "running"]);
+const ACTIVE_STATUSES = new Set(["waiting", "queued", "running"]);
 const TASKS_QUERY_OPTIONS = { status: "all", limit: 50 } as const;
 const EMPTY_TASKS: TaskListResponse = {
   items: [],
@@ -24,7 +24,13 @@ const EMPTY_TASKS: TaskListResponse = {
 
 function taskOrder(left: TaskResponse, right: TaskResponse): number {
   const rank = (task: TaskResponse) =>
-    task.status === "running" ? 0 : task.status === "queued" ? 1 : 2;
+    task.status === "running"
+      ? 0
+      : task.status === "waiting"
+        ? 1
+        : task.status === "queued"
+          ? 2
+          : 3;
   const statusRank = rank(left) - rank(right);
   if (statusRank !== 0) return statusRank;
   return (

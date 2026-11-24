@@ -2514,7 +2514,21 @@
                   "kind": "scalar"
                 }
               },
+              "ownerUserId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
               "parentTaskId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "payload": {
                 "nullable": true,
                 "type": {
                   "codecId": "sqlite/text@1",
@@ -2592,7 +2606,24 @@
                 }
               }
             },
-            "relations": {},
+            "relations": {
+              "ownerUser": {
+                "cardinality": "N:1",
+                "nullable": true,
+                "on": {
+                  "localFields": [
+                    "ownerUserId"
+                  ],
+                  "targetFields": [
+                    "id"
+                  ]
+                },
+                "to": {
+                  "model": "User",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
             "storage": {
               "fields": {
                 "completedAt": {
@@ -2619,8 +2650,14 @@
                 "kind": {
                   "column": "kind"
                 },
+                "ownerUserId": {
+                  "column": "ownerUserId"
+                },
                 "parentTaskId": {
                   "column": "parentTaskId"
+                },
+                "payload": {
+                  "column": "payload"
                 },
                 "progressCompleted": {
                   "column": "progressCompleted"
@@ -3513,7 +3550,23 @@
                 }
               }
             },
-            "relations": {},
+            "relations": {
+              "tasks": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "id"
+                  ],
+                  "targetFields": [
+                    "ownerUserId"
+                  ]
+                },
+                "to": {
+                  "model": "Task",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
             "storage": {
               "fields": {
                 "bootstrapKey": {
@@ -5687,7 +5740,17 @@
                   "dataType": "sqlite/text",
                   "nullable": false
                 },
+                "ownerUserId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
                 "parentTaskId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
+                },
+                "payload": {
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
                   "nullable": true
@@ -5747,7 +5810,28 @@
                   "nullable": false
                 }
               },
-              "foreignKeys": [],
+              "foreignKeys": [
+                {
+                  "index": {
+                    "name": "Task_ownerUserId_idx_f93ae154"
+                  },
+                  "onDelete": "setNull",
+                  "source": {
+                    "columns": [
+                      "ownerUserId"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "Task"
+                  },
+                  "target": {
+                    "columns": [
+                      "id"
+                    ],
+                    "namespaceId": "__unbound__",
+                    "tableName": "User"
+                  }
+                }
+              ],
               "indexes": [
                 {
                   "columns": [
@@ -5756,6 +5840,14 @@
                   ],
                   "name": "Task_kind_status_idx_8034fcaa",
                   "prefix": "Task_kind_status_idx",
+                  "unique": false
+                },
+                {
+                  "columns": [
+                    "ownerUserId"
+                  ],
+                  "name": "Task_ownerUserId_idx_f93ae154",
+                  "prefix": "Task_ownerUserId_idx",
                   "unique": false
                 },
                 {
@@ -6529,7 +6621,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "62852c84f360700fb54d673a54a0791178d3f524fd14d42249cc7465c6681bd9"
+    "storageHash": "4ec7a4c60e9a0744c3ae6737869dfeff69184c2a83bec1a720f953fb929efdc9"
   },
   "execution": {
     "executionHash": "4dc5ec34a7ada0a7604910a7f1410b9814a4e624330a6fecab7762fe2abe3491",
