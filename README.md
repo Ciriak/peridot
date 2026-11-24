@@ -133,3 +133,10 @@ An external client that can be used to search and download files
 ### Metadata provider
 
 An external metadata source that can provide additional data about a media (artists, albums, cover art...)
+
+
+### Tasks
+
+Internal tasks that are run by the Peridot instance, like media scanning, metadata sync...
+
+
