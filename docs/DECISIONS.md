@@ -1,5 +1,76 @@
 # Peridot decisions
 
+## 2026-11-25: Liked tracks controls the account offline preference
+
+The liked-tracks playlist header replaces its per-playlist offline button with
+the account-level “Make my liked titles available offline” switch. The setting
+is one compact muted pill containing the larger shared cloud-download icon and
+a short explanatory tooltip triggered by the whole pill. Its checked state
+explicitly uses the primary token so the control remains visible in the dark
+card header. It reads and writes the existing `likedTitlesOffline` preference
+through `useLibrarySettings`, so changes stay synchronized with Settings →
+Library and the established automatic liked-title download flow.
+
+Manual playlists retain their playlist-specific offline save button. The shared
+preference switch is local to the automatic liked-tracks playlist and follows
+the same verification, saving, and disconnected disabled states as the Library
+setting.
+
+## 2026-11-25: Catalog update badges share one running-scan state
+
+Albums, artist lists, audiobook lists, and podcast lists render one shared
+`CatalogUpdateBadge` beside their counted result badge. The component owns the
+task query and visibility rule, so every surface shows the localized outline
+pill with the shared spinner only while a `library_scan` task is running.
+
+Queued scans and other task kinds do not mark catalog results as updating.
+Playlist lists are unchanged because their source and update boundaries are not
+part of this catalog browse indicator.
+
+## 2026-11-25: Search surfaces display at most 50 results
+
+Library search uses a 50-element display budget. The combined All view allocates
+that budget across tracks, albums, and playlists in their existing display
+order; every category filter is independently capped at 50. External results
+are capped at 50 after applying the selected media filter.
+
+Search requests one 50-item page per library result type and no longer
+auto-paginates. Category counts and virtualizer totals reflect the displayed
+items so placeholders cannot reserve results that will not be shown. Selecting
+a category remains the way to see that category's own first 50 matches when
+another result type fills the combined All budget.
+
+## 2026-11-25: Mobile fullscreen player fits the viewport without scrolling
+
+The mobile fullscreen player is a fixed viewport layout, not a scrolling
+document. The header, timeline, and transport controls reserve their full height;
+the artwork carousel consumes only the remaining space. The square cover can
+shrink with that space and is capped at `max-h-72`, growing to `max-h-96` at the
+`sm` breakpoint. This keeps every control visible on short phones without
+introducing a scrollbar or hiding the current track metadata.
+
+## 2026-11-25: Catalog browse surfaces share counted virtual windows
+
+Albums, artists, audiobooks, podcasts, and playlists use one counted,
+offset-addressed card loader. The first page supplies the complete count, while
+only the visible page neighborhood remains in Vue Query. Unloaded card slots
+render reduced-motion-aware placeholders until their window resolves, and short
+final rows never gain placeholders beyond the real count.
+
+Artist detail album grids use the same windowed loader. Shared track tables keep
+the complete count for the scrollbar and render skeleton rows for unloaded track
+positions, so album, artist, audiobook, podcast, and other shared track-table
+surfaces use one loading-row implementation. When pagination is exhausted, the
+virtual count collapses to the actual loaded rows so filtered or stale totals
+cannot leave permanent skeleton rows beneath the final track.
+
+Playlist detail entries are virtualized against the main scroll container while
+preserving drag reordering. Reordering uses the visible neighboring entry IDs
+rather than virtualization-local DOM indexes, so a drop in a large playlist maps
+back to the complete playlist order. Playlist detail still receives all entries
+from its existing detail response; virtualization limits rendered rows rather
+than changing the API.
+
 ## 2026-11-25: Discovery materializes the catalog in committed batches
 
 Library discovery and catalog projection use one source-neutral batch boundary.

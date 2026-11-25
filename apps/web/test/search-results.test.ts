@@ -2,9 +2,25 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
+  limitSearchResults,
+  searchResultBudgets,
   searchResultTypeLabelKey,
+  SEARCH_RESULTS_LIMIT,
   trackSearchResultType,
 } from "../app/lib/search-results.ts";
+
+test("search result groups share a 50-element display budget", () => {
+  const items = Array.from(
+    { length: SEARCH_RESULTS_LIMIT + 5 },
+    (_, index) => index,
+  );
+
+  assert.equal(SEARCH_RESULTS_LIMIT, 50);
+  assert.deepEqual(limitSearchResults(items), items.slice(0, 50));
+  assert.deepEqual(searchResultBudgets([60, 20, 10]), [50, 0, 0]);
+  assert.deepEqual(searchResultBudgets([20, 40, 10]), [20, 30, 0]);
+  assert.deepEqual(searchResultBudgets([10, 10, 10]), [10, 10, 10]);
+});
 
 test("track media types map to readable search-result tags", () => {
   assert.equal(trackSearchResultType("music"), "song");

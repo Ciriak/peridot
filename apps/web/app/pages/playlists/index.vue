@@ -5,15 +5,14 @@ import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { onMounted, ref } from "vue";
+import AlbumCardPlaceholder from "../../components/AlbumCardPlaceholder.vue";
 import CatalogCard from "../../components/CatalogCard.vue";
 import ListSearchBar from "../../components/ListSearchBar.vue";
 import PlaylistNameDialog from "../../components/PlaylistNameDialog.vue";
 import VirtualCardGrid from "../../components/VirtualCardGrid.vue";
 import { useListSearch } from "../../composables/use-list-search";
-import {
-  usePlaylistActions,
-  usePlaylistList,
-} from "../../composables/use-playlists";
+import { usePlaylistActions } from "../../composables/use-playlists";
+import { useVirtualPlaylists } from "../../composables/use-virtual-catalog";
 import { playlistCatalogCard } from "../../lib/catalog-cards";
 import { icons } from "../../lib/icons";
 
@@ -28,10 +27,11 @@ const {
   loading,
   loadingMore,
   hasMore,
+  loadedCount,
   error,
   load,
-  loadMore,
-} = usePlaylistList({ limit: 50, query: searchQuery });
+  setVisibleRange,
+} = useVirtualPlaylists(() => ({ query: searchQuery.value || undefined }));
 const actions = usePlaylistActions();
 const createOpen = ref(false);
 const creating = ref(false);
@@ -112,12 +112,17 @@ onMounted(() => void load());
       :item-key="(playlist) => playlist.id"
       :estimate-row-height="220"
       :total-count="totalCount"
+      :loaded-count="loadedCount"
       :has-more="hasMore"
       :loading-more="loadingMore"
-      @load-more="loadMore"
+      paging-mode="window"
+      @visible-range="setVisibleRange"
     >
       <template #default="{ item }">
         <CatalogCard :item="playlistCatalogCard(item)" />
+      </template>
+      <template #placeholder>
+        <AlbumCardPlaceholder />
       </template>
     </VirtualCardGrid>
     <p

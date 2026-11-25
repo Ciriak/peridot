@@ -30,17 +30,11 @@ test("albums have list and detail routes with derived groups", async () => {
   assert.match(listPage, /useVirtualAlbums/);
   assert.match(listPage, /items: albums/);
   assert.doesNotMatch(listPage, /library-search/);
+  assert.match(listPage, /<CatalogUpdateBadge \/>/);
   assert.match(listPage, /<VirtualCardGrid/);
   assert.match(listPage, /<CatalogCard/);
   assert.match(listPage, /albumCatalogCard\(item\)/);
-  assert.match(listPage, /useTasks\(\)/);
-  assert.match(listPage, /task\.kind === "library_scan"/);
-  assert.match(listPage, /task\.status === "running"/);
-  assert.match(listPage, /page\.albums\.indexing/);
-  assert.match(
-    listPage,
-    /v-if="libraryIndexing" variant="outline" aria-live="polite"/,
-  );
+  assert.doesNotMatch(listPage, /useTasks\(\)/);
   assert.match(catalogCard, /:to="titleRoute"/);
   assert.match(
     catalogCard,

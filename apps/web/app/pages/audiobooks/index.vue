@@ -4,12 +4,14 @@ import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { onMounted } from "vue";
+import AlbumCardPlaceholder from "../../components/AlbumCardPlaceholder.vue";
+import CatalogUpdateBadge from "../../components/CatalogUpdateBadge.vue";
 import ListSearchBar from "../../components/ListSearchBar.vue";
 import MediaCollectionCard from "../../components/MediaCollectionCard.vue";
 import VirtualCardGrid from "../../components/VirtualCardGrid.vue";
-import { useCatalogAudiobookQuery } from "../../composables/use-catalog-query";
 import { useListSearch } from "../../composables/use-list-search";
 import { useLikes } from "../../composables/use-likes";
+import { useVirtualAudiobooks } from "../../composables/use-virtual-catalog";
 
 const { t } = useI18n();
 useHead({ title: t("page.audiobooks.title") });
@@ -23,9 +25,10 @@ const {
   loaded,
   hasMore,
   totalCount,
+  loadedCount,
   load,
-  loadMore,
-} = useCatalogAudiobookQuery(() => ({
+  setVisibleRange,
+} = useVirtualAudiobooks(() => ({
   query: searchQuery.value || undefined,
 }));
 const { load: loadLikes } = useLikes();
@@ -61,6 +64,7 @@ onMounted(() => {
       <Badge variant="secondary">
         {{ loading ? t("common.loading") : totalCount }}
       </Badge>
+      <CatalogUpdateBadge />
     </div>
     <div
       v-if="loading && !audiobooks.length"
@@ -87,13 +91,18 @@ onMounted(() => {
       :item-key="(book) => book.id"
       :estimate-row-height="340"
       :total-count="totalCount"
+      :loaded-count="loadedCount"
       :has-more="hasMore"
       :loading-more="loadingMore"
+      paging-mode="window"
       :aria-busy="loading"
-      @load-more="loadMore"
+      @visible-range="setVisibleRange"
     >
       <template #default="{ item }">
         <MediaCollectionCard :collection="item" />
+      </template>
+      <template #placeholder>
+        <AlbumCardPlaceholder />
       </template>
     </VirtualCardGrid>
     <p

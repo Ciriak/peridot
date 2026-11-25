@@ -140,7 +140,7 @@ test("track list rows open their track menu while catalog links keep their own m
   );
   assert.match(
     playlistTracks,
-    /<MediaRowContextMenu\s+v-for="\(entry, index\) in rows"[\s\S]*:track="entry\.media"[\s\S]*role="listitem"[\s\S]*<TrackArtistLinks[\s\S]*<AlbumLink[\s\S]*<\/MediaRowContextMenu>/,
+    /<MediaRowContextMenu\s+v-for="[^"]*virtualRows"[\s\S]*:track="entry\.media"[\s\S]*role="listitem"[\s\S]*<TrackArtistLinks[\s\S]*<AlbumLink[\s\S]*<\/MediaRowContextMenu>/,
     "The whole playlist track row is a context-menu trigger",
   );
   assert.doesNotMatch(

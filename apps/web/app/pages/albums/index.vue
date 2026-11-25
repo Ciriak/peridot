@@ -3,15 +3,15 @@ import { useHead, useI18n } from "#imports";
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
-import { computed, onMounted } from "vue";
+import { onMounted } from "vue";
 import AlbumCardPlaceholder from "../../components/AlbumCardPlaceholder.vue";
 import CatalogCard from "../../components/CatalogCard.vue";
+import CatalogUpdateBadge from "../../components/CatalogUpdateBadge.vue";
 import ListSearchBar from "../../components/ListSearchBar.vue";
 import VirtualCardGrid from "../../components/VirtualCardGrid.vue";
 import { useListSearch } from "../../composables/use-list-search";
 import { useLikes } from "../../composables/use-likes";
-import { useTasks } from "../../composables/use-tasks";
-import { useVirtualAlbums } from "../../composables/use-virtual-albums";
+import { useVirtualAlbums } from "../../composables/use-virtual-catalog";
 import { albumCatalogCard } from "../../lib/catalog-cards";
 
 const { t } = useI18n();
@@ -33,12 +33,6 @@ const {
   query: searchQuery.value || undefined,
 }));
 const { load: loadLikes } = useLikes();
-const { tasks } = useTasks();
-const libraryIndexing = computed(() =>
-  tasks.value.some(
-    (task) => task.kind === "library_scan" && task.status === "running",
-  ),
-);
 
 onMounted(() => {
   void load();
@@ -71,15 +65,7 @@ onMounted(() => {
       <Badge variant="secondary">
         {{ loading ? t("common.loading") : totalCount }}
       </Badge>
-      <Badge
-        v-if="libraryIndexing"
-        variant="outline"
-        aria-live="polite"
-        class="select-none"
-      >
-        <PeridotSpinner :label="t('page.albums.indexing')" class="size-3" />
-        {{ t("page.albums.indexing") }}
-      </Badge>
+      <CatalogUpdateBadge />
     </div>
     <div
       v-if="loading && !albums.length"

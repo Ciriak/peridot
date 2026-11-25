@@ -88,6 +88,12 @@ export function runningMetadataTask(
   );
 }
 
+export function hasRunningLibraryScan(tasks: readonly TaskResponse[]): boolean {
+  return tasks.some(
+    (task) => task.kind === "library_scan" && task.status === "running",
+  );
+}
+
 export function activeTaskPercent(task: TaskResponse): number | null {
   if (task.status === "queued") return 0;
   if (task.status !== "running" && task.status !== "waiting") return null;

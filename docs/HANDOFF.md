@@ -1,5 +1,194 @@
 # Peridot handoff
 
+## Liked tracks header offline toggle
+
+The liked-tracks playlist header now shows the account-level “Make my liked
+titles available offline” switch instead of the automatic playlist's separate
+offline button. The switch is grouped into one compact pill with the shared
+Basil cloud-download icon and a short tooltip explaining automatic offline
+downloads. Hovering or focusing anywhere on the pill opens the tooltip. The icon
+uses the larger control size, and the muted pill plus an explicit primary-token
+checked state keep the toggle visible in the dark header. It reads and writes
+the existing account preference, so it stays synchronized with Settings →
+Library and automatically starts or stops the established liked-title download
+flow.
+
+Manual playlists keep their playlist-specific offline save button. The new
+header switch is disabled while the preference is unverified or saving and
+while the server is disconnected, matching the Library setting.
+
+Verification:
+
+- Focused playlist and library-settings tests (16 passing)
+- `pnpm --filter @peridot/web test` (330 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Focused ESLint and Prettier checks on the changed Web and test files
+
+Known limits:
+
+- The header switch was verified through behavioral source assertions and the
+  production build, not an authenticated browser session.
+
+Uncommitted changes:
+
+- Liked-tracks header toggle component, playlist detail wiring, focused test
+  coverage, decision record, and this handoff section.
+- Concurrent catalog virtualization, search, player, and other in-progress
+  changes remain present and were preserved.
+
+Next:
+
+- Open Liked tracks at desktop and phone widths, toggle the header switch, then
+  confirm Settings → Library shows the same value and the download task starts
+  or stops accordingly.
+
+## Catalog update badge across browse categories
+
+Albums, artists, audiobooks, and podcasts now render the same localized outline
+badge beside their count while a library scan is running. The badge is owned by
+one shared component, so the task query, spinner, accessibility announcement,
+and running-only visibility rule cannot drift between the four catalog pages.
+
+Verification:
+
+- Focused task, album, artist, category, count, badge, and i18n tests (30
+  passing)
+- `pnpm --filter @peridot/web test` (329 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Focused ESLint and Prettier checks on the changed app and test files
+
+Known limits:
+
+- The badge was verified through behavioral tests and the production build, not
+  an authenticated browser session with a live scan.
+
+Uncommitted changes:
+
+- Shared catalog update badge, four-page wiring, running-scan helper, translations,
+  focused regression tests, decision record, and this handoff section.
+- Concurrent catalog virtualization, search, player, and other in-progress
+  changes remain present and were preserved.
+
+Next:
+
+- Start a long library scan and confirm the pill appears and clears on Albums,
+  Artists, Audiobooks, and Podcasts at desktop and phone widths.
+
+## Search results display at most 50 items
+
+Library search now caps the combined All view at 50 rendered results by
+allocating the budget across tracks, albums, and playlists in display order.
+Each category filter and the filtered External sources list are independently
+capped at 50. Search loads one 50-item page per local result type and no longer
+auto-paginates.
+
+Verification:
+
+- Focused search, pagination, count, and virtual-scroll tests (17 passing)
+- `pnpm --filter @peridot/web test` (328 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Focused ESLint and Prettier checks on all changed Web and test files
+
+Known limits:
+
+- The capped search surfaces were verified through behavioral tests and the
+  production build, not an authenticated desktop or phone browser session.
+
+Uncommitted changes:
+
+- Search display-budget helpers, page wiring, regression tests, the decision
+  record, and this handoff section.
+- Unrelated in-progress catalog, playlist, player, and desktop changes were
+  present in the worktree and left untouched.
+
+Next:
+
+- Run a broad query in the browser at desktop and phone widths, then confirm
+  the All view stops at 50 and each category filter and External list stops at
+  50 after filtering.
+
+## Counted virtual catalog surfaces
+
+Albums, artist lists, audiobook lists, podcast lists, playlists, and artist
+album sections now use a shared offset-window loader. Each grid reserves the
+complete result count, fetches only the visible page neighborhood, and renders
+matching card placeholders until loaded. Shared track tables now render reduced-
+motion-aware skeleton rows for unloaded positions, which covers album, artist,
+audiobook, and podcast track sections.
+
+Playlist track rows now use the main-scroll virtualizer while keeping drag
+reordering. Drops map through visible neighboring entry IDs to the complete
+playlist order. No search-page wiring was changed by this work.
+
+Track-table placeholders now stop as soon as pagination is exhausted. The
+virtual count falls back to the actual loaded rows when no next page exists, so
+a filtered or stale total cannot leave skeleton rows below the final track.
+
+Verification:
+
+- `pnpm --filter @peridot/web test` (330 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- `pnpm lint`
+- `pnpm format:check`
+- Focused virtual-scroll, playlist, artist, album, media-category, context-menu,
+  list-search, and styling tests
+
+Known limits:
+
+- Live authenticated visual QA at desktop and phone widths was not completed.
+- Playlist detail still fetches every entry because its existing detail response
+  is not paged; only its rendered row count is virtualized.
+- Dragging across a rapidly changing virtual viewport has behavioral coverage
+  for neighbor mapping but has not been exercised on a long playlist in a live
+  browser.
+
+Uncommitted changes:
+
+- Shared virtual catalog loader, card placeholders, track-row placeholders,
+  exhausted-pagination placeholder clamping, playlist-row virtualization and
+  reorder mapping, page wiring, tests, decision record, and this handoff section.
+- Concurrent mobile-player layout changes remain present and were preserved.
+- Separate concurrent mobile-player, search-result budget, and task-progress
+  changes remain present and were left untouched.
+
+Next:
+
+- Exercise large artist, audiobook, podcast, and playlist collections while
+  jumping through the main scrollbar, then drag entries across several virtual
+  viewport positions.
+
+## Mobile fullscreen player fits without scrolling
+
+The mobile fullscreen player no longer uses a vertical scroll container. Its
+header, timeline, and transport controls keep their height while the artwork
+carousel fills the remaining viewport space. The square cover now shrinks with
+that space and caps at `max-h-72`, growing to `max-h-96` at the `sm` breakpoint.
+
+Verification:
+
+- `pnpm --filter @peridot/web exec node --test test/mobile-player.test.ts`
+  (2 passing)
+- `pnpm --filter @peridot/web build`
+- Focused ESLint and Prettier checks on the changed player and test files
+- The latest full web suite passes with the concurrent virtual-catalog changes
+  (330 passing), and the web typecheck passes.
+
+Known limits:
+
+- Live phone-width visual QA was not completed because Computer Use could not
+  verify the active browser URL.
+
+Uncommitted changes:
+
+- Mobile fullscreen flex layout, responsive square artwork sizing, focused
+  regression assertions, this decision, and this handoff.
+- Concurrent virtual-catalog changes in other web components, pages, and
+  composables were present during verification and left untouched.
+
 ## Progressive source-neutral media discovery
 
 Folder scans, Jellyfin scans, and targeted release imports now share a
@@ -682,7 +871,7 @@ Known limits:
 Feature files:
 
 - `apps/web/app/composables/use-virtual-load-more.ts`
-- `apps/web/app/composables/use-virtual-albums.ts`
+- `apps/web/app/composables/use-virtual-catalog.ts`
 - `apps/web/app/lib/virtual-albums.ts`
 - `apps/server/src/catalog-routes.ts`
 - `apps/server/src/catalog.ts`

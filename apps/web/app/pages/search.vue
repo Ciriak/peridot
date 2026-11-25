@@ -14,7 +14,6 @@ import { useQuery } from "@tanstack/vue-query";
 import { watchDebounced } from "@vueuse/core";
 import { computed, onMounted, ref, watch } from "vue";
 import ArtistCard from "../components/ArtistCard.vue";
-import AutoLoadMore from "../components/AutoLoadMore.vue";
 import CatalogCard from "../components/CatalogCard.vue";
 import MediaCollectionCard from "../components/MediaCollectionCard.vue";
 import ExternalResults from "../components/ExternalResults.vue";
@@ -45,6 +44,11 @@ import {
   SEARCH_TAB_QUERY_PARAM,
   type SearchTab,
 } from "../lib/search-history";
+import {
+  limitSearchResults,
+  searchResultBudgets,
+  SEARCH_RESULTS_LIMIT,
+} from "../lib/search-results";
 import {
   filterReleaseResults,
   type ExternalResultFilter,
@@ -142,81 +146,65 @@ const searchTerm = computed(() =>
   searching.value ? debouncedQuery.value : "__peridot_no_search__",
 );
 const {
-  items: artistResults,
+  items: artistResultItems,
   loading: artistsLoading,
-  loadingMore: artistsLoadingMore,
   error: artistsError,
-  hasMore: hasMoreArtists,
-  totalCount: artistTotalCount,
   load: loadArtists,
-  loadMore: loadMoreArtists,
 } = useCatalogArtistQuery(() => ({
   query: searchTerm.value,
   sort: "name",
+  limit: SEARCH_RESULTS_LIMIT,
 }));
 const {
-  items: albumResults,
+  items: albumResultItems,
   loading: albumsLoading,
-  loadingMore: albumsLoadingMore,
   error: albumsError,
-  hasMore: hasMoreAlbums,
   load: loadAlbums,
-  loadMore: loadMoreAlbums,
 } = useCatalogAlbumQuery(() => ({
   query: searchTerm.value,
   sort: "title",
+  limit: SEARCH_RESULTS_LIMIT,
 }));
 const {
-  items: playlistResults,
+  items: playlistResultItems,
   loading: playlistsLoading,
-  loadingMore: playlistsLoadingMore,
   error: playlistsError,
-  hasMore: hasMorePlaylists,
   load: loadPlaylists,
-  loadMore: loadMorePlaylists,
 } = usePlaylistList({
   query: searchTerm,
+  limit: SEARCH_RESULTS_LIMIT,
 });
 const {
-  items: audiobookResults,
+  items: audiobookResultItems,
   loading: audiobooksLoading,
-  loadingMore: audiobooksLoadingMore,
   error: audiobooksError,
-  hasMore: hasMoreAudiobooks,
-  totalCount: audiobookTotalCount,
   load: loadAudiobooks,
-  loadMore: loadMoreAudiobooks,
 } = useCatalogAudiobookQuery(() => ({
   query: searchTerm.value,
   sort: "title",
+  limit: SEARCH_RESULTS_LIMIT,
 }));
 const {
-  items: podcastResults,
+  items: podcastResultItems,
   loading: podcastsLoading,
-  loadingMore: podcastsLoadingMore,
   error: podcastsError,
-  hasMore: hasMorePodcasts,
-  totalCount: podcastTotalCount,
   load: loadPodcasts,
-  loadMore: loadMorePodcasts,
 } = useCatalogPodcastQuery(() => ({
   query: searchTerm.value,
   sort: "title",
+  limit: SEARCH_RESULTS_LIMIT,
 }));
 const {
-  tracks: trackResults,
+  tracks: trackResultItems,
   loading: tracksLoading,
-  loadingMore: tracksLoadingMore,
   error: tracksError,
-  hasMore: hasMoreTracks,
-  totalCount: trackTotalCount,
   load: loadTracks,
-  loadMore: loadMoreTracks,
 } = useCatalogTrackQuery(() => ({
   query: searchTerm.value,
   mediaType: "all",
   sort: "title",
   direction: "asc",
+  limit: SEARCH_RESULTS_LIMIT,
 }));
 
 const resultsLoading = computed(
@@ -237,31 +225,6 @@ const resultsError = computed(
     audiobooksError.value ||
     podcastsError.value,
 );
-const hasResults = computed(() =>
-  Boolean(
-    artistResults.value.length ||
-    albumResults.value.length ||
-    playlistResults.value.length ||
-    trackResults.value.length ||
-    audiobookResults.value.length ||
-    podcastResults.value.length,
-  ),
-);
-const hasVisibleResults = computed(() => {
-  if (resultFilter.value === "artists") return artistResults.value.length > 0;
-  if (resultFilter.value === "albums") return albumResults.value.length > 0;
-  if (resultFilter.value === "playlists")
-    return playlistResults.value.length > 0;
-  if (resultFilter.value === "tracks") return trackResults.value.length > 0;
-  if (resultFilter.value === "audiobooks")
-    return audiobookResults.value.length > 0;
-  if (resultFilter.value === "podcasts") return podcastResults.value.length > 0;
-  return Boolean(
-    trackResults.value.length ||
-    albumResults.value.length ||
-    playlistResults.value.length,
-  );
-});
 const showCatalogList = computed(() =>
   ["all", "albums", "playlists", "tracks"].includes(resultFilter.value),
 );
@@ -277,6 +240,72 @@ const showTracks = computed(
 );
 const showAudiobooks = computed(() => resultFilter.value === "audiobooks");
 const showPodcasts = computed(() => resultFilter.value === "podcasts");
+const catalogResultBudgets = computed(() =>
+  searchResultBudgets([
+    trackResultItems.value.length,
+    albumResultItems.value.length,
+    playlistResultItems.value.length,
+  ]),
+);
+const displayedTrackResults = computed(() =>
+  showTracks.value
+    ? limitSearchResults(
+        trackResultItems.value,
+        resultFilter.value === "all"
+          ? (catalogResultBudgets.value[0] ?? 0)
+          : SEARCH_RESULTS_LIMIT,
+      )
+    : [],
+);
+const displayedAlbumResults = computed(() =>
+  showAlbums.value
+    ? limitSearchResults(
+        albumResultItems.value,
+        resultFilter.value === "all"
+          ? (catalogResultBudgets.value[1] ?? 0)
+          : SEARCH_RESULTS_LIMIT,
+      )
+    : [],
+);
+const displayedPlaylistResults = computed(() =>
+  showPlaylists.value
+    ? limitSearchResults(
+        playlistResultItems.value,
+        resultFilter.value === "all"
+          ? (catalogResultBudgets.value[2] ?? 0)
+          : SEARCH_RESULTS_LIMIT,
+      )
+    : [],
+);
+const displayedArtistResults = computed(() =>
+  showArtists.value ? limitSearchResults(artistResultItems.value) : [],
+);
+const displayedAudiobookResults = computed(() =>
+  showAudiobooks.value ? limitSearchResults(audiobookResultItems.value) : [],
+);
+const displayedPodcastResults = computed(() =>
+  showPodcasts.value ? limitSearchResults(podcastResultItems.value) : [],
+);
+const hasResults = computed(() =>
+  Boolean(
+    artistResultItems.value.length ||
+    albumResultItems.value.length ||
+    playlistResultItems.value.length ||
+    trackResultItems.value.length ||
+    audiobookResultItems.value.length ||
+    podcastResultItems.value.length,
+  ),
+);
+const hasVisibleResults = computed(() =>
+  Boolean(
+    displayedTrackResults.value.length ||
+    displayedAlbumResults.value.length ||
+    displayedPlaylistResults.value.length ||
+    displayedArtistResults.value.length ||
+    displayedAudiobookResults.value.length ||
+    displayedPodcastResults.value.length,
+  ),
+);
 const resultFilters: { value: ResultFilter; labelKey: string }[] = [
   { value: "all", labelKey: "page.search.all" },
   { value: "artists", labelKey: "page.search.artists" },
@@ -314,7 +343,9 @@ const visibleResultFilters = computed(() =>
   activeSearchTab.value === "external" ? externalResultFilters : resultFilters,
 );
 const filteredExternalReleases = computed(() =>
-  filterReleaseResults(externalReleases.value, externalResultFilter.value),
+  limitSearchResults(
+    filterReleaseResults(externalReleases.value, externalResultFilter.value),
+  ),
 );
 const externalEmptyMessage = computed(() => {
   if (externalResultFilter.value === "music") return t("torznab.emptyMusic");
@@ -519,67 +550,49 @@ onMounted(() => {
             class="overflow-hidden rounded-lg border"
           >
             <TrackTable
-              v-if="showTracks && trackResults.length"
-              :tracks="trackResults"
+              v-if="showTracks && displayedTrackResults.length"
+              :tracks="displayedTrackResults"
               variant="search"
-              :has-more="hasMoreTracks"
-              :loading-more="tracksLoadingMore"
-              :total-count="trackTotalCount"
-              @load-more="loadMoreTracks"
             />
 
             <div
-              v-if="showAlbums && albumResults.length"
+              v-if="showAlbums && displayedAlbumResults.length"
               role="list"
               class="divide-y"
               :class="{
-                'border-t': showTracks && trackResults.length,
+                'border-t': showTracks && displayedTrackResults.length,
               }"
             >
               <CatalogCard
-                v-for="album in albumResults"
+                v-for="album in displayedAlbumResults"
                 :key="album.id"
                 :item="albumCatalogCard(album)"
                 layout="row"
                 @open="openAlbum(album)"
               />
-              <AutoLoadMore
-                :enabled="hasMoreAlbums"
-                :loading="albumsLoadingMore"
-                :item-count="albumResults.length"
-                :label="t('page.search.loadingMoreAlbums')"
-                @load="loadMoreAlbums"
-              />
             </div>
 
             <div
-              v-if="showPlaylists && playlistResults.length"
+              v-if="showPlaylists && displayedPlaylistResults.length"
               role="list"
               class="divide-y"
               :class="{
                 'border-t':
-                  (showTracks && trackResults.length) ||
-                  (showAlbums && albumResults.length),
+                  (showTracks && displayedTrackResults.length) ||
+                  (showAlbums && displayedAlbumResults.length),
               }"
             >
               <CatalogCard
-                v-for="playlist in playlistResults"
+                v-for="playlist in displayedPlaylistResults"
                 :key="playlist.id"
                 :item="playlistCatalogCard(playlist)"
                 layout="row"
-              />
-              <AutoLoadMore
-                :enabled="hasMorePlaylists"
-                :loading="playlistsLoadingMore"
-                :item-count="playlistResults.length"
-                :label="t('page.search.loadingMorePlaylists')"
-                @load="loadMorePlaylists"
               />
             </div>
           </section>
 
           <section
-            v-if="showArtists && artistResults.length"
+            v-if="showArtists && displayedArtistResults.length"
             aria-labelledby="local-artists-heading"
             class="space-y-4"
           >
@@ -591,21 +604,18 @@ onMounted(() => {
                 {{
                   t(
                     "count.artist",
-                    { count: artistTotalCount },
-                    artistTotalCount,
+                    { count: displayedArtistResults.length },
+                    displayedArtistResults.length,
                   )
                 }}
               </Badge>
             </div>
             <VirtualCardGrid
-              :items="artistResults"
+              :items="displayedArtistResults"
               layout="standard"
               :item-key="(artist) => artist.id"
               :estimate-row-height="92"
-              :total-count="artistTotalCount"
-              :has-more="hasMoreArtists"
-              :loading-more="artistsLoadingMore"
-              @load-more="loadMoreArtists"
+              :total-count="displayedArtistResults.length"
             >
               <template #default="{ item }">
                 <ArtistCard :artist="item" />
@@ -614,7 +624,7 @@ onMounted(() => {
           </section>
 
           <section
-            v-if="showAudiobooks && audiobookResults.length"
+            v-if="showAudiobooks && displayedAudiobookResults.length"
             aria-labelledby="local-audiobooks-heading"
             class="space-y-4"
           >
@@ -626,21 +636,18 @@ onMounted(() => {
                 {{
                   t(
                     "count.audiobook",
-                    { count: audiobookTotalCount },
-                    audiobookTotalCount,
+                    { count: displayedAudiobookResults.length },
+                    displayedAudiobookResults.length,
                   )
                 }}
               </Badge>
             </div>
             <VirtualCardGrid
-              :items="audiobookResults"
+              :items="displayedAudiobookResults"
               layout="standard"
               :item-key="(audiobook) => audiobook.id"
               :estimate-row-height="340"
-              :total-count="audiobookTotalCount"
-              :has-more="hasMoreAudiobooks"
-              :loading-more="audiobooksLoadingMore"
-              @load-more="loadMoreAudiobooks"
+              :total-count="displayedAudiobookResults.length"
             >
               <template #default="{ item }">
                 <MediaCollectionCard :collection="item" />
@@ -649,7 +656,7 @@ onMounted(() => {
           </section>
 
           <section
-            v-if="showPodcasts && podcastResults.length"
+            v-if="showPodcasts && displayedPodcastResults.length"
             aria-labelledby="local-podcasts-heading"
             class="space-y-4"
           >
@@ -661,21 +668,18 @@ onMounted(() => {
                 {{
                   t(
                     "count.podcast",
-                    { count: podcastTotalCount },
-                    podcastTotalCount,
+                    { count: displayedPodcastResults.length },
+                    displayedPodcastResults.length,
                   )
                 }}
               </Badge>
             </div>
             <VirtualCardGrid
-              :items="podcastResults"
+              :items="displayedPodcastResults"
               layout="standard"
               :item-key="(podcast) => podcast.id"
               :estimate-row-height="340"
-              :total-count="podcastTotalCount"
-              :has-more="hasMorePodcasts"
-              :loading-more="podcastsLoadingMore"
-              @load-more="loadMorePodcasts"
+              :total-count="displayedPodcastResults.length"
             >
               <template #default="{ item }">
                 <MediaCollectionCard :collection="item" />

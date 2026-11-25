@@ -5,11 +5,13 @@ import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { onMounted } from "vue";
 import ArtistCard from "../../components/ArtistCard.vue";
+import ArtistCardPlaceholder from "../../components/ArtistCardPlaceholder.vue";
+import CatalogUpdateBadge from "../../components/CatalogUpdateBadge.vue";
 import ListSearchBar from "../../components/ListSearchBar.vue";
 import VirtualCardGrid from "../../components/VirtualCardGrid.vue";
-import { useCatalogArtistQuery } from "../../composables/use-catalog-query";
 import { useListSearch } from "../../composables/use-list-search";
 import { useLikes } from "../../composables/use-likes";
+import { useVirtualArtists } from "../../composables/use-virtual-catalog";
 
 const { t } = useI18n();
 useHead({ title: t("page.artists.title") });
@@ -23,9 +25,10 @@ const {
   loaded,
   hasMore,
   totalCount,
+  loadedCount,
   load,
-  loadMore,
-} = useCatalogArtistQuery(() => ({
+  setVisibleRange,
+} = useVirtualArtists(() => ({
   query: searchQuery.value || undefined,
   sort: "name",
 }));
@@ -62,6 +65,7 @@ onMounted(() => {
       <Badge variant="secondary">
         {{ loading ? t("common.loading") : totalCount }}
       </Badge>
+      <CatalogUpdateBadge />
     </div>
     <div
       v-if="loading && !artists.length"
@@ -88,13 +92,18 @@ onMounted(() => {
       :item-key="(artist) => artist.id"
       :estimate-row-height="92"
       :total-count="totalCount"
+      :loaded-count="loadedCount"
       :has-more="hasMore"
       :loading-more="loadingMore"
+      paging-mode="window"
       :aria-busy="loading"
-      @load-more="loadMore"
+      @visible-range="setVisibleRange"
     >
       <template #default="{ item }">
         <ArtistCard :artist="item" />
+      </template>
+      <template #placeholder>
+        <ArtistCardPlaceholder />
       </template>
     </VirtualCardGrid>
     <p

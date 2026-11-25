@@ -95,7 +95,7 @@ test("paginated app surfaces use automatic load triggers without manual buttons"
 
   const search = sources.at(-2)!;
   const tasks = sources.at(-1)!;
-  assert.match(search, /AutoLoadMore/);
+  assert.doesNotMatch(search, /AutoLoadMore/);
   assert.match(tasks, /AutoLoadMore/);
   assert.match(sources[0]!, /useVirtualLoadMore/);
   assert.match(sources[1]!, /useVirtualLoadMore/);

@@ -16,6 +16,7 @@ import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { computed, onMounted, ref } from "vue";
 import AddTracksToPlaylistDialog from "../../components/AddTracksToPlaylistDialog.vue";
 import BackButton from "../../components/BackButton.vue";
+import LikedTracksOfflineToggle from "../../components/LikedTracksOfflineToggle.vue";
 import ListSearchBar from "../../components/ListSearchBar.vue";
 import LikeButton from "../../components/LikeButton.vue";
 import PlaylistCover from "../../components/PlaylistCover.vue";
@@ -237,7 +238,12 @@ onMounted(() => void load());
         aria-labelledby="playlist-heading"
         class="relative flex flex-col gap-6 rounded-lg border bg-card p-6 text-card-foreground sm:flex-row sm:items-end"
       >
+        <LikedTracksOfflineToggle
+          v-if="automatic"
+          class="absolute right-4 top-4"
+        />
         <PlaylistOfflineButton
+          v-else
           :playlist="playlist"
           class="absolute right-4 top-4"
         />

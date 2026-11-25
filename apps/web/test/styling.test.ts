@@ -78,6 +78,7 @@ test("app layout respects the owner's Tailwind and shadcn styling authority", as
   );
   const source = sources.map((entry) => entry.source).join("\n");
   const virtualStyleFiles = new Set([
+    "../app/components/PlaylistTrackList.vue",
     "../app/components/TrackTable.vue",
     "../app/components/VirtualCardGrid.vue",
   ]);
@@ -126,6 +127,12 @@ test("app layout respects the owner's Tailwind and shadcn styling authority", as
     sources.find((entry) => entry.file.endsWith("/TrackTable.vue"))!.source,
     /:style="virtualizer\.virtualRowStyle\(item\)"/,
     "Track rows bind virtualizer-generated positioning only",
+  );
+  assert.match(
+    sources.find((entry) => entry.file.endsWith("/PlaylistTrackList.vue"))!
+      .source,
+    /:style="virtualizer\.virtualRowStyle\(\{ start \}\)"/,
+    "Playlist rows bind virtualizer-generated positioning only",
   );
   assert.match(
     sources.find((entry) => entry.file.endsWith("/VirtualCardGrid.vue"))!
