@@ -39,7 +39,7 @@ import {
 } from "../lib/peridot-client";
 import { offlineAudioBlob, readSavedOfflineTracks } from "../lib/offline-audio";
 import { readOfflineCatalog } from "../lib/offline-catalog";
-import { isTrackPlayable } from "../lib/offline-playback";
+import { isTrackPlayable, playbackSourcePlan } from "../lib/offline-playback";
 import { notifyPlaybackFailed, notifyTrackDownloadFailed } from "../lib/toasts";
 import { useCatalogRevision } from "./use-catalog-query";
 import {
@@ -1412,43 +1412,30 @@ export function useLibraryPlayer(options: { audio?: boolean } = {}) {
       const selectedTrack = resolvedQueueTracks.value.find(
         (track) => track.id === mediaId,
       );
-      if (
-        selectedTrack &&
-        !selectedTrack.available &&
-        offlineSavedTrackIdSet.value.has(mediaId)
-      ) {
+      const sourcePlan = playbackSourcePlan({
+        saved: offlineSavedTrackIdSet.value.has(mediaId),
+        serverLost: serverStatus.value === "lost",
+        trackAvailable: selectedTrack?.available ?? false,
+      });
+
+      if (sourcePlan.trySaved) {
         try {
           error.value = null;
-          if (!(await loadOfflineTrack(mediaId, attempt))) {
-            if (await retryTrackStart(mediaId, attempt, true)) return;
-            if (skipFailedTrack(mediaId, attempt)) return;
-            playing.value = false;
-            error.value = t("error.offlineTrackMissing");
-          }
-        } finally {
+          if (await loadOfflineTrack(mediaId, attempt)) return;
+        } catch {
+          // A cache failure must not prevent connected streaming fallback.
+        }
+        if (!sourcePlan.allowStreaming) {
+          if (await retryTrackStart(mediaId, attempt, true)) return;
+          if (skipFailedTrack(mediaId, attempt)) return;
+          playing.value = false;
+          error.value = t("error.offlineTrackMissing");
           if (attempt === loadAttempt) {
             loading.value = false;
             loadingTrackId = null;
           }
+          return;
         }
-        return;
-      }
-      if (serverStatus.value === "lost") {
-        try {
-          error.value = null;
-          if (!(await loadOfflineTrack(mediaId, attempt))) {
-            if (await retryTrackStart(mediaId, attempt, true)) return;
-            if (skipFailedTrack(mediaId, attempt)) return;
-            playing.value = false;
-            error.value = t("error.offlineTrackMissing");
-          }
-        } finally {
-          if (attempt === loadAttempt) {
-            loading.value = false;
-            loadingTrackId = null;
-          }
-        }
-        return;
       }
       if (!serverAddress || !sessionToken) {
         playing.value = false;
