@@ -252,8 +252,8 @@ export function createJellyfinIntegration(
         const key = apiKey(input.credentials);
         const selectedLibraryId = libraryId(input.configuration);
         const [info, libraries] = await Promise.all([
-          client.validate(url, key),
-          client.listLibraries(url, key),
+          client.validate(url, key, input.signal),
+          client.listLibraries(url, key, input.signal),
         ]);
         const library = libraries.find(
           (candidate) => candidate.id === selectedLibraryId,

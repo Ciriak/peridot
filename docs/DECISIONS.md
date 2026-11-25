@@ -1,5 +1,37 @@
 # Peridot decisions
 
+## 2026-11-25: Settings opens on a read-only platform overview
+
+The account avatar and `/settings` now lead to `/settings/overview`. Profile
+remains a separate common settings destination. Overview is a full-workspace,
+read-only Vue Flow surface with Peridot at the center. Library sources occupy a
+background subflow on the left and metadata providers occupy the matching
+background subflow on the right. Download clients occupy a third background
+subflow below Peridot, and their animated edges run outward from Peridot to each
+client. Cards remain individually linked inside their group. They show only the
+connector icon, name, safe address, basic count or type, and connection status;
+source paths, URLs beyond the host label, configuration, and credentials never
+reach this shared screen. The central card keeps the standard card background
+with a primary border and shows available album, playlist, podcast, and
+audiobook totals. Playlist counts include the signed-in user's visible Liked
+Tracks playlist. An explicit fit after node initialization adds graph padding.
+Panning and wheel/pinch zoom remain available; node, link, and connection
+editing stay disabled. Double-clicking a card opens its matching settings page:
+Server for the Peridot hub, Library sources, Metadata providers, or Download
+clients for the corresponding connection cards. Subflow backgrounds do not
+navigate.
+
+Overview uses the authenticated `GET /api/overview` summary for every signed-in
+user. The server checks readable folder sources and authenticates configured
+Jellyfin sources with their stored server-side credentials under a bounded
+timeout, small concurrency limit, and short cache. Metadata-provider cards show
+only their icon, name, and active, configuration-required, or disabled status.
+Download-client cards show their name and safe qBittorrent host; their status
+remains unknown until a live transfer-client probe is added. The web client
+refreshes the summary when focused and every 60 seconds. Online dots pulse
+unless reduced motion is requested; offline, unknown, and disabled dots remain
+static. Connections use custom animated bezier edges.
+
 ## 2026-11-25: Web playback starts saved audio before streaming
 
 The browser and desktop player attempts a device-local audio blob before

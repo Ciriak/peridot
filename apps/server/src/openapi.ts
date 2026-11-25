@@ -926,6 +926,40 @@ const schemas: Record<string, SchemaObject> = {
   LibrarySourceListResponse: objectSchema({
     items: arrayOf(ref("LibrarySourceResponse")),
   }),
+  OverviewLibrarySourceResponse: objectSchema({
+    id: stringSchema,
+    kind: enumeration("path", "jellyfin"),
+    name: stringSchema,
+    address: stringSchema,
+    fileCount: integerSchema,
+    status: enumeration("online", "offline", "unknown", "disabled"),
+  }),
+  OverviewMetadataProviderResponse: objectSchema({
+    id: stringSchema,
+    kind: enumeration("musicbrainz", "discogs"),
+    name: stringSchema,
+    status: enumeration("online", "offline", "unknown", "disabled"),
+  }),
+  OverviewDownloadClientResponse: objectSchema({
+    id: stringSchema,
+    kind: enumeration("qbittorrent"),
+    name: stringSchema,
+    address: stringSchema,
+    status: enumeration("online", "offline", "unknown", "disabled"),
+  }),
+  OverviewServiceCounts: objectSchema({
+    albums: integerSchema,
+    playlists: integerSchema,
+    podcasts: integerSchema,
+    audiobooks: integerSchema,
+  }),
+  OverviewResponse: objectSchema({
+    checkedAt: dateTimeSchema,
+    librarySources: arrayOf(ref("OverviewLibrarySourceResponse")),
+    metadataProviders: arrayOf(ref("OverviewMetadataProviderResponse")),
+    downloadClients: arrayOf(ref("OverviewDownloadClientResponse")),
+    counts: ref("OverviewServiceCounts"),
+  }),
   LibrarySourceRemovalResponse: objectSchema({
     mediaId: stringSchema,
     unavailableTrackCount: integerSchema,
@@ -1916,6 +1950,11 @@ const routes: Record<string, OpenApiOperation> = {
     "Sources",
     "List library sources",
     ref("LibrarySourceListResponse"),
+  ),
+  "GET /api/overview": jsonOperation(
+    "Overview",
+    "Get the platform overview and live library-source status",
+    ref("OverviewResponse"),
   ),
   "POST /api/admin/library-sources": jsonOperation(
     "Sources",

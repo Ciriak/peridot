@@ -961,6 +961,48 @@ export interface LibrarySourceListResponse {
   items: LibrarySourceResponse[];
 }
 
+export type OverviewConnectionStatus =
+  "online" | "offline" | "unknown" | "disabled";
+
+export interface OverviewLibrarySourceResponse {
+  id: string;
+  kind: LibrarySourceKind;
+  name: string;
+  address: string;
+  fileCount: number;
+  status: OverviewConnectionStatus;
+}
+
+export interface OverviewMetadataProviderResponse {
+  id: string;
+  kind: MetadataProviderKind;
+  name: string;
+  status: OverviewConnectionStatus;
+}
+
+export interface OverviewDownloadClientResponse {
+  id: string;
+  kind: "qbittorrent";
+  name: string;
+  address: string;
+  status: OverviewConnectionStatus;
+}
+
+export interface OverviewServiceCounts {
+  albums: number;
+  playlists: number;
+  podcasts: number;
+  audiobooks: number;
+}
+
+export interface OverviewResponse {
+  checkedAt: string;
+  librarySources: OverviewLibrarySourceResponse[];
+  metadataProviders: OverviewMetadataProviderResponse[];
+  downloadClients: OverviewDownloadClientResponse[];
+  counts: OverviewServiceCounts;
+}
+
 export interface LibrarySourceRemovalResponse {
   sourceId: string;
   unavailableMediaCopyCount: number;

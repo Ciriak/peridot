@@ -77,6 +77,11 @@ const combinedTaskProgress = computed(() => {
   );
 });
 const commonCategories = [
+  {
+    labelKey: "settings.overview",
+    to: "/settings/overview",
+    icon: icons.overview,
+  },
   { labelKey: "settings.profile", to: "/settings/account", icon: icons.user },
   {
     labelKey: "settings.library",
@@ -99,7 +104,10 @@ const adminCategories = [
   { labelKey: "settings.users", to: "/settings/users", icon: icons.user },
   { labelKey: "settings.server", to: "/settings/server", icon: icons.server },
 ];
-const wideContent = computed(() => route.path === "/settings/medias");
+const wideContent = computed(
+  () =>
+    route.path === "/settings/medias" || route.path === "/settings/overview",
+);
 const connectorCategories = [
   {
     labelKey: "settings.connectors.librarySources",

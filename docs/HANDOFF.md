@@ -1,5 +1,90 @@
 # Peridot handoff
 
+## Release indexer action parity
+
+Release indexers now match the download-client toolbar and saved-row actions.
+The toolbar uses the compact settings heading and a plus-icon Add action.
+Configure is a cog-only edit button, while destructive removal is available
+only from the row's three-dot menu and requires confirmation.
+
+Verification:
+
+- `pnpm --filter @peridot/web test` (340 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Focused ESLint and Prettier checks on the changed page, test, and docs
+
+Known limits:
+
+- Live authenticated browser QA was not completed.
+
+Uncommitted changes:
+
+- Release-indexer toolbar and action controls, focused test coverage, development
+  notes, and this handoff section.
+- Concurrent overview and other in-progress changes remain present and were
+  preserved.
+
+## Settings platform overview
+
+The account avatar and `/settings` now open `/settings/overview`. Profile remains
+a separate settings destination. Overview is a full-workspace, read-only Vue
+Flow 2 graph with Peridot centered, a library-source subflow on the left, and a
+metadata-provider subflow on the right. A download-client subflow sits below,
+with outbound animated edges from Peridot to each client. The subflows are visual
+backgrounds; each card keeps its own animated bezier link. Cards show icons,
+names, safe address labels, basic counts/type, and static-or-animated status
+dots. The central card uses the default card background with a primary border;
+it shows available album, playlist, podcast, and audiobook totals. Only online
+dots pulse; disabled/unknown states stay static. Metadata-provider cards show
+only icon, name, and status. After node initialization the graph explicitly
+fits with padding. Panning and wheel/pinch zoom remain available, while node,
+link, and connection editing stay disabled.
+Double-clicking a card opens its matching settings page; subflow backgrounds do
+not navigate.
+
+`GET /api/overview` is authenticated for every signed-in user and returns only
+sanitized summary data. Folder and Jellyfin source checks run server-side with a
+short cache and timeout. Metadata cards expose MusicBrainz/Discogs service
+names and active/unknown/disabled state without returning configuration,
+credentials, addresses, or counts. Download-client cards expose only their saved
+name and qBittorrent host; they remain `unknown` until a live probe is added.
+
+Verification:
+
+- `pnpm --filter @peridot/web test` (340 passing)
+- Focused server Jellyfin tests (16 passing)
+- Focused server overview and OpenAPI tests (8 passing)
+- Server and web typechecks
+- Server and web production builds
+- `pnpm lint`
+- `pnpm format:check`
+- `pnpm version:check`
+- `pnpm db:validate` (2-migration graph current)
+
+Known limits:
+
+- The full server suite reached 224 passing tests but the known Node/V8 loader
+  crash terminated `jellyfin.test.ts`; rerunning Jellyfin alone passed.
+- Metadata-provider dots represent enabled and required configuration state, not
+  a live outbound MusicBrainz or Discogs request.
+- Download-client dots remain unknown because the overview does not probe
+  qBittorrent yet.
+- Computer Use could not verify the active Brave URL, so live post-fix visual QA
+  was not completed. Handle orientation is covered by focused geometry tests.
+
+Uncommitted changes:
+
+- Overview contracts, API route and health service, Vue Flow page/components,
+  navigation changes, dependency lockfile, translations, tests, and
+  decision/development/handoff documentation.
+
+Next:
+
+- Reload `/settings/overview` at desktop and phone widths and confirm all three
+  subflow backgrounds contain their cards, download links run outward, graph
+  padding is balanced, and panning/zoom remain available without moving cards.
+
 ## Saved web audio starts before streaming
 
 The web/desktop player now looks up a saved audio blob before requesting a

@@ -360,10 +360,17 @@ export class JellyfinClient {
     }
   }
 
-  async validate(baseUrl: string, apiKey: string): Promise<JellyfinServerInfo> {
+  async validate(
+    baseUrl: string,
+    apiKey: string,
+    signal?: AbortSignal,
+  ): Promise<JellyfinServerInfo> {
     const response = await this.request(
       endpoint(baseUrl, "System/Info"),
       apiKey,
+      {
+        ...(signal ? { signal } : {}),
+      },
     );
     if (response.status === 401 || response.status === 403) {
       throw new JellyfinError(

@@ -225,6 +225,15 @@ Media catalog routes use `/api/media`, `/api/media/:id`,
 also use Media IDs. The removed `/api/tracks`, `/api/torznab`, and
 `/api/admin/sources` surfaces have no compatibility aliases.
 
+Every signed-in user can read the sanitized platform overview at
+`GET /api/overview`. It returns library-source names, safe address labels,
+available file counts, live `online`, `offline`, or `unknown` checks, and
+metadata-provider names with `online`, `unknown`, or `disabled` state. It also
+returns available album, podcast, and audiobook counts plus the signed-in user's
+visible playlist count. The route never returns source configuration,
+credentials, full paths, or remote URLs beyond their host label.
+Metadata-provider cards intentionally omit address and count details.
+
 Discover uses `GET /api/search/external?query=...` and returns result items plus
 per-connector statuses. Imports use `POST /api/release-imports` and
 `GET /api/release-imports/:taskId`.
@@ -257,6 +266,17 @@ import legacy browser-local values.
 The shared UI uses standard Tailwind utilities, shadcn-vue variants, theme tokens,
 and bundled Basil Iconify SVG data. Do not add component CSS, inline visual
 styles, arbitrary Tailwind values, or local theme overrides.
+
+The account avatar opens Settings → Overview. The page uses `@xyflow/vue` for a
+read-only connection graph with Peridot centered, a library-source subflow on
+the left, a metadata-provider subflow on the right, and a download-client
+subflow below. Every card keeps its own animated link while the subflow is only
+a visual background group; download-client edges run from Peridot toward the
+client. Panning and scroll/pinch zoom remain available while node, link, and
+connection editing stay disabled. The page polls `/api/overview` while open.
+Keep graph cards to basic connection information and do not expose administrator
+configuration on this screen. Double-clicking a card routes to the matching
+Server or connector settings page; subflow backgrounds remain non-interactive.
 
 Render catalog artists through `ArtistLink` or `TrackArtistLinks`, and catalog
 albums through `AlbumLink`, so navigation and right-click menu behavior remain
@@ -338,6 +358,11 @@ connectivity fails. Repeat for additional instances. Saved rows lead with the
 bundled qBittorrent icon, use a cog-icon edit action, and keep removal in the
 row's three-dot action menu behind a confirmation dialog because it is
 destructive.
+
+Saved release-indexer rows use the same toolbar and row-action pattern: the add
+action includes the shared plus icon, Configure is a cog-icon button, and
+destructive removal is available only from the row's three-dot menu after an
+explicit confirmation.
 
 Select a download client in each indexer's settings together with a destination
 folder library source. Choose the qBittorrent category and additional tags.

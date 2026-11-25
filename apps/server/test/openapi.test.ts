@@ -115,6 +115,9 @@ test("OpenAPI endpoints publish every documented API route", async () => {
     }
 
     assert.deepEqual(document.paths["/api/health"]?.get?.security, []);
+    assert.deepEqual(document.paths["/api/overview"]?.get?.security, [
+      { bearerAuth: [] },
+    ]);
     assert.deepEqual(document.paths["/api/media"]?.get?.security, [
       { bearerAuth: [] },
     ]);
