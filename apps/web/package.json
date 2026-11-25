@@ -34,6 +34,7 @@
     "@tauri-apps/plugin-process": "2.4.0",
     "@tauri-apps/plugin-updater": "2.14.1",
     "@vite-pwa/nuxt": "^1.1.1",
+    "@xyflow/vue": "2.0.3",
     "h3": "^1.15.11",
     "idb-keyval": "^6.3.0",
     "nuxt": "4.6.4",

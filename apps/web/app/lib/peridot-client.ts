@@ -43,6 +43,7 @@ import type {
   MetadataProviderDefinitionListResponse,
   MetadataProviderListResponse,
   MetadataProviderResponse,
+  OverviewResponse,
   PasswordResetRequest,
   PasswordResetRequestResponse,
   PlaylistDetailResponse,
@@ -714,6 +715,14 @@ export function listSources(serverAddress: string, token: string) {
   return authenticatedRequestJson<LibrarySourceListResponse>(
     serverAddress,
     "/api/admin/library-sources",
+    token,
+  );
+}
+
+export function fetchOverview(serverAddress: string, token: string) {
+  return authenticatedRequestJson<OverviewResponse>(
+    serverAddress,
+    "/api/overview",
     token,
   );
 }

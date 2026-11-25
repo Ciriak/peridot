@@ -482,7 +482,7 @@ onBeforeUnmount(stopLoadingRay);
             <ServerConnectionIndicator />
             <Button as-child variant="ghost" size="icon" class="rounded-full">
               <NuxtLink
-                to="/settings/account"
+                to="/settings/overview"
                 :aria-label="t('navigation.profileSettings')"
                 class="group/avatar relative"
               >
