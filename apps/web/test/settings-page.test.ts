@@ -298,10 +298,7 @@ test("qBittorrent discovery is optional on its default port", async () => {
   assert.match(page, /filter\(\(source\) => !source\.removal\)/);
   assert.match(page, /t\("clients\.destinationSource"\)/);
   assert.match(page, /<SelectRoot v-model="form\.destinationSourceId">/);
-  assert.match(
-    page,
-    /sourceKindIcon\(selectedDestinationSource\.kind\)/,
-  );
+  assert.match(page, /sourceKindIcon\(selectedDestinationSource\.kind\)/);
   assert.match(page, /sourceKindIcon\(source\.kind\)/);
   assert.match(page, /v-model="form\.destinationSourceId"/);
   assert.match(page, /inputmode="url"/);

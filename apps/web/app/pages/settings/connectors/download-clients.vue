@@ -54,10 +54,7 @@ import {
   discoverConnectorInstances,
   downloadClientsApi,
 } from "../../../lib/peridot-client";
-import {
-  sourceKindIcon,
-  sourceKindLabelKey,
-} from "../../../lib/source-label";
+import { sourceKindIcon, sourceKindLabelKey } from "../../../lib/source-label";
 
 definePageMeta({ layout: "settings" });
 
@@ -632,9 +629,7 @@ onBeforeUnmount(() => {
                           class="flex size-4 shrink-0 items-center justify-center text-muted-foreground"
                         >
                           <Icon
-                            :icon="
-                              sourceKindIcon(source.kind) ?? icons.library
-                            "
+                            :icon="sourceKindIcon(source.kind) ?? icons.library"
                             aria-hidden="true"
                             class="size-4"
                           />
