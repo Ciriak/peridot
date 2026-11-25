@@ -5,6 +5,7 @@ import type {
   LibrarySourceKind,
   MediaTypeOrigin,
 } from "@peridot/contracts";
+import type { ConnectorInstanceDiscoveryCapability } from "./connector-instance-discovery.js";
 import type { CredentialStore } from "./credential-store.js";
 
 export type LibrarySourceConnectorConfiguration = Record<string, string>;
@@ -122,6 +123,7 @@ export class LibrarySourceConnectorError extends Error {
 
 export interface LibrarySourceConnectorDefinition {
   kind: string;
+  instanceDiscovery?: ConnectorInstanceDiscoveryCapability;
   discover(
     input: LibrarySourceConnectorDiscoveryInput,
   ): Promise<LibrarySourceConnectorOptionResponse[]>;

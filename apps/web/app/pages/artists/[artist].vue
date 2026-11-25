@@ -7,6 +7,7 @@ import { Button } from "@peridot/ui/components/ui/button";
 import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { computed, onMounted, ref, watch } from "vue";
+import AlbumCardPlaceholder from "../../components/AlbumCardPlaceholder.vue";
 import ArtistArtwork from "../../components/ArtistArtwork.vue";
 import ArtistContextMenu from "../../components/ArtistContextMenu.vue";
 import ArtistLink from "../../components/ArtistLink.vue";
@@ -18,7 +19,6 @@ import TrackTable from "../../components/TrackTable.vue";
 import VirtualCardGrid from "../../components/VirtualCardGrid.vue";
 import {
   useCatalogArtistQuery,
-  useCatalogAlbumQuery,
   useCatalogTrackQuery,
 } from "../../composables/use-catalog-query";
 import { useLikes } from "../../composables/use-likes";
@@ -27,6 +27,7 @@ import { useOfflineTracks } from "../../composables/use-offline-tracks";
 import { useServerConnection } from "../../composables/use-server-connection";
 import { useServer } from "../../composables/use-server";
 import { useSession } from "../../composables/use-session";
+import { useVirtualAlbums } from "../../composables/use-virtual-catalog";
 import { loadCollectionTracks } from "../../lib/catalog-collections";
 import { albumCatalogCard } from "../../lib/catalog-cards";
 import { icons } from "../../lib/icons";
@@ -102,9 +103,10 @@ const {
   error: albumsError,
   hasMore: hasMoreAlbums,
   totalCount: albumTotalCount,
+  loadedCount: loadedAlbumCount,
   load: loadAlbums,
-  loadMore: loadMoreAlbums,
-} = useCatalogAlbumQuery(() => ({
+  setVisibleRange: setVisibleAlbumRange,
+} = useVirtualAlbums(() => ({
   artistId: artist.value?.id ?? "__peridot_missing_artist__",
   sort: "title",
 }));
@@ -356,12 +358,17 @@ onMounted(() => {
         :item-key="(album) => album.id"
         :estimate-row-height="300"
         :total-count="albumTotalCount"
+        :loaded-count="loadedAlbumCount"
         :has-more="hasMoreAlbums"
         :loading-more="albumsLoadingMore"
-        @load-more="loadMoreAlbums"
+        paging-mode="window"
+        @visible-range="setVisibleAlbumRange"
       >
         <template #default="{ item }">
           <CatalogCard :item="albumCatalogCard(item)" />
+        </template>
+        <template #placeholder>
+          <AlbumCardPlaceholder />
         </template>
       </VirtualCardGrid>
     </section>

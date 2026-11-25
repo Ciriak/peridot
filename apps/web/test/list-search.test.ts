@@ -31,7 +31,7 @@ test("library list pages render an independent scoped search control", async () 
   assert.match(pages[3]!, /query: searchQuery\.value \|\| undefined/);
   assert.match(
     pages[4]!,
-    /usePlaylistList\(\{ limit: 50, query: searchQuery \}\)/,
+    /useVirtualPlaylists\(\(\) => \(\{ query: searchQuery\.value \|\| undefined \}\)\)/,
   );
   assert.match(pages[5]!, /query: searchQuery\.value \|\| undefined/);
 });

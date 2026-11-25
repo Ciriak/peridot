@@ -33,7 +33,7 @@ test("virtual album windows fetch pages around the visible range", () => {
 test("virtual album windows use bounded offset pages instead of cursor chains", async () => {
   const source = await import("node:fs/promises").then(({ readFile }) =>
     readFile(
-      new URL("../app/composables/use-virtual-albums.ts", import.meta.url),
+      new URL("../app/composables/use-virtual-catalog.ts", import.meta.url),
       "utf8",
     ),
   );
@@ -45,4 +45,15 @@ test("virtual album windows use bounded offset pages instead of cursor chains", 
   assert.match(source, /queryClient\.removeQueries/);
   assert.match(source, /gcTime: 60_000/);
   assert.doesNotMatch(source, /useInfiniteQuery|fetchNextPage/);
+  for (const hook of [
+    "useVirtualAlbums",
+    "useVirtualArtists",
+    "useVirtualAudiobooks",
+    "useVirtualPodcasts",
+    "useVirtualPlaylists",
+  ]) {
+    assert.match(source, new RegExp(`export function ${hook}`));
+  }
+  assert.match(source, /options\.optionsKey/);
+  assert.match(source, /visibleStart\.value = 0/);
 });

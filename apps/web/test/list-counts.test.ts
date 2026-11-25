@@ -35,11 +35,13 @@ test("collection counts use exact totals beside section headings", async () => {
   assert.match(pages[3]!, /loading \? t\("common\.loading"\) : totalCount/);
   assert.match(pages[4]!, /loading \? t\("common\.loading"\) : totalCount/);
   assert.match(pages[5]!, /t\("count\.track", \{ count: totalCount \}/);
-  assert.match(pages[6]!, /totalCount: artistTotalCount/);
-  assert.match(pages[6]!, /totalCount: audiobookTotalCount/);
-  assert.match(pages[6]!, /totalCount: podcastTotalCount/);
+  assert.match(pages[6]!, /count: displayedArtistResults\.length/);
+  assert.match(pages[6]!, /count: displayedAudiobookResults\.length/);
+  assert.match(pages[6]!, /count: displayedPodcastResults\.length/);
   assert.doesNotMatch(pages[6]!, /totalCount: albumTotalCount/);
-  assert.match(pages[6]!, /totalCount: trackTotalCount/);
+  assert.match(pages[6]!, /displayedArtistResults\.length/);
+  assert.match(pages[6]!, /displayedAudiobookResults\.length/);
+  assert.match(pages[6]!, /displayedPodcastResults\.length/);
   assert.match(pages[7]!, /totalCount: albumTotalCount/);
   assert.match(pages[7]!, /totalCount: trackTotalCount/);
 });

@@ -22,10 +22,14 @@ test("artists have list and detail routes with artist-scoped content", async () 
     ),
   ]);
 
-  assert.match(listPage, /useCatalogArtistQuery/);
+  assert.match(listPage, /useVirtualArtists/);
   assert.match(listPage, /items: artists/);
   assert.doesNotMatch(listPage, /library-search/);
   assert.match(listPage, /<VirtualCardGrid/);
+  assert.match(listPage, /<ArtistCardPlaceholder/);
+  assert.match(listPage, /<CatalogUpdateBadge \/>/);
+  assert.match(listPage, /paging-mode="window"/);
+  assert.match(listPage, /@visible-range="setVisibleRange"/);
   assert.match(listPage, /<ArtistCard/);
   assert.match(listPage, /:artist="item"/);
   assert.match(artistCard, /:to="artistRoute\(artist\)"/);
@@ -60,13 +64,13 @@ test("artists have list and detail routes with artist-scoped content", async () 
     "Artist detail does not override cached query loading state",
   );
   assert.match(detailPage, /route\.params\.artist/);
-  assert.match(detailPage, /useCatalogAlbumQuery/);
+  assert.match(detailPage, /useVirtualAlbums/);
   assert.match(detailPage, /artistId: artist\.value\?\.id/);
   assert.match(detailPage, /<CatalogCard/);
   assert.match(detailPage, /albumCatalogCard\(item\)/);
   assert.match(
     detailPage,
-    /<VirtualCardGrid[\s\S]*layout="wide"/,
+    /<VirtualCardGrid[\s\S]*layout="wide"[\s\S]*<AlbumCardPlaceholder/,
     "Artist albums use the wide virtual card profile",
   );
   assert.match(detailPage, /toggleCollectionPlayback\(/);

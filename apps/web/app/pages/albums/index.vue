@@ -6,11 +6,12 @@ import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { onMounted } from "vue";
 import AlbumCardPlaceholder from "../../components/AlbumCardPlaceholder.vue";
 import CatalogCard from "../../components/CatalogCard.vue";
+import CatalogUpdateBadge from "../../components/CatalogUpdateBadge.vue";
 import ListSearchBar from "../../components/ListSearchBar.vue";
 import VirtualCardGrid from "../../components/VirtualCardGrid.vue";
 import { useListSearch } from "../../composables/use-list-search";
 import { useLikes } from "../../composables/use-likes";
-import { useVirtualAlbums } from "../../composables/use-virtual-albums";
+import { useVirtualAlbums } from "../../composables/use-virtual-catalog";
 import { albumCatalogCard } from "../../lib/catalog-cards";
 
 const { t } = useI18n();
@@ -64,6 +65,7 @@ onMounted(() => {
       <Badge variant="secondary">
         {{ loading ? t("common.loading") : totalCount }}
       </Badge>
+      <CatalogUpdateBadge />
     </div>
     <div
       v-if="loading && !albums.length"

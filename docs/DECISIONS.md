@@ -1,5 +1,146 @@
 # Peridot decisions
 
+## 2026-11-25: Liked tracks controls the account offline preference
+
+The liked-tracks playlist header replaces its per-playlist offline button with
+the account-level “Make my liked titles available offline” switch. The setting
+is one compact muted pill containing the larger shared cloud-download icon and
+a short explanatory tooltip triggered by the whole pill. Its checked state
+explicitly uses the primary token so the control remains visible in the dark
+card header. It reads and writes the existing `likedTitlesOffline` preference
+through `useLibrarySettings`, so changes stay synchronized with Settings →
+Library and the established automatic liked-title download flow.
+
+Manual playlists retain their playlist-specific offline save button. The shared
+preference switch is local to the automatic liked-tracks playlist and follows
+the same verification, saving, and disconnected disabled states as the Library
+setting.
+
+## 2026-11-25: Catalog update badges share one running-scan state
+
+Albums, artist lists, audiobook lists, and podcast lists render one shared
+`CatalogUpdateBadge` beside their counted result badge. The component owns the
+task query and visibility rule, so every surface shows the localized outline
+pill with the shared spinner only while a `library_scan` task is running.
+
+Queued scans and other task kinds do not mark catalog results as updating.
+Playlist lists are unchanged because their source and update boundaries are not
+part of this catalog browse indicator.
+
+## 2026-11-25: Search surfaces display at most 50 results
+
+Library search uses a 50-element display budget. The combined All view allocates
+that budget across tracks, albums, and playlists in their existing display
+order; every category filter is independently capped at 50. External results
+are capped at 50 after applying the selected media filter.
+
+Search requests one 50-item page per library result type and no longer
+auto-paginates. Category counts and virtualizer totals reflect the displayed
+items so placeholders cannot reserve results that will not be shown. Selecting
+a category remains the way to see that category's own first 50 matches when
+another result type fills the combined All budget.
+
+## 2026-11-25: Mobile fullscreen player fits the viewport without scrolling
+
+The mobile fullscreen player is a fixed viewport layout, not a scrolling
+document. The header, timeline, and transport controls reserve their full height;
+the artwork carousel consumes only the remaining space. The square cover can
+shrink with that space and is capped at `max-h-72`, growing to `max-h-96` at the
+`sm` breakpoint. This keeps every control visible on short phones without
+introducing a scrollbar or hiding the current track metadata.
+
+## 2026-11-25: Catalog browse surfaces share counted virtual windows
+
+Albums, artists, audiobooks, podcasts, and playlists use one counted,
+offset-addressed card loader. The first page supplies the complete count, while
+only the visible page neighborhood remains in Vue Query. Unloaded card slots
+render reduced-motion-aware placeholders until their window resolves, and short
+final rows never gain placeholders beyond the real count.
+
+Artist detail album grids use the same windowed loader. Shared track tables keep
+the complete count for the scrollbar and render skeleton rows for unloaded track
+positions, so album, artist, audiobook, podcast, and other shared track-table
+surfaces use one loading-row implementation. When pagination is exhausted, the
+virtual count collapses to the actual loaded rows so filtered or stale totals
+cannot leave permanent skeleton rows beneath the final track.
+
+Playlist detail entries are virtualized against the main scroll container while
+preserving drag reordering. Reordering uses the visible neighboring entry IDs
+rather than virtualization-local DOM indexes, so a drop in a large playlist maps
+back to the complete playlist order. Playlist detail still receives all entries
+from its existing detail response; virtualization limits rendered rows rather
+than changing the API.
+
+## 2026-11-25: Discovery materializes the catalog in committed batches
+
+Library discovery and catalog projection use one source-neutral batch boundary.
+Folder scans stream bounded discovery batches, Jellyfin pages retain their
+100-record import transactions, and targeted release imports use the same path,
+while the catalog materializes at most every 500 unique committed media IDs and
+once for the final partial batch.
+
+Each materialization transaction captures old projection state, updates
+`CatalogMedia`, reconciles artist links and media search terms, rebuilds each
+affected album and artist once, replaces card search terms, and clears
+projection-pending state. One catalog revision is published after the complete
+batch. Albums, artists, and search therefore become usable during the scan and
+completed batches remain available if a later traversal or remote request fails.
+
+Folder discovery no longer retains the complete source file list. It yields
+bounded batches while the breadth-first traversal continues; task progress stays
+indeterminate until the source total is known. A final full catalog projection
+remains available only for media still pending after discovery, covering older
+database state, failed incremental materialization, and recovery paths. Normal
+successful scans no longer perform a redundant full projection.
+
+Album and artist counts are provisional while a scan is running and may increase
+as later batches commit. The Albums page shows a small update badge beside its
+count while a library scan is running. No public API or persistent schema change
+is required.
+
+## 2026-11-24: Connector instances use verified network discovery
+
+Trusted connectors may expose one shared instance-discovery capability. The
+server owns subnet enumeration, candidate generation, bounded concurrency,
+protocol probing, deduplication, and sanitized results; connector code only
+identifies its own service. Peridot onboarding now uses this engine while
+retaining its public discovery route, port `17430`, health signature, and
+response contract.
+
+Administrators discover connector instances through the authenticated
+`POST /api/admin/connectors/:kind/discover-instances` route. An empty request
+searches localhost, loopback, and up to three private IPv4 `/24` subnets visible
+to the Peridot server. An address hint limits the scan to that exact host, which
+supports Docker bridge deployments that cannot infer the host LAN. The same
+engine is available to future library-source and download-client connectors.
+
+Jellyfin currently advertises port `8096` and probes both HTTP and HTTPS
+regardless of a typed scheme. A response is accepted only when
+`System/Info/Public` identifies `ProductName` as `Jellyfin Server`. Verified
+HTTPS is preferred when one Jellyfin server responds on both schemes, and
+results are deduplicated by Jellyfin server ID. Standard certificate validation
+remains enabled; self-signed HTTPS is not accepted during this milestone.
+
+qBittorrent advertises port `8080` and probes both HTTP and HTTPS. A response is
+accepted only when the Web UI HTML contains the official
+`qBittorrent WebUI` metadata or the older localized qBittorrent title together
+with its bundled Web UI asset. The root page is inspected without credentials,
+and verified HTTPS is preferred when both schemes respond.
+
+The Jellyfin and qBittorrent forms start discovery automatically and provide a
+rescan action. Typing an address starts a debounced targeted scan.
+Administrators must explicitly choose a discovered result. Discovery rows
+prefill configuration and do not render a selected or checked state. The chosen
+scanner URL is the only value used for Jellyfin library discovery or qBittorrent
+saving. Saving a qBittorrent client performs a live authenticated options request
+and rejects with `connection_failed` without writing when the connection does not
+work. Editing the address invalidates the verified choice. Saved qBittorrent
+clients remain editable from their previously verified URL; changing that URL
+requires a new scanner result before saving. Credentials remain manual and are
+never sent to the unauthenticated instance probe.
+Removing a saved qBittorrent client is destructive: it is available only from
+the row action menu and requires an explicit confirmation that names the client.
+
 ## 2026-11-24: Medias manager uses persistent administrator overrides
 
 Administration includes a Medias manager at `/settings/medias`. It lists every

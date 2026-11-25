@@ -50,6 +50,10 @@ test("settings is a fullscreen routed area with a separate administrator group",
   );
   assert.match(
     connectorCategories,
+    /to: "\/settings\/connectors\/release-indexers",\s*icon: icons\.globe,/,
+  );
+  assert.match(
+    connectorCategories,
     /labelKey: "settings\.connectors\.downloadClients"/,
   );
   assert.match(
@@ -136,14 +140,121 @@ test("Jellyfin is a direct built-in source integration", async () => {
   ]);
   assert.match(page, /chooseKind\('jellyfin'\)/);
   assert.match(page, /discoverJellyfinLibraries/);
+  assert.match(page, /discoverConnectorInstances/);
+  assert.match(page, /scanJellyfinInstances/);
+  assert.match(page, /selectJellyfinInstance/);
   assert.match(page, /newJellyfinUrl/);
   assert.match(page, /newJellyfinApiKey/);
   assert.match(page, /newJellyfinLibraryId/);
   assert.match(page, /kind: "jellyfin"/);
   assert.match(client, /source-integrations\/\$\{encodeURIComponent\(kind\)\}/);
+  assert.match(
+    client,
+    /connectors\/\$\{encodeURIComponent\(kind\)\}\/discover-instances/,
+  );
   assert.doesNotMatch(client, /api\/admin\/plugins|api\/plugins/);
   assert.match(contracts, /LibrarySourceKind = "path" \| "jellyfin"/);
   assert.match(contracts, /CreateJellyfinLibrarySourceRequest/);
+  assert.match(contracts, /interface ConnectorInstanceResponse/);
+  assert.match(contracts, /DiscoverConnectorInstancesResponse/);
+});
+
+test("Jellyfin uses only an explicitly selected scanner result", async () => {
+  const page = await readSource(
+    "../app/pages/settings/connectors/library-sources.vue",
+  );
+
+  assert.match(
+    page,
+    /if \(kind === "jellyfin"\) void scanJellyfinInstances\(\)/,
+  );
+  assert.match(page, /newJellyfinUrl\.value = instance\.url/);
+  assert.match(page, /url: instance\.url/);
+  assert.match(page, /configuration: \{ url: instance\.url \}/);
+  assert.match(page, /Boolean\(selectedJellyfinInstance\.value\)/);
+  assert.match(page, /inputmode="url"/);
+  assert.match(page, /type="text"/);
+  assert.doesNotMatch(page, /aria-pressed=/);
+  assert.doesNotMatch(page, /icons\.check/);
+  assert.match(page, /animate-ping rounded-full bg-success/);
+  assert.match(page, /t\("common\.active"\)/);
+  assert.doesNotMatch(page, /configuration: \{ url: newJellyfinUrl\.value \}/);
+});
+
+test("qBittorrent uses verified instances on its default port", async () => {
+  const [page, translations, connectors] = await Promise.all([
+    readSource("../app/pages/settings/connectors/download-clients.vue"),
+    readSource("../i18n/locales/en-US.json"),
+    readSource("../../../apps/server/src/connectors.ts"),
+  ]);
+
+  assert.match(page, /discoverConnectorInstances/);
+  assert.match(page, /scanQbittorrentInstances/);
+  assert.match(page, /selectQbittorrentInstance/);
+  assert.match(page, /void scanQbittorrentInstances\(\)/);
+  assert.match(
+    page,
+    /blank\(clientKind === "qbittorrent" \? "qBittorrent" : ""\)/,
+  );
+  assert.match(page, /form\.value\.url = instance\.url/);
+  assert.match(
+    page,
+    /if \(!form\.value\.name\.trim\(\)\) form\.value\.name = instance\.label/,
+  );
+  assert.match(
+    page,
+    /:disabled="\s*busy \|\| !selectedQbittorrentInstance \|\| serverLost\s*"[\s\S]*?type="submit"/,
+  );
+  assert.doesNotMatch(page, /act\('test'\)|clients\.test"/);
+  assert.match(page, /selectedQbittorrentInstance/);
+  assert.match(page, /inputmode="url"/);
+  assert.match(page, /type="text"/);
+  assert.doesNotMatch(page, /aria-pressed=/);
+  assert.doesNotMatch(page, /icons\.check/);
+  assert.match(page, /animate-ping rounded-full bg-success/);
+  assert.match(page, /t\("common\.active"\)/);
+  assert.match(page, /icons\.qbittorrent/);
+  assert.match(page, /icons\.settings/);
+  assert.match(page, /t\('clients\.edit', \{ client: client\.name \}\)/);
+  assert.match(page, /@click="edit\(client\)"/);
+  assert.doesNotMatch(page, /t\("common\.edit"\)/);
+  assert.match(page, /DropdownMenuRoot/);
+  assert.match(page, /@select="askRemove\(client\)"/);
+  assert.match(page, /AlertDialogRoot/);
+  assert.match(page, /@click="confirmRemove"/);
+  assert.match(page, /text-destructive/);
+  assert.doesNotMatch(page, /@click="act\('remove', client\.id\)"/);
+  assert.ok(
+    page.indexOf("icons.qbittorrent") < page.indexOf("{{ client.name }}"),
+    "The qBittorrent icon leads each saved client row",
+  );
+  assert.ok(
+    page.indexOf('id="qbittorrent-url"') < page.indexOf('t("indexer.name")'),
+    "Server scanning appears before the remaining client fields",
+  );
+  assert.match(
+    translations,
+    /"clients\.urlPlaceholder": "http:\/\/localhost:8080"/,
+  );
+  assert.match(connectors, /instance-discovery/);
+});
+
+test("release indexers are added and configured in a dialog", async () => {
+  const page = await readSource(
+    "../app/pages/settings/connectors/release-indexers.vue",
+  );
+
+  assert.match(page, /@click="beginAdd"/);
+  assert.match(page, /<DialogRoot v-model:open="open">/);
+  assert.match(page, /<DialogContent/);
+  assert.match(page, /<DialogTitle/);
+  assert.match(page, /<form class="mt-4 space-y-4" @submit\.prevent="save">/);
+  assert.match(
+    page,
+    /<DownloadClientLink v-model="form" :sources="sources" \/>/,
+  );
+  assert.match(page, /v-if="formError"/);
+  assert.doesNotMatch(page, /v-if="open"\s+class="space-y-4 rounded-lg border/);
 });
 
 test("settings shows app metadata and profile owns confirmed logout", async () => {

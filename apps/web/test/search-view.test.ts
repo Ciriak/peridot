@@ -47,6 +47,10 @@ test("search uses one full-content route with recent and local results", async (
   assert.match(searchPage, /useCatalogPodcastQuery/);
   assert.match(searchPage, /useTorznabSearch\(debouncedQuery\)/);
   assert.match(searchPage, /query: searchTerm\.value/);
+  assert.match(searchPage, /SEARCH_RESULTS_LIMIT/);
+  assert.match(searchPage, /limitSearchResults/);
+  assert.match(searchPage, /searchResultBudgets/);
+  assert.doesNotMatch(searchPage, /<AutoLoadMore/);
   assert.match(searchPage, /page\.search\.recent/);
   assert.match(searchPage, /useSearchRecents\(\)/);
   assert.match(searchPage, /@open="openAlbum\(album\)"/);
@@ -116,6 +120,10 @@ test("external results use a counted tab and render only through the external pa
     "Each search tab exposes its own category filters",
   );
   assert.match(searchPage, /:releases="filteredExternalReleases"/);
+  assert.match(
+    searchPage,
+    /filteredExternalReleases = computed\([\s\S]*?limitSearchResults\([\s\S]*?filterReleaseResults/,
+  );
   assert.match(searchPage, /<TabsContent value="library"/);
   assert.match(
     searchPage,
@@ -135,10 +143,10 @@ test("search lists tracks before albums and playlists without type headings", as
   );
   const trackIndex = searchPage.indexOf('variant="search"');
   const albumIndex = searchPage.indexOf(
-    'v-if="showAlbums && albumResults.length"',
+    'v-if="showAlbums && displayedAlbumResults.length"',
   );
   const playlistIndex = searchPage.indexOf(
-    'v-if="showPlaylists && playlistResults.length"',
+    'v-if="showPlaylists && displayedPlaylistResults.length"',
   );
 
   assert.ok(trackIndex >= 0);

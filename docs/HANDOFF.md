@@ -1,5 +1,345 @@
 # Peridot handoff
 
+## Liked tracks header offline toggle
+
+The liked-tracks playlist header now shows the account-level “Make my liked
+titles available offline” switch instead of the automatic playlist's separate
+offline button. The switch is grouped into one compact pill with the shared
+Basil cloud-download icon and a short tooltip explaining automatic offline
+downloads. Hovering or focusing anywhere on the pill opens the tooltip. The icon
+uses the larger control size, and the muted pill plus an explicit primary-token
+checked state keep the toggle visible in the dark header. It reads and writes
+the existing account preference, so it stays synchronized with Settings →
+Library and automatically starts or stops the established liked-title download
+flow.
+
+Manual playlists keep their playlist-specific offline save button. The new
+header switch is disabled while the preference is unverified or saving and
+while the server is disconnected, matching the Library setting.
+
+Verification:
+
+- Focused playlist and library-settings tests (16 passing)
+- `pnpm --filter @peridot/web test` (330 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Focused ESLint and Prettier checks on the changed Web and test files
+
+Known limits:
+
+- The header switch was verified through behavioral source assertions and the
+  production build, not an authenticated browser session.
+
+Uncommitted changes:
+
+- Liked-tracks header toggle component, playlist detail wiring, focused test
+  coverage, decision record, and this handoff section.
+- Concurrent catalog virtualization, search, player, and other in-progress
+  changes remain present and were preserved.
+
+Next:
+
+- Open Liked tracks at desktop and phone widths, toggle the header switch, then
+  confirm Settings → Library shows the same value and the download task starts
+  or stops accordingly.
+
+## Catalog update badge across browse categories
+
+Albums, artists, audiobooks, and podcasts now render the same localized outline
+badge beside their count while a library scan is running. The badge is owned by
+one shared component, so the task query, spinner, accessibility announcement,
+and running-only visibility rule cannot drift between the four catalog pages.
+
+Verification:
+
+- Focused task, album, artist, category, count, badge, and i18n tests (30
+  passing)
+- `pnpm --filter @peridot/web test` (329 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Focused ESLint and Prettier checks on the changed app and test files
+
+Known limits:
+
+- The badge was verified through behavioral tests and the production build, not
+  an authenticated browser session with a live scan.
+
+Uncommitted changes:
+
+- Shared catalog update badge, four-page wiring, running-scan helper, translations,
+  focused regression tests, decision record, and this handoff section.
+- Concurrent catalog virtualization, search, player, and other in-progress
+  changes remain present and were preserved.
+
+Next:
+
+- Start a long library scan and confirm the pill appears and clears on Albums,
+  Artists, Audiobooks, and Podcasts at desktop and phone widths.
+
+## Search results display at most 50 items
+
+Library search now caps the combined All view at 50 rendered results by
+allocating the budget across tracks, albums, and playlists in display order.
+Each category filter and the filtered External sources list are independently
+capped at 50. Search loads one 50-item page per local result type and no longer
+auto-paginates.
+
+Verification:
+
+- Focused search, pagination, count, and virtual-scroll tests (17 passing)
+- `pnpm --filter @peridot/web test` (328 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Focused ESLint and Prettier checks on all changed Web and test files
+
+Known limits:
+
+- The capped search surfaces were verified through behavioral tests and the
+  production build, not an authenticated desktop or phone browser session.
+
+Uncommitted changes:
+
+- Search display-budget helpers, page wiring, regression tests, the decision
+  record, and this handoff section.
+- Unrelated in-progress catalog, playlist, player, and desktop changes were
+  present in the worktree and left untouched.
+
+Next:
+
+- Run a broad query in the browser at desktop and phone widths, then confirm
+  the All view stops at 50 and each category filter and External list stops at
+  50 after filtering.
+
+## Counted virtual catalog surfaces
+
+Albums, artist lists, audiobook lists, podcast lists, playlists, and artist
+album sections now use a shared offset-window loader. Each grid reserves the
+complete result count, fetches only the visible page neighborhood, and renders
+matching card placeholders until loaded. Shared track tables now render reduced-
+motion-aware skeleton rows for unloaded positions, which covers album, artist,
+audiobook, and podcast track sections.
+
+Playlist track rows now use the main-scroll virtualizer while keeping drag
+reordering. Drops map through visible neighboring entry IDs to the complete
+playlist order. No search-page wiring was changed by this work.
+
+Track-table placeholders now stop as soon as pagination is exhausted. The
+virtual count falls back to the actual loaded rows when no next page exists, so
+a filtered or stale total cannot leave skeleton rows below the final track.
+
+Verification:
+
+- `pnpm --filter @peridot/web test` (330 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- `pnpm lint`
+- `pnpm format:check`
+- Focused virtual-scroll, playlist, artist, album, media-category, context-menu,
+  list-search, and styling tests
+
+Known limits:
+
+- Live authenticated visual QA at desktop and phone widths was not completed.
+- Playlist detail still fetches every entry because its existing detail response
+  is not paged; only its rendered row count is virtualized.
+- Dragging across a rapidly changing virtual viewport has behavioral coverage
+  for neighbor mapping but has not been exercised on a long playlist in a live
+  browser.
+
+Uncommitted changes:
+
+- Shared virtual catalog loader, card placeholders, track-row placeholders,
+  exhausted-pagination placeholder clamping, playlist-row virtualization and
+  reorder mapping, page wiring, tests, decision record, and this handoff section.
+- Concurrent mobile-player layout changes remain present and were preserved.
+- Separate concurrent mobile-player, search-result budget, and task-progress
+  changes remain present and were left untouched.
+
+Next:
+
+- Exercise large artist, audiobook, podcast, and playlist collections while
+  jumping through the main scrollbar, then drag entries across several virtual
+  viewport positions.
+
+## Mobile fullscreen player fits without scrolling
+
+The mobile fullscreen player no longer uses a vertical scroll container. Its
+header, timeline, and transport controls keep their height while the artwork
+carousel fills the remaining viewport space. The square cover now shrinks with
+that space and caps at `max-h-72`, growing to `max-h-96` at the `sm` breakpoint.
+
+Verification:
+
+- `pnpm --filter @peridot/web exec node --test test/mobile-player.test.ts`
+  (2 passing)
+- `pnpm --filter @peridot/web build`
+- Focused ESLint and Prettier checks on the changed player and test files
+- The latest full web suite passes with the concurrent virtual-catalog changes
+  (330 passing), and the web typecheck passes.
+
+Known limits:
+
+- Live phone-width visual QA was not completed because Computer Use could not
+  verify the active browser URL.
+
+Uncommitted changes:
+
+- Mobile fullscreen flex layout, responsive square artwork sizing, focused
+  regression assertions, this decision, and this handoff.
+- Concurrent virtual-catalog changes in other web components, pages, and
+  composables were present during verification and left untouched.
+
+## Progressive source-neutral media discovery
+
+Folder scans, Jellyfin scans, and targeted release imports now share a
+committed-media catalog boundary. Folder discovery streams bounded batches
+while later directories are still being enumerated, Jellyfin retains its
+500-item pages and 100-record transactions, and the catalog materializes after
+at most 500 unique committed media IDs or the final partial batch.
+
+Each materialization transaction reconciles `CatalogMedia`, album and artist
+summaries, artist links, card search terms, and pending projection state before
+publishing one catalog revision. Albums, artists, and search are usable while a
+scan is running. Completed batches remain visible if a later traversal or remote
+request fails. The full catalog projection now runs only as a recovery fallback
+when media remain pending.
+
+The Albums page shows a localized outline badge with the shared spinner beside
+its count while a library scan is running.
+
+Verification:
+
+- `pnpm --filter @peridot/server test` (227 passing)
+- `pnpm --filter @peridot/web test` (324 passing)
+- `pnpm exec turbo run test --filter=!@peridot/android --concurrency=1`
+  (contracts, desktop, player, server, UI, and web successful)
+- `pnpm typecheck`
+- `pnpm lint`
+- `pnpm format:check`
+- `pnpm version:check`
+- `pnpm db:validate` (current at `7fb2e91df85d`, two migrations)
+- `pnpm build` (server, web, desktop, and Android debug build)
+
+The normal parallel `pnpm test` run hit the repository's previously observed
+Node/V8 loader crash while the Jellyfin test file overlapped with other package
+workers. The same aggregate suite passed with Turbo concurrency set to one, and
+the server suite also passed independently.
+
+Known limits:
+
+- Folder progress is indeterminate until breadth-first enumeration completes.
+- Interrupted scans still restart traversal; this milestone does not persist a
+  page checkpoint.
+- Album and artist counts are provisional and may increase while indexing.
+- A storage-heavy synthetic 70k-item timing benchmark was not added.
+- The Albums-page hint was verified through behavioral tests and the production
+  build, not an authenticated browser session.
+
+Uncommitted changes:
+
+- Shared scan batching and incremental catalog materialization.
+- Folder streaming discovery and catalog reconciliation for unavailable copies.
+- Progressive Jellyfin and release-import batches.
+- Albums-page indexing badge, translation, tests, and scan documentation.
+
+Next:
+
+- Exercise an authenticated large Jellyfin scan and confirm that albums appear
+  after the first page while the task remains running.
+- Measure first-album latency, peak memory, SQLite busy errors, and total scan
+  duration at 10k and 70k items.
+- Add resumable source cursors and retention of cross-batch album identity
+  refinements if interrupted scans become a common operational issue.
+
+## Reusable connector instance discovery
+
+Connector discovery now uses one server-side engine for subnet enumeration,
+candidate normalization, bounded HTTP/HTTPS probing, result deduplication, and
+credential-free response mapping. Peridot onboarding remains on its existing
+public discovery endpoint and port `17430`, but now runs through the shared
+engine.
+
+Administrators can call
+`POST /api/admin/connectors/:kind/discover-instances` with an optional address
+hint. The connector registry accepts an optional instance-discovery capability,
+so future library sources and download clients can reuse the same contract
+without exposing arbitrary network probing. Jellyfin uses port `8096`, HTTPS
+preference, and the public `System/Info/Public` `Jellyfin Server` signature.
+qBittorrent uses port `8080` and its official Web UI metadata, including the
+older localized title and bundled asset markers.
+
+The Jellyfin Add source form starts a local-network scan automatically, supports
+explicit rescans, and starts a debounced targeted scan when an address is typed.
+Discovered servers show their name, URL, and version. Administrators must
+explicitly choose a result; the selected scanner URL is then used for library
+discovery and source creation. Editing the address invalidates the selection and
+loaded libraries.
+
+The qBittorrent form also starts a local-network scan, supports rescans and
+targeted address probes, and requires an explicit discovered result. Scan
+controls and the discovered list appear first below the dialog title.
+Saving uses the selected scanner URL and performs a live authenticated
+qBittorrent check before persisting; failed connections are rejected. Existing
+saved clients remain editable from their current verified URL until the
+administrator changes it. Choosing a discovered row prefills fields without
+showing a checked selection state. Discovered connector rows use a
+reduced-motion-aware green pulse to show that the scanner reached the instance,
+and new qBittorrent clients default their editable display name to qBittorrent.
+Saved download-client rows lead with the bundled qBittorrent icon, use a
+cog-icon Edit action, and keep the destructive Remove action inside a three-dot
+menu with an explicit confirmation dialog.
+
+Release-indexer Add and Configure actions now open the same modal-dialog pattern
+used by library sources and download clients. Torznab fields, import-destination
+controls, validation, and save errors remain inside the dialog.
+
+Verification:
+
+- `pnpm --filter @peridot/server test` (225 passing)
+- `pnpm --filter @peridot/web test` (323 passing)
+- `pnpm typecheck`
+- `pnpm lint`
+- `pnpm format:check`
+- `pnpm version:check`
+- `pnpm db:validate` (current at `7fb2e91df85d`, two migrations)
+- `pnpm build` (server, web, desktop, and Android debug build)
+- Focused connector discovery, local discovery, admin authorization, web client,
+  settings form, i18n, and OpenAPI tests
+
+Known limits:
+
+- No live Jellyfin or qBittorrent instance or authenticated browser session was
+  used for visual QA.
+- Automatic subnet enumeration only sees interfaces available to Peridot. The
+  default Docker bridge setup may hide the host LAN, so entering the Jellyfin
+  host address is the reliable container path.
+- Jellyfin currently advertises only port `8096`; later default ports and
+  suggested hosts can be added to the connector capability.
+- Standard TLS validation is enforced, so self-signed HTTPS Jellyfin endpoints
+  and qBittorrent endpoints are skipped and a valid HTTP endpoint may be selected
+  instead.
+- qBittorrent discovery supports the official built-in Web UI. Alternate Web UIs
+  and Web UI roots hidden behind HTTP basic authentication do not expose the
+  expected marker.
+
+Uncommitted changes:
+
+- Shared discovery engine and contracts, authenticated administrator route,
+  Jellyfin public-info probe, qBittorrent Web UI probe, onboarding refactor, web
+  client method, both connector forms, translations, tests, decisions, and
+  development notes.
+- Existing unrelated source-label icon changes and their tests remain untouched.
+
+Next:
+
+- Run Add source → Jellyfin against live HTTP and trusted HTTPS instances,
+  including multiple servers and a reverse-proxy path.
+- Verify the automatic sweep and typed-host path in both host-network and default
+  Docker bridge deployments.
+- Run Download clients → qBittorrent against qBittorrent 4.x and 5.x, with API
+  key and username/password authentication, and confirm the scanner URL appears
+  in the saved client.
+
 ## Medias manager
 
 Administration now includes a Medias manager at `/settings/medias`. It lists all
@@ -531,7 +871,7 @@ Known limits:
 Feature files:
 
 - `apps/web/app/composables/use-virtual-load-more.ts`
-- `apps/web/app/composables/use-virtual-albums.ts`
+- `apps/web/app/composables/use-virtual-catalog.ts`
 - `apps/web/app/lib/virtual-albums.ts`
 - `apps/server/src/catalog-routes.ts`
 - `apps/server/src/catalog.ts`

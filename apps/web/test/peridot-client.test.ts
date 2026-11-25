@@ -17,6 +17,7 @@ import {
   deleteManagedUser,
   deletePlaylist,
   deleteSource,
+  discoverConnectorInstances,
   discoverLocalServers,
   fetchAuthStatus,
   fetchLogs,
@@ -1080,6 +1081,46 @@ test("local discovery reads the same-origin discovery endpoint", async (context)
     items: [{ address: "http://192.168.1.8:17430", host: "192.168.1.8" }],
     scannedSubnets: ["192.168.1.0/24"],
   });
+});
+
+test("connector discovery posts the address hint to the admin scanner", async (context) => {
+  const originalFetch = globalThis.fetch;
+  context.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+  let request: Request | null = null;
+  globalThis.fetch = async (input, init) => {
+    request = new Request(String(input), init);
+    return Response.json({
+      items: [
+        {
+          kind: "jellyfin",
+          id: "server-id",
+          label: "Living room",
+          url: "https://192.168.1.5:8096",
+          version: "10.10.0",
+        },
+      ],
+      scannedSubnets: [],
+    });
+  };
+
+  const result = await discoverConnectorInstances(
+    "http://127.0.0.1:17430",
+    "session-token",
+    "jellyfin",
+    " 192.168.1.5 ",
+  );
+
+  assert.ok(request);
+  assert.equal(
+    request.url,
+    "http://127.0.0.1:17430/api/admin/connectors/jellyfin/discover-instances",
+  );
+  assert.equal(request.method, "POST");
+  assert.equal(request.headers.get("Authorization"), "Bearer session-token");
+  assert.deepEqual(await request.json(), { address: "192.168.1.5" });
+  assert.equal(result.items[0]?.url, "https://192.168.1.5:8096");
 });
 
 test("log polling reads from the admin logs endpoint", async (context) => {

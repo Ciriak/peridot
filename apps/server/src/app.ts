@@ -87,6 +87,7 @@ export interface BuildAppOptions {
   metadataRequestIntervalMs?: number;
   discogsFetch?: typeof fetch;
   discogsRequestIntervalMs?: number;
+  qbittorrentFetch?: typeof fetch;
   sourceIntegrations?: readonly LibrarySourceConnectorDefinition[];
   connectors?: readonly ConnectorRuntimeDefinition[];
   enableSourceRefreshScheduler?: boolean;
@@ -190,7 +191,9 @@ export async function buildApp(options: BuildAppOptions = {}) {
       librarySourceConnectorDefinition,
     ),
     torznabConnectorDefinition(),
-    qBittorrentConnectorDefinition(),
+    qBittorrentConnectorDefinition({
+      ...(options.qbittorrentFetch ? { fetch: options.qbittorrentFetch } : {}),
+    }),
     ...metadataRegistry.all().map(metadataProviderConnectorDefinition),
     ...(options.connectors ?? []),
   ]);

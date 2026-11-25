@@ -412,6 +412,42 @@ test("Jellyfin publishes imported tracks before the scan completes", async () =>
           track.sourceKind === "jellyfin",
       ),
     );
+    const partialAlbums = (
+      await context.app.inject({
+        method: "GET",
+        url: "/api/albums?limit=100",
+        headers: context.authorization,
+      })
+    ).json<{
+      items: Array<{ id: string; title: string; trackCount: number }>;
+      totalCount: number;
+    }>();
+    assert.equal(partialAlbums.totalCount, 500);
+    assert.equal(partialAlbums.items.length, 100);
+    assert.ok(
+      partialAlbums.items.every(
+        (album) =>
+          album.title.startsWith("Batched album ") && album.trackCount === 1,
+      ),
+    );
+    const partialArtists = (
+      await context.app.inject({
+        method: "GET",
+        url: "/api/artists?limit=100",
+        headers: context.authorization,
+      })
+    ).json<{ items: unknown[]; totalCount: number }>();
+    assert.equal(partialArtists.totalCount, 500);
+    assert.equal(partialArtists.items.length, 100);
+    const pendingAfterFirstPage = await context.database.orm.Media.where({
+      catalogProjectionPending: 1,
+    }).all();
+    assert.equal(pendingAfterFirstPage.length, 0);
+    const copiesAfterFirstPage = await context.database.orm.MediaCopy.all();
+    assert.equal(copiesAfterFirstPage.length, 500);
+    assert.ok(
+      copiesAfterFirstPage.every((copy) => copy.lastSeenScanId === scanTask.id),
+    );
     const running = await context.app.inject({
       method: "GET",
       url: `/api/tasks/${scanTask.id}`,
@@ -423,7 +459,7 @@ test("Jellyfin publishes imported tracks before the scan completes", async () =>
     const result = await waitForScan(context, scanTask.id);
     assert.equal(result.status, "completed", JSON.stringify(result));
     assert.equal(result.createdCount, items.length);
-    assert.equal(result.catalogStatus, "completed");
+    assert.equal(result.catalogStatus, "skipped", JSON.stringify(result));
     assert.ok(requestedLimits.length >= 2);
     assert.ok(requestedLimits.every((limit) => limit === 500));
     assert.deepEqual(requestedStarts, [0, 500]);
@@ -764,6 +800,9 @@ test("Jellyfin rescans use item versions and mark remotely deleted audio unavail
     Etag: etag,
     Container: "mp3",
     RunTimeTicks: 10_000_000,
+    Artists: ["Version Artist"],
+    Album: "Version Album",
+    AlbumArtists: [{ Name: "Version Artist" }],
     MediaSources: [{ Container: "mp3", Size: 10 }],
   });
   const context = await createTestContext({
@@ -811,6 +850,14 @@ test("Jellyfin rescans use item versions and mark remotely deleted audio unavail
     const source = created.json<{ id: string; task: TaskResponse }>();
     const firstScan = await waitForScan(context, source.task.id);
     assert.equal(firstScan.createdCount, 2);
+    const firstAlbum = await context.database.orm.CatalogAlbum.firstOrThrow({
+      title: "Version Album",
+    });
+    assert.equal(firstAlbum.trackCount, 2);
+    const firstArtist = await context.database.orm.CatalogArtist.firstOrThrow({
+      name: "Version Artist",
+    });
+    assert.equal(firstArtist.trackCount, 2);
 
     const unchangedScanResponse = await context.app.inject({
       method: "POST",
@@ -838,6 +885,22 @@ test("Jellyfin rescans use item versions and mark remotely deleted audio unavail
       changedScanResponse.json<{ id: string }>().id,
     );
     assert.equal(changedScan.updatedCount, 1);
+    assert.equal(
+      (
+        await context.database.orm.CatalogAlbum.firstOrThrow({
+          id: firstAlbum.id,
+        })
+      ).trackCount,
+      1,
+    );
+    assert.equal(
+      (
+        await context.database.orm.CatalogArtist.firstOrThrow({
+          id: firstArtist.id,
+        })
+      ).trackCount,
+      1,
+    );
     const sourceCopies = await context.database.orm.MediaCopy.where({
       librarySourceId: source.id,
     }).all();

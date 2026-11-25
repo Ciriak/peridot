@@ -64,8 +64,14 @@ test("automatic media categories remain wired without classification controls", 
   assert.match(layout, /labelKey: "navigation\.podcasts"/);
   assert.match(layout, /icon: icons\.book/);
   assert.match(layout, /icon: icons\.podcast/);
-  assert.match(audiobookPage, /useCatalogAudiobookQuery/);
-  assert.match(podcastPage, /useCatalogPodcastQuery/);
+  assert.match(audiobookPage, /useVirtualAudiobooks/);
+  assert.match(audiobookPage, /<AlbumCardPlaceholder/);
+  assert.match(audiobookPage, /<CatalogUpdateBadge \/>/);
+  assert.match(audiobookPage, /paging-mode="window"/);
+  assert.match(podcastPage, /useVirtualPodcasts/);
+  assert.match(podcastPage, /<AlbumCardPlaceholder/);
+  assert.match(podcastPage, /<CatalogUpdateBadge \/>/);
+  assert.match(podcastPage, /paging-mode="window"/);
   assert.match(audiobookDetail, /name: "audiobook-detail"/);
   assert.match(podcastDetail, /name: "podcast-detail"/);
   assert.match(card, /MediaCollectionOfflineButton/);

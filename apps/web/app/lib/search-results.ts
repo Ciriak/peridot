@@ -1,5 +1,7 @@
 import type { MediaType } from "@peridot/contracts";
 
+export const SEARCH_RESULTS_LIMIT = 50;
+
 export type TrackSearchResultType = "song" | "chapter" | "episode";
 
 export type SearchResultType =
@@ -21,4 +23,23 @@ export function trackSearchResultType(
 
 export function searchResultTypeLabelKey(type: SearchResultType): string {
   return `page.search.resultType.${type}`;
+}
+
+export function limitSearchResults<T>(
+  items: readonly T[],
+  limit = SEARCH_RESULTS_LIMIT,
+): T[] {
+  return items.slice(0, Math.max(0, limit));
+}
+
+export function searchResultBudgets(
+  counts: readonly number[],
+  limit = SEARCH_RESULTS_LIMIT,
+): number[] {
+  let remaining = Math.max(0, limit);
+  return counts.map((count) => {
+    const budget = Math.min(Math.max(0, count), remaining);
+    remaining -= budget;
+    return budget;
+  });
 }

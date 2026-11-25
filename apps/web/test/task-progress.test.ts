@@ -12,6 +12,7 @@ import {
   estimatedRemainingMs,
   estimatedTaskRemainingMs,
   groupedTaskProgress,
+  hasRunningLibraryScan,
   orderedActiveTasks,
   overallTaskProgress,
   runningMetadataTask,
@@ -257,6 +258,19 @@ test("running metadata work is represented by one shared task", () => {
   assert.equal(runningMetadataTask(tasks)?.id, "metadata-running");
   assert.equal(runningMetadataTask([tasks[0]!]), null);
   assert.equal(runningMetadataTask([]), null);
+});
+
+test("only a running library scan marks catalog results as updating", () => {
+  assert.equal(hasRunningLibraryScan([task()]), true);
+  assert.equal(
+    hasRunningLibraryScan([
+      task({ status: "queued" }),
+      task({ id: "metadata", kind: "metadata_enrichment" }),
+      task({ id: "completed", status: "completed" }),
+    ]),
+    false,
+  );
+  assert.equal(hasRunningLibraryScan([]), false);
 });
 
 test("overall progress averages the running percentage with queued tasks at zero", () => {

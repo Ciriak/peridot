@@ -72,32 +72,34 @@ watch(
 <template>
   <div
     data-mobile-player-track-panel
-    class="min-w-0 overflow-hidden text-center"
+    class="flex h-full min-w-0 flex-col overflow-hidden text-center"
   >
     <component
       :is="interactive && track ? TrackContextMenu : 'div'"
       v-bind="interactive && track ? { track } : {}"
       @play="emit('play')"
     >
-      <div class="flex min-w-0 flex-col items-center">
-        <div
-          aria-hidden="true"
-          class="relative mx-auto flex aspect-square w-full max-w-sm shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted text-muted-foreground shadow-lg"
-          :class="track?.available === false && 'opacity-60'"
-        >
-          <Icon :icon="placeholderIcon" aria-hidden="true" class="size-16" />
-          <FadeInImage
-            v-if="currentCoverImageUrl && !coverFailed"
-            :key="currentCoverImageUrl"
-            :src="currentCoverImageUrl"
-            :fade-in="!coverFromCache"
-            loading="eager"
-            class="absolute inset-0"
-            @error="coverFailed = true"
-          />
+      <div class="flex min-h-0 min-w-0 flex-1 flex-col items-center">
+        <div class="flex min-h-0 w-full flex-1 items-end justify-center pt-2">
+          <div
+            aria-hidden="true"
+            class="relative mx-auto flex aspect-square h-full max-h-72 w-auto max-w-full shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted text-muted-foreground shadow-lg sm:max-h-96"
+            :class="track?.available === false && 'opacity-60'"
+          >
+            <Icon :icon="placeholderIcon" aria-hidden="true" class="size-16" />
+            <FadeInImage
+              v-if="currentCoverImageUrl && !coverFailed"
+              :key="currentCoverImageUrl"
+              :src="currentCoverImageUrl"
+              :fade-in="!coverFromCache"
+              loading="eager"
+              class="absolute inset-0"
+              @error="coverFailed = true"
+            />
+          </div>
         </div>
 
-        <div class="mt-4 min-w-0 text-center">
+        <div class="mt-2 min-w-0 shrink-0 text-center">
           <template v-if="track">
             <ScrollingText
               :key="`${track.id}:${track.title}`"
@@ -138,7 +140,10 @@ watch(
       </div>
     </component>
 
-    <div v-if="interactive && track" class="mt-3 flex w-full justify-end">
+    <div
+      v-if="interactive && track"
+      class="mt-2 flex w-full shrink-0 justify-end"
+    >
       <LikeButton
         large
         :liked="liked"

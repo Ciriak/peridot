@@ -7,6 +7,7 @@ function message(key: string): MessageDescriptor {
 const AUDIO_PAGE_SIZE = 500;
 const MAX_COVER_BYTES = 5 * 1024 * 1024;
 const DEFAULT_REQUEST_TIMEOUT_MS = 60_000;
+export const JELLYFIN_DEFAULT_PORT = 8096;
 const AUDIO_TYPES = new Map<string, { extension: string; mimeType: string }>([
   ["aac", { extension: "aac", mimeType: "audio/aac" }],
   ["flac", { extension: "flac", mimeType: "audio/flac" }],
@@ -88,6 +89,12 @@ export interface JellyfinServerInfo {
   name: string;
   productName: string;
   serverId: string | null;
+  version: string | null;
+}
+
+export interface JellyfinPublicServerInfo {
+  id: string;
+  name: string;
   version: string | null;
 }
 
@@ -317,6 +324,40 @@ export class JellyfinClient {
     requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
   ) {
     this.requestTimeoutMs = requestTimeoutMs;
+  }
+
+  async publicInfo(
+    baseUrl: string,
+    signal?: AbortSignal,
+  ): Promise<JellyfinPublicServerInfo | null> {
+    try {
+      const response = await this.fetchImpl(
+        endpoint(baseUrl, "System/Info/Public"),
+        {
+          headers: {
+            Accept: "application/json",
+            "User-Agent": "Peridot/0.1",
+          },
+          ...(signal ? { signal } : {}),
+        },
+      );
+      if (!response.ok) return null;
+      const raw = await response.json();
+      const value = jsonObject(raw) as JellyfinSystemInfo;
+      if (
+        !value.ProductName?.trim() ||
+        value.ProductName.trim().toLowerCase() !== "jellyfin server"
+      ) {
+        return null;
+      }
+      return {
+        id: value.Id?.trim() || baseUrl,
+        name: value.ServerName?.trim() || "Jellyfin",
+        version: value.Version?.trim() || null,
+      };
+    } catch {
+      return null;
+    }
   }
 
   async validate(baseUrl: string, apiKey: string): Promise<JellyfinServerInfo> {

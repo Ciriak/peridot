@@ -26,10 +26,16 @@ import type {
   UpdateStatusResponse,
   LibrarySourceConnectorOptionListResponse,
   ConnectorListResponse,
+  DiscoverConnectorInstancesRequest,
+  DiscoverConnectorInstancesResponse,
 } from "@peridot/contracts";
 import type { FastifyInstance } from "fastify";
 import type { CatalogService } from "./catalog.js";
 import type { ConnectorRegistry } from "./connectors.js";
+import {
+  ConnectorInstanceDiscoveryError,
+  discoverConnectorInstances,
+} from "./connector-instance-discovery.js";
 import type { CredentialStore } from "./credential-store.js";
 import type { Database } from "./database.js";
 import { sendError } from "./http.js";
@@ -129,6 +135,45 @@ export async function registerAdminRoutes(
       async (): Promise<ConnectorListResponse> => ({
         items: connectors?.descriptors() ?? [],
       }),
+    );
+    admin.post<{
+      Params: { kind: string };
+      Body: DiscoverConnectorInstancesRequest;
+    }>(
+      "/api/admin/connectors/:kind/discover-instances",
+      async (
+        request,
+        reply,
+      ): Promise<DiscoverConnectorInstancesResponse | undefined> => {
+        const kind = request.params.kind;
+        const capability = connectors?.get(kind)?.instanceDiscovery;
+        if (!capability) {
+          return sendError(
+            reply,
+            404,
+            "connector_discovery_unsupported",
+            "This connector does not support instance discovery.",
+            message("api.message.connectorUnavailable"),
+          );
+        }
+        try {
+          return await discoverConnectorInstances(kind, capability, {
+            ...(request.body?.address !== undefined
+              ? { address: request.body.address }
+              : {}),
+          });
+        } catch (error) {
+          if (error instanceof ConnectorInstanceDiscoveryError) {
+            return sendError(
+              reply,
+              error.statusCode,
+              "invalid_discovery_address",
+              error.message,
+            );
+          }
+          throw error;
+        }
+      },
     );
     admin.get(
       "/api/admin/server",

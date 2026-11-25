@@ -12,6 +12,7 @@ import {
   playlistCoverSlots,
   playlistPlayableTracks,
 } from "../app/lib/playlists.ts";
+import { playlistEntriesAfterDrag } from "../app/lib/playlist-order.ts";
 
 function track(id: string, available = true): MediaResponse {
   return {
@@ -137,6 +138,23 @@ test("playlist covers fill exactly nine slots in playlist order", () => {
   );
 });
 
+test("virtual playlist drag order follows visible neighbors", () => {
+  const entries = ["a", "b", "c", "d", "e"].map((id) => ({ id }));
+
+  assert.deepEqual(
+    playlistEntriesAfterDrag(entries, "e", "b", "c")?.map((entry) => entry.id),
+    ["a", "b", "e", "c", "d"],
+  );
+  assert.deepEqual(
+    playlistEntriesAfterDrag(entries, "a", null, "b")?.map((entry) => entry.id),
+    ["a", "b", "c", "d", "e"],
+  );
+  assert.deepEqual(
+    playlistEntriesAfterDrag(entries, "b", "e", null)?.map((entry) => entry.id),
+    ["a", "c", "d", "e", "b"],
+  );
+});
+
 test("automatic playlist search matches title, artist, and album", () => {
   const entries = [
     entry("0", {
@@ -246,10 +264,16 @@ test("playlist pages expose creation, unavailable tracks, editing, likes, and of
   assert.match(index, /<CatalogCard/);
   assert.match(index, /playlistCatalogCard/);
   assert.doesNotMatch(index, /page\.home\.comingSoon/);
+  assert.match(listPage, /useVirtualPlaylists/);
+  assert.match(listPage, /<AlbumCardPlaceholder/);
+  assert.match(listPage, /paging-mode="window"/);
   assert.match(listPage, /<PlaylistNameDialog/);
   assert.match(listPage, /mode="create"/);
   assert.match(detailPage, /playlistPlayableTracks/);
-  assert.match(detailPage, /<PlaylistOfflineButton/);
+  assert.match(
+    detailPage,
+    /<LikedTracksOfflineToggle\s+v-if="automatic"[\s\S]*<PlaylistOfflineButton\s+v-else/,
+  );
   assert.match(detailPage, /<PlaylistTrackList/);
   assert.match(detailPage, /<PlaylistNameDialog/);
   assert.match(detailPage, /<PlaylistDeleteDialog/);
@@ -269,6 +293,9 @@ test("playlist pages expose creation, unavailable tracks, editing, likes, and of
   assert.match(playlistMenu, /context\.renamePlaylist/);
   assert.match(playlistMenu, /<PlaylistDeleteDialog/);
   assert.match(trackList, /useSortable/);
+  assert.match(trackList, /useMainScrollVirtualizer/);
+  assert.match(trackList, /virtualRows/);
+  assert.match(trackList, /playlistEntriesAfterDrag/);
   assert.match(
     trackList,
     /<Badge\s+v-if="\s*entry\.media && !entry\.media\.available && playable\(entry\)\s*"[\s\S]*?trackTable\.availableOffline/,
@@ -326,33 +353,47 @@ test("playlist offline saving reuses the per-track manifest", async () => {
 });
 
 test("liked tracks use generated artwork and a read-only automatic playlist surface", async () => {
-  const [cover, catalogCard, playlistMenu, detail, submenu, layout] =
-    await Promise.all([
-      readFile(
-        new URL("../app/components/PlaylistCover.vue", import.meta.url),
-        "utf8",
+  const [
+    cover,
+    catalogCard,
+    playlistMenu,
+    detail,
+    submenu,
+    layout,
+    offlineToggle,
+  ] = await Promise.all([
+    readFile(
+      new URL("../app/components/PlaylistCover.vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/components/CatalogCard.vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/components/PlaylistContextMenu.vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../app/pages/playlists/[playlist].vue", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL(
+        "../app/components/AddTrackToPlaylistSubmenu.vue",
+        import.meta.url,
       ),
-      readFile(
-        new URL("../app/components/CatalogCard.vue", import.meta.url),
-        "utf8",
+      "utf8",
+    ),
+    readFile(new URL("../app/layouts/default.vue", import.meta.url), "utf8"),
+    readFile(
+      new URL(
+        "../app/components/LikedTracksOfflineToggle.vue",
+        import.meta.url,
       ),
-      readFile(
-        new URL("../app/components/PlaylistContextMenu.vue", import.meta.url),
-        "utf8",
-      ),
-      readFile(
-        new URL("../app/pages/playlists/[playlist].vue", import.meta.url),
-        "utf8",
-      ),
-      readFile(
-        new URL(
-          "../app/components/AddTrackToPlaylistSubmenu.vue",
-          import.meta.url,
-        ),
-        "utf8",
-      ),
-      readFile(new URL("../app/layouts/default.vue", import.meta.url), "utf8"),
-    ]);
+      "utf8",
+    ),
+  ]);
 
   assert.match(cover, /bg-primary\/40 text-white/);
   assert.match(cover, /icons\.heartFilled/);
@@ -366,4 +407,36 @@ test("liked tracks use generated artwork and a read-only automatic playlist surf
   assert.doesNotMatch(detail, /automatic[\s\S]{0,100}page\.playlist\.rename/);
   assert.match(submenu, /filterAddablePlaylists/);
   assert.match(layout, /to: "\/playlists\/liked"/);
+  assert.match(offlineToggle, /useLibrarySettings/);
+  assert.match(offlineToggle, /setLikedTitlesOffline/);
+  assert.match(offlineToggle, /:icon="icons\.cloudDownload"/);
+  assert.match(
+    offlineToggle,
+    /<TooltipTrigger as-child>[\s\S]*class="flex items-center gap-2 rounded-full border bg-muted[^"]*"[\s\S]*<Switch[\s\S]*<\/div>\s*<\/TooltipTrigger>/,
+    "The tooltip trigger wraps the whole liked playlist offline pill",
+  );
+  assert.match(offlineToggle, /<TooltipRoot v-model:open="tooltipOpen">/);
+  assert.match(offlineToggle, /@focusin="tooltipOpen = true"/);
+  assert.match(
+    offlineToggle,
+    /class="size-5 text-muted-foreground"/,
+    "The shared cloud-download icon uses the larger control size",
+  );
+  assert.match(
+    offlineToggle,
+    /:class="likedTitlesOffline \? 'bg-primary' : undefined"/,
+    "The enabled switch uses the primary token instead of rendering black",
+  );
+  assert.match(offlineToggle, /<TooltipContent[\s\S]*side="top"/);
+  assert.match(
+    offlineToggle,
+    /settings\.library\.likedTitlesOfflineTooltip/,
+    "The offline setting explains itself in a short tooltip",
+  );
+  assert.match(offlineToggle, /<Switch[\s\S]*v-model="model"/);
+  assert.match(
+    offlineToggle,
+    /settings\.library\.likedTitlesOffline/,
+    "The liked playlist toggle uses the account-level offline preference label",
+  );
 });

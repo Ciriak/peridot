@@ -10,9 +10,11 @@ import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import { useSortable } from "@vueuse/integrations/useSortable";
+import type { SortableEvent } from "sortablejs";
 import { computed, ref, watch } from "vue";
 import { useLikes } from "../composables/use-likes";
 import { useLibraryPlayer } from "../composables/use-library-player";
+import { useMainScrollVirtualizer } from "../composables/use-main-scroll-virtualizer";
 import { useOfflineTracks } from "../composables/use-offline-tracks";
 import { useServer } from "../composables/use-server";
 import { useServerConnection } from "../composables/use-server-connection";
@@ -23,6 +25,7 @@ import {
   trackArtistNames,
 } from "../lib/library";
 import { isTrackPlayable } from "../lib/offline-playback";
+import { playlistEntriesAfterDrag } from "../lib/playlist-order";
 import AlbumLink from "./AlbumLink.vue";
 import ArtistLink from "./ArtistLink.vue";
 import LikeButton from "./LikeButton.vue";
@@ -44,6 +47,19 @@ const emit = defineEmits<{
 const { t } = useI18n();
 const list = ref<HTMLElement | null>(null);
 const rows = ref<PlaylistEntryResponse[]>([]);
+const virtualizer = useMainScrollVirtualizer({
+  count: computed(() => rows.value.length),
+  estimateSize: 65,
+  overscan: 8,
+  wrapper: list,
+  getItemKey: (index) => rows.value[index]?.id ?? index,
+});
+const virtualRows = computed(() =>
+  virtualizer.virtualItems.value.flatMap((row) => {
+    const entry = rows.value[row.index];
+    return entry ? [{ ...row, entry }] : [];
+  }),
+);
 const { address } = useServer();
 const { status } = useServerConnection();
 const {
@@ -71,21 +87,49 @@ watch(
   { immediate: true },
 );
 
+let pendingReorderIds: string[] | null = null;
+
+function entryIdFromElement(element: Element | null) {
+  return element?.getAttribute("data-playlist-entry-id") ?? null;
+}
+
+function restoreDraggedElement(event: SortableEvent) {
+  if (typeof event.oldIndex !== "number") return;
+  event.item.parentNode?.removeChild(event.item);
+  event.from.insertBefore(
+    event.item,
+    event.from.children[event.oldIndex] ?? null,
+  );
+}
+
+function reorderRowsForDrop(event: SortableEvent) {
+  const entryId = entryIdFromElement(event.item);
+  if (!entryId) return;
+  const previousId = entryIdFromElement(event.item.previousElementSibling);
+  const nextId = entryIdFromElement(event.item.nextElementSibling);
+  const reordered = playlistEntriesAfterDrag(
+    rows.value,
+    entryId,
+    previousId,
+    nextId,
+  );
+  if (!reordered) return;
+  pendingReorderIds = reordered.map((entry) => entry.id);
+  restoreDraggedElement(event);
+  rows.value = reordered;
+}
+
 useSortable(list, rows, {
   animation: 150,
   filter: "a, button, input",
   preventOnFilter: false,
   watchElement: true,
   disabled: !props.editable,
+  onUpdate: reorderRowsForDrop,
   onEnd: () => {
-    if (!props.editable) {
-      rows.value = [...props.entries];
-      return;
-    }
-    emit(
-      "reorder",
-      rows.value.map((entry) => entry.id),
-    );
+    const itemIds = pendingReorderIds;
+    pendingReorderIds = null;
+    if (props.editable && itemIds) emit("reorder", itemIds);
   },
 });
 
@@ -140,17 +184,27 @@ function albumForEntry(entry: PlaylistEntryResponse): AlbumSummaryResponse {
     ref="list"
     role="list"
     :aria-label="t('playlistTracks.label')"
-    class="rounded-lg border text-sm"
+    class="relative rounded-lg border text-sm"
+    :style="{
+      height: `${virtualizer.totalSize.value}px`,
+      overflowAnchor: 'none',
+    }"
   >
     <MediaRowContextMenu
-      v-for="(entry, index) in rows"
+      v-for="{ entry, index, start } in virtualRows"
       :key="entry.id"
       :track="entry.media"
       @play="toggleEntryPlayback(entry)"
     >
       <div
+        :ref="virtualizer.measureRow"
         role="listitem"
-        class="flex min-w-full items-center gap-3 border-b p-3 last:border-b-0"
+        :aria-posinset="index + 1"
+        :aria-setsize="rows.length"
+        :data-playlist-entry-id="entry.id"
+        :style="virtualizer.virtualRowStyle({ start })"
+        class="flex min-w-full items-center gap-3 border-b p-3"
+        :class="{ 'border-0': index === rows.length - 1 }"
       >
         <Icon
           v-if="!readOnly"

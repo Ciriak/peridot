@@ -50,6 +50,7 @@ import more from "@iconify-icons/basil/other-1-outline";
 import discogs from "@iconify-icons/simple-icons/discogs";
 import musicbrainz from "@iconify-icons/simple-icons/musicbrainz";
 import jellyfin from "@iconify-icons/simple-icons/jellyfin";
+import qbittorrent from "@iconify-icons/simple-icons/qbittorrent";
 
 // Import data directly: icons render during SSR and never require an icon API.
 export const icons = {
@@ -108,4 +109,5 @@ export const icons = {
   discogs,
   musicbrainz,
   jellyfin,
+  qbittorrent,
 };

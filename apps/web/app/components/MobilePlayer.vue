@@ -431,14 +431,17 @@ const {
 
           <main
             ref="playerScrollArea"
-            class="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6"
+            class="flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-4 sm:px-6"
           >
             <div
-              class="mx-auto flex min-h-full max-w-xl flex-col justify-center gap-6"
+              class="mx-auto flex h-full min-h-0 w-full max-w-xl flex-col justify-center gap-4"
             >
-              <div data-mobile-player-carousel class="overflow-hidden">
+              <div
+                data-mobile-player-carousel
+                class="min-h-0 flex-1 overflow-hidden"
+              >
                 <div
-                  class="flex w-full"
+                  class="flex h-full min-h-0 w-full"
                   :class="
                     playerCarouselDragging
                       ? 'transition-none'
@@ -449,7 +452,7 @@ const {
                   :style="playerCarouselStyle"
                 >
                   <div
-                    class="w-full shrink-0 overflow-hidden transition-opacity duration-200 motion-reduce:transition-none"
+                    class="flex h-full min-h-0 w-full shrink-0 overflow-hidden transition-opacity duration-200 motion-reduce:transition-none"
                     :class="
                       playerCarouselDragging || playerCarouselAnimating
                         ? 'opacity-100'
@@ -463,7 +466,9 @@ const {
                       :server-address="address ?? ''"
                     />
                   </div>
-                  <div class="w-full shrink-0 overflow-hidden">
+                  <div
+                    class="flex h-full min-h-0 w-full shrink-0 overflow-hidden"
+                  >
                     <MobilePlayerTrackPanel
                       :track="active"
                       :server-address="address ?? ''"
@@ -486,7 +491,7 @@ const {
                     />
                   </div>
                   <div
-                    class="w-full shrink-0 overflow-hidden transition-opacity duration-200 motion-reduce:transition-none"
+                    class="flex h-full min-h-0 w-full shrink-0 overflow-hidden transition-opacity duration-200 motion-reduce:transition-none"
                     :class="
                       playerCarouselDragging || playerCarouselAnimating
                         ? 'opacity-100'
@@ -511,7 +516,7 @@ const {
                 {{ error }}
               </p>
               <div
-                class="flex items-center gap-3 text-xs tabular-nums text-muted-foreground"
+                class="flex shrink-0 items-center gap-3 text-xs tabular-nums text-muted-foreground"
               >
                 <span>{{ clock(elapsed) }}</span>
                 <Slider
@@ -528,7 +533,9 @@ const {
                 <span>{{ clock(durationSeconds) }}</span>
               </div>
 
-              <div class="flex items-center justify-center gap-2 sm:gap-4">
+              <div
+                class="flex shrink-0 items-center justify-center gap-2 sm:gap-4"
+              >
                 <Button
                   variant="ghost"
                   size="icon-lg"

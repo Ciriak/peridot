@@ -809,3 +809,120 @@ test("album artists group a release across folders without collapsing ambiguous 
     await context.close();
   }
 });
+
+test("committed scan batches materialize and reconcile albums and artists", async () => {
+  const context = await createTestContext();
+  const catalog = new CatalogService(
+    context.database,
+    new PlaybackTokenService(),
+  );
+  try {
+    await catalog.initialize();
+    const first = await createMediaFixture(context, {
+      media: {
+        title: "First Track",
+        artist: "Artist One, Guest Artist",
+        artistCredits: JSON.stringify(["Artist One", "Guest Artist"]),
+        albumArtist: "Artist One",
+        albumArtistCredits: JSON.stringify(["Artist One"]),
+        album: "Incremental Album",
+        trackNumber: 1,
+      },
+    });
+    const second = await createMediaFixture(context, {
+      media: {
+        title: "Second Track",
+        artist: "Artist One, Guest Artist",
+        artistCredits: JSON.stringify(["Artist One", "Guest Artist"]),
+        albumArtist: "Artist One",
+        albumArtistCredits: JSON.stringify(["Artist One"]),
+        album: "Incremental Album",
+        trackNumber: 2,
+      },
+    });
+    const user = await context.database.orm.User.firstOrThrow();
+
+    await catalog.indexScanBatch([first.media.id], first.copy.librarySourceId);
+    let album = await context.database.orm.CatalogAlbum.firstOrThrow({
+      title: "Incremental Album",
+    });
+    assert.equal(album.trackCount, 1);
+    assert.equal(album.availableTrackCount, 1);
+    let artist = await context.database.orm.CatalogArtist.firstOrThrow({
+      name: "Artist One",
+    });
+    assert.equal(artist.trackCount, 1);
+    assert.equal(artist.albumCount, 1);
+    assert.equal(
+      (
+        await context.database.orm.Media.firstOrThrow({
+          id: first.media.id,
+        })
+      ).catalogProjectionPending,
+      0,
+    );
+
+    await catalog.indexScanBatch(
+      [second.media.id],
+      second.copy.librarySourceId,
+    );
+    album = await context.database.orm.CatalogAlbum.firstOrThrow({
+      id: album.id,
+    });
+    assert.equal(album.trackCount, 2);
+    assert.equal(album.availableTrackCount, 2);
+    artist = await context.database.orm.CatalogArtist.firstOrThrow({
+      id: artist.id,
+    });
+    assert.equal(artist.trackCount, 2);
+
+    await context.database.orm.Media.where({ id: first.media.id }).update({
+      title: "Moved Track",
+      artist: "Artist Two",
+      artistCredits: JSON.stringify(["Artist Two"]),
+      albumArtist: "Artist Two",
+      albumArtistCredits: JSON.stringify(["Artist Two"]),
+      album: "Moved Album",
+    });
+    await catalog.indexScanBatch([first.media.id], first.copy.librarySourceId);
+
+    const oldAlbum = await context.database.orm.CatalogAlbum.firstOrThrow({
+      title: "Incremental Album",
+    });
+    assert.equal(oldAlbum.trackCount, 1);
+    const movedAlbum = await context.database.orm.CatalogAlbum.firstOrThrow({
+      title: "Moved Album",
+    });
+    assert.equal(movedAlbum.trackCount, 1);
+    const oldArtist = await context.database.orm.CatalogArtist.firstOrThrow({
+      name: "Artist One",
+    });
+    assert.equal(oldArtist.trackCount, 1);
+    assert.equal(oldArtist.albumCount, 1);
+    const movedArtist = await context.database.orm.CatalogArtist.firstOrThrow({
+      name: "Artist Two",
+    });
+    assert.equal(movedArtist.trackCount, 1);
+    assert.equal(movedArtist.albumCount, 1);
+
+    const albums = await catalog.listAlbums({
+      userId: user.id,
+      query: "moved",
+    });
+    assert.deepEqual(
+      albums.items.map((item) => item.title),
+      ["Moved Album"],
+    );
+    const artists = await catalog.listArtists({
+      userId: user.id,
+      query: "artist two",
+    });
+    assert.deepEqual(
+      artists.items.map((item) => item.name),
+      ["Artist Two"],
+    );
+  } finally {
+    await catalog.close();
+    await context.close();
+  }
+});

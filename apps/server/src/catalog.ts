@@ -27,6 +27,7 @@ import type { PlaybackTokenService } from "./playback-tokens.js";
 import type {
   ArtistImageRow,
   ArtistMetadataRow,
+  CatalogMediaRow,
   TaskRow,
 } from "./prisma/models.js";
 import {
@@ -469,6 +470,71 @@ function finiteDuration(value: number | null): number {
   return value !== null && Number.isFinite(value) && value >= 0 ? value : 0;
 }
 
+function albumProjectionValues(
+  tracks: readonly CatalogMediaRow[],
+  excludedTrackId?: string,
+) {
+  const included = tracks.filter((track) => track.id !== excludedTrackId);
+  if (!included.length) return null;
+  const availableTracks = included.filter((track) => track.available);
+  const representativeTracks = availableTracks.length
+    ? availableTracks
+    : included;
+  const first = [...included].sort(
+    (left, right) =>
+      left.normalizedTitle.localeCompare(right.normalizedTitle) ||
+      left.id.localeCompare(right.id),
+  )[0]!;
+  const coverTrack =
+    representativeTracks.find((track) => track.coverId) ?? first;
+  const years = new Set(
+    included.flatMap((track) =>
+      track.releaseYear === null ? [] : [track.releaseYear],
+    ),
+  );
+  const explicitAlbumArtists = uniqueArtistCredits(
+    included.flatMap((track) =>
+      parseStoredOptionalArtistCredits(
+        track.albumArtistCredits,
+        track.albumArtist,
+      ),
+    ),
+  );
+  const albumArtists = explicitAlbumArtists.length
+    ? explicitAlbumArtists
+    : parseStoredArtistCredits(first.artistCredits, first.artist);
+  const albumArtist = albumArtists.join(", ");
+  const collectionMediaType = storedMediaType(first.mediaType);
+  const latestPublishedAt =
+    included
+      .flatMap((track) => (track.publishedAt ? [track.publishedAt] : []))
+      .sort((left, right) => right.getTime() - left.getTime())[0] ?? null;
+  return {
+    mediaType: collectionMediaType,
+    title: first.album ?? "Unknown Album",
+    artist: albumArtist,
+    normalizedTitle: normalize(first.album ?? "Unknown Album"),
+    normalizedArtist: normalize(albumArtist),
+    artistId:
+      collectionMediaType === "music"
+        ? catalogArtistId(albumArtists[0] ?? first.artist)
+        : null,
+    coverId: coverTrack.coverId,
+    coverMediaId: coverTrack.coverId ? coverTrack.id : null,
+    artistCredits: JSON.stringify(albumArtists),
+    trackCount: included.length,
+    availableTrackCount: availableTracks.length,
+    durationMs: included.some((track) => track.durationMs !== null)
+      ? included.reduce(
+          (total, track) => total + finiteDuration(track.durationMs),
+          0,
+        )
+      : null,
+    releaseYear: years.size === 1 ? [...years][0]! : null,
+    latestPublishedAt,
+  };
+}
+
 function yieldToEventLoop(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
 }
@@ -574,11 +640,6 @@ export class CatalogService {
     });
     this.lastRevision = revision?.revision ?? this.lastRevision;
     return this.lastRevision;
-  }
-
-  markScanBatchChanged(primaryLibrarySourceId: string | null): Promise<number> {
-    this.markChanged(primaryLibrarySourceId, "scan");
-    return this.flushChanges();
   }
 
   async hasPendingProjection(
@@ -709,90 +770,576 @@ export class CatalogService {
     });
   }
 
-  async indexScanBatch(mediaIds: readonly string[]): Promise<void> {
+  async indexScanBatch(
+    mediaIds: readonly string[],
+    primaryLibrarySourceId: string | null = null,
+  ): Promise<void> {
     return this.serializeCatalog(async () => {
-      if (!mediaIds.length) return;
-      const [mediaRows, primaries] = await Promise.all([
-        this.database.orm.Media.where((media) =>
-          media.id.in([...new Set(mediaIds)]),
-        ).all(),
-        primaryCopiesForMediaIds(this.database, mediaIds),
-      ]);
-      const prepared: Array<{ id: string; values: Record<string, unknown> }> =
-        [];
-      for (const media of mediaRows) {
-        const primary = primaries.get(media.id);
-        if (!primary) continue;
-        const effective = effectiveMediaFields(media);
-        const trackMediaType = storedMediaType(media.mediaType);
-        const album = effective.album?.trim() || null;
-        const albumFolderKey = catalogAlbumFolderKey(
-          primary.source.id,
-          primary.copy.relativePath,
+      const uniqueIds = [...new Set(mediaIds)];
+      if (!uniqueIds.length) return;
+      let changedSourceId = primaryLibrarySourceId;
+      await this.database.transaction(async (transaction) => {
+        const [mediaRows, primaries, previousRows, previousArtistLinks] =
+          await Promise.all([
+            transaction.orm.Media.where((media) =>
+              media.id.in(uniqueIds),
+            ).all(),
+            primaryCopiesForMediaIds(transaction, uniqueIds),
+            transaction.orm.CatalogMedia.where((media) =>
+              media.id.in(uniqueIds),
+            ).all(),
+            transaction.orm.CatalogMediaArtist.where((link) =>
+              link.mediaId.in(uniqueIds),
+            ).all(),
+          ]);
+        const mediaById = new Map(mediaRows.map((media) => [media.id, media]));
+        const previousById = new Map(
+          previousRows.map((media) => [media.id, media]),
         );
-        const albumReleaseKey = catalogAlbumReleaseKey(
-          media.metadataProviderId,
-          media.metadataExternalReleaseId,
+        const previousLinkByKey = new Map(
+          previousArtistLinks.map((link) => [
+            `${link.mediaId}\u0000${link.artistId}`,
+            link,
+          ]),
         );
-        const albumId = album
-          ? catalogAlbumId({
+        const linksByMediaId = new Map<string, Set<string>>();
+        for (const link of previousArtistLinks) {
+          const artistIds =
+            linksByMediaId.get(link.mediaId) ?? new Set<string>();
+          artistIds.add(link.artistId);
+          linksByMediaId.set(link.mediaId, artistIds);
+        }
+        const affectedAlbumIds = new Set<string>();
+        const affectedArtistIds = new Set<string>();
+        const prepared = uniqueIds.map((mediaId) => {
+          const media = mediaById.get(mediaId);
+          const previous = previousById.get(mediaId) ?? null;
+          const existingArtistIds = linksByMediaId.get(mediaId) ?? new Set();
+          for (const artistId of existingArtistIds) {
+            affectedArtistIds.add(artistId);
+          }
+          if (previous?.albumId) affectedAlbumIds.add(previous.albumId);
+          if (!media) {
+            return {
+              mediaId,
+              previous,
+              values: null,
+              artistIds: [] as string[],
+            };
+          }
+
+          const primary = primaries.get(media.id);
+          changedSourceId ??= primary?.source.id ?? null;
+          const effective = effectiveMediaFields(media);
+          const trackMediaType = storedMediaType(media.mediaType);
+          const album = effective.album?.trim() || null;
+          const albumFolderKey = primary
+            ? catalogAlbumFolderKey(
+                primary.source.id,
+                primary.copy.relativePath,
+              )
+            : (previous?.albumFolderKey ?? media.id);
+          const albumReleaseKey = catalogAlbumReleaseKey(
+            media.metadataProviderId,
+            media.metadataExternalReleaseId,
+          );
+          const albumId =
+            media.available && album
+              ? catalogAlbumId({
+                  mediaType: trackMediaType,
+                  album,
+                  albumArtists: effective.albumArtists,
+                  albumReleaseKey,
+                  albumFolderKey,
+                })
+              : null;
+          if (albumId) affectedAlbumIds.add(albumId);
+          const artistIds =
+            media.available && trackMediaType === "music"
+              ? [
+                  ...new Set(
+                    effective.artists
+                      .filter((artist) => artist.trim())
+                      .map(catalogArtistId),
+                  ),
+                ]
+              : [];
+          for (const artistId of artistIds) {
+            affectedArtistIds.add(artistId);
+          }
+          return {
+            mediaId,
+            previous,
+            artistIds,
+            values: {
+              sourceKind: primary
+                ? parsedLibrarySourceKind(primary.source.kind)
+                : null,
               mediaType: trackMediaType,
+              title: effective.title,
+              artist: effective.artist,
+              artistCredits: JSON.stringify(effective.artists),
+              albumArtist: effective.albumArtists.join(", "),
+              albumArtistCredits: JSON.stringify(effective.albumArtists),
               album,
-              albumArtists: effective.albumArtists,
-              albumReleaseKey,
+              normalizedTitle: normalize(effective.title),
+              normalizedArtist: normalize(effective.artist),
+              normalizedAlbum: normalize(album ?? ""),
+              normalizedGenres: normalize(effective.genres.join(" ")),
+              durationMs: effective.durationMs,
+              publishedAt: media.publishedAt,
+              discNumber: effective.discNumber,
+              trackNumber: effective.trackNumber,
+              releaseYear: albumReleaseYear(media),
+              available: media.available,
+              coverId: media.coverId,
+              albumId,
               albumFolderKey,
-            })
-          : null;
-        const values = {
-          sourceKind: parsedLibrarySourceKind(primary.source.kind),
-          mediaType: trackMediaType,
-          title: effective.title,
-          artist: effective.artist,
-          artistCredits: JSON.stringify(effective.artists),
-          albumArtist: effective.albumArtists.join(", "),
-          albumArtistCredits: JSON.stringify(effective.albumArtists),
-          album,
-          normalizedTitle: normalize(effective.title),
-          normalizedArtist: normalize(effective.artist),
-          normalizedAlbum: normalize(album ?? ""),
-          normalizedGenres: normalize(effective.genres.join(" ")),
-          durationMs: effective.durationMs,
-          publishedAt: media.publishedAt,
-          discNumber: effective.discNumber,
-          trackNumber: effective.trackNumber,
-          releaseYear: albumReleaseYear(media),
-          available: media.available,
-          coverId: media.coverId,
-          albumId,
-          albumFolderKey,
-          albumReleaseKey,
+              albumReleaseKey,
+            },
+          };
+        });
+
+        const mediaInserts: Array<Record<string, unknown>> = [];
+        const mediaUpdates: Array<{
+          id: string;
+          values: NonNullable<(typeof prepared)[number]["values"]>;
+        }> = [];
+        const removedMediaIds: string[] = [];
+        for (const item of prepared) {
+          if (!item.values) {
+            removedMediaIds.push(item.mediaId);
+            continue;
+          }
+          if (item.previous) {
+            mediaUpdates.push({ id: item.mediaId, values: item.values });
+          } else {
+            mediaInserts.push({
+              id: item.mediaId,
+              ...item.values,
+            });
+          }
+        }
+        if (removedMediaIds.length) {
+          await transaction.orm.CatalogMedia.where((media) =>
+            media.id.in(removedMediaIds),
+          ).deleteAndCount();
+        }
+        if (mediaInserts.length) {
+          await transaction.execute(
+            transaction.sql.CatalogMedia.insert(mediaInserts as never).build(),
+          );
+        }
+        for (const update of mediaUpdates) {
+          await transaction.orm.CatalogMedia.where({ id: update.id }).update(
+            update.values,
+          );
+        }
+
+        const removedLinkIds: string[] = [];
+        const artistLinksToCreate: Array<{
+          mediaId: string;
+          artistId: string;
+        }> = [];
+        for (const item of prepared) {
+          const existingArtistIds =
+            linksByMediaId.get(item.mediaId) ?? new Set<string>();
+          const targetArtistIds = new Set(item.artistIds);
+          for (const artistId of existingArtistIds) {
+            if (targetArtistIds.has(artistId)) continue;
+            const link = previousLinkByKey.get(
+              `${item.mediaId}\u0000${artistId}`,
+            );
+            if (link) removedLinkIds.push(link.id);
+          }
+          for (const artistId of targetArtistIds) {
+            if (existingArtistIds.has(artistId)) continue;
+            artistLinksToCreate.push({
+              mediaId: item.mediaId,
+              artistId,
+            });
+          }
+        }
+        if (removedLinkIds.length) {
+          await transaction.orm.CatalogMediaArtist.where((link) =>
+            link.id.in(removedLinkIds),
+          ).deleteAndCount();
+        }
+        if (artistLinksToCreate.length) {
+          await transaction.execute(
+            transaction.sql.CatalogMediaArtist.insert(
+              artistLinksToCreate,
+            ).build(),
+          );
+        }
+
+        await transaction.orm.CatalogSearchTerm.where({
+          entityType: "media",
+        })
+          .where((term) => term.entityId.in(uniqueIds))
+          .deleteAndCount();
+        const mediaTerms: Array<{
+          entityType: string;
+          entityId: string;
+          term: string;
+        }> = [];
+        for (const item of prepared) {
+          if (!item.values) continue;
+          const media = mediaById.get(item.mediaId);
+          if (!media) continue;
+          const effective = effectiveMediaFields(media);
+          for (const term of searchTerms([
+            effective.title,
+            effective.artist,
+            effective.album,
+            ...effective.genres,
+            ...parseStoredGenres(media.genres),
+            ...effective.artists,
+            ...effective.albumArtists,
+          ])) {
+            mediaTerms.push({
+              entityType: "media",
+              entityId: item.mediaId,
+              term,
+            });
+          }
+        }
+        for (let offset = 0; offset < mediaTerms.length; offset += 200) {
+          await transaction.execute(
+            transaction.sql.CatalogSearchTerm.insert(
+              mediaTerms.slice(offset, offset + 200),
+            ).build(),
+          );
+        }
+
+        await this.refreshAlbumsWithDatabase(transaction, affectedAlbumIds);
+        await this.refreshArtistsWithDatabase(transaction, affectedArtistIds);
+        await transaction.orm.Media.where((media) =>
+          media.id.in(uniqueIds),
+        ).updateAndCount({ catalogProjectionPending: 0 });
+      });
+      this.markChanged(changedSourceId, "scan");
+    });
+  }
+
+  private async refreshAlbumsWithDatabase(
+    database: CatalogDatabase,
+    albumIds: ReadonlySet<string>,
+  ): Promise<void> {
+    const ids = [...albumIds];
+    if (!ids.length) return;
+    const tracksByAlbumId = new Map<string, CatalogMediaRow[]>();
+    for (let offset = 0; offset < ids.length; offset += 200) {
+      const batch = ids.slice(offset, offset + 200);
+      const tracks = await database.orm.CatalogMedia.where((track) =>
+        track.albumId.in(batch),
+      ).all();
+      for (const track of tracks) {
+        if (!track.albumId) continue;
+        const albumTracks = tracksByAlbumId.get(track.albumId) ?? [];
+        albumTracks.push(track);
+        tracksByAlbumId.set(track.albumId, albumTracks);
+      }
+    }
+
+    await database.orm.CatalogSearchTerm.where({
+      entityType: "album",
+    })
+      .where((term) => term.entityId.in(ids))
+      .deleteAndCount();
+    const existing = await database.orm.CatalogAlbum.where((album) =>
+      album.id.in(ids),
+    ).all();
+    const existingIds = new Set(existing.map((album) => album.id));
+    const removedIds: string[] = [];
+    const creates: Array<Record<string, unknown>> = [];
+    const updates: Array<{
+      id: string;
+      values: NonNullable<ReturnType<typeof albumProjectionValues>>;
+    }> = [];
+    const terms: Array<{
+      entityType: string;
+      entityId: string;
+      term: string;
+    }> = [];
+    for (const albumId of ids) {
+      const values = albumProjectionValues(tracksByAlbumId.get(albumId) ?? []);
+      if (!values) {
+        if (existingIds.has(albumId)) removedIds.push(albumId);
+        continue;
+      }
+      if (existingIds.has(albumId)) {
+        updates.push({ id: albumId, values });
+      } else {
+        creates.push({ id: albumId, ...values });
+      }
+      for (const term of searchTerms([values.title, values.artist])) {
+        terms.push({
+          entityType: "album",
+          entityId: albumId,
+          term,
+        });
+      }
+    }
+    if (removedIds.length) {
+      await database.orm.CatalogAlbum.where((album) =>
+        album.id.in(removedIds),
+      ).deleteAndCount();
+    }
+    if (creates.length) {
+      await database.execute(
+        database.sql.CatalogAlbum.insert(creates as never).build(),
+      );
+    }
+    for (const update of updates) {
+      await database.orm.CatalogAlbum.where({ id: update.id }).update(
+        update.values,
+      );
+    }
+    for (let offset = 0; offset < terms.length; offset += 200) {
+      await database.execute(
+        database.sql.CatalogSearchTerm.insert(
+          terms.slice(offset, offset + 200),
+        ).build(),
+      );
+    }
+  }
+
+  private async refreshArtistsWithDatabase(
+    database: CatalogDatabase,
+    artistIds: ReadonlySet<string>,
+  ): Promise<void> {
+    const ids = [...artistIds];
+    if (!ids.length) return;
+    for (let offset = 0; offset < ids.length; offset += 200) {
+      const batch = ids.slice(offset, offset + 200);
+      const links = await database.orm.CatalogMediaArtist.where((link) =>
+        link.artistId.in(batch),
+      ).all();
+      const mediaIds = [...new Set(links.map((link) => link.mediaId))];
+      const mediaRows = mediaIds.length
+        ? await database.orm.CatalogMedia.where((media) =>
+            media.id.in(mediaIds),
+          ).all()
+        : [];
+      const mediaById = new Map(mediaRows.map((media) => [media.id, media]));
+      const existingArtists = await database.orm.CatalogArtist.where((artist) =>
+        artist.id.in(batch),
+      ).all();
+      const existingById = new Map(
+        existingArtists.map((artist) => [artist.id, artist]),
+      );
+      const metadataRows = await database.orm.ArtistMetadata.where((metadata) =>
+        metadata.artistId.in(batch),
+      ).all();
+      const metadataById = new Map(
+        metadataRows.map((metadata) => [metadata.artistId, metadata]),
+      );
+      const existingAlbumLinks = await database.orm.CatalogArtistAlbum.where(
+        (link) => link.artistId.in(batch),
+      ).all();
+      const existingAlbumLinksByArtist = new Map<
+        string,
+        typeof existingAlbumLinks
+      >();
+      for (const link of existingAlbumLinks) {
+        const artistLinks = existingAlbumLinksByArtist.get(link.artistId) ?? [];
+        artistLinks.push(link);
+        existingAlbumLinksByArtist.set(link.artistId, artistLinks);
+      }
+      const linksByArtist = new Map<string, typeof links>();
+      for (const link of links) {
+        const artistLinks = linksByArtist.get(link.artistId) ?? [];
+        artistLinks.push(link);
+        linksByArtist.set(link.artistId, artistLinks);
+      }
+      const namesByArtist = new Map<string, Set<string>>();
+      for (const link of links) {
+        const media = mediaById.get(link.mediaId);
+        if (!media) continue;
+        for (const name of parseStoredArtistCredits(
+          media.artistCredits,
+          media.artist,
+        )) {
+          if (catalogArtistId(name) !== link.artistId) continue;
+          const names = namesByArtist.get(link.artistId) ?? new Set<string>();
+          names.add(name);
+          namesByArtist.set(link.artistId, names);
+        }
+      }
+
+      await database.orm.CatalogSearchTerm.where({
+        entityType: "artist",
+      })
+        .where((term) => term.entityId.in(batch))
+        .deleteAndCount();
+      const removedArtistIds: string[] = [];
+      const artistCreates: Array<Record<string, unknown>> = [];
+      const artistUpdates: Array<{
+        id: string;
+        values: {
+          name: string;
+          normalizedName: string;
+          displayName: string;
+          normalizedDisplayName: string;
+          trackCount: number;
+          availableTrackCount: number;
+          albumCount: number;
+          durationMs: number | null;
         };
-        prepared.push({ id: media.id, values });
+      }> = [];
+      const artistTerms: Array<{
+        entityType: string;
+        entityId: string;
+        term: string;
+      }> = [];
+      const removedAlbumLinkIds: string[] = [];
+      const updatedAlbumLinks: Array<{
+        id: string;
+        trackCount: number;
+      }> = [];
+      const createdAlbumLinks: Array<{
+        artistId: string;
+        albumId: string;
+        trackCount: number;
+      }> = [];
+      for (const artistId of batch) {
+        const artistLinks = linksByArtist.get(artistId) ?? [];
+        if (!artistLinks.length) {
+          removedArtistIds.push(artistId);
+          continue;
+        }
+        const existingArtist = existingById.get(artistId);
+        const names = [...(namesByArtist.get(artistId) ?? [])].sort(
+          (left, right) =>
+            normalize(left).localeCompare(normalize(right)) ||
+            left.localeCompare(right),
+        );
+        const name = existingArtist?.name.trim()
+          ? existingArtist.name
+          : (names[0] ?? "");
+        if (!name) {
+          removedArtistIds.push(artistId);
+          continue;
+        }
+        const metadata = metadataById.get(artistId);
+        const displayName =
+          metadata?.metadataMode !== "file" && metadata?.displayName.trim()
+            ? metadata.displayName
+            : name;
+        const albumTrackCounts = new Map<string, number>();
+        let availableTrackCount = 0;
+        let durationMs: number | null = null;
+        for (const link of artistLinks) {
+          const media = mediaById.get(link.mediaId);
+          if (!media) continue;
+          if (media.available) {
+            availableTrackCount += 1;
+            if (media.durationMs !== null) {
+              durationMs = (durationMs ?? 0) + finiteDuration(media.durationMs);
+            }
+          }
+          if (media.albumId) {
+            albumTrackCounts.set(
+              media.albumId,
+              (albumTrackCounts.get(media.albumId) ?? 0) + 1,
+            );
+          }
+        }
+        const values = {
+          name,
+          normalizedName: normalize(name),
+          displayName,
+          normalizedDisplayName: normalize(displayName),
+          trackCount: artistLinks.length,
+          availableTrackCount,
+          albumCount: albumTrackCounts.size,
+          durationMs,
+        };
+        if (existingArtist) {
+          artistUpdates.push({ id: artistId, values });
+        } else {
+          artistCreates.push({
+            id: artistId,
+            ...values,
+          });
+        }
+        for (const term of searchTerms([name, displayName])) {
+          artistTerms.push({
+            entityType: "artist",
+            entityId: artistId,
+            term,
+          });
+        }
+
+        const existingLinks = new Map(
+          (existingAlbumLinksByArtist.get(artistId) ?? []).map((link) => [
+            link.albumId,
+            link,
+          ]),
+        );
+        for (const [albumId, link] of existingLinks) {
+          const trackCount = albumTrackCounts.get(albumId);
+          if (!trackCount) {
+            removedAlbumLinkIds.push(link.id);
+          } else if (link.trackCount !== trackCount) {
+            updatedAlbumLinks.push({ id: link.id, trackCount });
+          }
+        }
+        for (const [albumId, trackCount] of albumTrackCounts) {
+          if (existingLinks.has(albumId)) continue;
+          createdAlbumLinks.push({
+            artistId,
+            albumId,
+            trackCount,
+          });
+        }
       }
-      const existing = await this.database.orm.CatalogMedia.where((media) =>
-        media.id.in(prepared.map((item) => item.id)),
-      )
-        .select("id")
-        .all();
-      const existingIds = new Set(existing.map((media) => media.id));
-      const inserts = prepared.filter((item) => !existingIds.has(item.id));
-      if (inserts.length) {
-        const plan = this.database.sql.CatalogMedia.insert(
-          inserts.map((item) => ({ id: item.id, ...item.values })) as never,
-        ).build();
-        await this.database.execute(plan);
+      if (removedArtistIds.length) {
+        await database.orm.CatalogArtistAlbum.where((link) =>
+          link.artistId.in(removedArtistIds),
+        ).deleteAndCount();
+        await database.orm.CatalogArtist.where((artist) =>
+          artist.id.in(removedArtistIds),
+        ).deleteAndCount();
       }
-      for (const item of prepared) {
-        if (!existingIds.has(item.id)) continue;
-        await this.database.orm.CatalogMedia.where({ id: item.id }).update(
-          item.values as never,
+      if (artistCreates.length) {
+        await database.execute(
+          database.sql.CatalogArtist.insert(artistCreates as never).build(),
         );
       }
-      this.markChanged(
-        primaries.values().next().value?.source.id ?? null,
-        "scan",
-      );
-    });
+      for (const update of artistUpdates) {
+        await database.orm.CatalogArtist.where({ id: update.id }).update(
+          update.values,
+        );
+      }
+      for (
+        let termOffset = 0;
+        termOffset < artistTerms.length;
+        termOffset += 200
+      ) {
+        await database.execute(
+          database.sql.CatalogSearchTerm.insert(
+            artistTerms.slice(termOffset, termOffset + 200),
+          ).build(),
+        );
+      }
+      if (removedAlbumLinkIds.length) {
+        await database.orm.CatalogArtistAlbum.where((link) =>
+          link.id.in(removedAlbumLinkIds),
+        ).deleteAndCount();
+      }
+      for (const update of updatedAlbumLinks) {
+        await database.orm.CatalogArtistAlbum.where({ id: update.id }).update({
+          trackCount: update.trackCount,
+        });
+      }
+      if (createdAlbumLinks.length) {
+        await database.execute(
+          database.sql.CatalogArtistAlbum.insert(createdAlbumLinks).build(),
+        );
+      }
+    }
   }
 
   private async reindexMediaUnlocked(
@@ -2375,72 +2922,14 @@ export class CatalogService {
   }
 
   private async refreshAlbum(albumId: string, excludedTrackId?: string) {
-    const tracks = (
-      await this.database.orm.CatalogMedia.where({
-        albumId,
-      }).all()
-    ).filter((track) => track.id !== excludedTrackId);
-    if (!tracks.length) {
+    const tracks = await this.database.orm.CatalogMedia.where({
+      albumId,
+    }).all();
+    const values = albumProjectionValues(tracks, excludedTrackId);
+    if (!values) {
       await this.removeAlbum(albumId);
       return;
     }
-    const availableTracks = tracks.filter((track) => track.available);
-    const representativeTracks = availableTracks.length
-      ? availableTracks
-      : tracks;
-    const first = [...tracks].sort(
-      (left, right) =>
-        left.normalizedTitle.localeCompare(right.normalizedTitle) ||
-        left.id.localeCompare(right.id),
-    )[0]!;
-    const coverTrack =
-      representativeTracks.find((track) => track.coverId) ?? first;
-    const years = new Set(
-      tracks.flatMap((track) =>
-        track.releaseYear === null ? [] : [track.releaseYear],
-      ),
-    );
-    const explicitAlbumArtists = uniqueArtistCredits(
-      tracks.flatMap((track) =>
-        parseStoredOptionalArtistCredits(
-          track.albumArtistCredits,
-          track.albumArtist,
-        ),
-      ),
-    );
-    const albumArtists = explicitAlbumArtists.length
-      ? explicitAlbumArtists
-      : parseStoredArtistCredits(first.artistCredits, first.artist);
-    const albumArtist = albumArtists.join(", ");
-    const collectionMediaType = storedMediaType(first.mediaType);
-    const latestPublishedAt =
-      tracks
-        .flatMap((track) => (track.publishedAt ? [track.publishedAt] : []))
-        .sort((left, right) => right.getTime() - left.getTime())[0] ?? null;
-    const values = {
-      mediaType: collectionMediaType,
-      title: first.album ?? "Unknown Album",
-      artist: albumArtist,
-      normalizedTitle: normalize(first.album ?? "Unknown Album"),
-      normalizedArtist: normalize(albumArtist),
-      artistId:
-        collectionMediaType === "music"
-          ? catalogArtistId(albumArtists[0] ?? first.artist)
-          : null,
-      coverId: coverTrack.coverId,
-      coverMediaId: coverTrack.coverId ? coverTrack.id : null,
-      artistCredits: JSON.stringify(albumArtists),
-      trackCount: tracks.length,
-      availableTrackCount: availableTracks.length,
-      durationMs: tracks.some((track) => track.durationMs !== null)
-        ? tracks.reduce(
-            (total, track) => total + finiteDuration(track.durationMs),
-            0,
-          )
-        : null,
-      releaseYear: years.size === 1 ? [...years][0]! : null,
-      latestPublishedAt,
-    };
     const existing = await this.database.orm.CatalogAlbum.first({
       id: albumId,
     });

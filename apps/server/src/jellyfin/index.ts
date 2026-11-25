@@ -17,6 +17,7 @@ import {
 import {
   JellyfinClient,
   JellyfinError,
+  JELLYFIN_DEFAULT_PORT,
   type JellyfinAudioItem,
   type JellyfinLibraryResponse,
 } from "./client.js";
@@ -210,6 +211,20 @@ export function createJellyfinIntegration(
 
   return {
     kind: "jellyfin",
+    instanceDiscovery: {
+      defaultPorts: [JELLYFIN_DEFAULT_PORT],
+      protocols: ["https", "http"],
+      async probe(baseUrl, signal) {
+        const server = await client.publicInfo(baseUrl.toString(), signal);
+        return server
+          ? {
+              id: server.id,
+              label: server.name,
+              version: server.version,
+            }
+          : null;
+      },
+    },
     async discover(
       input: LibrarySourceConnectorDiscoveryInput,
     ): Promise<LibrarySourceConnectorOptionResponse[]> {

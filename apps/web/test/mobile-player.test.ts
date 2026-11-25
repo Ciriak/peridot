@@ -134,7 +134,7 @@ test("the fullscreen mobile player exposes accessible complete controls", async 
   assert.match(player, /closeFullscreen\(\);\s+emit\("openQueue"\)/);
   assert.match(
     player,
-    /data-mobile-player-carousel[\s\S]*class="flex w-full"[\s\S]*:style="playerCarouselStyle"/,
+    /data-mobile-player-carousel[\s\S]*class="flex h-full min-h-0 w-full"[\s\S]*:style="playerCarouselStyle"/,
   );
   assert.equal(
     player.match(/<MobilePlayerTrackPanel/g)?.length,
@@ -143,7 +143,7 @@ test("the fullscreen mobile player exposes accessible complete controls", async 
   );
   assert.match(
     player,
-    /class="w-full shrink-0 overflow-hidden transition-opacity[\s\S]*'opacity-0'[\s\S]*inert\s+aria-hidden="true"[\s\S]*:track="previousTrackPreview"/,
+    /class="flex h-full min-h-0 w-full shrink-0 overflow-hidden transition-opacity[\s\S]*'opacity-0'[\s\S]*inert\s+aria-hidden="true"[\s\S]*:track="previousTrackPreview"/,
   );
   assert.match(
     player,
@@ -151,13 +151,36 @@ test("the fullscreen mobile player exposes accessible complete controls", async 
   );
   assert.match(
     player,
-    /class="w-full shrink-0 overflow-hidden transition-opacity[\s\S]*'opacity-0'[\s\S]*inert\s+aria-hidden="true"[\s\S]*:track="nextTrackPreview"/,
+    /class="flex h-full min-h-0 w-full shrink-0 overflow-hidden transition-opacity[\s\S]*'opacity-0'[\s\S]*inert\s+aria-hidden="true"[\s\S]*:track="nextTrackPreview"/,
   );
   assert.match(
     player,
-    /class="w-full shrink-0 overflow-hidden"[\s\S]*:track="active"/,
+    /class="flex h-full min-h-0 w-full shrink-0 overflow-hidden"[\s\S]*:track="active"/,
   );
-  assert.match(panel, /class="min-w-0 overflow-hidden text-center"/);
+  assert.match(
+    player,
+    /ref="playerScrollArea"\s+class="flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-4 sm:px-6"/,
+    "the fullscreen player never becomes a scroll container",
+  );
+  assert.match(
+    player,
+    /data-mobile-player-carousel\s+class="min-h-0 flex-1 overflow-hidden"/,
+    "the artwork area absorbs only the height left by the controls",
+  );
+  assert.match(
+    panel,
+    /class="flex h-full min-w-0 flex-col overflow-hidden text-center"/,
+  );
+  assert.match(
+    panel,
+    /class="flex min-h-0 w-full flex-1 items-end justify-center pt-2"/,
+    "the shrinking cover stays above its title instead of separating from it",
+  );
+  assert.match(
+    panel,
+    /class="relative mx-auto flex aspect-square h-full max-h-72 w-auto max-w-full shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted text-muted-foreground shadow-lg sm:max-h-96"/,
+    "the square cover shrinks to fit the remaining vertical space and caps its width",
+  );
   assert.match(panel, /TrackContextMenu/);
   assert.match(panel, /<TrackArtistLinks/);
   assert.match(panel, /v-if="interactive && track"/);
@@ -185,12 +208,12 @@ test("the fullscreen mobile player exposes accessible complete controls", async 
   );
   assert.match(
     panel,
-    /class="mt-3 flex w-full justify-end"[\s\S]*<LikeButton\s+large/,
+    /class="mt-2 flex w-full shrink-0 justify-end"[\s\S]*<LikeButton\s+large/,
     "the fullscreen like control sits on the right",
   );
   assert.match(
     player,
-    /class="flex items-center justify-center gap-2 sm:gap-4"/,
+    /class="flex shrink-0 items-center justify-center gap-2 sm:gap-4"/,
   );
   assert.equal(
     player.match(/class="group(?: relative)? size-12"/g)?.length,
