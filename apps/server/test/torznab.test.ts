@@ -10,9 +10,37 @@ import {
   createWav,
 } from "./helpers.js";
 import { qbitAddAccepted } from "../src/qbittorrent.js";
+import { importSettings } from "../src/download-clients.js";
 import { completedAudioReleasePaths } from "../src/release-import-files.js";
 import { parseReleases } from "../src/torznab.js";
 import { readReleaseImportTaskPayload, readTaskPayload } from "../src/tasks.js";
+
+test("download clients can target integration library sources", async () => {
+  const context = await createTestContext();
+  try {
+    const source = await context.database.orm.LibrarySource.create({
+      kind: "jellyfin",
+      name: "Jellyfin downloads",
+      url: "http://jellyfin.test:8096",
+      configuration: "{}",
+      credentialCiphertext: "jellyfin-credential",
+    });
+    const client = await context.database.orm.DownloadClient.create({
+      kind: "qbittorrent",
+      name: "Downloads",
+      url: "http://qbit.test:8080",
+      username: "",
+      credentialCiphertext: "qbit-credential",
+      destinationSourceId: source.id,
+    });
+
+    await assert.doesNotReject(
+      importSettings(context.database, { downloadClientId: client.id }),
+    );
+  } finally {
+    await context.close();
+  }
+});
 
 test("rejects DTDs and indexer errors", () => {
   for (const xml of ["<!DOCTYPE rss><rss/>", '<error code="100"/>'])
@@ -170,6 +198,105 @@ test("external search reports partial connector failures without dropping succes
   );
 });
 
+test("release indexers save while unreachable and test connections explicitly", async (t) => {
+  const context = await createTestContext();
+  t.after(() => context.close());
+  let capabilityRequests = 0;
+  t.mock.method(globalThis, "fetch", async (input: URL | RequestInfo) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    capabilityRequests += 1;
+    assert.equal(url.searchParams.get("t"), "caps");
+    assert.equal(url.searchParams.get("apikey"), "saved-secret");
+    if (url.hostname === "offline.test") {
+      throw new TypeError("indexer is unavailable");
+    }
+    return new Response(
+      '<caps><searching><music-search available="yes" supportedParams="q,artist"/></searching><categories><category id="3000"><subcat id="3040"/></category></categories></caps>',
+    );
+  });
+
+  assert.equal(
+    (
+      await context.app.inject({
+        method: "POST",
+        url: "/api/admin/release-indexers/test",
+        payload: { url: "http://working.test/feed" },
+      })
+    ).statusCode,
+    401,
+  );
+
+  const offline = await context.app.inject({
+    method: "POST",
+    url: "/api/admin/release-indexers",
+    headers: context.authorization,
+    payload: {
+      name: "Offline indexer",
+      url: "http://offline.test/feed",
+      apiKey: "saved-secret",
+    },
+  });
+  assert.equal(offline.statusCode, 201, offline.body);
+  assert.equal(offline.json().configuration.mode, "search");
+  assert.equal(offline.json().configuration.categories, "3000");
+  assert.equal(capabilityRequests, 0);
+
+  const offlineTest = await context.app.inject({
+    method: "POST",
+    url: "/api/admin/release-indexers/test",
+    headers: context.authorization,
+    payload: {
+      url: "http://offline.test/feed",
+      apiKey: "saved-secret",
+    },
+  });
+  assert.equal(offlineTest.statusCode, 502, offlineTest.body);
+  assert.equal(
+    offlineTest.json<{ error: { code: string } }>().error.code,
+    "connection_failed",
+  );
+
+  const working = await context.app.inject({
+    method: "POST",
+    url: "/api/admin/release-indexers",
+    headers: context.authorization,
+    payload: {
+      name: "Working indexer",
+      url: "http://working.test/feed",
+      apiKey: "saved-secret",
+    },
+  });
+  assert.equal(working.statusCode, 201, working.body);
+  assert.equal(capabilityRequests, 1);
+
+  const workingTest = await context.app.inject({
+    method: "POST",
+    url: "/api/admin/release-indexers/test",
+    headers: context.authorization,
+    payload: {
+      url: "http://working.test/feed",
+      apiKey: "saved-secret",
+    },
+  });
+  assert.equal(workingTest.statusCode, 200, workingTest.body);
+  assert.deepEqual(workingTest.json(), {
+    mode: "music",
+    categories: ["3000", "3040"],
+  });
+
+  const savedTest = await context.app.inject({
+    method: "POST",
+    url: "/api/admin/release-indexers/test",
+    headers: context.authorization,
+    payload: {
+      id: working.json().id,
+      url: "http://working.test/feed",
+    },
+  });
+  assert.equal(savedTest.statusCode, 200, savedTest.body);
+  assert.equal(capabilityRequests, 3);
+});
+
 test("an external release indexes only its completed audio files", async (t) => {
   const folder = await realpath(
     await mkdtemp(path.join(os.tmpdir(), "torznab-test-")),
@@ -184,7 +311,7 @@ test("an external release indexes only its completed audio files", async (t) => 
   upstream.get("/feed", async (req) => {
     if ((req.query as { t: string }).t === "caps")
       return '<caps><searching><music-search available="yes" supportedParams="q,artist"/></searching></caps>';
-    assert.equal((req.query as { t: string }).t, "music");
+    assert.equal((req.query as { t: string }).t, "search");
     assert.equal((req.query as { cat: string }).cat, "3000");
     return '<rss xmlns:t="http://torznab.com/schemas/2015/feed"><channel><item><title>Release</title><guid>abc</guid><enclosure length="100" url="/download?secret=hidden"/><t:attr name="seeders" value="4"/><t:attr name="category" value="3040"/></item></channel></rss>';
   });
@@ -196,7 +323,7 @@ test("an external release indexes only its completed audio files", async (t) => 
   upstream.get("/mixed", async (req) => {
     if ((req.query as { t: string }).t === "caps")
       return '<caps><searching><search available="yes" supportedParams="q"/></searching><categories><category id="2000"/><category id="3000"><subcat id="3040"/></category></categories></caps>';
-    assert.equal((req.query as { cat: string }).cat, "3000,3040");
+    assert.equal((req.query as { cat: string }).cat, "3000");
     return "<rss><channel><item><title>Film</title><category>2000</category><link>/movie</link></item></channel></rss>";
   });
   upstream.get("/api/v2/torrents/categories", async () => ({
@@ -299,12 +426,21 @@ test("an external release indexes only its completed audio files", async (t) => 
     path: folder,
     position: 1,
   });
+  const jellyfinSource = await ctx.database.orm.LibrarySource.create({
+    kind: "jellyfin",
+    name: "Jellyfin downloads",
+    url: "http://jellyfin.test:8096",
+    configuration: "{}",
+    credentialCiphertext: "jellyfin-credential",
+    position: 2,
+  });
   const clients = "/api/admin/download-clients";
   const clientInput = {
     kind: "qbittorrent",
     name: "Test downloader",
     url,
     apiKey: "client-secret",
+    destinationSourceId: folderSource.id,
   };
   const unavailable = await ctx.app.inject({
     method: "POST",
@@ -316,9 +452,31 @@ test("an external release indexes only its completed audio files", async (t) => 
       apiKey: "offline-secret",
     },
   });
-  assert.equal(unavailable.statusCode, 502, unavailable.body);
+  assert.equal(unavailable.statusCode, 201, unavailable.body);
+  const missingDestination = await ctx.app.inject({
+    method: "POST",
+    url: clients,
+    headers: ctx.authorization,
+    payload: {
+      kind: "qbittorrent",
+      name: "Missing destination",
+      url,
+      apiKey: "offline-secret",
+    },
+  });
+  assert.equal(missingDestination.statusCode, 400, missingDestination.body);
+  const testUnavailable = await ctx.app.inject({
+    method: "POST",
+    url: clients + "/test",
+    headers: ctx.authorization,
+    payload: {
+      ...clientInput,
+      apiKey: "offline-secret",
+    },
+  });
+  assert.equal(testUnavailable.statusCode, 502, testUnavailable.body);
   assert.equal(
-    unavailable.json<{ error: { code: string } }>().error.code,
+    testUnavailable.json<{ error: { code: string } }>().error.code,
     "connection_failed",
   );
   const saved = await ctx.app.inject({
@@ -329,6 +487,21 @@ test("an external release indexes only its completed audio files", async (t) => 
   });
   assert.equal(saved.statusCode, 201, saved.body);
   const downloadClientId = saved.json().id;
+  const jellyfinDestinationClient = await ctx.app.inject({
+    method: "POST",
+    url: clients,
+    headers: ctx.authorization,
+    payload: {
+      ...clientInput,
+      name: "Jellyfin downloader",
+      destinationSourceId: jellyfinSource.id,
+    },
+  });
+  assert.equal(
+    jellyfinDestinationClient.statusCode,
+    201,
+    jellyfinDestinationClient.body,
+  );
   assert.equal(
     (await ctx.app.inject({ url: clients, headers })).statusCode,
     403,
@@ -338,7 +511,15 @@ test("an external release indexes only its completed audio files", async (t) => 
     headers: ctx.authorization,
   });
   assert.doesNotMatch(listing.body, /client-secret|credentialCiphertext/);
+  assert.equal(listing.json()[0].destinationSourceId, folderSource.id);
   assert.equal(listing.json()[0].hasApiKey, true);
+  assert.deepEqual(
+    listing
+      .json<Array<{ id: string; destinationSourceId: string }>>()
+      .find((client) => client.id === jellyfinDestinationClient.json().id)
+      ?.destinationSourceId,
+    jellyfinSource.id,
+  );
   for (const [method, path, address, expected] of [
     ["POST", clients, url, 400],
     ["PUT", clients + "/" + downloadClientId, url, 200],
@@ -348,7 +529,12 @@ test("an external release indexes only its completed audio files", async (t) => 
       method,
       url: path,
       headers: ctx.authorization,
-      payload: { kind: "qbittorrent", name: "Renamed", url: address },
+      payload: {
+        kind: "qbittorrent",
+        name: "Renamed",
+        url: address,
+        destinationSourceId: folderSource.id,
+      },
     });
     assert.equal(response.statusCode, expected, response.body);
   }
@@ -386,7 +572,6 @@ test("an external release indexes only its completed audio files", async (t) => 
     category: "music",
     tags: "lossless",
     categoryPath: true,
-    librarySourceId: folderSource.id,
   };
   for (const host of ["one", "two"]) {
     const added = await ctx.app.inject({
@@ -421,10 +606,18 @@ test("an external release indexes only its completed audio files", async (t) => 
       headers: ctx.authorization,
       payload: { kind: "torznab", url: url + suffix },
     });
-  assert.equal((await addFeed("/movies")).statusCode, 400);
+  const movies = await addFeed("/movies");
+  assert.equal(movies.statusCode, 201, movies.body);
+  const moviesTest = await ctx.app.inject({
+    method: "POST",
+    url: "/api/admin/release-indexers/test",
+    headers: ctx.authorization,
+    payload: { url: url + "/movies" },
+  });
+  assert.equal(moviesTest.statusCode, 502, moviesTest.body);
   const mixed = await addFeed("/mixed");
   assert.equal(mixed.statusCode, 201, mixed.body);
-  assert.equal(mixed.json().configuration.categories, "3000,3040");
+  assert.equal(mixed.json().configuration.categories, "3000");
   const searchRoute = "/api/search/external";
   const denied = await ctx.app.inject({
     url: searchRoute + "?query=test",

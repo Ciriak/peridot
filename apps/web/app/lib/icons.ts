@@ -10,6 +10,7 @@ import close from "@iconify-icons/basil/cross-outline";
 import menu from "@iconify-icons/basil/menu-outline";
 import plus from "@iconify-icons/basil/plus-outline";
 import music from "@iconify-icons/basil/music-outline";
+import overview from "@iconify-icons/basil/apps-outline";
 import book from "@iconify-icons/basil/book-outline";
 import podcast from "@iconify-icons/basil/microphone-outline";
 import album from "@iconify-icons/mdi/cd-rom";
@@ -68,6 +69,7 @@ export const icons = {
   menu,
   plus,
   music,
+  overview,
   book,
   podcast,
   album,

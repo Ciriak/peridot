@@ -20,9 +20,16 @@ test("settings is a fullscreen routed area with a separate administrator group",
     layout.indexOf("const connectorCategories"),
     layout.indexOf("];", layout.indexOf("const connectorCategories")) + 2,
   );
-  for (const category of ["account", "library", "tasks", "playback"]) {
+  for (const category of [
+    "overview",
+    "account",
+    "library",
+    "tasks",
+    "playback",
+  ]) {
     assert.match(layout, new RegExp(`to: "/settings/${category}"`));
   }
+  assert.match(commonCategories, /labelKey: "settings\.overview"/);
   assert.match(commonCategories, /labelKey: "settings\.profile"/);
   assert.doesNotMatch(commonCategories, /settings\.account"/);
   for (const category of ["medias", "users", "server"]) {
@@ -112,6 +119,7 @@ test("settings is a fullscreen routed area with a separate administrator group",
   );
   assert.match(layout, /settings\.tasks\.progressFor/);
   for (const page of [
+    "overview",
     "tasks",
     "medias",
     "users",
@@ -127,9 +135,83 @@ test("settings is a fullscreen routed area with a separate administrator group",
   }
 });
 
-test("/settings redirects to account", async () => {
+test("/settings redirects to overview", async () => {
   const index = await readSource("../app/pages/settings/index.vue");
-  assert.match(index, /navigateTo\("\/settings\/account"/);
+  assert.match(index, /navigateTo\("\/settings\/overview"/);
+});
+
+test("overview is a read-only Vue Flow workspace", async () => {
+  const [page, node, edge, flow, subflow] = await Promise.all([
+    readSource("../app/pages/settings/overview.vue"),
+    readSource("../app/components/OverviewNode.vue"),
+    readSource("../app/components/AnimationEdge.vue"),
+    readSource("../app/lib/overview-flow.ts"),
+    readSource("../app/components/OverviewSubflow.vue"),
+  ]);
+
+  assert.match(page, /layout: "settings"/);
+  assert.match(page, /import "@xyflow\/vue\/style\.css"/);
+  assert.match(page, /<VueFlow/);
+  assert.match(page, /<Background variant="dots"/);
+  assert.match(page, /:nodes-draggable="false"/);
+  assert.match(page, /:nodes-connectable="false"/);
+  assert.match(page, /:elements-selectable="false"/);
+  assert.match(page, /:edges-updatable="false"/);
+  assert.match(page, /:delete-key-code="null"/);
+  assert.match(page, /:pan-on-drag="true"/);
+  assert.match(page, /:zoom-on-scroll="true"/);
+  assert.match(page, /:zoom-on-pinch="true"/);
+  assert.match(page, /#edge-animation="props"/);
+  assert.match(page, /@nodes-initialized="fitOverview"/);
+  assert.match(page, /@node-double-click="openNodeSettings"/);
+  assert.match(page, /setupVueFlow/);
+  assert.match(page, /usePreferredReducedMotion/);
+  assert.match(page, /settings\.overview\.loading/);
+  assert.match(page, /settings\.overview\.empty/);
+  assert.match(page, /OverviewSubflow/);
+  assert.match(page, /subflow: markRaw\(OverviewSubflow\)/);
+  assert.match(node, /@peridot\/ui\/assets\/brand\/logo\.svg/);
+  assert.match(node, /bg-card/);
+  assert.match(node, /border-primary\/40/);
+  assert.match(node, /icons\.musicbrainz/);
+  assert.match(node, /icons\.discogs/);
+  assert.match(node, /icons\.qbittorrent/);
+  assert.match(node, /sourceKindIcon/);
+  assert.match(node, /v-if="data\.status === 'online'"/);
+  assert.match(node, /animate-ping rounded-full bg-success/);
+  assert.match(node, /motion-reduce:hidden/);
+  assert.equal(node.match(/animate-ping/gu)?.length, 1);
+  assert.match(node, /count\.file/);
+  assert.match(node, /settings\.overview\.albums/);
+  assert.match(node, /settings\.overview\.playlists/);
+  assert.match(node, /settings\.overview\.podcasts/);
+  assert.match(node, /settings\.overview\.audiobooks/);
+  assert.match(node, /class="min-w-0 truncate"/);
+  assert.match(edge, /BezierEdge/);
+  assert.match(edge, /stroke-primary/);
+  assert.match(subflow, /border-dashed/);
+  assert.match(subflow, /bg-muted\/30/);
+  assert.match(subflow, /settings\.sources\.heading/);
+  assert.match(subflow, /settings\.connectors\.metadataProviders/);
+  assert.match(subflow, /settings\.connectors\.downloadClients/);
+  assert.match(subflow, /settings\.connectors\.releaseIndexers/);
+  assert.doesNotMatch(subflow, /data\.count/);
+  assert.match(flow, /CONNECTION_COLUMN_X = 480/);
+  assert.match(flow, /LIBRARY_SOURCE_GROUP_X = -CONNECTION_COLUMN_X/);
+  assert.match(flow, /METADATA_PROVIDER_GROUP_X = CONNECTION_COLUMN_X/);
+  assert.match(flow, /library-source-subflow/);
+  assert.match(flow, /metadata-provider-subflow/);
+  assert.match(flow, /download-client-subflow/);
+  assert.match(flow, /release-indexer-subflow/);
+  assert.match(flow, /overviewNodeSettingsPath/);
+  assert.match(page, /padding: 0\.35/);
+  assert.match(page, /maxZoom: 1/);
+  assert.match(page, /zoom: 0\.9/);
+  assert.match(flow, /sourceHandle: "peridot-download-client"/);
+  assert.match(flow, /Position\.Left/);
+  assert.match(flow, /Position\.Right/);
+  assert.match(flow, /Position\.Top/);
+  assert.match(flow, /Position\.Bottom/);
 });
 
 test("Jellyfin is a direct built-in source integration", async () => {
@@ -181,7 +263,7 @@ test("Jellyfin uses only an explicitly selected scanner result", async () => {
   assert.doesNotMatch(page, /configuration: \{ url: newJellyfinUrl\.value \}/);
 });
 
-test("qBittorrent uses verified instances on its default port", async () => {
+test("qBittorrent discovery is optional on its default port", async () => {
   const [page, translations, connectors] = await Promise.all([
     readSource("../app/pages/settings/connectors/download-clients.vue"),
     readSource("../i18n/locales/en-US.json"),
@@ -203,10 +285,19 @@ test("qBittorrent uses verified instances on its default port", async () => {
   );
   assert.match(
     page,
-    /:disabled="\s*busy \|\| !selectedQbittorrentInstance \|\| serverLost\s*"[\s\S]*?type="submit"/,
+    /:disabled="\s*busy \|\| !form\.destinationSourceId \|\| serverLost\s*"[\s\S]*?type="submit"/,
+  );
+  assert.doesNotMatch(
+    page,
+    /:disabled="\s*busy \|\| !selectedQbittorrentInstance \|\| serverLost\s*"/,
   );
   assert.doesNotMatch(page, /act\('test'\)|clients\.test"/);
   assert.match(page, /selectedQbittorrentInstance/);
+  assert.match(page, /useAdminSourcesQuery/);
+  assert.match(page, /destinationSourceId: client\?\.destinationSourceId/);
+  assert.match(page, /filter\(\(source\) => !source\.removal\)/);
+  assert.match(page, /t\("clients\.destinationSource"\)/);
+  assert.match(page, /v-model="form\.destinationSourceId"/);
   assert.match(page, /inputmode="url"/);
   assert.match(page, /type="text"/);
   assert.doesNotMatch(page, /aria-pressed=/);
@@ -236,23 +327,54 @@ test("qBittorrent uses verified instances on its default port", async () => {
     translations,
     /"clients\.urlPlaceholder": "http:\/\/localhost:8080"/,
   );
+  assert.match(
+    translations,
+    /"clients\.scanHelp": ".*A connection test is not required to save\."/,
+  );
+  assert.doesNotMatch(translations, /"clients\.discoveryRequired"/);
   assert.match(connectors, /instance-discovery/);
 });
 
 test("release indexers are added and configured in a dialog", async () => {
-  const page = await readSource(
-    "../app/pages/settings/connectors/release-indexers.vue",
-  );
+  const [page, downloadClientLink] = await Promise.all([
+    readSource("../app/pages/settings/connectors/release-indexers.vue"),
+    readSource("../app/components/DownloadClientLink.vue"),
+  ]);
 
+  assert.match(
+    page,
+    /<h1 class="text-xl font-semibold">Release indexers<\/h1>/,
+  );
+  assert.match(page, /icons\.plus/);
+  assert.match(page, /icons\.settings/);
+  assert.match(page, /@click="beginEdit\(indexer\)"/);
+  assert.match(page, /DropdownMenuRoot/);
+  assert.match(page, /icons\.more/);
+  assert.match(page, /@select="askRemove\(indexer\)"/);
+  assert.match(page, /AlertDialogRoot/);
+  assert.match(page, /@click="confirmRemove"/);
+  assert.doesNotMatch(page, /@click="remove\(indexer\)"/);
+  assert.doesNotMatch(page, />Configure<\/Button>/);
+  assert.doesNotMatch(page, />Remove<\/Button>/);
   assert.match(page, /@click="beginAdd"/);
   assert.match(page, /<DialogRoot v-model:open="open">/);
   assert.match(page, /<DialogContent/);
   assert.match(page, /<DialogTitle/);
   assert.match(page, /<form class="mt-4 space-y-4" @submit\.prevent="save">/);
+  assert.match(page, /saved = await api\.value\.create\(formInput\(\)\)/);
+  assert.match(page, /async function testConnection\(\)/);
+  assert.match(page, /api\.value\.test\(/);
+  assert.match(page, /@click="testConnection"/);
+  assert.match(page, /t\("indexer\.testHelp"\)/);
   assert.match(
     page,
-    /<DownloadClientLink v-model="form" :sources="sources" \/>/,
+    /testing \? t\("indexer\.testing"\) : t\("indexer\.test"\)/,
   );
+  assert.match(page, /<DownloadClientLink v-model="form" \/>/);
+  assert.doesNotMatch(page, /destinationSourceId/);
+  assert.doesNotMatch(page, /listSources/);
+  assert.doesNotMatch(downloadClientLink, /destinationSourceId/);
+  assert.doesNotMatch(downloadClientLink, /destinationSources/);
   assert.match(page, /v-if="formError"/);
   assert.doesNotMatch(page, /v-if="open"\s+class="space-y-4 rounded-lg border/);
 });
@@ -359,9 +481,9 @@ test("the header places connection status before the account avatar", async () =
   assert.doesNotMatch(header, /aria-label="Open settings"/);
   assert.match(
     header,
-    /<ServerConnectionIndicator \/>[\s\S]*?to="\/settings\/account"/,
+    /<ServerConnectionIndicator \/>[\s\S]*?to="\/settings\/overview"/,
   );
-  assert.match(header, /to="\/settings\/account"/);
+  assert.match(header, /to="\/settings\/overview"/);
   assert.match(header, /t\('navigation\.profileSettings'\)/);
   assert.match(header, /:icon="icons\.settings"/);
   assert.match(header, /group-hover\/avatar:opacity-100/);

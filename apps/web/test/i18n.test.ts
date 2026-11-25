@@ -68,8 +68,38 @@ test("en-US messages interpolate and pluralize", () => {
   assert.equal(i18n.global.t("player.openFullscreen"), "Open full player");
   assert.equal(i18n.global.t("player.closeFullscreen"), "Close full player");
   assert.equal(
+    i18n.global.t("clients.destinationSource"),
+    "Destination source",
+  );
+  assert.equal(
+    i18n.global.t("clients.chooseDestinationSource"),
+    "Select an existing source",
+  );
+  assert.equal(
+    i18n.global.t("indexer.testConnected", 2, { count: 2 }),
+    "Connected · 2 audio categories",
+  );
+  assert.equal(i18n.global.te("indexer.destinationSource"), false);
+  assert.equal(
     i18n.global.t("settings.sources.path"),
     "Server internal folder",
+  );
+  assert.equal(i18n.global.t("settings.overview.title"), "Overview");
+  assert.equal(
+    i18n.global.t("settings.overview.status.online", { name: "Music" }),
+    "Music is online",
+  );
+  assert.equal(
+    i18n.global.t("settings.overview.status.disabled", { name: "Discogs" }),
+    "Discogs is disabled",
+  );
+  assert.equal(
+    i18n.global.t("count.librarySource", { count: 2 }, 2),
+    "2 library sources",
+  );
+  assert.equal(
+    i18n.global.t("count.overviewConnection", { count: 4 }, 4),
+    "4 connections",
   );
   assert.equal(i18n.global.t("settings.sources.jellyfin.title"), "Jellyfin");
   assert.equal(

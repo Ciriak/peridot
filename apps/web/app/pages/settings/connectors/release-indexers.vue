@@ -1,38 +1,58 @@
 <script setup lang="ts">
-import { computed, definePageMeta, ref } from "#imports";
+import { Icon } from "@iconify/vue/offline";
+import { computed, definePageMeta, ref, useI18n } from "#imports";
 import type {
-  LibrarySourceResponse,
   ReleaseIndexerInput,
   ReleaseIndexerResponse,
 } from "@peridot/contracts";
 import { Button } from "@peridot/ui/components/ui/button";
 import { Input } from "@peridot/ui/components/ui/input";
+import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import {
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogOverlay,
+  AlertDialogPortal,
+  AlertDialogRoot,
+  AlertDialogTitle,
   DialogContent,
   DialogDescription,
   DialogOverlay,
   DialogPortal,
   DialogRoot,
   DialogTitle,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuPortal,
+  DropdownMenuRoot,
+  DropdownMenuTrigger,
 } from "reka-ui";
 import { onMounted } from "vue";
 import DownloadClientLink from "../../../components/DownloadClientLink.vue";
 import { useServer } from "../../../composables/use-server";
 import { useSession } from "../../../composables/use-session";
 import { useUser } from "../../../composables/use-user";
-import { listSources, releaseIndexersApi } from "../../../lib/peridot-client";
+import { icons } from "../../../lib/icons";
+import { releaseIndexersApi } from "../../../lib/peridot-client";
 
 definePageMeta({ layout: "settings" });
+const { t } = useI18n();
 const { address } = useServer();
 const { token } = useSession();
 const { user } = useUser();
 const indexers = ref<ReleaseIndexerResponse[]>([]);
-const sources = ref<LibrarySourceResponse[]>([]);
 const error = ref("");
 const formError = ref("");
+const testMessage = ref("");
+const testStatus = ref<"idle" | "success" | "error">("idle");
+const testing = ref(false);
 const loading = ref(false);
 const open = ref(false);
 const editing = ref<ReleaseIndexerResponse | null>(null);
+const removeOpen = ref(false);
+const pendingRemove = ref<ReleaseIndexerResponse | null>(null);
 const form = ref({
   name: "",
   url: "",
@@ -41,9 +61,9 @@ const form = ref({
   category: "",
   tags: "",
   categoryPath: false,
-  folderId: "",
   savePath: "",
 });
+let testSequence = 0;
 const api = computed(() =>
   address.value && token.value
     ? releaseIndexersApi(address.value, token.value)
@@ -55,12 +75,7 @@ async function load() {
   loading.value = true;
   error.value = "";
   try {
-    const [nextIndexers, nextSources] = await Promise.all([
-      api.value!.list(),
-      listSources(address.value, token.value),
-    ]);
-    indexers.value = nextIndexers.items;
-    sources.value = nextSources.items;
+    indexers.value = (await api.value!.list()).items;
   } catch (reason) {
     error.value = reason instanceof Error ? reason.message : "Load failed.";
   } finally {
@@ -68,9 +83,17 @@ async function load() {
   }
 }
 
+function clearTestResult() {
+  testSequence += 1;
+  testStatus.value = "idle";
+  testMessage.value = "";
+  testing.value = false;
+}
+
 function beginAdd() {
   editing.value = null;
   formError.value = "";
+  clearTestResult();
   form.value = {
     name: "",
     url: "",
@@ -79,7 +102,6 @@ function beginAdd() {
     category: "",
     tags: "",
     categoryPath: false,
-    folderId: "",
     savePath: "",
   };
   open.value = true;
@@ -88,6 +110,7 @@ function beginAdd() {
 function beginEdit(indexer: ReleaseIndexerResponse) {
   editing.value = indexer;
   formError.value = "";
+  clearTestResult();
   form.value = {
     ...form.value,
     name: indexer.name ?? "",
@@ -97,10 +120,22 @@ function beginEdit(indexer: ReleaseIndexerResponse) {
     category: indexer.configuration.category ?? "",
     tags: indexer.configuration.tags ?? "",
     categoryPath: indexer.configuration.categoryPath === "true",
-    folderId: indexer.destinationSourceId ?? "",
     savePath: indexer.configuration.savePath ?? "",
   };
   open.value = true;
+}
+
+function formInput(): ReleaseIndexerInput {
+  return {
+    name: form.value.name,
+    url: form.value.url,
+    apiKey: form.value.apiKey,
+    downloadClientId: form.value.downloadClientId,
+    category: form.value.category,
+    tags: form.value.tags,
+    categoryPath: form.value.categoryPath,
+    savePath: form.value.savePath,
+  };
 }
 
 async function save() {
@@ -109,23 +144,11 @@ async function save() {
   try {
     let saved = editing.value;
     if (!saved) {
-      const input: ReleaseIndexerInput = {
-        name: form.value.name,
-        url: form.value.url,
-        apiKey: form.value.apiKey,
-        downloadClientId: form.value.downloadClientId,
-        librarySourceId: form.value.folderId,
-        category: form.value.category,
-        tags: form.value.tags,
-        categoryPath: form.value.categoryPath,
-        savePath: form.value.savePath,
-      };
-      saved = await api.value.create(input);
+      saved = await api.value.create(formInput());
     }
     if (saved && form.value.downloadClientId) {
       await api.value.link(saved.id, {
         downloadClientId: form.value.downloadClientId,
-        librarySourceId: form.value.folderId,
         category: form.value.category,
         tags: form.value.tags,
         categoryPath: form.value.categoryPath,
@@ -139,10 +162,55 @@ async function save() {
   }
 }
 
+async function testConnection() {
+  if (!api.value || !form.value.url.trim()) return;
+  const sequence = ++testSequence;
+  testing.value = true;
+  testStatus.value = "idle";
+  testMessage.value = "";
+  try {
+    const result = await api.value.test({
+      ...formInput(),
+      ...(editing.value ? { id: editing.value.id } : {}),
+    });
+    if (sequence !== testSequence) return;
+    testStatus.value = "success";
+    testMessage.value = t(
+      "indexer.testConnected",
+      { count: result.categories.length },
+      result.categories.length,
+    );
+  } catch {
+    if (sequence !== testSequence) return;
+    testStatus.value = "error";
+    testMessage.value = t("indexer.testFailed");
+  } finally {
+    if (sequence === testSequence) testing.value = false;
+  }
+}
+
 async function remove(indexer: ReleaseIndexerResponse) {
   if (!api.value) return;
-  await api.value.remove(indexer.id);
-  await load();
+  try {
+    await api.value.remove(indexer.id);
+    await load();
+  } catch (reason) {
+    error.value = reason instanceof Error ? reason.message : "Remove failed.";
+  }
+}
+
+function askRemove(indexer: ReleaseIndexerResponse) {
+  pendingRemove.value = indexer;
+  removeOpen.value = true;
+  error.value = "";
+}
+
+async function confirmRemove() {
+  const indexer = pendingRemove.value;
+  if (!indexer) return;
+  removeOpen.value = false;
+  pendingRemove.value = null;
+  await remove(indexer);
 }
 
 onMounted(load);
@@ -151,13 +219,11 @@ onMounted(load);
 <template>
   <section class="space-y-4">
     <div class="flex items-center justify-between">
-      <div>
-        <h2 class="text-2xl font-semibold">Release indexers</h2>
-        <p class="text-sm text-muted-foreground">
-          Torznab feeds used by Discover.
-        </p>
-      </div>
-      <Button @click="beginAdd">Add indexer</Button>
+      <h1 class="text-xl font-semibold">Release indexers</h1>
+      <Button @click="beginAdd">
+        <Icon :icon="icons.plus" aria-hidden="true" />
+        Add indexer
+      </Button>
     </div>
     <p v-if="error" role="alert" class="text-sm text-destructive">
       {{ error }}
@@ -175,8 +241,42 @@ onMounted(load);
             {{ indexer.url }}
           </p>
         </div>
-        <Button variant="outline" @click="beginEdit(indexer)">Configure</Button>
-        <Button variant="ghost" @click="remove(indexer)">Remove</Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          :aria-label="`Configure ${indexer.name || 'Torznab'}`"
+          :title="`Configure ${indexer.name || 'Torznab'}`"
+          @click="beginEdit(indexer)"
+        >
+          <Icon :icon="icons.settings" aria-hidden="true" />
+        </Button>
+        <DropdownMenuRoot>
+          <DropdownMenuTrigger as-child>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              :aria-label="`Actions for ${indexer.name || 'Torznab'}`"
+            >
+              <Icon :icon="icons.more" aria-hidden="true" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuPortal>
+            <DropdownMenuContent
+              side="bottom"
+              align="end"
+              :side-offset="4"
+              class="z-50 w-40 rounded-lg border bg-popover p-1 text-popover-foreground shadow-lg"
+            >
+              <DropdownMenuItem
+                class="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-2 text-sm text-destructive outline-none"
+                @select="askRemove(indexer)"
+              >
+                <Icon :icon="icons.trash" aria-hidden="true" class="size-4" />
+                Remove
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenuPortal>
+        </DropdownMenuRoot>
       </article>
       <p v-if="!indexers.length" class="text-sm text-muted-foreground">
         No release indexers configured.
@@ -195,8 +295,8 @@ onMounted(load);
           <DialogDescription class="text-sm text-muted-foreground">
             {{
               editing
-                ? "Update this Torznab feed and its import destination."
-                : "Connect a Torznab feed and choose where completed releases are imported."
+                ? "Update this Torznab feed and its download settings."
+                : "Connect a Torznab feed and choose how releases are downloaded."
             }}
           </DialogDescription>
           <form class="mt-4 space-y-4" @submit.prevent="save">
@@ -211,7 +311,11 @@ onMounted(load);
                 type="url"
                 autocomplete="off"
                 required
+                @input="clearTestResult"
               />
+              <span class="text-xs text-muted-foreground">
+                {{ t("indexer.testHelp") }}
+              </span>
             </label>
             <label v-if="!editing" class="block space-y-2">
               <span class="text-sm font-medium">API key</span>
@@ -219,23 +323,87 @@ onMounted(load);
                 v-model="form.apiKey"
                 type="password"
                 autocomplete="new-password"
+                @input="clearTestResult"
               />
             </label>
-            <DownloadClientLink v-model="form" :sources="sources" />
+            <DownloadClientLink v-model="form" />
+            <p
+              v-if="testStatus === 'success'"
+              role="status"
+              class="text-sm text-success"
+            >
+              {{ testMessage }}
+            </p>
+            <p
+              v-else-if="testStatus === 'error'"
+              role="alert"
+              class="text-sm text-destructive"
+            >
+              {{ testMessage }}
+            </p>
             <p v-if="formError" role="alert" class="text-sm text-destructive">
               {{ formError }}
             </p>
-            <div class="flex justify-end gap-2">
-              <Button type="button" variant="outline" @click="open = false">
-                Cancel
+            <div class="flex items-center justify-between gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                :disabled="testing || !form.url.trim()"
+                @click="testConnection"
+              >
+                <PeridotSpinner
+                  v-if="testing"
+                  :label="t('indexer.testing')"
+                  class="size-4"
+                />
+                {{ testing ? t("indexer.testing") : t("indexer.test") }}
               </Button>
-              <Button type="submit" :disabled="loading || !form.url.trim()">
-                Save
-              </Button>
+              <div class="flex gap-2">
+                <Button type="button" variant="outline" @click="open = false">
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  :disabled="loading || testing || !form.url.trim()"
+                >
+                  Save
+                </Button>
+              </div>
             </div>
           </form>
         </DialogContent>
       </DialogPortal>
     </DialogRoot>
+
+    <AlertDialogRoot v-model:open="removeOpen">
+      <AlertDialogPortal>
+        <AlertDialogOverlay class="fixed inset-0 z-50 bg-background/80" />
+        <AlertDialogContent
+          class="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border bg-card p-6 text-card-foreground shadow-lg"
+        >
+          <AlertDialogTitle class="text-lg font-semibold">
+            Remove {{ pendingRemove?.name || "Torznab" }}?
+          </AlertDialogTitle>
+          <AlertDialogDescription class="text-sm text-muted-foreground">
+            This removes the saved Torznab feed and its credentials from
+            Peridot.
+          </AlertDialogDescription>
+          <div class="mt-6 flex justify-end gap-3">
+            <AlertDialogCancel as-child>
+              <Button type="button" variant="outline">Cancel</Button>
+            </AlertDialogCancel>
+            <AlertDialogAction as-child>
+              <Button
+                type="button"
+                variant="destructive"
+                @click="confirmRemove"
+              >
+                Remove
+              </Button>
+            </AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      </AlertDialogPortal>
+    </AlertDialogRoot>
   </section>
 </template>

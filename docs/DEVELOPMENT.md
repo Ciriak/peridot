@@ -225,6 +225,15 @@ Media catalog routes use `/api/media`, `/api/media/:id`,
 also use Media IDs. The removed `/api/tracks`, `/api/torznab`, and
 `/api/admin/sources` surfaces have no compatibility aliases.
 
+Every signed-in user can read the sanitized platform overview at
+`GET /api/overview`. It returns library-source names, safe address labels,
+available file counts, live `online`, `offline`, or `unknown` checks, and
+metadata-provider names with `online`, `unknown`, or `disabled` state. It also
+returns available album, podcast, and audiobook counts plus the signed-in user's
+visible playlist count. The route never returns source configuration,
+credentials, full paths, or remote URLs beyond their host label.
+Metadata-provider cards intentionally omit address and count details.
+
 Discover uses `GET /api/search/external?query=...` and returns result items plus
 per-connector statuses. Imports use `POST /api/release-imports` and
 `GET /api/release-imports/:taskId`.
@@ -257,6 +266,25 @@ import legacy browser-local values.
 The shared UI uses standard Tailwind utilities, shadcn-vue variants, theme tokens,
 and bundled Basil Iconify SVG data. Do not add component CSS, inline visual
 styles, arbitrary Tailwind values, or local theme overrides.
+
+The account avatar opens Settings → Overview. The page uses `@xyflow/vue` for a
+read-only connection graph with Peridot centered, a library-source subflow on
+the left, a metadata-provider subflow on the right, and a download-client
+subflow below. Release indexers form a bottom-right subflow. Library sources and
+metadata providers link to Peridot. A download client links to its configured
+Destination source, and a release indexer links to its configured download
+client. A destinationless client or an indexer without a client falls back to its
+direct Peridot relationship. Every link is animated while the subflow is only a
+visual background group. Panning and scroll/pinch zoom remain available while
+node, link, and connection editing stay disabled. The page polls
+`/api/overview` while open. Keep graph cards to basic connection information and
+do not expose administrator configuration on this screen. Double-clicking a
+card routes to the matching Server or connector settings page; subflow
+backgrounds remain non-interactive.
+
+The overview response includes `destinationSourceId` and `downloadClientId`
+solely to resolve those configured graph links. These IDs refer to existing
+overview cards and never expose connector configuration or credentials.
 
 Render catalog artists through `ArtistLink` or `TrackArtistLinks`, and catalog
 albums through `AlbumLink`, so navigation and right-click menu behavior remain
@@ -322,9 +350,17 @@ self-emit it before applying the migration.
 ### Discover and release imports
 
 In Settings → Release indexers, add a Torznab feed and optional display name and
-API key from a modal dialog matching the other connector settings. Peridot reads
-the feed's audio capabilities before saving it, and keeps save errors visible in
-the dialog. Repeat for additional indexers.
+API key from a modal dialog matching the other connector settings. Saving
+validates the URL, credential shape, and download settings without contacting
+the feed, so an unavailable indexer can be configured in advance. New feeds
+default to generic Torznab search with audio category `3000`.
+
+Test connection performs the capabilities request against the currently entered
+URL and API key. Testing a saved indexer with a blank API key reuses its stored
+credential. Success reports the advertised audio-category count; failure remains
+visible in the dialog and does not prevent saving. The authenticated endpoint is
+`POST /api/admin/release-indexers/test`. Repeat either flow for additional
+indexers.
 
 Under Settings → Download clients, choose qBittorrent. The form scans port
 `8080` automatically and places the scan controls and verified Web UI list
@@ -332,19 +368,29 @@ first, directly below the dialog title. Enter a host or URL to scan one
 directly, choose a discovered instance to prefill the client fields, then choose
 an authentication method. The display name defaults to qBittorrent and remains
 editable. Enter the Web UI username and password or an API key from qBittorrent
-5.2+ (Preferences → Web UI → API Key), then save. Saving validates the live
-qBittorrent connection and rejects without persisting when authentication or
-connectivity fails. Repeat for additional instances. Saved rows lead with the
-bundled qBittorrent icon, use a cog-icon edit action, and keep removal in the
-row's three-dot action menu behind a confirmation dialog because it is
-destructive.
+5.2+ (Preferences → Web UI → API Key), then choose the client's Destination
+source and save. Discovery and live connection checks are optional. Saving
+validates the URL, credentials shape, and active library source without
+contacting qBittorrent, so an unreachable client can be configured ahead of the
+service. The authenticated test endpoint remains available for explicit checks.
+Repeat for additional instances. Saved rows lead with the bundled qBittorrent
+icon, use a cog-icon edit action, and keep removal in the row's three-dot action
+menu behind a confirmation dialog because it is destructive.
 
-Select a download client in each indexer's settings together with a destination
-folder library source. Choose the qBittorrent category and additional tags.
-Category save paths use automatic torrent management. The destination library
-source must map to the category's completed directory. For manual paths, enter
-the qBittorrent-side path when the services mount the directory differently.
-Keep incomplete downloads outside that directory.
+Saved release-indexer rows use the same toolbar and row-action pattern: the add
+action includes the shared plus icon, Configure is a cog-icon button, and
+destructive removal is available only from the row's three-dot menu after an
+explicit confirmation.
+
+Select a download client in each indexer's settings and choose the qBittorrent
+category and additional tags. The client owns its Destination source. Every
+active library source is available, including folder and Jellyfin sources, and
+every indexer using that client shares its destination. Category save paths use
+automatic torrent management. The Destination source must map to the client's
+completed directory. For manual paths, enter the qBittorrent-side path when the
+services mount the directory differently. A Jellyfin destination is scanned
+through Jellyfin after the download completes. Keep incomplete downloads outside
+that directory.
 
 Discover is the external-search surface. Torznab is the only live external
 search connector in this milestone. Release IDs are opaque and scoped to their

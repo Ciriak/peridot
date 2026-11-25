@@ -961,6 +961,59 @@ export interface LibrarySourceListResponse {
   items: LibrarySourceResponse[];
 }
 
+export type OverviewConnectionStatus =
+  "online" | "offline" | "unknown" | "disabled";
+
+export interface OverviewLibrarySourceResponse {
+  id: string;
+  kind: LibrarySourceKind;
+  name: string;
+  address: string;
+  fileCount: number;
+  status: OverviewConnectionStatus;
+}
+
+export interface OverviewMetadataProviderResponse {
+  id: string;
+  kind: MetadataProviderKind;
+  name: string;
+  status: OverviewConnectionStatus;
+}
+
+export interface OverviewDownloadClientResponse {
+  id: string;
+  kind: "qbittorrent";
+  name: string;
+  address: string;
+  destinationSourceId: string | null;
+  status: OverviewConnectionStatus;
+}
+
+export interface OverviewReleaseIndexerResponse {
+  id: string;
+  kind: "torznab";
+  name: string;
+  address: string;
+  downloadClientId: string | null;
+  status: OverviewConnectionStatus;
+}
+
+export interface OverviewServiceCounts {
+  albums: number;
+  playlists: number;
+  podcasts: number;
+  audiobooks: number;
+}
+
+export interface OverviewResponse {
+  checkedAt: string;
+  librarySources: OverviewLibrarySourceResponse[];
+  metadataProviders: OverviewMetadataProviderResponse[];
+  downloadClients: OverviewDownloadClientResponse[];
+  releaseIndexers: OverviewReleaseIndexerResponse[];
+  counts: OverviewServiceCounts;
+}
+
 export interface LibrarySourceRemovalResponse {
   sourceId: string;
   unavailableMediaCopyCount: number;
@@ -987,6 +1040,7 @@ export interface CreateJellyfinLibrarySourceRequest {
 export type DownloadClientAuthType = "apiKey" | "password";
 export interface DownloadClientInput {
   authType?: DownloadClientAuthType;
+  destinationSourceId: string;
   username?: string;
   password?: string;
   kind: "qbittorrent";
@@ -1002,6 +1056,7 @@ export interface DownloadClientResponse {
   hasApiKey: boolean;
   authType: DownloadClientAuthType;
   username: string;
+  destinationSourceId: string | null;
 }
 export interface DownloadClientOptions {
   categories: string[];
@@ -1009,7 +1064,6 @@ export interface DownloadClientOptions {
 }
 export interface DownloadLinkInput {
   downloadClientId?: string;
-  librarySourceId?: string;
   savePath?: string;
   category?: string;
   tags?: string;
@@ -1021,6 +1075,15 @@ export interface ReleaseIndexerInput extends DownloadLinkInput {
   apiKey?: string;
 }
 
+export interface ReleaseIndexerConnectionTestRequest extends ReleaseIndexerInput {
+  id?: string;
+}
+
+export interface ReleaseIndexerConnectionTestResponse {
+  mode: "music" | "search";
+  categories: string[];
+}
+
 export interface ReleaseIndexerResponse {
   id: string;
   kind: "torznab";
@@ -1028,7 +1091,6 @@ export interface ReleaseIndexerResponse {
   url: string;
   configuration: Record<string, string>;
   downloadClientId: string | null;
-  destinationSourceId: string | null;
   lastSyncedAt: string | null;
 }
 

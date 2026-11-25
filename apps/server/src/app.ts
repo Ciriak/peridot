@@ -36,6 +36,7 @@ import { ensureDefaultMetadataProvider } from "./metadata-providers.js";
 import { MetadataResolverRegistry } from "./metadata-resolver.js";
 import { registerMediaMetadataRoutes } from "./metadata-routes.js";
 import { MusicBrainzClient, MusicBrainzResolver } from "./musicbrainz.js";
+import { OverviewService } from "./overview.js";
 import { registerQuickPickRoutes } from "./quick-picks-routes.js";
 import {
   PlaybackTokenService,
@@ -209,6 +210,11 @@ export async function buildApp(options: BuildAppOptions = {}) {
     new LibrarySourceConnectorRegistry(librarySourceDefinitions),
     credentials,
   );
+  const overview = new OverviewService(
+    database,
+    sourceIntegrations,
+    metadataRegistry,
+  );
   const catalog = new CatalogService(database, playbackTokens);
   const mediaMatch = new MediaMatchService(database, catalog);
   const realtime = new RealtimeHub(database);
@@ -361,6 +367,9 @@ export async function buildApp(options: BuildAppOptions = {}) {
     database,
     async (protectedApp) => {
       await registerRealtimeTicketRoute(protectedApp, realtime);
+      protectedApp.get("/api/overview", (request) =>
+        overview.get(request.authenticatedUser!.id),
+      );
       await registerLibraryRoutes(
         protectedApp,
         database,

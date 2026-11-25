@@ -136,7 +136,6 @@ const taskKindSchema = enumeration(
 
 const downloadLinkFields = {
   downloadClientId: stringSchema,
-  folderId: stringSchema,
   savePath: stringSchema,
   category: stringSchema,
   tags: stringSchema,
@@ -144,6 +143,7 @@ const downloadLinkFields = {
 };
 const downloadClientFields = {
   authType: enumeration("apiKey", "password"),
+  destinationSourceId: stringSchema,
   username: stringSchema,
   kind: enumeration("qbittorrent"),
   name: stringSchema,
@@ -151,7 +151,7 @@ const downloadClientFields = {
 };
 const downloadClientInput = objectSchema(
   { ...downloadClientFields, password: stringSchema, apiKey: stringSchema },
-  ["kind", "name", "url"],
+  ["kind", "name", "url", "destinationSourceId"],
 );
 const downloadOptions = objectSchema({
   categories: arrayOf(stringSchema),
@@ -873,7 +873,6 @@ const schemas: Record<string, SchemaObject> = {
       url: stringSchema,
       apiKey: stringSchema,
       downloadClientId: stringSchema,
-      librarySourceId: stringSchema,
       category: stringSchema,
       tags: stringSchema,
       categoryPath: booleanSchema,
@@ -888,11 +887,14 @@ const schemas: Record<string, SchemaObject> = {
     url: stringSchema,
     configuration: objectSchema({}),
     downloadClientId: nullable(stringSchema),
-    destinationSourceId: nullable(stringSchema),
     lastSyncedAt: nullable(stringSchema),
   }),
   ReleaseIndexerListResponse: objectSchema({
     items: arrayOf(ref("ReleaseIndexerResponse")),
+  }),
+  ReleaseIndexerConnectionTestResponse: objectSchema({
+    mode: enumeration("music", "search"),
+    categories: arrayOf(stringSchema),
   }),
   CreateLibrarySourceResponse: objectSchema({
     id: stringSchema,
@@ -925,6 +927,50 @@ const schemas: Record<string, SchemaObject> = {
   },
   LibrarySourceListResponse: objectSchema({
     items: arrayOf(ref("LibrarySourceResponse")),
+  }),
+  OverviewLibrarySourceResponse: objectSchema({
+    id: stringSchema,
+    kind: enumeration("path", "jellyfin"),
+    name: stringSchema,
+    address: stringSchema,
+    fileCount: integerSchema,
+    status: enumeration("online", "offline", "unknown", "disabled"),
+  }),
+  OverviewMetadataProviderResponse: objectSchema({
+    id: stringSchema,
+    kind: enumeration("musicbrainz", "discogs"),
+    name: stringSchema,
+    status: enumeration("online", "offline", "unknown", "disabled"),
+  }),
+  OverviewDownloadClientResponse: objectSchema({
+    id: stringSchema,
+    kind: enumeration("qbittorrent"),
+    name: stringSchema,
+    address: stringSchema,
+    destinationSourceId: nullable(stringSchema),
+    status: enumeration("online", "offline", "unknown", "disabled"),
+  }),
+  OverviewReleaseIndexerResponse: objectSchema({
+    id: stringSchema,
+    kind: enumeration("torznab"),
+    name: stringSchema,
+    address: stringSchema,
+    downloadClientId: nullable(stringSchema),
+    status: enumeration("online", "offline", "unknown", "disabled"),
+  }),
+  OverviewServiceCounts: objectSchema({
+    albums: integerSchema,
+    playlists: integerSchema,
+    podcasts: integerSchema,
+    audiobooks: integerSchema,
+  }),
+  OverviewResponse: objectSchema({
+    checkedAt: dateTimeSchema,
+    librarySources: arrayOf(ref("OverviewLibrarySourceResponse")),
+    metadataProviders: arrayOf(ref("OverviewMetadataProviderResponse")),
+    downloadClients: arrayOf(ref("OverviewDownloadClientResponse")),
+    releaseIndexers: arrayOf(ref("OverviewReleaseIndexerResponse")),
+    counts: ref("OverviewServiceCounts"),
   }),
   LibrarySourceRemovalResponse: objectSchema({
     mediaId: stringSchema,
@@ -1703,7 +1749,7 @@ const routes: Record<string, OpenApiOperation> = {
   ),
   "PUT /api/admin/release-indexers/:id/download-client": jsonOperation(
     "Server administration",
-    "Set the indexer download destination",
+    "Set the indexer download client",
     null,
     { status: 204, body: objectSchema(downloadLinkFields, []) },
   ),
@@ -1728,6 +1774,27 @@ const routes: Record<string, OpenApiOperation> = {
     "Create a release indexer",
     ref("ReleaseIndexerResponse"),
     { status: 201, body: ref("ReleaseIndexerInput") },
+  ),
+  "POST /api/admin/release-indexers/test": jsonOperation(
+    "Connectors",
+    "Test a release indexer connection",
+    ref("ReleaseIndexerConnectionTestResponse"),
+    {
+      body: objectSchema(
+        {
+          id: stringSchema,
+          name: stringSchema,
+          url: stringSchema,
+          apiKey: stringSchema,
+          downloadClientId: stringSchema,
+          category: stringSchema,
+          tags: stringSchema,
+          categoryPath: booleanSchema,
+          savePath: stringSchema,
+        },
+        ["url"],
+      ),
+    },
   ),
   "PUT /api/admin/release-indexers/order": jsonOperation(
     "Connectors",
@@ -1916,6 +1983,11 @@ const routes: Record<string, OpenApiOperation> = {
     "Sources",
     "List library sources",
     ref("LibrarySourceListResponse"),
+  ),
+  "GET /api/overview": jsonOperation(
+    "Overview",
+    "Get the platform overview and live library-source status",
+    ref("OverviewResponse"),
   ),
   "POST /api/admin/library-sources": jsonOperation(
     "Sources",

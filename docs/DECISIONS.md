@@ -1,5 +1,85 @@
 # Peridot decisions
 
+## 2026-11-25: Release indexers save independently of connection tests
+
+Saving a Torznab release indexer validates the feed URL, credential shape, and
+download settings locally without contacting the indexer. An administrator can
+save an indexer before its service is reachable, and connection failures remain
+visible when the explicit test action is used rather than blocking persistence.
+
+New and restored indexers default to generic Torznab search with audio category
+`3000`. `POST /api/admin/release-indexers/test` performs the capabilities
+request against the currently entered URL and optional API key. For a saved
+indexer, an omitted API key reuses the encrypted saved credential without
+returning it to the browser. The test response reports the advertised search
+mode and audio categories but does not mutate saved configuration.
+
+## 2026-11-25: Download clients own their Destination source
+
+Each download client stores one Destination source because completed files come
+from that client and must map back to a configured library source. The select
+lists every active library source by display name, falling back to its path or
+kind, including folder and Jellyfin sources. Release indexers continue to choose
+the client, category, tags, and qBittorrent-side save-path behavior. If different
+categories need different Peridot sources, they require different clients rather
+than per-indexer destination overrides.
+
+A folder destination supports targeted import scans of the completed torrent
+paths. A Jellyfin destination runs the normal Jellyfin source scan after the
+download completes and tracks changed media for downstream metadata work. The
+qBittorrent category or manual save path must make completed files visible to
+that Jellyfin library.
+
+The migration copies an existing linked indexer's destination to its client
+before dropping the indexer field. When multiple active indexers for one client
+disagree, the earliest ordered indexer wins because a client can store only one
+Destination source.
+
+Saving a download client does not contact qBittorrent. Administrators can
+configure a client before its service is reachable; live discovery and the
+explicit connection-test endpoint remain optional. Save still validates the URL,
+credential shape, and active Destination source.
+
+## 2026-11-25: Settings opens on a read-only platform overview
+
+The account avatar and `/settings` now lead to `/settings/overview`. Profile
+remains a separate common settings destination. Overview is a full-workspace,
+read-only Vue Flow surface with Peridot at the center. Library sources occupy a
+background subflow on the left and metadata providers occupy the matching
+background subflow on the right. Download clients occupy a third background
+subflow below Peridot. Release indexers occupy a fourth background subflow at
+the bottom right. Library sources and metadata providers retain their links to
+Peridot. Download clients link to their configured Destination source, and
+release indexers link to their configured download client, expressing the
+transfer chain instead of drawing every connector as a direct Peridot spoke.
+An indexer without a download client or a legacy client without an active
+Destination source keeps a direct Peridot fallback link. Cards remain
+individually identified inside their group. They show only the connector icon,
+name, safe address, basic count or type, and connection status;
+source paths, URLs beyond the host label, configuration, and credentials never
+reach this shared screen. The central card keeps the standard card background
+with a primary border and shows available album, playlist, podcast, and
+audiobook totals. Playlist counts include the signed-in user's visible Liked
+Tracks playlist. An explicit fit after node initialization adds graph padding.
+Panning and wheel/pinch zoom remain available; node, link, and connection
+editing stay disabled. Double-clicking a card opens its matching settings page:
+Server for the Peridot hub, Library sources, Metadata providers, Release
+indexers, or Download clients for the corresponding connection cards. Subflow
+backgrounds do not
+navigate.
+
+Overview uses the authenticated `GET /api/overview` summary for every signed-in
+user. The server checks readable folder sources and authenticates configured
+Jellyfin sources with their stored server-side credentials under a bounded
+timeout, small concurrency limit, and short cache. Metadata-provider cards show
+only their icon, name, and active, configuration-required, or disabled status.
+Download-client cards show their name and safe qBittorrent host; their status
+remains unknown until a live transfer-client probe is added. The web client
+refreshes the summary when focused and every 60 seconds. Online dots pulse
+unless reduced motion is requested; offline, unknown, and disabled dots remain
+static. Release-indexer cards show their name and safe Torznab host. Connections
+use custom animated bezier edges.
+
 ## 2026-11-25: Web playback starts saved audio before streaming
 
 The browser and desktop player attempts a device-local audio blob before
@@ -140,15 +220,12 @@ with its bundled Web UI asset. The root page is inspected without credentials,
 and verified HTTPS is preferred when both schemes respond.
 
 The Jellyfin and qBittorrent forms start discovery automatically and provide a
-rescan action. Typing an address starts a debounced targeted scan.
-Administrators must explicitly choose a discovered result. Discovery rows
-prefill configuration and do not render a selected or checked state. The chosen
-scanner URL is the only value used for Jellyfin library discovery or qBittorrent
-saving. Saving a qBittorrent client performs a live authenticated options request
-and rejects with `connection_failed` without writing when the connection does not
-work. Editing the address invalidates the verified choice. Saved qBittorrent
-clients remain editable from their previously verified URL; changing that URL
-requires a new scanner result before saving. Credentials remain manual and are
+rescan action. Typing an address starts a debounced targeted scan. Discovery
+rows prefill configuration and do not render a selected or checked state. A
+Jellyfin library operation must use an explicitly selected scanner result.
+qBittorrent discovery is optional: its scanner result can prefill the URL, or
+administrators can save a typed URL without contacting the client. Editing the
+address invalidates the discovered choice. Credentials remain manual and are
 never sent to the unauthenticated instance probe.
 Removing a saved qBittorrent client is destructive: it is available only from
 the row action menu and requires an explicit confirmation that names the client.

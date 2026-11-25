@@ -1,0 +1,123 @@
+[
+  {
+    "id": "column.DownloadClient.destinationSourceId",
+    "label": "Add column destinationSourceId on DownloadClient",
+    "summary": "Adds column destinationSourceId on DownloadClient",
+    "operationClass": "additive",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "column",
+        "name": "destinationSourceId",
+        "table": "DownloadClient"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"destinationSourceId\" is missing",
+        "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM pragma_table_info(?1) WHERE \"name\" = ?2",
+        "params": [
+          "DownloadClient",
+          "destinationSourceId"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "column \"destinationSourceId\" on \"DownloadClient\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"destinationSourceId\"",
+        "sql": "ALTER TABLE \"DownloadClient\" ADD COLUMN \"destinationSourceId\" TEXT"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"destinationSourceId\" exists",
+        "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM pragma_table_info(?1) WHERE \"name\" = ?2",
+        "params": [
+          "DownloadClient",
+          "destinationSourceId"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "column \"destinationSourceId\" on \"DownloadClient\""
+        }
+      },
+      {
+        "description": "verify column \"destinationSourceId\" on \"DownloadClient\" has type TEXT and is optional",
+        "sql": "SELECT COUNT(*) > 0 FROM pragma_table_info('DownloadClient') WHERE name = 'destinationSourceId' AND LOWER(type) = 'text' AND \"notnull\" = 0"
+      }
+    ]
+  },
+  {
+    "id": "data_migration.move-destination-source-to-download-client",
+    "label": "Move indexer destinations to download clients",
+    "summary": "Copy each active indexer destination to its download client before removing the indexer column",
+    "operationClass": "data",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "table",
+        "name": "DownloadClient"
+      }
+    },
+    "precheck": [],
+    "execute": [
+      {
+        "description": "Copy each active indexer destination to its download client before removing the indexer column",
+        "sql": "\n          UPDATE \"DownloadClient\"\n          SET \"destinationSourceId\" = (\n            SELECT \"ReleaseIndexer\".\"destinationSourceId\"\n            FROM \"ReleaseIndexer\"\n            WHERE \"ReleaseIndexer\".\"downloadClientId\" = \"DownloadClient\".\"id\"\n              AND \"ReleaseIndexer\".\"removedAt\" IS NULL\n              AND \"ReleaseIndexer\".\"destinationSourceId\" IS NOT NULL\n            ORDER BY\n              \"ReleaseIndexer\".\"position\" ASC,\n              \"ReleaseIndexer\".\"createdAt\" ASC,\n              \"ReleaseIndexer\".\"id\" ASC\n            LIMIT 1\n          )\n          WHERE \"destinationSourceId\" IS NULL\n            AND EXISTS (\n              SELECT 1\n              FROM \"ReleaseIndexer\"\n              WHERE \"ReleaseIndexer\".\"downloadClientId\" = \"DownloadClient\".\"id\"\n                AND \"ReleaseIndexer\".\"removedAt\" IS NULL\n                AND \"ReleaseIndexer\".\"destinationSourceId\" IS NOT NULL\n            )\n        "
+      }
+    ],
+    "postcheck": []
+  },
+  {
+    "id": "dropColumn.ReleaseIndexer.destinationSourceId",
+    "label": "Drop column \"destinationSourceId\" from \"ReleaseIndexer\"",
+    "summary": "Drops column destinationSourceId on ReleaseIndexer which is not in the contract",
+    "operationClass": "destructive",
+    "target": {
+      "id": "sqlite",
+      "details": {
+        "objectType": "column",
+        "name": "destinationSourceId",
+        "table": "ReleaseIndexer"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"destinationSourceId\" exists on \"ReleaseIndexer\"",
+        "sql": "SELECT COUNT(*) > 0 AS \"result\" FROM pragma_table_info(?1) WHERE \"name\" = ?2",
+        "params": [
+          "ReleaseIndexer",
+          "destinationSourceId"
+        ],
+        "expectation": {
+          "expects": "present",
+          "object": "column \"destinationSourceId\" on \"ReleaseIndexer\""
+        }
+      }
+    ],
+    "execute": [
+      {
+        "description": "drop column \"destinationSourceId\" from \"ReleaseIndexer\"",
+        "sql": "ALTER TABLE \"ReleaseIndexer\" DROP COLUMN \"destinationSourceId\""
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"destinationSourceId\" is gone from \"ReleaseIndexer\"",
+        "sql": "SELECT COUNT(*) = 0 AS \"result\" FROM pragma_table_info(?1) WHERE \"name\" = ?2",
+        "params": [
+          "ReleaseIndexer",
+          "destinationSourceId"
+        ],
+        "expectation": {
+          "expects": "absent",
+          "object": "column \"destinationSourceId\" on \"ReleaseIndexer\""
+        }
+      }
+    ]
+  }
+]

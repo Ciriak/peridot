@@ -735,6 +735,7 @@ export class LibraryScanner {
                   timings,
                 );
                 for (const mediaId of catalogIds) {
+                  if (targetedImport) processedMediaIds.add(mediaId);
                   catalogBatchIds.add(mediaId);
                 }
                 processedItems += batch.length;
