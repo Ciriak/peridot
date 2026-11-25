@@ -194,6 +194,7 @@ test("overview is a read-only Vue Flow workspace", async () => {
   assert.match(subflow, /settings\.sources\.heading/);
   assert.match(subflow, /settings\.connectors\.metadataProviders/);
   assert.match(subflow, /settings\.connectors\.downloadClients/);
+  assert.match(subflow, /settings\.connectors\.releaseIndexers/);
   assert.doesNotMatch(subflow, /data\.count/);
   assert.match(flow, /CONNECTION_COLUMN_X = 480/);
   assert.match(flow, /LIBRARY_SOURCE_GROUP_X = -CONNECTION_COLUMN_X/);
@@ -201,6 +202,7 @@ test("overview is a read-only Vue Flow workspace", async () => {
   assert.match(flow, /library-source-subflow/);
   assert.match(flow, /metadata-provider-subflow/);
   assert.match(flow, /download-client-subflow/);
+  assert.match(flow, /release-indexer-subflow/);
   assert.match(flow, /overviewNodeSettingsPath/);
   assert.match(page, /padding: 0\.35/);
   assert.match(page, /maxZoom: 1/);
@@ -261,7 +263,7 @@ test("Jellyfin uses only an explicitly selected scanner result", async () => {
   assert.doesNotMatch(page, /configuration: \{ url: newJellyfinUrl\.value \}/);
 });
 
-test("qBittorrent uses verified instances on its default port", async () => {
+test("qBittorrent discovery is optional on its default port", async () => {
   const [page, translations, connectors] = await Promise.all([
     readSource("../app/pages/settings/connectors/download-clients.vue"),
     readSource("../i18n/locales/en-US.json"),
@@ -283,10 +285,19 @@ test("qBittorrent uses verified instances on its default port", async () => {
   );
   assert.match(
     page,
-    /:disabled="\s*busy \|\| !selectedQbittorrentInstance \|\| serverLost\s*"[\s\S]*?type="submit"/,
+    /:disabled="\s*busy \|\| !form\.destinationSourceId \|\| serverLost\s*"[\s\S]*?type="submit"/,
+  );
+  assert.doesNotMatch(
+    page,
+    /:disabled="\s*busy \|\| !selectedQbittorrentInstance \|\| serverLost\s*"/,
   );
   assert.doesNotMatch(page, /act\('test'\)|clients\.test"/);
   assert.match(page, /selectedQbittorrentInstance/);
+  assert.match(page, /useAdminSourcesQuery/);
+  assert.match(page, /destinationSourceId: client\?\.destinationSourceId/);
+  assert.match(page, /filter\(\(source\) => !source\.removal\)/);
+  assert.match(page, /t\("clients\.destinationSource"\)/);
+  assert.match(page, /v-model="form\.destinationSourceId"/);
   assert.match(page, /inputmode="url"/);
   assert.match(page, /type="text"/);
   assert.doesNotMatch(page, /aria-pressed=/);
@@ -316,13 +327,19 @@ test("qBittorrent uses verified instances on its default port", async () => {
     translations,
     /"clients\.urlPlaceholder": "http:\/\/localhost:8080"/,
   );
+  assert.match(
+    translations,
+    /"clients\.scanHelp": ".*A connection test is not required to save\."/,
+  );
+  assert.doesNotMatch(translations, /"clients\.discoveryRequired"/);
   assert.match(connectors, /instance-discovery/);
 });
 
 test("release indexers are added and configured in a dialog", async () => {
-  const page = await readSource(
-    "../app/pages/settings/connectors/release-indexers.vue",
-  );
+  const [page, downloadClientLink] = await Promise.all([
+    readSource("../app/pages/settings/connectors/release-indexers.vue"),
+    readSource("../app/components/DownloadClientLink.vue"),
+  ]);
 
   assert.match(
     page,
@@ -344,10 +361,20 @@ test("release indexers are added and configured in a dialog", async () => {
   assert.match(page, /<DialogContent/);
   assert.match(page, /<DialogTitle/);
   assert.match(page, /<form class="mt-4 space-y-4" @submit\.prevent="save">/);
+  assert.match(page, /saved = await api\.value\.create\(formInput\(\)\)/);
+  assert.match(page, /async function testConnection\(\)/);
+  assert.match(page, /api\.value\.test\(/);
+  assert.match(page, /@click="testConnection"/);
+  assert.match(page, /t\("indexer\.testHelp"\)/);
   assert.match(
     page,
-    /<DownloadClientLink v-model="form" :sources="sources" \/>/,
+    /testing \? t\("indexer\.testing"\) : t\("indexer\.test"\)/,
   );
+  assert.match(page, /<DownloadClientLink v-model="form" \/>/);
+  assert.doesNotMatch(page, /destinationSourceId/);
+  assert.doesNotMatch(page, /listSources/);
+  assert.doesNotMatch(downloadClientLink, /destinationSourceId/);
+  assert.doesNotMatch(downloadClientLink, /destinationSources/);
   assert.match(page, /v-if="formError"/);
   assert.doesNotMatch(page, /v-if="open"\s+class="space-y-4 rounded-lg border/);
 });

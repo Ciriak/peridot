@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyReply } from "fastify";
+import type { FastifyInstance } from "fastify";
 import type {
   DownloadClientInput,
   DownloadLinkInput,
@@ -9,6 +9,10 @@ import type { CredentialStore } from "./credential-store.js";
 import { LibrarySourceConnectorError } from "./source-integrations.js";
 import { type QbitConnection, qbitOptions } from "./qbittorrent.js";
 
+export interface StoredDownloadClient extends QbitConnection {
+  destinationSourceId: string | null;
+}
+
 function invalid(message: string): never {
   throw new LibrarySourceConnectorError(message, "invalid_configuration", 400, {
     key: "indexer.validation",
@@ -16,34 +20,28 @@ function invalid(message: string): never {
   });
 }
 
-class DownloadClientConnectionError extends Error {
-  constructor() {
-    super("qBittorrent connection failed.");
-    this.name = "DownloadClientConnectionError";
-  }
-}
+const text = (value: unknown) =>
+  typeof value === "string" ? value.trim() : "";
 
-function connectionFailed(reply: FastifyReply) {
-  return reply.code(502).send({
-    error: {
-      code: "connection_failed",
-      message: "qBittorrent connection failed.",
-    },
+async function activeDestinationSource(db: Database, id: unknown) {
+  const sourceId = text(id);
+  if (!sourceId) return null;
+  const source = await db.orm.LibrarySource.first({
+    id: sourceId,
   });
+  return source && !source.removedAt ? source : null;
 }
 
 export async function importSettings(db: Database, input: DownloadLinkInput) {
-  const text = (v: unknown) => (typeof v === "string" ? v.trim() : "");
-  const downloadClientId = text(input.downloadClientId),
-    librarySourceId = text(input.librarySourceId);
-  if (downloadClientId || librarySourceId) {
+  const downloadClientId = text(input.downloadClientId);
+  if (downloadClientId) {
     const client = await db.orm.DownloadClient.first({ id: downloadClientId });
-    const folder = await db.orm.LibrarySource.first({
-      id: librarySourceId,
-      kind: "path",
-    });
-    if (!client || !folder || folder.removedAt)
-      invalid("Select a saved download client and an active folder source.");
+    const destination = await activeDestinationSource(
+      db,
+      client?.destinationSourceId,
+    );
+    if (!client || !destination)
+      invalid("Select a download client with an active Destination source.");
   }
   const tags = [
     ...new Set(
@@ -60,7 +58,6 @@ export async function importSettings(db: Database, input: DownloadLinkInput) {
     invalid("Choose a category to use its save path.");
   return {
     downloadClientId,
-    librarySourceId,
     category,
     tags: tags.join(","),
     categoryPath: String(Boolean(input.categoryPath)),
@@ -78,9 +75,9 @@ export function downloadCredentialEnvelope(value: string) {
 export async function readClientConnections(
   db: Database,
   store: CredentialStore,
-) {
+): Promise<Map<string, StoredDownloadClient>> {
   const clients = await db.orm.DownloadClient.all();
-  return new Map<string, QbitConnection>(
+  return new Map<string, StoredDownloadClient>(
     clients.map((c) => {
       const key = c.credentialCiphertext.startsWith(apiKeyPrefix);
       const secret = store.decrypt(
@@ -91,6 +88,7 @@ export async function readClientConnections(
         c.id,
         {
           client: c.url,
+          destinationSourceId: c.destinationSourceId,
           ...(key
             ? { clientApiKey: secret }
             : { username: c.username, password: secret }),
@@ -110,12 +108,21 @@ export function registerDownloadClients(
   const clients = db.orm.DownloadClient;
   app.get(base, async () =>
     (await clients.all()).map(
-      ({ id, kind, name, url, username, credentialCiphertext }) => ({
+      ({
         id,
         kind,
         name,
         url,
         username,
+        credentialCiphertext,
+        destinationSourceId,
+      }) => ({
+        id,
+        kind,
+        name,
+        url,
+        username,
+        destinationSourceId,
         authType: credentialCiphertext.startsWith(apiKeyPrefix)
           ? "apiKey"
           : "password",
@@ -189,16 +196,18 @@ export function registerDownloadClients(
     const c = await connection(input, id);
     if (typeof input.name !== "string" || !input.name.trim())
       invalid("Enter a client name.");
-    try {
-      await qbitOptions(c);
-    } catch {
-      throw new DownloadClientConnectionError();
-    }
+    const destination = await activeDestinationSource(
+      db,
+      input.destinationSourceId,
+    );
+    if (!destination)
+      invalid("Select an active library source as the Destination source.");
     const data = {
       name: input.name.trim(),
       kind: "qbittorrent",
       url: c.client,
       username: c.username,
+      destinationSourceId: destination.id,
       credentialCiphertext: c.clientApiKey
         ? apiKeyPrefix + store.encrypt(c.clientApiKey, "download-client")
         : store.encrypt(c.password, "download-client"),
@@ -209,28 +218,12 @@ export function registerDownloadClients(
     }
     return { id: (await clients.create(data)).id };
   }
-  app.post<{ Body: DownloadClientInput }>(base, async (req, reply) => {
-    try {
-      return reply.code(201).send(await save(req.body));
-    } catch (error) {
-      if (error instanceof DownloadClientConnectionError) {
-        return connectionFailed(reply);
-      }
-      throw error;
-    }
-  });
+  app.post<{ Body: DownloadClientInput }>(base, async (req, reply) =>
+    reply.code(201).send(await save(req.body)),
+  );
   app.put<{ Params: { id: string }; Body: DownloadClientInput }>(
     base + "/:id",
-    async (req, reply) => {
-      try {
-        return await save(req.body, req.params.id);
-      } catch (error) {
-        if (error instanceof DownloadClientConnectionError) {
-          return connectionFailed(reply);
-        }
-        throw error;
-      }
-    },
+    async (req) => save(req.body, req.params.id),
   );
   app.post<{ Body: DownloadClientInput & { id?: string } }>(
     base + "/test",

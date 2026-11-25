@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import type {
+  ReleaseIndexerConnectionTestRequest,
   ReleaseIndexerInput,
   ReleaseIndexerListResponse,
   ReleaseIndexerResponse,
@@ -12,7 +13,7 @@ import { sendError } from "./http.js";
 import { message } from "./messages.js";
 import type { ReleaseIndexerRow } from "./prisma/models.js";
 import { LibrarySourceConnectorError } from "./source-integrations.js";
-import { validateIndexer } from "./torznab.js";
+import { prepareIndexer, testIndexerConnection } from "./torznab.js";
 
 const base = "/api/admin/release-indexers";
 
@@ -42,10 +43,30 @@ function response(row: ReleaseIndexerRow): ReleaseIndexerResponse {
     url: row.url,
     configuration: config,
     downloadClientId: row.downloadClientId ?? config.downloadClientId ?? null,
-    destinationSourceId:
-      row.destinationSourceId ?? config.librarySourceId ?? null,
     lastSyncedAt: null,
   };
+}
+
+function sameFeedBase(left: string, right: string) {
+  try {
+    const normalized = (value: string) => {
+      const url = new URL(value);
+      url.search = "";
+      url.hash = "";
+      return url.href;
+    };
+    return normalized(left) === normalized(right);
+  } catch {
+    return left.trim() === right.trim();
+  }
+}
+
+function hasApiKeyInUrl(value: string) {
+  try {
+    return new URL(value).searchParams.has("apikey");
+  } catch {
+    return false;
+  }
 }
 
 export async function listReleaseIndexers(
@@ -67,10 +88,55 @@ export function registerReleaseIndexers(
 ) {
   app.get(base, async () => listReleaseIndexers(db));
 
+  app.post<{ Body: ReleaseIndexerConnectionTestRequest }>(
+    base + "/test",
+    async (request, reply) => {
+      try {
+        let input = request.body;
+        if (input?.id) {
+          const row = await db.orm.ReleaseIndexer.first({
+            id: input.id,
+            kind: "torznab",
+          });
+          if (!row || row.removedAt) return reply.code(404).send();
+          if (row.credentialCiphertext) {
+            const saved = JSON.parse(
+              credentials.decrypt(row.credentialCiphertext, "release-indexer"),
+            ) as { feed?: unknown; apiKey?: unknown };
+            const useSavedFeed =
+              typeof saved.feed === "string" &&
+              sameFeedBase(input.url, row.url) &&
+              !input.apiKey &&
+              !hasApiKeyInUrl(input.url);
+            input = {
+              ...input,
+              url: useSavedFeed ? String(saved.feed) : input.url,
+              apiKey:
+                input.apiKey ||
+                (typeof saved.apiKey === "string" ? saved.apiKey : ""),
+            };
+          }
+        }
+        return await testIndexerConnection(input);
+      } catch (error) {
+        if (error instanceof LibrarySourceConnectorError) {
+          return sendError(
+            reply,
+            error.statusCode,
+            error.code,
+            error.message,
+            error.messageDescriptor,
+          );
+        }
+        throw error;
+      }
+    },
+  );
+
   app.post<{ Body: ReleaseIndexerInput }>(base, async (request, reply) => {
     try {
       connectors.require("torznab", "release-indexer");
-      const validated = await validateIndexer(request.body, db);
+      const validated = await prepareIndexer(request.body, db);
       const existing = await db.orm.ReleaseIndexer.first({
         kind: "torznab",
         sourceIdentity: validated.identity,
@@ -93,7 +159,6 @@ export function registerReleaseIndexers(
         sourceIdentity: validated.identity,
         configuration: JSON.stringify(validated.configuration),
         downloadClientId: validated.configuration.downloadClientId || null,
-        destinationSourceId: validated.configuration.librarySourceId || null,
         credentialCiphertext: credentials.encrypt(
           JSON.stringify(validated.credentials),
           "release-indexer",
@@ -137,7 +202,6 @@ export function registerReleaseIndexers(
             ...settings,
           }),
           downloadClientId: settings.downloadClientId || null,
-          destinationSourceId: settings.librarySourceId || null,
         });
         return reply.code(204).send();
       } catch (error) {

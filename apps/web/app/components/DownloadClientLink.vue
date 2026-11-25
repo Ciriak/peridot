@@ -3,18 +3,15 @@ import { computed } from "vue";
 import { useI18n } from "#imports";
 import { useQuery } from "@tanstack/vue-query";
 import { Input } from "@peridot/ui/components/ui/input";
-import type { LibrarySourceResponse } from "@peridot/contracts";
 import { useServer } from "../composables/use-server";
 import { useSession } from "../composables/use-session";
 import { useQueryScope } from "../composables/use-query-scope";
 import { downloadClientsApi } from "../lib/peridot-client";
-const props = defineProps<{ sources: LibrarySourceResponse[] }>();
 const form = defineModel<{
   downloadClientId: string;
   category: string;
   tags: string;
   categoryPath: boolean;
-  folderId: string;
   savePath: string;
   name: string;
   apiKey: string;
@@ -109,24 +106,6 @@ function switchClient(event: Event) {
           :value="tag"
         /></datalist
     ></label>
-    <label class="block space-y-1"
-      ><span>{{ t("indexer.folder") }}</span
-      ><select
-        v-model="form.folderId"
-        class="w-full rounded-md border bg-background p-2"
-      >
-        <option disabled value="">{{ t("indexer.chooseFolder") }}</option>
-        <option
-          v-for="f in props.sources.filter(
-            (s) => s.kind === 'path' && !s.removal,
-          )"
-          :key="f.id"
-          :value="f.id"
-        >
-          {{ f.name || f.path }}
-        </option>
-      </select></label
-    >
     <label v-if="!form.categoryPath" class="block space-y-1"
       ><span>{{ t("indexer.savePath") }}</span
       ><Input v-model="form.savePath"

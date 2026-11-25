@@ -89,6 +89,62 @@ test("current-schema databases without a migration ledger need no changes", asyn
   });
 });
 
+test("moves an indexer destination source onto its download client", async () => {
+  await withTemporaryDatabase(async (databasePath) => {
+    const url = databaseUrl(databasePath);
+    await runPrismaCommand(
+      [
+        "db",
+        "migrate",
+        "--db",
+        url,
+        "--to",
+        "7fb2e91df85da52ca54ad7f6ff71621577a757d8b112f95a109d4653e0773135",
+      ],
+      true,
+    );
+
+    const database = new DatabaseSync(databasePath);
+    database.exec(`
+      INSERT INTO "LibrarySource" ("id", "kind", "path", "updatedAt")
+      VALUES ('source', 'path', 'C:/Music', '2026-11-25T00:00:00.000Z');
+      INSERT INTO "DownloadClient"
+        ("id", "kind", "name", "url", "username", "credentialCiphertext", "updatedAt")
+      VALUES
+        ('client', 'qbittorrent', 'Downloads', 'http://qbit:8080', '', 'secret', '2026-11-25T00:00:00.000Z');
+      INSERT INTO "ReleaseIndexer"
+        ("id", "url", "downloadClientId", "destinationSourceId", "position", "updatedAt")
+      VALUES
+        ('indexer', 'http://indexer/feed', 'client', 'source', 0, '2026-11-25T00:00:00.000Z');
+    `);
+    database.close();
+
+    const result = await runPendingMigrations({
+      databaseUrl: url,
+      info: () => undefined,
+    });
+    assert.equal(result.pendingCount, 1);
+
+    const migrated = new DatabaseSync(databasePath, { readOnly: true });
+    try {
+      const client = migrated
+        .prepare(
+          'SELECT "destinationSourceId" FROM "DownloadClient" WHERE "id" = ?',
+        )
+        .get("client") as { destinationSourceId?: string } | undefined;
+      assert.equal(client?.destinationSourceId, "source");
+      const oldColumn = migrated
+        .prepare(
+          "SELECT name FROM pragma_table_info('ReleaseIndexer') WHERE name = 'destinationSourceId'",
+        )
+        .get();
+      assert.equal(oldColumn, undefined);
+    } finally {
+      migrated.close();
+    }
+  });
+});
+
 test("failed migrations preserve a verified pre-migration backup", async () => {
   await withTemporaryDatabase(async (databasePath) => {
     const database = new DatabaseSync(databasePath);

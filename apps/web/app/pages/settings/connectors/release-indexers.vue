@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { Icon } from "@iconify/vue/offline";
-import { computed, definePageMeta, ref } from "#imports";
+import { computed, definePageMeta, ref, useI18n } from "#imports";
 import type {
-  LibrarySourceResponse,
   ReleaseIndexerInput,
   ReleaseIndexerResponse,
 } from "@peridot/contracts";
 import { Button } from "@peridot/ui/components/ui/button";
 import { Input } from "@peridot/ui/components/ui/input";
+import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import {
   AlertDialogAction,
   AlertDialogCancel,
@@ -35,16 +35,19 @@ import { useServer } from "../../../composables/use-server";
 import { useSession } from "../../../composables/use-session";
 import { useUser } from "../../../composables/use-user";
 import { icons } from "../../../lib/icons";
-import { listSources, releaseIndexersApi } from "../../../lib/peridot-client";
+import { releaseIndexersApi } from "../../../lib/peridot-client";
 
 definePageMeta({ layout: "settings" });
+const { t } = useI18n();
 const { address } = useServer();
 const { token } = useSession();
 const { user } = useUser();
 const indexers = ref<ReleaseIndexerResponse[]>([]);
-const sources = ref<LibrarySourceResponse[]>([]);
 const error = ref("");
 const formError = ref("");
+const testMessage = ref("");
+const testStatus = ref<"idle" | "success" | "error">("idle");
+const testing = ref(false);
 const loading = ref(false);
 const open = ref(false);
 const editing = ref<ReleaseIndexerResponse | null>(null);
@@ -58,9 +61,9 @@ const form = ref({
   category: "",
   tags: "",
   categoryPath: false,
-  folderId: "",
   savePath: "",
 });
+let testSequence = 0;
 const api = computed(() =>
   address.value && token.value
     ? releaseIndexersApi(address.value, token.value)
@@ -72,12 +75,7 @@ async function load() {
   loading.value = true;
   error.value = "";
   try {
-    const [nextIndexers, nextSources] = await Promise.all([
-      api.value!.list(),
-      listSources(address.value, token.value),
-    ]);
-    indexers.value = nextIndexers.items;
-    sources.value = nextSources.items;
+    indexers.value = (await api.value!.list()).items;
   } catch (reason) {
     error.value = reason instanceof Error ? reason.message : "Load failed.";
   } finally {
@@ -85,9 +83,17 @@ async function load() {
   }
 }
 
+function clearTestResult() {
+  testSequence += 1;
+  testStatus.value = "idle";
+  testMessage.value = "";
+  testing.value = false;
+}
+
 function beginAdd() {
   editing.value = null;
   formError.value = "";
+  clearTestResult();
   form.value = {
     name: "",
     url: "",
@@ -96,7 +102,6 @@ function beginAdd() {
     category: "",
     tags: "",
     categoryPath: false,
-    folderId: "",
     savePath: "",
   };
   open.value = true;
@@ -105,6 +110,7 @@ function beginAdd() {
 function beginEdit(indexer: ReleaseIndexerResponse) {
   editing.value = indexer;
   formError.value = "";
+  clearTestResult();
   form.value = {
     ...form.value,
     name: indexer.name ?? "",
@@ -114,10 +120,22 @@ function beginEdit(indexer: ReleaseIndexerResponse) {
     category: indexer.configuration.category ?? "",
     tags: indexer.configuration.tags ?? "",
     categoryPath: indexer.configuration.categoryPath === "true",
-    folderId: indexer.destinationSourceId ?? "",
     savePath: indexer.configuration.savePath ?? "",
   };
   open.value = true;
+}
+
+function formInput(): ReleaseIndexerInput {
+  return {
+    name: form.value.name,
+    url: form.value.url,
+    apiKey: form.value.apiKey,
+    downloadClientId: form.value.downloadClientId,
+    category: form.value.category,
+    tags: form.value.tags,
+    categoryPath: form.value.categoryPath,
+    savePath: form.value.savePath,
+  };
 }
 
 async function save() {
@@ -126,23 +144,11 @@ async function save() {
   try {
     let saved = editing.value;
     if (!saved) {
-      const input: ReleaseIndexerInput = {
-        name: form.value.name,
-        url: form.value.url,
-        apiKey: form.value.apiKey,
-        downloadClientId: form.value.downloadClientId,
-        librarySourceId: form.value.folderId,
-        category: form.value.category,
-        tags: form.value.tags,
-        categoryPath: form.value.categoryPath,
-        savePath: form.value.savePath,
-      };
-      saved = await api.value.create(input);
+      saved = await api.value.create(formInput());
     }
     if (saved && form.value.downloadClientId) {
       await api.value.link(saved.id, {
         downloadClientId: form.value.downloadClientId,
-        librarySourceId: form.value.folderId,
         category: form.value.category,
         tags: form.value.tags,
         categoryPath: form.value.categoryPath,
@@ -153,6 +159,33 @@ async function save() {
     await load();
   } catch (reason) {
     formError.value = reason instanceof Error ? reason.message : "Save failed.";
+  }
+}
+
+async function testConnection() {
+  if (!api.value || !form.value.url.trim()) return;
+  const sequence = ++testSequence;
+  testing.value = true;
+  testStatus.value = "idle";
+  testMessage.value = "";
+  try {
+    const result = await api.value.test({
+      ...formInput(),
+      ...(editing.value ? { id: editing.value.id } : {}),
+    });
+    if (sequence !== testSequence) return;
+    testStatus.value = "success";
+    testMessage.value = t(
+      "indexer.testConnected",
+      { count: result.categories.length },
+      result.categories.length,
+    );
+  } catch {
+    if (sequence !== testSequence) return;
+    testStatus.value = "error";
+    testMessage.value = t("indexer.testFailed");
+  } finally {
+    if (sequence === testSequence) testing.value = false;
   }
 }
 
@@ -262,8 +295,8 @@ onMounted(load);
           <DialogDescription class="text-sm text-muted-foreground">
             {{
               editing
-                ? "Update this Torznab feed and its import destination."
-                : "Connect a Torznab feed and choose where completed releases are imported."
+                ? "Update this Torznab feed and its download settings."
+                : "Connect a Torznab feed and choose how releases are downloaded."
             }}
           </DialogDescription>
           <form class="mt-4 space-y-4" @submit.prevent="save">
@@ -278,7 +311,11 @@ onMounted(load);
                 type="url"
                 autocomplete="off"
                 required
+                @input="clearTestResult"
               />
+              <span class="text-xs text-muted-foreground">
+                {{ t("indexer.testHelp") }}
+              </span>
             </label>
             <label v-if="!editing" class="block space-y-2">
               <span class="text-sm font-medium">API key</span>
@@ -286,19 +323,52 @@ onMounted(load);
                 v-model="form.apiKey"
                 type="password"
                 autocomplete="new-password"
+                @input="clearTestResult"
               />
             </label>
-            <DownloadClientLink v-model="form" :sources="sources" />
+            <DownloadClientLink v-model="form" />
+            <p
+              v-if="testStatus === 'success'"
+              role="status"
+              class="text-sm text-success"
+            >
+              {{ testMessage }}
+            </p>
+            <p
+              v-else-if="testStatus === 'error'"
+              role="alert"
+              class="text-sm text-destructive"
+            >
+              {{ testMessage }}
+            </p>
             <p v-if="formError" role="alert" class="text-sm text-destructive">
               {{ formError }}
             </p>
-            <div class="flex justify-end gap-2">
-              <Button type="button" variant="outline" @click="open = false">
-                Cancel
+            <div class="flex items-center justify-between gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                :disabled="testing || !form.url.trim()"
+                @click="testConnection"
+              >
+                <PeridotSpinner
+                  v-if="testing"
+                  :label="t('indexer.testing')"
+                  class="size-4"
+                />
+                {{ testing ? t("indexer.testing") : t("indexer.test") }}
               </Button>
-              <Button type="submit" :disabled="loading || !form.url.trim()">
-                Save
-              </Button>
+              <div class="flex gap-2">
+                <Button type="button" variant="outline" @click="open = false">
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  :disabled="loading || testing || !form.url.trim()"
+                >
+                  Save
+                </Button>
+              </div>
             </div>
           </form>
         </DialogContent>

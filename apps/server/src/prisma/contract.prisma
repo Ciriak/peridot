@@ -160,7 +160,6 @@ model ReleaseIndexer {
   configuration        String?
   credentialCiphertext String?
   downloadClientId     String?
-  destinationSourceId  String?
   position             Int      @default(0)
   removedAt            DateTime?
   createdAt            DateTime @default(now())
@@ -178,6 +177,7 @@ model DownloadClient {
   url                  String
   username             String
   credentialCiphertext String
+  destinationSourceId  String?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @onCreate(now()) @onUpdate(now())
 }

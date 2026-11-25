@@ -18,19 +18,26 @@ const isMetadataProviders = computed(
 const isDownloadClients = computed(
   () => data.value.view === "download-client-subflow",
 );
+const isReleaseIndexers = computed(
+  () => data.value.view === "release-indexer-subflow",
+);
 const title = computed(() =>
-  isDownloadClients.value
-    ? t("settings.connectors.downloadClients")
-    : isMetadataProviders.value
-      ? t("settings.connectors.metadataProviders")
-      : t("settings.sources.heading"),
+  isReleaseIndexers.value
+    ? t("settings.connectors.releaseIndexers")
+    : isDownloadClients.value
+      ? t("settings.connectors.downloadClients")
+      : isMetadataProviders.value
+        ? t("settings.connectors.metadataProviders")
+        : t("settings.sources.heading"),
 );
 const icon = computed(() =>
-  isDownloadClients.value
-    ? icons.download
-    : isMetadataProviders.value
-      ? icons.metadata
-      : icons.library,
+  isReleaseIndexers.value
+    ? icons.globe
+    : isDownloadClients.value
+      ? icons.download
+      : isMetadataProviders.value
+        ? icons.metadata
+        : icons.library,
 );
 </script>
 

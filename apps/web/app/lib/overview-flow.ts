@@ -6,16 +6,23 @@ import type {
   OverviewDownloadClientResponse,
   OverviewLibrarySourceResponse,
   OverviewMetadataProviderResponse,
+  OverviewReleaseIndexerResponse,
   OverviewServiceCounts,
 } from "@peridot/contracts";
 
 export interface OverviewNodeData extends Record<string, unknown> {
-  view: "peridot" | "library-source" | "metadata-provider" | "download-client";
+  view:
+    | "peridot"
+    | "library-source"
+    | "metadata-provider"
+    | "release-indexer"
+    | "download-client";
   name: string;
   address: string;
   fileCount: number | null;
   status: OverviewConnectionStatus | "checking";
-  kind: LibrarySourceKind | MetadataProviderKind | "qbittorrent" | null;
+  kind:
+    LibrarySourceKind | MetadataProviderKind | "qbittorrent" | "torznab" | null;
   handleType: "source" | "target" | null;
   sourcePosition: Position | null;
   targetHandles: string[];
@@ -27,6 +34,7 @@ export interface OverviewSubflowNodeData extends Record<string, unknown> {
   view:
     | "library-source-subflow"
     | "metadata-provider-subflow"
+    | "release-indexer-subflow"
     | "download-client-subflow";
 }
 
@@ -52,6 +60,21 @@ const DOWNLOAD_CLIENT_GROUP_TOP = 160;
 
 function centeredRowY(index: number, count: number): number {
   return (index - (count - 1) / 2) * CONNECTION_ROW_GAP;
+}
+
+function destinationSourceMappings(
+  sources: readonly OverviewLibrarySourceResponse[],
+  clients: readonly OverviewDownloadClientResponse[],
+) {
+  const sourceById = new Map(sources.map((source) => [source.id, source]));
+  return new Map(
+    clients.flatMap((client) => {
+      const source = client.destinationSourceId
+        ? sourceById.get(client.destinationSourceId)
+        : undefined;
+      return source ? [[client.id, source.id] as const] : [];
+    }),
+  );
 }
 
 export function overviewSubflowHeight(sourceCount: number): number {
@@ -89,11 +112,29 @@ export function overviewConnectionPositions(position: {
 export function overviewNodes(
   sources: readonly OverviewLibrarySourceResponse[],
   providers: readonly OverviewMetadataProviderResponse[],
+  indexers: readonly OverviewReleaseIndexerResponse[],
   clients: readonly OverviewDownloadClientResponse[],
   serviceCounts: OverviewServiceCounts,
   peridotAddress: string,
   peridotStatus: OverviewConnectionStatus,
 ): OverviewDiagramNode[] {
+  const clientsById = new Map(clients.map((client) => [client.id, client]));
+  const destinationSourceByClient = destinationSourceMappings(sources, clients);
+  const destinationSourceIds = new Set(destinationSourceByClient.values());
+  const clientsWithIndexers = new Set(
+    indexers.flatMap((indexer) =>
+      indexer.downloadClientId && clientsById.has(indexer.downloadClientId)
+        ? [indexer.downloadClientId]
+        : [],
+    ),
+  );
+  const fallbackClients = clients.filter(
+    (client) => !destinationSourceByClient.has(client.id),
+  );
+  const fallbackIndexers = indexers.filter(
+    (indexer) =>
+      !indexer.downloadClientId || !clientsById.has(indexer.downloadClientId),
+  );
   const nodes: OverviewDiagramNode[] = [
     {
       id: "peridot",
@@ -113,9 +154,13 @@ export function overviewNodes(
         sourcePosition: null,
         targetHandles: [
           ...(sources.length ? ["peridot-left"] : []),
-          ...(providers.length ? ["peridot-right"] : []),
+          ...(providers.length || fallbackIndexers.length
+            ? ["peridot-right"]
+            : []),
         ],
-        sourceHandles: clients.length ? ["peridot-download-client"] : [],
+        sourceHandles: fallbackClients.length
+          ? ["peridot-download-client"]
+          : [],
         serviceCounts,
       },
     },
@@ -148,6 +193,24 @@ export function overviewNodes(
       zIndex: -1,
       data: {
         view: "metadata-provider-subflow",
+      },
+    });
+  }
+  const releaseIndexerGroupHeight = overviewSubflowHeight(indexers.length);
+  const releaseIndexerGroupY =
+    DOWNLOAD_CLIENT_GROUP_TOP + releaseIndexerGroupHeight / 2;
+  if (indexers.length) {
+    nodes.push({
+      id: "release-indexer-subflow",
+      type: "subflow",
+      position: { x: METADATA_PROVIDER_GROUP_X, y: releaseIndexerGroupY },
+      width: LIBRARY_SOURCE_GROUP_WIDTH,
+      height: releaseIndexerGroupHeight,
+      draggable: false,
+      selectable: false,
+      zIndex: -1,
+      data: {
+        view: "release-indexer-subflow",
       },
     });
   }
@@ -187,7 +250,9 @@ export function overviewNodes(
         kind: source.kind as LibrarySourceKind | MetadataProviderKind,
         handleType: "source",
         sourcePosition: Position.Right,
-        targetHandles: [],
+        targetHandles: destinationSourceIds.has(source.id)
+          ? ["download-destination"]
+          : [],
         sourceHandles: [],
         serviceCounts: null,
       },
@@ -216,6 +281,29 @@ export function overviewNodes(
       },
     });
   }
+  for (const [index, indexer] of indexers.entries()) {
+    nodes.push({
+      id: `release-indexer-${indexer.id}`,
+      type: "overview",
+      position: {
+        x: METADATA_PROVIDER_GROUP_X,
+        y: releaseIndexerGroupY + centeredRowY(index, indexers.length),
+      },
+      data: {
+        view: "release-indexer",
+        name: indexer.name,
+        address: indexer.address,
+        fileCount: null,
+        status: indexer.status,
+        kind: "torznab",
+        handleType: "source",
+        sourcePosition: Position.Left,
+        targetHandles: [],
+        sourceHandles: [],
+        serviceCounts: null,
+      },
+    });
+  }
   for (const [index, client] of clients.entries()) {
     nodes.push({
       id: `download-client-${client.id}`,
@@ -231,10 +319,16 @@ export function overviewNodes(
         fileCount: null,
         status: client.status,
         kind: "qbittorrent",
-        handleType: "target",
-        sourcePosition: Position.Top,
-        targetHandles: [],
-        sourceHandles: [],
+        handleType: destinationSourceByClient.has(client.id) ? null : "target",
+        sourcePosition: destinationSourceByClient.has(client.id)
+          ? null
+          : Position.Top,
+        targetHandles: clientsWithIndexers.has(client.id)
+          ? ["release-indexer"]
+          : [],
+        sourceHandles: destinationSourceByClient.has(client.id)
+          ? ["download-destination"]
+          : [],
         serviceCounts: null,
       },
     });
@@ -245,9 +339,12 @@ export function overviewNodes(
 export function overviewEdges(
   sources: readonly OverviewLibrarySourceResponse[],
   providers: readonly OverviewMetadataProviderResponse[],
+  indexers: readonly OverviewReleaseIndexerResponse[],
   clients: readonly OverviewDownloadClientResponse[],
   animated: boolean,
 ): OverviewFlowEdge[] {
+  const clientsById = new Map(clients.map((client) => [client.id, client]));
+  const clientDestination = destinationSourceMappings(sources, clients);
   return [
     ...sources.map((source) => ({
       id: `source-${source.id}-peridot`,
@@ -275,19 +372,65 @@ export function overviewEdges(
       deletable: false,
       updatable: false,
     })),
-    ...clients.map((client) => ({
-      id: `peridot-download-client-${client.id}`,
-      source: "peridot",
-      sourceHandle: "peridot-download-client",
-      target: `download-client-${client.id}`,
-      targetHandle: "download-client",
-      type: "animation",
-      animated,
-      interactionWidth: 0,
-      selectable: false,
-      deletable: false,
-      updatable: false,
-    })),
+    ...indexers.map((indexer) =>
+      indexer.downloadClientId && clientsById.has(indexer.downloadClientId)
+        ? {
+            id: `release-indexer-${indexer.id}-download-client-${indexer.downloadClientId}`,
+            source: `release-indexer-${indexer.id}`,
+            target: `download-client-${indexer.downloadClientId}`,
+            sourceHandle: "source",
+            targetHandle: "release-indexer",
+            type: "animation",
+            animated,
+            interactionWidth: 0,
+            selectable: false,
+            deletable: false,
+            updatable: false,
+          }
+        : {
+            id: `release-indexer-${indexer.id}-peridot`,
+            source: `release-indexer-${indexer.id}`,
+            target: "peridot",
+            sourceHandle: "source",
+            targetHandle: "peridot-right",
+            type: "animation",
+            animated,
+            interactionWidth: 0,
+            selectable: false,
+            deletable: false,
+            updatable: false,
+          },
+    ),
+    ...clients.map((client) => {
+      const destinationSourceId = clientDestination.get(client.id);
+      return destinationSourceId
+        ? {
+            id: `download-client-${client.id}-source-${destinationSourceId}`,
+            source: `download-client-${client.id}`,
+            target: `source-${destinationSourceId}`,
+            sourceHandle: "download-destination",
+            targetHandle: "download-destination",
+            type: "animation",
+            animated,
+            interactionWidth: 0,
+            selectable: false,
+            deletable: false,
+            updatable: false,
+          }
+        : {
+            id: `peridot-download-client-${client.id}`,
+            source: "peridot",
+            sourceHandle: "peridot-download-client",
+            target: `download-client-${client.id}`,
+            targetHandle: "download-client",
+            type: "animation",
+            animated,
+            interactionWidth: 0,
+            selectable: false,
+            deletable: false,
+            updatable: false,
+          };
+    }),
   ];
 }
 
@@ -312,6 +455,8 @@ export function overviewNodeSettingsPath(
       return "/settings/connectors/library-sources";
     case "metadata-provider":
       return "/settings/connectors/metadata-providers";
+    case "release-indexer":
+      return "/settings/connectors/release-indexers";
     case "download-client":
       return "/settings/connectors/download-clients";
   }

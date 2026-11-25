@@ -1,5 +1,149 @@
 # Peridot handoff
 
+## Release indexer save without a live connection
+
+Release indexers can now be created while their Torznab feed is unreachable.
+Saving validates the URL, credential shape, and configured download-client
+settings without performing a network request. New or restored feeds default to
+generic Torznab search with audio category `3000`.
+
+The release-indexer dialog includes an explicit Test connection action.
+`POST /api/admin/release-indexers/test` checks the currently entered URL and
+returns the advertised search mode and audio categories. Testing a saved
+indexer with a blank API key reuses its encrypted stored credential. Connection
+failures stay visible in the dialog and do not block saving.
+
+Verification:
+
+- `pnpm --filter @peridot/server test` (237 passing)
+- `pnpm --filter @peridot/web test` (343 passing)
+- `pnpm --filter @peridot/server typecheck`
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/server build`
+- `pnpm --filter @peridot/web build`
+- `pnpm --filter @peridot/contracts build`
+- `pnpm db:validate` (3 migrations, current at `a9baeceeeaa3`)
+- `pnpm lint`
+- `pnpm version:check`
+- Focused Prettier checks on the changed files
+- `git diff --check`
+
+Known limits:
+
+- Live authenticated browser QA with an unreachable feed was not completed.
+- A successful test reports advertised capabilities but does not mutate saved
+  configuration; feeds saved without a test use the generic `search`/`3000`
+  fallback.
+- Full-repository Prettier still reports only the concurrently modified
+  `apps/desktop/src-tauri/tauri.conf.json`, which was preserved.
+
+Uncommitted changes:
+
+- Release-indexer local save validation, test endpoint and contract, dialog test
+  action and feedback, OpenAPI schema, focused tests, decision record,
+  development note, and this handoff section.
+- Concurrent download-client, overview, migration, version, and desktop changes
+  remain present and were preserved.
+
+## Overview connector relationship links
+
+The platform overview now follows configured data relationships. Download
+clients link to their Destination source, and release indexers link to their
+selected download client. Library sources and metadata providers continue to
+link to Peridot. An indexer without a client and a legacy client without an
+active Destination source retain the direct Peridot fallback link.
+
+Download-client edges now include every configured Destination source kind,
+including Jellyfin and folder sources. Node handles and edges share one
+destination mapping so a valid target source cannot render without its link.
+
+Verification:
+
+- Focused overview flow, settings, and server overview tests (16 passing)
+- Focused overview flow regression tests (10 passing)
+- `pnpm --filter @peridot/web test` (343 passing)
+- `pnpm --filter @peridot/server typecheck`
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/server build`
+- `pnpm --filter @peridot/web build`
+- `pnpm db:validate`
+- `pnpm lint`
+- Focused Prettier checks on the changed files
+
+Known limits:
+
+- Live authenticated visual QA of the crossing relationship edges was not
+  completed.
+- The full server suite passes 229 tests but the Jellyfin file aborts with the
+  repository's existing Node/V8 CommonJS loader crash; an isolated rerun also
+  aborts after five passing Jellyfin tests.
+- Full-repository Prettier currently reports the concurrently modified desktop
+  Tauri configuration, which was preserved.
+
+Uncommitted changes:
+
+- Overview relationship IDs, graph edge and handle changes, fallback behavior,
+  focused regression tests, development note, decision record, and this handoff
+  section.
+- Concurrent download-client, migration, overview-layout, and version changes
+  remain present and were preserved.
+
+## Download client Destination source and optional connection test
+
+Download clients now own the Destination source selector. Release indexers only
+choose the client, category, tags, and save-path behavior. The selector lists
+every active library source by name, falling back to its path or kind. Jellyfin
+destinations import by running the configured Jellyfin source scan after the
+download completes.
+
+Saving a download client no longer contacts qBittorrent. Administrators can
+create or edit a client before its service is reachable. Discovery remains
+optional, and the authenticated test endpoint remains available for an explicit
+connection check. Save still validates the URL, credential shape, and active
+Destination source.
+
+The data-preserving migration copies an existing linked indexer destination to its
+download client before dropping the indexer field. If multiple indexers for one
+client disagree, the earliest ordered indexer wins.
+
+Verification:
+
+- Focused Torznab integration-source destination tests (8 passing)
+- `pnpm --filter @peridot/web test` (343 passing)
+- Migration preservation test applies the new migration to a database at the
+  prior contract and confirms the linked client receives its indexer destination
+- `pnpm --filter @peridot/server typecheck`
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/server build`
+- `pnpm --filter @peridot/web build`
+- `pnpm db:validate` (3 migrations, current at `a9baeceeeaa3`)
+- `pnpm lint`
+- `pnpm format:check`
+- `pnpm version:check`
+
+Known limits:
+
+- Live authenticated browser QA with an intentionally unreachable qBittorrent
+  client was not completed.
+- A Jellyfin Destination source performs the normal full Jellyfin source scan
+  after transfer completion. It does not map qBittorrent relative file paths to
+  Jellyfin item IDs, so the release status may not expose an exact play-imported
+  media list even though changed Jellyfin media feed downstream metadata work.
+
+Uncommitted changes:
+
+- Download-client Destination source ownership, schema and data migration,
+  optional live connection validation, focused server/web tests, decision
+  record, development note, README clarification, and this handoff section.
+- Concurrent overview and other in-progress changes remain present and were
+  preserved.
+
+Next:
+
+- Add a client with an unreachable URL, confirm it persists and lists the chosen
+  Destination source, then make the service reachable and verify categories and
+  tags load for indexer transfer settings.
+
 ## Release indexer action parity
 
 Release indexers now match the download-client toolbar and saved-row actions.
@@ -31,10 +175,11 @@ The account avatar and `/settings` now open `/settings/overview`. Profile remain
 a separate settings destination. Overview is a full-workspace, read-only Vue
 Flow 2 graph with Peridot centered, a library-source subflow on the left, and a
 metadata-provider subflow on the right. A download-client subflow sits below,
-with outbound animated edges from Peridot to each client. The subflows are visual
-backgrounds; each card keeps its own animated bezier link. Cards show icons,
-names, safe address labels, basic counts/type, and static-or-animated status
-dots. The central card uses the default card background with a primary border;
+with outbound animated edges from Peridot to each client. Release indexers form
+a bottom-right subflow with inbound links back to Peridot. The subflows are
+visual backgrounds; each card keeps its own animated bezier link. Cards show
+icons, names, safe address labels, basic counts/type, and static-or-animated
+status dots. The central card uses the default card background with a primary border;
 it shows available album, playlist, podcast, and audiobook totals. Only online
 dots pulse; disabled/unknown states stay static. Metadata-provider cards show
 only icon, name, and status. After node initialization the graph explicitly
@@ -49,6 +194,8 @@ short cache and timeout. Metadata cards expose MusicBrainz/Discogs service
 names and active/unknown/disabled state without returning configuration,
 credentials, addresses, or counts. Download-client cards expose only their saved
 name and qBittorrent host; they remain `unknown` until a live probe is added.
+Release-indexer cards expose their saved name and Torznab host, also with
+`unknown` status until a live probe is added.
 
 Verification:
 

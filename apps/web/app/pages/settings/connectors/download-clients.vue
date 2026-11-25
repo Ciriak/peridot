@@ -34,6 +34,7 @@ import { useQuery, useQueryClient } from "@tanstack/vue-query";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { definePageMeta, useI18n } from "#imports";
 import { useQueryScope } from "../../../composables/use-query-scope";
+import { useAdminSourcesQuery } from "../../../composables/use-admin-queries";
 import { useServer } from "../../../composables/use-server";
 import { useServerConnection } from "../../../composables/use-server-connection";
 import { useSession } from "../../../composables/use-session";
@@ -42,7 +43,6 @@ import { icons } from "../../../lib/icons";
 import {
   discoverConnectorInstances,
   downloadClientsApi,
-  PeridotApiError,
 } from "../../../lib/peridot-client";
 
 definePageMeta({ layout: "settings" });
@@ -63,6 +63,10 @@ const clients = useQuery({
     Boolean(address.value && token.value && user.value?.role === "admin"),
   ),
 });
+const librarySources = useAdminSourcesQuery();
+const destinationSources = computed(() =>
+  librarySources.items.value.filter((source) => !source.removal),
+);
 
 const open = ref(false);
 const removeOpen = ref(false);
@@ -86,6 +90,7 @@ const keepSecret = computed(
 const blank = (name = "") => ({
   name,
   url: "",
+  destinationSourceId: "",
   authType: "apiKey" as DownloadClientAuthType,
   username: "",
   password: "",
@@ -160,6 +165,7 @@ function edit(client?: DownloadClientResponse) {
   form.value = {
     name: client?.name ?? "",
     url: client?.url ?? "",
+    destinationSourceId: client?.destinationSourceId ?? "",
     authType: client?.authType ?? "apiKey",
     username: client?.username ?? "",
     password: "",
@@ -253,10 +259,6 @@ async function confirmRemove() {
 async function act(action: "save" | "remove", removeId?: string) {
   if (action !== "remove" && !kind.value) return;
   const instance = selectedQbittorrentInstance.value;
-  if (action === "save" && !instance) {
-    error.value = t("clients.discoveryRequired");
-    return;
-  }
   busy.value = true;
   error.value = "";
   try {
@@ -279,18 +281,25 @@ async function act(action: "save" | "remove", removeId?: string) {
     await queryClient.invalidateQueries({
       queryKey: ["download-client-options", scope.value],
     });
-  } catch (reason) {
+  } catch {
     error.value = t(
-      action === "remove"
-        ? "clients.removeFailed"
-        : reason instanceof PeridotApiError &&
-            reason.code === "connection_failed"
-          ? "clients.testFailed"
-          : "clients.saveFailed",
+      action === "remove" ? "clients.removeFailed" : "clients.saveFailed",
     );
   } finally {
     busy.value = false;
   }
+}
+
+function destinationName(client: DownloadClientResponse) {
+  const source = destinationSources.value.find(
+    (item) => item.id === client.destinationSourceId,
+  );
+  return (
+    source?.name ||
+    source?.path ||
+    source?.url ||
+    t("clients.destinationNotSet")
+  );
 }
 
 onBeforeUnmount(() => {
@@ -329,6 +338,11 @@ onBeforeUnmount(() => {
       <div class="flex-1">
         <p>{{ client.name }}</p>
         <p class="text-sm text-muted-foreground">{{ client.url }}</p>
+        <p class="text-sm text-muted-foreground">
+          {{
+            t("clients.destinationValue", { source: destinationName(client) })
+          }}
+        </p>
       </div>
       <Button
         variant="ghost"
@@ -517,6 +531,34 @@ onBeforeUnmount(() => {
 
             <label class="block space-y-2">
               <span class="text-sm font-medium">
+                {{ t("clients.destinationSource") }}
+              </span>
+              <select
+                v-model="form.destinationSourceId"
+                class="w-full rounded-md border bg-background p-2"
+                required
+              >
+                <option disabled value="">
+                  {{ t("clients.chooseDestinationSource") }}
+                </option>
+                <option
+                  v-for="source in destinationSources"
+                  :key="source.id"
+                  :value="source.id"
+                >
+                  {{ source.name || source.path || source.url || source.kind }}
+                </option>
+              </select>
+              <NuxtLink
+                class="text-sm text-muted-foreground underline"
+                to="/settings/connectors/library-sources"
+              >
+                {{ t("clients.manageSources") }}
+              </NuxtLink>
+            </label>
+
+            <label class="block space-y-2">
+              <span class="text-sm font-medium">
                 {{ t("clients.authType") }}
               </span>
               <select
@@ -570,7 +612,7 @@ onBeforeUnmount(() => {
             </p>
             <div class="flex gap-2">
               <Button
-                :disabled="busy || !selectedQbittorrentInstance || serverLost"
+                :disabled="busy || !form.destinationSourceId || serverLost"
                 type="submit"
               >
                 {{ t("common.save") }}

@@ -168,12 +168,16 @@ test("overview counts the signed-in user's visible playlists", async () => {
 test("overview includes sanitized download clients", async () => {
   const context = await createTestContext();
   try {
+    const source = await context.database.orm.LibrarySource.firstOrThrow({
+      kind: "path",
+    });
     const client = await context.database.orm.DownloadClient.create({
       kind: "qbittorrent",
       name: "Downloads",
       url: "http://qbit.local:8080/",
       username: "private-user",
       credentialCiphertext: "private-password",
+      destinationSourceId: source.id,
     });
     const member = await createMemberSession(context);
     const response = await context.app.inject({
@@ -190,10 +194,57 @@ test("overview includes sanitized download clients", async () => {
       kind: "qbittorrent",
       name: "Downloads",
       address: "qbit.local:8080",
+      destinationSourceId: source.id,
       status: "unknown",
     });
     assert.equal(response.body.includes("private-user"), false);
     assert.equal(response.body.includes("private-password"), false);
+  } finally {
+    await context.close();
+  }
+});
+
+test("overview includes sanitized release indexers", async () => {
+  const context = await createTestContext();
+  try {
+    const source = await context.database.orm.LibrarySource.firstOrThrow({
+      kind: "path",
+    });
+    const client = await context.database.orm.DownloadClient.create({
+      kind: "qbittorrent",
+      name: "Linked downloader",
+      url: "http://qbit.local:8080/",
+      username: "",
+      credentialCiphertext: "private-password",
+      destinationSourceId: source.id,
+    });
+    const indexer = await context.database.orm.ReleaseIndexer.create({
+      kind: "torznab",
+      name: "Private Tracker",
+      url: "http://indexer.local:9117/api",
+      credentialCiphertext: "private-indexer-key",
+      downloadClientId: client.id,
+      position: 0,
+    });
+    const member = await createMemberSession(context);
+    const response = await context.app.inject({
+      method: "GET",
+      url: "/api/overview",
+      headers: member,
+    });
+    assert.equal(response.statusCode, 200, response.body);
+    const releaseIndexer = response
+      .json<OverviewResponse>()
+      .releaseIndexers.find((item) => item.id === indexer.id);
+    assert.deepEqual(releaseIndexer, {
+      id: indexer.id,
+      kind: "torznab",
+      name: "Private Tracker",
+      address: "indexer.local:9117",
+      downloadClientId: client.id,
+      status: "unknown",
+    });
+    assert.equal(response.body.includes("private-indexer-key"), false);
   } finally {
     await context.close();
   }
