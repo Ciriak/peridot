@@ -1,5 +1,67 @@
 # Peridot handoff
 
+## Progressive source-neutral media discovery
+
+Folder scans, Jellyfin scans, and targeted release imports now share a
+committed-media catalog boundary. Folder discovery streams bounded batches
+while later directories are still being enumerated, Jellyfin retains its
+500-item pages and 100-record transactions, and the catalog materializes after
+at most 500 unique committed media IDs or the final partial batch.
+
+Each materialization transaction reconciles `CatalogMedia`, album and artist
+summaries, artist links, card search terms, and pending projection state before
+publishing one catalog revision. Albums, artists, and search are usable while a
+scan is running. Completed batches remain visible if a later traversal or remote
+request fails. The full catalog projection now runs only as a recovery fallback
+when media remain pending.
+
+The Albums page shows a localized outline badge with the shared spinner beside
+its count while a library scan is running.
+
+Verification:
+
+- `pnpm --filter @peridot/server test` (227 passing)
+- `pnpm --filter @peridot/web test` (324 passing)
+- `pnpm exec turbo run test --filter=!@peridot/android --concurrency=1`
+  (contracts, desktop, player, server, UI, and web successful)
+- `pnpm typecheck`
+- `pnpm lint`
+- `pnpm format:check`
+- `pnpm version:check`
+- `pnpm db:validate` (current at `7fb2e91df85d`, two migrations)
+- `pnpm build` (server, web, desktop, and Android debug build)
+
+The normal parallel `pnpm test` run hit the repository's previously observed
+Node/V8 loader crash while the Jellyfin test file overlapped with other package
+workers. The same aggregate suite passed with Turbo concurrency set to one, and
+the server suite also passed independently.
+
+Known limits:
+
+- Folder progress is indeterminate until breadth-first enumeration completes.
+- Interrupted scans still restart traversal; this milestone does not persist a
+  page checkpoint.
+- Album and artist counts are provisional and may increase while indexing.
+- A storage-heavy synthetic 70k-item timing benchmark was not added.
+- The Albums-page hint was verified through behavioral tests and the production
+  build, not an authenticated browser session.
+
+Uncommitted changes:
+
+- Shared scan batching and incremental catalog materialization.
+- Folder streaming discovery and catalog reconciliation for unavailable copies.
+- Progressive Jellyfin and release-import batches.
+- Albums-page indexing badge, translation, tests, and scan documentation.
+
+Next:
+
+- Exercise an authenticated large Jellyfin scan and confirm that albums appear
+  after the first page while the task remains running.
+- Measure first-album latency, peak memory, SQLite busy errors, and total scan
+  duration at 10k and 70k items.
+- Add resumable source cursors and retention of cross-batch album identity
+  refinements if interrupted scans become a common operational issue.
+
 ## Reusable connector instance discovery
 
 Connector discovery now uses one server-side engine for subnet enumeration,

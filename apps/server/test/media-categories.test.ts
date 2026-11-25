@@ -16,6 +16,7 @@ import {
   createWav,
   startScan,
   waitForTask,
+  waitForScan,
 } from "./helpers.js";
 
 test("one automatic source separates mixed music, audiobooks, and podcasts", async () => {
@@ -166,7 +167,7 @@ test("automatic detection keeps books and shows separate from music", async () =
     assert.equal(bookSourceResponse.statusCode, 201);
     const bookSource = bookSourceResponse.json<CreateLibrarySourceResponse>();
     assert.ok(bookSource.task);
-    await waitForTask(context, bookSource.task.id);
+    await waitForScan(context, bookSource.task.id);
 
     const showsRoot = path.join(context.root, "podcasts", "Show One");
     await mkdir(showsRoot, { recursive: true });
@@ -209,7 +210,7 @@ test("automatic detection keeps books and shows separate from music", async () =
     const podcastSource =
       podcastSourceResponse.json<CreateLibrarySourceResponse>();
     assert.ok(podcastSource.task);
-    await waitForTask(context, podcastSource.task.id);
+    await waitForScan(context, podcastSource.task.id);
 
     const albumsResponse = await context.app.inject({
       method: "GET",

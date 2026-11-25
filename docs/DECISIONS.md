@@ -1,5 +1,32 @@
 # Peridot decisions
 
+## 2026-11-25: Discovery materializes the catalog in committed batches
+
+Library discovery and catalog projection use one source-neutral batch boundary.
+Folder scans stream bounded discovery batches, Jellyfin pages retain their
+100-record import transactions, and targeted release imports use the same path,
+while the catalog materializes at most every 500 unique committed media IDs and
+once for the final partial batch.
+
+Each materialization transaction captures old projection state, updates
+`CatalogMedia`, reconciles artist links and media search terms, rebuilds each
+affected album and artist once, replaces card search terms, and clears
+projection-pending state. One catalog revision is published after the complete
+batch. Albums, artists, and search therefore become usable during the scan and
+completed batches remain available if a later traversal or remote request fails.
+
+Folder discovery no longer retains the complete source file list. It yields
+bounded batches while the breadth-first traversal continues; task progress stays
+indeterminate until the source total is known. A final full catalog projection
+remains available only for media still pending after discovery, covering older
+database state, failed incremental materialization, and recovery paths. Normal
+successful scans no longer perform a redundant full projection.
+
+Album and artist counts are provisional while a scan is running and may increase
+as later batches commit. The Albums page shows a small update badge beside its
+count while a library scan is running. No public API or persistent schema change
+is required.
+
 ## 2026-11-24: Connector instances use verified network discovery
 
 Trusted connectors may expose one shared instance-discovery capability. The

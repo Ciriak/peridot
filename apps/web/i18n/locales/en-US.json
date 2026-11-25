@@ -204,6 +204,7 @@
   "page.albums.title": "Albums — Peridot",
   "page.albums.loading": "Loading albums",
   "page.albums.all": "All albums",
+  "page.albums.indexing": "Update in progress...",
   "page.albums.empty": "No albums found. Tracks need album tags before they can appear here.",
   "page.albums.noMatches": "No albums match your search.",
   "page.albums.loadMore": "Load more albums",

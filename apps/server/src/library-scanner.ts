@@ -73,6 +73,7 @@ const CURRENT_METADATA_VERSION = 9;
 const PROGRESS_WRITE_INTERVAL_MS = 250;
 const EVENT_LOOP_YIELD_INTERVAL_MS = 25;
 const IMPORT_BATCH_SIZE = 100;
+const SCAN_MATERIALIZE_BATCH_SIZE = 500;
 const REMOTE_ARTWORK_CONCURRENCY = 6;
 
 interface DiscoveredFile {
@@ -99,6 +100,11 @@ interface ScanCounts {
   updatedCount: number;
   unchangedCount: number;
   errorCount: number;
+}
+
+interface PreparedFileResult {
+  catalogChanged: boolean;
+  mediaId: string | null;
 }
 
 interface TimingBucket {
@@ -194,13 +200,13 @@ function throwIfAborted(signal: AbortSignal): void {
   }
 }
 
-async function discoverAudioFiles(
+export async function* discoverAudioFileBatches(
   root: string,
   workerPool: ScanWorkerPool,
   workerCount: number,
   signal: AbortSignal,
-): Promise<DiscoveredFile[]> {
-  const files: DiscoveredFile[] = [];
+): AsyncGenerator<DiscoveredFile[]> {
+  let files: DiscoveredFile[] = [];
   const directories = [root];
   let cursor = 0;
   while (cursor < directories.length) {
@@ -222,9 +228,13 @@ async function discoverAudioFiles(
         });
       }
     }
+    while (files.length >= SCAN_MATERIALIZE_BATCH_SIZE) {
+      yield files.slice(0, SCAN_MATERIALIZE_BATCH_SIZE);
+      files = files.slice(SCAN_MATERIALIZE_BATCH_SIZE);
+    }
     await new Promise<void>((resolve) => setImmediate(resolve));
   }
-  return files;
+  if (files.length) yield files;
 }
 
 async function discoverReleaseImportFiles(
@@ -484,7 +494,7 @@ export class LibraryScanner {
         requestedSource?.name ||
         (requestedSource ? task.connectorName : null) ||
         "All sources";
-      const files: SourceFile[] = [];
+      const pathSources: LibrarySourceRow[] = [];
       const integrationSources: IntegrationSourceWork[] = [];
       for (const source of sources) {
         throwIfAborted(signal);
@@ -496,35 +506,7 @@ export class LibraryScanner {
               message("api.message.sourceUnavailable"),
             );
           }
-          const sourcePath = source.path;
-          if (targetedImport) {
-            const discovered = await withTiming(timings.discovery, () =>
-              discoverReleaseImportFiles(sourcePath, importPaths, signal),
-            );
-            discoveryErrorCount += discovered.errorCount;
-            for (const file of discovered.files) {
-              files.push({
-                ...file,
-                sourceId: source.id,
-                sourceKind: "path",
-              });
-            }
-            continue;
-          }
-          for (const file of await withTiming(timings.discovery, () =>
-            discoverAudioFiles(
-              sourcePath,
-              activeWorkerPool,
-              workerCount,
-              signal,
-            ),
-          )) {
-            files.push({
-              ...file,
-              sourceId: source.id,
-              sourceKind: "path",
-            });
-          }
+          pathSources.push(source);
           continue;
         }
         if (!this.sourceIntegrations.registry.has(source.kind)) {
@@ -540,16 +522,17 @@ export class LibraryScanner {
           handle: this.sourceIntegrations.sourceHandle(source),
         });
       }
-      let discoveredCount = files.length;
-      let progressTotal: number | null = integrationSources.length
-        ? null
-        : discoveredCount;
+      let pathDiscoveredCount = 0;
+      let discoveredCount = 0;
+      let progressTotal: number | null = null;
       let processedItems = 0;
       let unsupportedCount = 0;
       const processedMediaIds = new Set<string>();
       let completedRemoteTotal = 0;
+      let unavailableCount = 0;
       let lastProgressAt = 0;
       let lastYieldAt = Date.now();
+      const catalogBatchIds = new Set<string>();
       const updateProgress = async (force = false) => {
         if (
           !force &&
@@ -568,38 +551,148 @@ export class LibraryScanner {
             created: counts.createdCount,
             updated: counts.updatedCount,
             unchanged: counts.unchangedCount,
-            unavailable: 0,
+            unavailable: unavailableCount,
             errors: counts.errorCount + unsupportedCount + discoveryErrorCount,
             timingMs: scanTimingValues(timings),
           }),
         );
       };
+      const flushCatalogBatch = async (
+        primaryLibrarySourceId: string | null,
+        force = false,
+      ) => {
+        if (
+          !this.catalog ||
+          !catalogBatchIds.size ||
+          (!force && catalogBatchIds.size < SCAN_MATERIALIZE_BATCH_SIZE)
+        ) {
+          return;
+        }
+        const mediaIds = [...catalogBatchIds];
+        await withTiming(timings.catalog, async () => {
+          await this.catalog!.indexScanBatch(mediaIds, primaryLibrarySourceId);
+          await this.catalog!.flushChanges();
+        });
+        for (const mediaId of mediaIds) catalogBatchIds.delete(mediaId);
+      };
       await updateProgress(true);
 
-      const pendingFiles = prepareFiles(
-        this,
-        files,
-        activeWorkerPool,
-        workerCount,
-        signal,
-      );
-      for await (const prepared of pendingFiles) {
+      for (const source of pathSources) {
         throwIfAborted(signal);
-        const processedMediaId = await this.applyPreparedFile(
-          prepared,
-          task.id,
-          counts,
-          signal,
-          timings,
-        );
-        if (processedMediaId) processedMediaIds.add(processedMediaId);
-        processedItems += 1;
-        if (shouldYield(lastYieldAt)) {
-          await yieldToEventLoop();
-          lastYieldAt = Date.now();
+        const sourcePath = source.path!;
+        try {
+          if (targetedImport) {
+            const discovered = await withTiming(timings.discovery, () =>
+              discoverReleaseImportFiles(sourcePath, importPaths, signal),
+            );
+            discoveryErrorCount += discovered.errorCount;
+            pathDiscoveredCount += discovered.files.length;
+            discoveredCount = pathDiscoveredCount + completedRemoteTotal;
+            progressTotal = integrationSources.length ? null : discoveredCount;
+            await updateProgress(true);
+            for (
+              let offset = 0;
+              offset < discovered.files.length;
+              offset += SCAN_MATERIALIZE_BATCH_SIZE
+            ) {
+              throwIfAborted(signal);
+              const files = discovered.files
+                .slice(offset, offset + SCAN_MATERIALIZE_BATCH_SIZE)
+                .map((file): SourceFile => ({
+                  ...file,
+                  sourceId: source.id,
+                  sourceKind: "path",
+                }));
+              for await (const prepared of prepareFiles(
+                this,
+                files,
+                activeWorkerPool,
+                workerCount,
+                signal,
+              )) {
+                throwIfAborted(signal);
+                const result = await this.applyPreparedFile(
+                  prepared,
+                  task.id,
+                  counts,
+                  signal,
+                  timings,
+                );
+                if (result.mediaId && targetedImport) {
+                  processedMediaIds.add(result.mediaId);
+                }
+                if (result.mediaId && result.catalogChanged) {
+                  catalogBatchIds.add(result.mediaId);
+                }
+                processedItems += 1;
+                await flushCatalogBatch(source.id);
+                if (shouldYield(lastYieldAt)) {
+                  await yieldToEventLoop();
+                  lastYieldAt = Date.now();
+                }
+                await updateProgress();
+              }
+              await flushCatalogBatch(source.id, true);
+              await updateProgress(true);
+            }
+          } else {
+            let lastDiscoveryAt = Date.now();
+            for await (const discovered of discoverAudioFileBatches(
+              sourcePath,
+              activeWorkerPool,
+              workerCount,
+              signal,
+            )) {
+              throwIfAborted(signal);
+              timings.discovery.ms += Date.now() - lastDiscoveryAt;
+              pathDiscoveredCount += discovered.length;
+              discoveredCount = pathDiscoveredCount + completedRemoteTotal;
+              progressTotal = null;
+              await updateProgress(true);
+              const files = discovered.map((file): SourceFile => ({
+                ...file,
+                sourceId: source.id,
+                sourceKind: "path",
+              }));
+              for await (const prepared of prepareFiles(
+                this,
+                files,
+                activeWorkerPool,
+                workerCount,
+                signal,
+              )) {
+                throwIfAborted(signal);
+                const result = await this.applyPreparedFile(
+                  prepared,
+                  task.id,
+                  counts,
+                  signal,
+                  timings,
+                );
+                if (result.mediaId && result.catalogChanged) {
+                  catalogBatchIds.add(result.mediaId);
+                }
+                processedItems += 1;
+                await flushCatalogBatch(source.id);
+                if (shouldYield(lastYieldAt)) {
+                  await yieldToEventLoop();
+                  lastYieldAt = Date.now();
+                }
+                await updateProgress();
+              }
+              await flushCatalogBatch(source.id, true);
+              await updateProgress(true);
+              lastDiscoveryAt = Date.now();
+            }
+            timings.discovery.ms += Date.now() - lastDiscoveryAt;
+          }
+        } finally {
+          await flushCatalogBatch(source.id, true);
         }
-        await updateProgress();
       }
+      progressTotal = integrationSources.length
+        ? progressTotal
+        : discoveredCount;
       await updateProgress(true);
       for (const source of integrationSources) {
         throwIfAborted(signal);
@@ -617,43 +710,49 @@ export class LibraryScanner {
             unsupportedCount += page.unsupportedCount;
             processedItems += page.unsupportedCount;
             discoveredCount =
-              files.length +
+              pathDiscoveredCount +
               completedRemoteTotal +
               (sourceTotal ?? page.processedCount);
             progressTotal = discoveredCount;
             await updateProgress(true);
 
-            for (
-              let offset = 0;
-              offset < page.items.length;
-              offset += IMPORT_BATCH_SIZE
-            ) {
-              const batch = page.items.slice(
-                offset,
-                offset + IMPORT_BATCH_SIZE,
-              );
-              await this.applyRemoteBatchWithRetry(
-                batch,
-                source,
-                task.id,
-                counts,
-                signal,
-                timings,
-              );
-              processedItems += batch.length;
-              lastYieldAt = Date.now();
-              await yieldToEventLoop();
-              await updateProgress(true);
+            try {
+              for (
+                let offset = 0;
+                offset < page.items.length;
+                offset += IMPORT_BATCH_SIZE
+              ) {
+                const batch = page.items.slice(
+                  offset,
+                  offset + IMPORT_BATCH_SIZE,
+                );
+                const catalogIds = await this.applyRemoteBatchWithRetry(
+                  batch,
+                  source,
+                  task.id,
+                  counts,
+                  signal,
+                  timings,
+                );
+                for (const mediaId of catalogIds) {
+                  catalogBatchIds.add(mediaId);
+                }
+                processedItems += batch.length;
+                lastYieldAt = Date.now();
+                await yieldToEventLoop();
+                await updateProgress(true);
+              }
+            } finally {
+              await flushCatalogBatch(source.source.id, true);
             }
             await updateProgress(true);
             lastPageEndAt = Date.now();
           },
         });
         completedRemoteTotal += sourceTotal ?? sourceProcessed;
-        discoveredCount = files.length + completedRemoteTotal;
+        discoveredCount = pathDiscoveredCount + completedRemoteTotal;
       }
       throwIfAborted(signal);
-      let unavailableCount = 0;
       if (!targetedImport) {
         await withTiming(timings.database, () => this.removeUnusedCovers());
         if (this.artworkCache) {
@@ -701,13 +800,15 @@ export class LibraryScanner {
               }
             }),
           );
-          if (this.catalog) {
-            await withTiming(timings.catalog, () =>
-              this.catalog!.markScanBatchChanged(requestedSource?.id ?? null),
-            );
+          for (const copy of batch) {
+            catalogBatchIds.add(copy.mediaId);
           }
+          await flushCatalogBatch(
+            batch[0]?.librarySourceId ?? requestedSource?.id ?? null,
+          );
           await yieldToEventLoop();
         }
+        await flushCatalogBatch(requestedSource?.id ?? null, true);
         unavailableCount = unavailableCopies.length;
         const syncedAt = new Date();
         await withTiming(timings.database, async () => {
@@ -838,7 +939,7 @@ export class LibraryScanner {
     counts: ScanCounts,
     signal: AbortSignal,
     timings: ScanTimings,
-  ): Promise<string | null> {
+  ): Promise<PreparedFileResult> {
     throwIfAborted(signal);
     if (prepared.kind === "unchanged") {
       await withTiming(timings.database, () =>
@@ -852,15 +953,13 @@ export class LibraryScanner {
           await refreshCanonicalMediaFromCopies(transaction, prepared.media.id);
         }),
       );
-      if (prepared.wasUnavailable) {
-        await withTiming(timings.catalog, () =>
-          this.catalog
-            ? this.catalog.reindexMedia(prepared.media.id, "scan")
-            : Promise.resolve(),
-        );
-      }
       counts.unchangedCount += 1;
-      return prepared.media.id;
+      return {
+        mediaId: prepared.media.id,
+        catalogChanged:
+          prepared.wasUnavailable ||
+          Boolean(prepared.media.catalogProjectionPending),
+      };
     }
 
     if (prepared.kind === "failed") {
@@ -870,8 +969,12 @@ export class LibraryScanner {
         await withTiming(timings.database, () =>
           this.markFileError(prepared.file, failedExisting, scanId),
         );
+        return {
+          mediaId: failedExisting.mediaId,
+          catalogChanged: true,
+        };
       }
-      return null;
+      return { mediaId: null, catalogChanged: false };
     }
 
     const { file, existing, metadata } = prepared;
@@ -999,13 +1102,8 @@ export class LibraryScanner {
             await refreshCanonicalMediaFromCopies(transaction, mediaId);
           }),
         );
-        await withTiming(timings.catalog, () =>
-          this.catalog
-            ? this.catalog.reindexMedia(mediaId, "scan")
-            : Promise.resolve(),
-        );
         counts.updatedCount += 1;
-        return mediaId;
+        return { mediaId, catalogChanged: true };
       } else {
         const created = await withTiming(timings.database, () =>
           this.database.transaction(async (transaction) => {
@@ -1017,13 +1115,8 @@ export class LibraryScanner {
             return media;
           }),
         );
-        await withTiming(timings.catalog, () =>
-          this.catalog
-            ? this.catalog.reindexMedia(created.id, "scan")
-            : Promise.resolve(),
-        );
         counts.createdCount += 1;
-        return created.id;
+        return { mediaId: created.id, catalogChanged: true };
       }
     } catch (error) {
       if (signal.aborted) throw error;
@@ -1032,8 +1125,12 @@ export class LibraryScanner {
         await withTiming(timings.database, () =>
           this.markFileError(file, existing, scanId),
         );
+        return {
+          mediaId: existing.mediaId,
+          catalogChanged: true,
+        };
       }
-      return null;
+      return { mediaId: null, catalogChanged: false };
     }
   }
 
@@ -1093,7 +1190,6 @@ export class LibraryScanner {
     if (projection) {
       await transaction.orm.CatalogMedia.where({ id: mediaId }).update({
         available,
-        ...(available ? {} : { albumId: null }),
       });
     }
     void reason;
@@ -1106,9 +1202,9 @@ export class LibraryScanner {
     counts: ScanCounts,
     signal: AbortSignal,
     timings: ScanTimings,
-  ): Promise<void> {
+  ): Promise<Set<string>> {
     throwIfAborted(signal);
-    if (!items.length) return;
+    if (!items.length) return new Set();
     const existingCopies = await this.database.orm.MediaCopy.where({
       librarySourceId: source.source.id,
     })
@@ -1288,6 +1384,9 @@ export class LibraryScanner {
             mediaIdsToRefresh.add(mediaId);
             if (unchanged && existingMedia?.available) {
               counts.unchangedCount += 1;
+              if (existingMedia.catalogProjectionPending) {
+                changedMediaIds.add(mediaId);
+              }
             } else {
               counts.updatedCount += 1;
               changedMediaIds.add(mediaId);
@@ -1316,12 +1415,7 @@ export class LibraryScanner {
         await syncArtworkJobsInBatch(transaction, artworkSyncInputs);
       }),
     );
-    if (this.catalog) {
-      await this.catalog.indexScanBatch([...changedMediaIds]);
-      await withTiming(timings.catalog, () =>
-        this.catalog!.markScanBatchChanged(source.source.id),
-      );
-    }
+    return changedMediaIds;
   }
 
   private async fetchRemoteCovers(
@@ -1397,12 +1491,12 @@ export class LibraryScanner {
     counts: ScanCounts,
     signal: AbortSignal,
     timings: ScanTimings,
-  ): Promise<void> {
+  ): Promise<Set<string>> {
     const initial = { ...counts };
     for (let attempt = 0; attempt < 8; attempt += 1) {
       throwIfAborted(signal);
       try {
-        await this.applyRemoteBatch(
+        return await this.applyRemoteBatch(
           items,
           source,
           scanId,
@@ -1410,7 +1504,6 @@ export class LibraryScanner {
           signal,
           timings,
         );
-        return;
       } catch (error) {
         Object.assign(counts, initial);
         if (
@@ -1425,6 +1518,7 @@ export class LibraryScanner {
         );
       }
     }
+    throw new Error("The remote batch could not be applied.");
   }
 
   private async storeCover(cover: CoverImage | null): Promise<string | null> {

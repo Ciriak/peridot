@@ -97,18 +97,34 @@ copy can serve it.
 ## Scans and playback
 
 Adding a folder or Jellyfin library source queues its source-scoped scan. A
-successful scan queues metadata matching and catalog projection for the same
-source. Library-source scans can run independently or together and share the
-durable task queue.
+successful scan queues metadata matching and duplicate-copy matching for the
+same source. Library-source scans can run independently or together and share
+the durable task queue.
 Failed executor runs automatically return to the queue up to two times before
 the task becomes terminally failed.
 
-Jellyfin requests `Audio` and `AudioBook` items in pages of 100. Core commits at
-most 100 records per transaction and publishes catalog changes before requesting
-the next page. Jellyfin IDs and ETags provide stable identity and change
-detection. Unique cover images referenced by each page are fetched in parallel
-with bounded concurrency and attached before their MediaCopies commit. Failed cover
-fetches do not fail the scan; the existing artwork job retries them afterward.
+Discovery and catalog projection share one committed-media boundary. Folder
+discovery streams bounded file batches while later directories are still being
+enumerated. Path writes and remote pages accumulate changed media, and the
+catalog materializes once for each 500 unique media IDs or the final partial
+batch. Each successful batch atomically updates `CatalogMedia`, album and artist
+summaries, links, search terms, and projection-pending state before publishing
+one catalog revision. Albums, artists, and search therefore become available
+while the scan is still running.
+
+Jellyfin requests `Audio` and `AudioBook` items in pages of 500. Core commits at
+most 100 records per transaction and materializes the complete page before
+requesting the next page. Jellyfin IDs and ETags provide stable identity and
+change detection. Unique cover images referenced by each page are fetched in
+parallel with bounded concurrency and attached before their MediaCopies commit.
+Failed cover fetches do not fail the scan; the existing artwork job retries them
+afterward.
+
+Folder progress remains indeterminate until enumeration completes. Successfully
+materialized batches remain browsable if later traversal fails. A full catalog
+projection task runs only as a recovery fallback when media remain pending after
+all discovery work, so a normal successful scan does not perform a redundant
+full pass.
 
 Playback and byte-range requests are proxied through Peridot while the Jellyfin
 API key remains server-side. Peridot tries ranked copies before sending response

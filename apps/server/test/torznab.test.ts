@@ -539,6 +539,16 @@ test("an external release indexes only its completed audio files", async (t) => 
     (await ctx.database.orm.Task.first({ id: importTaskId }))?.status,
     "completed",
   );
+  assert.equal(
+    (
+      await ctx.database.orm.Task.where({
+        kind: "catalog_projection",
+        parentTaskId: importTaskId,
+      }).all()
+    ).length,
+    0,
+    "targeted imports must materialize their catalog without a fallback pass",
+  );
   assert.deepEqual(
     readReleaseImportTaskPayload(
       (await ctx.database.orm.Task.first({ id: importTaskId }))!,
