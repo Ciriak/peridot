@@ -6,6 +6,7 @@ import type {
   OverviewDownloadClientResponse,
   OverviewLibrarySourceResponse,
   OverviewMetadataProviderResponse,
+  OverviewReleaseIndexerResponse,
   OverviewResponse,
   OverviewServiceCounts,
 } from "@peridot/contracts";
@@ -260,6 +261,25 @@ export class OverviewService {
         kind: "qbittorrent",
         name: client.name,
         address: safeHost(client.url) ?? "qBittorrent",
+        destinationSourceId: client.destinationSourceId,
+        status: "unknown",
+      }),
+    );
+    const indexers = await this.database.orm.ReleaseIndexer.where((indexer) =>
+      indexer.removedAt.isNull(),
+    )
+      .orderBy([
+        (indexer) => indexer.position.asc(),
+        (indexer) => indexer.createdAt.asc(),
+      ])
+      .all();
+    const releaseIndexers: OverviewReleaseIndexerResponse[] = indexers.map(
+      (indexer) => ({
+        id: indexer.id,
+        kind: "torznab",
+        name: indexer.name?.trim() || safeHost(indexer.url) || "Torznab",
+        address: safeHost(indexer.url) ?? "Torznab",
+        downloadClientId: indexer.downloadClientId,
         status: "unknown",
       }),
     );
@@ -269,6 +289,7 @@ export class OverviewService {
       librarySources,
       metadataProviders,
       downloadClients,
+      releaseIndexers,
       counts,
     };
     this.cached.set(userId, {

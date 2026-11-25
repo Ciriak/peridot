@@ -19,7 +19,7 @@ import type {
 } from '@prisma/orm-sqlite/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'7fb2e91df85da52ca54ad7f6ff71621577a757d8b112f95a109d4653e0773135'>;
+  StorageHashBase<'a9baeceeeaa3a1e81dd916241cc6e611b8ff32b7d2e2458752d7a463cd6c974a'>;
 export type ExecutionHash =
   ExecutionHashBase<'f5ba018940425231a1ebe82ea868c89b274c2b48ee35eb5ae80c79124cce62ce'>;
 export type ProfileHash =
@@ -375,6 +375,7 @@ export namespace Models {
   export type DownloadClient = {
     createdAt: FieldOutputTypes['__unbound__']['DownloadClient']['createdAt'];
     credentialCiphertext: FieldOutputTypes['__unbound__']['DownloadClient']['credentialCiphertext'];
+    destinationSourceId: FieldOutputTypes['__unbound__']['DownloadClient']['destinationSourceId'];
     id: FieldOutputTypes['__unbound__']['DownloadClient']['id'];
     kind: FieldOutputTypes['__unbound__']['DownloadClient']['kind'];
     name: FieldOutputTypes['__unbound__']['DownloadClient']['name'];
@@ -620,7 +621,6 @@ export namespace Models {
     configuration: FieldOutputTypes['__unbound__']['ReleaseIndexer']['configuration'];
     createdAt: FieldOutputTypes['__unbound__']['ReleaseIndexer']['createdAt'];
     credentialCiphertext: FieldOutputTypes['__unbound__']['ReleaseIndexer']['credentialCiphertext'];
-    destinationSourceId: FieldOutputTypes['__unbound__']['ReleaseIndexer']['destinationSourceId'];
     downloadClientId: FieldOutputTypes['__unbound__']['ReleaseIndexer']['downloadClientId'];
     id: FieldOutputTypes['__unbound__']['ReleaseIndexer']['id'];
     kind: FieldOutputTypes['__unbound__']['ReleaseIndexer']['kind'];
@@ -1841,6 +1841,12 @@ type ContractBase = Omit<
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly destinationSourceId: {
+                  readonly dataType: 'sqlite/text';
+                  readonly codecId: 'sqlite/text@1';
+                  readonly nullable: true;
                   readonly many: false;
                 };
                 readonly id: {
@@ -3566,12 +3572,6 @@ type ContractBase = Omit<
                   readonly nullable: true;
                   readonly many: false;
                 };
-                readonly destinationSourceId: {
-                  readonly dataType: 'sqlite/text';
-                  readonly codecId: 'sqlite/text@1';
-                  readonly nullable: true;
-                  readonly many: false;
-                };
                 readonly downloadClientId: {
                   readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
@@ -4991,6 +4991,10 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
+              readonly destinationSourceId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
+              };
               readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
@@ -5023,6 +5027,7 @@ type ContractBase = Omit<
               readonly fields: {
                 readonly createdAt: { readonly column: 'createdAt' };
                 readonly credentialCiphertext: { readonly column: 'credentialCiphertext' };
+                readonly destinationSourceId: { readonly column: 'destinationSourceId' };
                 readonly id: { readonly column: 'id' };
                 readonly kind: { readonly column: 'kind' };
                 readonly name: { readonly column: 'name' };
@@ -6359,10 +6364,6 @@ type ContractBase = Omit<
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
               };
-              readonly destinationSourceId: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-              };
               readonly downloadClientId: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
@@ -6408,7 +6409,6 @@ type ContractBase = Omit<
                 readonly configuration: { readonly column: 'configuration' };
                 readonly createdAt: { readonly column: 'createdAt' };
                 readonly credentialCiphertext: { readonly column: 'credentialCiphertext' };
-                readonly destinationSourceId: { readonly column: 'destinationSourceId' };
                 readonly downloadClientId: { readonly column: 'downloadClientId' };
                 readonly id: { readonly column: 'id' };
                 readonly kind: { readonly column: 'kind' };

@@ -1510,6 +1510,13 @@
                   "kind": "scalar"
                 }
               },
+              "destinationSourceId": {
+                "nullable": true,
+                "type": {
+                  "codecId": "sqlite/text@1",
+                  "kind": "scalar"
+                }
+              },
               "id": {
                 "nullable": false,
                 "type": {
@@ -1561,6 +1568,9 @@
                 },
                 "credentialCiphertext": {
                   "column": "credentialCiphertext"
+                },
+                "destinationSourceId": {
+                  "column": "destinationSourceId"
                 },
                 "id": {
                   "column": "id"
@@ -3842,13 +3852,6 @@
                   "kind": "scalar"
                 }
               },
-              "destinationSourceId": {
-                "nullable": true,
-                "type": {
-                  "codecId": "sqlite/text@1",
-                  "kind": "scalar"
-                }
-              },
               "downloadClientId": {
                 "nullable": true,
                 "type": {
@@ -3924,9 +3927,6 @@
                 },
                 "credentialCiphertext": {
                   "column": "credentialCiphertext"
-                },
-                "destinationSourceId": {
-                  "column": "destinationSourceId"
                 },
                 "downloadClientId": {
                   "column": "downloadClientId"
@@ -5752,6 +5752,11 @@
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
                   "nullable": false
+                },
+                "destinationSourceId": {
+                  "codecId": "sqlite/text@1",
+                  "dataType": "sqlite/text",
+                  "nullable": true
                 },
                 "id": {
                   "codecId": "sqlite/text@1",
@@ -7683,11 +7688,6 @@
                   "dataType": "sqlite/text",
                   "nullable": true
                 },
-                "destinationSourceId": {
-                  "codecId": "sqlite/text@1",
-                  "dataType": "sqlite/text",
-                  "nullable": true
-                },
                 "downloadClientId": {
                   "codecId": "sqlite/text@1",
                   "dataType": "sqlite/text",
@@ -8230,7 +8230,7 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "7fb2e91df85da52ca54ad7f6ff71621577a757d8b112f95a109d4653e0773135"
+    "storageHash": "a9baeceeeaa3a1e81dd916241cc6e611b8ff32b7d2e2458752d7a463cd6c974a"
   },
   "execution": {
     "executionHash": "f5ba018940425231a1ebe82ea868c89b274c2b48ee35eb5ae80c79124cce62ce",

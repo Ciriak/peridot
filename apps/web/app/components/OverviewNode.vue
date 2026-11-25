@@ -21,6 +21,7 @@ const icon = computed(() => {
   if (data.value.kind === "musicbrainz") return icons.musicbrainz;
   if (data.value.kind === "discogs") return icons.discogs;
   if (data.value.kind === "qbittorrent") return icons.qbittorrent;
+  if (data.value.kind === "torznab") return icons.globe;
   return sourceKindIcon(data.value.kind) ?? icons.library;
 });
 const typeLabel = computed(() => {
@@ -31,6 +32,9 @@ const typeLabel = computed(() => {
   if (data.value.kind === "qbittorrent") {
     return t("settings.overview.downloadClient");
   }
+  if (data.value.kind === "torznab") {
+    return t("settings.overview.releaseIndexer");
+  }
   const key = sourceKindLabelKey(data.value.kind);
   return key ? t(key) : t("settings.sources.heading");
 });
@@ -40,9 +44,17 @@ const statusLabel = computed(() =>
   }),
 );
 const fileLabel = computed(() =>
-  data.value.fileCount === null
+  data.value.kind === "qbittorrent"
     ? t("settings.overview.downloadClient")
-    : t("count.file", { count: data.value.fileCount }, data.value.fileCount),
+    : data.value.kind === "torznab"
+      ? t("settings.overview.releaseIndexer")
+      : data.value.fileCount === null
+        ? ""
+        : t(
+            "count.file",
+            { count: data.value.fileCount },
+            data.value.fileCount,
+          ),
 );
 const statusDotClass = computed(() =>
   data.value.status === "online"
@@ -183,13 +195,39 @@ const targetPositions = [
         class="pointer-events-none size-3 border-2 border-background bg-muted-foreground opacity-100"
       />
     </template>
-    <Handle
-      v-else
-      :id="data.handleType === 'target' ? 'download-client' : 'source'"
-      :type="data.handleType ?? 'source'"
-      :position="data.sourcePosition ?? Position.Right"
-      :is-connectable="false"
-      class="pointer-events-none size-3 border-2 border-background bg-muted-foreground opacity-100"
-    />
+    <template v-else>
+      <Handle
+        v-if="data.handleType"
+        :id="data.handleType === 'target' ? 'download-client' : 'source'"
+        :type="data.handleType"
+        :position="data.sourcePosition ?? Position.Right"
+        :is-connectable="false"
+        class="pointer-events-none size-3 border-2 border-background bg-muted-foreground opacity-100"
+      />
+      <Handle
+        v-if="data.sourceHandles.includes('download-destination')"
+        id="download-destination"
+        type="source"
+        :position="Position.Left"
+        :is-connectable="false"
+        class="pointer-events-none size-3 border-2 border-background bg-muted-foreground opacity-100"
+      />
+      <Handle
+        v-if="data.targetHandles.includes('download-destination')"
+        id="download-destination"
+        type="target"
+        :position="Position.Bottom"
+        :is-connectable="false"
+        class="pointer-events-none size-3 border-2 border-background bg-muted-foreground opacity-100"
+      />
+      <Handle
+        v-if="data.targetHandles.includes('release-indexer')"
+        id="release-indexer"
+        type="target"
+        :position="Position.Right"
+        :is-connectable="false"
+        class="pointer-events-none size-3 border-2 border-background bg-muted-foreground opacity-100"
+      />
+    </template>
   </div>
 </template>

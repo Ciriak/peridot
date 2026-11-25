@@ -985,6 +985,16 @@ export interface OverviewDownloadClientResponse {
   kind: "qbittorrent";
   name: string;
   address: string;
+  destinationSourceId: string | null;
+  status: OverviewConnectionStatus;
+}
+
+export interface OverviewReleaseIndexerResponse {
+  id: string;
+  kind: "torznab";
+  name: string;
+  address: string;
+  downloadClientId: string | null;
   status: OverviewConnectionStatus;
 }
 
@@ -1000,6 +1010,7 @@ export interface OverviewResponse {
   librarySources: OverviewLibrarySourceResponse[];
   metadataProviders: OverviewMetadataProviderResponse[];
   downloadClients: OverviewDownloadClientResponse[];
+  releaseIndexers: OverviewReleaseIndexerResponse[];
   counts: OverviewServiceCounts;
 }
 
@@ -1029,6 +1040,7 @@ export interface CreateJellyfinLibrarySourceRequest {
 export type DownloadClientAuthType = "apiKey" | "password";
 export interface DownloadClientInput {
   authType?: DownloadClientAuthType;
+  destinationSourceId: string;
   username?: string;
   password?: string;
   kind: "qbittorrent";
@@ -1044,6 +1056,7 @@ export interface DownloadClientResponse {
   hasApiKey: boolean;
   authType: DownloadClientAuthType;
   username: string;
+  destinationSourceId: string | null;
 }
 export interface DownloadClientOptions {
   categories: string[];
@@ -1051,7 +1064,6 @@ export interface DownloadClientOptions {
 }
 export interface DownloadLinkInput {
   downloadClientId?: string;
-  librarySourceId?: string;
   savePath?: string;
   category?: string;
   tags?: string;
@@ -1063,6 +1075,15 @@ export interface ReleaseIndexerInput extends DownloadLinkInput {
   apiKey?: string;
 }
 
+export interface ReleaseIndexerConnectionTestRequest extends ReleaseIndexerInput {
+  id?: string;
+}
+
+export interface ReleaseIndexerConnectionTestResponse {
+  mode: "music" | "search";
+  categories: string[];
+}
+
 export interface ReleaseIndexerResponse {
   id: string;
   kind: "torznab";
@@ -1070,7 +1091,6 @@ export interface ReleaseIndexerResponse {
   url: string;
   configuration: Record<string, string>;
   downloadClientId: string | null;
-  destinationSourceId: string | null;
   lastSyncedAt: string | null;
 }
 

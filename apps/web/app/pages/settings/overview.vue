@@ -53,6 +53,7 @@ const connectionCount = computed(
   () =>
     (overview.data.value?.librarySources.length ?? 0) +
     (overview.data.value?.metadataProviders.length ?? 0) +
+    (overview.data.value?.releaseIndexers.length ?? 0) +
     (overview.data.value?.downloadClients.length ?? 0),
 );
 const animated = computed(() => preferredMotion.value !== "reduce");
@@ -61,22 +62,30 @@ watch(
   [
     () => overview.data.value?.librarySources ?? [],
     () => overview.data.value?.metadataProviders ?? [],
+    () => overview.data.value?.releaseIndexers ?? [],
     () => overview.data.value?.downloadClients ?? [],
     () => overview.data.value?.counts,
     address,
     peridotStatus,
     animated,
   ],
-  ([sources, providers, clients, counts]) => {
+  ([sources, providers, indexers, clients, counts]) => {
     nodes.value = overviewNodes(
       sources,
       providers,
+      indexers,
       clients,
       counts ?? { albums: 0, playlists: 0, podcasts: 0, audiobooks: 0 },
       safeOverviewHost(address.value),
       peridotStatus.value,
     );
-    edges.value = overviewEdges(sources, providers, clients, animated.value);
+    edges.value = overviewEdges(
+      sources,
+      providers,
+      indexers,
+      clients,
+      animated.value,
+    );
   },
   { immediate: true },
 );

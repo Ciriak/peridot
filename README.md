@@ -137,6 +137,8 @@ An external client that can be used to download files, a BitTorrent client for e
 
 Download clients are **NOT** data source.
 
+Each download client stores the library source where its completed files are imported. A client can be saved before its service is reachable; connection discovery and testing are optional.
+
 ### Metadata provider
 
 An external metadata source that can provide additional data about a media (artists, albums, cover art...)

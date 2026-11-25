@@ -136,7 +136,6 @@ const taskKindSchema = enumeration(
 
 const downloadLinkFields = {
   downloadClientId: stringSchema,
-  folderId: stringSchema,
   savePath: stringSchema,
   category: stringSchema,
   tags: stringSchema,
@@ -144,6 +143,7 @@ const downloadLinkFields = {
 };
 const downloadClientFields = {
   authType: enumeration("apiKey", "password"),
+  destinationSourceId: stringSchema,
   username: stringSchema,
   kind: enumeration("qbittorrent"),
   name: stringSchema,
@@ -151,7 +151,7 @@ const downloadClientFields = {
 };
 const downloadClientInput = objectSchema(
   { ...downloadClientFields, password: stringSchema, apiKey: stringSchema },
-  ["kind", "name", "url"],
+  ["kind", "name", "url", "destinationSourceId"],
 );
 const downloadOptions = objectSchema({
   categories: arrayOf(stringSchema),
@@ -873,7 +873,6 @@ const schemas: Record<string, SchemaObject> = {
       url: stringSchema,
       apiKey: stringSchema,
       downloadClientId: stringSchema,
-      librarySourceId: stringSchema,
       category: stringSchema,
       tags: stringSchema,
       categoryPath: booleanSchema,
@@ -888,11 +887,14 @@ const schemas: Record<string, SchemaObject> = {
     url: stringSchema,
     configuration: objectSchema({}),
     downloadClientId: nullable(stringSchema),
-    destinationSourceId: nullable(stringSchema),
     lastSyncedAt: nullable(stringSchema),
   }),
   ReleaseIndexerListResponse: objectSchema({
     items: arrayOf(ref("ReleaseIndexerResponse")),
+  }),
+  ReleaseIndexerConnectionTestResponse: objectSchema({
+    mode: enumeration("music", "search"),
+    categories: arrayOf(stringSchema),
   }),
   CreateLibrarySourceResponse: objectSchema({
     id: stringSchema,
@@ -945,6 +947,15 @@ const schemas: Record<string, SchemaObject> = {
     kind: enumeration("qbittorrent"),
     name: stringSchema,
     address: stringSchema,
+    destinationSourceId: nullable(stringSchema),
+    status: enumeration("online", "offline", "unknown", "disabled"),
+  }),
+  OverviewReleaseIndexerResponse: objectSchema({
+    id: stringSchema,
+    kind: enumeration("torznab"),
+    name: stringSchema,
+    address: stringSchema,
+    downloadClientId: nullable(stringSchema),
     status: enumeration("online", "offline", "unknown", "disabled"),
   }),
   OverviewServiceCounts: objectSchema({
@@ -958,6 +969,7 @@ const schemas: Record<string, SchemaObject> = {
     librarySources: arrayOf(ref("OverviewLibrarySourceResponse")),
     metadataProviders: arrayOf(ref("OverviewMetadataProviderResponse")),
     downloadClients: arrayOf(ref("OverviewDownloadClientResponse")),
+    releaseIndexers: arrayOf(ref("OverviewReleaseIndexerResponse")),
     counts: ref("OverviewServiceCounts"),
   }),
   LibrarySourceRemovalResponse: objectSchema({
@@ -1737,7 +1749,7 @@ const routes: Record<string, OpenApiOperation> = {
   ),
   "PUT /api/admin/release-indexers/:id/download-client": jsonOperation(
     "Server administration",
-    "Set the indexer download destination",
+    "Set the indexer download client",
     null,
     { status: 204, body: objectSchema(downloadLinkFields, []) },
   ),
@@ -1762,6 +1774,27 @@ const routes: Record<string, OpenApiOperation> = {
     "Create a release indexer",
     ref("ReleaseIndexerResponse"),
     { status: 201, body: ref("ReleaseIndexerInput") },
+  ),
+  "POST /api/admin/release-indexers/test": jsonOperation(
+    "Connectors",
+    "Test a release indexer connection",
+    ref("ReleaseIndexerConnectionTestResponse"),
+    {
+      body: objectSchema(
+        {
+          id: stringSchema,
+          name: stringSchema,
+          url: stringSchema,
+          apiKey: stringSchema,
+          downloadClientId: stringSchema,
+          category: stringSchema,
+          tags: stringSchema,
+          categoryPath: booleanSchema,
+          savePath: stringSchema,
+        },
+        ["url"],
+      ),
+    },
   ),
   "PUT /api/admin/release-indexers/order": jsonOperation(
     "Connectors",

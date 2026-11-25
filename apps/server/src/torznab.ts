@@ -15,6 +15,7 @@ import {
   TASK_RELEASE_IMPORT_ID_DETAIL_KEY,
   TASK_RELEASE_IMPORT_STAGE_DETAIL_KEY,
   type ReleaseIndexerInput,
+  type ReleaseIndexerConnectionTestResponse,
   type MediaType,
   type TaskDetailResponse,
   type TaskReleaseImportStage,
@@ -37,6 +38,12 @@ function invalid(reason: string): never {
     params: { reason },
   });
 }
+function connectionFailed(reason: string): never {
+  throw new LibrarySourceConnectorError(reason, "connection_failed", 502, {
+    key: "indexer.validation",
+    params: { reason },
+  });
+}
 function httpUrl(value: unknown) {
   if (typeof value !== "string" || !URL.canParse(value))
     return invalid("Enter an HTTP or HTTPS URL.");
@@ -53,10 +60,7 @@ function httpUrl(value: unknown) {
 function audioCode(id: string) {
   return /^3[0-9]{3}$/.test(id);
 }
-export async function validateIndexer(
-  input: ReleaseIndexerInput,
-  db: Database,
-) {
+function indexerConnection(input: ReleaseIndexerInput) {
   const endpoint = httpUrl(input.url);
   const apiKey =
     (typeof input.apiKey === "string" && input.apiKey) ||
@@ -65,6 +69,19 @@ export async function validateIndexer(
   endpoint.searchParams.delete("apikey");
   const feed = endpoint.href;
   const identity = createHash("sha256").update(feed).digest("hex");
+  endpoint.search = "";
+  return {
+    endpoint: endpoint.href,
+    feed,
+    apiKey,
+    identity,
+  };
+}
+async function readCapabilities(
+  feed: string,
+  apiKey: string,
+): Promise<ReleaseIndexerConnectionTestResponse> {
+  const endpoint = new URL(feed);
   if (apiKey) endpoint.searchParams.set("apikey", apiKey);
   endpoint.searchParams.set("t", "caps");
   let text: string;
@@ -76,16 +93,17 @@ export async function validateIndexer(
     if (!response.ok) throw new Error();
     text = await response.text();
   } catch {
-    return invalid(
+    return connectionFailed(
       "Could not read audio capabilities. Check the indexer URL and API key.",
     );
   }
-  if (/<!DOCTYPE/i.test(text)) return invalid("Invalid indexer capabilities.");
+  if (/<!DOCTYPE/i.test(text))
+    return connectionFailed("Invalid indexer capabilities.");
   let doc;
   try {
     doc = new DOMParser().parseFromString(text, "application/xml");
   } catch {
-    return invalid("Invalid indexer capabilities.");
+    return connectionFailed("Invalid indexer capabilities.");
   }
   const supportsQuery = (tag: string) => {
     const node = doc.getElementsByTagName(tag)[0];
@@ -113,25 +131,40 @@ export async function validateIndexer(
     (!categories.length && doc.getElementsByTagName("category").length > 0) ||
     (mode === "search" && (!categories.length || !supportsQuery("search")))
   )
-    return invalid("This indexer does not advertise searchable audio.");
-  const settings = await importSettings(db, input);
-  endpoint.search = "";
+    return connectionFailed(
+      "This indexer does not advertise searchable audio.",
+    );
   return {
-    identity,
+    mode,
+    categories: categories.length ? categories : ["3000"],
+  };
+}
+export async function prepareIndexer(input: ReleaseIndexerInput, db: Database) {
+  const connection = indexerConnection(input);
+  const settings = await importSettings(db, input);
+  const endpoint = new URL(connection.endpoint);
+  return {
+    identity: connection.identity,
     name:
       (typeof input.name === "string" && input.name.trim()) ||
       endpoint.hostname,
     configuration: {
       url: endpoint.href,
-      mode,
-      categories: categories.join(",") || "3000",
+      mode: "search",
+      categories: "3000",
       ...settings,
     },
     credentials: {
-      feed,
-      apiKey,
+      feed: connection.feed,
+      apiKey: connection.apiKey,
     },
   };
+}
+export function testIndexerConnection(
+  input: ReleaseIndexerInput,
+): Promise<ReleaseIndexerConnectionTestResponse> {
+  const connection = indexerConnection(input);
+  return readCapabilities(connection.feed, connection.apiKey);
 }
 
 const searchRoute = "/api/search/external";
@@ -333,11 +366,13 @@ export class ReleaseImportService {
           ...(clients.get(config.downloadClientId) || {
             client: "",
             clientApiKey: "",
+            destinationSourceId: null,
           }),
+          destinationSourceId:
+            clients.get(config.downloadClientId)?.destinationSourceId || "",
           category: String(config.category || ""),
           tags: String(config.tags || ""),
           categoryPath: config.categoryPath === "true",
-          folderId: String(config.librarySourceId || config.folderId || ""),
           savePath: String(config.savePath),
           categories: String(config.categories),
           mode: String(config.mode),
@@ -347,15 +382,15 @@ export class ReleaseImportService {
     type Indexer = Awaited<ReturnType<typeof indexers>>[number];
     async function source(indexer: Indexer) {
       const row = await db.orm.LibrarySource.first({
-        id: indexer.folderId,
-        kind: "path",
+        id: indexer.destinationSourceId,
       });
-      if (!row?.path || row.removedAt)
-        throw new Error("Import folder unavailable.");
+      if (!row || row.removedAt || (row.kind === "path" && !row.path))
+        throw new Error("Destination source unavailable.");
       return {
         id: row.id,
-        name: row.name || row.path,
-        destination: indexer.savePath || row.path,
+        kind: row.kind,
+        name: row.name || row.path || row.kind,
+        destination: indexer.savePath || row.path || "",
       };
     }
     app.get(searchRoute + "/status", async () => ({
@@ -398,7 +433,9 @@ export class ReleaseImportService {
                     bytes,
                     mediaType,
                     sourceName: indexer.name,
-                    canImport: Boolean(indexer.client),
+                    canImport: Boolean(
+                      indexer.client && indexer.destinationSourceId,
+                    ),
                     infoHash,
                     indexer,
                   };
@@ -556,7 +593,7 @@ export class ReleaseImportService {
           paths: [],
         },
         connectorId: src.id,
-        connectorKind: "path",
+        connectorKind: src.kind,
         connectorName: src.name,
         details: releaseImportDetails(indexer.id, id, "downloading", null, 0),
       });
@@ -570,7 +607,10 @@ export class ReleaseImportService {
             ...(indexer.category ? { category: indexer.category } : {}),
             ...(indexer.categoryPath
               ? { autoTMM: "true" }
-              : { savepath: destination, autoTMM: "false" }),
+              : {
+                  ...(destination ? { savepath: destination } : {}),
+                  autoTMM: "false",
+                }),
             tags: [pending, "peridot-" + id, indexer.tags]
               .filter(Boolean)
               .join(","),
@@ -689,7 +729,8 @@ export class ReleaseImportService {
         const indexer = (await indexers()).find(
           (source) => source.id === indexerId,
         );
-        const destinationSourceId = importTask.connectorId ?? indexer?.folderId;
+        const destinationSourceId =
+          importTask.connectorId ?? indexer?.destinationSourceId;
         const taskProgress =
           importTask.progressCompleted !== null &&
           importTask.progressTotal !== null &&
@@ -909,7 +950,7 @@ export class ReleaseImportService {
                     kind: "release-import",
                     indexerId: indexer.id,
                     releaseId: importId,
-                    sourceId: indexer.folderId,
+                    sourceId: indexer.destinationSourceId,
                     paths: relativePaths,
                   },
                 );

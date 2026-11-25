@@ -105,6 +105,7 @@ export interface LibrarySourcePlaybackInput {
 export type LibrarySourceConnectorErrorCode =
   | "invalid_configuration"
   | "invalid_credentials"
+  | "connection_failed"
   | "unavailable"
   | "invalid_response"
   | "unsupported";

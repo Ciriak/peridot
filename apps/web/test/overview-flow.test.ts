@@ -5,6 +5,7 @@ import type {
   OverviewDownloadClientResponse,
   OverviewLibrarySourceResponse,
   OverviewMetadataProviderResponse,
+  OverviewReleaseIndexerResponse,
 } from "@peridot/contracts";
 import {
   overviewConnectionPositions,
@@ -53,6 +54,17 @@ const clients: OverviewDownloadClientResponse[] = [
     kind: "qbittorrent",
     name: "Downloads",
     address: "qbit.local:8080",
+    destinationSourceId: "folder",
+    status: "unknown",
+  },
+];
+const indexers: OverviewReleaseIndexerResponse[] = [
+  {
+    id: "tracker",
+    kind: "torznab",
+    name: "Private Tracker",
+    address: "indexer.local:9117",
+    downloadClientId: "downloads",
     status: "unknown",
   },
 ];
@@ -69,6 +81,7 @@ test("library sources use a stable left-side subflow layout", () => {
 
   const nodes = overviewNodes(
     sources,
+    [],
     [],
     [],
     serviceCounts,
@@ -108,11 +121,12 @@ test("overview flow includes Peridot, source cards, counts, and bezier edges", (
     sources,
     [],
     [],
+    [],
     serviceCounts,
     "peridot.example:17430",
     "online",
   );
-  const edges = overviewEdges(sources, [], [], true);
+  const edges = overviewEdges(sources, [], [], [], true);
 
   assert.equal(nodes[0]?.id, "peridot");
   assert.equal(nodes[0]?.data.fileCount, 20);
@@ -146,11 +160,12 @@ test("overview keeps every metadata provider individually linked on the right", 
     sources,
     providers,
     [],
+    [],
     serviceCounts,
     "peridot.example:17430",
     "online",
   );
-  const edges = overviewEdges(sources, providers, [], true);
+  const edges = overviewEdges(sources, providers, [], [], true);
 
   assert.equal(nodes.length, 7);
   assert.equal(nodes[0]?.data.fileCount, 20);
@@ -174,36 +189,156 @@ test("overview keeps every metadata provider individually linked on the right", 
   );
 });
 
-test("download clients sit below Peridot and receive outbound edges", () => {
+test("download clients link to their destination source", () => {
   const nodes = overviewNodes(
     sources,
     providers,
+    [],
     clients,
     serviceCounts,
     "peridot.example:17430",
     "online",
   );
-  const edges = overviewEdges(sources, providers, clients, true);
+  const edges = overviewEdges(sources, providers, [], clients, true);
 
   assert.equal(nodes.length, 9);
-  assert.deepEqual(nodes[0]?.data.sourceHandles, ["peridot-download-client"]);
+  assert.deepEqual(nodes[0]?.data.sourceHandles, []);
   const downloadClientGroup = nodes.find(
     (node) => node.id === "download-client-subflow",
   );
   assert.equal(downloadClientGroup?.type, "subflow");
-  assert.equal(downloadClientGroup?.position.y, 260);
+  assert.deepEqual(downloadClientGroup?.position, { x: 0, y: 260 });
   const downloadClient = nodes.find(
     (node) => node.id === "download-client-downloads",
   );
   assert.equal(downloadClient?.data.view, "download-client");
   assert.equal(downloadClient?.data.fileCount, null);
-  const outboundEdge = edges.find(
-    (edge) => edge.id === "peridot-download-client-downloads",
+  assert.deepEqual(downloadClient?.data.sourceHandles, [
+    "download-destination",
+  ]);
+  const destinationSource = nodes.find((node) => node.id === "source-folder");
+  assert.deepEqual(destinationSource?.data.targetHandles, [
+    "download-destination",
+  ]);
+  const destinationEdge = edges.find(
+    (edge) => edge.id === "download-client-downloads-source-folder",
   );
-  assert.equal(outboundEdge?.source, "peridot");
-  assert.equal(outboundEdge?.sourceHandle, "peridot-download-client");
-  assert.equal(outboundEdge?.target, "download-client-downloads");
-  assert.equal(outboundEdge?.targetHandle, "download-client");
+  assert.equal(destinationEdge?.source, "download-client-downloads");
+  assert.equal(destinationEdge?.sourceHandle, "download-destination");
+  assert.equal(destinationEdge?.target, "source-folder");
+  assert.equal(destinationEdge?.targetHandle, "download-destination");
+});
+
+test("download clients link to Jellyfin destination sources", () => {
+  const jellyfinClients = [
+    {
+      ...clients[0]!,
+      id: "jellyfin-downloads",
+      destinationSourceId: "jellyfin",
+    },
+  ];
+  const nodes = overviewNodes(
+    sources,
+    [],
+    [],
+    jellyfinClients,
+    serviceCounts,
+    "peridot.example:17430",
+    "online",
+  );
+  const edges = overviewEdges(sources, [], [], jellyfinClients, true);
+  const downloadClient = nodes.find(
+    (node) => node.id === "download-client-jellyfin-downloads",
+  );
+  assert.deepEqual(downloadClient?.data.sourceHandles, [
+    "download-destination",
+  ]);
+  assert.deepEqual(
+    nodes.find((node) => node.id === "source-jellyfin")?.data.targetHandles,
+    ["download-destination"],
+  );
+  assert.equal(
+    edges.some(
+      (edge) =>
+        edge.id === "download-client-jellyfin-downloads-source-jellyfin",
+    ),
+    true,
+  );
+  assert.equal(
+    edges.some(
+      (edge) => edge.id === "peridot-download-client-jellyfin-downloads",
+    ),
+    false,
+  );
+});
+
+test("release indexers link to their configured download client", () => {
+  const nodes = overviewNodes(
+    sources,
+    providers,
+    indexers,
+    clients,
+    serviceCounts,
+    "peridot.example:17430",
+    "online",
+  );
+  const edges = overviewEdges(sources, providers, indexers, clients, true);
+
+  assert.equal(nodes.length, 11);
+  const releaseIndexerGroup = nodes.find(
+    (node) => node.id === "release-indexer-subflow",
+  );
+  assert.equal(releaseIndexerGroup?.type, "subflow");
+  assert.deepEqual(releaseIndexerGroup?.position, { x: 480, y: 260 });
+  const releaseIndexer = nodes.find(
+    (node) => node.id === "release-indexer-tracker",
+  );
+  assert.equal(releaseIndexer?.data.view, "release-indexer");
+  const downloadClient = nodes.find(
+    (node) => node.id === "download-client-downloads",
+  );
+  assert.deepEqual(downloadClient?.data.targetHandles, ["release-indexer"]);
+  const clientEdge = edges.find(
+    (edge) => edge.id === "release-indexer-tracker-download-client-downloads",
+  );
+  assert.equal(clientEdge?.source, "release-indexer-tracker");
+  assert.equal(clientEdge?.target, "download-client-downloads");
+  assert.equal(clientEdge?.targetHandle, "release-indexer");
+  assert.equal(
+    edges.some((edge) => edge.id === "release-indexer-tracker-peridot"),
+    false,
+  );
+});
+
+test("unlinked indexers and destinationless clients fall back to Peridot", () => {
+  const unlinkedClients = [{ ...clients[0]!, destinationSourceId: null }];
+  const unlinkedIndexers = [{ ...indexers[0]!, downloadClientId: null }];
+  const nodes = overviewNodes(
+    sources,
+    [],
+    unlinkedIndexers,
+    unlinkedClients,
+    serviceCounts,
+    "peridot.example:17430",
+    "online",
+  );
+  const edges = overviewEdges(
+    sources,
+    [],
+    unlinkedIndexers,
+    unlinkedClients,
+    true,
+  );
+
+  assert.deepEqual(nodes[0]?.data.sourceHandles, ["peridot-download-client"]);
+  assert.equal(
+    edges.some((edge) => edge.id === "peridot-download-client-downloads"),
+    true,
+  );
+  assert.equal(
+    edges.some((edge) => edge.id === "release-indexer-tracker-peridot"),
+    true,
+  );
 });
 
 test("overview exposes only a safe server host", () => {
@@ -218,6 +353,7 @@ test("overview cards open their matching settings pages", () => {
   const nodes = overviewNodes(
     sources,
     providers,
+    indexers,
     clients,
     serviceCounts,
     "peridot.example:17430",
@@ -237,6 +373,10 @@ test("overview cards open their matching settings pages", () => {
   assert.equal(
     pathFor("provider-musicbrainz"),
     "/settings/connectors/metadata-providers",
+  );
+  assert.equal(
+    pathFor("release-indexer-tracker"),
+    "/settings/connectors/release-indexers",
   );
   assert.equal(
     pathFor("download-client-downloads"),

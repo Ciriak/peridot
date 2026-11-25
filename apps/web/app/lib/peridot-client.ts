@@ -78,6 +78,8 @@ import type {
   UserPreferencesResponse,
   UserResponse,
   ConnectorListResponse,
+  ReleaseIndexerConnectionTestRequest,
+  ReleaseIndexerConnectionTestResponse,
   ReleaseIndexerInput,
   ReleaseIndexerListResponse,
   ReleaseIndexerResponse,
@@ -832,6 +834,12 @@ export function releaseIndexersApi(serverAddress: string, token: string) {
     list: () => request<ReleaseIndexerListResponse>(base),
     create: (input: ReleaseIndexerInput) =>
       request<ReleaseIndexerResponse>(base, "POST", input),
+    test: (input: ReleaseIndexerConnectionTestRequest) =>
+      request<ReleaseIndexerConnectionTestResponse>(
+        base + "/test",
+        "POST",
+        input,
+      ),
     remove: (id: string) => request<void>(base + "/" + id, "DELETE"),
     link: (id: string, input: DownloadLinkInput) =>
       request<void>(base + "/" + id + "/download-client", "PUT", input),
