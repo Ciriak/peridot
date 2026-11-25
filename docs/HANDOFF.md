@@ -1,5 +1,41 @@
 # Peridot handoff
 
+## Saved web audio starts before streaming
+
+The web/desktop player now looks up a saved audio blob before requesting a
+playback token or opening the server audio URL. Saved tracks therefore use
+Cache Storage while the server is connected instead of waiting on the network
+and falling back only after a stream error. Missing or unreadable cache entries
+fall back to streaming when connected; disconnected and unavailable states
+remain offline-only. Android's existing local-file-first playback path is
+unchanged.
+
+Verification:
+
+- Focused offline playback, offline shell, and player tests (27 passing)
+- `pnpm --filter @peridot/web test` (333 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Focused ESLint and Prettier checks on the changed Web and test files
+
+Known limits:
+
+- Live playback QA was not completed against a real saved track and slow audio
+  endpoint.
+- Starting a saved track still reads and decodes the cached blob, so a brief
+  loading state remains possible even though no audio network request is made.
+
+Uncommitted changes:
+
+- Shared playback-source policy, saved-before-stream player ordering, focused
+  regression coverage, decision record, and this handoff section.
+
+Next:
+
+- Play a saved track while keeping the server reachable, confirm the audio
+  endpoint is not requested, then clear that cache entry and confirm connected
+  playback falls back to streaming.
+
 ## Liked tracks header offline toggle
 
 The liked-tracks playlist header now shows the account-level “Make my liked

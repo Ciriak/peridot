@@ -1,5 +1,17 @@
 # Peridot decisions
 
+## 2026-11-25: Web playback starts saved audio before streaming
+
+The browser and desktop player attempts a device-local audio blob before
+requesting a playback token whenever the active track is marked as saved. If
+Cache Storage contains the copy, playback starts without contacting the audio
+endpoint, so a reachable but slow server cannot make a saved track buffer.
+
+Missing or unreadable saved audio falls back to streaming only while the server
+is reachable and the catalog copy is available. Disconnected and unavailable
+source states remain offline-only. Android already resolves its local file
+before constructing a network playback request.
+
 ## 2026-11-25: Liked tracks controls the account offline preference
 
 The liked-tracks playlist header replaces its per-playlist offline button with

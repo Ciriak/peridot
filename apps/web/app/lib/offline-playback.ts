@@ -6,6 +6,27 @@ export interface PlaybackAvailability {
   unavailableTrackIds?: ReadonlySet<string>;
 }
 
+export interface PlaybackSourcePlan {
+  trySaved: boolean;
+  allowStreaming: boolean;
+}
+
+export function playbackSourcePlan({
+  saved,
+  serverLost,
+  trackAvailable,
+}: {
+  saved: boolean;
+  serverLost: boolean;
+  trackAvailable: boolean;
+}): PlaybackSourcePlan {
+  const allowStreaming = !serverLost && trackAvailable;
+  return {
+    trySaved: saved || !allowStreaming,
+    allowStreaming,
+  };
+}
+
 export function isTrackPlayable(
   track: MediaResponse,
   availability: PlaybackAvailability,

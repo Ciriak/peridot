@@ -797,6 +797,11 @@ test("offline playback prefers saved audio and recovers stream failures", async 
 
   assert.match(player, /isPeridotNetworkError\(reason\)/);
   assert.match(player, /offlineAudioBlob\(/);
+  assert.match(
+    player,
+    /const sourcePlan = playbackSourcePlan\(\{[\s\S]*?if \(sourcePlan\.trySaved\)[\s\S]*?loadOfflineTrack\(mediaId, attempt\)[\s\S]*?createPlaybackToken\(/,
+    "Saved audio is attempted before requesting a network stream",
+  );
   assert.match(player, /serverStatus\.value === "lost"[\s\S]*loadOfflineTrack/);
   assert.match(
     player,
