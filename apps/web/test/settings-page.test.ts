@@ -257,7 +257,7 @@ test("Jellyfin uses only an explicitly selected scanner result", async () => {
   assert.match(page, /inputmode="url"/);
   assert.match(page, /type="text"/);
   assert.doesNotMatch(page, /aria-pressed=/);
-  assert.doesNotMatch(page, /icons\.check/);
+  assert.match(page, /<SelectItemIndicator[\s\S]*?icons\.check/);
   assert.match(page, /animate-ping rounded-full bg-success/);
   assert.match(page, /t\("common\.active"\)/);
   assert.doesNotMatch(page, /configuration: \{ url: newJellyfinUrl\.value \}/);
@@ -297,6 +297,12 @@ test("qBittorrent discovery is optional on its default port", async () => {
   assert.match(page, /destinationSourceId: client\?\.destinationSourceId/);
   assert.match(page, /filter\(\(source\) => !source\.removal\)/);
   assert.match(page, /t\("clients\.destinationSource"\)/);
+  assert.match(page, /<SelectRoot v-model="form\.destinationSourceId">/);
+  assert.match(
+    page,
+    /sourceKindIcon\(selectedDestinationSource\.kind\)/,
+  );
+  assert.match(page, /sourceKindIcon\(source\.kind\)/);
   assert.match(page, /v-model="form\.destinationSourceId"/);
   assert.match(page, /inputmode="url"/);
   assert.match(page, /type="text"/);
