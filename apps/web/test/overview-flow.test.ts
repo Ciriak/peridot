@@ -294,6 +294,7 @@ test("release indexers link to their configured download client", () => {
     (node) => node.id === "release-indexer-tracker",
   );
   assert.equal(releaseIndexer?.data.view, "release-indexer");
+  assert.equal(releaseIndexer?.data.fileCount, null);
   const downloadClient = nodes.find(
     (node) => node.id === "download-client-downloads",
   );

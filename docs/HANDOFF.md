@@ -76,7 +76,7 @@ Next:
 
 ## Overview graph fit includes default padding
 
-The initial Vue Flow overview fit now uses shared `16px` padding around all
+The initial Vue Flow overview fit now uses shared `32px` padding around all
 nodes instead of the negligible `0.35px` value. The automatic fit and the
 post-initialization fit use the same options, keeping the graph inset when it
 first loads without reducing the available panning or zoom range.

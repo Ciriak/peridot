@@ -183,6 +183,11 @@ test("overview is a read-only Vue Flow workspace", async () => {
   assert.match(node, /motion-reduce:hidden/);
   assert.equal(node.match(/animate-ping/gu)?.length, 1);
   assert.match(node, /count\.file/);
+  assert.match(
+    node,
+    /const fileLabel = computed\(\(\) =>\s*data\.value\.fileCount === null\s*\? ""\s*: t\(/,
+  );
+  assert.match(node, /<span\s+v-if="fileLabel"/);
   assert.match(node, /settings\.overview\.albums/);
   assert.match(node, /settings\.overview\.playlists/);
   assert.match(node, /settings\.overview\.podcasts/);
@@ -207,7 +212,7 @@ test("overview is a read-only Vue Flow workspace", async () => {
   assert.match(flow, /overviewNodeSettingsPath/);
   assert.match(
     page,
-    /const overviewFitOptions = \{[\s\S]*?padding: 16,[\s\S]*?maxZoom: 1,[\s\S]*?\};/,
+    /const overviewFitOptions = \{[\s\S]*?padding: 32,[\s\S]*?maxZoom: 1,[\s\S]*?\};/,
   );
   assert.match(
     page,

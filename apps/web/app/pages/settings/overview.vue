@@ -58,7 +58,7 @@ const connectionCount = computed(
 );
 const animated = computed(() => preferredMotion.value !== "reduce");
 const overviewFitOptions = {
-  padding: 16,
+  padding: 32,
   minZoom: 0.1,
   maxZoom: 1,
 };
