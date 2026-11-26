@@ -9,6 +9,7 @@ import type {
 import {
   filterAddablePlaylists,
   filterPlaylistEntries,
+  isAutomaticPlaylistKind,
   playlistCoverSlots,
   playlistPlayableTracks,
 } from "../app/lib/playlists.ts";
@@ -192,6 +193,7 @@ test("add-to-playlist filtering excludes automatic playlists and matches every t
     playlist("1", "Late Night Drive"),
     playlist("2", "Morning Window"),
     playlist("3", "Liked tracks", "liked-tracks"),
+    playlist("4", "Recently added", "recently-added"),
   ];
 
   assert.deepEqual(
@@ -203,6 +205,14 @@ test("add-to-playlist filtering excludes automatic playlists and matches every t
     ["1", "2"],
   );
   assert.deepEqual(filterAddablePlaylists(playlists, "liked"), []);
+  assert.deepEqual(filterAddablePlaylists(playlists, "recent"), []);
+});
+
+test("only derived playlist kinds use automatic read-only behavior", () => {
+  assert.equal(isAutomaticPlaylistKind("liked-tracks"), true);
+  assert.equal(isAutomaticPlaylistKind("recently-added"), true);
+  assert.equal(isAutomaticPlaylistKind("external"), false);
+  assert.equal(isAutomaticPlaylistKind("manual"), false);
 });
 
 test("playlist pages expose creation, unavailable tracks, editing, likes, and offline controls", async () => {
@@ -260,7 +270,8 @@ test("playlist pages expose creation, unavailable tracks, editing, likes, and of
     ),
   ]);
 
-  assert.match(index, /usePlaylistList\(\{ limit: 1 \}\)/);
+  assert.match(index, /usePlaylistList\(\{ limit: 2 \}\)/);
+  assert.match(index, /RECENTLY_ADDED_PLAYLIST_ID/);
   assert.match(index, /<CatalogCard/);
   assert.match(index, /playlistCatalogCard/);
   assert.doesNotMatch(index, /page\.home\.comingSoon/);
@@ -272,7 +283,7 @@ test("playlist pages expose creation, unavailable tracks, editing, likes, and of
   assert.match(detailPage, /playlistPlayableTracks/);
   assert.match(
     detailPage,
-    /<LikedTracksOfflineToggle\s+v-if="automatic"[\s\S]*<PlaylistOfflineButton\s+v-else/,
+    /<LikedTracksOfflineToggle\s+v-if="likedAutomatic"[\s\S]*<PlaylistOfflineButton\s+v-else/,
   );
   assert.match(detailPage, /<PlaylistTrackList/);
   assert.match(detailPage, /<PlaylistNameDialog/);
@@ -397,13 +408,20 @@ test("liked tracks use generated artwork and a read-only automatic playlist surf
 
   assert.match(cover, /bg-primary\/40 text-white/);
   assert.match(cover, /icons\.heartFilled/);
+  assert.match(cover, /bg-chart-1\/60 text-foreground/);
+  assert.match(cover, /icons\.folderPlus/);
   assert.match(cover, /compact \? 'size-5' : 'size-16'/);
   assert.match(catalogCard, /:kind="playlist\.kind"/);
-  assert.match(playlistMenu, /playlist\.kind === "liked-tracks"/);
+  assert.match(
+    playlistMenu,
+    /isAutomaticPlaylistKind\(props\.playlist\.kind\)/,
+  );
   assert.match(playlistMenu, /v-if="!automatic"/);
+  assert.match(detail, /isAutomaticPlaylistKind\(playlist\.value\.kind\)/);
   assert.match(detail, /playlist\.value\?\.kind === "liked-tracks"/);
+  assert.match(detail, /playlist\.value\?\.kind === "recently-added"/);
   assert.match(detail, /:read-only="automatic"/);
-  assert.match(detail, /:show-track-likes="!automatic"/);
+  assert.match(detail, /:show-track-likes="!likedAutomatic"/);
   assert.doesNotMatch(detail, /automatic[\s\S]{0,100}page\.playlist\.rename/);
   assert.match(submenu, /filterAddablePlaylists/);
   assert.match(layout, /to: "\/playlists\/liked"/);

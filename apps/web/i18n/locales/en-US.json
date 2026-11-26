@@ -345,6 +345,8 @@
   "page.playlist.automaticNoMatches": "Try a different track title, artist, or album.",
   "page.playlist.automaticEmptyTitle": "No liked tracks yet",
   "page.playlist.automaticEmptyDescription": "Like a music track and it will be added here automatically.",
+  "page.playlist.recentlyAddedEmptyTitle": "No recently added tracks yet",
+  "page.playlist.recentlyAddedEmptyDescription": "Available music tracks will appear here when they are added to your library.",
   "page.playlist.rename": "Rename playlist",
   "page.playlist.delete": "Delete playlist",
   "page.playlist.unavailable": "This playlist is not available for this profile.",

@@ -11,6 +11,7 @@ import type {
 } from "@peridot/contracts";
 import {
   createMemberSession,
+  createMediaFixture,
   createTaggedMp3,
   createTestContext,
   startScan,
@@ -140,12 +141,13 @@ test("playlists support owner CRUD and stay private", async () => {
     });
     assert.equal(listResponse.statusCode, 200);
     const list = listResponse.json<PlaylistListResponse>();
-    assert.equal(list.totalCount, 2);
+    assert.equal(list.totalCount, 3);
     assert.deepEqual(
       list.items.map((item) => item.name),
-      ["Liked tracks", "Road trip"],
+      ["Liked tracks", "Recently added", "Road trip"],
     );
     assert.equal(list.items[0]?.kind, "liked-tracks");
+    assert.equal(list.items[1]?.kind, "recently-added");
     assert.equal(created.kind, "manual");
 
     const renamed = await context.app.inject({
@@ -177,10 +179,14 @@ test("playlists support owner CRUD and stay private", async () => {
       headers: member,
     });
     assert.equal(memberList.statusCode, 200);
-    assert.equal(memberList.json<PlaylistListResponse>().totalCount, 1);
+    assert.equal(memberList.json<PlaylistListResponse>().totalCount, 2);
     assert.equal(
       memberList.json<PlaylistListResponse>().items[0]?.kind,
       "liked-tracks",
+    );
+    assert.equal(
+      memberList.json<PlaylistListResponse>().items[1]?.kind,
+      "recently-added",
     );
 
     for (const method of ["GET", "PATCH", "DELETE"] as const) {
@@ -253,7 +259,7 @@ test("playlist list search filters names before pagination", async () => {
       headers: context.authorization,
     });
     assert.equal(blank.statusCode, 200);
-    assert.equal(blank.json<PlaylistListResponse>().totalCount, 5);
+    assert.equal(blank.json<PlaylistListResponse>().totalCount, 6);
   } finally {
     await context.close();
   }
@@ -323,7 +329,7 @@ test("liked tracks produce a read-only automatic playlist", async () => {
       headers: context.authorization,
     });
     const list = listResponse.json<PlaylistListResponse>();
-    assert.equal(list.totalCount, 2);
+    assert.equal(list.totalCount, 3);
     assert.equal(list.items[0]?.kind, "liked-tracks");
 
     const contains = await context.app.inject({
@@ -353,6 +359,16 @@ test("liked tracks produce a read-only automatic playlist", async () => {
     });
     assert.deepEqual(
       secondPage.json<PlaylistListResponse>().items.map((item) => item.name),
+      ["Recently added"],
+    );
+
+    const manualPage = await context.app.inject({
+      method: "GET",
+      url: "/api/playlists?limit=1&offset=2",
+      headers: context.authorization,
+    });
+    assert.deepEqual(
+      manualPage.json<PlaylistListResponse>().items.map((item) => item.name),
       ["Manual playlist"],
     );
 
@@ -387,6 +403,144 @@ test("liked tracks produce a read-only automatic playlist", async () => {
       await context.app.inject({
         method: "PUT",
         url: "/api/playlists/liked/items/order",
+        headers: context.authorization,
+        payload: { itemIds: [] },
+      }),
+    ];
+    assert.deepEqual(
+      mutationResponses.map((response) => response.statusCode),
+      [409, 409, 409, 409, 409],
+    );
+    assert.equal(
+      mutationResponses[0]?.json().error.code,
+      "automatic_playlist_read_only",
+    );
+  } finally {
+    await context.close();
+  }
+});
+
+test("recently added exposes 50 newest available music tracks and stays read-only", async () => {
+  const context = await createTestContext();
+  try {
+    const recentFixtures: Awaited<ReturnType<typeof createMediaFixture>>[] = [];
+    for (let index = 0; index <= 50; index += 1) {
+      recentFixtures.push(
+        await createMediaFixture(context, {
+          media: {
+            title: `Recent ${index}`,
+            artist: "Recent Artist",
+            album: "Recent Album",
+            durationMs: 60_000 + index,
+            createdAt: new Date(
+              `2026-01-01T00:${String(index).padStart(2, "0")}:00.000Z`,
+            ),
+          },
+        }),
+      );
+    }
+    await createMediaFixture(context, {
+      media: {
+        title: "Unavailable",
+        artist: "Recent Artist",
+        available: 0,
+        createdAt: new Date("2026-01-02T00:00:00.000Z"),
+      },
+    });
+    await createMediaFixture(context, {
+      media: {
+        title: "Audiobook",
+        artist: "Recent Artist",
+        mediaType: "audiobook",
+        createdAt: new Date("2026-01-03T00:00:00.000Z"),
+      },
+    });
+    await createMediaFixture(context, {
+      media: {
+        title: "Podcast",
+        artist: "Recent Artist",
+        mediaType: "podcast",
+        createdAt: new Date("2026-01-04T00:00:00.000Z"),
+      },
+    });
+    const user = await context.database.orm.User.firstOrThrow();
+    await context.database.orm.MediaLike.create({
+      userId: user.id,
+      mediaId: recentFixtures[1]!.media.id,
+    });
+
+    const detail = await getPlaylist(context, "recent");
+    assert.equal(detail.kind, "recently-added");
+    assert.equal(detail.name, "Recently added");
+    assert.equal(detail.trackCount, 50);
+    assert.equal(detail.availableTrackCount, 50);
+    assert.equal(detail.coverUrls.length, 0);
+    assert.equal(detail.entries.length, 50);
+    assert.equal(detail.entries[0]?.title, "Recent 50");
+    assert.equal(detail.entries.at(-1)?.title, "Recent 1");
+    assert.equal(detail.entries[0]?.position, 0);
+    assert.equal(detail.entries.at(-1)?.position, 49);
+    assert.equal(detail.entries.at(-1)?.liked, true);
+    assert.equal(detail.entries.at(-1)?.media?.liked, true);
+    assert.equal(
+      detail.entries.some((entry) =>
+        ["Recent 0", "Unavailable", "Audiobook", "Podcast"].includes(
+          entry.title,
+        ),
+      ),
+      false,
+    );
+
+    const listResponse = await context.app.inject({
+      method: "GET",
+      url: "/api/playlists?query=recent&limit=1",
+      headers: context.authorization,
+    });
+    assert.equal(listResponse.statusCode, 200);
+    const list = listResponse.json<PlaylistListResponse>();
+    assert.equal(list.totalCount, 1);
+    assert.equal(list.items[0]?.kind, "recently-added");
+    assert.equal(list.items[0]?.trackCount, 50);
+
+    const contains = await context.app.inject({
+      method: "GET",
+      url: `/api/playlists?mediaId=${encodeURIComponent(recentFixtures[50]!.media.id)}`,
+      headers: context.authorization,
+    });
+    const recentSummary = contains
+      .json<PlaylistListResponse>()
+      .items.find((item) => item.id === "recent");
+    assert.equal(recentSummary?.containsTrack, true);
+
+    const mutationResponses = [
+      await context.app.inject({
+        method: "PATCH",
+        url: "/api/playlists/recent",
+        headers: context.authorization,
+        payload: { name: "Renamed" },
+      }),
+      await context.app.inject({
+        method: "DELETE",
+        url: "/api/playlists/recent",
+        headers: context.authorization,
+      }),
+      await context.app.inject({
+        method: "POST",
+        url: "/api/playlists/recent/items",
+        headers: context.authorization,
+        payload: {
+          kind: "catalog",
+          mediaId: recentFixtures[50]!.media.id,
+        },
+      }),
+      await context.app.inject({
+        method: "DELETE",
+        url: `/api/playlists/recent/items/${encodeURIComponent(`recent:${recentFixtures[50]!.media.id}`)}`,
+        headers: context.authorization,
+      }),
+      await context.app.inject({
+        method: "PUT",
+        url: "/api/playlists/recent/items/order",
         headers: context.authorization,
         payload: { itemIds: [] },
       }),

@@ -1,5 +1,47 @@
 # Peridot handoff
 
+## Recently added automatic playlist
+
+Playlists and Home now include a read-only “Recently added” automatic playlist
+after Liked tracks. It contains at most 50 available music tracks ordered by
+canonical media creation time, newest first, with ID descending as the stable
+tie break. Adding another copy of a known recording does not move it, and the
+recording disappears from the playlist when no playable copy remains.
+
+The detail surface reuses the standard playlist playback, track search,
+per-track likes, and offline-save controls. Rename, delete, add, remove, and
+reorder requests return `409 automatic_playlist_read_only`. The generated cover
+uses `bg-chart-1/60` for a lighter light-blue field and the adaptive-foreground
+Basil `folder-plus-outline` icon. There is no sidebar shortcut.
+
+Verification:
+
+- `pnpm test` (server 239, web 345, UI 19, desktop 5)
+- `pnpm --filter @peridot/server typecheck`
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm lint`
+- `pnpm format:check`
+- `pnpm db:validate` (3-migration graph current)
+- Contract, server, and web production builds
+
+Known limits:
+
+- The lighter cover treatment is covered by source assertions and the
+  production build, not live authenticated browser visual QA.
+
+Uncommitted changes:
+
+- The Recently added contract, server projection and read-only routing,
+  overview count, cover icon and colors, Home/playlist-detail behavior,
+  translations, tests, decision record, and this handoff section.
+- Unrelated concurrent work was preserved.
+
+Next:
+
+- Open Home, Playlists, and `/playlists/recent` at desktop and phone widths in
+  both themes and confirm the lighter blue cover, 50-track ordering, playback,
+  search, per-track likes, and offline-save control.
+
 ## Determinate progress circles remain static
 
 The shared `ProgressCircle` now applies its reduced-motion-safe spin only while

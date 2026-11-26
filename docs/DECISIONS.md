@@ -1,5 +1,23 @@
 # Peridot decisions
 
+## 2026-11-26: Recently added is a bounded canonical-track playlist
+
+“Recently added” is the second virtual automatic playlist, with reserved ID
+`recent` and public kind `recently-added`. It contains at most 50 available
+music `Media` records ordered by canonical creation time, then ID for a stable
+tie break. It is library-wide rather than personalized, and it does not require
+a stored playlist or migration.
+
+The ordering uses the canonical media creation time rather than the newest
+`MediaCopy` time. Adding another source-backed file for a known recording
+therefore does not move that recording to the top, and removing its last
+available source removes it from the list. The playlist appears after Liked
+tracks on Home and the Playlists screen without a sidebar shortcut.
+
+The generated cover uses the shared `chart-1` light blue at 60% opacity so the
+field stays visibly light across the dark-first surfaces, with an adaptive
+foreground Basil `folder-plus-outline` icon.
+
 ## 2026-11-26: Determinate progress circles remain static
 
 The shared `ProgressCircle` rotates only while its value is indeterminate.

@@ -16,6 +16,7 @@ import { useLikes } from "../composables/use-likes";
 import { usePlaylistActions } from "../composables/use-playlists";
 import { useServerConnection } from "../composables/use-server-connection";
 import { icons } from "../lib/icons";
+import { isAutomaticPlaylistKind } from "../lib/playlists";
 import PlaylistDeleteDialog from "./PlaylistDeleteDialog.vue";
 import PlaylistNameDialog from "./PlaylistNameDialog.vue";
 
@@ -36,7 +37,7 @@ const {
   toggle: toggleLike,
   isPending: isLikePending,
 } = useLikes();
-const automatic = computed(() => props.playlist.kind === "liked-tracks");
+const automatic = computed(() => isAutomaticPlaylistKind(props.playlist.kind));
 const renameOpen = ref(false);
 const deleteOpen = ref(false);
 const pending = ref(false);
