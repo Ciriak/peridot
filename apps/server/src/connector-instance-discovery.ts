@@ -25,6 +25,7 @@ export interface ConnectorInstanceDiscoveryCapability {
 interface AddressHint {
   url: URL;
   explicitPort: number | null;
+  explicitScheme: boolean;
 }
 
 interface DiscoveryCandidate {
@@ -38,6 +39,10 @@ const DISCOVERY_CONCURRENCY = 64;
 const DISCOVERY_TIMEOUT_MS = 350;
 const PRIVATE_HOST_COUNT = 254;
 const MAX_PRIVATE_SUBNETS = 3;
+const STANDARD_PROTOCOL_PORTS: Record<ConnectorProbeProtocol, number> = {
+  http: 80,
+  https: 443,
+};
 
 export class ConnectorInstanceDiscoveryError extends Error {
   readonly statusCode = 400;
@@ -89,9 +94,8 @@ function subnetRank(prefix: string): number {
 function addressHint(value: string): AddressHint | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
-  const candidate = /^[a-z][a-z\d+.-]*:\/\//i.test(trimmed)
-    ? trimmed
-    : `http://${trimmed}`;
+  const explicitScheme = /^[a-z][a-z\d+.-]*:\/\//i.test(trimmed);
+  const candidate = explicitScheme ? trimmed : `http://${trimmed}`;
   let url: URL;
   try {
     url = new URL(candidate);
@@ -126,7 +130,7 @@ function addressHint(value: string): AddressHint | null {
     );
   }
   url.pathname = url.pathname.replace(/\/+$/, "") || "/";
-  return { url, explicitPort: parsedPort };
+  return { url, explicitPort: parsedPort, explicitScheme };
 }
 
 function configuredPorts(values: readonly number[]): number[] {
@@ -175,7 +179,11 @@ function discoveryCandidates(
 
   if (hint) {
     for (const protocol of protocols) {
-      for (const port of ports) {
+      const protocolPorts =
+        hint.explicitScheme && hint.explicitPort === null
+          ? [STANDARD_PROTOCOL_PORTS[protocol]]
+          : ports;
+      for (const port of protocolPorts) {
         append(candidateAddress(hint, protocol, port));
       }
     }

@@ -1,5 +1,32 @@
 # Peridot handoff
 
+## Connector discovery honors standard web ports
+
+Scheme-qualified connector address hints without an explicit port now probe
+HTTPS `443` and HTTP `80` instead of replacing the URL's effective port with the
+connector default. Scheme-less hosts still use advertised connector ports, and
+explicit ports and reverse-proxy paths remain unchanged.
+
+This fixes discovery of `https://jf.cyriaque.dev`, which is served through a
+reverse proxy on `443` rather than Jellyfin's direct port `8096`. Live discovery
+returned `Raspberry Pi Media` on Jellyfin `10.11.8`.
+
+Verification:
+
+- Focused connector discovery suite under Node 24.15.0 (6 passing)
+- Live Jellyfin discovery from `https://jf.cyriaque.dev`
+- `pnpm --filter @peridot/server typecheck` under Node 24.15.0
+- `pnpm --filter @peridot/server test` (238 passing under the machine's Node 26.13.0)
+- Focused ESLint and Prettier checks
+- Node 24.15.0 full-suite rerun reached `jellyfin.test.ts` and then hit the
+  repository's existing `v8::ToLocalChecked Empty MaybeLocal` module-loader
+  crash; all connector discovery tests passed during that run.
+
+Uncommitted changes:
+
+- Connector address-hint port selection, focused regression coverage, decision
+  record, development note, and this handoff section.
+
 ## Release indexer save without a live connection
 
 Release indexers can now be created while their Torznab feed is unreachable.

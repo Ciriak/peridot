@@ -1,5 +1,17 @@
 # Peridot decisions
 
+## 2026-11-26: Connector URL hints honor standard web ports
+
+An address hint with an explicit HTTP or HTTPS scheme and no port now probes the
+standard port for each protocol: `443` for HTTPS and `80` for HTTP. This lets a
+reverse-proxied service be discovered from its ordinary public URL without
+requiring an otherwise redundant explicit `:443` or `:80`.
+
+Scheme-less hosts continue to probe each connector's advertised ports, such as
+Jellyfin `8096` and qBittorrent `8080`. An explicit port still overrides both
+standard and connector defaults, and reverse-proxy paths remain part of every
+candidate.
+
 ## 2026-11-25: Release indexers save independently of connection tests
 
 Saving a Torznab release indexer validates the feed URL, credential shape, and

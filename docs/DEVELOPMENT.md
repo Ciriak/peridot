@@ -172,7 +172,10 @@ Libraries are discovered with
 Connector instances are discovered with
 `POST /api/admin/connectors/:kind/discover-instances`. An empty body searches
 the local networks visible to the Peridot server. An optional address hint
-limits the scan to one host:
+limits the scan to one host. A scheme-qualified URL without a port uses the
+standard port for each protocol (`443` for HTTPS and `80` for HTTP).
+Scheme-less hosts use the connector's advertised ports, and explicit ports are
+preserved:
 
 ```json
 {
@@ -197,11 +200,12 @@ The response contains only verified, credential-free instance descriptors:
 }
 ```
 
-Jellyfin uses port `8096`, probes HTTPS before HTTP, and accepts only the
-`Jellyfin Server` public-info signature. The Add source form must use the
-selected scanner URL for library discovery and source creation; typed addresses
-are scan hints. Docker bridge networking can hide the host LAN, so entering the
-Jellyfin host address directly is the reliable container path.
+Jellyfin uses port `8096` for scheme-less host hints, probes HTTPS before HTTP,
+and accepts only the `Jellyfin Server` public-info signature. The Add source
+form must use the selected scanner URL for library discovery and source
+creation; typed addresses are scan hints. Docker bridge networking can hide the
+host LAN, so entering the Jellyfin host address directly is the reliable
+container path.
 
 qBittorrent uses port `8080` and accepts only the official Web UI metadata or the
 older localized title and bundled Web UI asset. Download clients must use a
