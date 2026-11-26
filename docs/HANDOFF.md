@@ -1,5 +1,38 @@
 # Peridot handoff
 
+## Mobile fullscreen player keeps a square cover
+
+Each fullscreen carousel panel now fills its slide width. This prevents the
+artwork from collapsing against its height and keeps the right-aligned like
+control aligned with the carousel edge. The artwork, title, and artists form one
+vertically centered group within the carousel. Balanced edge slots keep the
+metadata horizontally centered while the like control occupies the right slot.
+Adjacent previews use a contents wrapper so they participate in the same flex
+height as the active track instead of collapsing their artwork.
+
+Live verification measured a centered `384 × 384` cover at `768 × 1024`; the
+content group center differed from the carousel center by less than one pixel,
+and the like control's right edge matched the carousel's right edge. A
+`375 × 667` check confirmed the smaller square artwork and full-width panel
+basis. At that phone width, previous, active, and next slides each measured a
+`288 × 288` cover with the same metadata baseline. The focused mobile-player
+assertions now cover the panel sizing, centered group, and adjacent-slide
+structure.
+
+Verification:
+
+- `pnpm --filter @peridot/web exec node --test test/mobile-player.test.ts`
+  (2 passing)
+- `pnpm --filter @peridot/web typecheck`
+- Focused ESLint and Prettier checks on the changed files
+- `git diff --check`
+- Live phone-width browser measurement and visual inspection
+
+Uncommitted changes:
+
+- The fullscreen carousel panel width fix, its regression assertion, and this
+  handoff section.
+
 ## Connector discovery honors standard web ports
 
 Scheme-qualified connector address hints without an explicit port now probe
