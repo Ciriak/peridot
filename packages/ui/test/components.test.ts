@@ -178,7 +178,7 @@ test("ProgressCircle starts its first rendered arc at zero while exposing curren
   assert.match(html, /class="[^"]*size-16/);
   assert.match(html, /class="[^"]*stroke-success/);
   assert.match(html, /class="[^"]*custom-progress/);
-  assert.match(html, /motion-safe:animate-spin/);
+  assert.doesNotMatch(html, /motion-safe:animate-spin/);
   const indicator =
     html.match(
       /<circle[^>]*data-slot="progress-circle-indicator"[^>]*>/,

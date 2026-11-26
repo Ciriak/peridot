@@ -1,5 +1,13 @@
 # Peridot decisions
 
+## 2026-11-26: Determinate progress circles remain static
+
+The shared `ProgressCircle` rotates only while its value is indeterminate.
+Finite values, including zero, render a fixed arc at the current percentage and
+continue to update the arc through the existing determinate transition. This
+keeps downloads, task progress, and other measured work distinguishable from an
+unknown-duration spinner.
+
 ## 2026-11-26: Legacy offline audio cleanup is not exposed in Settings
 
 Settings → Library no longer presents the legacy offline audio cleanup card or

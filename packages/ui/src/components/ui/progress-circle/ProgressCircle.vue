@@ -97,7 +97,8 @@ const valueTextClass = computed(() => valueTextClasses[props.size ?? "md"]);
       aria-hidden="true"
       viewBox="0 0 36 36"
       :stroke-width="normalizedStroke"
-      class="size-full origin-center -rotate-90 motion-safe:animate-spin"
+      class="size-full origin-center -rotate-90"
+      :class="{ 'motion-safe:animate-spin': isIndeterminate }"
     >
       <circle
         data-slot="progress-circle-track"

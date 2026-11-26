@@ -1,5 +1,37 @@
 # Peridot handoff
 
+## Determinate progress circles remain static
+
+The shared `ProgressCircle` now applies its reduced-motion-safe spin only while
+progress is indeterminate. A set value, including `0`, keeps the arc fixed at
+that percentage while retaining the determinate transition when the value
+changes.
+
+Verification:
+
+- `pnpm dlx node@24.15.0 --test test/*.test.ts` from `packages/ui`
+  (19 passing)
+- `pnpm dlx node@24.15.0 --test test/*.test.ts` from `apps/web`
+  (344 passing)
+- `pnpm --filter @peridot/web typecheck`
+- Focused ESLint and Prettier checks on the changed UI and test files
+- `git diff --check`
+
+Known limits:
+
+- The state distinction is covered by rendered component assertions, not a live
+  authenticated task or offline-download run.
+
+Uncommitted changes:
+
+- Conditional `ProgressCircle` rotation, its regression assertion, decision
+  record, and this handoff section.
+
+Next:
+
+- Open Settings → Tasks with a partially complete task and confirm the progress
+  arc updates without rotating.
+
 ## Overview graph fit includes default padding
 
 The initial Vue Flow overview fit now uses shared `16px` padding around all
