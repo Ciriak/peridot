@@ -1,5 +1,308 @@
 # Peridot handoff
 
+## Recently added automatic playlist
+
+Playlists and Home now include a read-only “Recently added” automatic playlist
+after Liked tracks. It contains at most 50 available music tracks ordered by
+canonical media creation time, newest first, with ID descending as the stable
+tie break. Adding another copy of a known recording does not move it, and the
+recording disappears from the playlist when no playable copy remains.
+
+The detail surface reuses the standard playlist playback, track search,
+per-track likes, and offline-save controls. Rename, delete, add, remove, and
+reorder requests return `409 automatic_playlist_read_only`. The generated cover
+uses `bg-chart-1/60` for a lighter light-blue field and the adaptive-foreground
+Basil `folder-plus-outline` icon. There is no sidebar shortcut.
+
+Verification:
+
+- `pnpm test` (server 239, web 345, UI 19, desktop 5)
+- `pnpm --filter @peridot/server typecheck`
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm lint`
+- `pnpm format:check`
+- `pnpm db:validate` (3-migration graph current)
+- Contract, server, and web production builds
+
+Known limits:
+
+- The lighter cover treatment is covered by source assertions and the
+  production build, not live authenticated browser visual QA.
+
+Uncommitted changes:
+
+- The Recently added contract, server projection and read-only routing,
+  overview count, cover icon and colors, Home/playlist-detail behavior,
+  translations, tests, decision record, and this handoff section.
+- Unrelated concurrent work was preserved.
+
+Next:
+
+- Open Home, Playlists, and `/playlists/recent` at desktop and phone widths in
+  both themes and confirm the lighter blue cover, 50-track ordering, playback,
+  search, per-track likes, and offline-save control.
+
+## Determinate progress circles remain static
+
+The shared `ProgressCircle` now applies its reduced-motion-safe spin only while
+progress is indeterminate. A set value, including `0`, keeps the arc fixed at
+that percentage while retaining the determinate transition when the value
+changes.
+
+Verification:
+
+- `pnpm dlx node@24.15.0 --test test/*.test.ts` from `packages/ui`
+  (19 passing)
+- `pnpm dlx node@24.15.0 --test test/*.test.ts` from `apps/web`
+  (344 passing)
+- `pnpm --filter @peridot/web typecheck`
+- Focused ESLint and Prettier checks on the changed UI and test files
+- `git diff --check`
+
+Known limits:
+
+- The state distinction is covered by rendered component assertions, not a live
+  authenticated task or offline-download run.
+
+Uncommitted changes:
+
+- Conditional `ProgressCircle` rotation, its regression assertion, decision
+  record, and this handoff section.
+
+Next:
+
+- Open Settings → Tasks with a partially complete task and confirm the progress
+  arc updates without rotating.
+
+## Overview graph fit includes default padding
+
+The initial Vue Flow overview fit now uses shared `32px` padding around all
+nodes instead of the negligible `0.35px` value. The automatic fit and the
+post-initialization fit use the same options, keeping the graph inset when it
+first loads without reducing the available panning or zoom range.
+
+Verification:
+
+- Focused overview settings regression test
+- Focused Prettier and ESLint checks on the changed Web files
+- `git diff --check`
+
+Uncommitted changes:
+
+- Overview initial fit padding, its shared configuration and regression
+  assertions, and this handoff section.
+- Concurrent catalog, layout, task, virtual-scroll, test, and documentation
+  changes were present and were left untouched.
+
+Next:
+
+- Open `/settings/overview` at desktop and phone widths and confirm the initial
+  fitted graph has a small, even inset from the flow container edge.
+
+## Library settings omit legacy offline audio cleanup
+
+Settings → Library no longer renders the legacy offline audio cleanup card,
+removal button, or page-local cleanup state. Retained browser
+`peridot-offline-audio-v1` and Android `files/offline` audio remain untouched,
+so removing the option does not delete device-local copies.
+
+Verification:
+
+- Focused legacy cache regression test under Node 24.15.0 (1 passing)
+- Web test suite under Node 24.15.0 (344 passing)
+- Web typecheck under Node 24.15.0
+- Web production build under Node 24.15.0
+- Focused ESLint and Prettier checks on the changed Web and test files
+- `git diff --check`
+
+Known limits:
+
+- The removed card was verified through source-level regression coverage and a
+  production build, not live authenticated browser QA.
+- The underlying web and Android legacy-cleanup helpers remain available but
+  have no Settings entry point.
+
+Uncommitted changes:
+
+- Legacy offline audio cleanup removal from Settings → Library, its regression
+  assertion, decision and development notes, and this handoff section.
+- Concurrent catalog, sidebar, layout, task, virtual-scroll, test, and handoff
+  changes were present during this work and were left untouched.
+
+Next:
+
+- Open Settings → Library at desktop and phone widths and confirm the legacy
+  cleanup card is absent while the liked-titles offline preference remains.
+
+## Download progress labels omit file counts only during transfers
+
+Active release-import downloads now show percentage-only progress, such as
+`Downloading · 0%`. Determinate progress for scans, metadata work, artwork, and
+release imports that have reached the library-ingestion stage retain the
+`(completed of total)` file count.
+
+Verification:
+
+- Focused Web task-progress, i18n, settings, and offline-shell tests
+  (62 passing)
+- `pnpm --filter @peridot/web typecheck`
+- Focused ESLint and Prettier checks on the changed Web and test files
+- `git diff --check`
+
+Known limits:
+
+- The scoped label was verified through behavioral tests and static checks, not
+  against a live qBittorrent transfer.
+
+Uncommitted changes:
+
+- Release-import download progress formatting, its focused regression coverage,
+  and this handoff section.
+- Concurrent catalog, sidebar, layout, virtual-scroll, test, and handoff changes
+  were present during this work and were left untouched.
+
+Next:
+
+- Observe the task tooltip during a live release import and confirm the count
+  returns when the task advances to library ingestion.
+
+## Virtual card placeholders use measured row heights
+
+Virtual card rows now register their measured height even when they contain
+placeholders. Artist preloader rows previously used the `92px` estimate without
+the rendered row gap, so consecutive skeleton rows overlapped and their spacing
+did not match populated cards. The artists catalog also renders one card per
+phone-width row.
+
+Verification:
+
+- Focused Web virtual-scroll regression test
+- `pnpm --filter @peridot/web test` (344 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Focused Prettier and `git diff --check`
+- Live desktop paging: populated and placeholder artist rows both measured
+  `105.6px` with the same gap
+- Live phone-width paging: one-column artist and skeleton rows retained the same
+  rendered gap
+
+Uncommitted changes:
+
+- The shared virtual card measurement fix, its regression assertion, and this
+  handoff section.
+- Concurrent catalog-card, sidebar, Web test, and handoff changes were present
+  during this work and were left untouched.
+
+Next:
+
+- Confirm the same paged-list behavior on other card surfaces during normal
+  catalog use.
+
+## Empty playlist cards hide the unavailable icon
+
+Catalog cards and rows no longer render a playlist playback control when the
+playlist has zero tracks. Previously the unavailable fallback appeared as a
+cloud-off icon over empty cards, including Liked tracks. Playlists with tracks
+still use the existing unavailable state when none of those tracks can play.
+
+Verification:
+
+- Focused card, playlist, and album tests (13 passing)
+- `pnpm --filter @peridot/web test` (344 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Focused ESLint and Prettier checks on the changed Web and test files
+- `git diff --check`
+
+Uncommitted changes:
+
+- The empty-playlist playback-control condition, its regression assertion, and
+  this handoff section.
+- Concurrent sidebar swipe, layout, and test changes were present during
+  verification and were left untouched.
+
+Next:
+
+- Open Liked tracks with zero liked tracks at desktop and phone widths, then
+  confirm the card cover has no playback overlay.
+
+## Mobile sidebars omit close buttons
+
+The main and settings navigation sidebars no longer render a mobile close
+button. The existing backdrop tap, menu toggle, route change, and swipe-to-close
+paths remain available.
+
+Verification:
+
+- Live main-sidebar DOM inspection confirmed no close control remains.
+- Focused sidebar swipe and closure regression test.
+- Focused ESLint and Prettier checks on the changed files.
+
+Uncommitted changes:
+
+- Main and settings sidebar close-button removal, regression coverage, and this
+  handoff section.
+
+## Mobile fullscreen player keeps a square cover
+
+Each fullscreen carousel panel now fills its slide width. This prevents the
+artwork from collapsing against its height and keeps the right-aligned like
+control aligned with the carousel edge. The artwork, title, and artists form one
+vertically centered group within the carousel. Balanced edge slots keep the
+metadata horizontally centered while the like control occupies the right slot.
+Adjacent previews use a contents wrapper so they participate in the same flex
+height as the active track instead of collapsing their artwork.
+
+Live verification measured a centered `384 × 384` cover at `768 × 1024`; the
+content group center differed from the carousel center by less than one pixel,
+and the like control's right edge matched the carousel's right edge. A
+`375 × 667` check confirmed the smaller square artwork and full-width panel
+basis. At that phone width, previous, active, and next slides each measured a
+`288 × 288` cover with the same metadata baseline. The focused mobile-player
+assertions now cover the panel sizing, centered group, and adjacent-slide
+structure.
+
+Verification:
+
+- `pnpm --filter @peridot/web exec node --test test/mobile-player.test.ts`
+  (2 passing)
+- `pnpm --filter @peridot/web typecheck`
+- Focused ESLint and Prettier checks on the changed files
+- `git diff --check`
+- Live phone-width browser measurement and visual inspection
+
+Uncommitted changes:
+
+- The fullscreen carousel panel width fix, its regression assertion, and this
+  handoff section.
+
+## Connector discovery honors standard web ports
+
+Scheme-qualified connector address hints without an explicit port now probe
+HTTPS `443` and HTTP `80` instead of replacing the URL's effective port with the
+connector default. Scheme-less hosts still use advertised connector ports, and
+explicit ports and reverse-proxy paths remain unchanged.
+
+This fixes discovery of `https://jf.cyriaque.dev`, which is served through a
+reverse proxy on `443` rather than Jellyfin's direct port `8096`. Live discovery
+returned `Raspberry Pi Media` on Jellyfin `10.11.8`.
+
+Verification:
+
+- Focused connector discovery suite under Node 24.15.0 (6 passing)
+- Live Jellyfin discovery from `https://jf.cyriaque.dev`
+- `pnpm --filter @peridot/server typecheck` under Node 24.15.0
+- `pnpm --filter @peridot/server test` (238 passing under the machine's Node 26.13.0)
+- Focused ESLint and Prettier checks
+- Node 24.15.0 full-suite rerun reached `jellyfin.test.ts` and then hit the
+  repository's existing `v8::ToLocalChecked Empty MaybeLocal` module-loader
+  crash; all connector discovery tests passed during that run.
+
+Uncommitted changes:
+
+- Connector address-hint port selection, focused regression coverage, decision
+  record, development note, and this handoff section.
+
 ## Release indexer save without a live connection
 
 Release indexers can now be created while their Torznab feed is unreachable.

@@ -533,8 +533,11 @@ export interface ArtistListResponse {
 
 export const LIKED_TRACKS_PLAYLIST_ID = "liked";
 export const LIKED_TRACKS_PLAYLIST_NAME = "Liked tracks";
+export const RECENTLY_ADDED_PLAYLIST_ID = "recent";
+export const RECENTLY_ADDED_PLAYLIST_NAME = "Recently added";
 
-export type PlaylistKind = "manual" | "external" | "liked-tracks";
+export type PlaylistKind =
+  "manual" | "external" | "liked-tracks" | "recently-added";
 
 export interface PlaylistSummaryResponse {
   id: string;

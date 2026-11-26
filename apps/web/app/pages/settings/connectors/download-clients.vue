@@ -19,6 +19,15 @@ import {
   DropdownMenuPortal,
   DropdownMenuRoot,
   DropdownMenuTrigger,
+  SelectContent,
+  SelectIcon,
+  SelectItem,
+  SelectItemIndicator,
+  SelectItemText,
+  SelectPortal,
+  SelectRoot,
+  SelectTrigger,
+  SelectViewport,
 } from "reka-ui";
 import { Icon } from "@iconify/vue/offline";
 import type {
@@ -26,6 +35,7 @@ import type {
   DownloadClientAuthType,
   DownloadClientInput,
   DownloadClientResponse,
+  LibrarySourceResponse,
 } from "@peridot/contracts";
 import { Button } from "@peridot/ui/components/ui/button";
 import { Input } from "@peridot/ui/components/ui/input";
@@ -44,6 +54,7 @@ import {
   discoverConnectorInstances,
   downloadClientsApi,
 } from "../../../lib/peridot-client";
+import { sourceKindIcon, sourceKindLabelKey } from "../../../lib/source-label";
 
 definePageMeta({ layout: "settings" });
 
@@ -97,6 +108,11 @@ const blank = (name = "") => ({
   apiKey: "",
 });
 const form = ref(blank());
+const selectedDestinationSource = computed(() =>
+  destinationSources.value.find(
+    (source) => source.id === form.value.destinationSourceId,
+  ),
+);
 const qbittorrentInstances = ref<ConnectorInstanceResponse[]>([]);
 const selectedQbittorrentInstance = ref<ConnectorInstanceResponse | null>(null);
 const qbittorrentScanState = ref<"idle" | "scanning" | "complete" | "failed">(
@@ -300,6 +316,15 @@ function destinationName(client: DownloadClientResponse) {
     source?.url ||
     t("clients.destinationNotSet")
   );
+}
+
+function destinationSourceLabel(source: LibrarySourceResponse): string {
+  return source.name || source.path || source.url || source.kind;
+}
+
+function destinationSourceKindLabel(source: LibrarySourceResponse): string {
+  const key = sourceKindLabelKey(source.kind);
+  return key ? t(key) : source.kind;
 }
 
 onBeforeUnmount(() => {
@@ -533,22 +558,90 @@ onBeforeUnmount(() => {
               <span class="text-sm font-medium">
                 {{ t("clients.destinationSource") }}
               </span>
-              <select
-                v-model="form.destinationSourceId"
-                class="w-full rounded-md border bg-background p-2"
-                required
-              >
-                <option disabled value="">
-                  {{ t("clients.chooseDestinationSource") }}
-                </option>
-                <option
-                  v-for="source in destinationSources"
-                  :key="source.id"
-                  :value="source.id"
+              <SelectRoot v-model="form.destinationSourceId">
+                <SelectTrigger
+                  :aria-label="t('clients.destinationSource')"
+                  class="border-input flex h-9 w-full items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
                 >
-                  {{ source.name || source.path || source.url || source.kind }}
-                </option>
-              </select>
+                  <span class="flex min-w-0 items-center gap-2">
+                    <template v-if="selectedDestinationSource">
+                      <span
+                        role="img"
+                        :aria-label="
+                          destinationSourceKindLabel(selectedDestinationSource)
+                        "
+                        :title="
+                          destinationSourceKindLabel(selectedDestinationSource)
+                        "
+                        class="flex size-4 shrink-0 items-center justify-center text-muted-foreground"
+                      >
+                        <Icon
+                          :icon="
+                            sourceKindIcon(selectedDestinationSource.kind) ??
+                            icons.library
+                          "
+                          aria-hidden="true"
+                          class="size-4"
+                        />
+                      </span>
+                      <span class="truncate">
+                        {{ destinationSourceLabel(selectedDestinationSource) }}
+                      </span>
+                    </template>
+                    <span v-else class="truncate text-muted-foreground">
+                      {{ t("clients.chooseDestinationSource") }}
+                    </span>
+                  </span>
+                  <SelectIcon as-child>
+                    <Icon
+                      :icon="icons.caretDown"
+                      aria-hidden="true"
+                      class="size-4 shrink-0 opacity-50"
+                    />
+                  </SelectIcon>
+                </SelectTrigger>
+                <SelectPortal>
+                  <SelectContent
+                    position="popper"
+                    :side-offset="4"
+                    class="z-50 max-h-96 min-w-56 overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md"
+                  >
+                    <SelectViewport class="p-1">
+                      <SelectItem
+                        v-for="source in destinationSources"
+                        :key="source.id"
+                        :value="source.id"
+                        class="relative flex w-full cursor-default select-none items-center gap-2 rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground"
+                      >
+                        <SelectItemIndicator
+                          class="absolute left-2 flex size-4 items-center justify-center"
+                        >
+                          <Icon
+                            :icon="icons.check"
+                            aria-hidden="true"
+                            class="size-4"
+                          />
+                        </SelectItemIndicator>
+                        <span
+                          role="img"
+                          :aria-label="destinationSourceKindLabel(source)"
+                          :title="destinationSourceKindLabel(source)"
+                          class="flex size-4 shrink-0 items-center justify-center text-muted-foreground"
+                        >
+                          <Icon
+                            :icon="sourceKindIcon(source.kind) ?? icons.library"
+                            aria-hidden="true"
+                            class="size-4"
+                          />
+                        </span>
+                        <SelectItemText class="truncate">
+                          {{ destinationSourceLabel(source) }}
+                        </SelectItemText>
+                      </SelectItem>
+                    </SelectViewport>
+                  </SelectContent>
+                </SelectPortal>
+              </SelectRoot>
               <NuxtLink
                 class="text-sm text-muted-foreground underline"
                 to="/settings/connectors/library-sources"

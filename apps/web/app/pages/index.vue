@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { useHead, useI18n } from "#imports";
-import { LIKED_TRACKS_PLAYLIST_ID } from "@peridot/contracts";
+import {
+  LIKED_TRACKS_PLAYLIST_ID,
+  RECENTLY_ADDED_PLAYLIST_ID,
+} from "@peridot/contracts";
 import { Button } from "@peridot/ui/components/ui/button";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
@@ -32,7 +35,7 @@ const {
   error: playlistsError,
   loaded: playlistsLoaded,
   load: loadPlaylists,
-} = usePlaylistList({ limit: 1 });
+} = usePlaylistList({ limit: 2 });
 const {
   items: quickPickItems,
   loading: quickPicksLoading,
@@ -54,10 +57,20 @@ const likedPlaylist = computed(
       (playlist) => playlist.id === LIKED_TRACKS_PLAYLIST_ID,
     ) ?? null,
 );
+const recentlyAddedPlaylist = computed(
+  () =>
+    playlists.value.find(
+      (playlist) => playlist.id === RECENTLY_ADDED_PLAYLIST_ID,
+    ) ?? null,
+);
 const contentItems = computed<CatalogCardItem[]>(() => {
-  const items: CatalogCardItem[] = likedPlaylist.value
-    ? [playlistCatalogCard(likedPlaylist.value)]
-    : [];
+  const items: CatalogCardItem[] = [];
+  if (likedPlaylist.value) {
+    items.push(playlistCatalogCard(likedPlaylist.value));
+  }
+  if (recentlyAddedPlaylist.value) {
+    items.push(playlistCatalogCard(recentlyAddedPlaylist.value));
+  }
   items.push(...visibleQuickPickItems.value);
   return items;
 });

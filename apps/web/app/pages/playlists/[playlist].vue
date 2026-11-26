@@ -39,6 +39,7 @@ import { icons } from "../../lib/icons";
 import { formatTrackDuration, trackCoverUrl } from "../../lib/library";
 import {
   filterPlaylistEntries,
+  isAutomaticPlaylistKind,
   playlistPlayableTracks,
 } from "../../lib/playlists";
 
@@ -59,7 +60,11 @@ const activePlaylistId = useState<string | null>(
 const playlistId = computed(() => String(route.params.playlist ?? ""));
 const { playlist, loading, error, load } = usePlaylist(playlistId);
 const { query, searchQuery, clear } = useListSearch();
-const automatic = computed(() => playlist.value?.kind === "liked-tracks");
+const automatic = computed(() =>
+  playlist.value ? isAutomaticPlaylistKind(playlist.value.kind) : false,
+);
+const likedAutomatic = computed(() => playlist.value?.kind === "liked-tracks");
+const recentlyAdded = computed(() => playlist.value?.kind === "recently-added");
 const {
   likedTrackIds,
   loaded: likesLoaded,
@@ -87,7 +92,7 @@ const savedIds = computed(
 );
 const currentEntries = computed(() => {
   const entries = playlist.value?.entries ?? [];
-  if (!automatic.value || !likesLoaded.value) return entries;
+  if (!likedAutomatic.value || !likesLoaded.value) return entries;
   const liked = new Set(likedTrackIds.value);
   return entries.filter((entry) => entry.media && liked.has(entry.media.id));
 });
@@ -239,7 +244,7 @@ onMounted(() => void load());
         class="relative flex flex-col gap-6 rounded-lg border bg-card p-6 text-card-foreground sm:flex-row sm:items-end"
       >
         <LikedTracksOfflineToggle
-          v-if="automatic"
+          v-if="likedAutomatic"
           class="absolute right-4 top-4"
         />
         <PlaylistOfflineButton
@@ -373,7 +378,7 @@ onMounted(() => void load());
         :entries="filteredEntries"
         :editable="!automatic && status !== 'lost' && !mutating"
         :read-only="automatic"
-        :show-track-likes="!automatic"
+        :show-track-likes="!likedAutomatic"
         @play="playFrom"
         @remove="removeEntry"
         @reorder="reorder"
@@ -387,14 +392,18 @@ onMounted(() => void load());
           {{
             currentEntries.length
               ? t("page.playlist.noMatches")
-              : t("page.playlist.automaticEmptyTitle")
+              : recentlyAdded
+                ? t("page.playlist.recentlyAddedEmptyTitle")
+                : t("page.playlist.automaticEmptyTitle")
           }}
         </p>
         <p class="text-sm text-muted-foreground">
           {{
             currentEntries.length
               ? t("page.playlist.automaticNoMatches")
-              : t("page.playlist.automaticEmptyDescription")
+              : recentlyAdded
+                ? t("page.playlist.recentlyAddedEmptyDescription")
+                : t("page.playlist.automaticEmptyDescription")
           }}
         </p>
       </div>

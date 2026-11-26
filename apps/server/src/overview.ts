@@ -214,7 +214,7 @@ export class OverviewService {
     ]);
     return {
       albums: albums.count,
-      playlists: playlists.count + 1,
+      playlists: playlists.count + 2,
       podcasts: podcasts.count,
       audiobooks: audiobooks.count,
     };

@@ -74,6 +74,42 @@ test("typed explicit ports and reverse-proxy paths are preserved", async () => {
   );
 });
 
+test("typed standard URLs use protocol ports instead of the connector port", async () => {
+  const requested: string[] = [];
+  const result = await discoverConnectorInstances(
+    "jellyfin",
+    {
+      defaultPorts: [8096],
+      protocols: ["https", "http"],
+      async probe(baseUrl) {
+        requested.push(baseUrl.toString());
+        return baseUrl.protocol === "https:"
+          ? { id: "server-3", label: "Reverse proxy", version: "10.11.8" }
+          : null;
+      },
+    },
+    {
+      address: "https://jellyfin.example.com/media",
+      interfaces: {},
+      timeoutMs: 50,
+    },
+  );
+
+  assert.deepEqual(requested.sort(), [
+    "http://jellyfin.example.com/media",
+    "https://jellyfin.example.com/media",
+  ]);
+  assert.deepEqual(result.items, [
+    {
+      kind: "jellyfin",
+      id: "server-3",
+      label: "Reverse proxy",
+      url: "https://jellyfin.example.com/media",
+      version: "10.11.8",
+    },
+  ]);
+});
+
 test("network discovery is limited to visible private subnets and deduplicates instances", async () => {
   const requested: string[] = [];
   const result = await discoverConnectorInstances(

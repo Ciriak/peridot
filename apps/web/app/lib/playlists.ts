@@ -1,5 +1,6 @@
 import type {
   PlaylistEntryResponse,
+  PlaylistKind,
   PlaylistSummaryResponse,
   MediaResponse,
 } from "@peridot/contracts";
@@ -9,6 +10,10 @@ import {
 } from "./offline-playback.ts";
 
 export type PlaylistPlaybackAvailability = PlaybackAvailability;
+
+export function isAutomaticPlaylistKind(kind: PlaylistKind): boolean {
+  return kind === "liked-tracks" || kind === "recently-added";
+}
 
 export function playlistPlayableTracks(
   entries: readonly PlaylistEntryResponse[],

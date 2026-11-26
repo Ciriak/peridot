@@ -27,6 +27,13 @@ const slots = computed(() => playlistCoverSlots(props.coverUrls));
     <Icon :icon="icons.heartFilled" :class="compact ? 'size-5' : 'size-16'" />
   </div>
   <div
+    v-else-if="kind === 'recently-added'"
+    aria-hidden="true"
+    class="flex aspect-square items-center justify-center rounded-md bg-chart-1/60 text-foreground"
+  >
+    <Icon :icon="icons.folderPlus" :class="compact ? 'size-5' : 'size-16'" />
+  </div>
+  <div
     v-else
     aria-hidden="true"
     class="grid aspect-square grid-cols-3 gap-px overflow-hidden rounded-md"

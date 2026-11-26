@@ -169,8 +169,13 @@ test("the shared card adapts menus, playback, and likes by item type", async () 
   );
   assert.match(
     card,
-    /<TooltipProvider v-if="playlist" :delay-duration="150">/,
-    "Only playlists retain the standalone row playback control",
+    /<TooltipProvider\s+v-if="playlist && playlist\.trackCount > 0"\s+:delay-duration="150"/,
+    "Only non-empty playlists retain the standalone row playback control",
+  );
+  assert.match(
+    card,
+    /<TooltipProvider\s+v-if="!playlist \|\| playlist\.trackCount > 0"\s+:delay-duration="150"/,
+    "Empty playlist cards do not show the unavailable cloud icon",
   );
   assert.match(card, /v-if="likeTarget"/);
   assert.doesNotMatch(

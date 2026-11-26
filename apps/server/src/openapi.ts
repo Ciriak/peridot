@@ -462,7 +462,7 @@ const schemas: Record<string, SchemaObject> = {
   }),
   PlaylistSummaryResponse: objectSchema({
     id: stringSchema,
-    kind: enumeration("manual", "external", "liked-tracks"),
+    kind: enumeration("manual", "external", "liked-tracks", "recently-added"),
     name: stringSchema,
     trackCount: integerSchema,
     availableTrackCount: integerSchema,
@@ -497,7 +497,7 @@ const schemas: Record<string, SchemaObject> = {
   }),
   PlaylistDetailResponse: objectSchema({
     id: stringSchema,
-    kind: enumeration("manual", "external", "liked-tracks"),
+    kind: enumeration("manual", "external", "liked-tracks", "recently-added"),
     name: stringSchema,
     trackCount: integerSchema,
     availableTrackCount: integerSchema,

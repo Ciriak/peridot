@@ -53,6 +53,7 @@ test("en-US messages interpolate and pluralize", () => {
     }),
     "67% (8 of 12)",
   );
+  assert.equal(i18n.global.t("settings.tasks.percent", { percent: 67 }), "67%");
   assert.equal(
     i18n.global.t("settings.tasks.remaining", { duration: "5 minutes" }),
     "5 minutes Remaining",

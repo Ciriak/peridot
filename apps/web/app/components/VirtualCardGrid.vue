@@ -26,6 +26,7 @@ const props = withDefaults(
     hasMore?: boolean;
     loadingMore?: boolean;
     pagingMode?: "incremental" | "window";
+    singleColumnMobile?: boolean;
   }>(),
   {
     estimateRowHeight: 240,
@@ -33,6 +34,7 @@ const props = withDefaults(
     hasMore: false,
     loadingMore: false,
     pagingMode: "incremental",
+    singleColumnMobile: false,
   },
 );
 const emit = defineEmits<{
@@ -57,6 +59,7 @@ const columns = computed(() => {
   }
   if (breakpoints.xl.value) return 5;
   if (breakpoints.lg.value) return 3;
+  if (props.singleColumnMobile && !breakpoints.sm.value) return 1;
   return 2;
 });
 const totalItemCount = computed(() =>
@@ -76,7 +79,10 @@ const gridClass = computed(() => {
   if (props.layout === "compact") {
     return "grid grid-cols-2 gap-x-1.5 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10";
   }
-  return "grid grid-cols-2 gap-x-4 lg:grid-cols-3 xl:grid-cols-5";
+  const mobileColumns = props.singleColumnMobile
+    ? "grid-cols-1"
+    : "grid-cols-2";
+  return `grid ${mobileColumns} gap-x-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5`;
 });
 const rowGapClass = computed(() =>
   props.layout === "compact" ? "pb-1.5" : "pb-4",
@@ -152,11 +158,7 @@ function rowKey(index: number) {
       >
         <div
           v-if="rowItems(row.index).length || $slots.placeholder"
-          :ref="
-            rowItems(row.index).length === columns
-              ? virtualizer.measureRow
-              : undefined
-          "
+          :ref="virtualizer.measureRow"
           :data-index="row.index"
           :style="virtualizer.virtualRowStyle(row)"
         >

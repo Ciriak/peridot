@@ -537,7 +537,10 @@ function toggleCardLike() {
         </div>
         <div class="ml-auto flex shrink-0 items-center gap-2">
           <SearchSourceIcons :source-kinds="searchLibrarySourceKinds" />
-          <TooltipProvider v-if="playlist" :delay-duration="150">
+          <TooltipProvider
+            v-if="playlist && playlist.trackCount > 0"
+            :delay-duration="150"
+          >
             <TooltipRoot :disabled="controlEnabled">
               <TooltipTrigger as-child>
                 <Button
@@ -625,7 +628,10 @@ function toggleCardLike() {
                 />
               </div>
             </NuxtLink>
-            <TooltipProvider :delay-duration="150">
+            <TooltipProvider
+              v-if="!playlist || playlist.trackCount > 0"
+              :delay-duration="150"
+            >
               <TooltipRoot :disabled="controlEnabled">
                 <TooltipTrigger as-child>
                   <Button

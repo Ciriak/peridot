@@ -17,6 +17,7 @@ import {
 import { Badge } from "@peridot/ui/components/ui/badge";
 import { Button } from "@peridot/ui/components/ui/button";
 import { ProgressCircle } from "@peridot/ui/components/ui/progress-circle";
+import { ScrollingText } from "@peridot/ui/components/ui/scrolling-text";
 import { PeridotSpinner } from "@peridot/ui/components/ui/spinner";
 import AutoLoadMore from "../../components/AutoLoadMore.vue";
 import { useOfflineDownloadTasks } from "../../composables/use-offline-download-tasks";
@@ -538,7 +539,11 @@ onMounted(() => {
     </p>
   </div>
 
-  <p v-if="taskActionError" role="alert" class="text-sm text-destructive">
+  <p
+    v-if="taskActionError"
+    role="alert"
+    class="break-words text-sm text-destructive"
+  >
     {{ taskActionError }}
   </p>
 
@@ -566,7 +571,7 @@ onMounted(() => {
       <article
         v-for="row in activeRows"
         :key="row.key"
-        class="rounded-lg border bg-card p-4 text-card-foreground"
+        class="min-w-0 overflow-hidden rounded-lg border bg-card p-4 text-card-foreground"
       >
         <div class="flex items-start gap-4">
           <ProgressCircle
@@ -577,19 +582,27 @@ onMounted(() => {
                 title: row.title,
               })
             "
-            class="mt-0.5 size-6"
+            class="mt-0.5 size-6 shrink-0"
           />
           <div class="min-w-0 flex-1">
-            <div class="flex flex-wrap items-start justify-between gap-2">
-              <div class="min-w-0">
-                <h4 class="truncate text-sm font-semibold">
-                  {{ row.title }}
+            <div
+              class="flex min-w-0 flex-wrap items-start justify-between gap-2"
+            >
+              <div class="min-w-0 flex-1">
+                <h4 class="text-sm font-semibold">
+                  <ScrollingText class="w-full">
+                    {{ row.title }}
+                  </ScrollingText>
                 </h4>
                 <p class="mt-1 text-xs text-muted-foreground">
-                  {{ row.context }}
+                  <ScrollingText class="w-full">
+                    {{ row.context }}
+                  </ScrollingText>
                 </p>
               </div>
-              <div class="flex flex-wrap items-center justify-end gap-2">
+              <div
+                class="flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2"
+              >
                 <Badge variant="outline" :class="row.statusClass">
                   {{ row.statusLabel }}
                 </Badge>
@@ -620,24 +633,27 @@ onMounted(() => {
             <p
               v-if="row.failureMessage"
               role="alert"
-              class="mt-3 text-sm"
+              class="mt-3 break-words text-sm"
               :class="taskFailureMessageClass(row)"
             >
               {{ row.failureMessage }}
             </p>
             <div
-              class="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"
+              class="mt-3 flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"
             >
-              <span class="font-medium text-foreground">
+              <span class="min-w-0 break-words font-medium text-foreground">
                 {{ row.progressLabel }}
               </span>
               <time
                 v-if="row.timeLabel && row.timeDateTime"
                 :datetime="row.timeDateTime"
+                class="min-w-0 break-words"
               >
                 {{ row.timeLabel }}
               </time>
-              <span v-else-if="row.timeLabel">{{ row.timeLabel }}</span>
+              <span v-else-if="row.timeLabel" class="min-w-0 break-words">
+                {{ row.timeLabel }}
+              </span>
             </div>
           </div>
         </div>
@@ -671,18 +687,24 @@ onMounted(() => {
       <article
         v-for="row in historyRows"
         :key="row.key"
-        class="rounded-lg border bg-card p-4 text-card-foreground"
+        class="min-w-0 overflow-hidden rounded-lg border bg-card p-4 text-card-foreground"
       >
-        <div class="flex flex-wrap items-start justify-between gap-2">
-          <div class="min-w-0">
-            <h4 class="truncate text-sm font-semibold">
-              {{ row.title }}
+        <div class="flex min-w-0 flex-wrap items-start justify-between gap-2">
+          <div class="min-w-0 flex-1">
+            <h4 class="text-sm font-semibold">
+              <ScrollingText class="w-full">
+                {{ row.title }}
+              </ScrollingText>
             </h4>
             <p class="mt-1 text-xs text-muted-foreground">
-              {{ row.context }}
+              <ScrollingText class="w-full">
+                {{ row.context }}
+              </ScrollingText>
             </p>
           </div>
-          <div class="flex flex-wrap items-center justify-end gap-2">
+          <div
+            class="flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2"
+          >
             <Badge variant="outline" :class="row.statusClass">
               {{ row.statusLabel }}
             </Badge>
@@ -702,29 +724,31 @@ onMounted(() => {
         <p
           v-if="row.failureMessage"
           role="alert"
-          class="mt-3 text-sm"
+          class="mt-3 break-words text-sm"
           :class="taskFailureMessageClass(row)"
         >
           {{ row.failureMessage }}
         </p>
         <dl
           v-if="row.details.length"
-          class="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs"
+          class="mt-3 flex min-w-0 flex-wrap gap-x-4 gap-y-2 text-xs"
         >
           <div
             v-for="detail in row.details"
             :key="detail.key"
-            class="flex gap-1"
+            class="flex min-w-0 max-w-full gap-1"
           >
-            <dt class="text-muted-foreground">{{ detail.label }}:</dt>
-            <dd class="font-medium">{{ detail.value }}</dd>
+            <dt class="shrink-0 text-muted-foreground">{{ detail.label }}:</dt>
+            <dd class="min-w-0 break-words font-medium">
+              {{ detail.value }}
+            </dd>
           </div>
         </dl>
         <time
           v-if="row.timeLabel && row.timeDateTime"
           :datetime="row.timeDateTime"
           :title="row.timeTitle ?? undefined"
-          class="mt-3 block text-xs text-muted-foreground"
+          class="mt-3 block break-words text-xs text-muted-foreground"
         >
           {{ row.timeLabel }}
         </time>
@@ -741,7 +765,7 @@ onMounted(() => {
     <p
       v-else-if="combinedHistoryError"
       role="alert"
-      class="rounded-lg border bg-card p-4 text-sm text-destructive"
+      class="break-words rounded-lg border bg-card p-4 text-sm text-destructive"
     >
       {{ combinedHistoryError }}
     </p>
@@ -754,7 +778,7 @@ onMounted(() => {
     <p
       v-if="combinedHistoryError && historyRows.length"
       role="alert"
-      class="text-sm text-destructive"
+      class="break-words text-sm text-destructive"
     >
       {{ combinedHistoryError }}
     </p>
