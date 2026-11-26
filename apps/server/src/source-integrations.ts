@@ -77,6 +77,12 @@ export interface LibrarySourceScanInput {
   source: LibrarySourceConnectorHandle;
   signal: AbortSignal;
   onPage(page: LibrarySourceScanPage): Promise<void> | void;
+  target?: LibrarySourceScanTarget;
+}
+
+export interface LibrarySourceScanTarget {
+  paths: readonly string[];
+  modifiedSince: Date;
 }
 
 export interface LibrarySourceArtworkInput {

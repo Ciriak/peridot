@@ -27,6 +27,26 @@ function message(key: string): MessageDescriptor {
   return { key };
 }
 
+const DEFAULT_TARGET_RETRY_ATTEMPTS = 12;
+const DEFAULT_TARGET_RETRY_DELAY_MS = 5_000;
+
+function waitForRetry(delayMs: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.reject(signal.reason);
+  if (delayMs <= 0) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", abort);
+      resolve();
+    }, delayMs);
+    const abort = () => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", abort);
+      reject(signal.reason);
+    };
+    signal.addEventListener("abort", abort, { once: true });
+  });
+}
+
 function integrationError(error: unknown): never {
   if (error instanceof LibrarySourceConnectorError) throw error;
   if (error instanceof JellyfinError) {
@@ -199,6 +219,8 @@ function trackRecord(
 export interface JellyfinIntegrationOptions {
   fetch?: typeof fetch;
   requestTimeoutMs?: number;
+  targetRetryAttempts?: number;
+  targetRetryDelayMs?: number;
 }
 
 export function createJellyfinIntegration(
@@ -207,6 +229,14 @@ export function createJellyfinIntegration(
   const client = new JellyfinClient(
     options.fetch ?? fetch,
     options.requestTimeoutMs,
+  );
+  const targetRetryAttempts = Math.max(
+    0,
+    options.targetRetryAttempts ?? DEFAULT_TARGET_RETRY_ATTEMPTS,
+  );
+  const targetRetryDelayMs = Math.max(
+    0,
+    options.targetRetryDelayMs ?? DEFAULT_TARGET_RETRY_DELAY_MS,
   );
 
   return {
@@ -281,6 +311,61 @@ export function createJellyfinIntegration(
     },
     async scan(input: LibrarySourceScanInput): Promise<void> {
       try {
+        if (input.target) {
+          const targetPaths = input.target.paths;
+          let result = await client.listAudio(
+            input.source.configuration.url ?? "",
+            input.source.credentials.apiKey ?? "",
+            input.source.configuration.libraryId ?? null,
+            undefined,
+            input.signal,
+            {
+              targetPaths,
+              modifiedSince: input.target.modifiedSince,
+            },
+          );
+          const items = new Map(
+            result.items.map((item) => [item.externalId, item]),
+          );
+          let processedCount = result.processedCount;
+          let unsupportedCount = result.unsupportedCount;
+          for (
+            let attempt = 0;
+            attempt < targetRetryAttempts &&
+            processedCount < (result.totalCount ?? targetPaths.length);
+            attempt += 1
+          ) {
+            await waitForRetry(targetRetryDelayMs, input.signal);
+            result = await client.listAudio(
+              input.source.configuration.url ?? "",
+              input.source.credentials.apiKey ?? "",
+              input.source.configuration.libraryId ?? null,
+              undefined,
+              input.signal,
+              {
+                targetPaths,
+                modifiedSince: input.target.modifiedSince,
+              },
+            );
+            processedCount = Math.max(processedCount, result.processedCount);
+            unsupportedCount = Math.max(
+              unsupportedCount,
+              result.unsupportedCount,
+            );
+            for (const item of result.items) items.set(item.externalId, item);
+          }
+          const totalCount = result.totalCount ?? targetPaths.length;
+          const missingCount = Math.max(0, totalCount - processedCount);
+          await input.onPage({
+            items: [...items.values()].map((item) =>
+              trackRecord(item, input.source.configuration),
+            ),
+            unsupportedCount: unsupportedCount + missingCount,
+            processedCount: totalCount,
+            totalCount,
+          });
+          return;
+        }
         await client.listAudio(
           input.source.configuration.url ?? "",
           input.source.credentials.apiKey ?? "",

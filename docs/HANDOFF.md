@@ -1,5 +1,42 @@
 # Peridot handoff
 
+## Targeted Jellyfin release imports
+
+Completed external imports now preserve their completed path list when the
+destination is Jellyfin. The integration requests recently saved audio with
+`fields=Path` and `minDateLastSaved`, then keeps only paths that match the
+release. The task denominator is the number of unique completed target files,
+not the full Jellyfin library.
+
+The filtered query repeats for up to one minute so Jellyfin can finish noticing
+new torrent files. Files still missing after that window and matched unsupported
+files count as scan errors. There is no automatic full-library fallback.
+
+Verification:
+
+- `pnpm --filter @peridot/server typecheck`
+- `pnpm --filter @peridot/server test` (240 passing)
+- `pnpm --filter @peridot/server build`
+- `pnpm lint`
+- `pnpm format:check`
+
+Known limits:
+
+- Path matching uses normalized case-insensitive suffixes. A service that
+  renames downloaded files after qBittorrent completes can still require a
+  normal source rescan.
+- The focused test uses a simulated Jellyfin response, not a live server.
+
+Uncommitted changes:
+
+- Source-scan targeting, the Jellyfin recent-path query and retry, the focused
+  regression test, the decision record, and this handoff section.
+
+Next:
+
+- Run a real release import into a live Jellyfin destination and confirm the
+  task reports the completed file count instead of the library count.
+
 ## Recently added automatic playlist
 
 Playlists and Home now include a read-only “Recently added” automatic playlist

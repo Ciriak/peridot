@@ -38,6 +38,7 @@ interface JellyfinMediaSource {
 interface JellyfinItem {
   Id?: string | null;
   Name?: string | null;
+  Path?: string | null;
   Type?: string | null;
   Etag?: string | null;
   Container?: string | null;
@@ -132,6 +133,11 @@ export interface JellyfinAudioPage {
   totalCount: number | null;
 }
 
+export interface JellyfinAudioListOptions {
+  targetPaths?: readonly string[];
+  modifiedSince?: Date;
+}
+
 export interface JellyfinCover {
   data: Buffer;
   mimeType: string;
@@ -194,6 +200,42 @@ function audioType(item: JellyfinItem): {
       .toLowerCase() ?? "";
   const type = container ? AUDIO_TYPES.get(container) : null;
   return type ? { ...type, container } : null;
+}
+
+function normalizedTargetPaths(paths: readonly string[]): Set<string> {
+  return new Set(
+    paths.flatMap((value) => {
+      const normalized = value
+        .trim()
+        .replaceAll("\\", "/")
+        .replace(/\/+/g, "/")
+        .replace(/^\.\/+/, "")
+        .toLowerCase();
+      return normalized ? [normalized] : [];
+    }),
+  );
+}
+
+function matchingTargetPath(
+  itemPath: string,
+  targetPaths: ReadonlySet<string>,
+): string | null {
+  const normalized = itemPath
+    .trim()
+    .replaceAll("\\", "/")
+    .replace(/\/+/g, "/")
+    .toLowerCase();
+  if (!normalized) return null;
+  if (targetPaths.has(normalized)) return normalized;
+  for (
+    let separator = normalized.indexOf("/");
+    separator >= 0;
+    separator = normalized.indexOf("/", separator + 1)
+  ) {
+    const suffix = normalized.slice(separator + 1);
+    if (targetPaths.has(suffix)) return suffix;
+  }
+  return null;
 }
 
 function toAudioItem(item: JellyfinItem): {
@@ -423,6 +465,7 @@ export class JellyfinClient {
     libraryId: string | null,
     onPage?: (page: JellyfinAudioPage) => Promise<void> | void,
     signal?: AbortSignal,
+    options: JellyfinAudioListOptions = {},
   ): Promise<{
     items: JellyfinAudioItem[];
     unsupportedCount: number;
@@ -433,6 +476,24 @@ export class JellyfinClient {
     let unsupportedCount = 0;
     let startIndex = 0;
     let totalCount: number | null = null;
+    const hasTargetPaths = options.targetPaths !== undefined;
+    const targetPaths = normalizedTargetPaths(options.targetPaths ?? []);
+    const processedTargetPaths = new Set<string>();
+    const modifiedSince =
+      options.modifiedSince && !Number.isNaN(options.modifiedSince.getTime())
+        ? options.modifiedSince.toISOString()
+        : null;
+
+    if (hasTargetPaths && targetPaths.size === 0) {
+      const page = {
+        items: [],
+        unsupportedCount: 0,
+        processedCount: 0,
+        totalCount: 0,
+      };
+      if (onPage) await onPage(page);
+      return page;
+    }
 
     while (true) {
       const url = endpoint(baseUrl, "Items");
@@ -441,12 +502,16 @@ export class JellyfinClient {
         includeItemTypes: "Audio,AudioBook",
         mediaTypes: "Audio",
         ...(libraryId ? { parentId: libraryId } : {}),
-        fields: "MediaSources,Genres,PremiereDate,DateCreated,Tags,ProviderIds",
+        fields:
+          "MediaSources,Genres,PremiereDate,DateCreated,Tags,ProviderIds,Path",
         enableImages: "true",
         enableTotalRecordCount: "true",
         sortBy: "SortName",
         startIndex: String(startIndex),
         limit: String(AUDIO_PAGE_SIZE),
+        ...(hasTargetPaths && modifiedSince
+          ? { minDateLastSaved: modifiedSince }
+          : {}),
       }).toString();
       const response = await this.request(url, apiKey, {
         ...(signal ? { signal } : {}),
@@ -480,9 +545,18 @@ export class JellyfinClient {
       }
       const page = jsonObject(raw) as JellyfinItemsResponse;
       const pageItems = Array.isArray(page.Items) ? page.Items : [];
+      const scopedPageItems = hasTargetPaths
+        ? pageItems.filter((item) => {
+            if (!item.Path) return false;
+            const target = matchingTargetPath(item.Path, targetPaths);
+            if (!target || processedTargetPaths.has(target)) return false;
+            processedTargetPaths.add(target);
+            return true;
+          })
+        : pageItems;
       const convertedItems: JellyfinAudioItem[] = [];
       let pageUnsupportedCount = 0;
-      for (const item of pageItems) {
+      for (const item of scopedPageItems) {
         const converted = toAudioItem(item);
         if (converted.value) convertedItems.push(converted.value);
         if (converted.unsupported) pageUnsupportedCount += 1;
@@ -499,8 +573,12 @@ export class JellyfinClient {
         await onPage({
           items: convertedItems,
           unsupportedCount: pageUnsupportedCount,
-          processedCount: startIndex,
-          totalCount: pageTotal ?? totalCount,
+          processedCount: hasTargetPaths
+            ? processedTargetPaths.size
+            : startIndex,
+          totalCount: hasTargetPaths
+            ? targetPaths.size
+            : (pageTotal ?? totalCount),
         });
       } else {
         items.push(...convertedItems);
@@ -508,13 +586,19 @@ export class JellyfinClient {
       if (
         pageItems.length === 0 ||
         pageItems.length < AUDIO_PAGE_SIZE ||
-        (pageTotal !== null && startIndex >= pageTotal)
+        (pageTotal !== null && startIndex >= pageTotal) ||
+        (hasTargetPaths && processedTargetPaths.size >= targetPaths.size)
       ) {
         break;
       }
     }
 
-    return { items, unsupportedCount, totalCount, processedCount: startIndex };
+    return {
+      items,
+      unsupportedCount,
+      totalCount: hasTargetPaths ? targetPaths.size : totalCount,
+      processedCount: hasTargetPaths ? processedTargetPaths.size : startIndex,
+    };
   }
 
   async listLibraries(
