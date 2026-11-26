@@ -1,5 +1,18 @@
 # Peridot decisions
 
+## 2026-11-26: Jellyfin release imports scan only completed target paths
+
+Release-import tasks now pass their completed audio paths and creation time to
+source-integration scans. Jellyfin limits `Items` requests with
+`minDateLastSaved` and retains only items whose normalized `Path` ends with one
+of those release-relative paths. Progress uses the number of unique target
+files rather than Jellyfin's complete library count.
+
+Jellyfin may expose a completed torrent after Peridot begins scanning. A
+targeted import therefore repeats the filtered query for up to one minute.
+Missing or unsupported target files remain errors and do not trigger a
+full-library fallback.
+
 ## 2026-11-26: Recently added is a bounded canonical-track playlist
 
 “Recently added” is the second virtual automatic playlist, with reserved ID

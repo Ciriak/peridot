@@ -702,6 +702,14 @@ export class LibraryScanner {
         await source.integration.scan({
           source: source.handle,
           signal,
+          ...(targetedImport
+            ? {
+                target: {
+                  paths: importPaths,
+                  modifiedSince: task.createdAt,
+                },
+              }
+            : {}),
           onPage: async (page) => {
             throwIfAborted(signal);
             timings.discovery.ms += Date.now() - lastPageEndAt;
