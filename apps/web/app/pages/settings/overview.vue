@@ -57,6 +57,11 @@ const connectionCount = computed(
     (overview.data.value?.downloadClients.length ?? 0),
 );
 const animated = computed(() => preferredMotion.value !== "reduce");
+const overviewFitOptions = {
+  padding: 16,
+  minZoom: 0.1,
+  maxZoom: 1,
+};
 
 watch(
   [
@@ -92,9 +97,7 @@ watch(
 
 function fitOverview() {
   void fitView({
-    padding: 0.35,
-    minZoom: 0.1,
-    maxZoom: 1,
+    ...overviewFitOptions,
     duration: animated.value ? 200 : 0,
   });
 }
@@ -167,7 +170,7 @@ function openNodeSettings(event: NodeMouseEvent<OverviewDiagramNode>) {
         :edges-updatable="false"
         :delete-key-code="null"
         :fit-view="true"
-        :fit-view-options="{ padding: 0.35, minZoom: 0.1, maxZoom: 1 }"
+        :fit-view-options="overviewFitOptions"
         :default-viewport="{ x: 0, y: 0, zoom: 0.9 }"
         :min-zoom="0.1"
         :max-zoom="1"

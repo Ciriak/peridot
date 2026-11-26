@@ -416,5 +416,5 @@ offline-manifest generations. On first launch it clears legacy metadata while
 retaining `peridot-offline-audio-v1`. Android uses `files/offline-v2` for new
 manifests and audio while leaving `files/offline` untouched.
 
-Settings → Library includes the explicit legacy audio cleanup action. It removes
-the retained web or Android legacy audio only when invoked by the user.
+Settings → Library does not expose a legacy audio cleanup action. Retained web
+and Android legacy audio is left untouched.

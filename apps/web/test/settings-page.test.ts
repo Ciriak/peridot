@@ -164,6 +164,7 @@ test("overview is a read-only Vue Flow workspace", async () => {
   assert.match(page, /#edge-animation="props"/);
   assert.match(page, /@nodes-initialized="fitOverview"/);
   assert.match(page, /@node-double-click="openNodeSettings"/);
+  assert.match(page, /:fit-view-options="overviewFitOptions"/);
   assert.match(page, /setupVueFlow/);
   assert.match(page, /usePreferredReducedMotion/);
   assert.match(page, /settings\.overview\.loading/);
@@ -204,7 +205,14 @@ test("overview is a read-only Vue Flow workspace", async () => {
   assert.match(flow, /download-client-subflow/);
   assert.match(flow, /release-indexer-subflow/);
   assert.match(flow, /overviewNodeSettingsPath/);
-  assert.match(page, /padding: 0\.35/);
+  assert.match(
+    page,
+    /const overviewFitOptions = \{[\s\S]*?padding: 16,[\s\S]*?maxZoom: 1,[\s\S]*?\};/,
+  );
+  assert.match(
+    page,
+    /fitView\(\{[\s\S]*?\.\.\.overviewFitOptions,[\s\S]*?duration:/,
+  );
   assert.match(page, /maxZoom: 1/);
   assert.match(page, /zoom: 0\.9/);
   assert.match(flow, /sourceHandle: "peridot-download-client"/);
@@ -788,6 +796,15 @@ test("tasks have a settings view for active work and paginated history", async (
   assert.match(page, /taskStatusMessage\(task\)/);
   assert.match(page, /settings\.tasks\.artworkFetch/);
   assert.match(page, /task\.failureMessage/);
+  assert.match(page, /import \{ ScrollingText \}/);
+  assert.match(
+    page,
+    /<ScrollingText class="w-full">\s+\{\{ row\.title \}\}\s+<\/ScrollingText>/,
+  );
+  assert.match(
+    page,
+    /<ScrollingText class="w-full">\s+\{\{ row\.context \}\}\s+<\/ScrollingText>/,
+  );
   assert.match(page, /TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY/);
   assert.match(page, /settings\.tasks\.loadingOlder/);
   assert.match(page, /<AutoLoadMore/);

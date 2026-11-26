@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   TASK_ACTIVE_METADATA_PROVIDER_DETAIL_KEY,
+  TASK_RELEASE_IMPORT_STAGE_DETAIL_KEY,
   type TaskResponse,
 } from "@peridot/contracts";
 import {
@@ -359,6 +360,46 @@ test("task labels distinguish queued, determinate, and indeterminate work", () =
     key: "settings.tasks.progress",
     params: { percent: 67, completed: 8, total: 12 },
   });
+  assert.deepEqual(
+    taskProgressMessage(
+      task({
+        kind: "release_import",
+        status: "waiting",
+        details: [
+          {
+            key: TASK_RELEASE_IMPORT_STAGE_DETAIL_KEY,
+            value: "downloading",
+            labelMessage: { key: "task.detail.releaseStage" },
+            valueMessage: { key: "task.releaseStage.downloading" },
+          },
+        ],
+      }),
+    ),
+    {
+      key: "settings.tasks.percent",
+      params: { percent: 67 },
+    },
+  );
+  assert.deepEqual(
+    taskProgressMessage(
+      task({
+        kind: "release_import",
+        status: "waiting",
+        details: [
+          {
+            key: TASK_RELEASE_IMPORT_STAGE_DETAIL_KEY,
+            value: "addingToLibrary",
+            labelMessage: { key: "task.detail.releaseStage" },
+            valueMessage: { key: "task.releaseStage.addingToLibrary" },
+          },
+        ],
+      }),
+    ),
+    {
+      key: "settings.tasks.progress",
+      params: { percent: 67, completed: 8, total: 12 },
+    },
+  );
   assert.deepEqual(
     taskProgressMessage(
       task({

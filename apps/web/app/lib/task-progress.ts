@@ -227,7 +227,11 @@ export function taskProgressMessage(task: TaskResponse): MessageDescriptor {
   if (percent === null) {
     return message("settings.tasks.progressIndeterminate");
   }
-  if (task.progress.state === "determinate" && task.progress.total > 0) {
+  if (
+    task.progress.state === "determinate" &&
+    task.progress.total > 0 &&
+    releaseImportStage(task) !== "downloading"
+  ) {
     return message("settings.tasks.progress", {
       percent: Math.round(percent),
       completed: task.progress.completed,

@@ -125,7 +125,7 @@ test("albums have list and detail routes with derived groups", async () => {
   );
   assert.match(
     catalogCard,
-    /<TooltipProvider :delay-duration="150">\s+<TooltipRoot :disabled="controlEnabled">\s+<TooltipTrigger as-child>/,
+    /<TooltipProvider\s+v-if="!playlist \|\| playlist\.trackCount > 0"\s+:delay-duration="150"\s+>\s+<TooltipRoot :disabled="controlEnabled">\s+<TooltipTrigger as-child>/,
   );
   assert.match(
     catalogCard,

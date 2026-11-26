@@ -1,5 +1,15 @@
 # Peridot decisions
 
+## 2026-11-26: Legacy offline audio cleanup is not exposed in Settings
+
+Settings → Library no longer presents the legacy offline audio cleanup card or
+its removal action. The retained `peridot-offline-audio-v1` browser cache and
+Android `files/offline` audio remain untouched, preserving any device-local
+copies that may still be the only playable source for unavailable media.
+
+This supersedes the Settings exposure described in the 2026-11-24 legacy audio
+cleanup decision without changing the startup retention behavior.
+
 ## 2026-11-26: Connector URL hints honor standard web ports
 
 An address hint with an explicit HTTP or HTTPS scheme and no port now probes the

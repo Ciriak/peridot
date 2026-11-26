@@ -391,14 +391,6 @@ onBeforeUnmount(stopLoadingRay);
               />
             </Button>
           </div>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            class="md:hidden"
-            :aria-label="t('navigation.close')"
-            @click="mobileNavigation = false"
-            ><Icon :icon="icons.close" aria-hidden="true"
-          /></Button>
         </div>
         <nav :aria-label="t('navigation.main')" class="space-y-1 p-3">
           <Button
