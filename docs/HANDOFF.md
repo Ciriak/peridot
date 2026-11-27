@@ -1,5 +1,32 @@
 # Peridot handoff
 
+## Web Nuxt module assertions
+
+The locale and offline-shell tests now verify that their own required Nuxt
+modules are registered without pinning the complete module array. Adding the
+Sentry module had left both tests failing despite a valid configuration.
+
+Verification:
+
+- Focused i18n and offline-shell tests (26 passing)
+- `pnpm --filter @peridot/web test` (347 passing)
+- `pnpm --filter @peridot/web typecheck`
+- Focused ESLint and Prettier checks on the changed test files
+- `git diff --check`
+
+Known limits:
+
+- This is a test-only change; no production build was required.
+
+Uncommitted changes:
+
+- The Nuxt module assertions in `apps/web/test/i18n.test.ts` and
+  `apps/web/test/offline-spa.test.ts`, plus this handoff section.
+
+Next:
+
+- Commit the test fix and let CI verify the repository-level checks.
+
 ## Sentry CI configuration
 
 Sentry is now configured for the Nuxt web client and Fastify server. The
