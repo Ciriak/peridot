@@ -5,9 +5,7 @@ export interface LogoutProcess {
   clearDeviceData: () => Promise<unknown>;
 }
 
-export async function logoutImmediately(
-  process: LogoutProcess,
-): Promise<void> {
+export async function logoutImmediately(process: LogoutProcess): Promise<void> {
   process.clearCredentials();
   const navigation = process.redirectToLogin();
   void Promise.allSettled([
