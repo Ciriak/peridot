@@ -1,5 +1,53 @@
 # Peridot handoff
 
+## Sentry CI configuration
+
+Sentry is now configured for the Nuxt web client and Fastify server. The
+`peridot-web` and `peridot-server` projects include errors and tracing;
+the browser also has masked Session Replay and the server captures warning and
+error Pino logs. Automatic user, cookie, header, body, query-parameter,
+database-value, and stack-variable collection is disabled.
+
+GitHub Actions repository secrets now contain:
+
+- `SENTRY_DSN`
+- `NUXT_PUBLIC_SENTRY_DSN`
+- `SENTRY_AUTH_TOKEN`
+
+Push builds pass the browser DSN to web, desktop, Android, and Docker artifact
+builds. The source-map token is scoped to those build steps and Docker BuildKit
+secrets. `SENTRY_DSN` remains runtime-only and must be supplied by the deployment
+environment.
+
+Verification:
+
+- `gh secret list --repo Ciriak/peridot` confirmed all three repository secrets
+- Focused web Sentry and CI regression tests (8 passing)
+- Focused server Sentry tests (2 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/server typecheck`
+- Web and server production builds
+- Web production build with a source-map token uploaded maps to Sentry and
+  removed them from the public output
+- Web production build without a token completed with source-map upload skipped
+- `pnpm lint`
+- `pnpm format:check`
+- `git diff --check`
+
+Known limits:
+
+- The server verification error was triggered, but the browser error could not
+  be completed because Computer Use could not verify the active Brave URL.
+- The server DSN is stored in GitHub but this repository has no deployment job
+  that can inject it into a running container.
+- Source-map upload requires a push and the configured repository secrets;
+  pull-request builds intentionally omit the upload token.
+
+Next:
+
+- Run the updated push workflow and confirm browser source maps and production
+  server events reach both Sentry projects.
+
 ## Targeted Jellyfin release imports
 
 Completed external imports now preserve their completed path list when the

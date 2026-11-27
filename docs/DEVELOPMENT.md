@@ -22,6 +22,28 @@ application, API, audio, and realtime traffic from one listener on port 17430.
 Set `DATABASE_URL` or `MUSIC_LIBRARY_PATH` to override the development database
 or default folder source.
 
+## Sentry configuration
+
+Sentry is optional. Leave these variables unset to run without any Sentry SDK
+initialization:
+
+- `SENTRY_DSN`: server-side runtime DSN. Supply it to the deployed container
+  through the deployment environment or Compose `.env`; it is not embedded in
+  the image.
+- `NUXT_PUBLIC_SENTRY_DSN`: public browser DSN. It is read when the web,
+  desktop, and Android web bundles are generated.
+- `SENTRY_AUTH_TOKEN`: build-only organization token used to upload browser
+  source maps. Do not expose it to application runtime code or commit it.
+
+The GitHub Actions workflow reads `NUXT_PUBLIC_SENTRY_DSN` and
+`SENTRY_AUTH_TOKEN` from repository secrets on pushes. The server `SENTRY_DSN`
+is stored as a repository secret for deployment automation and must be passed
+to the running container by that environment.
+
+Development tracing samples every span. Production traces and non-error Session
+Replays sample at 10%, while error-triggered replays and all Session Replay text
+and media masking remain enabled.
+
 ## Structure
 
 - `apps/web`: Nuxt 4 SPA/PWA client and TanStack Query cache.

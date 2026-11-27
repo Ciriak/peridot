@@ -1,5 +1,24 @@
 # Peridot decisions
 
+## 2026-11-27: Sentry is optional and configured by environment
+
+Peridot uses separate `peridot-web` and `peridot-server` Sentry projects. The
+browser SDK includes errors, tracing, masked Session Replay, and warning/error
+console logs. The Fastify server includes errors, request tracing, and
+warning/error Pino logs. User identity, cookies, headers, request bodies, query
+parameters, database values, and stack-frame variables are excluded from
+automatic collection.
+
+`NUXT_PUBLIC_SENTRY_DSN` is embedded into browser builds because a Sentry DSN is
+a public event-ingestion identifier. `SENTRY_AUTH_TOKEN` is available only to
+the build for source-map upload. `SENTRY_DSN` stays in the server runtime
+environment and is never baked into the public container image, so self-hosted
+deployments do not report to the project owner's Sentry organization.
+
+Development traces and session replays sample at 100%. Production traces and
+non-error replays sample at 10%, while error-triggered replay sampling remains
+100%. Leaving the DSN variables unset disables Sentry initialization.
+
 ## 2026-11-26: Jellyfin release imports scan only completed target paths
 
 Release-import tasks now pass their completed audio paths and creation time to

@@ -4,6 +4,8 @@ services:
   peridot:
     image: ghcr.io/ciriak/peridot:${PERIDOT_CHANNEL:-stable}
     restart: unless-stopped
+    environment:
+      SENTRY_DSN: ${SENTRY_DSN:-}
     ports:
       - "${PERIDOT_PORT:-17430}:17430"
     volumes:

@@ -118,4 +118,16 @@ test("CI publishes signed Android and desktop update artifacts", async () => {
   assert.match(workflow, /channel=beta/);
   assert.match(workflow, /type=raw,value=beta/);
   assert.doesNotMatch(workflow, /type=ref,event=branch/);
+  assert.match(
+    workflow,
+    /NUXT_PUBLIC_SENTRY_DSN: \$\{\{ secrets\.NUXT_PUBLIC_SENTRY_DSN \}\}/,
+  );
+  assert.match(
+    workflow,
+    /SENTRY_AUTH_TOKEN: \$\{\{ secrets\.SENTRY_AUTH_TOKEN \}\}/,
+  );
+  assert.match(
+    workflow,
+    /sentry_auth_token=\$\{\{ secrets\.SENTRY_AUTH_TOKEN \}\}/,
+  );
 });

@@ -119,6 +119,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec turbo run build --filter=@peridot/web
+        env:
+          NUXT_PUBLIC_SENTRY_DSN: ${{ github.event_name == 'push' && secrets.NUXT_PUBLIC_SENTRY_DSN || '' }}
+          SENTRY_AUTH_TOKEN: ${{ github.event_name == 'push' && secrets.SENTRY_AUTH_TOKEN || '' }}
 
   build-server:
     name: Build Server
@@ -147,6 +150,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec turbo run build --filter=@peridot/web
+        env:
+          NUXT_PUBLIC_SENTRY_DSN: ${{ github.event_name == 'push' && secrets.NUXT_PUBLIC_SENTRY_DSN || '' }}
+          SENTRY_AUTH_TOKEN: ${{ github.event_name == 'push' && secrets.SENTRY_AUTH_TOKEN || '' }}
       - name: Install Tauri system dependencies
         run: |
           sudo apt-get update
@@ -163,6 +169,9 @@ jobs:
         with:
           workspaces: apps/desktop/src-tauri -> target
       - run: pnpm desktop:build
+        env:
+          NUXT_PUBLIC_SENTRY_DSN: ${{ github.event_name == 'push' && secrets.NUXT_PUBLIC_SENTRY_DSN || '' }}
+          SENTRY_AUTH_TOKEN: ${{ github.event_name == 'push' && secrets.SENTRY_AUTH_TOKEN || '' }}
 
   build-android:
     name: Build Android
@@ -207,6 +216,8 @@ jobs:
         env:
           PERIDOT_CLIENT_CHANNEL: ${{ steps.client.outputs.channel }}
           PERIDOT_CLIENT_VERSION: ${{ steps.client.outputs.version }}
+          NUXT_PUBLIC_SENTRY_DSN: ${{ github.event_name == 'push' && secrets.NUXT_PUBLIC_SENTRY_DSN || '' }}
+          SENTRY_AUTH_TOKEN: ${{ github.event_name == 'push' && secrets.SENTRY_AUTH_TOKEN || '' }}
 
   prepare-client-release:
     name: Prepare client release
@@ -288,6 +299,8 @@ jobs:
         env:
           PERIDOT_CLIENT_CHANNEL: ${{ needs.prepare-client-release.outputs.channel }}
           PERIDOT_CLIENT_VERSION: ${{ needs.prepare-client-release.outputs.version }}
+          NUXT_PUBLIC_SENTRY_DSN: ${{ secrets.NUXT_PUBLIC_SENTRY_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
       - name: Package and sign update
         run: |
           umask 077
@@ -389,6 +402,8 @@ jobs:
         env:
           PERIDOT_CLIENT_CHANNEL: ${{ needs.prepare-client-release.outputs.channel }}
           PERIDOT_CLIENT_VERSION: ${{ needs.prepare-client-release.outputs.version }}
+          NUXT_PUBLIC_SENTRY_DSN: ${{ secrets.NUXT_PUBLIC_SENTRY_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
       - uses: actions/upload-artifact@v4
@@ -509,6 +524,9 @@ jobs:
             PERIDOT_BUILD_TAG=${{ github.ref_type == 'tag' && github.ref_name || '' }}
             PERIDOT_BUILD_COMMIT=${{ github.sha }}
             PERIDOT_VERSION=${{ steps.version.outputs.value }}
+            NUXT_PUBLIC_SENTRY_DSN=${{ secrets.NUXT_PUBLIC_SENTRY_DSN }}
+          secrets: |
+            sentry_auth_token=${{ secrets.SENTRY_AUTH_TOKEN }}
           cache-from: type=gha,scope=peridot-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=peridot-${{ matrix.arch }}
       - name: Record image digest
