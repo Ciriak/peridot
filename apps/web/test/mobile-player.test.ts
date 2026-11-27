@@ -189,8 +189,8 @@ test("the fullscreen mobile player exposes accessible complete controls", async 
   );
   assert.match(
     panel,
-    /class="relative mx-auto flex aspect-square h-full max-h-72 w-auto max-w-full shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted text-muted-foreground shadow-lg sm:max-h-96"/,
-    "the square cover shrinks to fit the remaining vertical space and caps its width",
+    /class="relative mx-auto flex size-56 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted text-muted-foreground shadow-lg sm:size-72"/,
+    "the fullscreen cover has one square width and height at phone and tablet sizes",
   );
   assert.match(panel, /TrackContextMenu/);
   assert.match(panel, /<TrackArtistLinks/);

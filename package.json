@@ -35,6 +35,7 @@
     "android:sync": "pnpm --filter @peridot/android sync",
     "android:generate": "pnpm --filter @peridot/android generate",
     "android:dev": "pnpm --filter @peridot/android dev",
+    "android:auto": "pnpm --filter @peridot/android auto",
     "android:open": "pnpm --filter @peridot/android open",
     "android:test": "pnpm --filter @peridot/android sync && pnpm --filter @peridot/android test",
     "android:instrument": "pnpm --filter @peridot/android sync && pnpm --filter @peridot/android instrument",

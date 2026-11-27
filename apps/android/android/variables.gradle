@@ -15,4 +15,5 @@ ext {
     cordovaAndroidVersion = '14.0.1'
     media3Version = '1.11.1'
     coroutinesVersion = '1.10.2'
+    mockWebServerVersion = '4.12.0'
 }

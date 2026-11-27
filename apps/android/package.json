@@ -8,6 +8,7 @@
     "sync": "pnpm generate && cap sync android",
     "dev": "pnpm sync && cap run android",
     "open": "pnpm sync && cap open android",
+    "auto": "node scripts/launch-auto.mjs",
     "update:bundle": "node scripts/package-update.mjs",
     "test": "node scripts/gradle.mjs testDebugUnitTest",
     "lint": "node scripts/gradle.mjs lintDebug",
