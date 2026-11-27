@@ -1,5 +1,17 @@
 # Peridot decisions
 
+## 2026-11-27: Node 24.22.3 is the supported development runtime
+
+Peridot pins Node 24.22.3 in CI and the production container. Node 24.14
+introduced an upstream crash in the native CommonJS lexer used during
+ESM-to-CommonJS resolution; the fix landed in Node 24.19.0. Tests can abort
+probabilistically under concurrent module loading on the previous 24.15.0 pin,
+even when every application assertion passes.
+
+The package engine range requires `>=24.19.0 <25`, and CI reads the runtime from
+one workflow-level version value so future Node updates are made once. Older
+Node 24 releases remain unsupported until they are upgraded past the fix.
+
 ## 2026-11-27: Sentry is optional and configured by environment
 
 Peridot uses separate `peridot-web` and `peridot-server` Sentry projects. The

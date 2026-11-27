@@ -2,8 +2,10 @@
 
 ## Toolchain
 
-Use Node 24.15 or newer within Node 24 and pnpm 11.25.0. The project pins its
-preferred Node runtime through pnpm and commits `pnpm-lock.yaml`.
+Use Node 24.22.3 and pnpm 12.23.0. Node 24.19.0 or newer within Node 24 is
+supported; earlier Node 24 releases contain an upstream ESM-to-CommonJS parser
+crash. The project pins its preferred Node runtime through pnpm and commits
+`pnpm-lock.yaml`.
 
 ```sh
 pnpm install --frozen-lockfile
