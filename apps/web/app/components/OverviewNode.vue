@@ -44,17 +44,9 @@ const statusLabel = computed(() =>
   }),
 );
 const fileLabel = computed(() =>
-  data.value.kind === "qbittorrent"
-    ? t("settings.overview.downloadClient")
-    : data.value.kind === "torznab"
-      ? t("settings.overview.releaseIndexer")
-      : data.value.fileCount === null
-        ? ""
-        : t(
-            "count.file",
-            { count: data.value.fileCount },
-            data.value.fileCount,
-          ),
+  data.value.fileCount === null
+    ? ""
+    : t("count.file", { count: data.value.fileCount }, data.value.fileCount),
 );
 const statusDotClass = computed(() =>
   data.value.status === "online"
@@ -152,7 +144,7 @@ const targetPositions = [
         <span class="min-w-0 truncate" :title="data.address">
           {{ data.address }}
         </span>
-        <span class="shrink-0 font-medium text-foreground">{{
+        <span v-if="fileLabel" class="shrink-0 font-medium text-foreground">{{
           fileLabel
         }}</span>
       </div>

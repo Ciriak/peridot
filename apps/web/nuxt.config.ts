@@ -37,6 +37,7 @@ const optimizedDependencies = [
   "@iconify-icons/basil/download-outline",
   "@iconify-icons/basil/filter-outline",
   "@iconify-icons/basil/folder-outline",
+  "@iconify-icons/basil/folder-plus-outline",
   "@iconify-icons/basil/heart-outline",
   "@iconify-icons/basil/heart-solid",
   "@iconify-icons/basil/home-outline",

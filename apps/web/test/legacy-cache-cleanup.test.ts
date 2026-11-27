@@ -28,8 +28,10 @@ test("legacy metadata resets without deleting offline audio caches", async () =>
   assert.doesNotMatch(reset, /peridot-offline-audio-v1/);
   assert.match(offlineAudio, /peridot-offline-audio-v1/);
   assert.match(offlineAudio, /caches\.delete\(LEGACY_OFFLINE_AUDIO_CACHE\)/);
-  assert.match(settings, /clearLegacyOfflineTracks/);
-  assert.match(settings, /Remove legacy offline audio/);
+  assert.doesNotMatch(
+    settings,
+    /clearLegacyOfflineTracks|Legacy offline audio/,
+  );
   assert.match(androidStore, /File\(appContext\.filesDir, "offline"\)/);
   assert.match(
     androidStore,

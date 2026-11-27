@@ -12,15 +12,16 @@ test("home greeting follows the local time of day", () => {
   assert.equal(homeGreetingPeriod(new Date(2026, 10, 13, 23, 59)), "evening");
 });
 
-test("home shows liked tracks and the quick-pick content without categories", async () => {
+test("home shows both automatic playlists and quick-pick content without categories", async () => {
   const [homePage, albumPage] = await Promise.all([
     readFile(new URL("../app/pages/index.vue", import.meta.url), "utf8"),
     readFile(new URL("../app/pages/albums/index.vue", import.meta.url), "utf8"),
   ]);
 
   assert.match(homePage, /LIKED_TRACKS_PLAYLIST_ID/);
+  assert.match(homePage, /RECENTLY_ADDED_PLAYLIST_ID/);
   assert.match(homePage, /useQuickPicks/);
-  assert.match(homePage, /usePlaylistList\(\{ limit: 1 \}\)/);
+  assert.match(homePage, /usePlaylistList\(\{ limit: 2 \}\)/);
   assert.match(
     homePage,
     /import CatalogCard from "\.\.\/components\/CatalogCard\.vue"/,
@@ -29,6 +30,11 @@ test("home shows liked tracks and the quick-pick content without categories", as
     homePage,
     /playlistCatalogCard\(likedPlaylist\.value\)/,
     "Home wraps the liked playlist in the shared card model",
+  );
+  assert.match(
+    homePage,
+    /playlistCatalogCard\(recentlyAddedPlaylist\.value\)/,
+    "Home wraps the recently added playlist in the shared card model",
   );
   assert.match(
     homePage,
@@ -75,7 +81,7 @@ test("home shows liked tracks and the quick-pick content without categories", as
   assert.match(
     homePage,
     /grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-5/,
-    "Liked tracks and quick picks share one two-column mobile card grid",
+    "Automatic playlists and quick picks share one two-column mobile card grid",
   );
   assert.match(albumPage, /<VirtualCardGrid[\s\S]*layout="wide"/);
   assert.match(

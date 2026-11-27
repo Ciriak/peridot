@@ -2,14 +2,12 @@
 import { definePageMeta, useI18n } from "#imports";
 import { Icon } from "@iconify/vue/offline";
 import { Switch } from "@peridot/ui/components/ui/switch";
-import { Button } from "@peridot/ui/components/ui/button";
-import { computed, ref } from "vue";
+import { computed } from "vue";
 import { useLibrarySettings } from "../../composables/use-library-settings";
 import { useOfflineCatalog } from "../../composables/use-offline-catalog";
 import { useServerConnection } from "../../composables/use-server-connection";
 import { icons } from "../../lib/icons";
 import { OFFLINE_CATALOG_MAX_TRACKS } from "../../lib/offline-catalog";
-import { clearLegacyOfflineTracks } from "../../lib/offline-audio";
 
 definePageMeta({ layout: "settings" });
 const { t, n } = useI18n();
@@ -34,19 +32,6 @@ const switchDisabled = computed(
     verification.value === "verifying" ||
     serverStatus.value === "lost",
 );
-const clearingLegacyCache = ref(false);
-const legacyCacheNotice = ref("");
-
-async function clearLegacyCache() {
-  clearingLegacyCache.value = true;
-  legacyCacheNotice.value = "";
-  try {
-    await clearLegacyOfflineTracks();
-    legacyCacheNotice.value = "Legacy offline audio removed.";
-  } finally {
-    clearingLegacyCache.value = false;
-  }
-}
 </script>
 
 <template>
@@ -111,27 +96,5 @@ async function clearLegacyCache() {
         })
       }}
     </p>
-    <section
-      aria-labelledby="legacy-offline-audio-heading"
-      class="rounded-lg border bg-card p-4 text-card-foreground"
-    >
-      <h3 id="legacy-offline-audio-heading" class="text-sm font-medium">
-        Legacy offline audio
-      </h3>
-      <p class="mt-1 text-sm text-muted-foreground">
-        Files from the pre-Media client remain on this device until removed.
-      </p>
-      <Button
-        class="mt-3"
-        variant="outline"
-        :disabled="clearingLegacyCache"
-        @click="clearLegacyCache"
-      >
-        {{ clearingLegacyCache ? "Removing…" : "Remove legacy offline audio" }}
-      </Button>
-      <p v-if="legacyCacheNotice" class="mt-2 text-sm text-muted-foreground">
-        {{ legacyCacheNotice }}
-      </p>
-    </section>
   </div>
 </template>

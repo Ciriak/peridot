@@ -87,6 +87,16 @@ test("both navigation layouts share swipe handling and a closing backdrop", asyn
     assert.match(layout, /transition-transform duration-300 ease-out/);
     assert.match(layout, /:inert="navigationInert"/);
     assert.match(layout, /@click="mobileNavigation = false"/);
+
+    const sidebar = layout.slice(
+      layout.indexOf('ref="navigationDrawer"'),
+      layout.indexOf("</aside>"),
+    );
+    assert.doesNotMatch(
+      sidebar,
+      /icons\.close|navigation\.closeSettings|navigation\.close"/,
+      "mobile navigation closes from the backdrop or swipe, not a sidebar button",
+    );
   }
   assert.match(
     defaultLayout,

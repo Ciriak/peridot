@@ -72,15 +72,20 @@ watch(
 <template>
   <div
     data-mobile-player-track-panel
-    class="flex h-full min-w-0 flex-col overflow-hidden text-center"
+    class="flex h-full w-full min-w-0 flex-col overflow-hidden text-center"
   >
     <component
       :is="interactive && track ? TrackContextMenu : 'div'"
+      :class="interactive && track ? undefined : 'contents'"
       v-bind="interactive && track ? { track } : {}"
       @play="emit('play')"
     >
-      <div class="flex min-h-0 min-w-0 flex-1 flex-col items-center">
-        <div class="flex min-h-0 w-full flex-1 items-end justify-center pt-2">
+      <div
+        class="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center"
+      >
+        <div
+          class="flex min-h-0 w-full flex-1 items-center justify-center max-h-72 sm:max-h-96"
+        >
           <div
             aria-hidden="true"
             class="relative mx-auto flex size-56 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted text-muted-foreground shadow-lg sm:size-72"
@@ -99,59 +104,65 @@ watch(
           </div>
         </div>
 
-        <div class="mt-2 min-w-0 shrink-0 text-center">
-          <template v-if="track">
-            <ScrollingText
-              :key="`${track.id}:${track.title}`"
-              mode="always"
-              class="w-full text-lg font-semibold"
-              :title="
-                track.available ? undefined : t('trackTable.unavailableTitle')
-              "
-            >
-              <NuxtLink
-                v-if="interactive && currentTrackTitleRoute"
-                :to="currentTrackTitleRoute"
-                class="inline-block rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                :class="!track.available && 'opacity-60'"
+        <div class="mt-2 flex w-full shrink-0 items-center gap-3 text-center">
+          <span
+            v-if="interactive && track"
+            aria-hidden="true"
+            class="size-12 shrink-0"
+          />
+          <div class="min-w-0 flex-1">
+            <template v-if="track">
+              <ScrollingText
+                :key="`${track.id}:${track.title}`"
+                mode="always"
+                class="w-full text-lg font-semibold"
+                :title="
+                  track.available ? undefined : t('trackTable.unavailableTitle')
+                "
               >
-                {{ track.title }}
-              </NuxtLink>
-              <span v-else>{{ track.title }}</span>
-            </ScrollingText>
-            <ScrollingText
-              mode="always"
-              class="w-full text-sm text-muted-foreground"
-            >
-              <TrackArtistLinks
-                v-if="interactive && track.mediaType === 'music'"
-                :artists="trackArtistNames(track)"
-              />
-              <template v-else>{{ previewArtistNames }}</template>
-            </ScrollingText>
-          </template>
-          <template v-else>
-            <p class="text-lg font-semibold">{{ t("player.noTrack") }}</p>
-            <p class="text-sm text-muted-foreground">
-              {{ t("player.scanLibrary") }}
-            </p>
-          </template>
+                <NuxtLink
+                  v-if="interactive && currentTrackTitleRoute"
+                  :to="currentTrackTitleRoute"
+                  class="inline-block rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  :class="!track.available && 'opacity-60'"
+                >
+                  {{ track.title }}
+                </NuxtLink>
+                <span v-else>{{ track.title }}</span>
+              </ScrollingText>
+              <ScrollingText
+                mode="always"
+                class="w-full text-sm text-muted-foreground"
+              >
+                <TrackArtistLinks
+                  v-if="interactive && track.mediaType === 'music'"
+                  :artists="trackArtistNames(track)"
+                />
+                <template v-else>{{ previewArtistNames }}</template>
+              </ScrollingText>
+            </template>
+            <template v-else>
+              <p class="text-lg font-semibold">{{ t("player.noTrack") }}</p>
+              <p class="text-sm text-muted-foreground">
+                {{ t("player.scanLibrary") }}
+              </p>
+            </template>
+          </div>
+          <div
+            v-if="interactive && track"
+            class="flex size-12 shrink-0 items-center justify-end"
+          >
+            <LikeButton
+              large
+              :liked="liked"
+              :label="track.title"
+              :pending="likePending"
+              :disabled="likeDisabled"
+              @toggle="emit('like')"
+            />
+          </div>
         </div>
       </div>
     </component>
-
-    <div
-      v-if="interactive && track"
-      class="mt-2 flex w-full shrink-0 justify-end"
-    >
-      <LikeButton
-        large
-        :liked="liked"
-        :label="track.title"
-        :pending="likePending"
-        :disabled="likeDisabled"
-        @toggle="emit('like')"
-      />
-    </div>
   </div>
 </template>

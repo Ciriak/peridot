@@ -96,6 +96,7 @@ onMounted(() => {
       :has-more="hasMore"
       :loading-more="loadingMore"
       paging-mode="window"
+      single-column-mobile
       :aria-busy="loading"
       @visible-range="setVisibleRange"
     >

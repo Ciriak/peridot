@@ -72,7 +72,7 @@ test("overview reports safe source details to members and counts files", async (
     assert.equal(overview.librarySources[0]?.status, "online");
     assert.deepEqual(overview.counts, {
       albums: 0,
-      playlists: 1,
+      playlists: 2,
       podcasts: 0,
       audiobooks: 0,
     });
@@ -159,7 +159,7 @@ test("overview counts the signed-in user's visible playlists", async () => {
       headers: member,
     });
     assert.equal(response.statusCode, 200, response.body);
-    assert.equal(response.json<OverviewResponse>().counts.playlists, 2);
+    assert.equal(response.json<OverviewResponse>().counts.playlists, 3);
   } finally {
     await context.close();
   }

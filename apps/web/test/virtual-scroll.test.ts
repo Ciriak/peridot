@@ -51,6 +51,11 @@ test("catalog card grids virtualize responsive rows against the main scroll", as
   assert.match(grid, /useVirtualLoadMore/);
   assert.match(grid, /virtualizer\.virtualItems\.value/);
   assert.match(grid, /virtualizer\.measureRow/);
+  assert.match(
+    grid,
+    /:ref="virtualizer\.measureRow"\s+:data-index="row\.index"/,
+    "Placeholder and data rows use their measured grid height",
+  );
   assert.match(grid, /emit\("load-more"\)/);
   assert.match(
     grid,
@@ -76,7 +81,12 @@ test("catalog card grids virtualize responsive rows against the main scroll", as
   assert.match(
     grid,
     /if \(breakpoints\.lg\.value\) return 3;[\s\S]*return 2;/,
-    "Standard and wide card rows render two columns at mobile widths",
+    "Standard and wide card rows render two columns by default at mobile widths",
+  );
+  assert.match(
+    grid,
+    /props\.singleColumnMobile && !breakpoints\.sm\.value[\s\S]*return 1;/,
+    "The artists grid opts into one card per phone-width row",
   );
 
   const countedPages = [
@@ -103,6 +113,7 @@ test("catalog card grids virtualize responsive rows against the main scroll", as
   assert.match(albums, /useVirtualAlbums/);
   assert.match(albums, /<AlbumCardPlaceholder/);
   assert.match(artists, /<ArtistCardPlaceholder/);
+  assert.match(artists, /single-column-mobile/);
   assert.match(audiobooks, /<AlbumCardPlaceholder/);
   assert.match(podcasts, /<AlbumCardPlaceholder/);
   assert.match(playlists, /<AlbumCardPlaceholder/);

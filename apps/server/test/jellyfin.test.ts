@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { TaskResponse } from "@peridot/contracts";
 import sharp from "sharp";
+import { createJellyfinIntegration } from "../src/jellyfin/index.js";
+import { LibraryScanner } from "../src/library-scanner.js";
 import { createTestContext, waitForScan, waitForTask } from "./helpers.js";
 
 const API_KEY = "jellyfin-secret-api-key";
@@ -113,6 +115,130 @@ function jellyfinResponse(input: string | URL | Request): Response {
   }
   return new Response("not found", { status: 404 });
 }
+
+test("targeted Jellyfin imports query only the completed release paths", async () => {
+  const requestedUrls: URL[] = [];
+  const context = await createTestContext();
+  try {
+    const source = await context.database.orm.LibrarySource.create({
+      kind: "jellyfin",
+      name: "Audio",
+      configuration: JSON.stringify({
+        url: "http://jellyfin.local:8096",
+        libraryId: "music-library-id",
+      }),
+      credentialCiphertext: "unused-in-this-test",
+      position: 1,
+    });
+    const integration = createJellyfinIntegration({
+      targetRetryAttempts: 0,
+      fetch: async (input, init) => {
+        const request =
+          input instanceof Request
+            ? input
+            : new Request(String(input), init as RequestInit);
+        const url = new URL(request.url);
+        requestedUrls.push(url);
+        return Response.json({
+          Items: [
+            {
+              Id: AUDIO_ID,
+              Name: "Matching track",
+              Path: "/srv/music/Release/01 Matching.flac",
+              Etag: "target-v1",
+              Container: "flac",
+              DateCreated: "2026-11-26T13:00:00.000Z",
+              Artists: ["Target Artist"],
+              Album: "Release",
+              AlbumId: ALBUM_ID,
+              MediaSources: [{ Container: "flac", Size: 10 }],
+            },
+            {
+              Id: "unrelated-track",
+              Name: "Unrelated track",
+              Path: "/srv/music/Other/02 Unrelated.flac",
+              Etag: "other-v1",
+              Container: "flac",
+              DateCreated: "2026-11-26T13:00:00.000Z",
+              Artists: ["Other Artist"],
+              Album: "Other",
+              AlbumId: "other-album",
+              MediaSources: [{ Container: "flac", Size: 10 }],
+            },
+          ],
+          TotalRecordCount: 2,
+        });
+      },
+    });
+    const sourceHandle = {
+      id: source.id,
+      kind: "jellyfin" as const,
+      name: source.name,
+      configuration: {
+        url: "http://jellyfin.local:8096",
+        libraryId: "music-library-id",
+      },
+      credentials: { apiKey: API_KEY },
+    };
+    const connectorService = {
+      registry: { has: (kind: string) => kind === "jellyfin" },
+      definition: () => integration,
+      sourceHandle: () => sourceHandle,
+    };
+    const progress: Array<{ completed: number; total: number | null }> = [];
+    const fakeTasks = {
+      updateProgress: async (
+        _taskId: string,
+        completed: number,
+        total: number | null,
+      ) => {
+        progress.push({ completed, total });
+      },
+      enqueue: async () => ({ id: "child-task" }),
+    };
+    const scanner = new LibraryScanner(
+      context.database,
+      connectorService as never,
+    );
+    const createdAt = new Date("2026-11-26T12:59:00.000Z");
+    await scanner.runTask(
+      {
+        id: "targeted-release-task",
+        kind: "release_import",
+        connectorId: source.id,
+        connectorName: "Audio",
+        createdAt,
+        payload: JSON.stringify({
+          kind: "release-import",
+          indexerId: "indexer",
+          releaseId: "release",
+          sourceId: source.id,
+          paths: ["Release\\01 Matching.flac"],
+        }),
+      } as never,
+      fakeTasks as never,
+      new AbortController().signal,
+    );
+
+    assert.equal(requestedUrls.length, 1);
+    assert.equal(requestedUrls[0]?.pathname, "/Items");
+    assert.equal(
+      requestedUrls[0]?.searchParams.get("minDateLastSaved"),
+      createdAt.toISOString(),
+    );
+    assert.ok(
+      requestedUrls[0]?.searchParams.get("fields")?.split(",").includes("Path"),
+    );
+    assert.deepEqual(progress.at(-1), { completed: 1, total: 1 });
+    const copies = await context.database.orm.MediaCopy.where({
+      librarySourceId: source.id,
+    }).all();
+    assert.equal(copies.length, 1);
+    assert.equal(copies[0]?.externalId, AUDIO_ID);
+  } finally {
+    await context.close();
+  }
+});
 
 test("Jellyfin library discovery creates one auto-detected source per selected library", async () => {
   const requestedUrls: string[] = [];

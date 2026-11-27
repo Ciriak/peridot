@@ -169,12 +169,23 @@ test("the fullscreen mobile player exposes accessible complete controls", async 
   );
   assert.match(
     panel,
-    /class="flex h-full min-w-0 flex-col overflow-hidden text-center"/,
+    /class="flex h-full w-full min-w-0 flex-col overflow-hidden text-center"/,
+    "each carousel panel fills its slide so artwork and actions share the full width",
   );
   assert.match(
     panel,
-    /class="flex min-h-0 w-full flex-1 items-end justify-center pt-2"/,
-    "the shrinking cover stays above its title instead of separating from it",
+    /:is="interactive && track \? TrackContextMenu : 'div'"\s+:class="interactive && track \? undefined : 'contents'"/,
+    "adjacent tracks use the same flex height as the active track",
+  );
+  assert.match(
+    panel,
+    /class="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center"/,
+    "the cover and metadata form one vertically centered group",
+  );
+  assert.match(
+    panel,
+    /class="flex min-h-0 w-full flex-1 items-center justify-center max-h-72 sm:max-h-96"/,
+    "the shrinking cover area is centered and capped before metadata",
   );
   assert.match(
     panel,
@@ -208,8 +219,8 @@ test("the fullscreen mobile player exposes accessible complete controls", async 
   );
   assert.match(
     panel,
-    /class="mt-2 flex w-full shrink-0 justify-end"[\s\S]*<LikeButton\s+large/,
-    "the fullscreen like control sits on the right",
+    /class="mt-2 flex w-full shrink-0 items-center gap-3 text-center"[\s\S]*class="size-12 shrink-0"[\s\S]*class="min-w-0 flex-1"[\s\S]*class="flex size-12 shrink-0 items-center justify-end"[\s\S]*<LikeButton\s+large/,
+    "balanced metadata edges keep the text centered with the like control on the right",
   );
   assert.match(
     player,
