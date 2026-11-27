@@ -1,5 +1,42 @@
 # Peridot handoff
 
+## Node 24.22.3 for server CI
+
+The server CI failure was an upstream Node 24.15.0 crash in the native
+CommonJS lexer used during ESM-to-CommonJS resolution. All twelve Jellyfin
+assertions completed, then Node aborted with
+`FATAL ERROR: v8::ToLocalChecked Empty MaybeLocal`. Node 24.14 introduced the
+crash and Node 24.19.0 contains the upstream fix.
+
+CI now reads Node 24.22.3 from one workflow-level value. The package engine
+range requires `>=24.19.0 <25`, and the production container uses Node 24.22.3.
+
+Verification:
+
+- Full server suite under Node 24.22.3 (242 passing)
+- Server application and test TypeScript checks under Node 24.22.3
+- `pnpm lint`
+- `pnpm format:check`
+- `pnpm version:check`
+- `git diff --check`
+
+Known limits:
+
+- The Docker daemon was unavailable, so the updated image was not built
+  locally.
+- The updated GitHub Actions workflow has not run because no push was
+  authorized.
+
+Uncommitted changes:
+
+- Docker uses pnpm 12.23.0 to match the repository's package manager, plus this
+  handoff section.
+
+Next:
+
+- Commit the Docker pnpm alignment, push when authorized, and confirm the server
+  CI job runs on Node 24.22.3 without the lexer crash.
+
 ## Web Nuxt module assertions
 
 The locale and offline-shell tests now verify that their own required Nuxt
