@@ -166,6 +166,14 @@ test("en-US messages interpolate and pluralize", () => {
     "Last sync Nov 13, 2026",
   );
   assert.equal(
+    i18n.global.t("settings.server.updates.manualUpdateTitle"),
+    "Update with Docker Compose",
+  );
+  assert.equal(
+    i18n.global.t("settings.server.updates.manualUpdateDescription"),
+    "Pull the latest Docker image and recreate the server container from the directory containing your Compose file.",
+  );
+  assert.equal(
     i18n.global.t("settings.tasks.artworkFetch"),
     "Artwork retrieval",
   );

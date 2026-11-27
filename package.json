@@ -1,6 +1,6 @@
 {
   "name": "peridot",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
   "packageManager": "pnpm@12.23.0",
   "engines": {
@@ -31,7 +31,7 @@
     "db:reset": "pnpm --filter @peridot/server db:reset",
     "db:vacuum": "pnpm --filter @peridot/server db:vacuum",
     "desktop:dev": "pnpm --filter @peridot/desktop dev",
-    "desktop:build": "pnpm --filter @peridot/desktop package",
+    "desktop:build": "pnpm --filter @peridot/desktop bundle:local",
     "android:sync": "pnpm --filter @peridot/android sync",
     "android:generate": "pnpm --filter @peridot/android generate",
     "android:dev": "pnpm --filter @peridot/android dev",

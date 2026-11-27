@@ -103,6 +103,9 @@ const updateCheckingNotice = ref("");
 const updateCheckingError = ref("");
 
 const updateStatus = computed(() => updates.status.value);
+const versionOutdated = computed(
+  () => updateStatus.value?.state === "available",
+);
 const updateChannel = computed(() => {
   const channel = updateStatus.value?.channel;
   if (channel === "dev") return t("settings.server.updates.channel.dev");
@@ -410,7 +413,20 @@ watch(connectionStatus, (status) => {
             <dt class="text-muted-foreground">
               {{ t("settings.server.updates.serverVersion") }}
             </dt>
-            <dd class="font-medium">{{ updateStatus?.version ?? "—" }}</dd>
+            <dd
+              class="font-medium"
+              :class="versionOutdated && 'text-warning'"
+              :title="
+                versionOutdated
+                  ? t('settings.server.updates.available')
+                  : undefined
+              "
+            >
+              {{ updateStatus?.version ?? "—" }}
+              <span v-if="versionOutdated" class="sr-only">
+                {{ t("settings.server.updates.available") }}
+              </span>
+            </dd>
           </div>
           <div class="space-y-1">
             <dt class="text-muted-foreground">
@@ -448,16 +464,40 @@ watch(connectionStatus, (status) => {
           </template>
         </p>
         <div
-          class="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between"
+          v-if="versionOutdated"
+          id="manual-update-alert"
+          role="status"
+          aria-labelledby="manual-update-alert-title"
+          class="flex gap-3 rounded-lg border bg-muted p-4 text-sm"
         >
-          <p class="text-sm text-muted-foreground">
-            {{
-              updateStatus?.channel === "local"
-                ? t("settings.server.updates.localHelp")
-                : t("settings.server.updates.manualHelp")
-            }}
+          <Icon
+            :icon="icons.info"
+            aria-hidden="true"
+            class="mt-0.5 size-4 shrink-0 text-primary"
+          />
+          <div class="min-w-0 space-y-2">
+            <p id="manual-update-alert-title" class="font-medium">
+              {{ t("settings.server.updates.manualUpdateTitle") }}
+            </p>
+            <p class="text-muted-foreground">
+              {{ t("settings.server.updates.manualUpdateDescription") }}
+            </p>
+            <pre
+              class="overflow-x-auto rounded-md border bg-background p-3 font-mono text-xs text-foreground"
+            ><code>docker compose pull peridot
+docker compose up -d peridot</code></pre>
+          </div>
+        </div>
+        <div
+          class="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center"
+        >
+          <p
+            v-if="updateStatus?.channel === 'local'"
+            class="text-sm text-muted-foreground"
+          >
+            {{ t("settings.server.updates.localHelp") }}
           </p>
-          <div class="flex gap-2">
+          <div class="flex gap-2 sm:ml-auto">
             <Button
               type="button"
               variant="outline"

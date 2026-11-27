@@ -170,7 +170,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: apps/desktop/src-tauri -> target
-      - run: pnpm desktop:build
+      - run: pnpm --filter @peridot/desktop package
         env:
           NUXT_PUBLIC_SENTRY_DSN: ${{ github.event_name == 'push' && secrets.NUXT_PUBLIC_SENTRY_DSN || '' }}
           SENTRY_AUTH_TOKEN: ${{ github.event_name == 'push' && secrets.SENTRY_AUTH_TOKEN || '' }}
@@ -408,6 +408,23 @@ jobs:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      - name: Verify Windows NSIS installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $bundleRoot = "apps/desktop/src-tauri/target/release/bundle"
+          $installers = @(Get-ChildItem "$bundleRoot/nsis/*-setup.exe" -File)
+          $signatures = @(Get-ChildItem "$bundleRoot/nsis/*.exe.sig" -File)
+          $msiFiles = @(Get-ChildItem "$bundleRoot/msi/*.msi" -File -ErrorAction SilentlyContinue)
+          if ($installers.Count -ne 1) {
+            throw "Expected one NSIS installer, found $($installers.Count)."
+          }
+          if ($signatures.Count -ne 1) {
+            throw "Expected one NSIS updater signature, found $($signatures.Count)."
+          }
+          if ($msiFiles.Count -ne 0) {
+            throw "Windows desktop release unexpectedly produced an MSI installer."
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.target }}

@@ -338,6 +338,18 @@ The Tauri desktop shell embeds the generated web client and supports signed
 update artifacts. The Android application packages the same client with
 Capacitor and a native Media3 service for background playback and Android Auto.
 
+### Desktop packaging
+
+`pnpm desktop:build` builds the current platform's Tauri installer. Windows uses
+only NSIS and writes
+`apps/desktop/src-tauri/target/release/bundle/nsis/Peridot_<version>_x64-setup.exe`.
+Local packaging omits updater signatures because the private key is available
+only to the release workflow. The release workflow uses the signed updater
+configuration and publishes the resulting NSIS installer and `.exe.sig`.
+Use `pnpm --filter @peridot/desktop package` for a raw executable without a
+installer. Desktop channel releases upload the NSIS installer and updater
+signature with the other platform artifacts.
+
 ### Android Auto
 
 `PeridotPlaybackService` publishes Liked tracks, Albums, Playlists, Artists, and

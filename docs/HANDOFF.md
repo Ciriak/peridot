@@ -1,5 +1,149 @@
 # Peridot handoff
 
+## Immediate logout redirect
+
+Profile logout now clears credentials and opens the login screen before waiting
+for server revocation or device cleanup. Query cache, download-task,
+offline-audio, and artwork cleanup continue in the background, while the
+captured session token is still revoked when the server is reachable.
+
+Verification:
+
+- Focused logout and settings tests under Node 24.22.3 (21 passing)
+- Full Web suite under Node 24.22.3 (348 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Focused ESLint and Prettier checks on the changed Web files
+- `git diff --check`
+
+Known limits:
+
+- The logout flow was verified through behavioral and source regression tests,
+  not a live authenticated browser session.
+- Background cleanup and server revocation failures intentionally do not hold
+  the login screen open or surface an error.
+
+Uncommitted changes:
+
+- Final await-compatible typing for the login navigation wrapper and the
+  decision and handoff records.
+- The logout helper and regression tests were captured by interim commits
+  during verification.
+
+Next:
+
+- Confirm in a live signed-in client that Profile → Log out shows the login
+  screen immediately, then verify offline and download data finish clearing in
+  the background.
+
+## Manual Docker update guidance
+
+Settings → Server now shows an informational alert when a newer server image
+is available. The alert provides the Compose commands for pulling the latest
+image and recreating the Peridot container.
+
+Verification:
+
+- Focused settings and i18n tests (25 passing)
+- `pnpm --filter @peridot/web typecheck`
+- Focused ESLint and Prettier checks on the changed Web files
+
+Known limits:
+
+- The alert was not opened through a live authenticated administrator session.
+
+Uncommitted changes:
+
+- Software-update alert, English copy, regression assertions, and this handoff
+  section.
+- Existing Sentry, desktop packaging, dependency, and settings changes remain
+  untouched.
+
+Next:
+
+- Check Settings → Server with an available channel update at desktop and
+  mobile widths.
+
+## Server update helper label removed
+
+Settings → Server no longer shows the non-local helper sentence explaining
+six-hour checks and rollout behavior. Local builds retain their
+channel-update-unavailable explanation. The unused `manualHelp` message and
+its source assertion were removed, and the settings regression test now
+verifies that the sentence stays absent.
+
+Verification:
+
+- Focused settings and i18n tests under Node 24.22.3 (25 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Focused ESLint and Prettier checks on the changed Web files
+- `git diff --check`
+
+Known limits:
+
+- Typecheck and build used the machine's Node 24.15.0 and emitted the
+  repository's unsupported-engine warning. The supported-runtime test run used
+  Node 24.22.3.
+- The settings page was not opened through a live authenticated admin session.
+
+Uncommitted changes:
+
+- Server update helper removal, its locale and regression-test updates, and
+  this handoff section.
+- Existing Sentry, NSIS-only desktop, settings, dependency, and documentation
+  changes remain untouched.
+
+Next:
+
+- Open Settings → Server on a channel build and confirm only the update status
+  and Check for updates action remain in the update footer.
+
+## NSIS-only Windows desktop releases
+
+Windows desktop builds now target only NSIS. `pnpm desktop:build` creates
+`apps/desktop/src-tauri/target/release/bundle/nsis/Peridot_0.1.5_x64-setup.exe`
+without requiring the release updater private key. Linux and macOS retain their
+native Tauri bundle targets.
+
+The desktop release workflow still builds with the signed updater configuration.
+It now fails unless the Windows job produces exactly one NSIS installer and one
+updater signature, and it fails if an MSI is present. The existing release
+artifact upload publishes the installer and `.exe.sig` alongside `latest.json`
+and the other platform assets.
+
+Verification:
+
+- Focused desktop Tauri configuration tests (6 passing under Node 24.22.3)
+- Focused Web client-update workflow tests (6 passing under Node 24.22.3)
+- Focused ESLint and Prettier checks on changed tests, configuration, and
+  workflow files
+- `pnpm desktop:build` produced `Peridot_0.1.5_x64-setup.exe` (2.52 MiB)
+- `git diff --check`
+
+Known limits:
+
+- The local command used Node 24.15.0 and emitted the repository's unsupported
+  engine warning. The supported-runtime test runs used Node 24.22.3.
+- The release workflow has not run because no push was authorized.
+- Local installer builds intentionally omit updater signatures. Signed updater
+  artifacts are created only by the release workflow.
+- Older ignored bundle artifacts from prior builds remain in the local target
+  directory until it is cleaned.
+
+Uncommitted changes:
+
+- Windows and local Tauri configuration files, the `desktop:build` scripts,
+  release workflow NSIS verification, regression tests, desktop/development
+  documentation, the decision record, and this handoff section.
+- Existing Sentry, settings, desktop Cargo lock, and test changes remain
+  untouched.
+
+Next:
+
+- Commit on `dev` when authorized, push, and confirm the Windows release job
+  publishes `Peridot_<version>_x64-setup.exe` and its `.exe.sig` without an MSI.
+
 ## Node 24.22.3 for server CI
 
 The server CI failure was an upstream Node 24.15.0 crash in the native
