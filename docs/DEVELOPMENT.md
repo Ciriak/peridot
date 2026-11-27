@@ -42,6 +42,20 @@ The GitHub Actions workflow reads `NUXT_PUBLIC_SENTRY_DSN` and
 is stored as a repository secret for deployment automation and must be passed
 to the running container by that environment.
 
+The migration entrypoint initializes Sentry before database access. Fatal
+database migration, runtime configuration, and server startup failures are
+captured with `component`, `operation`, and process fields, then flushed for up
+to two seconds before the process exits. The same failures are appended as
+structured JSON records to `peridot.log` beside `DATABASE_URL`; this preserves
+the error chain and stack even when Sentry is disabled.
+
+Terminal background task failures are also sent as handled Sentry issues. Only
+error and fatal Pino logs are forwarded to Sentry; warning-level logs remain
+local because they can contain owner-visible one-time recovery tokens. Fastify
+logs redact authorization, cookie, password, API key, credential, and token
+fields. Administrator log entries include the error type, message, code,
+request ID, while the raw `peridot.log` records retain full stacks.
+
 Development tracing samples every span. Production traces and non-error Session
 Replays sample at 10%, while error-triggered replays and all Session Replay text
 and media masking remain enabled.

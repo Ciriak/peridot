@@ -58,6 +58,7 @@ import {
   queueMediaMatch,
   TaskService,
 } from "./tasks.js";
+import { captureBackgroundError, flushSentry } from "./failure-reporting.js";
 import { ensureServerSettings } from "./server-settings.js";
 import { SourceRefreshScheduler } from "./source-refresh-scheduler.js";
 import { ensureDefaultSource } from "./sources.js";
@@ -246,7 +247,12 @@ export async function buildApp(options: BuildAppOptions = {}) {
   const tasks = new TaskService(
     database,
     (task) => realtime.publishTask(task),
-    (level, message) => logBuffer.add(level, message),
+    (level, message) => {
+      logBuffer.add(level, message);
+      if (level === "error") {
+        captureBackgroundError(message, "task", { logLevel: level });
+      }
+    },
   );
   const scanner = new LibraryScanner(
     database,
@@ -280,7 +286,23 @@ export async function buildApp(options: BuildAppOptions = {}) {
     logger:
       options.logger === false
         ? false
-        : { stream: logBuffer.stream, level: "debug" },
+        : {
+            stream: logBuffer.stream,
+            level: "debug",
+            redact: {
+              paths: [
+                "req.headers.authorization",
+                "req.headers.cookie",
+                'res.headers["set-cookie"]',
+                "*.password",
+                "*.apiKey",
+                "*.credential",
+                "*.credentialCiphertext",
+                "*.token",
+              ],
+              censor: "[Redacted]",
+            },
+          },
     logController: new LogController({ disableRequestLogging: true }),
   });
   await registerOpenApi(app);
@@ -428,20 +450,24 @@ export async function buildApp(options: BuildAppOptions = {}) {
     await registerWebApplication(app, { webRoot: options.webRoot });
   }
   app.addHook("onClose", async () => {
-    updateCheckScheduler.close();
-    sourceRefreshScheduler.close();
-    if (backfillImmediate) {
-      clearImmediate(backfillImmediate);
-      backfillImmediate = undefined;
+    try {
+      updateCheckScheduler.close();
+      sourceRefreshScheduler.close();
+      if (backfillImmediate) {
+        clearImmediate(backfillImmediate);
+        backfillImmediate = undefined;
+      }
+      metadataEnrichment.close();
+      await tasks.close();
+      await catalog.close();
+      await artworkCache.close();
+      await logBuffer.close();
+    } finally {
+      await flushSentry();
+      logBuffer.onEntry(null);
+      realtime.close();
+      if (ownsDatabase) await database.close();
     }
-    metadataEnrichment.close();
-    await tasks.close();
-    await catalog.close();
-    await artworkCache.close();
-    await logBuffer.close();
-    logBuffer.onEntry(null);
-    realtime.close();
-    if (ownsDatabase) await database.close();
   });
   return app;
 }

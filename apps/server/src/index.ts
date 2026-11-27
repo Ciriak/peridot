@@ -1,4 +1,5 @@
 import "./instrument.js";
 import { startServer } from "./start.js";
 
-await startServer();
+const started = await startServer();
+if (!started) process.exitCode = 1;

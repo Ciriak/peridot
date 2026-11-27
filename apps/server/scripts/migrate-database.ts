@@ -258,26 +258,3 @@ export async function runPendingMigrations({
 
   return { pendingCount: pending.length, backupPath };
 }
-
-async function main(): Promise<void> {
-  const advanceRefIndex = process.argv.indexOf("--advance-ref");
-  const advanceRef =
-    advanceRefIndex >= 0 ? process.argv[advanceRefIndex + 1] : undefined;
-  if (advanceRefIndex >= 0 && !advanceRef) {
-    throw new Error("--advance-ref requires a ref name");
-  }
-
-  await runPendingMigrations({
-    ...(advanceRef ? { advanceRef } : {}),
-  });
-}
-
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
-) {
-  main().catch((error: unknown) => {
-    console.error(error instanceof Error ? error.message : error);
-    process.exitCode = 1;
-  });
-}

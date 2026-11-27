@@ -5,6 +5,7 @@ import { createInterface } from "node:readline";
 import { Writable } from "node:stream";
 import { DEFAULT_FILE_LOG_RETENTION_DAYS } from "@peridot/contracts";
 import { sqliteFilePath } from "./database.js";
+import { summarizeError } from "./error-format.js";
 
 const MAX_ENTRIES = 500;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -44,6 +45,7 @@ function levelName(level: unknown): string {
 }
 
 function describe(record: Record<string, unknown>): string {
+  let message = typeof record.msg === "string" ? record.msg : "";
   if (
     record.msg === "request completed" &&
     typeof record.req === "object" &&
@@ -55,9 +57,22 @@ function describe(record: Record<string, unknown>): string {
     const response = record.res as Record<string, unknown>;
     const responseTime =
       typeof record.responseTime === "number" ? record.responseTime : "?";
-    return `${String(request.method ?? "")} ${String(request.url ?? "")} ${String(response.statusCode ?? "")} (${responseTime}ms)`;
+    message = `${String(request.method ?? "")} ${String(request.url ?? "")} ${String(response.statusCode ?? "")} (${responseTime}ms)`;
   }
-  return typeof record.msg === "string" ? record.msg : "";
+
+  const error = summarizeError(record.err ?? record.error);
+  if (error && !message.includes(error)) {
+    message = message ? `${message} ${error}` : error;
+  }
+  if (
+    ["error", "fatal"].includes(levelName(record.level)) &&
+    typeof record.reqId === "string" &&
+    record.reqId &&
+    !message.includes(record.reqId)
+  ) {
+    message = `${message} [requestId=${record.reqId}]`;
+  }
+  return message;
 }
 
 function recordTime(record: Record<string, unknown>): number | null {
