@@ -1,6 +1,5 @@
 # Peridot handoff
 
-<<<<<<< HEAD
 ## Sentry CI configuration
 
 Sentry is now configured for the Nuxt web client and Fastify server. The
@@ -48,7 +47,7 @@ Next:
 
 - Run the updated push workflow and confirm browser source maps and production
   server events reach both Sentry projects.
-=======
+
 ## Android Auto browse and collection playback
 
 Android Auto now exposes every browse surface already supported by the native
@@ -105,7 +104,6 @@ Next:
   mode, start its head unit server, then use `pnpm android:auto` to verify tab
   navigation, collection playback, next/previous, artwork, and notification
   metadata against a real Peridot server.
->>>>>>> origin/dev
 
 ## Targeted Jellyfin release imports
 

@@ -1,6 +1,5 @@
 # Peridot decisions
 
-<<<<<<< HEAD
 ## 2026-11-27: Sentry is optional and configured by environment
 
 Peridot uses separate `peridot-web` and `peridot-server` Sentry projects. The
@@ -19,7 +18,7 @@ deployments do not report to the project owner's Sentry organization.
 Development traces and session replays sample at 100%. Production traces and
 non-error replays sample at 10%, while error-triggered replay sampling remains
 100%. Leaving the DSN variables unset disables Sentry initialization.
-=======
+
 ## 2026-11-25: Android Auto exposes every supported browse surface
 
 The Android prototype publishes Liked tracks, Albums, Playlists, Artists, and
@@ -44,7 +43,6 @@ Peridot continues to distribute the Android APK directly rather than through
 Google Play. A physical head unit therefore requires Android Auto developer
 mode and permission to run apps from unknown sources; the Desktop Head Unit is
 the supported development test path.
->>>>>>> origin/dev
 
 ## 2026-11-26: Jellyfin release imports scan only completed target paths
 
