@@ -75,6 +75,7 @@ dependencies {
     testImplementation "androidx.media3:media3-test-utils:$media3Version"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    androidTestImplementation "com.squareup.okhttp3:mockwebserver:$mockWebServerVersion"
     implementation project(':capacitor-cordova-android-plugins')
 }
 

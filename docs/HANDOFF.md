@@ -1,5 +1,6 @@
 # Peridot handoff
 
+<<<<<<< HEAD
 ## Sentry CI configuration
 
 Sentry is now configured for the Nuxt web client and Fastify server. The
@@ -47,6 +48,64 @@ Next:
 
 - Run the updated push workflow and confirm browser source maps and production
   server events reach both Sentry projects.
+=======
+## Android Auto browse and collection playback
+
+Android Auto now exposes every browse surface already supported by the native
+player: Liked tracks, Albums, Playlists, Artists, and the current Queue. The
+head unit may display fewer root tabs, but Peridot no longer limits the tree to
+three surfaces.
+
+Liked tracks uses `/api/playlists/liked`, preserving automatic-playlist order.
+Playlists are fully paged and exclude the automatic liked playlist. Albums,
+playlists, and artists are browsable and playable; collection playback replaces
+the queue and starts at the selected track. URI-less Android Auto play requests
+are resolved by media ID, unavailable tracks without local audio are omitted,
+and thumbnails, durations, media types, and collection context are published to
+Media3. Signed-out and expired sessions surface the authentication-expired
+result.
+
+Verification:
+
+- Android unit tests (13 passing), including the automotive manifest checks
+- Android debug lint and `@peridot/android` TypeScript typecheck
+- `:app:connectedDebugAndroidTest` on API 37 (12 passing, including API-backed
+  MediaBrowser fixtures)
+- `pnpm --filter @peridot/android build` (debug APK assembled)
+- `pnpm android:auto` cold launch and reuse paths verified: the launcher starts
+  or reuses the AVD, waits for boot, forwards port `5277`, and invokes the DHU.
+  With the full Android Auto phone connected, the default command now prefers
+  that device, starts the server-connected DHU persistently, and reuses both on
+  subsequent runs. The current AVD remains a stub image.
+- Repository ESLint and Prettier checks
+
+Known limits:
+
+- Android Auto catalog browsing is online-only; saved audio can play, but
+  downloaded collections are not reconstructed as an offline car library.
+- The prototype declares five root surfaces and leaves final tab visibility to
+  the vehicle or DHU.
+- Live Desktop Head Unit and physical-vehicle QA were not completed.
+- The APK is not submitted to Google Play; physical vehicles require Android
+  Auto developer mode and unknown-source permission.
+
+Uncommitted changes:
+
+- Android Auto Media3 service, catalog API/cache, localized tab resources,
+  manifest and MediaBrowser tests, MockWebServer test dependency, Android
+  documentation, decision record, and this handoff section.
+- Cross-platform `pnpm android:auto` launcher for the Android emulator, ADB port
+  forwarding, and Desktop Head Unit.
+- Existing documentation edits for the download-client source chooser were
+  present and preserved.
+
+Next:
+
+- Install full Android Auto on the AVD, enable unknown sources in developer
+  mode, start its head unit server, then use `pnpm android:auto` to verify tab
+  navigation, collection playback, next/previous, artwork, and notification
+  metadata against a real Peridot server.
+>>>>>>> origin/dev
 
 ## Targeted Jellyfin release imports
 
@@ -404,7 +463,7 @@ failures stay visible in the dialog and do not block saving.
 Verification:
 
 - `pnpm --filter @peridot/server test` (237 passing)
-- `pnpm --filter @peridot/web test` (343 passing)
+- `pnpm --filter @peridot/web test` (344 passing)
 - `pnpm --filter @peridot/server typecheck`
 - `pnpm --filter @peridot/web typecheck`
 - `pnpm --filter @peridot/server build`
@@ -449,7 +508,7 @@ Verification:
 
 - Focused overview flow, settings, and server overview tests (16 passing)
 - Focused overview flow regression tests (10 passing)
-- `pnpm --filter @peridot/web test` (343 passing)
+- `pnpm --filter @peridot/web test` (344 passing)
 - `pnpm --filter @peridot/server typecheck`
 - `pnpm --filter @peridot/web typecheck`
 - `pnpm --filter @peridot/server build`
@@ -482,7 +541,8 @@ Download clients now own the Destination source selector. Release indexers only
 choose the client, category, tags, and save-path behavior. The selector lists
 every active library source by name, falling back to its path or kind. Jellyfin
 destinations import by running the configured Jellyfin source scan after the
-download completes.
+download completes. The chooser uses a rich listbox that shows each source's
+folder or Jellyfin icon beside its name in both the selected value and options.
 
 Saving a download client no longer contacts qBittorrent. Administrators can
 create or edit a client before its service is reachable. Discovery remains
@@ -497,7 +557,7 @@ client disagree, the earliest ordered indexer wins.
 Verification:
 
 - Focused Torznab integration-source destination tests (8 passing)
-- `pnpm --filter @peridot/web test` (343 passing)
+- `pnpm --filter @peridot/web test` (344 passing)
 - Migration preservation test applies the new migration to a database at the
   prior contract and confirms the linked client receives its indexer destination
 - `pnpm --filter @peridot/server typecheck`

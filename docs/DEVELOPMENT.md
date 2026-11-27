@@ -298,11 +298,12 @@ read-only connection graph with Peridot centered, a library-source subflow on
 the left, a metadata-provider subflow on the right, and a download-client
 subflow below. Release indexers form a bottom-right subflow. Library sources and
 metadata providers link to Peridot. A download client links to its configured
-Destination source, and a release indexer links to its configured download
-client. A destinationless client or an indexer without a client falls back to its
-direct Peridot relationship. Every link is animated while the subflow is only a
-visual background group. Panning and scroll/pinch zoom remain available while
-node, link, and connection editing stay disabled. The page polls
+Destination source for every active source kind, including folders and Jellyfin.
+A release indexer links to its configured download client. A destinationless
+client or an indexer without a client falls back to its direct Peridot
+relationship. Every link is animated while the subflow is only a visual
+background group. Panning and scroll/pinch zoom remain available while node,
+link, and connection editing stay disabled. The page polls
 `/api/overview` while open. Keep graph cards to basic connection information and
 do not expose administrator configuration on this screen. Double-clicking a
 card routes to the matching Server or connector settings page; subflow
@@ -334,6 +335,34 @@ this manager.
 The Tauri desktop shell embeds the generated web client and supports signed
 update artifacts. The Android application packages the same client with
 Capacitor and a native Media3 service for background playback and Android Auto.
+
+### Android Auto
+
+`PeridotPlaybackService` publishes Liked tracks, Albums, Playlists, Artists, and
+the current Queue through `MediaLibraryService`. Android Auto is online-only:
+the user must first sign in to the phone app, and the service reads the existing
+encrypted session rather than exposing credentials to car clients. Catalog
+responses are cached per server and user and are not an offline library.
+
+Liked tracks uses the automatic liked playlist endpoint. Albums, playlists, and
+artists are browsable and playable as complete collections. Collections replace
+the player queue and start at the selected track; selecting Play on a collection
+starts at its first playable track. Playlists are fully paged and the automatic
+liked playlist is omitted from the Playlists tab.
+
+Directly installed APKs require Android Auto developer mode and the Android Auto
+setting that permits unknown sources. Use the Desktop Head Unit for development
+testing. Root-tab count is controlled by the head unit; Peridot advertises every
+surface it supports even when a particular vehicle hides lower-priority tabs.
+
+`pnpm android:auto` launches or reuses an available Android emulator, waits for
+Android boot, forwards the configured DHU port, and starts the Desktop Head Unit.
+If a connected physical device has full Android Auto, the launcher prefers it
+over stub emulator images; pass `--avd` to force an emulator. Set `PERIDOT_AVD`
+when multiple AVDs are installed. `PERIDOT_DHU_PORT` overrides the default port
+`5277`, and `PERIDOT_AVD_BOOT_TIMEOUT_MS` changes the boot timeout from its
+default of three minutes. The launcher warns when the selected device has only
+the Android Auto stub package.
 
 ## Verification
 
@@ -399,6 +428,8 @@ source and save. Discovery and live connection checks are optional. Saving
 validates the URL, credentials shape, and active library source without
 contacting qBittorrent, so an unreachable client can be configured ahead of the
 service. The authenticated test endpoint remains available for explicit checks.
+The Destination source listbox displays each folder or Jellyfin source with its
+matching icon in both the selected value and the available options.
 Repeat for additional instances. Saved rows lead with the bundled qBittorrent
 icon, use a cog-icon edit action, and keep removal in the row's three-dot action
 menu behind a confirmation dialog because it is destructive.

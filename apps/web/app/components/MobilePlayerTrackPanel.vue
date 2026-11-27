@@ -88,7 +88,7 @@ watch(
         >
           <div
             aria-hidden="true"
-            class="relative mx-auto flex aspect-square h-full max-h-72 w-auto max-w-full shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted text-muted-foreground shadow-lg sm:max-h-96"
+            class="relative mx-auto flex size-56 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-muted text-muted-foreground shadow-lg sm:size-72"
             :class="track?.available === false && 'opacity-60'"
           >
             <Icon :icon="placeholderIcon" aria-hidden="true" class="size-16" />

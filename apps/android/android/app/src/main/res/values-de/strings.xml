@@ -4,4 +4,16 @@
     <string name="title_activity_main">Peridot</string>
     <string name="playback_notification_channel_name">Wiedergabesteuerung</string>
     <string name="playback_notification_channel_description">Steuerung der in Peridot wiedergegebenen Musik.</string>
+    <string name="auto_root_title">Peridot</string>
+    <string name="auto_root_description">Deine Musik</string>
+    <string name="auto_liked_tracks">Lieblingstitel</string>
+    <string name="auto_liked_tracks_description">Deine Favoriten</string>
+    <string name="auto_albums">Alben</string>
+    <string name="auto_albums_description">Sammlung durchsuchen</string>
+    <string name="auto_playlists">Playlists</string>
+    <string name="auto_playlists_description">Deine Playlists</string>
+    <string name="auto_artists">Interpreten</string>
+    <string name="auto_artists_description">Nach Interpret durchsuchen</string>
+    <string name="auto_queue">Warteschlange</string>
+    <string name="auto_queue_description">Weiterhören</string>
 </resources>
