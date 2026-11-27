@@ -1,5 +1,17 @@
 # Peridot decisions
 
+## 2026-11-27: Logout navigation does not wait for cleanup
+
+Profile logout clears the session cookies synchronously and starts navigation
+to the login screen before revoking the server session or deleting query,
+download-task, offline-audio, and artwork state. Cleanup continues in the
+background because the SPA remains alive after the route change.
+
+Server-session revocation uses the captured token and remains best-effort when
+the server is unreachable. Device cleanup is also best-effort, so a slow or
+failed deletion cannot leave the user waiting in the authenticated shell after
+their credentials have already been cleared.
+
 ## 2026-11-27: Windows desktop releases use NSIS only
 
 Windows Tauri builds target only NSIS. A Windows-specific Tauri configuration

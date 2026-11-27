@@ -1,5 +1,41 @@
 # Peridot handoff
 
+## Immediate logout redirect
+
+Profile logout now clears credentials and opens the login screen before waiting
+for server revocation or device cleanup. Query cache, download-task,
+offline-audio, and artwork cleanup continue in the background, while the
+captured session token is still revoked when the server is reachable.
+
+Verification:
+
+- Focused logout and settings tests under Node 24.22.3 (21 passing)
+- Full Web suite under Node 24.22.3 (348 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/web build`
+- Focused ESLint and Prettier checks on the changed Web files
+- `git diff --check`
+
+Known limits:
+
+- The logout flow was verified through behavioral and source regression tests,
+  not a live authenticated browser session.
+- Background cleanup and server revocation failures intentionally do not hold
+  the login screen open or surface an error.
+
+Uncommitted changes:
+
+- Final await-compatible typing for the login navigation wrapper and the
+  decision and handoff records.
+- The logout helper and regression tests were captured by interim commits
+  during verification.
+
+Next:
+
+- Confirm in a live signed-in client that Profile → Log out shows the login
+  screen immediately, then verify offline and download data finish clearing in
+  the background.
+
 ## Manual Docker update guidance
 
 Settings → Server now shows an informational alert when a newer server image

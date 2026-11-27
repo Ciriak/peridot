@@ -107,8 +107,8 @@ async function confirmLogout() {
         user.value = null;
         logoutOpen.value = false;
       },
-      redirectToLogin() {
-        return navigateTo(
+      async redirectToLogin() {
+        await navigateTo(
           {
             path: "/onboarding",
             query: { auth: "login", redirect },
