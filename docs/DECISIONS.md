@@ -1,5 +1,19 @@
 # Peridot decisions
 
+## 2026-11-27: Windows desktop releases use NSIS only
+
+Windows Tauri builds target only NSIS. A Windows-specific Tauri configuration
+overrides the cross-platform `all` default, while Linux and macOS retain their
+native bundle targets. This removes MSI generation and avoids publishing two
+Windows installers for the same application.
+
+`pnpm desktop:build` creates a local NSIS installer through a local Tauri
+configuration that disables updater artifact signing because the updater
+private key exists only in the release environment. The release workflow keeps
+the signed updater configuration, verifies exactly one `*-setup.exe` and one
+`.exe.sig`, rejects an MSI, and uploads the NSIS installer and signature with
+the other desktop release assets.
+
 ## 2026-11-27: Node 24.22.3 is the supported development runtime
 
 Peridot pins Node 24.22.3 in CI and the production container. Node 24.14

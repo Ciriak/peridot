@@ -402,10 +402,11 @@ test("settings shows app metadata and profile owns confirmed logout", async () =
     readSource("../nuxt.config.ts"),
     readSource("../../../package.json"),
   ]);
+  const metadataFooterStart = layout.indexOf(
+    'class="block shrink-0 border-t border-sidebar-border p-3 text-xs',
+  );
   const metadataFooter = layout.slice(
-    layout.indexOf(
-      'class="shrink-0 border-t border-sidebar-border p-3 text-xs',
-    ),
+    layout.lastIndexOf("<NuxtLink", metadataFooterStart),
     layout.indexOf("</aside>"),
   );
   const logoutControl = page.slice(
@@ -420,14 +421,27 @@ test("settings shows app metadata and profile owns confirmed logout", async () =
   assert.match(layout, /useRuntimeConfig/);
   assert.match(layout, /runtimeConfig\.public\.appVersion/);
   assert.match(layout, /runtimeConfig\.public\.environment/);
+  assert.match(layout, /useUpdatesQuery/);
+  assert.match(layout, /updates\.status\.value\?\.state === "available"/);
   assert.match(
     metadataFooter,
-    /text-xs leading-tight text-muted-foreground\/60/,
+    /<NuxtLink\s+to="\/settings\/server"\s+class="block shrink-0 border-t border-sidebar-border p-3 text-xs leading-tight text-muted-foreground\/60[^"]*"/,
+  );
+  assert.match(
+    metadataFooter,
+    /focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-inset/,
   );
   assert.match(metadataFooter, /navigation\.version/);
   assert.match(metadataFooter, /\{\{ appVersion \}\}/);
   assert.match(metadataFooter, /navigation\.environment/);
   assert.match(metadataFooter, /\{\{ environment \}\}/);
+  assert.match(metadataFooter, /versionOutdated && 'text-warning'/);
+  assert.match(
+    metadataFooter,
+    /versionOutdated[\s\S]*?settings\.server\.updates\.available/,
+  );
+  assert.match(metadataFooter, /class="sr-only"/);
+  assert.match(metadataFooter, /<\/NuxtLink>/);
   assert.doesNotMatch(metadataFooter, /icons\.logout/);
   assert.doesNotMatch(metadataFooter, /navigation\.logOut/);
   assert.doesNotMatch(layout, /revokeSession|AlertDialogRoot/);
@@ -458,11 +472,13 @@ test("settings shows app metadata and profile owns confirmed logout", async () =
   assert.doesNotMatch(logoutControl, /@click="confirmLogout"/);
   assert.match(page, /useServer/);
   assert.match(page, /useSession/);
+  assert.match(page, /logoutImmediately/);
   assert.match(page, /revokeSession/);
   assert.match(page, /token\.value = null/);
   assert.match(page, /user\.value = null/);
   assert.doesNotMatch(page, /address\.value = null/);
-  assert.match(page, /query: \{ auth: "login", redirect: route\.fullPath \}/);
+  assert.match(page, /const redirect = route\.fullPath/);
+  assert.match(page, /query: \{ auth: "login", redirect \}/);
   assert.match(page, /AlertDialogRoot/);
   assert.match(logoutDialog, /navigation\.logOutTitle/);
   assert.match(logoutDialog, /navigation\.logOutDescription/);
@@ -959,15 +975,41 @@ test("server settings expose channel update checks without automatic installatio
   assert.match(page, /useUpdatesQuery/);
   assert.match(page, /useRuntimeConfig/);
   assert.match(page, /runtimeConfig\.public\.clientVersion/);
+  assert.match(page, /const versionOutdated = computed/);
+  assert.match(page, /updateStatus\.value\?\.state === "available"/);
   assert.match(updateCard, /settings\.server\.updates\.serverVersion/);
+  assert.match(
+    updateCard,
+    /:class="versionOutdated && 'text-warning'"[\s\S]*?\{\{ updateStatus\?\.version \?\? "—" \}\}/,
+  );
+  assert.match(
+    updateCard,
+    /versionOutdated[\s\S]*?settings\.server\.updates\.available/,
+  );
   assert.match(updateCard, /settings\.server\.updates\.clientVersion/);
   assert.match(updateCard, /\{\{ updateStatus\?\.version \?\? "—" \}\}/);
   assert.match(updateCard, /\{\{ clientVersion \}\}/);
   assert.match(updateCard, /settings\.server\.updates\.channel/);
   assert.match(updateCard, /settings\.server\.updates\.revision/);
+  assert.match(
+    updateCard,
+    /v-if="versionOutdated"[\s\S]*?id="manual-update-alert"[\s\S]*?role="status"/,
+  );
+  assert.match(updateCard, /:icon="icons\.info"/);
+  assert.match(updateCard, /settings\.server\.updates\.manualUpdateTitle/);
+  assert.match(
+    updateCard,
+    /settings\.server\.updates\.manualUpdateDescription/,
+  );
+  assert.match(updateCard, /docker compose pull peridot/);
+  assert.match(updateCard, /docker compose up -d peridot/);
   assert.match(updateCard, /@click="checkUpdates"/);
   assert.match(updateCard, /updateStatus\?\.state === 'available'/);
-  assert.match(updateCard, /settings\.server\.updates\.manualHelp/);
+  assert.doesNotMatch(updateCard, /settings\.server\.updates\.manualHelp/);
+  assert.match(
+    updateCard,
+    /v-if="updateStatus\?\.channel === 'local'"[\s\S]*?settings\.server\.updates\.localHelp/,
+  );
   assert.doesNotMatch(
     updateCard,
     /requestInstall|installOpen|installAvailable/,

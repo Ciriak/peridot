@@ -7,7 +7,10 @@ import { Button } from "@peridot/ui/components/ui/button";
 import { ProgressCircle } from "@peridot/ui/components/ui/progress-circle";
 import { computed, ref, watch } from "vue";
 import ServerConnectionIndicator from "../components/ServerConnectionIndicator.vue";
-import { useAdminSourcesQuery } from "../composables/use-admin-queries";
+import {
+  useAdminSourcesQuery,
+  useUpdatesQuery,
+} from "../composables/use-admin-queries";
 import { useOfflineDownloadTasks } from "../composables/use-offline-download-tasks";
 import { useSwipeSidebar } from "../composables/use-swipe-sidebar";
 import { useTasks } from "../composables/use-tasks";
@@ -30,6 +33,7 @@ const {
 } = useAdminSourcesQuery();
 const { tasks } = useTasks();
 const { activeTasks: activeDownloadTasks } = useOfflineDownloadTasks();
+const updates = useUpdatesQuery();
 const runtimeConfig = useRuntimeConfig();
 const appVersion = runtimeConfig.public.appVersion;
 const environment = runtimeConfig.public.environment;
@@ -38,6 +42,9 @@ const navigationSwipeArea = ref<HTMLElement | null>(null);
 const navigationDrawer = ref<HTMLElement | null>(null);
 const previousLibraryTaskStatuses = new Map<string, TaskStatus>();
 const sourceCount = computed(() => sources.value.length);
+const versionOutdated = computed(
+  () => updates.status.value?.state === "available",
+);
 const activeTasks = computed(() =>
   tasks.value.filter((task) => isActiveTaskStatus(task.status)),
 );
@@ -337,20 +344,33 @@ watch(tasks, (current) => {
           </Button>
         </section>
       </nav>
-      <div
-        class="shrink-0 border-t border-sidebar-border p-3 text-xs leading-tight text-muted-foreground/60"
+      <NuxtLink
+        to="/settings/server"
+        class="block shrink-0 border-t border-sidebar-border p-3 text-xs leading-tight text-muted-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-inset"
       >
         <dl class="space-y-1">
           <div class="flex justify-between gap-3">
             <dt>{{ t("navigation.version") }}</dt>
-            <dd>{{ appVersion }}</dd>
+            <dd
+              :class="versionOutdated && 'text-warning'"
+              :title="
+                versionOutdated
+                  ? t('settings.server.updates.available')
+                  : undefined
+              "
+            >
+              {{ appVersion }}
+              <span v-if="versionOutdated" class="sr-only">
+                {{ t("settings.server.updates.available") }}
+              </span>
+            </dd>
           </div>
           <div class="flex justify-between gap-3">
             <dt>{{ t("navigation.environment") }}</dt>
             <dd>{{ environment }}</dd>
           </div>
         </dl>
-      </div>
+      </NuxtLink>
     </aside>
 
     <div class="flex min-w-0 flex-1 flex-col">

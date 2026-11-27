@@ -108,6 +108,32 @@ test("Tauri uses the public signed updater channel", async () => {
   assert.doesNotMatch(source, /github.*token|oauth/i);
 });
 
+test("Windows desktop builds produce only an NSIS installer locally", async () => {
+  const [windowsConfig, localConfig, desktopPackage, rootPackage] =
+    await Promise.all([
+      readJson<{ bundle: { targets: string[] } }>(
+        "src-tauri/tauri.windows.conf.json",
+      ),
+      readJson<{ bundle: { createUpdaterArtifacts: boolean } }>(
+        "src-tauri/tauri.local.conf.json",
+      ),
+      readJson<{ scripts: Record<string, string> }>("package.json"),
+      readJson<{ scripts: Record<string, string> }>("../../package.json"),
+    ]);
+
+  assert.deepEqual(windowsConfig.bundle.targets, ["nsis"]);
+  assert.equal(localConfig.bundle.createUpdaterArtifacts, false);
+  assert.equal(desktopPackage.scripts.bundle, "tauri build");
+  assert.equal(
+    desktopPackage.scripts["bundle:local"],
+    "tauri build --config src-tauri/tauri.local.conf.json",
+  );
+  assert.equal(
+    rootPackage.scripts["desktop:build"],
+    "pnpm --filter @peridot/desktop bundle:local",
+  );
+});
+
 test("Tauri hosts native media-key shortcuts through the official plugin", async () => {
   const [cargo, source] = await Promise.all([
     readFile(path.join(desktopRoot, "src-tauri/Cargo.toml"), "utf8"),

@@ -1,12 +1,13 @@
 {
   "name": "@peridot/desktop",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "tauri dev",
     "package": "tauri build --no-bundle",
     "bundle": "tauri build",
+    "bundle:local": "tauri build --config src-tauri/tauri.local.conf.json",
     "typecheck": "cargo check --manifest-path src-tauri/Cargo.toml",
     "test": "node --test test/*.test.ts"
   },

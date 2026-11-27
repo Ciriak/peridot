@@ -20,6 +20,7 @@ import { useUser } from "../../composables/use-user";
 import { useLocalizedMessage } from "../../composables/use-localized-message";
 import { icons } from "../../lib/icons";
 import { clearDownloadTasks } from "../../lib/download-tasks";
+import { logoutImmediately } from "../../lib/logout";
 import { clearAllOfflineTracks } from "../../lib/offline-audio";
 import {
   isAuthenticationRedirectError,
@@ -98,28 +99,38 @@ async function confirmLogout() {
   loggingOut.value = true;
   const currentAddress = address.value;
   const currentToken = token.value;
-  token.value = null;
-  user.value = null;
-  await Promise.all([
-    clearAllPeridotQueries(),
-    clearAllOfflineTracks(),
-    clearDownloadTasks(),
-  ]);
+  const redirect = route.fullPath;
   try {
-    if (currentAddress && currentToken) {
-      await revokeSession(currentAddress, currentToken);
-    }
-  } catch {
-    // Local credentials are cleared even if the server cannot be reached.
+    await logoutImmediately({
+      clearCredentials() {
+        token.value = null;
+        user.value = null;
+        logoutOpen.value = false;
+      },
+      redirectToLogin() {
+        return navigateTo(
+          {
+            path: "/onboarding",
+            query: { auth: "login", redirect },
+          },
+          { replace: true },
+        );
+      },
+      clearServerSession() {
+        return currentAddress && currentToken
+          ? revokeSession(currentAddress, currentToken)
+          : Promise.resolve();
+      },
+      async clearDeviceData() {
+        await Promise.all([
+          clearAllPeridotQueries(),
+          clearAllOfflineTracks(),
+          clearDownloadTasks(),
+        ]);
+      },
+    });
   } finally {
     loggingOut.value = false;
-    await navigateTo(
-      {
-        path: "/onboarding",
-        query: { auth: "login", redirect: route.fullPath },
-      },
-      { replace: true },
-    );
   }
 }
 </script>
