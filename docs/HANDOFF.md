@@ -1,6 +1,5 @@
 # Peridot handoff
 
-<<<<<<< HEAD
 ## Android Auto browse and collection playback
 
 Android Auto now exposes every browse surface already supported by the native
@@ -57,7 +56,7 @@ Next:
   mode, start its head unit server, then use `pnpm android:auto` to verify tab
   navigation, collection playback, next/previous, artwork, and notification
   metadata against a real Peridot server.
-=======
+
 ## Targeted Jellyfin release imports
 
 Completed external imports now preserve their completed path list when the
@@ -397,7 +396,6 @@ Uncommitted changes:
 
 - Connector address-hint port selection, focused regression coverage, decision
   record, development note, and this handoff section.
->>>>>>> origin/dev
 
 ## Release indexer save without a live connection
 

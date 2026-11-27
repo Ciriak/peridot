@@ -1,6 +1,5 @@
 # Peridot decisions
 
-<<<<<<< HEAD
 ## 2026-11-25: Android Auto exposes every supported browse surface
 
 The Android prototype publishes Liked tracks, Albums, Playlists, Artists, and
@@ -25,7 +24,7 @@ Peridot continues to distribute the Android APK directly rather than through
 Google Play. A physical head unit therefore requires Android Auto developer
 mode and permission to run apps from unknown sources; the Desktop Head Unit is
 the supported development test path.
-=======
+
 ## 2026-11-26: Jellyfin release imports scan only completed target paths
 
 Release-import tasks now pass their completed audio paths and creation time to
@@ -86,7 +85,6 @@ Scheme-less hosts continue to probe each connector's advertised ports, such as
 Jellyfin `8096` and qBittorrent `8080`. An explicit port still overrides both
 standard and connector defaults, and reverse-proxy paths remain part of every
 candidate.
->>>>>>> origin/dev
 
 ## 2026-11-25: Release indexers save independently of connection tests
 
