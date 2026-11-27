@@ -8,6 +8,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import androidx.media3.common.AudioAttributes
@@ -61,6 +62,8 @@ class PeridotPlaybackService : MediaLibraryService() {
     private var playbackStartRetries = 0
     private var playbackStartedTrackId: String? = null
     private val unavailableTrackIds = linkedSetOf<String>()
+    private val trackParents = mutableMapOf<String, String>()
+    private var trackParentScope: String? = null
 
     private val publishProgress = object : Runnable {
         override fun run() {
@@ -157,12 +160,22 @@ class PeridotPlaybackService : MediaLibraryService() {
                 browser: MediaSession.ControllerInfo,
                 mediaId: String,
             ): ListenableFuture<LibraryResult<MediaItem>> {
-                val item = runCatching { mediaItemForId(mediaId) }.getOrElse {
-                    return Futures.immediateFuture(
-                        LibraryResult.ofError(SessionError.ERROR_IO),
-                    )
+                val result = SettableFuture.create<LibraryResult<MediaItem>>()
+                libraryScope.launch {
+                    try {
+                        val item = loadLibraryItem(mediaId)
+                        result.set(
+                            if (item == null) {
+                                LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
+                            } else {
+                                LibraryResult.ofItem(item, null)
+                            },
+                        )
+                    } catch (error: Throwable) {
+                        result.set(LibraryResult.ofError(libraryErrorCode(error)))
+                    }
                 }
-                return Futures.immediateFuture(LibraryResult.ofItem(item, null))
+                return result
             }
 
             override fun onGetChildren(
@@ -173,7 +186,7 @@ class PeridotPlaybackService : MediaLibraryService() {
                 pageSize: Int,
                 params: LibraryParams?,
             ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> =
-                loadChildren(parentId, params)
+                loadChildren(parentId, page, pageSize, params)
 
             override fun onGetSearchResult(
                 session: MediaLibrarySession,
@@ -186,14 +199,59 @@ class PeridotPlaybackService : MediaLibraryService() {
                 val result = SettableFuture.create<LibraryResult<ImmutableList<MediaItem>>>()
                 libraryScope.launch {
                     try {
-                        val items = api.search(query).map(::browseItem)
+                        val items = pageItems(
+                            api.search(query).map(::browseItem),
+                            page,
+                            pageSize,
+                        )
                         result.set(
                             LibraryResult.ofItemList(ImmutableList.copyOf(items), params),
                         )
-                    } catch (error: SessionExpiredException) {
-                        result.set(LibraryResult.ofError(SessionError.ERROR_NOT_SUPPORTED))
                     } catch (error: Throwable) {
-                        result.set(LibraryResult.ofError(SessionError.ERROR_IO))
+                        result.set(LibraryResult.ofError(libraryErrorCode(error)))
+                    }
+                }
+                return result
+            }
+
+            override fun onAddMediaItems(
+                mediaSession: MediaSession,
+                controller: MediaSession.ControllerInfo,
+                mediaItems: List<MediaItem>,
+            ): ListenableFuture<List<MediaItem>> {
+                val result = SettableFuture.create<List<MediaItem>>()
+                libraryScope.launch {
+                    try {
+                        result.set(
+                            mediaItems.flatMap(::resolveAddedMediaItems),
+                        )
+                    } catch (error: Throwable) {
+                        result.setException(error)
+                    }
+                }
+                return result
+            }
+
+            override fun onSetMediaItems(
+                mediaSession: MediaSession,
+                controller: MediaSession.ControllerInfo,
+                mediaItems: List<MediaItem>,
+                startIndex: Int,
+                startPositionMs: Long,
+            ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+                val result =
+                    SettableFuture.create<MediaSession.MediaItemsWithStartPosition>()
+                libraryScope.launch {
+                    try {
+                        result.set(
+                            resolveSetMediaItems(
+                                mediaItems,
+                                startIndex,
+                                startPositionMs,
+                            ),
+                        )
+                    } catch (error: Throwable) {
+                        result.setException(error)
                     }
                 }
                 return result
@@ -374,6 +432,11 @@ class PeridotPlaybackService : MediaLibraryService() {
                 activeTracks = emptyMap()
                 lastError = null
                 unavailableTrackIds.clear()
+                synchronized(trackParents) {
+                    trackParents.clear()
+                    trackParentScope = null
+                }
+                api.clearCachedSession()
                 playbackStore.clear()
                 publishSnapshot()
                 stopSelf()
@@ -442,63 +505,123 @@ class PeridotPlaybackService : MediaLibraryService() {
 
     private fun loadChildren(
         parentId: String,
+        page: Int,
+        pageSize: Int,
         params: LibraryParams?,
     ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
         val result = SettableFuture.create<LibraryResult<ImmutableList<MediaItem>>>()
         libraryScope.launch {
             try {
-                val items = when {
+                val allItems = when {
                     parentId == ROOT_ID -> rootChildren()
-                    parentId == LIKED_ID -> api.likedTracks().map(::playableItem)
+                    parentId == QUEUE_ID -> queueItems()
+                    parentId == LIKED_ID -> collectionItems(LIKED_ID)
                     parentId == ALBUMS_ID -> api.albums().map(::browseItem)
                     parentId == ARTISTS_ID -> api.artists().map(::browseItem)
                     parentId == PLAYLISTS_ID -> api.playlists().map(::browseItem)
-                    parentId == QUEUE_ID -> queueItems()
-                    parentId.startsWith("$ALBUM_PREFIX:") ->
-                        api.albumTracks(parentId.substringAfter(':')).map(::playableItem)
-                    parentId.startsWith("$ARTIST_PREFIX:") ->
-                        api.artistTracks(parentId.substringAfter(':')).map(::playableItem)
-                    parentId.startsWith("$PLAYLIST_PREFIX:") ->
-                        api.playlistTracks(parentId.substringAfter(':')).map(::playableItem)
+                    isCollectionId(parentId) -> collectionItems(parentId)
                     else -> emptyList()
                 }
+                val items = pageItems(allItems, page, pageSize)
                 result.set(
                     LibraryResult.ofItemList(ImmutableList.copyOf(items), params),
                 )
-            } catch (error: SessionExpiredException) {
-                result.set(LibraryResult.ofError(SessionError.ERROR_NOT_SUPPORTED))
             } catch (error: Throwable) {
-                result.set(LibraryResult.ofError(SessionError.ERROR_IO))
+                result.set(LibraryResult.ofError(libraryErrorCode(error)))
             }
         }
         return result
     }
 
     private fun rootChildren(): List<MediaItem> = listOf(
-        browseNode(QUEUE_ID, "Queue", "Continue listening"),
-        browseNode(LIKED_ID, "Liked songs", "Your favorites"),
-        browseNode(ALBUMS_ID, "Albums", "Browse your collection"),
-        browseNode(ARTISTS_ID, "Artists", "Browse by artist"),
-        browseNode(PLAYLISTS_ID, "Playlists", "Your playlists"),
+        browseNode(
+            LIKED_ID,
+            getString(R.string.auto_liked_tracks),
+            getString(R.string.auto_liked_tracks_description),
+        ),
+        browseNode(
+            ALBUMS_ID,
+            getString(R.string.auto_albums),
+            getString(R.string.auto_albums_description),
+        ),
+        browseNode(
+            PLAYLISTS_ID,
+            getString(R.string.auto_playlists),
+            getString(R.string.auto_playlists_description),
+        ),
+        browseNode(
+            ARTISTS_ID,
+            getString(R.string.auto_artists),
+            getString(R.string.auto_artists_description),
+        ),
+        browseNode(
+            QUEUE_ID,
+            getString(R.string.auto_queue),
+            getString(R.string.auto_queue_description),
+        ),
     )
 
     private fun queueItems(): List<MediaItem> =
-        activeQueue?.tracks?.map(::playableItem).orEmpty()
+        playableItems(activeQueue?.tracks.orEmpty())
 
-    private fun mediaItemForId(mediaId: String): MediaItem = when {
+    private fun loadLibraryItem(mediaId: String): MediaItem? = when {
         mediaId == ROOT_ID -> rootItem()
-        mediaId == QUEUE_ID -> browseNode(QUEUE_ID, "Queue", "Continue listening")
-        mediaId == LIKED_ID -> browseNode(LIKED_ID, "Liked songs", "Your favorites")
-        mediaId == ALBUMS_ID -> browseNode(ALBUMS_ID, "Albums", "Browse your collection")
-        mediaId == ARTISTS_ID -> browseNode(ARTISTS_ID, "Artists", "Browse by artist")
-        mediaId == PLAYLISTS_ID -> browseNode(PLAYLISTS_ID, "Playlists", "Your playlists")
-        mediaId.startsWith("$TRACK_PREFIX:") ->
-            playableItem(activeTracks[mediaId.substringAfter(':')] ?: api.track(mediaId.substringAfter(':')))
-        else -> browseNode(mediaId, mediaId.substringAfter(':'), "")
+        mediaId == QUEUE_ID -> browseNode(
+            QUEUE_ID,
+            getString(R.string.auto_queue),
+            getString(R.string.auto_queue_description),
+        )
+        mediaId == LIKED_ID -> browseNode(
+            LIKED_ID,
+            getString(R.string.auto_liked_tracks),
+            getString(R.string.auto_liked_tracks_description),
+        )
+        mediaId == ALBUMS_ID -> browseNode(
+            ALBUMS_ID,
+            getString(R.string.auto_albums),
+            getString(R.string.auto_albums_description),
+        )
+        mediaId == PLAYLISTS_ID -> browseNode(
+            PLAYLISTS_ID,
+            getString(R.string.auto_playlists),
+            getString(R.string.auto_playlists_description),
+        )
+        mediaId == ARTISTS_ID -> browseNode(
+            ARTISTS_ID,
+            getString(R.string.auto_artists),
+            getString(R.string.auto_artists_description),
+        )
+        mediaId.startsWith("$ALBUM_PREFIX:") ->
+            api.album(mediaId.substringAfter(':').takeIf(String::isNotBlank) ?: return null)
+                ?.let(::browseItem)
+        mediaId.startsWith("$ARTIST_PREFIX:") ->
+            api.artist(mediaId.substringAfter(':').takeIf(String::isNotBlank) ?: return null)
+                ?.let(::browseItem)
+        mediaId.startsWith("$PLAYLIST_PREFIX:") ->
+            api.playlist(mediaId.substringAfter(':').takeIf(String::isNotBlank) ?: return null)
+                ?.let(::browseItem)
+        mediaId.startsWith("$TRACK_PREFIX:") -> {
+            val trackId = mediaId.substringAfter(':').takeIf(String::isNotBlank)
+            if (trackId == null) {
+                null
+            } else {
+                val track = activeTracks[trackId] ?: api.track(trackId)
+                if (!hasPlayableSource(track)) {
+                    null
+                } else {
+                    playableItem(track, trackParent(mediaId))
+                }
+            }
+        }
+        else -> null
     }
 
     private fun rootItem(): MediaItem =
-        browseNode(ROOT_ID, "Peridot", "Your music")
+        browseNode(
+            ROOT_ID,
+            getString(R.string.auto_root_title),
+            getString(R.string.auto_root_description),
+        )
 
     private fun browseNode(id: String, title: String, subtitle: String): MediaItem =
         MediaItem.Builder()
@@ -516,6 +639,16 @@ class PeridotPlaybackService : MediaLibraryService() {
     private fun browseItem(entry: BrowseEntry): MediaItem {
         entry.track?.let { return playableItem(it) }
         val artwork = entry.coverUrl?.let(Uri::parse)
+        val isCollection =
+            entry.id.startsWith("$ALBUM_PREFIX:") ||
+                entry.id.startsWith("$PLAYLIST_PREFIX:") ||
+                entry.id.startsWith("$ARTIST_PREFIX:")
+        val mediaType = when {
+            entry.id.startsWith("$ALBUM_PREFIX:") -> MediaMetadata.MEDIA_TYPE_ALBUM
+            entry.id.startsWith("$PLAYLIST_PREFIX:") -> MediaMetadata.MEDIA_TYPE_PLAYLIST
+            entry.id.startsWith("$ARTIST_PREFIX:") -> MediaMetadata.MEDIA_TYPE_ARTIST
+            else -> MediaMetadata.MEDIA_TYPE_MIXED
+        }
         return MediaItem.Builder()
             .setMediaId(entry.id)
             .setMediaMetadata(
@@ -523,17 +656,21 @@ class PeridotPlaybackService : MediaLibraryService() {
                     .setTitle(entry.title)
                     .setArtist(entry.subtitle)
                     .setArtworkUri(artwork)
+                    .setMediaType(mediaType)
                     .setIsBrowsable(true)
-                    .setIsPlayable(false)
+                    .setIsPlayable(isCollection)
                     .build(),
             )
             .build()
     }
 
-    private fun playableItems(tracks: List<TrackSnapshot>): List<MediaItem> =
+    private fun playableItems(
+        tracks: List<TrackSnapshot>,
+        parentId: String? = null,
+    ): List<MediaItem> =
         tracks
             .filter(::hasPlayableSource)
-            .map(::playableItem)
+            .map { playableItem(it, parentId) }
 
     private fun hasPlayableSource(track: TrackSnapshot): Boolean {
         if (track.available) return true
@@ -541,23 +678,185 @@ class PeridotPlaybackService : MediaLibraryService() {
         return offlineStore.audioFile(session, track.id).isFile
     }
 
-    private fun playableItem(track: TrackSnapshot): MediaItem {
+    private fun playableItem(
+        track: TrackSnapshot,
+        parentId: String? = null,
+    ): MediaItem {
         val artwork = track.coverUrl?.let(Uri::parse)
+        val metadata = MediaMetadata.Builder()
+            .setTitle(track.title)
+            .setArtist(track.artist)
+            .setAlbumTitle(track.album)
+            .setArtworkUri(artwork)
+            .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
+            .setIsBrowsable(false)
+            .setIsPlayable(true)
+        track.durationMs?.takeIf { it > 0 }?.let(metadata::setDurationMs)
+        if (parentId != null) {
+            metadata.setExtras(
+                Bundle().apply {
+                    putString(EXTRA_TRACK_PARENT, parentId)
+                },
+            )
+        }
         return MediaItem.Builder()
             .setMediaId("$TRACK_PREFIX:${track.id}")
             .setUri(trackDataSourceUri(track.id))
             .setMimeType(track.mimeType)
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(track.title)
-                    .setArtist(track.artist)
-                    .setAlbumTitle(track.album)
-                    .setArtworkUri(artwork)
-                    .setIsBrowsable(false)
-                    .setIsPlayable(true)
-                    .build(),
-            )
+            .setMediaMetadata(metadata.build())
             .build()
+    }
+
+    private fun collectionItems(parentId: String): List<MediaItem> {
+        val tracks = collectionTracks(parentId)
+        rememberTrackParents(parentId, tracks)
+        return playableItems(tracks, parentId)
+    }
+
+    private fun collectionTracks(parentId: String): List<TrackSnapshot> = when {
+        parentId == LIKED_ID -> api.likedTracks()
+        parentId.startsWith("$ALBUM_PREFIX:") ->
+            api.albumTracks(parentId.substringAfter(':'))
+        parentId.startsWith("$PLAYLIST_PREFIX:") ->
+            api.playlistTracks(parentId.substringAfter(':'))
+        parentId.startsWith("$ARTIST_PREFIX:") ->
+            api.artistTracks(parentId.substringAfter(':'))
+        else -> emptyList()
+    }
+
+    private fun collectionPlayback(
+        parentId: String,
+        requestedTrackId: String?,
+    ): Pair<List<MediaItem>, Int> {
+        val tracks = collectionTracks(parentId).filter(::hasPlayableSource)
+        rememberTrackParents(parentId, tracks)
+        val items = tracks.map { playableItem(it, parentId) }
+        val index = requestedTrackId
+            ?.let { trackId -> tracks.indexOfFirst { it.id == trackId } }
+            ?.takeIf { it >= 0 }
+            ?: 0
+        return items to index
+    }
+
+    private fun resolveAddedMediaItems(item: MediaItem): List<MediaItem> {
+        if (isCollectionId(item.mediaId)) {
+            return collectionItems(item.mediaId)
+        }
+        return listOfNotNull(resolvePlayableItem(item))
+    }
+
+    private fun resolveSetMediaItems(
+        mediaItems: List<MediaItem>,
+        startIndex: Int,
+        startPositionMs: Long,
+    ): MediaSession.MediaItemsWithStartPosition {
+        if (mediaItems.size == 1) {
+            val requested = mediaItems.single()
+            val requestedTrackId = requested.mediaId
+                .takeIf { it.startsWith("$TRACK_PREFIX:") }
+                ?.substringAfter(':')
+            val parentId = if (isCollectionId(requested.mediaId)) {
+                requested.mediaId
+            } else {
+                trackParent(requested)
+            }
+            if (parentId != null) {
+                val (items, index) = collectionPlayback(parentId, requestedTrackId)
+                if (items.isNotEmpty()) {
+                    return MediaSession.MediaItemsWithStartPosition(
+                        items,
+                        index,
+                        startPositionMs.coerceAtLeast(0),
+                    )
+                }
+            }
+            val resolved = listOfNotNull(resolvePlayableItem(requested))
+            return MediaSession.MediaItemsWithStartPosition(
+                resolved,
+                0,
+                startPositionMs.coerceAtLeast(0),
+            )
+        }
+
+        val resolved = mediaItems.flatMap(::resolveAddedMediaItems)
+        val index = startIndex.coerceIn(0, (resolved.size - 1).coerceAtLeast(0))
+        return MediaSession.MediaItemsWithStartPosition(
+            resolved,
+            index,
+            startPositionMs.coerceAtLeast(0),
+        )
+    }
+
+    private fun resolvePlayableItem(item: MediaItem): MediaItem? {
+        if (item.localConfiguration != null) return item
+        if (!item.mediaId.startsWith("$TRACK_PREFIX:")) return null
+        val trackId = item.mediaId.substringAfter(':').takeIf(String::isNotBlank)
+            ?: return null
+        val track = activeTracks[trackId] ?: api.track(trackId)
+        if (!hasPlayableSource(track)) return null
+        return playableItem(track, trackParent(item))
+    }
+
+    private fun rememberTrackParents(
+        parentId: String,
+        tracks: List<TrackSnapshot>,
+    ) {
+        val scope = sessionScope() ?: return
+        synchronized(trackParents) {
+            if (trackParentScope != scope) {
+                trackParents.clear()
+                trackParentScope = scope
+            }
+            tracks.forEach { track ->
+                trackParents["$TRACK_PREFIX:${track.id}"] = parentId
+            }
+        }
+    }
+
+    private fun trackParent(mediaItem: MediaItem): String? {
+        val metadataParent = mediaItem.mediaMetadata.extras
+            ?.getString(EXTRA_TRACK_PARENT)
+            ?.takeIf(String::isNotBlank)
+        if (metadataParent != null) return metadataParent
+        return trackParent(mediaItem.mediaId)
+    }
+
+    private fun trackParent(mediaId: String): String? {
+        val scope = sessionScope() ?: return null
+        return synchronized(trackParents) {
+            if (trackParentScope == scope) trackParents[mediaId] else null
+        }
+    }
+
+    private fun sessionScope(): String? =
+        sessions.read()?.let { "${it.serverAddress}|${it.userId}" }
+
+    private fun isCollectionId(mediaId: String): Boolean =
+        mediaId == LIKED_ID ||
+            mediaId.startsWith("$ALBUM_PREFIX:") ||
+            mediaId.startsWith("$PLAYLIST_PREFIX:") ||
+            mediaId.startsWith("$ARTIST_PREFIX:")
+
+    private fun libraryErrorCode(error: Throwable): Int = when (error) {
+        is SessionExpiredException -> SessionError.ERROR_SESSION_AUTHENTICATION_EXPIRED
+        is LibraryRequestException -> when (error.statusCode) {
+            400, 404, 410 -> SessionError.ERROR_BAD_VALUE
+            403 -> SessionError.ERROR_PERMISSION_DENIED
+            else -> SessionError.ERROR_IO
+        }
+        else -> SessionError.ERROR_IO
+    }
+
+    private fun <T> pageItems(
+        items: List<T>,
+        page: Int,
+        pageSize: Int,
+    ): List<T> {
+        if (page < 0 || pageSize <= 0) return emptyList()
+        val start = page.toLong() * pageSize.toLong()
+        if (start >= items.size) return emptyList()
+        val end = (start + pageSize.toLong()).coerceAtMost(items.size.toLong())
+        return items.subList(start.toInt(), end.toInt())
     }
 
     private fun resolveTrackDataSpec(dataSpec: DataSpec): DataSpec {
@@ -651,6 +950,8 @@ class PeridotPlaybackService : MediaLibraryService() {
         const val EXTRA_VOLUME = "volume"
         const val EXTRA_REPEAT_MODE = "repeatMode"
         const val EXTRA_SHUFFLE = "shuffle"
+        const val EXTRA_TRACK_PARENT =
+            "app.peridot.android.playback.TRACK_PARENT"
 
         const val ROOT_ID = "root"
         const val QUEUE_ID = "queue"

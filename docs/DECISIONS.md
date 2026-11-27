@@ -1,5 +1,30 @@
 # Peridot decisions
 
+## 2026-11-25: Android Auto exposes every supported browse surface
+
+The Android prototype publishes Liked tracks, Albums, Playlists, Artists, and
+the current playback Queue to Android Auto. Android Auto may show fewer root
+tabs than Peridot declares, but the prototype does not discard supported
+surfaces to satisfy a particular head-unit layout.
+
+Liked tracks uses the automatic `/api/playlists/liked` response so membership
+and ordering remain identical to the web and phone clients. The Playlists tab
+loads every server page and excludes the automatic liked-tracks playlist to
+avoid duplicating the dedicated tab. Albums and playlists are both browsable
+and playable; choosing Play queues the complete collection, while selecting a
+track queues its parent collection at that track.
+
+Android Auto remains online-only and uses the encrypted session persisted by
+the signed-in Capacitor app. It has no car-side login UI. Signed-out and expired
+sessions return Media3's authentication-expired result, and the existing
+Android Auto media notification and playback controls remain authoritative.
+Successful catalog reads are cached for 60 seconds per server and user.
+
+Peridot continues to distribute the Android APK directly rather than through
+Google Play. A physical head unit therefore requires Android Auto developer
+mode and permission to run apps from unknown sources; the Desktop Head Unit is
+the supported development test path.
+
 ## 2026-11-25: Release indexers save independently of connection tests
 
 Saving a Torznab release indexer validates the feed URL, credential shape, and

@@ -6,4 +6,16 @@
     <string name="custom_url_scheme" translatable="false">app.peridot.android</string>
     <string name="playback_notification_channel_name">Playback controls</string>
     <string name="playback_notification_channel_description">Controls for music playing in Peridot.</string>
+    <string name="auto_root_title">Peridot</string>
+    <string name="auto_root_description">Your music</string>
+    <string name="auto_liked_tracks">Liked tracks</string>
+    <string name="auto_liked_tracks_description">Your favorites</string>
+    <string name="auto_albums">Albums</string>
+    <string name="auto_albums_description">Browse your collection</string>
+    <string name="auto_playlists">Playlists</string>
+    <string name="auto_playlists_description">Your playlists</string>
+    <string name="auto_artists">Artists</string>
+    <string name="auto_artists_description">Browse by artist</string>
+    <string name="auto_queue">Queue</string>
+    <string name="auto_queue_description">Continue listening</string>
 </resources>

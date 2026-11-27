@@ -64,11 +64,11 @@ class PeridotMediaBrowserTest {
         assertNotNull(result.value)
         assertEquals(
             listOf(
-                PeridotPlaybackService.QUEUE_ID,
                 PeridotPlaybackService.LIKED_ID,
                 PeridotPlaybackService.ALBUMS_ID,
-                PeridotPlaybackService.ARTISTS_ID,
                 PeridotPlaybackService.PLAYLISTS_ID,
+                PeridotPlaybackService.ARTISTS_ID,
+                PeridotPlaybackService.QUEUE_ID,
             ),
             result.value!!.map { it.mediaId },
         )
