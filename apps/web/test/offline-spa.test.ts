@@ -68,7 +68,7 @@ test("Nuxt builds a client-rendered installable offline shell", async () => {
   };
 
   assert.match(config, /ssr: false/);
-  assert.match(config, /modules: \["@nuxtjs\/i18n", "@vite-pwa\/nuxt"\]/);
+  assert.match(config, /modules: \[[^\]]*"@vite-pwa\/nuxt"/);
   assert.match(config, /registerType: "autoUpdate"/);
   assert.match(
     config,

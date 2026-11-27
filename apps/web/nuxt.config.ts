@@ -20,6 +20,7 @@ const releaseAssetBase =
     : clientUpdateChannel === "dev" || clientUpdateChannel === "beta"
       ? `https://github.com/${releaseRepository}/releases/download/client-${clientUpdateChannel}`
       : "";
+const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN?.trim();
 
 const optimizedDependencies = [
   "@iconify-icons/akar-icons/drag-vertical",
@@ -110,6 +111,9 @@ export default defineNuxtConfig({
       environment: appEnvironment,
       clientVersion,
       clientUpdateChannel,
+      sentry: {
+        dsn: process.env.NUXT_PUBLIC_SENTRY_DSN?.trim() || "",
+      },
       androidWebReleaseApiUrl:
         clientUpdateChannel === "stable"
           ? `https://api.github.com/repos/${releaseRepository}/releases/latest`
@@ -121,7 +125,16 @@ export default defineNuxtConfig({
         : "",
     },
   },
-  modules: ["@nuxtjs/i18n", "@vite-pwa/nuxt"],
+  modules: ["@nuxtjs/i18n", "@vite-pwa/nuxt", "@sentry/nuxt/module"],
+  sentry: {
+    org: "peridot-57",
+    project: "peridot-web",
+    ...(sentryAuthToken ? { authToken: sentryAuthToken } : {}),
+    sourcemaps: {
+      filesToDeleteAfterUpload: ["./.output/public/**/*.map"],
+    },
+  },
+  ...(sentryAuthToken ? { sourcemap: { client: "hidden" as const } } : {}),
   nitro: {
     devProxy: {
       "/api": {

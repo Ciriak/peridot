@@ -1,5 +1,117 @@
 # Peridot handoff
 
+## Node 24.22.3 for server CI
+
+The server CI failure was an upstream Node 24.15.0 crash in the native
+CommonJS lexer used during ESM-to-CommonJS resolution. All twelve Jellyfin
+assertions completed, then Node aborted with
+`FATAL ERROR: v8::ToLocalChecked Empty MaybeLocal`. Node 24.14 introduced the
+crash and Node 24.19.0 contains the upstream fix.
+
+CI now reads Node 24.22.3 from one workflow-level value. The package engine
+range requires `>=24.19.0 <25`, and the production container uses Node 24.22.3.
+
+Verification:
+
+- Full server suite under Node 24.22.3 (242 passing)
+- Server application and test TypeScript checks under Node 24.22.3
+- `pnpm lint`
+- `pnpm format:check`
+- `pnpm version:check`
+- `git diff --check`
+
+Known limits:
+
+- The Docker daemon was unavailable, so the updated image was not built
+  locally.
+- The updated GitHub Actions workflow has not run because no push was
+  authorized.
+
+Uncommitted changes:
+
+- Docker uses pnpm 12.23.0 to match the repository's package manager, plus this
+  handoff section.
+
+Next:
+
+- Commit the Docker pnpm alignment, push when authorized, and confirm the server
+  CI job runs on Node 24.22.3 without the lexer crash.
+
+## Web Nuxt module assertions
+
+The locale and offline-shell tests now verify that their own required Nuxt
+modules are registered without pinning the complete module array. Adding the
+Sentry module had left both tests failing despite a valid configuration.
+
+Verification:
+
+- Focused i18n and offline-shell tests (26 passing)
+- `pnpm --filter @peridot/web test` (347 passing)
+- `pnpm --filter @peridot/web typecheck`
+- Focused ESLint and Prettier checks on the changed test files
+- `git diff --check`
+
+Known limits:
+
+- This is a test-only change; no production build was required.
+
+Uncommitted changes:
+
+- The Nuxt module assertions in `apps/web/test/i18n.test.ts` and
+  `apps/web/test/offline-spa.test.ts`, plus this handoff section.
+
+Next:
+
+- Commit the test fix and let CI verify the repository-level checks.
+
+## Sentry CI configuration
+
+Sentry is now configured for the Nuxt web client and Fastify server. The
+`peridot-web` and `peridot-server` projects include errors and tracing;
+the browser also has masked Session Replay and the server captures warning and
+error Pino logs. Automatic user, cookie, header, body, query-parameter,
+database-value, and stack-variable collection is disabled.
+
+GitHub Actions repository secrets now contain:
+
+- `SENTRY_DSN`
+- `NUXT_PUBLIC_SENTRY_DSN`
+- `SENTRY_AUTH_TOKEN`
+
+Push builds pass the browser DSN to web, desktop, Android, and Docker artifact
+builds. The source-map token is scoped to those build steps and Docker BuildKit
+secrets. `SENTRY_DSN` remains runtime-only and must be supplied by the deployment
+environment.
+
+Verification:
+
+- `gh secret list --repo Ciriak/peridot` confirmed all three repository secrets
+- Focused web Sentry and CI regression tests (8 passing)
+- Focused server Sentry tests (2 passing)
+- `pnpm --filter @peridot/web typecheck`
+- `pnpm --filter @peridot/server typecheck`
+- Web and server production builds
+- Web production build with a source-map token uploaded maps to Sentry and
+  removed them from the public output
+- Web production build without a token completed with source-map upload skipped
+- `pnpm lint`
+- `pnpm format:check`
+- `git diff --check`
+
+Known limits:
+
+- The server verification error was triggered, but the browser error could not
+  be completed because Computer Use could not verify the active Brave URL.
+- The server DSN is stored in GitHub but this repository has no deployment job
+  that can inject it into a running container.
+- Source-map upload requires a push and the configured repository secrets;
+  pull-request builds intentionally omit the upload token.
+
+Next:
+
+- Run the updated push workflow and confirm browser source maps and production
+  server events reach both Sentry projects.
+
 ## Android Auto browse and collection playback
 
 Android Auto now exposes every browse surface already supported by the native

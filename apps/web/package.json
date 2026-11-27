@@ -1,6 +1,6 @@
 {
   "name": "@peridot/web",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "private": true,
   "type": "module",
   "scripts": {
@@ -27,6 +27,7 @@
     "@nuxtjs/i18n": "10.6.0",
     "@peridot/contracts": "workspace:*",
     "@peridot/ui": "workspace:*",
+    "@sentry/nuxt": "11.19.0",
     "@tanstack/query-persist-client-core": "^5.107.1",
     "@tanstack/vue-query": "^5.107.1",
     "@tanstack/vue-virtual": "^3.13.52",

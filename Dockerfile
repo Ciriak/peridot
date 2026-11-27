@@ -1,9 +1,9 @@
-FROM node:24.15-bookworm-slim AS base
+FROM node:24.22.3-bookworm-slim AS base
 
 ENV PNPM_HOME="/pnpm"
 ENV PATH="${PNPM_HOME}:${PATH}"
 
-RUN corepack enable && corepack prepare pnpm@11.25.0 --activate
+RUN corepack enable && corepack prepare pnpm@12.23.0 --activate
 
 WORKDIR /app
 
@@ -13,13 +13,18 @@ ARG PERIDOT_BUILD_CHANNEL=local
 ARG PERIDOT_BUILD_TAG=
 ARG PERIDOT_BUILD_COMMIT=
 ARG PERIDOT_VERSION=
+ARG NUXT_PUBLIC_SENTRY_DSN=
+
+ENV NUXT_PUBLIC_SENTRY_DSN=${NUXT_PUBLIC_SENTRY_DSN}
 
 COPY . .
 
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @peridot/contracts build
 RUN pnpm --filter @peridot/server build
-RUN pnpm --filter @peridot/web generate
+RUN --mount=type=secret,id=sentry_auth_token,required=false \
+    SENTRY_AUTH_TOKEN="$(cat /run/secrets/sentry_auth_token 2>/dev/null || true)" \
+    pnpm --filter @peridot/web generate
 
 FROM base AS runtime
 

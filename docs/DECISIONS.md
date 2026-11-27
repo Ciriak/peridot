@@ -1,5 +1,36 @@
 # Peridot decisions
 
+## 2026-11-27: Node 24.22.3 is the supported development runtime
+
+Peridot pins Node 24.22.3 in CI and the production container. Node 24.14
+introduced an upstream crash in the native CommonJS lexer used during
+ESM-to-CommonJS resolution; the fix landed in Node 24.19.0. Tests can abort
+probabilistically under concurrent module loading on the previous 24.15.0 pin,
+even when every application assertion passes.
+
+The package engine range requires `>=24.19.0 <25`, and CI reads the runtime from
+one workflow-level version value so future Node updates are made once. Older
+Node 24 releases remain unsupported until they are upgraded past the fix.
+
+## 2026-11-27: Sentry is optional and configured by environment
+
+Peridot uses separate `peridot-web` and `peridot-server` Sentry projects. The
+browser SDK includes errors, tracing, masked Session Replay, and warning/error
+console logs. The Fastify server includes errors, request tracing, and
+warning/error Pino logs. User identity, cookies, headers, request bodies, query
+parameters, database values, and stack-frame variables are excluded from
+automatic collection.
+
+`NUXT_PUBLIC_SENTRY_DSN` is embedded into browser builds because a Sentry DSN is
+a public event-ingestion identifier. `SENTRY_AUTH_TOKEN` is available only to
+the build for source-map upload. `SENTRY_DSN` stays in the server runtime
+environment and is never baked into the public container image, so self-hosted
+deployments do not report to the project owner's Sentry organization.
+
+Development traces and session replays sample at 100%. Production traces and
+non-error replays sample at 10%, while error-triggered replay sampling remains
+100%. Leaving the DSN variables unset disables Sentry initialization.
+
 ## 2026-11-25: Android Auto exposes every supported browse surface
 
 The Android prototype publishes Liked tracks, Albums, Playlists, Artists, and

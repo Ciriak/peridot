@@ -22,7 +22,7 @@ test("en-US is the fixed, unprefixed locale", async () => {
     readFile(new URL("../i18n/locales/en-US.json", import.meta.url), "utf8"),
   ]);
 
-  assert.match(config, /modules: \["@nuxtjs\/i18n", "@vite-pwa\/nuxt"\]/);
+  assert.match(config, /modules: \[[^\]]*"@nuxtjs\/i18n"/);
   assert.match(config, /defaultLocale: "en-US"/);
   assert.match(config, /strategy: "no_prefix"/);
   assert.match(config, /detectBrowserLanguage: false/);
