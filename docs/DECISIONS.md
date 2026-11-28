@@ -43,7 +43,7 @@ Node 24 releases remain unsupported until they are upgraded past the fix.
 Peridot uses separate `peridot-web` and `peridot-server` Sentry projects. The
 browser SDK includes errors, tracing, masked Session Replay, and warning/error
 console logs. The Fastify server includes errors, request tracing, and
-warning/error Pino logs. User identity, cookies, headers, request bodies, query
+error/fatal Pino logs. User identity, cookies, headers, request bodies, query
 parameters, database values, and stack-frame variables are excluded from
 automatic collection.
 
@@ -56,6 +56,26 @@ deployments do not report to the project owner's Sentry organization.
 Development traces and session replays sample at 100%. Production traces and
 non-error replays sample at 10%, while error-triggered replay sampling remains
 100%. Leaving the DSN variables unset disables Sentry initialization.
+
+## 2026-11-27: Fatal startup failures report outside Fastify
+
+Database migrations run before the instrumented Fastify process. The migration
+entrypoint now initializes Sentry itself, and both migration and server-start
+failures explicitly capture the original exception before flushing and exiting.
+This covers caught startup errors that neither Fastify error instrumentation nor
+the uncaught-exception integration can observe.
+
+Every fatal startup or migration failure also appends a structured record to
+`peridot.log` beside the SQLite database. The record includes the operation,
+process ID, serialized error chain, stack, and whether Sentry captured and
+flushed an event. Logging must never suppress the original failure when Sentry
+is disabled, capture fails, or the log file cannot be written.
+
+Handled background task failures are reported as Sentry issues rather than
+remaining file-only entries. Fastify/Pino logs redact authentication and
+credential fields, preserving the existing rule that secrets never enter
+browser responses or monitoring payloads. Warning-level Pino logs remain local
+because they can contain intentionally owner-visible one-time recovery tokens.
 
 ## 2026-11-25: Android Auto exposes every supported browse surface
 

@@ -1,5 +1,14 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -12,6 +21,40 @@ import { runPrismaCommand } from "../scripts/prisma-cli.js";
 
 function databaseUrl(databasePath: string): string {
   return `file:${path.resolve(databasePath).replaceAll("\\", "/")}`;
+}
+
+async function runMigrationEntry(
+  databasePath: string,
+): Promise<{ code: number | null; stderr: string; stdout: string }> {
+  const child = spawn(
+    process.execPath,
+    ["--import", "tsx", "scripts/migrate-database-entry.ts"],
+    {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        DATABASE_URL: databaseUrl(databasePath),
+        SENTRY_DSN: "",
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    },
+  );
+  let stdout = "";
+  let stderr = "";
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stdout.on("data", (value: string) => {
+    stdout += value;
+  });
+  child.stderr.on("data", (value: string) => {
+    stderr += value;
+  });
+  const code = await new Promise<number | null>((resolve, reject) => {
+    child.once("error", reject);
+    child.once("exit", resolve);
+  });
+  return { code, stderr, stdout };
 }
 
 async function withTemporaryDatabase(
@@ -66,6 +109,33 @@ test("fresh databases apply the baseline without a backup", async () => {
     await assert.rejects(
       readdir(path.join(path.dirname(databasePath), "backups")),
     );
+  });
+});
+
+test("migration entrypoint logs malformed databases with structured details", async () => {
+  await withTemporaryDatabase(async (databasePath) => {
+    await writeFile(databasePath, "not a SQLite database");
+    const result = await runMigrationEntry(databasePath);
+    assert.notEqual(result.code, 0);
+    assert.match(result.stdout, /Checking for pending database migrations/);
+
+    const logPath = path.join(path.dirname(databasePath), "peridot.log");
+    const records = (await readFile(logPath, "utf8"))
+      .trim()
+      .split(/\r?\n/)
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    const record = records.at(-1);
+    assert.equal(record?.component, "database");
+    assert.equal(record?.operation, "migration");
+    assert.match(String(record?.msg), /Database migration failed/);
+    assert.equal(typeof record?.error, "object");
+    assert.deepEqual(record?.sentry, {
+      enabled: false,
+      eventId: null,
+      flushRequested: false,
+      flushed: null,
+    });
+    assert.match(result.stderr, /"component":"database"/);
   });
 });
 

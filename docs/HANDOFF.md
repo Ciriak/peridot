@@ -1,5 +1,66 @@
 # Peridot handoff
 
+## Resilient startup reporting and structured logs
+
+Database migrations now use an instrumented entrypoint, so migration failures
+reach Sentry before Fastify exists. Initial startup, runtime configuration,
+restart, and migration failures capture the original exception with
+`component`/`operation` tags, flush for up to two seconds, and write a structured
+JSON record to `peridot.log` beside the database. Failure logging continues when
+Sentry is disabled, capture fails, flush fails, or file logging cannot be
+opened.
+
+Handled background task failures now create Sentry issues. Only error/fatal
+Pino logs are forwarded to Sentry, keeping owner-visible recovery tokens local.
+Fastify logs redact authorization, cookie, password, API key, credential, and
+token fields.
+Administrator log rows retain the error type, message, SQLite/provider code, and
+request ID for error/fatal entries, while raw logs retain complete stacks.
+
+Verification:
+
+- Full server suite under Node 24.22.3 (252 passing)
+- Focused server Sentry tests after restricting forwarded Pino levels
+  (2 passing under Node 24.22.3)
+- Focused reporting, startup, log, and migration tests under Node 24.22.3
+- Real migration entrypoint against a malformed database: nonzero exit,
+  structured database/migration log, and Sentry-disabled status recorded
+- `pnpm --filter @peridot/server typecheck`
+- `pnpm --filter @peridot/server build`
+- `pnpm --filter @peridot/server db:validate` (migration graph current)
+- Focused ESLint and Prettier checks on changed files
+- `git diff --check`
+
+Known limits:
+
+- No live event was delivered to Sentry because this environment has no server
+  runtime DSN. Capture context, event-ID handling, capture failures, and flush
+  success/failure are covered through injected behavioral tests.
+- The build used the installed Node 24.15.0 and emitted the repository's
+  unsupported-engine warning. Type-checking and the complete test suite used the
+  supported Node 24.22.3 runtime.
+- Handled background task failures are message-level Sentry issues because the
+  task queue logs terminal summaries rather than retaining every original
+  executor exception.
+- The Docker image was not built locally.
+
+Uncommitted changes:
+
+- Instrumented migration entrypoint and package script.
+- Shared error serialization, explicit fatal failure capture/flush, and
+  background task issue reporting.
+- Startup result handling, Fastify/Pino redaction, shutdown flush, and structured
+  administrator log error details.
+- Server Sentry forwarding restricted to error/fatal Pino levels so recovery
+  tokens stay local.
+- Behavioral tests, Sentry/logging guidance, decision record, and this handoff.
+
+Next:
+
+- Deploy with a runtime `SENTRY_DSN`, force a sanitized migration or startup
+  failure in a staging instance, and confirm the issued event and matching
+  `peridot.log` record share the same error and operation tags.
+
 ## Immediate logout redirect
 
 Profile logout now clears credentials and opens the login screen before waiting

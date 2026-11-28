@@ -77,6 +77,48 @@ test("request completions are debug and errors are warnings", async () => {
   }
 });
 
+test("structured error details remain visible in administrator logs", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "peridot-log-errors-"));
+  const logPath = path.join(root, "peridot.log");
+  const logBuffer = new ServerLogBuffer(logPath);
+  try {
+    await new Promise<void>((resolve, reject) => {
+      logBuffer.stream.write(
+        `${JSON.stringify({
+          time: Date.now(),
+          level: 50,
+          msg: "Database operation failed",
+          reqId: "req-42",
+          err: {
+            type: "SqliteError",
+            message: "database disk image is malformed",
+            code: "SQLITE_CORRUPT",
+            stack: "SqliteError: database disk image is malformed\n    at open",
+          },
+        })}\n`,
+        (error) => {
+          if (error) reject(error);
+          else resolve();
+        },
+      );
+    });
+
+    assert.deepEqual(
+      logBuffer.list().map(({ level, message }) => ({ level, message })),
+      [
+        {
+          level: "error",
+          message:
+            "Database operation failed SqliteError: database disk image is malformed (code SQLITE_CORRUPT) [requestId=req-42]",
+        },
+      ],
+    );
+  } finally {
+    await logBuffer.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("log polling continues after the last seen entry", async () => {
   const context = await createTestContext();
   try {

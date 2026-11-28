@@ -8,7 +8,7 @@ if (options) {
     ...options,
     integrations: [
       Sentry.pinoIntegration({
-        log: { levels: ["warn", "error", "fatal"] },
+        log: { levels: ["error", "fatal"] },
       }),
     ],
     dataCollection: {

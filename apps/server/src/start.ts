@@ -1,6 +1,8 @@
 import { buildApp } from "./app.js";
 import { DEFAULT_PORT } from "./config.js";
 import { fileURLToPath } from "node:url";
+import { reportFatalFailure } from "./failure-reporting.js";
+import { serverLogFilePath } from "./server-log.js";
 
 const DEFAULT_WEB_DIST = new URL("../../web/.output/public", import.meta.url);
 
@@ -9,6 +11,11 @@ export interface ServerRuntimeOptions {
   host: string;
   serveWeb: boolean;
   webRoot: string;
+}
+
+export interface StartServerDependencies {
+  buildApp?: typeof buildApp;
+  reportFailure?: typeof reportFatalFailure;
 }
 
 function parsePort(value: string | undefined, fallback: number, name: string) {
@@ -34,11 +41,37 @@ export function resolveServerRuntimeOptions(
 
 export async function startServer(
   environment: NodeJS.ProcessEnv = process.env,
-): Promise<void> {
-  const { port, host, serveWeb, webRoot } = resolveServerRuntimeOptions(
-    environment,
-    fileURLToPath(DEFAULT_WEB_DIST),
-  );
+  dependencies: StartServerDependencies = {},
+): Promise<boolean> {
+  const buildApplication = dependencies.buildApp ?? buildApp;
+  const reportFailure = dependencies.reportFailure ?? reportFatalFailure;
+  const logFilePath = (() => {
+    const databaseUrl = environment.DATABASE_URL;
+    if (!databaseUrl) return undefined;
+    try {
+      return serverLogFilePath(databaseUrl);
+    } catch {
+      return undefined;
+    }
+  })();
+  const failureLogFile = logFilePath ? { logFilePath } : {};
+  let runtime: ServerRuntimeOptions;
+  try {
+    runtime = resolveServerRuntimeOptions(
+      environment,
+      fileURLToPath(DEFAULT_WEB_DIST),
+    );
+  } catch (error) {
+    await reportFailure(error, {
+      message: "Could not resolve the Peridot server runtime.",
+      component: "server",
+      operation: "startup",
+      ...failureLogFile,
+    });
+    process.exitCode = 1;
+    return false;
+  }
+  const { port, host, serveWeb, webRoot } = runtime;
   let app: Awaited<ReturnType<typeof buildApp>> | null = null;
   let restartScheduled = false;
   let shuttingDown = false;
@@ -49,7 +82,7 @@ export async function startServer(
   }
 
   async function buildAndListen() {
-    app = await buildApp({
+    app = await buildApplication({
       restartServer: requestRestart,
       enableSourceRefreshScheduler: true,
       enableUpdateCheckScheduler: true,
@@ -67,8 +100,14 @@ export async function startServer(
         if (shuttingDown) return;
         await buildAndListen();
       } catch (error) {
+        await reportFailure(error, {
+          message: "Could not restart the Peridot server.",
+          component: "server",
+          operation: "restart",
+          ...failureLogFile,
+          fields: { host, port, serveWeb },
+        });
         process.exitCode = 1;
-        console.error("Could not restart the Peridot server.", error);
       } finally {
         restartScheduled = false;
       }
@@ -84,9 +123,17 @@ export async function startServer(
         void closeApp();
       });
     }
+    return true;
   } catch (error) {
-    console.error("Could not start the Peridot server.", error);
     await closeApp().catch(() => undefined);
+    await reportFailure(error, {
+      message: "Could not start the Peridot server.",
+      component: "server",
+      operation: "startup",
+      ...failureLogFile,
+      fields: { host, port, serveWeb },
+    });
     process.exitCode = 1;
+    return false;
   }
 }
